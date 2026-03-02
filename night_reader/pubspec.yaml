@@ -1,0 +1,96 @@
+name: night_reader
+description: "A cross-platform reading app inspired by Zotero, built with Flutter and Material Design 3."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状态管理 + 路由 + 依赖注入
+  get: ^4.6.6
+
+  # 网络
+  dio: ^5.9.0
+  connectivity_plus: ^6.0.0
+
+  # 本地数据库
+  isar: ^3.1.0
+  isar_flutter_libs: ^3.1.0
+
+  # 键值存储（设置/偏好）
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Material You 动态取色
+  dynamic_color: ^1.7.0
+
+  # 文件/路径
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+  # 图片缓存
+  cached_network_image: ^3.4.1
+
+  # WebDAV 同步
+  webdav_client: ^1.2.2
+
+  # 分享
+  share_plus: ^10.0.0
+
+  # 权限
+  permission_handler: ^11.3.0
+
+  # App 信息
+  package_info_plus: ^8.0.0
+
+  # Toast / Dialog
+  flutter_smart_dialog: ^4.9.8
+
+  # 日志
+  logger: ^2.5.0
+
+  # 国际化
+  intl: ^0.20.0
+
+  # JSON 序列化（运行时）
+  json_annotation: ^4.9.0
+
+  # Zip/EPUB 解压
+  archive: ^3.6.1
+
+  # SVG
+  flutter_svg: ^2.0.14
+
+  # URL 跳转
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # 代码生成
+  build_runner: ^2.4.0
+  json_serializable: ^6.9.0
+  isar_generator: ^3.1.0
+
+  # 启动图 / 图标
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/images/logo/
+    - assets/icons/
+
+  # fonts:
+  #   - family: CustomFont
+  #     fonts:
+  #       - asset: assets/fonts/CustomFont-Regular.ttf
