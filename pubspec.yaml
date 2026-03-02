@@ -60,7 +60,7 @@ dependencies:
   json_annotation: ^4.9.0
 
   # Zip/EPUB 解压
-  archive: ^3.6.1
+  archive: ^4.0.2
 
   # SVG
   flutter_svg: ^2.0.14
@@ -75,7 +75,7 @@ dev_dependencies:
 
   # 代码生成
   build_runner: ^2.4.0
-  json_serializable: ^6.9.0
+  json_serializable: ^6.8.0
   isar_generator: ^3.1.0
 
   # 启动图 / 图标
