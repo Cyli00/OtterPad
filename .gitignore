@@ -50,3 +50,6 @@ app.*.map.json
 
 # Android JNI libraries (generated from Rust)
 android/app/src/main/jniLibs/
+
+# reference
+ref/

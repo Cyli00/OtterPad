@@ -1,17 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdfrx/pdfrx.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
-import 'core/services/service_locator.dart';
 import 'core/storage/storage.dart';
+import 'providers/theme_provider.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 初始化键值存储
-  await GStorage.init();
+  // Edge-to-Edge 沉浸式
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // 注册全局依赖（GetX DI）
-  await ServiceLocator.init();
+  // 初始化 pdfrx（注册 loadAsset 回调 + 初始化 PDFium 引擎）
+  await pdfrxFlutterInitialize();
 
-  runApp(const NightReaderApp());
+  // 并行初始化
+  final results = await Future.wait([
+    SharedPreferences.getInstance(),
+    GStorage.init(),
+  ]);
+  final prefs = results[0] as SharedPreferences;
+
+  runApp(ProviderScope(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+    ],
+    child: const NightReaderApp(),
+  ));
 }
