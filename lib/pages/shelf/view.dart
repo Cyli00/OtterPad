@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/models/collection/favorite.dart';
 import '../../providers/local_docs_provider.dart';
+import '../../providers/favorites_provider.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
+import 'widgets/create_favorite_dialog.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
@@ -12,6 +15,17 @@ class ShelfPage extends ConsumerWidget {
     final theme = Theme.of(context);
     final docsAsync = ref.watch(localDocsProvider);
     final docsCount = docsAsync.value?.length ?? 0;
+    final allDocs = docsAsync.value ?? [];
+    final favorites = ref.watch(favoritesProvider);
+
+    // 默认文库：虚拟收藏夹，始终包含全部文档
+    final defaultFavorite = Favorite(
+      id: Favorite.defaultId,
+      emoji: '\u{1F4DA}',
+      name: '默认文库',
+      docPaths: allDocs,
+      createdAt: DateTime(2024),
+    );
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -80,17 +94,26 @@ class ShelfPage extends ConsumerWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '1',
+                      '${favorites.length + 1}',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary, // 绿色的数字
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                     const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.add),
                       color: theme.colorScheme.onSurfaceVariant,
-                      onPressed: () {},
+                      onPressed: () async {
+                        final result =
+                            await showCreateFavoriteDialog(context);
+                        if (result != null) {
+                          ref.read(favoritesProvider.notifier).create(
+                                emoji: result['emoji']!,
+                                name: result['name']!,
+                              );
+                        }
+                      },
                     ),
                   ],
                 ),
@@ -98,14 +121,40 @@ class ShelfPage extends ConsumerWidget {
                 
                 // 水平滚动的卡片列表
                 SizedBox(
-                  height: 380, // 增加高度以容纳多本书的预览
-                  child: ListView(
+                  height: 380,
+                  child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none, // 防止卡片的阴影被裁剪
-                    children: [
-                      FavoriteCard(
-                        title: '默认文库',
-                        subtitle: '包含所有文献',
+                    clipBehavior: Clip.none,
+                    itemCount: favorites.length + 1, // +1 默认文库
+                    itemBuilder: (context, index) {
+                      // 第一项始终是默认文库
+                      if (index == 0) {
+                        return FavoriteCard(
+                          title: defaultFavorite.name,
+                          subtitle: '包含所有文献',
+                          subtitleIcon: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: theme.colorScheme.primaryContainer,
+                            ),
+                            child: Icon(
+                              Icons.menu_book_rounded,
+                              size: 14,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          pdfAssets: allDocs,
+                          totalCount: docsCount,
+                          onTap: () {},
+                        );
+                      }
+
+                      final fav = favorites[index - 1];
+                      return FavoriteCard(
+                        title: fav.name,
+                        subtitle: '${fav.docPaths.length} 篇文献',
                         subtitleIcon: Container(
                           width: 24,
                           height: 24,
@@ -113,17 +162,17 @@ class ShelfPage extends ConsumerWidget {
                             shape: BoxShape.circle,
                             color: theme.colorScheme.primaryContainer,
                           ),
-                          child: Icon(
-                            Icons.menu_book_rounded,
-                            size: 14,
-                            color: theme.colorScheme.primary,
+                          alignment: Alignment.center,
+                          child: Text(
+                            fav.emoji,
+                            style: const TextStyle(fontSize: 13),
                           ),
                         ),
-                        pdfAssets: docsAsync.value ?? [],
-                        totalCount: docsCount,
+                        pdfAssets: fav.docPaths,
+                        totalCount: fav.docPaths.length,
                         onTap: () {},
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
                 
