@@ -56,7 +56,7 @@ class _LibraryPageState extends State<LibraryPage>
                     unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
                     dividerColor: Colors.transparent, // 隐藏底部默认的细线
                     tabs: const [
-                      Tab(text: '书架'),
+                      Tab(text: '文献库'),
                       Tab(text: '推荐'),
                       Tab(text: '会议日程'),
                     ],

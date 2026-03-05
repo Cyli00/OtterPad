@@ -52,8 +52,7 @@ class DocumentCard extends StatelessWidget {
                         color: colorScheme.surfaceContainerHighest,
                         child: Icon(
                           Icons.insert_drive_file,
-                          color:
-                              colorScheme.onSurfaceVariant.withAlpha(100),
+                          color: colorScheme.onSurfaceVariant.withAlpha(100),
                           size: 48,
                         ),
                       ),
@@ -61,8 +60,10 @@ class DocumentCard extends StatelessWidget {
             ),
             // 底部信息区域：固定高度
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10.0,
+                vertical: 8.0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,

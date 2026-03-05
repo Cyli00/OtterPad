@@ -68,6 +68,7 @@ dependencies:
 
   # URL 跳转
   url_launcher: ^6.3.1
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
