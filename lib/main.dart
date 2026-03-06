@@ -24,10 +24,14 @@ Future<void> main() async {
   ]);
   final prefs = results[0] as SharedPreferences;
 
-  runApp(ProviderScope(
+  final container = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
     ],
+  );
+
+  runApp(UncontrolledProviderScope(
+    container: container,
     child: const NightReaderApp(),
   ));
 }

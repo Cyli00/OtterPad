@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'pdf_cover.dart';
 
 class DocumentCard extends StatelessWidget {
-  final String title;
-  final String author;
-  final String? coverAsset;
+  final String coverAsset;
+  final String name;
+  final String journalName;
+  final String year;
   final VoidCallback onTap;
   final bool isBookmarked;
   final VoidCallback onBookmarkToggle;
@@ -12,9 +13,10 @@ class DocumentCard extends StatelessWidget {
 
   const DocumentCard({
     super.key,
-    required this.title,
-    required this.author,
-    this.coverAsset,
+    required this.coverAsset,
+    required this.name,
+    required this.journalName,
+    required this.year,
     required this.onTap,
     this.isBookmarked = false,
     required this.onBookmarkToggle,
@@ -42,53 +44,53 @@ class DocumentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 封面区域：占据上部剩余空间
+            // 封面缩略图
             Expanded(
               child: SizedBox(
                 width: double.infinity,
-                child: coverAsset != null && coverAsset!.endsWith('.pdf')
-                    ? PdfCoverRender(assetPath: coverAsset!)
-                    : Container(
-                        color: colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          Icons.insert_drive_file,
-                          color: colorScheme.onSurfaceVariant.withAlpha(100),
-                          size: 48,
-                        ),
-                      ),
+                child: PdfCoverRender(assetPath: coverAsset),
               ),
             ),
-            // 底部信息区域：固定高度
+            // 底部信息区域
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10.0,
-                vertical: 8.0,
-              ),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 文献名
                   Text(
-                    title,
+                    name,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      height: 1.2,
+                      height: 1.25,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (author.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                  const SizedBox(height: 4),
+                  // 期刊名
+                  if (journalName.isNotEmpty)
                     Text(
-                      author,
+                      journalName,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  // 发表年份
+                  if (year.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      year,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withAlpha(180),
+                      ),
+                    ),
                   ],
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
+                  // 操作栏
                   Row(
                     children: [
                       InkWell(
@@ -108,7 +110,7 @@ class DocumentCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              isBookmarked ? '继续阅读' : '收藏',
+                              '收藏',
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: isBookmarked
                                     ? colorScheme.primary

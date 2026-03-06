@@ -57,10 +57,3 @@ android/app/src/main/jniLibs/
 
 # reference
 ref/
-
-android/
-windows/
-linux/
-macos/
-ios/
-web/

@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/documents_provider.dart';
 import 'widgets/home_header.dart';
 import 'widgets/home_tab_bar.dart';
 import 'widgets/bookshelf_grid.dart';
+import 'widgets/bookshelf_list.dart';
 
-class LibraryPage extends StatefulWidget {
+class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
 
   @override
-  State<LibraryPage> createState() => _LibraryPageState();
+  ConsumerState<LibraryPage> createState() => _LibraryPageState();
 }
 
-class _LibraryPageState extends State<LibraryPage>
+class _LibraryPageState extends ConsumerState<LibraryPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -30,6 +33,7 @@ class _LibraryPageState extends State<LibraryPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isGrid = ref.watch(viewModeProvider);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -37,9 +41,9 @@ class _LibraryPageState extends State<LibraryPage>
         child: NestedScrollView(
           headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
             return <Widget>[
-              // 1. 顶部的搜索栏与头像
+              // 顶部的搜索栏与操作按钮
               const HomeHeader(),
-              // 2. 吸顶的 TabBar
+              // 吸顶的 TabBar
               SliverPersistentHeader(
                 pinned: true,
                 delegate: HomeTabBarDelegate(
@@ -54,7 +58,7 @@ class _LibraryPageState extends State<LibraryPage>
                     labelColor: theme.colorScheme.primary,
                     labelStyle: const TextStyle(fontWeight: FontWeight.bold),
                     unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-                    dividerColor: Colors.transparent, // 隐藏底部默认的细线
+                    dividerColor: Colors.transparent,
                     tabs: const [
                       Tab(text: '文献库'),
                       Tab(text: '推荐'),
@@ -68,9 +72,11 @@ class _LibraryPageState extends State<LibraryPage>
           body: TabBarView(
             controller: _tabController,
             children: [
-              // Tab1: 书架视图（Slivers 需要包装在 CustomScrollView 中）
-              const CustomScrollView(
-                slivers: [BookshelfGrid()],
+              // Tab1: 书架视图（根据 viewMode 切换 Grid/List）
+              CustomScrollView(
+                slivers: [
+                  if (isGrid) const BookshelfGrid() else const BookshelfList(),
+                ],
               ),
               // Tab2: 推荐视图暂未实现
               const Center(child: Text('推荐内容')),

@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/collection/favorite.dart';
-import '../../providers/local_docs_provider.dart';
+import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
+import 'favorite_detail_page.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
 
+  void _openDetail(BuildContext context, Favorite favorite) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FavoriteDetailPage(favorite: favorite),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final docsAsync = ref.watch(localDocsProvider);
-    final docsCount = docsAsync.value?.length ?? 0;
-    final allDocs = docsAsync.value ?? [];
+    final docs = ref.watch(documentsProvider);
+    final allDocPaths = docs.map((d) => d.filePath).toList();
     final favorites = ref.watch(favoritesProvider);
 
     // 默认文库：虚拟收藏夹，始终包含全部文档
@@ -23,7 +31,7 @@ class ShelfPage extends ConsumerWidget {
       id: Favorite.defaultId,
       emoji: '\u{1F4DA}',
       name: '默认文库',
-      docPaths: allDocs,
+      docPaths: allDocPaths,
       createdAt: DateTime(2024),
     );
 
@@ -145,9 +153,9 @@ class ShelfPage extends ConsumerWidget {
                               color: theme.colorScheme.primary,
                             ),
                           ),
-                          pdfAssets: allDocs,
-                          totalCount: docsCount,
-                          onTap: () {},
+                          pdfAssets: allDocPaths,
+                          totalCount: docs.length,
+                          onTap: () => _openDetail(context, defaultFavorite),
                         );
                       }
 
@@ -170,7 +178,7 @@ class ShelfPage extends ConsumerWidget {
                         ),
                         pdfAssets: fav.docPaths,
                         totalCount: fav.docPaths.length,
-                        onTap: () {},
+                        onTap: () => _openDetail(context, fav),
                       );
                     },
                   ),

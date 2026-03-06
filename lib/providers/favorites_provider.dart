@@ -6,6 +6,9 @@ import '../core/storage/storage.dart';
 import '../data/models/collection/favorite.dart';
 
 /// 收藏夹状态管理
+///
+/// 收藏夹通过 Hive 存储文献的原始路径引用（指向 NightReader/docs/ 中的文件），
+/// 不复制文件，不创建链接——同一份 PDF 只占一份磁盘和一份缩略图缓存。
 class FavoritesNotifier extends StateNotifier<List<Favorite>> {
   final Box _box;
 
