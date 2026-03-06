@@ -23,7 +23,8 @@ class ShelfPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final docs = ref.watch(documentsProvider);
-    final allDocPaths = docs.map((d) => d.filePath).toList();
+    final allDocPaths =
+        docs.map((d) => d.filePath).where((p) => p.isNotEmpty).toList();
     final favorites = ref.watch(favoritesProvider);
 
     // 默认文库：虚拟收藏夹，始终包含全部文档

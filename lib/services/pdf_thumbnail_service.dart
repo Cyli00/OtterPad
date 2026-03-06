@@ -70,8 +70,10 @@ class PdfThumbnailService {
 
     PdfDocument? document;
     try {
-      document = await PdfDocument.openFile(
-        filePath,
+      // 用 readAsBytes + openData 避免路径编码问题（中文文件名等）
+      final bytes = await File(filePath).readAsBytes();
+      document = await PdfDocument.openData(
+        bytes,
         passwordProvider: () => '',
       );
       if (document.pages.isEmpty) return null;

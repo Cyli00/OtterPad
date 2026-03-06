@@ -22,10 +22,24 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       state = [];
       return;
     }
-    state = raw
+    final docs = raw
         .map((e) => Document.fromJson(
             Map<String, dynamic>.from(jsonDecode(e as String))))
         .toList();
+
+    // 自动清理：
+    // 1. 旧版 asset 路径条目（已废弃，无法用 openFile 打开）
+    // 2. 文件已不存在的条目
+    final valid = docs.where((d) {
+      if (d.filePath.isEmpty) return false;
+      if (d.filePath.startsWith('assets/')) return false;
+      return File(d.filePath).existsSync();
+    }).toList();
+    state = valid;
+
+    if (valid.length != docs.length) {
+      _save(); // 回写，清除失效条目
+    }
   }
 
   Future<void> _save() async {
@@ -70,20 +84,12 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return doc;
   }
 
-  /// 通过标识符创建占位条目（后续通过 API 填充元数据）
-  Future<Document> addByIdentifier(String identifier) async {
-    final doc = Document(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: '待获取: $identifier',
-      authors: [],
-      doi: identifier,
-      filePath: '',
-      addedAt: DateTime.now(),
-    );
-
-    state = [...state, doc];
-    await _save();
-    return doc;
+  /// 通过标识符添加文献（DOI / PMID / arXiv ID）
+  ///
+  /// TODO: 接入 CrossRef / PubMed / arXiv API 解析元数据并下载 PDF
+  Future<Document?> addByIdentifier(String identifier) async {
+    // 标识符解析功能尚未实现
+    return null;
   }
 
   /// 重构文库：扫描本地目录，同步文献列表

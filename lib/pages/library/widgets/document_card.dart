@@ -48,7 +48,18 @@ class DocumentCard extends StatelessWidget {
             Expanded(
               child: SizedBox(
                 width: double.infinity,
-                child: PdfCoverRender(assetPath: coverAsset),
+                child: coverAsset.isNotEmpty
+                    ? PdfCoverRender(assetPath: coverAsset)
+                    : Container(
+                        color: colorScheme.surfaceContainerHighest,
+                        child: Center(
+                          child: Icon(
+                            Icons.article_outlined,
+                            color: colorScheme.onSurfaceVariant.withAlpha(80),
+                            size: 48,
+                          ),
+                        ),
+                      ),
               ),
             ),
             // 底部信息区域

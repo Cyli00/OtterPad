@@ -260,7 +260,7 @@ class FavoriteCard extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  '查看书单 · $totalCount 本书',
+                  '查看文库 · $totalCount 篇文献',
                   style: theme.textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: colorScheme.primary,

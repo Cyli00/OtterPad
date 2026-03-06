@@ -32,8 +32,15 @@ class HomeHeader extends ConsumerWidget {
       case ToolbarAction.addByIdentifier:
         if (!context.mounted) return;
         final identifier = await showIdentifierDialog(context);
-        if (identifier != null) {
-          ref.read(documentsProvider.notifier).addByIdentifier(identifier);
+        if (identifier != null && context.mounted) {
+          final doc = await ref
+              .read(documentsProvider.notifier)
+              .addByIdentifier(identifier);
+          if (doc == null && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('标识符解析功能暂未实现')),
+            );
+          }
         }
       case ToolbarAction.rebuildLibrary:
         await ref.read(documentsProvider.notifier).rebuild();
