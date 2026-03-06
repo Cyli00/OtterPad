@@ -7,6 +7,10 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
+import '../services/identifier_resolver.dart';
+
+/// addByIdentifier 的结果类型
+enum AddByIdentifierResult { success, duplicate }
 
 /// 文献库状态管理
 class DocumentsNotifier extends StateNotifier<List<Document>> {
@@ -29,16 +33,16 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
     // 自动清理：
     // 1. 旧版 asset 路径条目（已废弃，无法用 openFile 打开）
-    // 2. 文件已不存在的条目
+    // 2. 文件已不存在的条目（但保留 filePath 为空的纯元数据条目）
     final valid = docs.where((d) {
-      if (d.filePath.isEmpty) return false;
+      if (d.filePath.isEmpty) return true;
       if (d.filePath.startsWith('assets/')) return false;
       return File(d.filePath).existsSync();
     }).toList();
     state = valid;
 
     if (valid.length != docs.length) {
-      _save(); // 回写，清除失效条目
+      _save();
     }
   }
 
@@ -84,12 +88,39 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return doc;
   }
 
-  /// 通过标识符添加文献（DOI / PMID / arXiv ID）
+  /// 通过标识符添加文献（DOI / PMID / arXiv ID / ISBN）
   ///
-  /// TODO: 接入 CrossRef / PubMed / arXiv API 解析元数据并下载 PDF
-  Future<Document?> addByIdentifier(String identifier) async {
-    // 标识符解析功能尚未实现
-    return null;
+  /// 返回 (Document, AddByIdentifierResult) 或抛出 IdentifierResolveException
+  Future<(Document, AddByIdentifierResult)> addByIdentifier(
+      String identifier) async {
+    final doc = await IdentifierResolver.instance.resolve(identifier);
+
+    // 去重检查
+    final isDuplicate = state.any((d) {
+      if (doc.doi != null && doc.doi!.isNotEmpty && d.doi == doc.doi) {
+        return true;
+      }
+      if (doc.pmid != null && doc.pmid!.isNotEmpty && d.pmid == doc.pmid) {
+        return true;
+      }
+      if (doc.arxivId != null &&
+          doc.arxivId!.isNotEmpty &&
+          d.arxivId == doc.arxivId) {
+        return true;
+      }
+      if (doc.isbn != null && doc.isbn!.isNotEmpty && d.isbn == doc.isbn) {
+        return true;
+      }
+      return false;
+    });
+
+    if (isDuplicate) {
+      return (doc, AddByIdentifierResult.duplicate);
+    }
+
+    state = [...state, doc];
+    await _save();
+    return (doc, AddByIdentifierResult.success);
   }
 
   /// 重构文库：扫描本地目录，同步文献列表
@@ -116,7 +147,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       }
     }
 
-    // 移除文件已不存在的条目
+    // 移除文件已不存在的条目（跳过 filePath 为空的纯元数据条目）
     final validDocs = <Document>[];
     for (final doc in state) {
       if (doc.filePath.isEmpty || await File(doc.filePath).exists()) {
@@ -135,21 +166,51 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   /// 更新文献元数据
   Future<void> update(
     String id, {
+    String? itemType,
     String? title,
     List<String>? authors,
     String? journal,
+    String? journalAbbr,
+    String? publisher,
+    String? volume,
+    String? issue,
+    String? pages,
     String? year,
+    String? date,
     String? doi,
+    String? pmid,
+    String? pmcid,
+    String? arxivId,
+    String? isbn,
+    String? issn,
+    String? url,
+    String? abstractText,
+    String? language,
   }) async {
     state = [
       for (final d in state)
         if (d.id == id)
           d.copyWith(
+            itemType: itemType,
             title: title,
             authors: authors,
             journal: journal,
+            journalAbbr: journalAbbr,
+            publisher: publisher,
+            volume: volume,
+            issue: issue,
+            pages: pages,
             year: year,
+            date: date,
             doi: doi,
+            pmid: pmid,
+            pmcid: pmcid,
+            arxivId: arxivId,
+            isbn: isbn,
+            issn: issn,
+            url: url,
+            abstractText: abstractText,
+            language: language,
           )
         else
           d,

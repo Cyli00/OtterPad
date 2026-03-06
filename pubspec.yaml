@@ -73,6 +73,9 @@ dependencies:
   # 文件选择
   file_picker: ^8.1.7
 
+  # XML 解析（arXiv API 响应）
+  xml: ^6.6.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

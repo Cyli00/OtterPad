@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../providers/documents_provider.dart';
+import '../../../services/identifier_resolver.dart';
 import '../search_page.dart';
 import 'toolbar_bottom_sheet.dart';
 import 'identifier_dialog.dart';
@@ -33,12 +34,45 @@ class HomeHeader extends ConsumerWidget {
         if (!context.mounted) return;
         final identifier = await showIdentifierDialog(context);
         if (identifier != null && context.mounted) {
-          final doc = await ref
-              .read(documentsProvider.notifier)
-              .addByIdentifier(identifier);
-          if (doc == null && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('标识符解析功能暂未实现')),
+          // 显示加载中 SnackBar
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 16),
+                  Text('正在解析标识符...'),
+                ],
+              ),
+              duration: Duration(seconds: 30),
+            ),
+          );
+
+          try {
+            final (doc, result) = await ref
+                .read(documentsProvider.notifier)
+                .addByIdentifier(identifier);
+            messenger.hideCurrentSnackBar();
+            if (!context.mounted) return;
+            if (result == AddByIdentifierResult.duplicate) {
+              messenger.showSnackBar(
+                const SnackBar(content: Text('该文献已存在于文库中')),
+              );
+            } else {
+              messenger.showSnackBar(
+                SnackBar(content: Text('已添加: ${doc.title}')),
+              );
+            }
+          } on IdentifierResolveException catch (e) {
+            messenger.hideCurrentSnackBar();
+            if (!context.mounted) return;
+            messenger.showSnackBar(
+              SnackBar(content: Text(e.message)),
             );
           }
         }
