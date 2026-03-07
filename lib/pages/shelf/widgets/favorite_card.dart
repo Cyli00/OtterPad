@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../library/widgets/pdf_cover.dart';
 
-class FavoriteCard extends StatelessWidget {
+class FavoriteCard extends StatefulWidget {
   final String title;
   final String subtitle;
   final Widget? subtitleIcon;
   final List<String> pdfAssets;
   final int totalCount;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   const FavoriteCard({
     super.key,
@@ -17,7 +18,15 @@ class FavoriteCard extends StatelessWidget {
     required this.pdfAssets,
     required this.totalCount,
     required this.onTap,
+    this.onDelete,
   });
+
+  @override
+  State<FavoriteCard> createState() => _FavoriteCardState();
+}
+
+class _FavoriteCardState extends State<FavoriteCard> {
+  bool _showDelete = false;
 
   Widget _buildEmptyCoverLayer(BuildContext context) {
     return Container(
@@ -51,7 +60,7 @@ class FavoriteCard extends StatelessWidget {
   }
 
   double _getDynamicWidth() {
-    final count = pdfAssets.length;
+    final count = widget.pdfAssets.length;
     if (count <= 1) return 200.0;
     if (count == 2) return 330.0;
     if (count == 3) return 280.0;
@@ -60,8 +69,8 @@ class FavoriteCard extends StatelessWidget {
   }
 
   Widget _buildCoverArea(BuildContext context) {
-    final count = pdfAssets.length;
-    
+    final count = widget.pdfAssets.length;
+
     if (count == 0) {
       return Center(
         child: AspectRatio(
@@ -73,7 +82,7 @@ class FavoriteCard extends StatelessWidget {
       return Center(
         child: AspectRatio(
           aspectRatio: 0.72,
-          child: _buildCover(context, pdfAssets[0]),
+          child: _buildCover(context, widget.pdfAssets[0]),
         ),
       );
     } else if (count == 2) {
@@ -83,14 +92,14 @@ class FavoriteCard extends StatelessWidget {
           Expanded(
             child: AspectRatio(
               aspectRatio: 0.72,
-              child: _buildCover(context, pdfAssets[0]),
+              child: _buildCover(context, widget.pdfAssets[0]),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: AspectRatio(
               aspectRatio: 0.72,
-              child: _buildCover(context, pdfAssets[1]),
+              child: _buildCover(context, widget.pdfAssets[1]),
             ),
           ),
         ],
@@ -102,7 +111,7 @@ class FavoriteCard extends StatelessWidget {
             flex: 2,
             child: AspectRatio(
               aspectRatio: 0.72,
-              child: _buildCover(context, pdfAssets[0]),
+              child: _buildCover(context, widget.pdfAssets[0]),
             ),
           ),
           const SizedBox(width: 6),
@@ -110,9 +119,9 @@ class FavoriteCard extends StatelessWidget {
             flex: 1,
             child: Column(
               children: [
-                Expanded(child: _buildCover(context, pdfAssets[1])),
+                Expanded(child: _buildCover(context, widget.pdfAssets[1])),
                 const SizedBox(height: 4),
-                Expanded(child: _buildCover(context, pdfAssets[2])),
+                Expanded(child: _buildCover(context, widget.pdfAssets[2])),
               ],
             ),
           ),
@@ -127,9 +136,9 @@ class FavoriteCard extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    Expanded(child: _buildCover(context, pdfAssets[0])),
+                    Expanded(child: _buildCover(context, widget.pdfAssets[0])),
                     const SizedBox(width: 4),
-                    Expanded(child: _buildCover(context, pdfAssets[1])),
+                    Expanded(child: _buildCover(context, widget.pdfAssets[1])),
                   ],
                 ),
               ),
@@ -137,9 +146,9 @@ class FavoriteCard extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    Expanded(child: _buildCover(context, pdfAssets[2])),
+                    Expanded(child: _buildCover(context, widget.pdfAssets[2])),
                     const SizedBox(width: 4),
-                    Expanded(child: _buildCover(context, pdfAssets[3])),
+                    Expanded(child: _buildCover(context, widget.pdfAssets[3])),
                   ],
                 ),
               ),
@@ -155,10 +164,10 @@ class FavoriteCard extends StatelessWidget {
             flex: 12,
             child: AspectRatio(
               aspectRatio: 0.72,
-              child: _buildCover(context, pdfAssets[0]),
+              child: _buildCover(context, widget.pdfAssets[0]),
             ),
           ),
-          const SizedBox(width: 6), // between big and small pattern
+          const SizedBox(width: 6),
           Expanded(
             flex: 11,
             child: Column(
@@ -166,9 +175,11 @@ class FavoriteCard extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      Expanded(child: _buildCover(context, pdfAssets[1])),
+                      Expanded(
+                          child: _buildCover(context, widget.pdfAssets[1])),
                       const SizedBox(width: 3),
-                      Expanded(child: _buildCover(context, pdfAssets[2])),
+                      Expanded(
+                          child: _buildCover(context, widget.pdfAssets[2])),
                     ],
                   ),
                 ),
@@ -176,9 +187,11 @@ class FavoriteCard extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      Expanded(child: _buildCover(context, pdfAssets[3])),
+                      Expanded(
+                          child: _buildCover(context, widget.pdfAssets[3])),
                       const SizedBox(width: 3),
-                      Expanded(child: _buildCover(context, pdfAssets[4])),
+                      Expanded(
+                          child: _buildCover(context, widget.pdfAssets[4])),
                     ],
                   ),
                 ),
@@ -195,81 +208,126 @@ class FavoriteCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Container(
-      width: _getDynamicWidth(), // 动态宽度
-      padding: const EdgeInsets.all(20),
-      margin: const EdgeInsets.only(right: 16),
-      decoration: BoxDecoration(
-        color: colorScheme.surface, // 白色或者跟随主题的面色
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(13),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              if (subtitleIcon != null) ...[
-                subtitleIcon!,
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Text(
-                  subtitle,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // 封面区域
-          Expanded(
-            child: _buildCoverArea(context),
-          ),
-          const SizedBox(height: 16),
-          // 底部按钮
-          InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: GestureDetector(
+        onLongPress: widget.onDelete != null
+            ? () => setState(() => _showDelete = !_showDelete)
+            : null,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: _getDynamicWidth(),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest.withAlpha(128),
-                borderRadius: BorderRadius.circular(12),
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(13),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: Center(
-                child: Text(
-                  '查看文库 · $totalCount 篇文献',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (widget.subtitleIcon != null) ...[
+                        widget.subtitleIcon!,
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          widget.subtitle,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: _buildCoverArea(context),
+                  ),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    onTap: widget.onTap,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color:
+                            colorScheme.surfaceContainerHighest.withAlpha(128),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '查看文库 · ${widget.totalCount} 篇文献',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.onDelete != null)
+              Positioned(
+                top: -8,
+                right: -8,
+                child: AnimatedScale(
+                  scale: _showDelete ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutBack,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onDelete,
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: Material(
+                          color: colorScheme.error,
+                          shape: const CircleBorder(),
+                          elevation: 2,
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: Icon(
+                              Icons.remove,
+                              size: 18,
+                              color: colorScheme.onError,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

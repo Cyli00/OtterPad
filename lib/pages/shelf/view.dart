@@ -19,6 +19,38 @@ class ShelfPage extends ConsumerWidget {
     );
   }
 
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    Favorite fav,
+  ) async {
+    final theme = Theme.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除收藏夹'),
+        content: Text('确定要删除「${fav.name}」吗？收藏夹内的文献不会被删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: theme.colorScheme.error,
+              foregroundColor: theme.colorScheme.onError,
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      ref.read(favoritesProvider.notifier).delete(fav.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -180,6 +212,7 @@ class ShelfPage extends ConsumerWidget {
                         pdfAssets: fav.docPaths,
                         totalCount: fav.docPaths.length,
                         onTap: () => _openDetail(context, fav),
+                        onDelete: () => _confirmDelete(context, ref, fav),
                       );
                     },
                   ),
