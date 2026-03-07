@@ -77,7 +77,59 @@ class HomeHeader extends ConsumerWidget {
           }
         }
       case ToolbarAction.rebuildLibrary:
-        await ref.read(documentsProvider.notifier).rebuild();
+        if (!context.mounted) return;
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 16),
+                Text('正在重构文库...'),
+              ],
+            ),
+            duration: Duration(minutes: 5),
+          ),
+        );
+
+        await ref.read(documentsProvider.notifier).rebuild(
+          onProgress: (progress) {
+            if (!context.mounted) return;
+            messenger.hideCurrentSnackBar();
+            messenger.showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        '(${progress.current}/${progress.total}) '
+                        '${progress.fileName}: ${progress.status}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                duration: const Duration(minutes: 5),
+              ),
+            );
+          },
+        );
+
+        if (!context.mounted) return;
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          const SnackBar(content: Text('文库重构完成')),
+        );
     }
   }
 

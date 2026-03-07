@@ -286,7 +286,7 @@ class IdentifierResolver {
       String filePath = '';
       try {
         final docsDir = await DocumentsNotifier.getDocsDir();
-        final fileName = _buildPdfFileName(
+        final fileName = buildPdfFileName(
           year: year,
           authors: authors,
           title: title,
@@ -405,7 +405,7 @@ class IdentifierResolver {
   // ── 文件命名 ──
 
   /// 根据元数据生成 PDF 文件名，格式：year-mainAuthor-title.pdf
-  String _buildPdfFileName({
+  static String buildPdfFileName({
     String? year,
     List<String> authors = const [],
     required String title,

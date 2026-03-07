@@ -1,5 +1,5 @@
 # vscode
-.vscode/
+/.vscode/
 
 
 # Miscellaneous
@@ -56,4 +56,4 @@ app.*.map.json
 android/app/src/main/jniLibs/
 
 # reference
-ref/
+/ref/

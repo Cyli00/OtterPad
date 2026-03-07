@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 // ignore: depend_on_referenced_packages
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
@@ -8,9 +9,25 @@ import 'package:path_provider/path_provider.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import '../services/identifier_resolver.dart';
+import '../services/pdf_doi_extractor.dart';
 
 /// addByIdentifier 的结果类型
 enum AddByIdentifierResult { success, duplicate }
+
+/// rebuild() 进度信息
+class RebuildProgress {
+  final int current;
+  final int total;
+  final String fileName;
+  final String status;
+
+  const RebuildProgress({
+    required this.current,
+    required this.total,
+    required this.fileName,
+    required this.status,
+  });
+}
 
 /// 文献库状态管理
 class DocumentsNotifier extends StateNotifier<List<Document>> {
@@ -123,13 +140,26 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return (doc, AddByIdentifierResult.success);
   }
 
-  /// 重构文库：扫描本地目录，同步文献列表
-  Future<void> rebuild() async {
+  /// 判断文献是否需要元数据修复
+  bool _needsMetadataRepair(Document doc) {
+    if (doc.filePath.isEmpty) return false;
+    if (doc.doi != null && doc.doi!.isNotEmpty) return false;
+    if (doc.pmid != null && doc.pmid!.isNotEmpty) return false;
+    if (doc.arxivId != null && doc.arxivId!.isNotEmpty) return false;
+    if (doc.isbn != null && doc.isbn!.isNotEmpty) return false;
+    if (doc.authors.isNotEmpty) return false;
+    return true;
+  }
+
+  /// 重构文库：扫描新文件、清理缺失文件、自动补全元数据并重命名
+  Future<void> rebuild({
+    void Function(RebuildProgress)? onProgress,
+  }) async {
     final docsDir = await getDocsDir();
     final existingPaths = state.map((d) => d.filePath).toSet();
     bool changed = false;
 
-    // 添加目录中存在但列表中没有的文件
+    // Phase A — 扫描新文件
     await for (final entity in docsDir.list()) {
       if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
         if (!existingPaths.contains(entity.path)) {
@@ -147,7 +177,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       }
     }
 
-    // 移除文件已不存在的条目（跳过 filePath 为空的纯元数据条目）
+    // Phase A — 清理缺失文件
     final validDocs = <Document>[];
     for (final doc in state) {
       if (doc.filePath.isEmpty || await File(doc.filePath).exists()) {
@@ -156,11 +186,114 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         changed = true;
       }
     }
-
     if (changed) {
       state = validDocs;
-      await _save();
     }
+
+    // Phase B + C — 元数据修复 + 自动重命名
+    final toRepair = state.where(_needsMetadataRepair).toList();
+    if (toRepair.isNotEmpty) {
+      for (int i = 0; i < toRepair.length; i++) {
+        var doc = toRepair[i];
+        final baseName = p.basename(doc.filePath);
+
+        try {
+          // B1: 提取 DOI
+          onProgress?.call(RebuildProgress(
+            current: i + 1,
+            total: toRepair.length,
+            fileName: baseName,
+            status: '正在提取 DOI...',
+          ));
+
+          final doi = await PdfDoiExtractor.instance.extractDoi(doc.filePath);
+          if (doi == null) continue;
+
+          // B2: 通过 DOI 获取元数据
+          onProgress?.call(RebuildProgress(
+            current: i + 1,
+            total: toRepair.length,
+            fileName: baseName,
+            status: '正在获取元数据...',
+          ));
+
+          final resolved = await IdentifierResolver.instance.resolve(doi);
+
+          // B3: 合并元数据（保留原 id/addedAt/filePath）
+          doc = doc.copyWith(
+            itemType: resolved.itemType,
+            title: resolved.title,
+            authors: resolved.authors,
+            journal: resolved.journal,
+            journalAbbr: resolved.journalAbbr,
+            publisher: resolved.publisher,
+            volume: resolved.volume,
+            issue: resolved.issue,
+            pages: resolved.pages,
+            year: resolved.year,
+            date: resolved.date,
+            doi: resolved.doi,
+            pmid: resolved.pmid,
+            pmcid: resolved.pmcid,
+            arxivId: resolved.arxivId,
+            isbn: resolved.isbn,
+            issn: resolved.issn,
+            url: resolved.url,
+            abstractText: resolved.abstractText,
+            language: resolved.language,
+          );
+
+          // C: 自动重命名
+          onProgress?.call(RebuildProgress(
+            current: i + 1,
+            total: toRepair.length,
+            fileName: baseName,
+            status: '正在重命名...',
+          ));
+
+          try {
+            final newName = IdentifierResolver.buildPdfFileName(
+              year: doc.year,
+              authors: doc.authors,
+              title: doc.title,
+              fallbackId: p.basenameWithoutExtension(doc.filePath),
+            );
+
+            final dir = p.dirname(doc.filePath);
+            var newPath = p.join(dir, newName);
+
+            // 如果新路径和旧路径相同，跳过重命名
+            if (newPath != doc.filePath) {
+              // 冲突处理：加编号 (2)、(3)...
+              if (await File(newPath).exists()) {
+                final nameWithoutExt = p.basenameWithoutExtension(newName);
+                int counter = 2;
+                while (await File(newPath).exists()) {
+                  newPath = p.join(dir, '$nameWithoutExt ($counter).pdf');
+                  counter++;
+                }
+              }
+
+              await File(doc.filePath).rename(newPath);
+              doc = doc.copyWith(filePath: newPath);
+            }
+          } catch (e) {
+            debugPrint('重命名失败 ($baseName): $e');
+          }
+
+          // 更新 state 中对应的 doc
+          state = [
+            for (final d in state)
+              if (d.id == doc.id) doc else d,
+          ];
+        } catch (e) {
+          debugPrint('元数据修复失败 ($baseName): $e');
+          continue;
+        }
+      }
+    }
+
+    await _save();
   }
 
   /// 更新文献元数据
