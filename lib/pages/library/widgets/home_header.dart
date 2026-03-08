@@ -22,12 +22,40 @@ class HomeHeader extends ConsumerWidget {
           allowedExtensions: ['pdf'],
           allowMultiple: true,
         );
-        if (result != null) {
+        if (result != null && context.mounted) {
           final notifier = ref.read(documentsProvider.notifier);
-          for (final file in result.files) {
-            if (file.path != null) {
-              await notifier.addFile(file.path!);
-            }
+          final messenger = ScaffoldMessenger.of(context);
+          final files = result.files.where((f) => f.path != null).toList();
+          for (int i = 0; i < files.length; i++) {
+            messenger.hideCurrentSnackBar();
+            messenger.showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        '(${i + 1}/${files.length}) 正在解析 ${files[i].name}...',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                duration: const Duration(minutes: 5),
+              ),
+            );
+            await notifier.addFile(files[i].path!);
+          }
+          if (context.mounted) {
+            messenger.hideCurrentSnackBar();
+            messenger.showSnackBar(
+              SnackBar(content: Text('已添加 ${files.length} 篇文献')),
+            );
           }
         }
       case ToolbarAction.addByIdentifier:

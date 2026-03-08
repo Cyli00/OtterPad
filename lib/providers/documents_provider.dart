@@ -78,7 +78,111 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return docsDir;
   }
 
-  /// 添加用户选择的文件（复制到应用目录）
+  /// 从文件名解析基础元数据（最后兜底）
+  /// 支持格式: "YYYY-Authors-Title.pdf"
+  static ({String title, List<String> authors, String? year}) _parseFileName(
+      String filePath) {
+    final baseName = p.basenameWithoutExtension(filePath);
+    final parts = baseName.split('-');
+
+    if (parts.length >= 3) {
+      final yearCandidate = parts[0].trim();
+      final authorPart = parts[1].trim();
+      final titlePart = parts.sublist(2).join('-').trim();
+
+      if (RegExp(r'^\d{4}$').hasMatch(yearCandidate) &&
+          titlePart.isNotEmpty) {
+        return (title: titlePart, authors: [authorPart], year: yearCandidate);
+      }
+    }
+
+    return (title: baseName, authors: <String>[], year: null);
+  }
+
+  /// 对单个文档执行元数据修复: PDF DOI 提取 → CrossRef 解析 → 重命名 → 文件名兜底
+  Future<Document> _repairDocument(Document doc) async {
+    try {
+      final doi = await PdfDoiExtractor.instance.extractDoi(doc.filePath);
+      if (doi == null) {
+        final parsed = _parseFileName(doc.filePath);
+        if (parsed.authors.isNotEmpty || parsed.year != null) {
+          return doc.copyWith(
+            title: parsed.title,
+            authors: parsed.authors,
+            year: parsed.year,
+          );
+        }
+        return doc;
+      }
+
+      final resolved = await IdentifierResolver.instance.resolve(doi);
+      doc = doc.copyWith(
+        itemType: resolved.itemType,
+        title: resolved.title,
+        authors: resolved.authors,
+        journal: resolved.journal,
+        journalAbbr: resolved.journalAbbr,
+        publisher: resolved.publisher,
+        volume: resolved.volume,
+        issue: resolved.issue,
+        pages: resolved.pages,
+        year: resolved.year,
+        date: resolved.date,
+        doi: resolved.doi,
+        pmid: resolved.pmid,
+        pmcid: resolved.pmcid,
+        arxivId: resolved.arxivId,
+        isbn: resolved.isbn,
+        issn: resolved.issn,
+        url: resolved.url,
+        abstractText: resolved.abstractText,
+        language: resolved.language,
+      );
+
+      // 自动重命名
+      try {
+        final newName = IdentifierResolver.buildPdfFileName(
+          year: doc.year,
+          authors: doc.authors,
+          title: doc.title,
+          fallbackId: p.basenameWithoutExtension(doc.filePath),
+        );
+
+        final dir = p.dirname(doc.filePath);
+        var newPath = p.join(dir, newName);
+
+        if (newPath != doc.filePath) {
+          if (await File(newPath).exists()) {
+            final nameWithoutExt = p.basenameWithoutExtension(newName);
+            int counter = 2;
+            while (await File(newPath).exists()) {
+              newPath = p.join(dir, '$nameWithoutExt ($counter).pdf');
+              counter++;
+            }
+          }
+          await File(doc.filePath).rename(newPath);
+          doc = doc.copyWith(filePath: newPath);
+        }
+      } catch (e) {
+        debugPrint('重命名失败: $e');
+      }
+
+      return doc;
+    } catch (e) {
+      debugPrint('元数据修复失败: $e');
+      final parsed = _parseFileName(doc.filePath);
+      if (parsed.authors.isNotEmpty || parsed.year != null) {
+        return doc.copyWith(
+          title: parsed.title,
+          authors: parsed.authors,
+          year: parsed.year,
+        );
+      }
+      return doc;
+    }
+  }
+
+  /// 添加用户选择的文件（复制到应用目录，立即解析元数据）
   Future<Document?> addFile(String sourcePath) async {
     final file = File(sourcePath);
     if (!await file.exists()) return null;
@@ -92,15 +196,23 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
     await file.copy(destPath);
 
-    final doc = Document(
+    var doc = Document(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: fileName.replaceAll('.pdf', ''),
+      title: p.basenameWithoutExtension(destPath),
       authors: [],
       filePath: destPath,
       addedAt: DateTime.now(),
     );
 
+    // 先加入 state，让 UI 立即显示条目
     state = [...state, doc];
+
+    // 立即修复元数据（DOI 提取 → CrossRef → 重命名 → 文件名兜底）
+    doc = await _repairDocument(doc);
+    state = [
+      for (final d in state)
+        if (d.id == doc.id) doc else d,
+    ];
     await _save();
     return doc;
   }
@@ -140,14 +252,13 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return (doc, AddByIdentifierResult.success);
   }
 
-  /// 判断文献是否需要元数据修复
+  /// 判断文献是否需要元数据修复（有标识符说明已通过 API 获取过完整数据）
   bool _needsMetadataRepair(Document doc) {
     if (doc.filePath.isEmpty) return false;
     if (doc.doi != null && doc.doi!.isNotEmpty) return false;
     if (doc.pmid != null && doc.pmid!.isNotEmpty) return false;
     if (doc.arxivId != null && doc.arxivId!.isNotEmpty) return false;
     if (doc.isbn != null && doc.isbn!.isNotEmpty) return false;
-    if (doc.authors.isNotEmpty) return false;
     return true;
   }
 
@@ -163,11 +274,12 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     await for (final entity in docsDir.list()) {
       if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
         if (!existingPaths.contains(entity.path)) {
-          final fileName = p.basenameWithoutExtension(entity.path);
+          final parsed = _parseFileName(entity.path);
           final doc = Document(
             id: '${DateTime.now().millisecondsSinceEpoch}_${entity.path.hashCode}',
-            title: fileName,
-            authors: [],
+            title: parsed.title,
+            authors: parsed.authors,
+            year: parsed.year,
             filePath: entity.path,
             addedAt: DateTime.now(),
           );
@@ -192,105 +304,20 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
     // Phase B + C — 元数据修复 + 自动重命名
     final toRepair = state.where(_needsMetadataRepair).toList();
-    if (toRepair.isNotEmpty) {
-      for (int i = 0; i < toRepair.length; i++) {
-        var doc = toRepair[i];
-        final baseName = p.basename(doc.filePath);
+    for (int i = 0; i < toRepair.length; i++) {
+      final doc = toRepair[i];
+      onProgress?.call(RebuildProgress(
+        current: i + 1,
+        total: toRepair.length,
+        fileName: p.basename(doc.filePath),
+        status: '正在修复元数据...',
+      ));
 
-        try {
-          // B1: 提取 DOI
-          onProgress?.call(RebuildProgress(
-            current: i + 1,
-            total: toRepair.length,
-            fileName: baseName,
-            status: '正在提取 DOI...',
-          ));
-
-          final doi = await PdfDoiExtractor.instance.extractDoi(doc.filePath);
-          if (doi == null) continue;
-
-          // B2: 通过 DOI 获取元数据
-          onProgress?.call(RebuildProgress(
-            current: i + 1,
-            total: toRepair.length,
-            fileName: baseName,
-            status: '正在获取元数据...',
-          ));
-
-          final resolved = await IdentifierResolver.instance.resolve(doi);
-
-          // B3: 合并元数据（保留原 id/addedAt/filePath）
-          doc = doc.copyWith(
-            itemType: resolved.itemType,
-            title: resolved.title,
-            authors: resolved.authors,
-            journal: resolved.journal,
-            journalAbbr: resolved.journalAbbr,
-            publisher: resolved.publisher,
-            volume: resolved.volume,
-            issue: resolved.issue,
-            pages: resolved.pages,
-            year: resolved.year,
-            date: resolved.date,
-            doi: resolved.doi,
-            pmid: resolved.pmid,
-            pmcid: resolved.pmcid,
-            arxivId: resolved.arxivId,
-            isbn: resolved.isbn,
-            issn: resolved.issn,
-            url: resolved.url,
-            abstractText: resolved.abstractText,
-            language: resolved.language,
-          );
-
-          // C: 自动重命名
-          onProgress?.call(RebuildProgress(
-            current: i + 1,
-            total: toRepair.length,
-            fileName: baseName,
-            status: '正在重命名...',
-          ));
-
-          try {
-            final newName = IdentifierResolver.buildPdfFileName(
-              year: doc.year,
-              authors: doc.authors,
-              title: doc.title,
-              fallbackId: p.basenameWithoutExtension(doc.filePath),
-            );
-
-            final dir = p.dirname(doc.filePath);
-            var newPath = p.join(dir, newName);
-
-            // 如果新路径和旧路径相同，跳过重命名
-            if (newPath != doc.filePath) {
-              // 冲突处理：加编号 (2)、(3)...
-              if (await File(newPath).exists()) {
-                final nameWithoutExt = p.basenameWithoutExtension(newName);
-                int counter = 2;
-                while (await File(newPath).exists()) {
-                  newPath = p.join(dir, '$nameWithoutExt ($counter).pdf');
-                  counter++;
-                }
-              }
-
-              await File(doc.filePath).rename(newPath);
-              doc = doc.copyWith(filePath: newPath);
-            }
-          } catch (e) {
-            debugPrint('重命名失败 ($baseName): $e');
-          }
-
-          // 更新 state 中对应的 doc
-          state = [
-            for (final d in state)
-              if (d.id == doc.id) doc else d,
-          ];
-        } catch (e) {
-          debugPrint('元数据修复失败 ($baseName): $e');
-          continue;
-        }
-      }
+      final repaired = await _repairDocument(doc);
+      state = [
+        for (final d in state)
+          if (d.id == doc.id) repaired else d,
+      ];
     }
 
     await _save();

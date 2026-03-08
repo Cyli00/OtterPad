@@ -35,6 +35,7 @@ class BookshelfGrid extends ConsumerWidget {
             return DocumentCard(
               coverAsset: doc.filePath,
               name: doc.title,
+              authors: doc.authors.join(', '),
               journalName: doc.journal ?? '',
               year: doc.year ?? '',
               isBookmarked: false,

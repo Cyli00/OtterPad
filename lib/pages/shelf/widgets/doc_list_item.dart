@@ -1,39 +1,21 @@
 import 'package:flutter/material.dart';
 import '../../library/widgets/pdf_cover.dart';
 
-/// 从资源路径中解析文献信息（年份、作者、标题）
-///
-/// 文件名格式示例：
-/// "2022-Dong et al-Cortical regulation of two-stage rapid eye movement sleep.pdf"
-({String title, String authors}) _parseDocInfo(String assetPath) {
-  // 取文件名（去掉目录和 .pdf 后缀）
-  final fileName = assetPath.split('/').last.replaceAll('.pdf', '');
-
-  // 按 "-" 分割，尝试提取 "年份-作者-标题" 格式
-  final parts = fileName.split('-');
-  if (parts.length >= 3) {
-    // 第一段可能是年份，第二段是作者，其余拼回标题
-    final authorPart = parts[1].trim();
-    final titlePart = parts.sublist(2).join('-').trim();
-    if (titlePart.isNotEmpty) {
-      return (title: titlePart, authors: authorPart);
-    }
-  }
-
-  // 无法解析时用文件名作为标题
-  // TODO: 替换为真实 PDF 元数据提取
-  return (title: fileName, authors: '未知作者');
-}
-
 /// 收藏夹详情页中的文献列表项
 class DocListItem extends StatelessWidget {
-  final String assetPath;
+  final String title;
+  final String authors;
+  final String? journal;
+  final String coverPath;
   final String? comment;
   final VoidCallback onTap;
 
   const DocListItem({
     super.key,
-    required this.assetPath,
+    required this.title,
+    required this.authors,
+    this.journal,
+    required this.coverPath,
     this.comment,
     required this.onTap,
   });
@@ -42,7 +24,6 @@ class DocListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final info = _parseDocInfo(assetPath);
 
     return Card(
       elevation: 0,
@@ -70,7 +51,7 @@ class DocListItem extends StatelessWidget {
                       width: 100,
                       height: 140,
                       child: PdfCoverRender(
-                        assetPath: assetPath,
+                        assetPath: coverPath,
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -84,7 +65,7 @@ class DocListItem extends StatelessWidget {
                         const SizedBox(height: 4),
                         // 标题
                         Text(
-                          info.title,
+                          title,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: colorScheme.onSurface,
@@ -95,14 +76,28 @@ class DocListItem extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         // 作者
-                        Text(
-                          info.authors,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                        if (authors.isNotEmpty)
+                          Text(
+                            authors,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        // 期刊
+                        if (journal != null && journal!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            journal!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant
+                                  .withAlpha(180),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),

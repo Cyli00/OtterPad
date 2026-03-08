@@ -4,6 +4,7 @@ import 'pdf_cover.dart';
 class DocumentCard extends StatelessWidget {
   final String coverAsset;
   final String name;
+  final String authors;
   final String journalName;
   final String year;
   final VoidCallback onTap;
@@ -15,6 +16,7 @@ class DocumentCard extends StatelessWidget {
     super.key,
     required this.coverAsset,
     required this.name,
+    this.authors = '',
     required this.journalName,
     required this.year,
     required this.onTap,
@@ -80,8 +82,19 @@ class DocumentCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
+                  // 作者
+                  if (authors.isNotEmpty)
+                    Text(
+                      authors,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   // 期刊名
-                  if (journalName.isNotEmpty)
+                  if (journalName.isNotEmpty) ...[
+                    const SizedBox(height: 2),
                     Text(
                       journalName,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -90,6 +103,7 @@ class DocumentCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  ],
                   // 发表年份
                   if (year.isNotEmpty) ...[
                     const SizedBox(height: 2),
