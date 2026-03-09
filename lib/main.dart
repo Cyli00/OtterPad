@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/storage/storage.dart';
+import 'providers/proxy_provider.dart';
 import 'providers/theme_provider.dart';
 
 Future<void> main() async {
@@ -29,6 +30,9 @@ Future<void> main() async {
       sharedPreferencesProvider.overrideWithValue(prefs),
     ],
   );
+
+  // 初始化代理配置
+  container.read(proxyProvider.notifier).applyInitial();
 
   runApp(UncontrolledProviderScope(
     container: container,

@@ -6,7 +6,12 @@
       "mcp__plugin_context7_context7__query-docs",
       "Bash(xargs grep:*)",
       "WebFetch(domain:pub.dev)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:api.crossref.org)",
+      "WebFetch(domain:www.crossref.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.ncbi.nlm.nih.gov)",
+      "WebFetch(domain:info.arxiv.org)"
     ]
   }
 }
