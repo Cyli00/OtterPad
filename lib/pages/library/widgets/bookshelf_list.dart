@@ -9,7 +9,7 @@ class BookshelfList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final docs = ref.watch(documentsProvider);
+    final docs = ref.watch(validDocsProvider);
 
     if (docs.isEmpty) {
       return const SliverToBoxAdapter(

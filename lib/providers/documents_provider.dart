@@ -576,3 +576,8 @@ final noFileDocsCountProvider = Provider<int>((ref) {
 final noFileDocsProvider = Provider<List<Document>>((ref) {
   return ref.watch(documentsProvider).where((d) => d.filePath.isEmpty).toList();
 });
+
+/// 有文件条目列表（用于在文献库页面展示）
+final validDocsProvider = Provider<List<Document>>((ref) {
+  return ref.watch(documentsProvider).where((d) => d.filePath.isNotEmpty).toList();
+});
