@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/book/document.dart';
+import '../../../providers/documents_provider.dart';
 import 'pdf_cover.dart';
 
 /// 文献列表卡片（文献库列表视图 + 收藏夹详情页共用）
 ///
 /// 长按显示右上角删除按钮 → 点击后二次确认。
-class DocListCard extends StatefulWidget {
+/// 通过 [activeDeleteIdProvider] 实现卡片间删除按钮互斥。
+class DocListCard extends ConsumerWidget {
   final Document doc;
   final String? comment;
   final VoidCallback? onTap;
@@ -19,20 +22,13 @@ class DocListCard extends StatefulWidget {
     this.onDelete,
   });
 
-  @override
-  State<DocListCard> createState() => _DocListCardState();
-}
-
-class _DocListCardState extends State<DocListCard> {
-  bool _showDelete = false;
-
-  Future<void> _confirmDelete() async {
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final cs = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除文献'),
-        content: Text('确定要从文库中移除「${widget.doc.title}」吗？'),
+        content: Text('确定要从文库中移除「${doc.title}」吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -50,18 +46,16 @@ class _DocListCardState extends State<DocListCard> {
       ),
     );
     if (confirmed == true) {
-      widget.onDelete?.call();
+      onDelete?.call();
     }
-    if (mounted) {
-      setState(() => _showDelete = false);
-    }
+    ref.read(activeDeleteIdProvider.notifier).state = null;
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final doc = widget.doc;
+    final showDelete = ref.watch(activeDeleteIdProvider) == doc.id;
 
     return Stack(
       children: [
@@ -74,11 +68,12 @@ class _DocListCardState extends State<DocListCard> {
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: _showDelete
-                ? () => setState(() => _showDelete = false)
-                : widget.onTap,
-            onLongPress: widget.onDelete != null
-                ? () => setState(() => _showDelete = !_showDelete)
+            onTap: showDelete
+                ? () => ref.read(activeDeleteIdProvider.notifier).state = null
+                : onTap,
+            onLongPress: onDelete != null
+                ? () => ref.read(activeDeleteIdProvider.notifier).state =
+                    showDelete ? null : doc.id
                 : null,
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -158,8 +153,7 @@ class _DocListCardState extends State<DocListCard> {
                   ),
 
                   // 评语区域
-                  if (widget.comment != null &&
-                      widget.comment!.isNotEmpty) ...[
+                  if (comment != null && comment!.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,7 +166,7 @@ class _DocListCardState extends State<DocListCard> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            widget.comment!,
+                            comment!,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                               height: 1.5,
@@ -195,25 +189,29 @@ class _DocListCardState extends State<DocListCard> {
           top: 4,
           right: 4,
           child: IgnorePointer(
-            ignoring: !_showDelete,
+            ignoring: !showDelete,
             child: AnimatedScale(
-              scale: _showDelete ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutBack,
-              child: Material(
-                type: MaterialType.circle,
-                color: colorScheme.errorContainer,
-                elevation: 1,
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: _confirmDelete,
-                  child: SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: Icon(
-                      Icons.remove_rounded,
-                      size: 20,
-                      color: colorScheme.onErrorContainer,
+              scale: showDelete ? 1.0 : 0.0,
+              duration: Duration(milliseconds: showDelete ? 250 : 150),
+              curve: showDelete ? Curves.easeOutBack : Curves.easeIn,
+              child: AnimatedOpacity(
+                opacity: showDelete ? 1.0 : 0.0,
+                duration: Duration(milliseconds: showDelete ? 200 : 100),
+                child: Material(
+                  type: MaterialType.circle,
+                  color: colorScheme.errorContainer,
+                  elevation: 1,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => _confirmDelete(context, ref),
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(
+                        Icons.remove_rounded,
+                        size: 20,
+                        color: colorScheme.onErrorContainer,
+                      ),
                     ),
                   ),
                 ),

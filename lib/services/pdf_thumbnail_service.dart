@@ -8,12 +8,14 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 
+import 'pdf_process_lock.dart';
+
 /// PDF 缩略图服务：首次渲染 PDF 首页为 PNG 存入磁盘，后续直接返回文件路径。
 ///
 /// 核心策略：
 /// - 首次导入时提取 PDF 第一页，按高分辨率渲染为 PNG
 /// - 后续只加载磁盘上的 PNG 文件，不再加载整个 PDF，保证丝滑滚动
-/// - 使用简单的异步 Future 队列（避免重入并发打开）彻底解决 OOM 问题
+/// - 使用全局 [PdfProcessLock] 彻底解决 OOM 问题
 class PdfThumbnailService {
   PdfThumbnailService._();
   static final PdfThumbnailService instance = PdfThumbnailService._();
@@ -21,8 +23,8 @@ class PdfThumbnailService {
   // 防止同一文件的重复并发请求（如快速滚动时多次请求同一本书）
   final Map<String, Future<String?>> _cachingTasks = {};
 
-  // 串行队列锁（Future chain），防止并发打开大量 PDF 导致内存暴胀
-  Future<void> _processLock = Future.value();
+  /// 单次渲染超时时间
+  static const _renderTimeout = Duration(seconds: 30);
 
   Future<String> get _cacheDir async {
     final appDir = await getApplicationCacheDirectory();
@@ -46,63 +48,75 @@ class PdfThumbnailService {
     }
 
     // 开启渲染提取任务
-    final task = _renderAndSaveWithLock(filePath, cachePath);
+    final task = _renderAndSave(filePath, cachePath);
     _cachingTasks[filePath] = task;
 
     try {
       return await task;
     } finally {
-      // 提取成功或失败，都必须移除旧任务
       _cachingTasks.remove(filePath);
     }
   }
 
-  /// 带有串行队列锁的渲染机制，保证同一时刻仅解析一份 PDF
-  Future<String?> _renderAndSaveWithLock(
-      String filePath, String cachePath) async {
-    // 简单的 Future chain 机制：串并联锁
-    final lock = _processLock;
-    final completer = Completer<void>();
-    _processLock = completer.future;
+  /// 通过全局锁串行渲染 PDF 首页（带超时保护）
+  Future<String?> _renderAndSave(String filePath, String cachePath) async {
+    return PdfProcessLock.instance.run(() async {
+      PdfDocument? document;
+      try {
+        final bytes = await File(filePath).readAsBytes();
+        document = await PdfDocument.openData(
+          bytes,
+          passwordProvider: () => '',
+        );
+        if (document.pages.isEmpty) return null;
 
-    // 等到上一个 PDF 处理结束
-    await lock;
+        final page = document.pages.first;
 
-    PdfDocument? document;
+        // 2.5 倍分辨率保证高分屏清晰
+        const scale = 2.5;
+        final rendered = await page.render(
+          fullWidth: page.width * scale,
+          fullHeight: page.height * scale,
+        );
+
+        if (rendered == null) return null;
+
+        final image = await rendered.createImage();
+        final byteData =
+            await image.toByteData(format: ui.ImageByteFormat.png);
+        image.dispose();
+
+        if (byteData == null) return null;
+
+        await File(cachePath).writeAsBytes(byteData.buffer.asUint8List());
+        return cachePath;
+      } catch (e) {
+        debugPrint('渲染 PDF 首页失败 ($filePath): $e');
+        return null;
+      } finally {
+        document?.dispose();
+      }
+    }).timeout(
+      _renderTimeout,
+      onTimeout: () {
+        debugPrint('渲染 PDF 首页超时 ($filePath)');
+        return null;
+      },
+    );
+  }
+
+  /// 文件重命名后迁移缩略图缓存，避免重新渲染
+  Future<void> migrateCacheEntry(String oldPath, String newPath) async {
+    if (oldPath == newPath) return;
     try {
-      // 用 readAsBytes + openData 避免路径编码问题（中文文件名等）
-      final bytes = await File(filePath).readAsBytes();
-      document = await PdfDocument.openData(
-        bytes,
-        passwordProvider: () => '',
-      );
-      if (document.pages.isEmpty) return null;
-
-      final page = document.pages.first;
-
-      // 2.5 倍分辨率保证高分屏清晰
-      const scale = 2.5;
-      final rendered = await page.render(
-        fullWidth: page.width * scale,
-        fullHeight: page.height * scale,
-      );
-
-      if (rendered == null) return null;
-
-      final image = await rendered.createImage();
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-
-      if (byteData == null) return null;
-
-      await File(cachePath).writeAsBytes(byteData.buffer.asUint8List());
-      return cachePath;
+      final dir = await _cacheDir;
+      final oldCache = File(p.join(dir, _cacheKey(oldPath)));
+      if (await oldCache.exists()) {
+        final newCache = p.join(dir, _cacheKey(newPath));
+        await oldCache.rename(newCache);
+      }
     } catch (e) {
-      debugPrint('渲染 PDF 首页失败 ($filePath): $e');
-      return null;
-    } finally {
-      document?.dispose();
-      completer.complete();
+      debugPrint('迁移缩略图缓存失败: $e');
     }
   }
 

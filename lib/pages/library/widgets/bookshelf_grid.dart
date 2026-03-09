@@ -33,6 +33,7 @@ class BookshelfGrid extends ConsumerWidget {
             final doc = docs[index];
 
             return DocumentCard(
+              docId: doc.id,
               coverAsset: doc.filePath,
               name: doc.title,
               authors: doc.authors.join(', '),

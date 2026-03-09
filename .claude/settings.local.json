@@ -12,7 +12,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.ncbi.nlm.nih.gov)",
       "WebFetch(domain:info.arxiv.org)",
-      "Bash(dart analyze:*)"
+      "Bash(dart analyze:*)",
+      "WebFetch(domain:services.zotero.org)",
+      "WebFetch(domain:grobid.readthedocs.io)",
+      "WebFetch(domain:forums.zotero.org)"
     ]
   },
   "outputStyle": "Explanatory"

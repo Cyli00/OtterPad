@@ -10,7 +10,8 @@ import 'package:path_provider/path_provider.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import '../services/identifier_resolver.dart';
-import '../services/pdf_doi_extractor.dart';
+import '../services/pdf_identifier_extractor.dart';
+import '../services/pdf_thumbnail_service.dart';
 
 /// addByIdentifier 的结果类型
 enum AddByIdentifierResult { success, duplicate }
@@ -100,11 +101,11 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return (title: baseName, authors: <String>[], year: null);
   }
 
-  /// 对单个文档执行元数据修复: PDF DOI 提取 → CrossRef 解析 → 重命名 → 文件名兜底
+  /// 对单个文档执行元数据修复: PDF 标识符提取 → API 解析 → 重命名 → 文件名兜底
   Future<Document> _repairDocument(Document doc, {CancelToken? cancelToken}) async {
     try {
-      final doi = await PdfDoiExtractor.instance.extractDoi(doc.filePath);
-      if (doi == null) {
+      final identifier = await PdfIdentifierExtractor.instance.extractIdentifier(doc.filePath);
+      if (identifier == null) {
         final parsed = _parseFileName(doc.filePath);
         if (parsed.authors.isNotEmpty || parsed.year != null) {
           return doc.copyWith(
@@ -116,7 +117,11 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         return doc;
       }
 
-      final resolved = await IdentifierResolver.instance.resolve(doi, cancelToken: cancelToken);
+      final resolved = await IdentifierResolver.instance.resolve(
+        identifier.value,
+        metadataOnly: true,
+        cancelToken: cancelToken,
+      );
       doc = doc.copyWith(
         itemType: resolved.itemType,
         title: resolved.title,
@@ -161,8 +166,11 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
               counter++;
             }
           }
-          await File(doc.filePath).rename(newPath);
+          final oldPath = doc.filePath;
+          await File(oldPath).rename(newPath);
           doc = doc.copyWith(filePath: newPath);
+          // 迁移缩略图缓存，避免路径变化后重新渲染
+          await PdfThumbnailService.instance.migrateCacheEntry(oldPath, newPath);
         }
       } catch (e) {
         debugPrint('重命名失败: $e');
@@ -306,21 +314,35 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
     // Phase B + C — 元数据修复 + 自动重命名
     final toRepair = state.where(_needsMetadataRepair).toList();
-    for (int i = 0; i < toRepair.length; i++) {
-      if (cancelToken?.isCancelled == true) break;
-      final doc = toRepair[i];
-      onProgress?.call(RebuildProgress(
-        current: i + 1,
-        total: toRepair.length,
-        fileName: p.basename(doc.filePath),
-        status: '正在修复元数据...',
-      ));
+    if (toRepair.isNotEmpty) {
+      final updatedMap = <String, Document>{};
+      for (int i = 0; i < toRepair.length; i++) {
+        if (cancelToken?.isCancelled == true) break;
+        final doc = toRepair[i];
+        onProgress?.call(RebuildProgress(
+          current: i + 1,
+          total: toRepair.length,
+          fileName: p.basename(doc.filePath),
+          status: '正在修复元数据...',
+        ));
 
-      final repaired = await _repairDocument(doc, cancelToken: cancelToken);
-      state = [
-        for (final d in state)
-          if (d.id == doc.id) repaired else d,
-      ];
+        final repaired = await _repairDocument(doc, cancelToken: cancelToken);
+        updatedMap[doc.id] = repaired;
+        
+        // 批处理状态更新：每修复 5 个刷新一次 UI，避免频繁重建导致主线程卡顿
+        if ((i + 1) % 5 == 0) {
+          state = [
+            for (final d in state) updatedMap[d.id] ?? d,
+          ];
+        }
+      }
+
+      // 循环结束，应用剩下的更新
+      if (updatedMap.isNotEmpty) {
+        state = [
+          for (final d in state) updatedMap[d.id] ?? d,
+        ];
+      }
     }
 
     await _save();
@@ -381,8 +403,17 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     await _save();
   }
 
-  /// 删除文献
+  /// 删除文献（同时删除磁盘 PDF 文件）
   Future<void> delete(String id) async {
+    final doc = state.firstWhere((d) => d.id == id, orElse: () => state.first);
+    if (doc.id == id && doc.filePath.isNotEmpty) {
+      try {
+        final file = File(doc.filePath);
+        if (await file.exists()) await file.delete();
+      } catch (e) {
+        debugPrint('删除文件失败: $e');
+      }
+    }
     state = state.where((d) => d.id != id).toList();
     await _save();
   }
@@ -395,3 +426,6 @@ final documentsProvider =
 
 /// 视图模式：true=网格，false=列表
 final viewModeProvider = StateProvider<bool>((ref) => true);
+
+/// 当前显示删除按钮的文献 ID（null 表示无激活）
+final activeDeleteIdProvider = StateProvider<String?>((ref) => null);

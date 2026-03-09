@@ -14,6 +14,10 @@ Do not edit files in the `android/`, `windows/`, `linux/`, `macos/`, `ios/`, and
 - Write each of them to ~/CLAUDE.md below **Completed Tasks**.
 - Remove similar accomplished tasks from ~/CLAUDE.md below **Todolist**
 
+## Database Management
+
+
+
 ## UI Design Rules (Strict MD3 Compliance)
 
 **Check Items:**
@@ -59,7 +63,8 @@ When adding or updating dependencies in `pubspec.yaml`:
 - IdentifierResolver 添加 applyProxy/testConnectivity
 - SnackBar 取消按钮 + CancelToken 全链路传递
 - 出版商 PDF 直接获取 (DOI 重定向 + 8 家 URL 模式)
+- 修复 PDF 解析锁死导致标识符提取与缩略图卡顿
+- 优化库重构 O(N²) Riverpod 状态更新引发的 UI 卡顿
 
 ## Todolist
 
-- DocumentCard 作者名 IEEE 格式化展示

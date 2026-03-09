@@ -29,13 +29,28 @@ SnackBar buildProgressSnackBar({
             child: Text('($current/$total)'),
           ),
         Expanded(
-          child: Text(
-            status != null && status.isNotEmpty
-                ? '$fileName $status'
-                : fileName,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
+          child: status != null && status.isNotEmpty
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        fileName,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                    Text(
+                      ' $status',
+                      maxLines: 1,
+                    ),
+                  ],
+                )
+              : Text(
+                  fileName,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
         ),
       ],
     ),
