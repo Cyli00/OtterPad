@@ -128,8 +128,9 @@ class HomeHeader extends ConsumerWidget {
           ),
         );
 
+        RebuildResult? result;
         try {
-          await ref.read(documentsProvider.notifier).rebuild(
+          result = await ref.read(documentsProvider.notifier).rebuild(
             cancelToken: cancelToken,
             onProgress: (progress) {
               if (!context.mounted || cancelToken.isCancelled) return;
@@ -154,10 +155,13 @@ class HomeHeader extends ConsumerWidget {
 
         if (!context.mounted) return;
         messenger.hideCurrentSnackBar();
+
+        String message = cancelToken.isCancelled ? '已取消重构' : '文库重构已结束';
+        if (result != null && result.noFileCount > 0) {
+          message += '，有 ${result.noFileCount} 个条目被转移到无文件条目';
+        }
         messenger.showSnackBar(
-          SnackBar(
-            content: Text(cancelToken.isCancelled ? '已取消重构' : '文库重构已结束'),
-          ),
+          SnackBar(content: Text(message)),
         );
     }
   }

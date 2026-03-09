@@ -1,0 +1,51 @@
+﻿Analyzing NightReader...                                        
+
+   info - Unnecessary use of multiple underscores - lib\pages\shelf\no_file_entries_page.dart:84:39 - unnecessary_underscores
+   info - Use the null-aware marker '?' rather than a null check via an 'if' - lib\pages\shelf\widgets\library_menu_item.dart:43:13 - use_null_aware_elements
+  error - Classes can only extend other classes - lib\providers\documents_provider.dart:42:33 - extends_non_class
+  error - Too many positional arguments: 0 expected, but 1 found - lib\providers\documents_provider.dart:45:40 - extra_positional_arguments
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:52:7 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:68:5 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:76:21 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:211:9 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:224:5 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:224:17 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:228:5 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:229:23 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:244:25 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:266:5 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:266:17 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:287:27 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:303:11 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:303:23 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:311:23 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:325:7 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:329:24 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:360:11 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:361:29 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:366:9 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:367:27 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:373:22 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:391:11 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:392:29 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:399:9 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:400:27 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:407:25 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:438:5 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:439:23 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:471:17 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:471:70 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:503:5 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:504:23 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:515:17 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:515:70 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:528:9 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:529:27 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:544:17 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:544:67 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:553:5 - undefined_identifier
+  error - Undefined name 'state' - lib\providers\documents_provider.dart:553:13 - undefined_identifier
+  error - The function 'StateNotifierProvider' isn't defined - lib\providers\documents_provider.dart:559:5 - undefined_function
+  error - The function 'StateProvider' isn't defined - lib\providers\documents_provider.dart:564:26 - undefined_function
+  error - The function 'StateProvider' isn't defined - lib\providers\documents_provider.dart:567:32 - undefined_function
+

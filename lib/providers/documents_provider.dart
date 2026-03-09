@@ -3,6 +3,7 @@ import 'dart:io';
 // ignore: depend_on_referenced_packages
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
@@ -15,6 +16,13 @@ import '../services/pdf_thumbnail_service.dart';
 
 /// addByIdentifier 的结果类型
 enum AddByIdentifierResult { success, duplicate }
+
+/// rebuild() 的返回结果
+class RebuildResult {
+  final int noFileCount;
+  final bool cancelled;
+  const RebuildResult({required this.noFileCount, required this.cancelled});
+}
 
 /// rebuild() 进度信息
 class RebuildProgress {
@@ -272,7 +280,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   }
 
   /// 重构文库：扫描新文件、清理缺失文件、自动补全元数据并重命名
-  Future<void> rebuild({
+  Future<RebuildResult> rebuild({
     void Function(RebuildProgress)? onProgress,
     CancelToken? cancelToken,
   }) async {
@@ -396,6 +404,12 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     }
 
     await _save();
+
+    final noFileCount = state.where((d) => d.filePath.isEmpty).length;
+    return RebuildResult(
+      noFileCount: noFileCount,
+      cancelled: cancelToken?.isCancelled == true,
+    );
   }
 
   /// 更新文献元数据
@@ -453,6 +467,79 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     await _save();
   }
 
+  /// 为无文件条目附加本地 PDF 文件
+  Future<void> attachFile(String docId, String sourcePath) async {
+    final doc = state.firstWhere((d) => d.id == docId, orElse: () => state.first);
+    if (doc.id != docId) return;
+
+    final docsDir = await getDocsDir();
+    final newName = IdentifierResolver.buildPdfFileName(
+      year: doc.year,
+      authors: doc.authors,
+      title: doc.title,
+      fallbackId: p.basenameWithoutExtension(sourcePath),
+    );
+
+    final dir = docsDir.path;
+    var destPath = p.join(dir, newName);
+
+    // 处理文件名冲突
+    if (await File(destPath).exists()) {
+      final nameWithoutExt = p.basenameWithoutExtension(newName);
+      int counter = 2;
+      while (await File(destPath).exists()) {
+        destPath = p.join(dir, '$nameWithoutExt ($counter).pdf');
+        counter++;
+      }
+    }
+
+    final sourceFile = File(sourcePath);
+    // 若源文件已在 docsDir 则 rename，否则 copy
+    if (p.dirname(sourcePath) == dir) {
+      await sourceFile.rename(destPath);
+    } else {
+      await sourceFile.copy(destPath);
+    }
+
+    state = [
+      for (final d in state)
+        if (d.id == docId) d.copyWith(filePath: destPath) else d,
+    ];
+    await _save();
+
+    // 触发缩略图生成
+    PdfThumbnailService.instance.getThumbnailPath(destPath);
+  }
+
+  /// 为无文件条目重新下载 PDF（仅 DOI 非空时有效）
+  Future<bool> redownloadPdf(String docId, {CancelToken? cancelToken}) async {
+    final doc = state.firstWhere((d) => d.id == docId, orElse: () => state.first);
+    if (doc.id != docId || doc.doi == null || doc.doi!.isEmpty) return false;
+
+    try {
+      final downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
+        doi: doc.doi!,
+        year: doc.year,
+        authors: doc.authors,
+        title: doc.title,
+        fallbackId: p.basenameWithoutExtension(doc.id),
+        cancelToken: cancelToken,
+      );
+      if (downloadedPath.isNotEmpty) {
+        state = [
+          for (final d in state)
+            if (d.id == docId) d.copyWith(filePath: downloadedPath) else d,
+        ];
+        await _save();
+        PdfThumbnailService.instance.getThumbnailPath(downloadedPath);
+        return true;
+      }
+    } catch (e) {
+      debugPrint('重新下载 PDF 失败: $e');
+    }
+    return false;
+  }
+
   /// 删除文献（同时删除磁盘 PDF 文件）
   Future<void> delete(String id) async {
     final doc = state.firstWhere((d) => d.id == id, orElse: () => state.first);
@@ -479,3 +566,13 @@ final viewModeProvider = StateProvider<bool>((ref) => true);
 
 /// 当前显示删除按钮的文献 ID（null 表示无激活）
 final activeDeleteIdProvider = StateProvider<String?>((ref) => null);
+
+/// 无文件条目数量
+final noFileDocsCountProvider = Provider<int>((ref) {
+  return ref.watch(documentsProvider).where((d) => d.filePath.isEmpty).length;
+});
+
+/// 无文件条目列表
+final noFileDocsProvider = Provider<List<Document>>((ref) {
+  return ref.watch(documentsProvider).where((d) => d.filePath.isEmpty).toList();
+});

@@ -7,6 +7,7 @@ import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
 import 'favorite_detail_page.dart';
+import 'no_file_entries_page.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
@@ -100,19 +101,45 @@ class ShelfPage extends ConsumerWidget {
                   onTap: () {},
                 ),
                 LibraryMenuItem(
-                  icon: Icons.star_border, // 星标
+                  icon: Icons.star_border,
                   title: '星标条目',
                   onTap: () {},
                 ),
-                
-                // 思维导图先不要考虑
-                // LibraryMenuItem(
-                //   icon: Icons.account_tree_outlined,
-                //   title: '思维导图',
-                //   onTap: () {},
-                // ),
-
-                const SizedBox(height: 16),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final count = ref.watch(noFileDocsCountProvider);
+                    return LibraryMenuItem(
+                      icon: Icons.insert_drive_file_outlined,
+                      title: '无文件条目',
+                      trailing: count > 0
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.errorContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onErrorContainer,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          : null,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const NoFileEntriesPage(),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
                 
                 // 分割线
                 Divider(
