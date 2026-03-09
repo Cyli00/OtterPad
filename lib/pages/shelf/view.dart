@@ -101,7 +101,7 @@ class ShelfPage extends ConsumerWidget {
                 ),
                 LibraryMenuItem(
                   icon: Icons.star_border, // 星标
-                  title: '星标项目',
+                  title: '星标条目',
                   onTap: () {},
                 ),
                 

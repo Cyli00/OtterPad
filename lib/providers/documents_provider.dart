@@ -305,11 +305,61 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       if (doc.filePath.isEmpty || await File(doc.filePath).exists()) {
         validDocs.add(doc);
       } else {
-        changed = true;
+        // 如果文件丢失且有 DOI，则保留条目但清空 filePath，以便后续尝试重新下载
+        if (doc.doi != null && doc.doi!.isNotEmpty) {
+          validDocs.add(doc.copyWith(filePath: ''));
+          changed = true;
+        } else {
+          changed = true;
+        }
       }
     }
     if (changed) {
       state = validDocs;
+    }
+
+    // Phase A.5 — 根据 DOI 下载缺失的 PDF
+    final toDownload = state.where((d) => d.filePath.isEmpty && d.doi != null && d.doi!.isNotEmpty).toList();
+    if (toDownload.isNotEmpty) {
+      final updatedMap = <String, Document>{};
+      for (int i = 0; i < toDownload.length; i++) {
+        if (cancelToken?.isCancelled == true) break;
+        final doc = toDownload[i];
+        onProgress?.call(RebuildProgress(
+          current: i + 1,
+          total: toDownload.length,
+          fileName: doc.title,
+          status: '正在根据 DOI 下载文献: ${doc.doi}',
+        ));
+
+        try {
+          final downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
+            doi: doc.doi!,
+            year: doc.year,
+            authors: doc.authors,
+            title: doc.title,
+            fallbackId: p.basenameWithoutExtension(doc.id),
+            cancelToken: cancelToken,
+          );
+          if (downloadedPath.isNotEmpty) {
+            updatedMap[doc.id] = doc.copyWith(filePath: downloadedPath);
+          }
+        } catch (e) {
+          debugPrint('下载缺失 PDF 失败: $e');
+        }
+
+        // 批处理状态更新：每下载 2 个刷新一次 UI
+        if ((i + 1) % 2 == 0) {
+          state = [
+            for (final d in state) updatedMap[d.id] ?? d,
+          ];
+        }
+      }
+      if (updatedMap.isNotEmpty) {
+        state = [
+          for (final d in state) updatedMap[d.id] ?? d,
+        ];
+      }
     }
 
     // Phase B + C — 元数据修复 + 自动重命名

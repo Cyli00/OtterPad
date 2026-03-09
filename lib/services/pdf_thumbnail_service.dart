@@ -63,20 +63,34 @@ class PdfThumbnailService {
     return PdfProcessLock.instance.run(() async {
       PdfDocument? document;
       try {
-        final bytes = await File(filePath).readAsBytes();
-        document = await PdfDocument.openData(
-          bytes,
+        document = await PdfDocument.openFile(
+          filePath,
           passwordProvider: () => '',
         );
         if (document.pages.isEmpty) return null;
 
         final page = document.pages.first;
 
-        // 2.5 倍分辨率保证高分屏清晰
+        // 2.5 倍分辨率保证高分屏清晰，但增加最大限制防止崩溃
         const scale = 2.5;
+        double renderWidth = page.width * scale;
+        double renderHeight = page.height * scale;
+        
+        const double maxDimension = 3000.0;
+        if (renderWidth > maxDimension || renderHeight > maxDimension) {
+          final aspect = page.width / page.height;
+          if (renderWidth > renderHeight) {
+            renderWidth = maxDimension;
+            renderHeight = maxDimension / aspect;
+          } else {
+            renderHeight = maxDimension;
+            renderWidth = maxDimension * aspect;
+          }
+        }
+
         final rendered = await page.render(
-          fullWidth: page.width * scale,
-          fullHeight: page.height * scale,
+          fullWidth: renderWidth,
+          fullHeight: renderHeight,
         );
 
         if (rendered == null) return null;

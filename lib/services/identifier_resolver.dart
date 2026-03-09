@@ -551,6 +551,94 @@ class IdentifierResolver {
     }
   }
 
+  // ── 根据 DOI 下载 PDF ──
+
+  /// 根据 DOI 尝试下载 PDF（Publisher -> Unpaywall -> Sci-Hub兜底）
+  /// 
+  /// 适用于文档元数据已存在，但未找到本地 PDF 文件的场景。
+  Future<String> downloadPdfByDoi({
+    required String doi,
+    String? year,
+    List<String> authors = const [],
+    required String title,
+    required String fallbackId,
+    CancelToken? cancelToken,
+  }) async {
+    String filePath = '';
+
+    // 策略 1: 出版商直接获取（校园网/机构代理）
+    try {
+      filePath = await _tryPublisherPdf(
+        doi: doi,
+        year: year,
+        authors: authors,
+        title: title,
+        fallbackId: fallbackId,
+        cancelToken: cancelToken,
+      );
+    } catch (e) {
+      debugPrint('出版商 PDF 获取失败: $e');
+    }
+    if (filePath.isNotEmpty) return filePath;
+
+    // 策略 2: Unpaywall 开放获取
+    try {
+      final uResp = await _dio.get(
+        'https://api.unpaywall.org/v2/$doi',
+        queryParameters: {'email': 'dev@nightreader.app'},
+        cancelToken: cancelToken,
+      );
+      final bestOa = (uResp.data as Map<String, dynamic>)['best_oa_location'];
+      final pdfUrl = (bestOa as Map<String, dynamic>?)?['url_for_pdf'] as String?;
+      if (pdfUrl != null && pdfUrl.isNotEmpty) {
+        filePath = await _downloadPdf(
+          url: pdfUrl,
+          year: year,
+          authors: authors,
+          title: title,
+          fallbackId: fallbackId,
+          cancelToken: cancelToken,
+        );
+      }
+    } catch (e) {
+      debugPrint('Unpaywall PDF 下载失败: $e');
+    }
+    if (filePath.isNotEmpty) return filePath;
+
+    // 策略 3: Sci-Hub 兜底获取
+    try {
+      final sResp = await _dio.get(
+        'https://sci-hub.se/$doi',
+        cancelToken: cancelToken,
+      );
+      final html = sResp.data as String;
+      // 匹配 <embed src="..."> 或 <iframe src="...">
+      final embedMatch = RegExp(r'<embed[^>]+src="([^"]+)"', caseSensitive: false).firstMatch(html) ??
+                         RegExp(r'<iframe[^>]+src="([^"]+)"', caseSensitive: false).firstMatch(html);
+      
+      if (embedMatch != null) {
+        var pdfUrl = embedMatch.group(1)!;
+        if (pdfUrl.startsWith('//')) {
+          pdfUrl = 'https:$pdfUrl';
+        } else if (pdfUrl.startsWith('/')) {
+          pdfUrl = 'https://sci-hub.se$pdfUrl';
+        }
+        filePath = await _downloadPdf(
+          url: pdfUrl,
+          year: year,
+          authors: authors,
+          title: title,
+          fallbackId: fallbackId,
+          cancelToken: cancelToken,
+        );
+      }
+    } catch (e) {
+      debugPrint('Sci-Hub PDF 下载失败: $e');
+    }
+
+    return filePath;
+  }
+
   // ── 出版商 PDF 获取 ──
 
   /// 尝试通过出版商直接获取 PDF（校园网 / 机构代理场景）

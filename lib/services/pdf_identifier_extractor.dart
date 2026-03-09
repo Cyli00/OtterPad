@@ -34,9 +34,8 @@ class PdfIdentifierExtractor {
     return PdfProcessLock.instance.run(() async {
       PdfDocument? document;
       try {
-        final bytes = await File(filePath).readAsBytes();
-        document = await PdfDocument.openData(
-          bytes,
+        document = await PdfDocument.openFile(
+          filePath,
           passwordProvider: () => '',
         );
 

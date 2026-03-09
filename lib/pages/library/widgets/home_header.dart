@@ -156,7 +156,7 @@ class HomeHeader extends ConsumerWidget {
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
           SnackBar(
-            content: Text(cancelToken.isCancelled ? '已取消重构' : '文库重构完成'),
+            content: Text(cancelToken.isCancelled ? '已取消重构' : '文库重构已结束'),
           ),
         );
     }
