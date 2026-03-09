@@ -3,6 +3,50 @@ import 'package:flutter/material.dart';
 
 enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
+/// 构建操作进度 SnackBar
+///
+/// 布局: [spinner] (current/total) fileName status  [取消]
+SnackBar buildProgressSnackBar({
+  int? current,
+  int? total,
+  required String fileName,
+  String? status,
+  required VoidCallback onCancel,
+  Duration duration = const Duration(minutes: 5),
+}) {
+  return SnackBar(
+    content: Row(
+      children: [
+        const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: 12),
+        if (current != null && total != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text('($current/$total)'),
+          ),
+        Expanded(
+          child: Text(
+            status != null && status.isNotEmpty
+                ? '$fileName $status'
+                : fileName,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+      ],
+    ),
+    action: SnackBarAction(
+      label: '取消',
+      onPressed: onCancel,
+    ),
+    duration: duration,
+  );
+}
+
 /// 工具栏 Bottom Sheet
 Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
   final theme = Theme.of(context);

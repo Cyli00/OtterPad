@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 /// 全局键值存储单例（Hive）
 class GStorage {
@@ -8,7 +12,12 @@ class GStorage {
   static late Box _documentsBox;
 
   static Future<void> init() async {
-    await Hive.initFlutter();
+    final appDir = await getApplicationDocumentsDirectory();
+    final dataDir = Directory(p.join(appDir.path, 'NightReader', 'data'));
+    if (!await dataDir.exists()) {
+      await dataDir.create(recursive: true);
+    }
+    Hive.init(dataDir.path);
     final results = await Future.wait([
       Hive.openBox('settings'),
       Hive.openBox('favorites'),

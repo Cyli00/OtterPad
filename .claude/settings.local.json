@@ -11,7 +11,8 @@
       "WebFetch(domain:www.crossref.org)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.ncbi.nlm.nih.gov)",
-      "WebFetch(domain:info.arxiv.org)"
+      "WebFetch(domain:info.arxiv.org)",
+      "Bash(dart analyze:*)"
     ]
   },
   "outputStyle": "Explanatory"

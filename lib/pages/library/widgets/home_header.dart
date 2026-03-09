@@ -33,31 +33,15 @@ class HomeHeader extends ConsumerWidget {
             if (cancelToken.isCancelled) break;
             messenger.hideCurrentSnackBar();
             messenger.showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        '(${i + 1}/${files.length}) 正在解析 ${files[i].name}...',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                action: SnackBarAction(
-                  label: '取消',
-                  onPressed: () {
-                    cancelToken.cancel();
-                    messenger.hideCurrentSnackBar();
-                  },
-                ),
-                duration: const Duration(minutes: 5),
+              buildProgressSnackBar(
+                current: i + 1,
+                total: files.length,
+                fileName: files[i].name,
+                status: '正在解析...',
+                onCancel: () {
+                  cancelToken.cancel();
+                  messenger.hideCurrentSnackBar();
+                },
               ),
             );
             try {
@@ -88,25 +72,15 @@ class HomeHeader extends ConsumerWidget {
           final messenger = ScaffoldMessenger.of(context);
           final cancelToken = CancelToken();
           messenger.showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 16),
-                  Text('正在解析标识符...'),
-                ],
-              ),
-              action: SnackBarAction(
-                label: '取消',
-                onPressed: () {
-                  cancelToken.cancel();
-                  messenger.hideCurrentSnackBar();
-                },
-              ),
+            buildProgressSnackBar(
+              current: 1,
+              total: 1,
+              fileName: identifier,
+              status: '正在解析...',
+              onCancel: () {
+                cancelToken.cancel();
+                messenger.hideCurrentSnackBar();
+              },
               duration: const Duration(seconds: 30),
             ),
           );
@@ -145,26 +119,12 @@ class HomeHeader extends ConsumerWidget {
         final messenger = ScaffoldMessenger.of(context);
         final cancelToken = CancelToken();
         messenger.showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                SizedBox(width: 16),
-                Text('正在重构文库...'),
-              ],
-            ),
-            action: SnackBarAction(
-              label: '取消',
-              onPressed: () {
-                cancelToken.cancel();
-                messenger.hideCurrentSnackBar();
-              },
-            ),
-            duration: const Duration(minutes: 5),
+          buildProgressSnackBar(
+            fileName: '正在扫描文库...',
+            onCancel: () {
+              cancelToken.cancel();
+              messenger.hideCurrentSnackBar();
+            },
           ),
         );
 
@@ -175,32 +135,15 @@ class HomeHeader extends ConsumerWidget {
               if (!context.mounted || cancelToken.isCancelled) return;
               messenger.hideCurrentSnackBar();
               messenger.showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          '(${progress.current}/${progress.total}) '
-                          '${progress.fileName}: ${progress.status}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  action: SnackBarAction(
-                    label: '取消',
-                    onPressed: () {
-                      cancelToken.cancel();
-                      messenger.hideCurrentSnackBar();
-                    },
-                  ),
-                  duration: const Duration(minutes: 5),
+                buildProgressSnackBar(
+                  current: progress.current,
+                  total: progress.total,
+                  fileName: progress.fileName,
+                  status: progress.status,
+                  onCancel: () {
+                    cancelToken.cancel();
+                    messenger.hideCurrentSnackBar();
+                  },
                 ),
               );
             },

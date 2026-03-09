@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import '../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/documents_provider.dart';
-import 'widgets/doc_list_item.dart';
-
-/// 从文件路径中提取纯文件名（兼容 `/` 和 `\` 分隔符，去掉 .pdf 后缀）
-String _extractFileName(String path) {
-  final name = path.split(RegExp(r'[/\\]')).last;
-  final dotIndex = name.lastIndexOf('.');
-  return dotIndex > 0 ? name.substring(0, dotIndex) : name;
-}
+import '../library/widgets/doc_list_card.dart';
 
 /// 收藏夹详情页：展示书单内所有文献
 class FavoriteDetailPage extends ConsumerWidget {
@@ -95,14 +90,18 @@ class FavoriteDetailPage extends ConsumerWidget {
                 itemBuilder: (context, index) {
                   final docPath = favorite.docPaths[index];
                   final doc = docs
-                      .where((d) => d.filePath == docPath)
-                      .firstOrNull;
+                          .where((d) => d.filePath == docPath)
+                          .firstOrNull ??
+                      Document(
+                        id: '',
+                        title: p.basenameWithoutExtension(docPath),
+                        authors: [],
+                        filePath: docPath,
+                        addedAt: DateTime.now(),
+                      );
 
-                  return DocListItem(
-                    title: doc?.title ?? _extractFileName(docPath),
-                    authors: doc?.authors.join(', ') ?? '',
-                    journal: doc?.journal,
-                    coverPath: docPath,
+                  return DocListCard(
+                    doc: doc,
                     onTap: () {
                       // TODO: 跳转到 PDF 阅读器
                     },

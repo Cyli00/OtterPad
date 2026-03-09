@@ -42,6 +42,9 @@ class BookshelfGrid extends ConsumerWidget {
               onTap: () {},
               onBookmarkToggle: () {},
               onMoreTap: () {},
+              onDelete: () {
+                ref.read(documentsProvider.notifier).delete(doc.id);
+              },
             );
           },
           childCount: docs.length,
