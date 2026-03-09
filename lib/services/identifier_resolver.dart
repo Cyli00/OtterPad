@@ -118,6 +118,48 @@ class IdentifierResolver {
             .trim();
       }
 
+      // 策略 1: 通过出版商直接获取 PDF（校园网/机构代理）
+      String filePath = '';
+      try {
+        filePath = await _tryPublisherPdf(
+          doi: resolvedDoi,
+          year: year,
+          authors: authors,
+          title: title,
+          fallbackId: doi.replaceAll('/', '_'),
+          cancelToken: cancelToken,
+        );
+      } catch (e) {
+        debugPrint('出版商 PDF 获取失败: $e');
+      }
+
+      // 策略 2: Unpaywall 开放获取
+      if (filePath.isEmpty) {
+        try {
+          final uResp = await _dio.get(
+            'https://api.unpaywall.org/v2/$doi',
+            queryParameters: {'email': 'dev@nightreader.app'},
+            cancelToken: cancelToken,
+          );
+          final bestOa =
+              (uResp.data as Map<String, dynamic>)['best_oa_location'];
+          final pdfUrl =
+              (bestOa as Map<String, dynamic>?)?['url_for_pdf'] as String?;
+          if (pdfUrl != null && pdfUrl.isNotEmpty) {
+            filePath = await _downloadPdf(
+              url: pdfUrl,
+              year: year,
+              authors: authors,
+              title: title,
+              fallbackId: doi.replaceAll('/', '_'),
+              cancelToken: cancelToken,
+            );
+          }
+        } catch (e) {
+          debugPrint('Unpaywall PDF 下载失败: $e');
+        }
+      }
+
       return Document(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         itemType: itemType,
@@ -136,7 +178,7 @@ class IdentifierResolver {
         language: language,
         issn: issn,
         abstractText: abstractText,
-        filePath: '',
+        filePath: filePath,
         addedAt: DateTime.now(),
       );
     } on DioException catch (e) {
@@ -227,6 +269,67 @@ class IdentifierResolver {
         // 摘要获取失败不影响主流程
       }
 
+      // 策略 1: 有 DOI 时尝试出版商直接获取（校园网/机构代理）
+      String filePath = '';
+      if (doi != null && doi.isNotEmpty) {
+        try {
+          filePath = await _tryPublisherPdf(
+            doi: doi,
+            year: year,
+            authors: authors,
+            title: title,
+            fallbackId: pmid,
+            cancelToken: cancelToken,
+          );
+        } catch (e) {
+          debugPrint('出版商 PDF 获取失败: $e');
+        }
+      }
+
+      // 策略 2: PMC 开放获取
+      if (filePath.isEmpty && pmcid != null && pmcid.isNotEmpty) {
+        try {
+          filePath = await _downloadPdf(
+            url: 'https://europepmc.org/backend/ptpmcrender.fcgi'
+                '?accid=$pmcid&blobtype=pdf',
+            year: year,
+            authors: authors,
+            title: title,
+            fallbackId: pmid,
+            cancelToken: cancelToken,
+          );
+        } catch (e) {
+          debugPrint('PMC PDF 下载失败: $e');
+        }
+      }
+
+      // 策略 3: Unpaywall（出版商与 PMC 均无果）
+      if (filePath.isEmpty && doi != null && doi.isNotEmpty) {
+        try {
+          final uResp = await _dio.get(
+            'https://api.unpaywall.org/v2/$doi',
+            queryParameters: {'email': 'dev@nightreader.app'},
+            cancelToken: cancelToken,
+          );
+          final bestOa =
+              (uResp.data as Map<String, dynamic>)['best_oa_location'];
+          final pdfUrl =
+              (bestOa as Map<String, dynamic>?)?['url_for_pdf'] as String?;
+          if (pdfUrl != null && pdfUrl.isNotEmpty) {
+            filePath = await _downloadPdf(
+              url: pdfUrl,
+              year: year,
+              authors: authors,
+              title: title,
+              fallbackId: pmid,
+              cancelToken: cancelToken,
+            );
+          }
+        } catch (e) {
+          debugPrint('Unpaywall PDF 下载失败: $e');
+        }
+      }
+
       return Document(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         itemType: 'journalArticle',
@@ -245,7 +348,7 @@ class IdentifierResolver {
         language: language,
         issn: issn,
         abstractText: abstractText,
-        filePath: '',
+        filePath: filePath,
         addedAt: DateTime.now(),
       );
     } on IdentifierResolveException {
@@ -440,6 +543,169 @@ class IdentifierResolver {
     } catch (e) {
       throw const IdentifierResolveException('解析响应数据失败');
     }
+  }
+
+  // ── 出版商 PDF 获取 ──
+
+  /// 尝试通过出版商直接获取 PDF（校园网 / 机构代理场景）
+  ///
+  /// 回退链: HEAD 探测 DOI 重定向 → 检测 content-type → 出版商 URL 模式
+  Future<String> _tryPublisherPdf({
+    required String doi,
+    String? year,
+    List<String> authors = const [],
+    required String title,
+    required String fallbackId,
+    CancelToken? cancelToken,
+  }) async {
+    Uri? publisherUri;
+    try {
+      final resp = await _dio.head(
+        'https://doi.org/$doi',
+        options: Options(
+          followRedirects: true,
+          maxRedirects: 10,
+          validateStatus: (s) => s != null && s >= 200 && s < 400,
+        ),
+        cancelToken: cancelToken,
+      );
+      publisherUri = resp.realUri;
+
+      // 出版商对校内 IP / 代理直接返回 PDF
+      if (_isPdfContentType(resp.headers)) {
+        return await _downloadPdf(
+          url: publisherUri.toString(),
+          year: year,
+          authors: authors,
+          title: title,
+          fallbackId: fallbackId,
+          cancelToken: cancelToken,
+        );
+      }
+    } catch (e) {
+      debugPrint('DOI 重定向探测失败: $e');
+    }
+
+    // 根据出版商域名构造 PDF 下载链接
+    if (publisherUri != null) {
+      final pdfUrl = _buildPublisherPdfUrl(publisherUri, doi);
+      if (pdfUrl != null) {
+        try {
+          final path = await _downloadPdf(
+            url: pdfUrl,
+            year: year,
+            authors: authors,
+            title: title,
+            fallbackId: fallbackId,
+            cancelToken: cancelToken,
+          );
+          if (path.isNotEmpty) return path;
+        } catch (e) {
+          debugPrint('出版商 URL 模式下载失败: $e');
+        }
+      }
+    }
+
+    return '';
+  }
+
+  /// 根据出版商域名和页面 URL 构造 PDF 下载链接，返回 null 表示不支持
+  String? _buildPublisherPdfUrl(Uri publisherUri, String doi) {
+    final host = publisherUri.host.toLowerCase();
+
+    // Springer
+    if (host.contains('link.springer.com')) {
+      return 'https://link.springer.com/content/pdf/$doi.pdf';
+    }
+
+    // Nature
+    if (host.contains('nature.com')) {
+      final seg = publisherUri.pathSegments;
+      if (seg.length >= 2 && seg[seg.length - 2] == 'articles') {
+        return 'https://www.nature.com/articles/${seg.last}.pdf';
+      }
+    }
+
+    // Wiley
+    if (host.contains('onlinelibrary.wiley.com')) {
+      return 'https://onlinelibrary.wiley.com/doi/pdfdirect/$doi?download=true';
+    }
+
+    // Elsevier / ScienceDirect
+    if (host.contains('sciencedirect.com') ||
+        host.contains('linkinghub.elsevier.com')) {
+      final base = publisherUri.toString().split('?').first;
+      return '$base/pdfft?download=true';
+    }
+
+    // ACS
+    if (host.contains('pubs.acs.org')) {
+      return 'https://pubs.acs.org/doi/pdf/$doi';
+    }
+
+    // Taylor & Francis
+    if (host.contains('tandfonline.com')) {
+      return 'https://www.tandfonline.com/doi/pdf/$doi';
+    }
+
+    // RSC
+    if (host.contains('pubs.rsc.org')) {
+      final path = publisherUri.path;
+      if (path.contains('articlelanding')) {
+        final pdfPath = path.replaceFirst('articlelanding', 'articlepdf');
+        return 'https://pubs.rsc.org$pdfPath';
+      }
+    }
+
+    // MDPI
+    if (host.contains('mdpi.com')) {
+      final base = publisherUri.toString().split('?').first;
+      return base.endsWith('/') ? '${base}pdf' : '$base/pdf';
+    }
+
+    return null;
+  }
+
+  bool _isPdfContentType(Headers headers) {
+    final ct = headers.value('content-type');
+    return ct != null && ct.contains('application/pdf');
+  }
+
+  // ── PDF 下载 ──
+
+  /// 下载 PDF 到文库目录，返回本地路径；失败或非 PDF 内容返回空字符串
+  Future<String> _downloadPdf({
+    required String url,
+    String? year,
+    List<String> authors = const [],
+    required String title,
+    required String fallbackId,
+    CancelToken? cancelToken,
+  }) async {
+    final docsDir = await DocumentsNotifier.getDocsDir();
+    final fileName = buildPdfFileName(
+      year: year,
+      authors: authors,
+      title: title,
+      fallbackId: fallbackId,
+    );
+    final pdfPath = p.join(docsDir.path, fileName);
+
+    if (await File(pdfPath).exists()) return pdfPath;
+
+    await _dio.download(url, pdfPath, cancelToken: cancelToken);
+
+    // 验证 PDF 有效性（检查 %PDF 魔数）
+    final file = File(pdfPath);
+    final raf = await file.open();
+    final header = await raf.read(4);
+    await raf.close();
+    if (header.length < 4 || String.fromCharCodes(header) != '%PDF') {
+      await file.delete();
+      return '';
+    }
+
+    return pdfPath;
   }
 
   // ── 文件命名 ──

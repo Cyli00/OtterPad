@@ -58,6 +58,7 @@ When adding or updating dependencies in `pubspec.yaml`:
 - 网络设置页面与连通性测试
 - IdentifierResolver 添加 applyProxy/testConnectivity
 - SnackBar 取消按钮 + CancelToken 全链路传递
+- 出版商 PDF 直接获取 (DOI 重定向 + 8 家 URL 模式)
 
 ## Todolist
 
