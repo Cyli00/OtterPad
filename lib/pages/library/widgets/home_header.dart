@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -26,7 +27,10 @@ class HomeHeader extends ConsumerWidget {
           final notifier = ref.read(documentsProvider.notifier);
           final messenger = ScaffoldMessenger.of(context);
           final files = result.files.where((f) => f.path != null).toList();
+          final cancelToken = CancelToken();
+          int addedCount = 0;
           for (int i = 0; i < files.length; i++) {
+            if (cancelToken.isCancelled) break;
             messenger.hideCurrentSnackBar();
             messenger.showSnackBar(
               SnackBar(
@@ -46,15 +50,34 @@ class HomeHeader extends ConsumerWidget {
                     ),
                   ],
                 ),
+                action: SnackBarAction(
+                  label: '取消',
+                  onPressed: () {
+                    cancelToken.cancel();
+                    messenger.hideCurrentSnackBar();
+                  },
+                ),
                 duration: const Duration(minutes: 5),
               ),
             );
-            await notifier.addFile(files[i].path!);
+            try {
+              await notifier.addFile(files[i].path!, cancelToken: cancelToken);
+              addedCount++;
+            } on DioException catch (_) {
+              if (cancelToken.isCancelled) break;
+              rethrow;
+            }
           }
           if (context.mounted) {
             messenger.hideCurrentSnackBar();
             messenger.showSnackBar(
-              SnackBar(content: Text('已添加 ${files.length} 篇文献')),
+              SnackBar(
+                content: Text(
+                  cancelToken.isCancelled
+                      ? '已取消，已添加 $addedCount/${files.length} 篇文献'
+                      : '已添加 ${files.length} 篇文献',
+                ),
+              ),
             );
           }
         }
@@ -62,11 +85,11 @@ class HomeHeader extends ConsumerWidget {
         if (!context.mounted) return;
         final identifier = await showIdentifierDialog(context);
         if (identifier != null && context.mounted) {
-          // 显示加载中 SnackBar
           final messenger = ScaffoldMessenger.of(context);
+          final cancelToken = CancelToken();
           messenger.showSnackBar(
-            const SnackBar(
-              content: Row(
+            SnackBar(
+              content: const Row(
                 children: [
                   SizedBox(
                     width: 20,
@@ -77,16 +100,23 @@ class HomeHeader extends ConsumerWidget {
                   Text('正在解析标识符...'),
                 ],
               ),
-              duration: Duration(seconds: 30),
+              action: SnackBarAction(
+                label: '取消',
+                onPressed: () {
+                  cancelToken.cancel();
+                  messenger.hideCurrentSnackBar();
+                },
+              ),
+              duration: const Duration(seconds: 30),
             ),
           );
 
           try {
             final (doc, result) = await ref
                 .read(documentsProvider.notifier)
-                .addByIdentifier(identifier);
+                .addByIdentifier(identifier, cancelToken: cancelToken);
             messenger.hideCurrentSnackBar();
-            if (!context.mounted) return;
+            if (cancelToken.isCancelled || !context.mounted) return;
             if (result == AddByIdentifierResult.duplicate) {
               messenger.showSnackBar(
                 const SnackBar(content: Text('该文献已存在于文库中')),
@@ -98,18 +128,25 @@ class HomeHeader extends ConsumerWidget {
             }
           } on IdentifierResolveException catch (e) {
             messenger.hideCurrentSnackBar();
-            if (!context.mounted) return;
+            if (cancelToken.isCancelled || !context.mounted) return;
             messenger.showSnackBar(
               SnackBar(content: Text(e.message)),
+            );
+          } on DioException catch (_) {
+            messenger.hideCurrentSnackBar();
+            if (cancelToken.isCancelled || !context.mounted) return;
+            messenger.showSnackBar(
+              const SnackBar(content: Text('网络请求失败，请稍后重试')),
             );
           }
         }
       case ToolbarAction.rebuildLibrary:
         if (!context.mounted) return;
         final messenger = ScaffoldMessenger.of(context);
+        final cancelToken = CancelToken();
         messenger.showSnackBar(
-          const SnackBar(
-            content: Row(
+          SnackBar(
+            content: const Row(
               children: [
                 SizedBox(
                   width: 20,
@@ -120,43 +157,64 @@ class HomeHeader extends ConsumerWidget {
                 Text('正在重构文库...'),
               ],
             ),
-            duration: Duration(minutes: 5),
+            action: SnackBarAction(
+              label: '取消',
+              onPressed: () {
+                cancelToken.cancel();
+                messenger.hideCurrentSnackBar();
+              },
+            ),
+            duration: const Duration(minutes: 5),
           ),
         );
 
-        await ref.read(documentsProvider.notifier).rebuild(
-          onProgress: (progress) {
-            if (!context.mounted) return;
-            messenger.hideCurrentSnackBar();
-            messenger.showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        '(${progress.current}/${progress.total}) '
-                        '${progress.fileName}: ${progress.status}',
-                        overflow: TextOverflow.ellipsis,
+        try {
+          await ref.read(documentsProvider.notifier).rebuild(
+            cancelToken: cancelToken,
+            onProgress: (progress) {
+              if (!context.mounted || cancelToken.isCancelled) return;
+              messenger.hideCurrentSnackBar();
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          '(${progress.current}/${progress.total}) '
+                          '${progress.fileName}: ${progress.status}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  action: SnackBarAction(
+                    label: '取消',
+                    onPressed: () {
+                      cancelToken.cancel();
+                      messenger.hideCurrentSnackBar();
+                    },
+                  ),
+                  duration: const Duration(minutes: 5),
                 ),
-                duration: const Duration(minutes: 5),
-              ),
-            );
-          },
-        );
+              );
+            },
+          );
+        } on DioException catch (_) {
+          // CancelToken 取消时 Dio 会抛出异常，静默处理
+        }
 
         if (!context.mounted) return;
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
-          const SnackBar(content: Text('文库重构完成')),
+          SnackBar(
+            content: Text(cancelToken.isCancelled ? '已取消重构' : '文库重构完成'),
+          ),
         );
     }
   }

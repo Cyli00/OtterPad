@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
+
 
 import '../data/models/book/document.dart';
 import '../providers/documents_provider.dart';
@@ -31,19 +33,52 @@ class IdentifierResolver {
     },
   ));
 
+  /// 根据代理模式配置 Dio 的 HTTP 代理
+  ///
+  /// [mode] 接受 ProxyMode 枚举值，内部通过 name 匹配以避免循环导入。
+  void applyProxy(Enum mode, String host, int port) {
+    final adapter = IOHttpClientAdapter();
+    switch (mode.name) {
+      case 'custom':
+        adapter.createHttpClient = () {
+          final client = HttpClient();
+          client.findProxy = (_) => 'PROXY $host:$port';
+          client.badCertificateCallback = (_, _, _) => true;
+          return client;
+        };
+      case 'system':
+        adapter.createHttpClient = () => HttpClient();
+      case 'none':
+        adapter.createHttpClient = () {
+          final client = HttpClient();
+          client.findProxy = (_) => 'DIRECT';
+          return client;
+        };
+    }
+    _dio.httpClientAdapter = adapter;
+  }
+
+  /// 测试连通性，返回响应耗时（毫秒）
+  Future<int> testConnectivity(String url, {CancelToken? cancelToken}) async {
+    final sw = Stopwatch()..start();
+    await _dio.head(url, cancelToken: cancelToken);
+    sw.stop();
+    return sw.elapsedMilliseconds;
+  }
+
   /// 解析原始输入字符串，返回 Document
-  Future<Document> resolve(String rawInput) async {
+  Future<Document> resolve(String rawInput, {CancelToken? cancelToken}) async {
     final parsed = IdentifierParser.parse(rawInput);
 
     switch (parsed.type) {
       case IdentifierType.doi:
-        return _resolveDoi(parsed.value);
+        return _resolveDoi(parsed.value, cancelToken: cancelToken);
       case IdentifierType.pmid:
-        return _resolvePmid(parsed.value);
+        return _resolvePmid(parsed.value, cancelToken: cancelToken);
       case IdentifierType.arxiv:
-        return _resolveArxiv(parsed.value);
+        return _resolveArxiv(parsed.value, cancelToken: cancelToken);
       case IdentifierType.isbn:
-        return _resolveIsbn(parsed.value);
+        return _resolveIsbn(parsed.value, cancelToken: cancelToken);
       case IdentifierType.unknown:
         throw const IdentifierResolveException('无法识别的标识符格式');
     }
@@ -51,9 +86,9 @@ class IdentifierResolver {
 
   // ── DOI → CrossRef REST API ──
 
-  Future<Document> _resolveDoi(String doi) async {
+  Future<Document> _resolveDoi(String doi, {CancelToken? cancelToken}) async {
     try {
-      final resp = await _dio.get('https://api.crossref.org/works/$doi');
+      final resp = await _dio.get('https://api.crossref.org/works/$doi', cancelToken: cancelToken);
       final msg = resp.data['message'] as Map<String, dynamic>;
 
       final title = _extractFirst(msg['title']) ?? doi;
@@ -113,7 +148,7 @@ class IdentifierResolver {
 
   // ── PMID → PubMed eSummary + eFetch ──
 
-  Future<Document> _resolvePmid(String pmid) async {
+  Future<Document> _resolvePmid(String pmid, {CancelToken? cancelToken}) async {
     try {
       // eSummary 获取基本元数据
       final resp = await _dio.get(
@@ -123,6 +158,7 @@ class IdentifierResolver {
           'id': pmid,
           'retmode': 'json',
         },
+        cancelToken: cancelToken,
       );
 
       final result = resp.data['result'] as Map<String, dynamic>;
@@ -177,6 +213,7 @@ class IdentifierResolver {
             'id': pmid,
             'retmode': 'xml',
           },
+          cancelToken: cancelToken,
         );
         final xmlDoc = XmlDocument.parse(efetchResp.data as String);
         final abstractParts = xmlDoc
@@ -222,11 +259,12 @@ class IdentifierResolver {
 
   // ── arXiv → Atom XML API + PDF 下载 ──
 
-  Future<Document> _resolveArxiv(String arxivId) async {
+  Future<Document> _resolveArxiv(String arxivId, {CancelToken? cancelToken}) async {
     try {
       final resp = await _dio.get(
         'https://export.arxiv.org/api/query',
         queryParameters: {'id_list': arxivId},
+        cancelToken: cancelToken,
       );
 
       final xmlDoc = XmlDocument.parse(resp.data as String);
@@ -298,6 +336,7 @@ class IdentifierResolver {
           await _dio.download(
             'https://arxiv.org/pdf/$arxivId.pdf',
             pdfPath,
+            cancelToken: cancelToken,
           );
         }
         filePath = pdfPath;
@@ -331,10 +370,11 @@ class IdentifierResolver {
 
   // ── ISBN → Open Library API ──
 
-  Future<Document> _resolveIsbn(String isbn) async {
+  Future<Document> _resolveIsbn(String isbn, {CancelToken? cancelToken}) async {
     try {
       final resp = await _dio.get(
         'https://openlibrary.org/isbn/$isbn.json',
+        cancelToken: cancelToken,
       );
       final data = resp.data as Map<String, dynamic>;
 
@@ -372,7 +412,7 @@ class IdentifierResolver {
           if (authorKey != null) {
             try {
               final authorResp =
-                  await _dio.get('https://openlibrary.org$authorKey.json');
+                  await _dio.get('https://openlibrary.org$authorKey.json', cancelToken: cancelToken);
               final name = authorResp.data['name'] as String?;
               if (name != null) authors.add(name);
             } catch (_) {}

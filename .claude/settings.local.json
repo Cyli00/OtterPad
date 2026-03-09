@@ -13,5 +13,6 @@
       "WebFetch(domain:www.ncbi.nlm.nih.gov)",
       "WebFetch(domain:info.arxiv.org)"
     ]
-  }
+  },
+  "outputStyle": "Explanatory"
 }

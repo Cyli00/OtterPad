@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 // ignore: depend_on_referenced_packages
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
@@ -100,7 +101,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   }
 
   /// 对单个文档执行元数据修复: PDF DOI 提取 → CrossRef 解析 → 重命名 → 文件名兜底
-  Future<Document> _repairDocument(Document doc) async {
+  Future<Document> _repairDocument(Document doc, {CancelToken? cancelToken}) async {
     try {
       final doi = await PdfDoiExtractor.instance.extractDoi(doc.filePath);
       if (doi == null) {
@@ -115,7 +116,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         return doc;
       }
 
-      final resolved = await IdentifierResolver.instance.resolve(doi);
+      final resolved = await IdentifierResolver.instance.resolve(doi, cancelToken: cancelToken);
       doc = doc.copyWith(
         itemType: resolved.itemType,
         title: resolved.title,
@@ -183,7 +184,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   }
 
   /// 添加用户选择的文件（复制到应用目录，立即解析元数据）
-  Future<Document?> addFile(String sourcePath) async {
+  Future<Document?> addFile(String sourcePath, {CancelToken? cancelToken}) async {
     final file = File(sourcePath);
     if (!await file.exists()) return null;
 
@@ -208,7 +209,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     state = [...state, doc];
 
     // 立即修复元数据（DOI 提取 → CrossRef → 重命名 → 文件名兜底）
-    doc = await _repairDocument(doc);
+    doc = await _repairDocument(doc, cancelToken: cancelToken);
     state = [
       for (final d in state)
         if (d.id == doc.id) doc else d,
@@ -221,8 +222,8 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   ///
   /// 返回 (Document, AddByIdentifierResult) 或抛出 IdentifierResolveException
   Future<(Document, AddByIdentifierResult)> addByIdentifier(
-      String identifier) async {
-    final doc = await IdentifierResolver.instance.resolve(identifier);
+      String identifier, {CancelToken? cancelToken}) async {
+    final doc = await IdentifierResolver.instance.resolve(identifier, cancelToken: cancelToken);
 
     // 去重检查
     final isDuplicate = state.any((d) {
@@ -265,6 +266,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   /// 重构文库：扫描新文件、清理缺失文件、自动补全元数据并重命名
   Future<void> rebuild({
     void Function(RebuildProgress)? onProgress,
+    CancelToken? cancelToken,
   }) async {
     final docsDir = await getDocsDir();
     final existingPaths = state.map((d) => d.filePath).toSet();
@@ -305,6 +307,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     // Phase B + C — 元数据修复 + 自动重命名
     final toRepair = state.where(_needsMetadataRepair).toList();
     for (int i = 0; i < toRepair.length; i++) {
+      if (cancelToken?.isCancelled == true) break;
       final doc = toRepair[i];
       onProgress?.call(RebuildProgress(
         current: i + 1,
@@ -313,7 +316,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         status: '正在修复元数据...',
       ));
 
-      final repaired = await _repairDocument(doc);
+      final repaired = await _repairDocument(doc, cancelToken: cancelToken);
       state = [
         for (final d in state)
           if (d.id == doc.id) repaired else d,
