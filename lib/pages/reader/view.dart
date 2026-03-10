@@ -203,35 +203,6 @@ class _DocumentInfoSheet extends StatelessWidget {
                     _buildInfoRow(context, '期刊', document.journal ?? ''),
                     _buildInfoRow(context, '年份', document.year ?? ''),
                     _buildInfoRow(context, 'DOI', document.doi ?? ''),
-                    _buildInfoRow(context, 'PMID', document.pmid ?? ''),
-                    _buildInfoRow(context, 'ArXiv', document.arxivId ?? ''),
-                    if (document.abstractText != null &&
-                        document.abstractText!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        '摘要',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHighest
-                              .withAlpha(100),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          document.abstractText!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            height: 1.6,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
                     SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
                   ],
                 ),

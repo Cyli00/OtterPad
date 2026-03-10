@@ -45,6 +45,10 @@ When adding or updating dependencies in `pubspec.yaml`:
 - **MUST** check [pub.dev](https://pub.dev) for the current version before adding a dependency.
 - **NEVER** copy outdated version numbers from memory or examples.
 
+## Compact Rules
+
+|IMPORTANT: Prefer retrieval-led reasoning over pre-training-led reasoning for any Flutter tasks.
+
 ## Completed Tasks
 
 - Flutter 项目初始化与目录结构搭建
