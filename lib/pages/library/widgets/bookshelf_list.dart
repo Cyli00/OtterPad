@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/documents_provider.dart';
+import '../../reader/view.dart';
 import 'doc_list_card.dart';
 
 /// 文献库列表视图
@@ -30,7 +31,11 @@ class BookshelfList extends ConsumerWidget {
           return DocListCard(
             doc: doc,
             onTap: () {
-              // TODO: 跳转到 PDF 阅读器
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ReaderPage(document: doc),
+                ),
+              );
             },
             onDelete: () {
               ref.read(documentsProvider.notifier).delete(doc.id);

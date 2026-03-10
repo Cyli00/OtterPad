@@ -1,5 +1,6 @@
 {
     "chat.tools.terminal.autoApprove": {
         "flutter": true
-    }
+    },
+    "github.copilot.chat.commitMessageGeneration.instructions": "Generate commit messages following Conventional Commits format: <type>(<scope>): <subject>. Reference past commit history."
 }

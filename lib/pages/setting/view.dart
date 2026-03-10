@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'api_settings_page.dart';
 import 'network_settings_page.dart';
 
 bool get _isDesktop =>
@@ -31,6 +32,16 @@ class SettingPage extends StatelessWidget {
                     ),
                   ),
                 ),
+              _SettingsTile(
+                icon: Icons.hub_outlined,
+                title: 'API 服务商',
+                subtitle: 'Agent 模型 · 文档提取接口',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ApiSettingsPage(),
+                  ),
+                ),
+              ),
             ],
           ),
         ],

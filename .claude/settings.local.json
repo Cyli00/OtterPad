@@ -15,7 +15,8 @@
       "Bash(dart analyze:*)",
       "WebFetch(domain:services.zotero.org)",
       "WebFetch(domain:grobid.readthedocs.io)",
-      "WebFetch(domain:forums.zotero.org)"
+      "WebFetch(domain:forums.zotero.org)",
+      "Bash(find /e/gitProjects/NightReader/lib/pages/setting -type f -name *.dart)"
     ]
   },
   "outputStyle": "Explanatory"
