@@ -266,12 +266,16 @@ class HomeHeader extends ConsumerWidget {
             const SizedBox(width: 8.0),
 
             // 用户头像
-            CircleAvatar(
-              radius: isMobile ? 18 : 20,
-              backgroundColor: colorScheme.primaryContainer,
+            Container(
+              width: isMobile ? 36 : 40,
+              height: isMobile ? 36 : 40,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                shape: BoxShape.circle,
+              ),
               child: Icon(
                 Icons.person_outline_rounded,
-                color: colorScheme.onPrimaryContainer,
+                color: colorScheme.primary,
                 size: isMobile ? 20 : 22,
               ),
             ),
@@ -307,9 +311,8 @@ class _HeaderButton extends StatelessWidget {
         tooltip: tooltip,
         icon: Icon(icon, size: size * 0.5),
         style: IconButton.styleFrom(
-          backgroundColor:
-              colorScheme.surfaceContainerHighest.withAlpha(150),
-          foregroundColor: colorScheme.onSurfaceVariant,
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.primary,
           shape: const CircleBorder(),
           padding: EdgeInsets.zero,
         ),

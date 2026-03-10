@@ -91,17 +91,17 @@ class ShelfPage extends ConsumerWidget {
                 
                 // 菜单列表项
                 LibraryMenuItem(
-                  icon: Icons.cloud_upload_outlined,
+                  icon: Icons.cloud_upload_rounded,
                   title: '已同步',
                   onTap: () {},
                 ),
                 LibraryMenuItem(
-                  icon: Icons.history, // 历史图标
+                  icon: Icons.history_rounded,
                   title: '阅读历史',
                   onTap: () {},
                 ),
                 LibraryMenuItem(
-                  icon: Icons.star_border,
+                  icon: Icons.star_outline_rounded,
                   title: '星标条目',
                   onTap: () {},
                 ),
@@ -109,7 +109,7 @@ class ShelfPage extends ConsumerWidget {
                   builder: (context, ref, _) {
                     final count = ref.watch(noFileDocsCountProvider);
                     return LibraryMenuItem(
-                      icon: Icons.insert_drive_file_outlined,
+                      icon: Icons.description_outlined,
                       title: '无文件条目',
                       trailing: count > 0
                           ? Container(
