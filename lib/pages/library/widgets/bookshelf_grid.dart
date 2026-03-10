@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/documents_provider.dart';
-import '../../reader/view.dart';
+import 'doc_card_actions.dart';
 import 'document_card.dart';
 
 class BookshelfGrid extends ConsumerWidget {
@@ -41,18 +41,10 @@ class BookshelfGrid extends ConsumerWidget {
               journalName: doc.journal ?? '',
               year: doc.year ?? '',
               isBookmarked: false,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ReaderPage(document: doc),
-                  ),
-                );
-              },
+              onTap: () => DocCardActions.openReader(context, doc),
               onBookmarkToggle: () {},
               onMoreTap: () {},
-              onDelete: () {
-                ref.read(documentsProvider.notifier).delete(doc.id);
-              },
+              onDelete: () => DocCardActions.delete(ref, doc.id),
             );
           },
           childCount: docs.length,

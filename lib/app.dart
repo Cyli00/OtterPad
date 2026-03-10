@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'pages/main/view.dart';
 import 'providers/theme_provider.dart';
+
+/// 各平台系统默认字体族
+String? get _systemFontFamily {
+  if (Platform.isWindows) return 'Microsoft YaHei UI';
+  if (Platform.isMacOS || Platform.isIOS) return '.AppleSystemUIFont';
+  // Android / Linux：返回 null 让 Flutter 走平台默认
+  return null;
+}
 
 class NightReaderApp extends ConsumerWidget {
   const NightReaderApp({super.key});
@@ -47,10 +57,12 @@ class NightReaderApp extends ConsumerWidget {
           theme: ThemeData(
             colorScheme: lightScheme,
             useMaterial3: true,
+            fontFamily: _systemFontFamily,
           ),
           darkTheme: ThemeData(
             colorScheme: darkScheme,
             useMaterial3: true,
+            fontFamily: _systemFontFamily,
           ),
           builder: (context, child) {
             final brightness = Theme.of(context).brightness;

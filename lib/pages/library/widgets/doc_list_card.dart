@@ -55,7 +55,8 @@ class DocListCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final showDelete = ref.watch(activeDeleteIdProvider) == doc.id;
+    final activeDeleteId = ref.watch(activeDeleteIdProvider);
+    final showDelete = activeDeleteId == doc.id;
 
     return Stack(
       children: [
@@ -68,7 +69,7 @@ class DocListCard extends ConsumerWidget {
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: showDelete
+            onTap: activeDeleteId != null
                 ? () => ref.read(activeDeleteIdProvider.notifier).state = null
                 : onTap,
             onLongPress: onDelete != null

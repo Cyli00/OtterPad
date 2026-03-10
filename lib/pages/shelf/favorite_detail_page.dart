@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import '../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/documents_provider.dart';
+import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 
 /// 收藏夹详情页：展示书单内所有文献
@@ -102,9 +103,10 @@ class FavoriteDetailPage extends ConsumerWidget {
 
                   return DocListCard(
                     doc: doc,
-                    onTap: () {
-                      // TODO: 跳转到 PDF 阅读器
-                    },
+                    onTap: () => DocCardActions.openReader(context, doc),
+                    onDelete: doc.id.isNotEmpty
+                        ? () => DocCardActions.delete(ref, doc.id)
+                        : null,
                   );
                 },
               ),
