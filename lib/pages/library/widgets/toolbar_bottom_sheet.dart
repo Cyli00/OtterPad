@@ -5,8 +5,9 @@ enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
 /// 构建操作进度 SnackBar
 ///
-/// 布局: [spinner] (current/total) fileName status  [取消]
+/// 布局: [spinner] status (current/total) [newline] fileName [取消]
 SnackBar buildProgressSnackBar({
+  BuildContext? context,
   int? current,
   int? total,
   required String fileName,
@@ -14,43 +15,72 @@ SnackBar buildProgressSnackBar({
   required VoidCallback onCancel,
   Duration duration = const Duration(minutes: 5),
 }) {
+  final isMobile = context != null ? MediaQuery.sizeOf(context).width < 600 : true;
+
   return SnackBar(
+    behavior: SnackBarBehavior.floating,
+    width: isMobile ? null : 400,
+    margin: isMobile ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0) : null,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+    elevation: 6,
     content: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        // 进度圈
         const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
         ),
-        const SizedBox(width: 12),
-        if (current != null && total != null)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Text('($current/$total)'),
-          ),
+        const SizedBox(width: 16),
+        
+        // 详细信息区
         Expanded(
-          child: status != null && status.isNotEmpty
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 状态与计数字段
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      status ?? '处理中...',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (current != null && total != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
                       child: Text(
-                        fileName,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
+                        '$current / $total',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                    Text(
-                      ' $status',
-                      maxLines: 1,
-                    ),
-                  ],
-                )
-              : Text(
-                  fileName,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                ],
+              ),
+              const SizedBox(height: 4),
+              // 文件名字段 (支持最多2行，且可以省略)
+              Text(
+                fileName,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ],
     ),

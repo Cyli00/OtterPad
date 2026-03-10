@@ -31,9 +31,12 @@ class HomeHeader extends ConsumerWidget {
           int addedCount = 0;
           for (int i = 0; i < files.length; i++) {
             if (cancelToken.isCancelled) break;
+            if (!context.mounted) break;
+            
             messenger.hideCurrentSnackBar();
             messenger.showSnackBar(
               buildProgressSnackBar(
+                context: context,
                 current: i + 1,
                 total: files.length,
                 fileName: files[i].name,
@@ -73,6 +76,7 @@ class HomeHeader extends ConsumerWidget {
           final cancelToken = CancelToken();
           messenger.showSnackBar(
             buildProgressSnackBar(
+              context: context,
               current: 1,
               total: 1,
               fileName: identifier,
@@ -120,6 +124,7 @@ class HomeHeader extends ConsumerWidget {
         final cancelToken = CancelToken();
         messenger.showSnackBar(
           buildProgressSnackBar(
+            context: context,
             fileName: '正在扫描文库...',
             onCancel: () {
               cancelToken.cancel();
@@ -137,6 +142,7 @@ class HomeHeader extends ConsumerWidget {
               messenger.hideCurrentSnackBar();
               messenger.showSnackBar(
                 buildProgressSnackBar(
+                  context: context,
                   current: progress.current,
                   total: progress.total,
                   fileName: progress.fileName,
@@ -171,13 +177,15 @@ class HomeHeader extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isGrid = ref.watch(viewModeProvider);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = screenWidth < 600;
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.only(
+        padding: EdgeInsets.only(
           left: 16.0,
           right: 16.0,
-          top: 8.0,
+          top: isMobile ? 4.0 : 8.0,
           bottom: 16.0,
         ),
         child: Row(
@@ -192,27 +200,31 @@ class HomeHeader extends ConsumerWidget {
                   );
                 },
                 child: Container(
-                  height: 48,
+                  height: isMobile ? 44 : 48,
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerHighest
                         .withAlpha(150),
                     borderRadius: BorderRadius.circular(24.0),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withAlpha(100),
+                      width: 1,
+                    ),
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Row(
                     children: [
                       Icon(
-                        Icons.search,
+                        Icons.search_rounded,
                         color: colorScheme.onSurfaceVariant,
+                        size: isMobile ? 20 : 24,
                       ),
                       const SizedBox(width: 8.0),
                       Expanded(
                         child: Text(
-                          '搜索文献、作者、关键词...',
-                          style:
-                              theme.textTheme.bodyMedium?.copyWith(
+                          isMobile ? '搜索文献...' : '搜索文献、作者、关键词...',
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
+                            fontSize: isMobile ? 14 : 15,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -230,6 +242,7 @@ class HomeHeader extends ConsumerWidget {
                   ? Icons.view_list_rounded
                   : Icons.grid_view_rounded,
               tooltip: isGrid ? '切换列表视图' : '切换网格视图',
+              size: isMobile ? 36 : 40,
               onPressed: () {
                 ref.read(viewModeProvider.notifier).state = !isGrid;
               },
@@ -241,6 +254,7 @@ class HomeHeader extends ConsumerWidget {
             _HeaderButton(
               icon: Icons.add_circle_outline_rounded,
               tooltip: '工具',
+              size: isMobile ? 36 : 40,
               onPressed: () async {
                 final action = await showToolbarSheet(context);
                 if (action != null && context.mounted) {
@@ -253,11 +267,12 @@ class HomeHeader extends ConsumerWidget {
 
             // 用户头像
             CircleAvatar(
-              radius: 20,
+              radius: isMobile ? 18 : 20,
               backgroundColor: colorScheme.primaryContainer,
               child: Icon(
-                Icons.person,
+                Icons.person_outline_rounded,
                 color: colorScheme.onPrimaryContainer,
+                size: isMobile ? 20 : 22,
               ),
             ),
           ],
@@ -271,11 +286,13 @@ class _HeaderButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
+  final double size;
 
   const _HeaderButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.size = 40,
   });
 
   @override
@@ -283,12 +300,12 @@ class _HeaderButton extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: 40,
-      height: 40,
+      width: size,
+      height: size,
       child: IconButton.filled(
         onPressed: onPressed,
         tooltip: tooltip,
-        icon: Icon(icon, size: 20),
+        icon: Icon(icon, size: size * 0.5),
         style: IconButton.styleFrom(
           backgroundColor:
               colorScheme.surfaceContainerHighest.withAlpha(150),
