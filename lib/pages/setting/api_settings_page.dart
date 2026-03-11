@@ -520,7 +520,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '勾选的标签区域将不会输出到 Markdown 结果中',
+                    '勾选的标签区域将不会输出到 Markdown 结果中，默认全忽略。',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),

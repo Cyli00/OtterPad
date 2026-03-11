@@ -258,6 +258,36 @@ class DocExtractService {
     return htmlPath;
   }
 
+  // ─── 静态工具 ──────────────────────────────────────────────────────────────
+
+  /// 将 Markdown 中的图片相对路径替换为绝对 file:/// 路径。
+  ///
+  /// [imageDir] 为图片保存目录的绝对路径（如 `{pdfDir}/{baseName}_images/`）。
+  /// 仅替换非 HTTP/file 协议的相对路径，且本地文件确实存在的情况。
+  static String resolveMarkdownImagePaths(String markdown, String imageDir) {
+    return markdown.replaceAllMapped(
+      RegExp(r'!\[([^\]]*)\]\(([^)]+)\)'),
+      (match) {
+        final alt = match.group(1)!;
+        final imgPath = match.group(2)!;
+
+        if (imgPath.startsWith('http://') ||
+            imgPath.startsWith('https://') ||
+            imgPath.startsWith('file:///')) {
+          return match.group(0)!;
+        }
+
+        final localFile = File(p.join(imageDir, imgPath));
+        if (localFile.existsSync()) {
+          final absPath = localFile.path.replaceAll('\\', '/');
+          return '![$alt](file:///$absPath)';
+        }
+
+        return match.group(0)!;
+      },
+    );
+  }
+
   // ─── 内部工具 ──────────────────────────────────────────────────────────────
 
   Map<String, dynamic> _buildOptions(DocExtractApiState state) {

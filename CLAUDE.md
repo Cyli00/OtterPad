@@ -75,3 +75,4 @@ When adding or updating dependencies in `pubspec.yaml`:
 
 ## Todolist
 
+- 提取的文本与PDF原文分栏对照显示，并支持点击文本块高亮联动定位 PDF 坐标 (需要重构数据存储及UI)

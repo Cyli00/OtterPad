@@ -2,35 +2,57 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart';
+import 'package:markdown/markdown.dart' as md;
+import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
-/// HTML 提取结果展示页
+import '../../services/doc_extract_service.dart';
+
+/// Markdown 提取结果展示页
 ///
 /// 支持两种加载方式：
-/// - [htmlContent] 直接传入内存中的 HTML 文本（刚提取的）
-/// - [filePath] 从磁盘加载已保存的 .html 文件
+/// - [markdownContent] 直接传入已解析图片路径的 Markdown（刚提取的）
+/// - [filePath] 从磁盘加载已保存的 .md 文件（图片路径需要解析）
 class ExtractResultPage extends StatelessWidget {
   final String title;
-  final String? htmlContent;
+  final String? markdownContent;
   final String? filePath;
 
   const ExtractResultPage({
     super.key,
     required this.title,
-    this.htmlContent,
+    this.markdownContent,
     this.filePath,
-  }) : assert(htmlContent != null || filePath != null);
+  }) : assert(markdownContent != null || filePath != null);
 
+  /// 加载并解析 Markdown 内容（图片路径替换为绝对路径）
   Future<String> _loadContent() async {
-    if (htmlContent != null) return htmlContent!;
-    return File(filePath!).readAsString();
+    if (markdownContent != null) return markdownContent!;
+
+    final raw = await File(filePath!).readAsString();
+    final baseName = p.basenameWithoutExtension(filePath!);
+    final dir = p.dirname(filePath!);
+    final imageDir = p.join(dir, '${baseName}_images');
+    return DocExtractService.resolveMarkdownImagePaths(raw, imageDir);
+  }
+
+  /// 获取对应的 .html 文件路径（用于分享）
+  String? get _htmlPath {
+    if (filePath == null) return null;
+    final html = p.join(
+      p.dirname(filePath!),
+      '${p.basenameWithoutExtension(filePath!)}.html',
+    );
+    return File(html).existsSync() ? html : null;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final sharePath = _htmlPath ?? filePath;
 
     return Scaffold(
       appBar: AppBar(
@@ -61,12 +83,12 @@ class ExtractResultPage extends StatelessWidget {
               }
             },
           ),
-          if (filePath != null)
+          if (sharePath != null)
             IconButton(
               icon: const Icon(Icons.share_rounded, size: 20),
               tooltip: '分享',
               onPressed: () {
-                Share.shareXFiles([XFile(filePath!)]);
+                Share.shareXFiles([XFile(sharePath)]);
               },
             ),
           const SizedBox(width: 8),
@@ -110,27 +132,39 @@ class ExtractResultPage extends StatelessWidget {
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            child: HtmlWidget(
-              content,
-              textStyle: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
-              customWidgetBuilder: (element) {
-                if (element.localName == 'img') {
-                  final src = element.attributes['src'] ?? '';
-                  if (src.startsWith('file:///')) {
-                    final file = File(Uri.parse(src).toFilePath());
-                    if (file.existsSync()) {
-                      return Image.file(
-                        file,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const Icon(
-                          Icons.broken_image_rounded,
-                          size: 48,
-                        ),
-                      );
-                    }
+            child: MarkdownBody(
+              data: content,
+              builders: {
+                'latex': LatexElementBuilder(
+                  textStyle: TextStyle(color: cs.onSurface),
+                ),
+              },
+              extensionSet: md.ExtensionSet(
+                [LatexBlockSyntax(), ...md.ExtensionSet.gitHubWeb.blockSyntaxes],
+                [LatexInlineSyntax(), ...md.ExtensionSet.gitHubWeb.inlineSyntaxes],
+              ),
+              imageBuilder: (uri, title, alt) {
+                if (uri.scheme == 'file') {
+                  final file = File(uri.toFilePath());
+                  if (file.existsSync()) {
+                    return Image.file(
+                      file,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.broken_image_rounded,
+                        size: 48,
+                      ),
+                    );
                   }
                 }
-                return null;
+                return Image.network(
+                  uri.toString(),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Icon(
+                    Icons.broken_image_rounded,
+                    size: 48,
+                  ),
+                );
               },
             ),
           );

@@ -3,8 +3,10 @@ import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
@@ -12,6 +14,7 @@ import '../../../data/models/book/document.dart';
 import '../../providers/api_provider.dart';
 import '../../services/doc_extract_service.dart';
 import '../library/widgets/toolbar_bottom_sheet.dart';
+import '../setting/api_settings_page.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
   final Document document;
@@ -28,8 +31,8 @@ class ReaderPage extends ConsumerStatefulWidget {
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _extracting = false;
   bool _showPreview = false;
-  String? _htmlPath; // 已保存的 .html 路径
-  String? _htmlContent; // 内存中的 HTML 内容
+  String? _mdPath; // 已保存的 .md 路径
+  String? _mdContent; // 图片路径已解析的 Markdown 内容
   CancelToken? _cancelToken;
 
   @override
@@ -38,20 +41,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _checkExistingResult();
   }
 
-  /// 检查 PDF 同目录是否已有 .html 提取结果
+  /// 检查 PDF 同目录是否已有 .md 提取结果
   void _checkExistingResult() {
     final filePath = widget.document.filePath;
     if (filePath.isEmpty) return;
-    final htmlPath = p.join(
+    final mdPath = p.join(
       p.dirname(filePath),
-      '${p.basenameWithoutExtension(filePath)}.html',
+      '${p.basenameWithoutExtension(filePath)}.md',
     );
-    if (File(htmlPath).existsSync()) {
-      _htmlPath = htmlPath;
+    if (File(mdPath).existsSync()) {
+      _mdPath = mdPath;
     }
   }
 
-  bool get _hasResult => _htmlPath != null || _htmlContent != null;
+  bool get _hasResult => _mdPath != null || _mdContent != null;
 
   void _showDocumentInfo(BuildContext context) {
     showModalBottomSheet(
@@ -74,7 +77,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           content: const Text('请先在设置中配置文档提取 API'),
           action: SnackBarAction(
             label: '前往设置',
-            onPressed: () => Navigator.of(context).pushNamed('/settings/api'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ApiSettingsPage(),
+              ),
+            ),
           ),
         ),
       );
@@ -131,7 +138,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         );
 
       // 保存到磁盘（传入 token 以便图片下载可能需要认证）
-      final htmlPath = await DocExtractService.instance.saveResult(
+      await DocExtractService.instance.saveResult(
         filePath,
         result,
         token: docState.apiKey,
@@ -140,12 +147,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      // 读取生成的 HTML 以便直接展示
-      final htmlContent = await File(htmlPath).readAsString();
+      // 用原始 Markdown + 已下载的本地图片路径生成可渲染内容
+      final mdPath = p.join(
+        p.dirname(filePath),
+        '${p.basenameWithoutExtension(filePath)}.md',
+      );
+      final resolvedMd = DocExtractService.resolveMarkdownImagePaths(
+        result.markdown,
+        result.imageDir ?? p.join(p.dirname(filePath), '${p.basenameWithoutExtension(filePath)}_images'),
+      );
 
       setState(() {
-        _htmlPath = htmlPath;
-        _htmlContent = htmlContent;
+        _mdPath = mdPath;
+        _mdContent = resolvedMd;
         _showPreview = true;
       });
     } on DioException catch (e) {
@@ -269,10 +283,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  /// 构建主体区域：PDF 视图 或 HTML 预览
+  /// 构建主体区域：PDF 视图 或 Markdown 预览
   Widget _buildBody(ThemeData theme, ColorScheme colorScheme) {
     if (_showPreview && _hasResult) {
-      return _buildHtmlPreview(theme);
+      return _buildMarkdownPreview(theme);
     }
     return PdfViewer.file(
       widget.document.filePath,
@@ -282,11 +296,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  Widget _buildHtmlPreview(ThemeData theme) {
+  /// 从磁盘加载 .md 文件并解析图片路径
+  Future<String> _loadAndResolveMarkdown() async {
+    final raw = await File(_mdPath!).readAsString();
+    final baseName = p.basenameWithoutExtension(_mdPath!);
+    final dir = p.dirname(_mdPath!);
+    final imageDir = p.join(dir, '${baseName}_images');
+    return DocExtractService.resolveMarkdownImagePaths(raw, imageDir);
+  }
+
+  Widget _buildMarkdownPreview(ThemeData theme) {
     return FutureBuilder<String>(
-      future: _htmlContent != null
-          ? Future.value(_htmlContent!)
-          : File(_htmlPath!).readAsString(),
+      future: _mdContent != null
+          ? Future.value(_mdContent!)
+          : _loadAndResolveMarkdown(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -300,27 +323,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         }
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: HtmlWidget(
-            snapshot.data!,
-            textStyle: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
-            customWidgetBuilder: (element) {
-              if (element.localName == 'img') {
-                final src = element.attributes['src'] ?? '';
-                if (src.startsWith('file:///')) {
-                  final file = File(Uri.parse(src).toFilePath());
-                  if (file.existsSync()) {
-                    return Image.file(
-                      file,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => const Icon(
-                        Icons.broken_image_rounded,
-                        size: 48,
-                      ),
-                    );
-                  }
+          child: MarkdownBody(
+            data: snapshot.data!,
+            builders: {
+              'latex': LatexElementBuilder(
+                textStyle: TextStyle(color: theme.colorScheme.onSurface),
+              ),
+            },
+            extensionSet: md.ExtensionSet(
+              [LatexBlockSyntax(), ...md.ExtensionSet.gitHubWeb.blockSyntaxes],
+              [LatexInlineSyntax(), ...md.ExtensionSet.gitHubWeb.inlineSyntaxes],
+            ),
+            imageBuilder: (uri, title, alt) {
+              if (uri.scheme == 'file') {
+                final file = File(uri.toFilePath());
+                if (file.existsSync()) {
+                  return Image.file(
+                    file,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.broken_image_rounded,
+                      size: 48,
+                    ),
+                  );
                 }
               }
-              return null;
+              return Image.network(
+                uri.toString(),
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => const Icon(
+                  Icons.broken_image_rounded,
+                  size: 48,
+                ),
+              );
             },
           ),
         );

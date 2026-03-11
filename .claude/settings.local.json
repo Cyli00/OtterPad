@@ -24,7 +24,8 @@
       "WebFetch(domain:docs.vllm.ai)",
       "WebFetch(domain:dev.to)",
       "WebFetch(domain:ai.baidu.com)",
-      "Bash(find . -name \"*.dart\" -type f -exec grep -l \"SnackBar\\\\|snackbar\" {})"
+      "Bash(find . -name \"*.dart\" -type f -exec grep -l \"SnackBar\\\\|snackbar\" {})",
+      "WebFetch(domain:fluttergems.dev)"
     ]
   },
   "outputStyle": "Explanatory"
