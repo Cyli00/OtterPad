@@ -71,6 +71,7 @@ When adding or updating dependencies in `pubspec.yaml`:
 - 优化库重构 O(N²) Riverpod 状态更新引发的 UI 卡顿
 - 无文件条目的统一归类、详情页及手动附加/重新下载功能
 - 隐藏主文献库视图中的无文件条目
+- 模型服务设置页面 MD3 UI 重构
 
 ## Todolist
 
