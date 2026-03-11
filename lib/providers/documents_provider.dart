@@ -572,13 +572,29 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return false;
   }
 
-  /// 删除文献（同时删除磁盘 PDF 文件）
+  /// 删除文献（级联删除磁盘文件、提取产物、缩略图缓存）
   Future<void> delete(String id) async {
     final doc = state.firstWhere((d) => d.id == id, orElse: () => state.first);
     if (doc.id == id && doc.filePath.isNotEmpty) {
+      final filePath = doc.filePath;
       try {
-        final file = File(doc.filePath);
+        // 删除 PDF 文件
+        final file = File(filePath);
         if (await file.exists()) await file.delete();
+
+        // 删除提取产物 (.md, .html, _images/)
+        final basePath = p.withoutExtension(filePath);
+        for (final ext in ['.md', '.html']) {
+          final artifact = File('$basePath$ext');
+          if (await artifact.exists()) await artifact.delete();
+        }
+        final imagesDir = Directory('${basePath}_images');
+        if (await imagesDir.exists()) {
+          await imagesDir.delete(recursive: true);
+        }
+
+        // 删除缩略图缓存
+        await PdfThumbnailService.instance.deleteCacheEntry(filePath);
       } catch (e) {
         debugPrint('删除文件失败: $e');
       }

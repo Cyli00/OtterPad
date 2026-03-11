@@ -79,6 +79,25 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     await _save();
   }
 
+  /// 从所有收藏夹中移除指定文档路径（级联删除时使用）
+  Future<void> removeDocFromAll(String docPath) async {
+    bool changed = false;
+    final updated = <Favorite>[];
+    for (final f in state) {
+      if (f.docPaths.contains(docPath)) {
+        changed = true;
+        updated.add(f.copyWith(
+            docPaths: f.docPaths.where((p) => p != docPath).toList()));
+      } else {
+        updated.add(f);
+      }
+    }
+    if (changed) {
+      state = updated;
+      await _save();
+    }
+  }
+
   /// 从收藏夹移除文档
   Future<void> removeDoc(String favoriteId, String docPath) async {
     state = [

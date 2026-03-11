@@ -119,6 +119,16 @@ class PdfThumbnailService {
     );
   }
 
+  /// 删除指定文件的缩略图缓存
+  Future<void> deleteCacheEntry(String filePath) async {
+    try {
+      final cache = File(p.join(await _cacheDir, _cacheKey(filePath)));
+      if (await cache.exists()) await cache.delete();
+    } catch (e) {
+      debugPrint('删除缩略图缓存失败: $e');
+    }
+  }
+
   /// 文件重命名后迁移缩略图缓存，避免重新渲染
   Future<void> migrateCacheEntry(String oldPath, String newPath) async {
     if (oldPath == newPath) return;
