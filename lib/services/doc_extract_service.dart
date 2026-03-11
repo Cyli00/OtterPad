@@ -202,16 +202,34 @@ class DocExtractService {
     if (result.images.isNotEmpty) {
       await Directory(imgDir).create(recursive: true);
 
+      // BOS 预签名 URL 包含自含签名，不能附加 Authorization 头，也不能经过代理
+      // （代理会修改 Host/Via 头，破坏签名校验 → 400）。
+      // token == null 表示来自批量提取，使用临时纯净 Dio 直连 BOS。
+      final downloadDio = token == null ? Dio() : _dio;
+
       for (final entry in result.images.entries) {
-        networkUrls[entry.key] = entry.value;
+        final value = entry.value;
+
+        // 非 HTTP URL（如 Base64 数据）：直接解码写入文件
+        if (!value.startsWith('http://') && !value.startsWith('https://')) {
+          try {
+            final bytes = base64Decode(value);
+            final imgPath = p.join(imgDir, entry.key);
+            await Directory(p.dirname(imgPath)).create(recursive: true);
+            await File(imgPath).writeAsBytes(bytes);
+            localPaths[entry.key] = imgPath;
+          } catch (_) {}
+          continue;
+        }
+
+        networkUrls[entry.key] = value;
 
         try {
           final imgPath = p.join(imgDir, entry.key);
           await Directory(p.dirname(imgPath)).create(recursive: true);
 
-          // 尝试下载（带认证头，以防图片 URL 需要同样的 token）
-          final imgResponse = await _dio.get<List<int>>(
-            entry.value,
+          final imgResponse = await downloadDio.get<List<int>>(
+            value,
             options: Options(
               responseType: ResponseType.bytes,
               headers: token != null

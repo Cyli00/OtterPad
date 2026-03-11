@@ -410,7 +410,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            '百度 AI Studio 文档版面解析 (PaddleOCR-VL)',
+                            '百度 AI Studio 文档 (PaddleOCR-VL-1.5)',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: cs.onSecondaryContainer,
                               fontWeight: FontWeight.w500,

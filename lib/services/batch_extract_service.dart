@@ -125,10 +125,8 @@ class BatchExtractService {
   // ─── 内部工具 ──────────────────────────────────────────────────────────────
 
   String _jobUrl(String apiBaseUrl) {
-    final base = apiBaseUrl.endsWith('/')
-        ? apiBaseUrl.substring(0, apiBaseUrl.length - 1)
-        : apiBaseUrl;
-    return '$base/api/v2/ocr/jobs';
+    // 批量任务固定使用这个全局接口，与 DocExtract (可能使用私有部署的 baseUrl) 区分开
+    return 'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs';
   }
 
   Map<String, dynamic> _buildOptionalPayload(DocExtractApiState state) {
@@ -143,6 +141,13 @@ class BatchExtractService {
       'relevelTitles': state.relevelTitles,
       'restructurePages': state.restructurePages,
       'layoutNms': state.layoutNms,
+      'layoutShapeMode': 'rect',
+      'promptLabel': 'ocr',
+      'repetitionPenalty': 1,
+      'temperature': 0,
+      'topP': 1,
+      'minPixels': 147384,
+      'maxPixels': 2822400,
       if (state.markdownIgnoreLabels.isNotEmpty)
         'markdownIgnoreLabels': state.markdownIgnoreLabels,
     };
@@ -385,8 +390,9 @@ class BatchExtractService {
                       .firstWhere((i) => i.documentId == status.documentId);
                   final extractResult =
                       DocExtractResult(markdown: markdown, images: images);
+                  // 批量提取返回的图片 URL (如 BOS) 是带签名的，不应附加 Authorization 头，否则会导致 400
                   final savedPath = await DocExtractService.instance
-                      .saveResult(item.filePath, extractResult, token: token);
+                      .saveResult(item.filePath, extractResult, token: null);
                   status.savedPath = savedPath;
                   results[status.documentId] = savedPath;
                 } catch (e) {

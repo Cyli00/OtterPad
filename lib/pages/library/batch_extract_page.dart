@@ -26,6 +26,7 @@ class _BatchExtractPageState extends ConsumerState<BatchExtractPage> {
   final Set<String> _selectedIds = {};
   String _searchQuery = '';
   bool _searchActive = false;
+  bool _showExtracted = false;
   final _searchController = TextEditingController();
 
   // 拖拽范围选择状态
@@ -102,7 +103,9 @@ class _BatchExtractPageState extends ConsumerState<BatchExtractPage> {
       return;
     }
 
-    final docs = ref.read(validDocsProvider);
+    final docs = _showExtracted
+        ? ref.read(validDocsProvider)
+        : ref.read(unextractedDocsProvider);
     final selectedDocs = docs
         .where((d) => _selectedIds.contains(d.id) && d.filePath.isNotEmpty)
         .toList();
@@ -147,7 +150,9 @@ class _BatchExtractPageState extends ConsumerState<BatchExtractPage> {
 
   @override
   Widget build(BuildContext context) {
-    final docs = ref.watch(validDocsProvider);
+    final docs = _showExtracted
+        ? ref.watch(validDocsProvider)
+        : ref.watch(unextractedDocsProvider);
     _filteredDocs = _searchQuery.isEmpty
         ? docs
         : docs.where((d) => d.matchesQuery(_searchQuery)).toList();
@@ -212,6 +217,20 @@ class _BatchExtractPageState extends ConsumerState<BatchExtractPage> {
               tooltip: '搜索',
               onPressed: () => setState(() => _searchActive = true),
             ),
+          IconButton(
+            icon: Icon(
+              _showExtracted
+                  ? Icons.filter_alt_off_rounded
+                  : Icons.filter_alt_rounded,
+            ),
+            tooltip: _showExtracted ? '隐藏已提取的文献' : '显示已提取的文献',
+            onPressed: () {
+              setState(() {
+                _showExtracted = !_showExtracted;
+                _selectedIds.clear(); // 切换时清空当前选择，避免混淆
+              });
+            },
+          ),
           IconButton(
             icon: Icon(
               allSelected

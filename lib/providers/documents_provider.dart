@@ -773,3 +773,12 @@ final validDocsProvider = Provider<List<Document>>((ref) {
       .where((doc) => doc.filePath.isNotEmpty)
       .toList();
 });
+
+/// 过滤出尚未提取（尚未生成 .html 文件）的有效文档，供批量提取页面使用
+final unextractedDocsProvider = Provider<List<Document>>((ref) {
+  return ref.watch(validDocsProvider).where((doc) {
+    if (doc.filePath.isEmpty) return false;
+    final htmlPath = '${p.withoutExtension(doc.filePath)}.html';
+    return !File(htmlPath).existsSync();
+  }).toList();
+});

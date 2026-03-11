@@ -10,7 +10,7 @@ import '../data/models/book/document.dart';
 import '../providers/documents_provider.dart';
 import 'identifier_parser.dart';
 
-/// 閺嶅洩鐦戠粭锕佇掗弸鎰磽鐢潻绱濋崠鍛儓閻劍鍩涢崣瀣偨閻ㄥ嫪鑵戦弬鍥ㄥ絹缁€?
+/// 标识符解析过程中抛出的异常。
 class IdentifierResolveException implements Exception {
   final String message;
   const IdentifierResolveException(this.message);
@@ -19,7 +19,7 @@ class IdentifierResolveException implements Exception {
   String toString() => message;
 }
 
-/// 閺嶅洩鐦戠粭锕佇掗弸鎰箛閸斺槄绱扮拫鍐暏閸忣剙鍙?API 鐏?DOI/PMID/arXiv/ISBN 鐟欙絾鐎芥稉?Document
+/// 标识符解析器，通过公开 API 将 DOI/PMID/arXiv/ISBN 解析为 Document。
 class IdentifierResolver {
   IdentifierResolver._();
   static final IdentifierResolver instance = IdentifierResolver._();
@@ -34,9 +34,9 @@ class IdentifierResolver {
     ),
   );
 
-  /// 閺嶈宓佹禒锝囨倞濡€崇础闁板秶鐤?Dio 閻?HTTP 娴狅絿鎮?
+  /// 更新代理配置，后续 Dio 发出的 HTTP 请求会走该代理。
   ///
-  /// [mode] 閹恒儱褰?ProxyMode 閺嬫矮濡囬崐纭风礉閸愬懘鍎撮柅姘崇箖 name 閸栧綊鍘ゆ禒銉╀缉閸忓秴鎯婇悳顖氼嚤閸忋儯鈧?
+  /// [mode] 接受 ProxyMode 枚举的任意子类，通过 name 属性匹配模式（便于跨包传递）。
   void applyProxy(Enum mode, String host, int port) {
     final adapter = IOHttpClientAdapter();
     switch (mode.name) {
@@ -59,7 +59,7 @@ class IdentifierResolver {
     _dio.httpClientAdapter = adapter;
   }
 
-  /// 濞村鐦潻鐐衡偓姘偓褝绱濇潻鏂挎礀閸濆秴绨查懓妤佹閿涘牊顕犵粔鎺炵礆
+  /// 测试网络连通性，返回请求耗时（毫秒）。
   Future<int> testConnectivity(String url, {CancelToken? cancelToken}) async {
     final sw = Stopwatch()..start();
     await _dio.head(url, cancelToken: cancelToken);
@@ -67,9 +67,9 @@ class IdentifierResolver {
     return sw.elapsedMilliseconds;
   }
 
-  /// 鐟欙絾鐎介崢鐔奉潗鏉堟挸鍙嗙€涙顑佹稉璇х礉鏉╂柨娲?Document
+  /// 解析标识符字符串，返回填充了元数据的 Document。
   ///
-  /// [metadataOnly] 娑?true 閺冩湹绮庨懢宄板絿閸忓啯鏆熼幑顕嗙礉鐠哄疇绻?PDF 娑撳娴?
+  /// [metadataOnly] 为 true 时仅获取元数据，不尝试下载 PDF。
   Future<Document> resolve(
     String rawInput, {
     bool metadataOnly = false,
@@ -99,13 +99,11 @@ class IdentifierResolver {
       case IdentifierType.isbn:
         return _resolveIsbn(parsed.value, cancelToken: cancelToken);
       case IdentifierType.unknown:
-        throw const IdentifierResolveException(
-          '\u672a\u627e\u5230\u8be5\u6807\u8bc6\u7b26\u5bf9\u5e94\u7684\u6587\u732e',
-        );
+        throw const IdentifierResolveException('未找到该标识符对应的文献');
     }
   }
 
-  // 閳光偓閳光偓 DOI 閳?CrossRef REST API 閳光偓閳光偓
+  // ─── DOI → CrossRef REST API ─────────────────────────────────────────────
 
   Future<Document> _resolveDoi(
     String doi, {
@@ -139,7 +137,7 @@ class IdentifierResolver {
             cancelToken: cancelToken,
           );
         } catch (e) {
-          debugPrint('閸戣櫣澧楃粈?PDF 閼惧嘲褰囨径杈Е: $e');
+          debugPrint('出版商 PDF 下载失败: $e');
         }
 
         if (filePath.isEmpty) {
@@ -165,7 +163,7 @@ class IdentifierResolver {
               );
             }
           } catch (e) {
-            debugPrint('Unpaywall PDF 娑撳娴囨径杈Е: $e');
+            debugPrint('Unpaywall PDF 下载失败: $e');
           }
         }
       }
@@ -183,8 +181,8 @@ class IdentifierResolver {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e, st) {
-      debugPrint('DOI 鐟欙絾鐎芥径杈Е: $e\n$st');
-      throw IdentifierResolveException('鐟欙絾鐎?DOI 閸濆秴绨查弫鐗堝祦婢惰精瑙? $e');
+      debugPrint('DOI 解析失败: $e\n$st');
+      throw IdentifierResolveException('解析 DOI 时发生错误: $e');
     }
   }
 
@@ -203,9 +201,7 @@ class IdentifierResolver {
       final result = resp.data['result'] as Map<String, dynamic>;
       final entry = result[pmid] as Map<String, dynamic>?;
       if (entry == null || entry.containsKey('error')) {
-        throw const IdentifierResolveException(
-          '\u672a\u627e\u5230\u8be5\u6807\u8bc6\u7b26\u5bf9\u5e94\u7684\u6587\u732e',
-        );
+        throw const IdentifierResolveException('未找到该标识符对应的文献');
       }
 
       final title = (entry['title'] as String?)?.trim() ?? pmid;
@@ -249,7 +245,7 @@ class IdentifierResolver {
               cancelToken: cancelToken,
             );
           } catch (e) {
-            debugPrint('閸戣櫣澧楃粈?PDF 閼惧嘲褰囨径杈Е: $e');
+            debugPrint('出版商 PDF 下载失败: $e');
           }
         }
 
@@ -265,7 +261,7 @@ class IdentifierResolver {
               cancelToken: cancelToken,
             );
           } catch (e) {
-            debugPrint('PMC PDF 娑撳娴囨径杈Е: $e');
+            debugPrint('PMC PDF 下载失败: $e');
           }
         }
 
@@ -294,7 +290,7 @@ class IdentifierResolver {
               );
             }
           } catch (e) {
-            debugPrint('Unpaywall PDF 娑撳娴囨径杈Е: $e');
+            debugPrint('Unpaywall PDF 下载失败: $e');
           }
         }
       }
@@ -314,8 +310,8 @@ class IdentifierResolver {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e, st) {
-      debugPrint('PMID 鐟欙絾鐎芥径杈Е: $e\n$st');
-      throw IdentifierResolveException('鐟欙絾鐎?PMID 閸濆秴绨查弫鐗堝祦婢惰精瑙? $e');
+      debugPrint('PMID 解析失败: $e\n$st');
+      throw IdentifierResolveException('解析 PMID 时发生错误: $e');
     }
   }
 
@@ -334,16 +330,12 @@ class IdentifierResolver {
       final xmlDoc = XmlDocument.parse(resp.data as String);
       final entry = xmlDoc.findAllElements('entry').firstOrNull;
       if (entry == null) {
-        throw const IdentifierResolveException(
-          '\u672a\u627e\u5230\u8be5\u6807\u8bc6\u7b26\u5bf9\u5e94\u7684\u6587\u732e',
-        );
+        throw const IdentifierResolveException('未找到该标识符对应的文献');
       }
 
       final idText = entry.findElements('id').firstOrNull?.innerText ?? '';
       if (idText.isEmpty) {
-        throw const IdentifierResolveException(
-          '\u672a\u627e\u5230\u8be5\u6807\u8bc6\u7b26\u5bf9\u5e94\u7684\u6587\u732e',
-        );
+        throw const IdentifierResolveException('未找到该标识符对应的文献');
       }
 
       final title =
@@ -390,7 +382,7 @@ class IdentifierResolver {
             cancelToken: cancelToken,
           );
         } catch (e) {
-          debugPrint('arXiv PDF 娑撳娴囨径杈Е: $e');
+          debugPrint('arXiv PDF 下载失败: $e');
         }
       }
 
@@ -409,8 +401,8 @@ class IdentifierResolver {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e, st) {
-      debugPrint('arXiv 鐟欙絾鐎芥径杈Е: $e\n$st');
-      throw IdentifierResolveException('鐟欙絾鐎?arXiv 閸濆秴绨查弫鐗堝祦婢惰精瑙? $e');
+      debugPrint('arXiv 解析失败: $e\n$st');
+      throw IdentifierResolveException('解析 arXiv 时发生错误: $e');
     }
   }
 
@@ -462,12 +454,12 @@ class IdentifierResolver {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e, st) {
-      debugPrint('ISBN 鐟欙絾鐎芥径杈Е: $e\n$st');
-      throw IdentifierResolveException('鐟欙絾鐎?ISBN 閸濆秴绨查弫鐗堝祦婢惰精瑙? $e');
+      debugPrint('ISBN 解析失败: $e\n$st');
+      throw IdentifierResolveException('解析 ISBN 时发生错误: $e');
     }
   }
 
-  // 鈥斺€?鏍规嵁 DOI 涓嬭浇 PDF 鈥斺€?
+  // ─── 根据 DOI 下载 PDF ────────────────────────────────────────────────────
 
   Future<String> downloadPdfByDoi({
     required String doi,
@@ -479,7 +471,7 @@ class IdentifierResolver {
   }) async {
     String filePath = '';
 
-    // 缁涙牜鏆?1: 閸戣櫣澧楅崯鍡欐纯閹恒儴骞忛崣鏍电礄閺嶁€虫疮缂?閺堢儤鐎禒锝囨倞閿?
+    // 步骤 1: 出版商直接获取（DOI 重定向 + URL 模式）
     try {
       filePath = await _tryPublisherPdf(
         doi: doi,
@@ -490,11 +482,11 @@ class IdentifierResolver {
         cancelToken: cancelToken,
       );
     } catch (e) {
-      debugPrint('閸戣櫣澧楅崯?PDF 閼惧嘲褰囨径杈Е: $e');
+      debugPrint('出版商 PDF 下载失败: $e');
     }
     if (filePath.isNotEmpty) return filePath;
 
-    // 缁涙牜鏆?2: Unpaywall 瀵偓閺€鎹愬箯閸?
+    // 步骤 2: Unpaywall 开放获取
     try {
       final uResp = await _dio.get(
         'https://api.unpaywall.org/v2/$doi',
@@ -515,18 +507,18 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
-      debugPrint('Unpaywall PDF 娑撳娴囨径杈Е: $e');
+      debugPrint('Unpaywall PDF 下载失败: $e');
     }
     if (filePath.isNotEmpty) return filePath;
 
-    // 缁涙牜鏆?3: Sci-Hub 閸忔粌绨抽懢宄板絿
+    // 步骤 3: Sci-Hub 兜底
     try {
       final sResp = await _dio.get(
         'https://sci-hub.se/$doi',
         cancelToken: cancelToken,
       );
       final html = sResp.data as String;
-      // 閸栧綊鍘?<embed src="..."> 閹?<iframe src="...">
+      // 提取 <embed src="..."> 或 <iframe src="...">
       final embedMatch =
           RegExp(
             r'<embed[^>]+src="([^"]+)"',
@@ -554,17 +546,17 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
-      debugPrint('Sci-Hub PDF 娑撳娴囨径杈Е: $e');
+      debugPrint('Sci-Hub PDF 下载失败: $e');
     }
 
     return filePath;
   }
 
-  // 閳光偓閳光偓 閸戣櫣澧楅崯?PDF 閼惧嘲褰?閳光偓閳光偓
+  // ─── 出版商直接获取 PDF ───────────────────────────────────────────────────
 
-  /// 鐏忔繆鐦柅姘崇箖閸戣櫣澧楅崯鍡欐纯閹恒儴骞忛崣?PDF閿涘牊鐗庨崶顓犵秹 / 閺堢儤鐎禒锝囨倞閸︾儤娅欓敍?
+  /// 优先通过 HEAD doi.org 重定向判断出版商，再构造 PDF 直链 / 出版商 URL 模式下载。
   ///
-  /// 閸ョ偤鈧偓闁? HEAD 閹恒垺绁?DOI 闁插秴鐣鹃崥?閳?濡偓濞?content-type 閳?閸戣櫣澧楅崯?URL 濡€崇础
+  /// 先通过 HEAD 请求 DOI 重定向，判断 content-type 及出版商 URL 再构造 PDF 链接。
   Future<String> _tryPublisherPdf({
     required String doi,
     String? year,
@@ -586,7 +578,7 @@ class IdentifierResolver {
       );
       publisherUri = resp.realUri;
 
-      // 閸戣櫣澧楅崯鍡楊嚠閺嶁€冲敶 IP / 娴狅絿鎮婇惄瀛樺复鏉╂柨娲?PDF
+      // 出版商直接返回 PDF（如预印本服务器）
       if (_isPdfContentType(resp.headers)) {
         return await _downloadPdf(
           url: publisherUri.toString(),
@@ -598,10 +590,10 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
-      debugPrint('DOI 闁插秴鐣鹃崥鎴炲赴濞村銇戠拹? $e');
+      debugPrint('DOI 重定向失败: $e');
     }
 
-    // 閺嶈宓侀崙铏瑰閸熷棗鐓欓崥宥嗙€柅?PDF 娑撳娴囬柧鐐复
+    // 根据出版商域名构造 PDF 直链
     if (publisherUri != null) {
       final pdfUrl = _buildPublisherPdfUrl(publisherUri, doi);
       if (pdfUrl != null) {
@@ -616,7 +608,7 @@ class IdentifierResolver {
           );
           if (path.isNotEmpty) return path;
         } catch (e) {
-          debugPrint('閸戣櫣澧楅崯?URL 濡€崇础娑撳娴囨径杈Е: $e');
+          debugPrint('出版商 URL 模式下载失败: $e');
         }
       }
     }
@@ -624,7 +616,7 @@ class IdentifierResolver {
     return '';
   }
 
-  /// 閺嶈宓侀崙铏瑰閸熷棗鐓欓崥宥呮嫲妞ょ敻娼?URL 閺嬪嫰鈧?PDF 娑撳娴囬柧鐐复閿涘矁绻戦崶?null 鐞涖劎銇氭稉宥嗘暜閹?
+  /// 根据出版商域名构造 PDF 直链，不支持则返回 null。
   String? _buildPublisherPdfUrl(Uri publisherUri, String doi) {
     final host = publisherUri.host.toLowerCase();
 
@@ -686,9 +678,9 @@ class IdentifierResolver {
     return ct != null && ct.contains('application/pdf');
   }
 
-  // 閳光偓閳光偓 PDF 娑撳娴?閳光偓閳光偓
+  // ─── PDF 下载 ─────────────────────────────────────────────────────────────
 
-  /// 娑撳娴?PDF 閸掔増鏋冩惔鎾舵窗瑜版洩绱濇潻鏂挎礀閺堫剙婀寸捄顖氱窞閿涙稑銇戠拹銉﹀灗闂?PDF 閸愬懎顔愭潻鏂挎礀缁屽搫鐡х粭锔胯
+  /// 下载 PDF 到文档目录，校验 %PDF 魔数后返回文件路径，校验失败则删除文件并返回空字符串。
   Future<String> _downloadPdf({
     required String url,
     String? year,
@@ -710,7 +702,7 @@ class IdentifierResolver {
 
     await _dio.download(url, pdfPath, cancelToken: cancelToken);
 
-    // 妤犲矁鐦?PDF 閺堝鏅ラ幀褝绱欏Λ鈧弻?%PDF 姒勬梹鏆熼敍?
+    // 校验 PDF 魔数（%PDF），非法文件直接删除
     final file = File(pdfPath);
     final raf = await file.open();
     final header = await raf.read(4);
@@ -723,9 +715,9 @@ class IdentifierResolver {
     return pdfPath;
   }
 
-  // 閳光偓閳光偓 閺傚洣娆㈤崨钘夋倳 閳光偓閳光偓
+  // ─── 文件名生成 ───────────────────────────────────────────────────────────
 
-  /// 閺嶈宓侀崗鍐╂殶閹诡喚鏁撻幋?PDF 閺傚洣娆㈤崥宥忕礉閺嶇厧绱￠敍姝絜ar-mainAuthor-title.pdf
+  /// 根据年份、作者、标题生成规范 PDF 文件名：year-mainAuthor-title.pdf
   static String buildPdfFileName({
     String? year,
     List<String> authors = const [],
@@ -754,7 +746,7 @@ class IdentifierResolver {
     return '${sanitized.isEmpty ? fallbackId : sanitized}.pdf';
   }
 
-  // 閳光偓閳光偓 鏉堝懎濮弬瑙勭《 閳光偓閳光偓
+  // ─── 元数据提取工具 ───────────────────────────────────────────────────────
 
   String? _extractFirst(dynamic list) {
     if (list is List && list.isNotEmpty) return list.first.toString();
