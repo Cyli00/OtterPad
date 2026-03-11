@@ -50,6 +50,94 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     super.dispose();
   }
 
+  // ── 提取选项开关列表 ──────────────────────────────────────────────────────
+
+  static const _optionDefs = <(String, String, String)>[
+    ('useLayoutDetection', '版面检测', '识别文档区域并排序'),
+    ('useChartRecognition', '图表识别', '将图表解析为表格'),
+    ('useDocOrientationClassify', '方向校正', '自动纠正 0°/90°/180°/270° 旋转'),
+    ('useDocUnwarping', '弯曲校正', '校正弯曲或褶皱的文档'),
+    ('useSealRecognition', '印章识别', '识别文档中的印章'),
+    ('useOcrForImageBlock', '图片区 OCR', '对图片区域执行文字识别'),
+    ('mergeTables', '跨页合并表格', '自动合并跨页表格'),
+    ('relevelTitles', '标题层级重排', '重新识别段落标题层级'),
+    ('restructurePages', '多页重构', '重构多页文档结构'),
+    ('layoutNms', '去重叠检测框', '移除重叠的版面检测框'),
+  ];
+
+  bool _getOptionValue(DocExtractApiState s, String field) => switch (field) {
+        'useLayoutDetection' => s.useLayoutDetection,
+        'useChartRecognition' => s.useChartRecognition,
+        'useDocOrientationClassify' => s.useDocOrientationClassify,
+        'useDocUnwarping' => s.useDocUnwarping,
+        'useSealRecognition' => s.useSealRecognition,
+        'useOcrForImageBlock' => s.useOcrForImageBlock,
+        'mergeTables' => s.mergeTables,
+        'relevelTitles' => s.relevelTitles,
+        'restructurePages' => s.restructurePages,
+        'layoutNms' => s.layoutNms,
+        _ => false,
+      };
+
+  List<Widget> _buildOptionTiles(BuildContext context) {
+    final docState = ref.watch(docExtractApiProvider);
+    return _optionDefs.map((def) {
+      final (field, title, subtitle) = def;
+      return SwitchListTile(
+        title: Text(title, style: Theme.of(context).textTheme.bodyMedium),
+        subtitle: Text(subtitle,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        value: _getOptionValue(docState, field),
+        onChanged: (v) =>
+            ref.read(docExtractApiProvider.notifier).setBool(field, v),
+        dense: true,
+        visualDensity: VisualDensity.compact,
+      );
+    }).toList();
+  }
+
+  // ── 忽略标签 Chips ─────────────────────────────────────────────────────────
+
+  static const _labelNames = <String, String>{
+    'header': '页眉',
+    'header_image': '页眉图片',
+    'footer': '页脚',
+    'footer_image': '页脚图片',
+    'number': '页码',
+    'footnote': '脚注',
+    'aside_text': '旁注',
+  };
+
+  Widget _buildIgnoreLabelChips(BuildContext context) {
+    final docState = ref.watch(docExtractApiProvider);
+    final selected = docState.markdownIgnoreLabels;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: kAllIgnoreLabels.map((label) {
+        final isSelected = selected.contains(label);
+        return FilterChip(
+          label: Text(_labelNames[label] ?? label),
+          selected: isSelected,
+          onSelected: (v) {
+            final updated = List<String>.from(selected);
+            if (v) {
+              if (!updated.contains(label)) updated.add(label);
+            } else {
+              updated.remove(label);
+            }
+            ref.read(docExtractApiProvider.notifier).setIgnoreLabels(updated);
+          },
+        );
+      }).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -186,6 +274,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           // ── 文档提取 API ────────────────────────────────────────────────────
           _SectionTitle('文档提取 API'),
           const SizedBox(height: 8),
+          // 连接信息卡片
           Card(
             elevation: 0,
             color: cs.surfaceContainerLow,
@@ -197,7 +286,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 格式说明
                   Row(
                     children: [
                       Icon(Icons.info_outline_rounded,
@@ -205,7 +293,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '当前仅支持 OpenAI 原生格式（兼容第三方接口）',
+                          '百度 AI Studio 文档版面解析 (PaddleOCR-VL)',
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: cs.onSurfaceVariant),
                         ),
@@ -214,9 +302,9 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Base URL
+                  // API URL
                   Text(
-                    'Base URL',
+                    'API URL',
                     style: theme.textTheme.labelMedium
                         ?.copyWith(color: cs.onSurfaceVariant),
                   ),
@@ -232,17 +320,17 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                             .setBaseUrl(v.trim());
                       });
                     },
-                    decoration:
-                        fieldDeco(hint: 'https://api.openai.com/v1'),
+                    decoration: fieldDeco(
+                        hint: 'https://xxx.aistudio-app.com'),
                     keyboardType: TextInputType.url,
                     autocorrect: false,
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
 
-                  // API Key
+                  // Access Token
                   Text(
-                    'API Key',
+                    'Access Token',
                     style: theme.textTheme.labelMedium
                         ?.copyWith(color: cs.onSurfaceVariant),
                   ),
@@ -260,7 +348,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                     },
                     obscureText: _docKeyObscured,
                     decoration: fieldDeco(
-                      hint: 'sk-...',
+                      hint: 'token ...',
                       suffix: IconButton(
                         icon: Icon(
                           _docKeyObscured
@@ -276,6 +364,66 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                     enableSuggestions: false,
                     style: theme.textTheme.bodyMedium,
                   ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // 提取选项卡片
+          Card(
+            elevation: 0,
+            color: cs.surfaceContainerLow,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: Text(
+                      '提取选项',
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  ..._buildOptionTiles(context),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Markdown 忽略标签卡片
+          Card(
+            elevation: 0,
+            color: cs.surfaceContainerLow,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Markdown 忽略标签',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '勾选的标签区域将不会输出到 Markdown 中',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildIgnoreLabelChips(context),
                 ],
               ),
             ),

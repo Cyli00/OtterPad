@@ -16,7 +16,14 @@
       "WebFetch(domain:services.zotero.org)",
       "WebFetch(domain:grobid.readthedocs.io)",
       "WebFetch(domain:forums.zotero.org)",
-      "Bash(find /e/gitProjects/NightReader/lib/pages/setting -type f -name *.dart)"
+      "Bash(find /e/gitProjects/NightReader/lib/pages/setting -type f -name *.dart)",
+      "Bash(grep -r \"vision\\\\|Vision\\\\|ocr\\\\|OCR\\\\|google_ml_kit\\\\|googleapis\" /e/gitProjects/NightReader/lib --include=*.dart)",
+      "Bash(find /e/gitProjects/NightReader/ref/MinerU -name README* -o -name readme*)",
+      "WebFetch(domain:www.paddleocr.ai)",
+      "WebFetch(domain:ernie.baidu.com)",
+      "WebFetch(domain:docs.vllm.ai)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:ai.baidu.com)"
     ]
   },
   "outputStyle": "Explanatory"

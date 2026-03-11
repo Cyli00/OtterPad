@@ -75,6 +75,7 @@ dependencies:
 
   # XML 解析（arXiv API 响应）
   xml: ^6.6.0
+  flutter_markdown_plus: ^1.0.7
 
 dev_dependencies:
   flutter_test:
