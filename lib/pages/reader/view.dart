@@ -4,13 +4,14 @@ import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/models/book/document.dart';
 import '../../providers/api_provider.dart';
 import '../../services/doc_extract_service.dart';
-import 'extract_result_page.dart';
+import '../library/widgets/toolbar_bottom_sheet.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
   final Document document;
@@ -26,7 +27,31 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _extracting = false;
+  bool _showPreview = false;
+  String? _htmlPath; // 已保存的 .html 路径
+  String? _htmlContent; // 内存中的 HTML 内容
   CancelToken? _cancelToken;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingResult();
+  }
+
+  /// 检查 PDF 同目录是否已有 .html 提取结果
+  void _checkExistingResult() {
+    final filePath = widget.document.filePath;
+    if (filePath.isEmpty) return;
+    final htmlPath = p.join(
+      p.dirname(filePath),
+      '${p.basenameWithoutExtension(filePath)}.html',
+    );
+    if (File(htmlPath).existsSync()) {
+      _htmlPath = htmlPath;
+    }
+  }
+
+  bool get _hasResult => _htmlPath != null || _htmlContent != null;
 
   void _showDocumentInfo(BuildContext context) {
     showModalBottomSheet(
@@ -56,7 +81,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
 
-    // 检查文件是否存在
+    // 检查文件
     final filePath = widget.document.filePath;
     if (filePath.isEmpty || !File(filePath).existsSync()) {
       if (!mounted) return;
@@ -66,35 +91,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
 
-    // 检查是否已有提取结果
-    final mdPath = p.join(
-      p.dirname(filePath),
-      '${p.basenameWithoutExtension(filePath)}.md',
-    );
-    if (File(mdPath).existsSync()) {
-      if (!mounted) return;
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ExtractResultPage(
-          title: widget.document.title,
-          filePath: mdPath,
-        ),
-      ));
-      return;
-    }
-
     // 开始提取
     setState(() => _extracting = true);
     _cancelToken = CancelToken();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('正在提取文档内容…'),
+      buildProgressSnackBar(
+        context: context,
+        fileName: widget.document.title,
+        status: '正在提取文档…',
+        onCancel: () {
+          _cancelToken?.cancel();
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        },
         duration: const Duration(minutes: 10),
-        action: SnackBarAction(
-          label: '取消',
-          onPressed: () => _cancelToken?.cancel(),
-        ),
       ),
     );
 
@@ -107,19 +118,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         cancelToken: _cancelToken,
       );
 
-      // 保存到磁盘
-      await DocExtractService.instance.saveResult(filePath, result);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          buildProgressSnackBar(
+            context: context,
+            fileName: widget.document.title,
+            status: '正在保存结果…',
+            onCancel: () {},
+          ),
+        );
+
+      // 保存到磁盘（传入 token 以便图片下载可能需要认证）
+      final htmlPath = await DocExtractService.instance.saveResult(
+        filePath,
+        result,
+        token: docState.apiKey,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ExtractResultPage(
-          title: widget.document.title,
-          markdown: result.markdown,
-          filePath: result.savedPath,
-        ),
-      ));
+      // 读取生成的 HTML 以便直接展示
+      final htmlContent = await File(htmlPath).readAsString();
+
+      setState(() {
+        _htmlPath = htmlPath;
+        _htmlContent = htmlContent;
+        _showPreview = true;
+      });
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
         if (!mounted) return;
@@ -146,6 +174,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (mounted) setState(() => _extracting = false);
       _cancelToken = null;
     }
+  }
+
+  void _togglePreview() {
+    setState(() => _showPreview = !_showPreview);
   }
 
   @override
@@ -183,20 +215,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ),
         centerTitle: true,
         actions: [
-          _extracting
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.document_scanner_rounded, size: 20),
-                  tooltip: '文档提取',
-                  onPressed: _onExtractPressed,
-                ),
+          _buildExtractButton(colorScheme),
+          if (_hasResult && !_extracting)
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              tooltip: '重新提取',
+              onPressed: _onExtractPressed,
+            ),
           IconButton(
             icon: const Icon(Icons.info_outline_rounded, size: 20),
             tooltip: '文献信息',
@@ -206,34 +231,125 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ],
       ),
       body: fileExists
-          ? PdfViewer.file(
-              doc.filePath,
-              params: const PdfViewerParams(
-                backgroundColor: Colors.transparent,
-              ),
-            )
-          : Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.error_outline_rounded,
-                      size: 48, color: colorScheme.error),
-                  const SizedBox(height: 16),
-                  Text('找不到该文献的 PDF 文件',
-                      style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                    child: Text(
-                      doc.filePath,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: colorScheme.onSurfaceVariant),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
+          ? _buildBody(theme, colorScheme)
+          : _buildFileNotFound(theme, colorScheme),
+    );
+  }
+
+  /// 根据状态构建不同形态的按钮：提取中 / 切换预览 / 开始提取
+  Widget _buildExtractButton(ColorScheme colorScheme) {
+    if (_extracting) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    if (_hasResult) {
+      return IconButton(
+        icon: Icon(
+          _showPreview
+              ? Icons.picture_as_pdf_rounded
+              : Icons.article_rounded,
+          size: 20,
+        ),
+        tooltip: _showPreview ? '查看 PDF' : '查看提取结果',
+        onPressed: _togglePreview,
+      );
+    }
+
+    return IconButton(
+      icon: const Icon(Icons.document_scanner_rounded, size: 20),
+      tooltip: '文档提取',
+      onPressed: _onExtractPressed,
+    );
+  }
+
+  /// 构建主体区域：PDF 视图 或 HTML 预览
+  Widget _buildBody(ThemeData theme, ColorScheme colorScheme) {
+    if (_showPreview && _hasResult) {
+      return _buildHtmlPreview(theme);
+    }
+    return PdfViewer.file(
+      widget.document.filePath,
+      params: const PdfViewerParams(
+        backgroundColor: Colors.transparent,
+      ),
+    );
+  }
+
+  Widget _buildHtmlPreview(ThemeData theme) {
+    return FutureBuilder<String>(
+      future: _htmlContent != null
+          ? Future.value(_htmlContent!)
+          : File(_htmlPath!).readAsString(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || (snapshot.data?.isEmpty ?? true)) {
+          return Center(
+            child: Text('加载失败',
+                style: theme.textTheme.bodyLarge
+                    ?.copyWith(color: theme.colorScheme.error)),
+          );
+        }
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: HtmlWidget(
+            snapshot.data!,
+            textStyle: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
+            customWidgetBuilder: (element) {
+              if (element.localName == 'img') {
+                final src = element.attributes['src'] ?? '';
+                if (src.startsWith('file:///')) {
+                  final file = File(Uri.parse(src).toFilePath());
+                  if (file.existsSync()) {
+                    return Image.file(
+                      file,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.broken_image_rounded,
+                        size: 48,
+                      ),
+                    );
+                  }
+                }
+              }
+              return null;
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFileNotFound(ThemeData theme, ColorScheme colorScheme) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline_rounded,
+              size: 48, color: colorScheme.error),
+          const SizedBox(height: 16),
+          Text('找不到该文献的 PDF 文件',
+              style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            child: Text(
+              widget.document.filePath,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
             ),
+          ),
+        ],
+      ),
     );
   }
 }

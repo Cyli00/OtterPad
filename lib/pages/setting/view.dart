@@ -49,7 +49,7 @@ class SettingPage extends StatelessWidget {
                 ),
               _SettingsTile(
                 icon: Icons.hub_rounded,
-                title: 'API 服务商',
+                title: '模型服务',
                 subtitle: 'Agent 模型 · 文档提取接口',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(

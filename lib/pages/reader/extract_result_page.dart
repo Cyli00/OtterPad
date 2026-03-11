@@ -2,28 +2,28 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// Markdown 提取结果展示页
+/// HTML 提取结果展示页
 ///
 /// 支持两种加载方式：
-/// - [markdown] 直接传入内存中的 Markdown 文本（刚提取的）
-/// - [filePath] 从磁盘加载已保存的 .md 文件
+/// - [htmlContent] 直接传入内存中的 HTML 文本（刚提取的）
+/// - [filePath] 从磁盘加载已保存的 .html 文件
 class ExtractResultPage extends StatelessWidget {
   final String title;
-  final String? markdown;
+  final String? htmlContent;
   final String? filePath;
 
   const ExtractResultPage({
     super.key,
     required this.title,
-    this.markdown,
+    this.htmlContent,
     this.filePath,
-  }) : assert(markdown != null || filePath != null);
+  }) : assert(htmlContent != null || filePath != null);
 
   Future<String> _loadContent() async {
-    if (markdown != null) return markdown!;
+    if (htmlContent != null) return htmlContent!;
     return File(filePath!).readAsString();
   }
 
@@ -108,37 +108,30 @@ class ExtractResultPage extends StatelessWidget {
             );
           }
 
-          return Markdown(
-            data: content,
-            selectable: true,
+          return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-              p: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
-              h1: theme.textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-              h2: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-              h3: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-              code: theme.textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
-                backgroundColor: cs.surfaceContainerHighest,
-              ),
-              codeblockDecoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              blockquoteDecoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(color: cs.primary, width: 3),
-                ),
-              ),
-              tableBorder: TableBorder.all(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              tableHead: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+            child: HtmlWidget(
+              content,
+              textStyle: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
+              customWidgetBuilder: (element) {
+                if (element.localName == 'img') {
+                  final src = element.attributes['src'] ?? '';
+                  if (src.startsWith('file:///')) {
+                    final file = File(Uri.parse(src).toFilePath());
+                    if (file.existsSync()) {
+                      return Image.file(
+                        file,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.broken_image_rounded,
+                          size: 48,
+                        ),
+                      );
+                    }
+                  }
+                }
+                return null;
+              },
             ),
           );
         },
