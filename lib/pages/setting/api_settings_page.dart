@@ -66,38 +66,63 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   ];
 
   bool _getOptionValue(DocExtractApiState s, String field) => switch (field) {
-        'useLayoutDetection' => s.useLayoutDetection,
-        'useChartRecognition' => s.useChartRecognition,
-        'useDocOrientationClassify' => s.useDocOrientationClassify,
-        'useDocUnwarping' => s.useDocUnwarping,
-        'useSealRecognition' => s.useSealRecognition,
-        'useOcrForImageBlock' => s.useOcrForImageBlock,
-        'mergeTables' => s.mergeTables,
-        'relevelTitles' => s.relevelTitles,
-        'restructurePages' => s.restructurePages,
-        'layoutNms' => s.layoutNms,
-        _ => false,
-      };
+    'useLayoutDetection' => s.useLayoutDetection,
+    'useChartRecognition' => s.useChartRecognition,
+    'useDocOrientationClassify' => s.useDocOrientationClassify,
+    'useDocUnwarping' => s.useDocUnwarping,
+    'useSealRecognition' => s.useSealRecognition,
+    'useOcrForImageBlock' => s.useOcrForImageBlock,
+    'mergeTables' => s.mergeTables,
+    'relevelTitles' => s.relevelTitles,
+    'restructurePages' => s.restructurePages,
+    'layoutNms' => s.layoutNms,
+    _ => false,
+  };
 
   List<Widget> _buildOptionTiles(BuildContext context) {
     final docState = ref.watch(docExtractApiProvider);
-    return _optionDefs.map((def) {
-      final (field, title, subtitle) = def;
-      return SwitchListTile(
-        title: Text(title, style: Theme.of(context).textTheme.bodyMedium),
-        subtitle: Text(subtitle,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        value: _getOptionValue(docState, field),
-        onChanged: (v) =>
-            ref.read(docExtractApiProvider.notifier).setBool(field, v),
-        dense: true,
-        visualDensity: VisualDensity.compact,
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final tiles = <Widget>[];
+    for (int i = 0; i < _optionDefs.length; i++) {
+      final (field, title, subtitle) = _optionDefs[i];
+      tiles.add(
+        SwitchListTile(
+          title: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          value: _getOptionValue(docState, field),
+          onChanged: (v) =>
+              ref.read(docExtractApiProvider.notifier).setBool(field, v),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+        ),
       );
-    }).toList();
+      if (i < _optionDefs.length - 1) {
+        tiles.add(
+          Divider(
+            height: 1,
+            thickness: 1,
+            indent: 20,
+            endIndent: 20,
+            color: cs.outlineVariant.withAlpha(40),
+          ),
+        );
+      }
+    }
+    return tiles;
   }
 
   // ── 忽略标签 Chips ─────────────────────────────────────────────────────────
@@ -115,15 +140,31 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   Widget _buildIgnoreLabelChips(BuildContext context) {
     final docState = ref.watch(docExtractApiProvider);
     final selected = docState.markdownIgnoreLabels;
+    final cs = Theme.of(context).colorScheme;
 
     return Wrap(
       spacing: 8,
-      runSpacing: 4,
+      runSpacing: 8,
       children: kAllIgnoreLabels.map((label) {
         final isSelected = selected.contains(label);
         return FilterChip(
           label: Text(_labelNames[label] ?? label),
           selected: isSelected,
+          showCheckmark: false,
+          color: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return cs.primaryContainer;
+            }
+            return cs.surface;
+          }),
+          side: BorderSide(
+            color: isSelected
+                ? Colors.transparent
+                : cs.outlineVariant.withAlpha(100),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           onSelected: (v) {
             final updated = List<String>.from(selected);
             if (v) {
@@ -138,6 +179,39 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     );
   }
 
+  Widget _buildGroup(
+    BuildContext context, {
+    required String title,
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
+          child: Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: child,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -147,104 +221,142 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     InputDecoration fieldDeco({required String hint, Widget? suffix}) =>
         InputDecoration(
           hintText: hint,
-          hintStyle: theme.textTheme.bodyMedium
-              ?.copyWith(color: cs.onSurfaceVariant.withAlpha(130)),
+          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+            color: cs.onSurfaceVariant.withAlpha(120),
+          ),
           filled: true,
-          fillColor: cs.surfaceContainer,
+          fillColor: cs.surface,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: cs.outlineVariant.withAlpha(100),
+              width: 1,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: cs.primary, width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
           isDense: true,
           suffixIcon: suffix,
         );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('API 服务商设置')),
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        title: Text(
+          '模型服务',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: false,
+        backgroundColor: cs.surface,
+        scrolledUnderElevation: 0,
+      ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ).copyWith(bottom: 40),
         children: [
           // ── Agent API ──────────────────────────────────────────────────────
-          _SectionTitle('Agent API'),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 0,
-            color: cs.surfaceContainerLow,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            clipBehavior: Clip.antiAlias,
+          _buildGroup(
+            context,
+            title: 'Agent API',
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 服务商选择
                   Text(
                     '服务商',
-                    style: theme.textTheme.labelMedium
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: SegmentedButton<AgentApiProvider>(
                       segments: AgentApiProvider.values
-                          .map((p) =>
-                              ButtonSegment(value: p, label: Text(p.label)))
+                          .map(
+                            (p) =>
+                                ButtonSegment(value: p, label: Text(p.label)),
+                          )
                           .toList(),
                       selected: {agentState.provider},
                       onSelectionChanged: (set) => ref
                           .read(agentApiProvider.notifier)
                           .setProvider(set.first),
+                      style: SegmentedButton.styleFrom(
+                        backgroundColor: cs.surface,
+                        selectedBackgroundColor: cs.primaryContainer,
+                        side: BorderSide(
+                          color: cs.outlineVariant.withAlpha(100),
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Base URL
+                  const SizedBox(height: 24),
                   Text(
                     'Base URL',
-                    style: theme.textTheme.labelMedium
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _agentUrlCtrl,
                     onChanged: (v) {
                       _agentUrlTimer?.cancel();
-                      _agentUrlTimer =
-                          Timer(const Duration(milliseconds: 600), () {
-                        ref
-                            .read(agentApiProvider.notifier)
-                            .setBaseUrl(v.trim());
-                      });
+                      _agentUrlTimer = Timer(
+                        const Duration(milliseconds: 600),
+                        () {
+                          ref
+                              .read(agentApiProvider.notifier)
+                              .setBaseUrl(v.trim());
+                        },
+                      );
                     },
-                    decoration:
-                        fieldDeco(hint: agentState.provider.defaultBaseUrl),
+                    decoration: fieldDeco(
+                      hint: agentState.provider.defaultBaseUrl,
+                    ),
                     keyboardType: TextInputType.url,
                     autocorrect: false,
                     style: theme.textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 16),
-
-                  // API Key
+                  const SizedBox(height: 24),
                   Text(
                     'API Key',
-                    style: theme.textTheme.labelMedium
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _agentKeyCtrl,
                     onChanged: (v) {
                       _agentKeyTimer?.cancel();
-                      _agentKeyTimer =
-                          Timer(const Duration(milliseconds: 600), () {
-                        ref
-                            .read(agentApiProvider.notifier)
-                            .setApiKey(v.trim());
-                      });
+                      _agentKeyTimer = Timer(
+                        const Duration(milliseconds: 600),
+                        () {
+                          ref
+                              .read(agentApiProvider.notifier)
+                              .setApiKey(v.trim());
+                        },
+                      );
                     },
                     obscureText: _agentKeyObscured,
                     decoration: fieldDeco(
@@ -257,7 +369,8 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                           size: 20,
                         ),
                         onPressed: () => setState(
-                            () => _agentKeyObscured = !_agentKeyObscured),
+                          () => _agentKeyObscured = !_agentKeyObscured,
+                        ),
                       ),
                     ),
                     autocorrect: false,
@@ -269,82 +382,92 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             ),
           ),
 
-          const SizedBox(height: 16),
-
           // ── 文档提取 API ────────────────────────────────────────────────────
-          _SectionTitle('文档提取 API'),
-          const SizedBox(height: 8),
-          // 连接信息卡片
-          Card(
-            elevation: 0,
-            color: cs.surfaceContainerLow,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            clipBehavior: Clip.antiAlias,
+          _buildGroup(
+            context,
+            title: '文档提取 API',
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded,
-                          size: 16, color: cs.primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '百度 AI Studio 文档版面解析 (PaddleOCR-VL)',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: cs.onSurfaceVariant),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.secondaryContainer.withAlpha(150),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 20,
+                          color: cs.secondary,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '百度 AI Studio 文档版面解析 (PaddleOCR-VL)',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: cs.onSecondaryContainer,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // API URL
+                  const SizedBox(height: 24),
                   Text(
                     'API URL',
-                    style: theme.textTheme.labelMedium
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _docUrlCtrl,
                     onChanged: (v) {
                       _docUrlTimer?.cancel();
-                      _docUrlTimer =
-                          Timer(const Duration(milliseconds: 600), () {
-                        ref
-                            .read(docExtractApiProvider.notifier)
-                            .setBaseUrl(v.trim());
-                      });
+                      _docUrlTimer = Timer(
+                        const Duration(milliseconds: 600),
+                        () {
+                          ref
+                              .read(docExtractApiProvider.notifier)
+                              .setBaseUrl(v.trim());
+                        },
+                      );
                     },
-                    decoration: fieldDeco(
-                        hint: 'https://xxx.aistudio-app.com'),
+                    decoration: fieldDeco(hint: 'https://xxx.aistudio-app.com'),
                     keyboardType: TextInputType.url,
                     autocorrect: false,
                     style: theme.textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 16),
-
-                  // Access Token
+                  const SizedBox(height: 24),
                   Text(
                     'Access Token',
-                    style: theme.textTheme.labelMedium
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _docKeyCtrl,
                     onChanged: (v) {
                       _docKeyTimer?.cancel();
-                      _docKeyTimer =
-                          Timer(const Duration(milliseconds: 600), () {
-                        ref
-                            .read(docExtractApiProvider.notifier)
-                            .setApiKey(v.trim());
-                      });
+                      _docKeyTimer = Timer(
+                        const Duration(milliseconds: 600),
+                        () {
+                          ref
+                              .read(docExtractApiProvider.notifier)
+                              .setApiKey(v.trim());
+                        },
+                      );
                     },
                     obscureText: _docKeyObscured,
                     decoration: fieldDeco(
@@ -369,88 +492,46 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             ),
           ),
 
-          const SizedBox(height: 12),
-
-          // 提取选项卡片
-          Card(
-            elevation: 0,
-            color: cs.surfaceContainerLow,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            clipBehavior: Clip.antiAlias,
+          // ── 提取选项 ────────────────────────────────────────────────────────
+          _buildGroup(
+            context,
+            title: '提取选项',
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: Text(
-                      '提取选项',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  ..._buildOptionTiles(context),
-                ],
-              ),
+              child: Column(children: _buildOptionTiles(context)),
             ),
           ),
 
-          const SizedBox(height: 12),
-
-          // Markdown 忽略标签卡片
-          Card(
-            elevation: 0,
-            color: cs.surfaceContainerLow,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            clipBehavior: Clip.antiAlias,
+          // ── Markdown 忽略标签 ───────────────────────────────────────────────
+          _buildGroup(
+            context,
+            title: '提取过滤',
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Markdown 忽略标签',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
-                    '勾选的标签区域将不会输出到 Markdown 中',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    '勾选的标签区域将不会输出到 Markdown 结果中',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   _buildIgnoreLabelChips(context),
                 ],
               ),
             ),
           ),
-
-          const SizedBox(height: 24),
         ],
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String text;
-  const _SectionTitle(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Text(
-        text,
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }

@@ -1,11 +1,9 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
-enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
+enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary, batchExtract }
 
-/// 构建操作进度 SnackBar
-///
-/// 布局: [spinner] status (current/total) [newline] fileName [取消]
 SnackBar buildProgressSnackBar({
   BuildContext? context,
   int? current,
@@ -15,33 +13,33 @@ SnackBar buildProgressSnackBar({
   required VoidCallback onCancel,
   Duration duration = const Duration(minutes: 5),
 }) {
-  final isMobile = context != null ? MediaQuery.sizeOf(context).width < 600 : true;
+  final isMobile = context != null
+      ? MediaQuery.sizeOf(context).width < 600
+      : true;
 
   return SnackBar(
     behavior: SnackBarBehavior.floating,
     width: isMobile ? null : 400,
-    margin: isMobile ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0) : null,
+    margin: isMobile
+        ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
+        : null,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
     elevation: 6,
     content: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // 进度圈
         const SizedBox(
           width: 24,
           height: 24,
           child: CircularProgressIndicator(strokeWidth: 2.5),
         ),
         const SizedBox(width: 16),
-        
-        // 详细信息区
         Expanded(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 状态与计数字段
               Row(
                 children: [
                   Expanded(
@@ -69,13 +67,9 @@ SnackBar buildProgressSnackBar({
                 ],
               ),
               const SizedBox(height: 4),
-              // 文件名字段 (支持最多2行，且可以省略)
               Text(
                 fileName,
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.4,
-                ),
+                style: const TextStyle(fontSize: 12, height: 1.4),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -84,26 +78,26 @@ SnackBar buildProgressSnackBar({
         ),
       ],
     ),
-    action: SnackBarAction(
-      label: '取消',
-      onPressed: onCancel,
-    ),
+    action: SnackBarAction(label: '取消', onPressed: onCancel),
     duration: duration,
   );
 }
 
-/// 构建结果提示 SnackBar（统一浮动样式）
 SnackBar buildResultSnackBar({
   BuildContext? context,
   required String message,
   Duration duration = const Duration(seconds: 4),
 }) {
-  final isMobile = context != null ? MediaQuery.sizeOf(context).width < 600 : true;
+  final isMobile = context != null
+      ? MediaQuery.sizeOf(context).width < 600
+      : true;
 
   return SnackBar(
     behavior: SnackBarBehavior.floating,
     width: isMobile ? null : 400,
-    margin: isMobile ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0) : null,
+    margin: isMobile
+        ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
+        : null,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
     elevation: 6,
@@ -112,7 +106,6 @@ SnackBar buildResultSnackBar({
   );
 }
 
-/// 工具栏 Bottom Sheet
 Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
   final theme = Theme.of(context);
   final colorScheme = theme.colorScheme;
@@ -126,14 +119,11 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
         child: Container(
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(28),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 拖拽条
               Container(
                 margin: const EdgeInsets.only(top: 12),
                 width: 32,
@@ -144,10 +134,11 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                 ),
               ),
               const SizedBox(height: 8),
-              // 标题
               Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 24, vertical: 8),
+                  horizontal: 24,
+                  vertical: 8,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -159,30 +150,34 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                   ),
                 ),
               ),
-              // 选项
               _SheetItem(
                 icon: Icons.note_add_outlined,
                 title: '添加文件',
-                subtitle: '从本地选择 PDF 文件添加到文库',
-                onTap: () =>
-                    Navigator.pop(context, ToolbarAction.addFile),
+                subtitle: '导入本地 PDF，并提取标题、作者、期刊、年份与 DOI',
+                onTap: () => Navigator.pop(context, ToolbarAction.addFile),
               ),
               _SheetItem(
                 icon: Icons.travel_explore_rounded,
-                title: '通过标识符添加条目',
-                subtitle: '输入 DOI、PMID、arXiv ID 等标识符',
+                title: '通过标识符添加',
+                subtitle: '输入 DOI、PMID、arXiv ID 或 ISBN 直接创建条目',
                 onTap: () =>
                     Navigator.pop(context, ToolbarAction.addByIdentifier),
               ),
               _SheetItem(
                 icon: Icons.refresh_rounded,
                 title: '重构文库',
-                subtitle: '重新扫描目录，更新文献列表与元数据',
+                subtitle: '重新扫描目录，补回 PDF 并重试提取核心元数据',
                 onTap: () =>
                     Navigator.pop(context, ToolbarAction.rebuildLibrary),
               ),
-              SizedBox(
-                  height: MediaQuery.of(context).padding.bottom + 16),
+              _SheetItem(
+                icon: Icons.auto_awesome_rounded,
+                title: '批量文献提取',
+                subtitle: '选择文献，使用 AI 将 PDF 转为带排版的 HTML',
+                onTap: () =>
+                    Navigator.pop(context, ToolbarAction.batchExtract),
+              ),
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
             ],
           ),
         ),

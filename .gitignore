@@ -1,6 +1,10 @@
 # vscode
 /.vscode/
-
+/.codex_tmp/
+patch.txt
+.gitconfig-codex
+.codex_tmp*
+/test/
 
 # Miscellaneous
 *.class

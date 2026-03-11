@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/storage.dart';
+import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
 import '../services/identifier_resolver.dart';
 
@@ -68,6 +69,7 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
   void _applyToResolver() {
     IdentifierResolver.instance.applyProxy(state.mode, state.host, state.port);
     DocExtractService.instance.applyProxy(state.mode, state.host, state.port);
+    BatchExtractService.instance.applyProxy(state.mode, state.host, state.port);
   }
 
   /// 启动时调用，将已保存的配置应用到 Dio

@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-// ignore: depend_on_referenced_packages
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,34 +9,53 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
+import '../services/document_metadata_parser.dart';
 import '../services/identifier_resolver.dart';
 import '../services/pdf_identifier_extractor.dart';
+import '../services/pdf_metadata_extractor.dart';
 import '../services/pdf_thumbnail_service.dart';
 
-/// addByIdentifier 的结果类型
 enum AddByIdentifierResult { success, duplicate }
 
-/// rebuild() 的返回结果
+enum MetadataStatus { none, partial, complete }
+
+enum AddFileResultType { imported, duplicate }
+
+class AddFileResult {
+  final AddFileResultType type;
+  final Document? document;
+  final MetadataStatus metadataStatus;
+
+  const AddFileResult({
+    required this.type,
+    this.document,
+    this.metadataStatus = MetadataStatus.none,
+  });
+}
+
 class RebuildResult {
   final int addedCount;
   final int removedCount;
   final int downloadedCount;
   final int repairedCount;
+  final int unresolvedCount;
   final int noFileCount;
   final bool cancelled;
+
   const RebuildResult({
     required this.addedCount,
     required this.removedCount,
     required this.downloadedCount,
     required this.repairedCount,
+    required this.unresolvedCount,
     required this.noFileCount,
     required this.cancelled,
   });
 }
 
-/// rebuild() 进度信息
 class RebuildProgress {
   final int? current;
   final int? total;
@@ -50,7 +70,13 @@ class RebuildProgress {
   });
 }
 
-/// 文献库状态管理
+class _MetadataRepairResult {
+  final Document document;
+  final MetadataStatus status;
+
+  const _MetadataRepairResult({required this.document, required this.status});
+}
+
 class DocumentsNotifier extends StateNotifier<List<Document>> {
   final Box _box;
 
@@ -64,32 +90,32 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       state = [];
       return;
     }
+
     final docs = raw
-        .map((e) => Document.fromJson(
-            Map<String, dynamic>.from(jsonDecode(e as String))))
+        .map(
+          (entry) => Document.fromJson(
+            Map<String, dynamic>.from(jsonDecode(entry as String)),
+          ),
+        )
         .toList();
 
-    // 自动清理：
-    // 1. 旧版 asset 路径条目（已废弃，无法用 openFile 打开）
-    // 2. 文件已不存在的条目（但保留 filePath 为空的纯元数据条目）
-    final valid = docs.where((d) {
-      if (d.filePath.isEmpty) return true;
-      if (d.filePath.startsWith('assets/')) return false;
-      return File(d.filePath).existsSync();
+    final validDocs = docs.where((doc) {
+      if (doc.filePath.isEmpty) return true;
+      if (doc.filePath.startsWith('assets/')) return false;
+      return File(doc.filePath).existsSync();
     }).toList();
-    state = valid;
 
-    if (valid.length != docs.length) {
+    state = validDocs;
+    if (validDocs.length != docs.length) {
       _save();
     }
   }
 
   Future<void> _save() async {
-    final encoded = state.map((d) => jsonEncode(d.toJson())).toList();
+    final encoded = state.map((doc) => jsonEncode(doc.toJson())).toList();
     await _box.put('documents', encoded);
   }
 
-  /// 获取文献存储目录
   static Future<Directory> getDocsDir() async {
     final appDir = await getApplicationDocumentsDirectory();
     final docsDir = Directory(p.join(appDir.path, 'NightReader', 'docs'));
@@ -99,454 +125,336 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return docsDir;
   }
 
-  /// 从文件名解析基础元数据（最后兜底）
-  /// 支持格式: "YYYY-Authors-Title.pdf"
-  static ({String title, List<String> authors, String? year}) _parseFileName(
-      String filePath) {
-    final baseName = p.basenameWithoutExtension(filePath);
-    final parts = baseName.split('-');
-
-    if (parts.length >= 3) {
-      final yearCandidate = parts[0].trim();
-      final authorPart = parts[1].trim();
-      final titlePart = parts.sublist(2).join('-').trim();
-
-      if (RegExp(r'^\d{4}$').hasMatch(yearCandidate) &&
-          titlePart.isNotEmpty) {
-        return (title: titlePart, authors: [authorPart], year: yearCandidate);
-      }
+  Future<AddFileResult> addFile(
+    String sourcePath, {
+    CancelToken? cancelToken,
+  }) async {
+    final sourceFile = File(sourcePath);
+    if (!await sourceFile.exists()) {
+      return const AddFileResult(type: AddFileResultType.duplicate);
     }
-
-    return (title: baseName, authors: <String>[], year: null);
-  }
-
-  /// 对单个文档执行元数据修复: PDF 标识符提取 → API 解析 → 重命名 → 文件名兜底
-  Future<Document> _repairDocument(Document doc, {CancelToken? cancelToken}) async {
-    try {
-      final identifier = await PdfIdentifierExtractor.instance.extractIdentifier(doc.filePath);
-      if (identifier == null) {
-        final parsed = _parseFileName(doc.filePath);
-        if (parsed.authors.isNotEmpty || parsed.year != null) {
-          return doc.copyWith(
-            title: parsed.title,
-            authors: parsed.authors,
-            year: parsed.year,
-          );
-        }
-        return doc;
-      }
-
-      final resolved = await IdentifierResolver.instance.resolve(
-        identifier.value,
-        metadataOnly: true,
-        cancelToken: cancelToken,
-      );
-      doc = doc.copyWith(
-        itemType: resolved.itemType,
-        title: resolved.title,
-        authors: resolved.authors,
-        journal: resolved.journal,
-        journalAbbr: resolved.journalAbbr,
-        publisher: resolved.publisher,
-        volume: resolved.volume,
-        issue: resolved.issue,
-        pages: resolved.pages,
-        year: resolved.year,
-        date: resolved.date,
-        doi: resolved.doi,
-        pmid: resolved.pmid,
-        pmcid: resolved.pmcid,
-        arxivId: resolved.arxivId,
-        isbn: resolved.isbn,
-        issn: resolved.issn,
-        url: resolved.url,
-        abstractText: resolved.abstractText,
-        language: resolved.language,
-      );
-
-      // 自动重命名
-      try {
-        final newName = IdentifierResolver.buildPdfFileName(
-          year: doc.year,
-          authors: doc.authors,
-          title: doc.title,
-          fallbackId: p.basenameWithoutExtension(doc.filePath),
-        );
-
-        final dir = p.dirname(doc.filePath);
-        var newPath = p.join(dir, newName);
-
-        if (newPath != doc.filePath) {
-          if (await File(newPath).exists()) {
-            final nameWithoutExt = p.basenameWithoutExtension(newName);
-            int counter = 2;
-            while (await File(newPath).exists()) {
-              newPath = p.join(dir, '$nameWithoutExt ($counter).pdf');
-              counter++;
-            }
-          }
-          final oldPath = doc.filePath;
-          await File(oldPath).rename(newPath);
-          doc = doc.copyWith(filePath: newPath);
-          // 迁移缩略图缓存，避免路径变化后重新渲染
-          await PdfThumbnailService.instance.migrateCacheEntry(oldPath, newPath);
-        }
-      } catch (e) {
-        debugPrint('重命名失败: $e');
-      }
-
-      return doc;
-    } catch (e) {
-      debugPrint('元数据修复失败: $e');
-      final parsed = _parseFileName(doc.filePath);
-      if (parsed.authors.isNotEmpty || parsed.year != null) {
-        return doc.copyWith(
-          title: parsed.title,
-          authors: parsed.authors,
-          year: parsed.year,
-        );
-      }
-      return doc;
-    }
-  }
-
-  /// 添加用户选择的文件（复制到应用目录，立即解析元数据）
-  Future<Document?> addFile(String sourcePath, {CancelToken? cancelToken}) async {
-    final file = File(sourcePath);
-    if (!await file.exists()) return null;
 
     final docsDir = await getDocsDir();
-    final fileName = p.basename(sourcePath);
-    final destPath = p.join(docsDir.path, fileName);
+    final normalizedSourcePath = p.normalize(sourcePath);
+    final existingDoc = state.cast<Document?>().firstWhere(
+      (doc) => doc != null && p.normalize(doc.filePath) == normalizedSourcePath,
+      orElse: () => null,
+    );
+    if (existingDoc != null) {
+      return AddFileResult(
+        type: AddFileResultType.duplicate,
+        document: existingDoc,
+      );
+    }
 
-    // 避免重复导入
-    if (state.any((d) => d.filePath == destPath)) return null;
+    final destPath = await _buildUniqueDestinationPath(
+      docsDir.path,
+      p.basename(sourcePath),
+    );
+    if (p.normalize(sourcePath) == p.normalize(destPath)) {
+      return AddFileResult(
+        type: AddFileResultType.duplicate,
+        document: state.cast<Document?>().firstWhere(
+          (doc) =>
+              doc != null && p.normalize(doc.filePath) == p.normalize(destPath),
+          orElse: () => null,
+        ),
+      );
+    }
 
-    await file.copy(destPath);
+    await sourceFile.copy(destPath);
 
+    final initialMetadata = DocumentMetadataParser.parseFilePath(destPath);
     var doc = Document(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: p.basenameWithoutExtension(destPath),
-      authors: [],
+      id: _newId(destPath),
+      title: initialMetadata.title ?? p.basenameWithoutExtension(destPath),
+      authors: initialMetadata.authors,
+      journal: initialMetadata.journal,
+      year: initialMetadata.year,
+      doi: initialMetadata.doi,
       filePath: destPath,
       addedAt: DateTime.now(),
     );
 
-    // 先加入 state，让 UI 立即显示条目
     state = [...state, doc];
 
-    // 立即修复元数据（DOI 提取 → CrossRef → 重命名 → 文件名兜底）
-    doc = await _repairDocument(doc, cancelToken: cancelToken);
+    final repaired = await _repairDocument(doc, cancelToken: cancelToken);
+    doc = repaired.document;
     state = [
-      for (final d in state)
-        if (d.id == doc.id) doc else d,
+      for (final entry in state)
+        if (entry.id == doc.id) doc else entry,
     ];
     await _save();
-    return doc;
+
+    unawaited(PdfThumbnailService.instance.getThumbnailPath(doc.filePath));
+
+    return AddFileResult(
+      type: AddFileResultType.imported,
+      document: doc,
+      metadataStatus: repaired.status,
+    );
   }
 
-  /// 通过标识符添加文献（DOI / PMID / arXiv ID / ISBN）
-  ///
-  /// 返回 (Document, AddByIdentifierResult) 或抛出 IdentifierResolveException
   Future<(Document, AddByIdentifierResult)> addByIdentifier(
-      String identifier, {CancelToken? cancelToken}) async {
-    final doc = await IdentifierResolver.instance.resolve(identifier, cancelToken: cancelToken);
+    String identifier, {
+    CancelToken? cancelToken,
+  }) async {
+    final resolved = await IdentifierResolver.instance.resolve(
+      identifier,
+      cancelToken: cancelToken,
+    );
 
-    // 去重检查
-    final isDuplicate = state.any((d) {
-      if (doc.doi != null && doc.doi!.isNotEmpty && d.doi == doc.doi) {
-        return true;
-      }
-      if (doc.pmid != null && doc.pmid!.isNotEmpty && d.pmid == doc.pmid) {
-        return true;
-      }
-      if (doc.arxivId != null &&
-          doc.arxivId!.isNotEmpty &&
-          d.arxivId == doc.arxivId) {
-        return true;
-      }
-      if (doc.isbn != null && doc.isbn!.isNotEmpty && d.isbn == doc.isbn) {
-        return true;
-      }
-      return false;
-    });
-
-    if (isDuplicate) {
-      return (doc, AddByIdentifierResult.duplicate);
+    final duplicate = state.any((doc) => _isDuplicateDocument(doc, resolved));
+    if (duplicate) {
+      return (resolved, AddByIdentifierResult.duplicate);
     }
 
-    state = [...state, doc];
+    state = [...state, resolved];
     await _save();
-    return (doc, AddByIdentifierResult.success);
+    if (resolved.filePath.isNotEmpty) {
+      unawaited(
+        PdfThumbnailService.instance.getThumbnailPath(resolved.filePath),
+      );
+    }
+    return (resolved, AddByIdentifierResult.success);
   }
 
-  /// 判断文献是否需要元数据修复（有标识符说明已通过 API 获取过完整数据）
-  bool _needsMetadataRepair(Document doc) {
-    if (doc.filePath.isEmpty) return false;
-    if (doc.doi != null && doc.doi!.isNotEmpty) return false;
-    if (doc.pmid != null && doc.pmid!.isNotEmpty) return false;
-    if (doc.arxivId != null && doc.arxivId!.isNotEmpty) return false;
-    if (doc.isbn != null && doc.isbn!.isNotEmpty) return false;
-    return true;
-  }
-
-  /// 重构文库：扫描新文件、清理缺失文件、自动补全元数据并重命名
   Future<RebuildResult> rebuild({
     void Function(RebuildProgress)? onProgress,
     CancelToken? cancelToken,
   }) async {
     final docsDir = await getDocsDir();
-    final existingPaths = state.map((d) => d.filePath).toSet();
-    bool changed = false;
-    int addedCount = 0;
-    int removedCount = 0;
-    int downloadedCount = 0;
-    int repairedCount = 0;
+    var addedCount = 0;
+    var removedCount = 0;
+    var downloadedCount = 0;
+    var repairedCount = 0;
 
-    // Phase A — 扫描新文件
-    onProgress?.call(const RebuildProgress(
-      fileName: '文库目录',
-      status: '正在扫描新文件...',
-    ));
+    onProgress?.call(
+      const RebuildProgress(
+        fileName: 'NightReader 文库',
+        status: '正在扫描 PDF 文件...',
+      ),
+    );
+
+    final pdfFiles = <File>[];
     await for (final entity in docsDir.list()) {
       if (cancelToken?.isCancelled == true) break;
       if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
-        if (!existingPaths.contains(entity.path)) {
-          final parsed = _parseFileName(entity.path);
-          final doc = Document(
-            id: '${DateTime.now().millisecondsSinceEpoch}_${entity.path.hashCode}',
-            title: parsed.title,
-            authors: parsed.authors,
-            year: parsed.year,
-            filePath: entity.path,
-            addedAt: DateTime.now(),
-          );
-          state = [...state, doc];
-          changed = true;
-          addedCount++;
-        }
+        pdfFiles.add(entity);
       }
     }
 
-    // Phase A — 清理缺失文件
-    onProgress?.call(const RebuildProgress(
-      fileName: '文库目录',
-      status: '正在检查文件完整性...',
-    ));
+    final knownPaths = state
+        .where((doc) => doc.filePath.isNotEmpty)
+        .map((doc) => p.normalize(doc.filePath))
+        .toSet();
+
+    for (final file in pdfFiles) {
+      if (cancelToken?.isCancelled == true) break;
+      final normalizedPath = p.normalize(file.path);
+      if (knownPaths.contains(normalizedPath)) continue;
+
+      final initialMetadata = DocumentMetadataParser.parseFilePath(file.path);
+      state = [
+        ...state,
+        Document(
+          id: _newId(file.path),
+          title: initialMetadata.title ?? p.basenameWithoutExtension(file.path),
+          authors: initialMetadata.authors,
+          journal: initialMetadata.journal,
+          year: initialMetadata.year,
+          doi: initialMetadata.doi,
+          filePath: file.path,
+          addedAt: DateTime.now(),
+        ),
+      ];
+      knownPaths.add(normalizedPath);
+      addedCount++;
+    }
+
+    onProgress?.call(
+      const RebuildProgress(fileName: 'NightReader 文库', status: '正在检查文件完整性...'),
+    );
+
     final validDocs = <Document>[];
     for (final doc in state) {
       if (doc.filePath.isEmpty || await File(doc.filePath).exists()) {
         validDocs.add(doc);
-      } else {
-        removedCount++;
-        // 如果文件丢失且有 DOI，则保留条目但清空 filePath，以便后续尝试重新下载
-        if (doc.doi != null && doc.doi!.isNotEmpty) {
-          validDocs.add(doc.copyWith(filePath: ''));
-          changed = true;
-        } else {
-          changed = true;
-        }
+        continue;
+      }
+
+      removedCount++;
+      if (!_isBlank(doc.doi)) {
+        validDocs.add(doc.copyWith(filePath: ''));
       }
     }
-    if (changed) {
-      state = validDocs;
-    }
+    state = validDocs;
 
-    // Phase A.5 — 根据 DOI 下载缺失的 PDF
-    final toDownload = state.where((d) => d.filePath.isEmpty && d.doi != null && d.doi!.isNotEmpty).toList();
+    final toDownload = state
+        .where((doc) => doc.filePath.isEmpty && !_isBlank(doc.doi))
+        .toList();
     if (toDownload.isNotEmpty) {
-      final updatedMap = <String, Document>{};
+      final updates = <String, Document>{};
       for (int i = 0; i < toDownload.length; i++) {
         if (cancelToken?.isCancelled == true) break;
         final doc = toDownload[i];
-        onProgress?.call(RebuildProgress(
-          current: i + 1,
-          total: toDownload.length,
-          fileName: doc.title,
-          status: '正在根据 DOI 下载文献: ${doc.doi}',
-        ));
+        onProgress?.call(
+          RebuildProgress(
+            current: i + 1,
+            total: toDownload.length,
+            fileName: doc.title,
+            status: '正在根据 DOI 补回 PDF...',
+          ),
+        );
 
         try {
-          final downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
-            doi: doc.doi!,
-            year: doc.year,
-            authors: doc.authors,
-            title: doc.title,
-            fallbackId: p.basenameWithoutExtension(doc.id),
-            cancelToken: cancelToken,
-          );
+          final downloadedPath = await IdentifierResolver.instance
+              .downloadPdfByDoi(
+                doi: doc.doi!,
+                year: doc.year,
+                authors: doc.authors,
+                title: doc.title,
+                fallbackId: doc.id,
+                cancelToken: cancelToken,
+              );
           if (downloadedPath.isNotEmpty) {
-            updatedMap[doc.id] = doc.copyWith(filePath: downloadedPath);
+            updates[doc.id] = doc.copyWith(filePath: downloadedPath);
             downloadedCount++;
+            unawaited(
+              PdfThumbnailService.instance.getThumbnailPath(downloadedPath),
+            );
           }
-        } catch (e) {
-          debugPrint('下载缺失 PDF 失败: $e');
-        }
-
-        // 批处理状态更新：每下载 2 个刷新一次 UI
-        if ((i + 1) % 2 == 0) {
-          state = [
-            for (final d in state) updatedMap[d.id] ?? d,
-          ];
+        } catch (error) {
+          debugPrint('根据 DOI 下载 PDF 失败: $error');
         }
       }
-      if (updatedMap.isNotEmpty) {
-        state = [
-          for (final d in state) updatedMap[d.id] ?? d,
-        ];
+
+      if (updates.isNotEmpty) {
+        state = [for (final doc in state) updates[doc.id] ?? doc];
       }
     }
 
-    // Phase B + C — 元数据修复 + 自动重命名
     final toRepair = state.where(_needsMetadataRepair).toList();
     if (toRepair.isNotEmpty) {
-      final updatedMap = <String, Document>{};
+      final updates = <String, Document>{};
       for (int i = 0; i < toRepair.length; i++) {
         if (cancelToken?.isCancelled == true) break;
         final doc = toRepair[i];
-        onProgress?.call(RebuildProgress(
-          current: i + 1,
-          total: toRepair.length,
-          fileName: p.basename(doc.filePath),
-          status: '正在修复元数据...',
-        ));
+        onProgress?.call(
+          RebuildProgress(
+            current: i + 1,
+            total: toRepair.length,
+            fileName: p.basename(doc.filePath),
+            status: '正在提取 PDF 元数据...',
+          ),
+        );
 
         final repaired = await _repairDocument(doc, cancelToken: cancelToken);
-        updatedMap[doc.id] = repaired;
-        repairedCount++;
-        
-        // 批处理状态更新：每修复 5 个刷新一次 UI，避免频繁重建导致主线程卡顿
-        if ((i + 1) % 5 == 0) {
-          state = [
-            for (final d in state) updatedMap[d.id] ?? d,
-          ];
+        updates[doc.id] = repaired.document;
+        if (repaired.status != MetadataStatus.none) {
+          repairedCount++;
         }
       }
 
-      // 循环结束，应用剩下的更新
-      if (updatedMap.isNotEmpty) {
-        state = [
-          for (final d in state) updatedMap[d.id] ?? d,
-        ];
+      if (updates.isNotEmpty) {
+        state = [for (final doc in state) updates[doc.id] ?? doc];
       }
     }
 
     await _save();
 
-    final noFileCount = state.where((d) => d.filePath.isEmpty).length;
+    final noFileCount = state.where((doc) => doc.filePath.isEmpty).length;
+    final unresolvedCount = state.where(_needsMetadataRepair).length;
+
     return RebuildResult(
       addedCount: addedCount,
       removedCount: removedCount,
       downloadedCount: downloadedCount,
       repairedCount: repairedCount,
+      unresolvedCount: unresolvedCount,
       noFileCount: noFileCount,
       cancelled: cancelToken?.isCancelled == true,
     );
   }
 
-  /// 更新文献元数据
   Future<void> update(
     String id, {
-    String? itemType,
     String? title,
     List<String>? authors,
     String? journal,
-    String? journalAbbr,
-    String? publisher,
-    String? volume,
-    String? issue,
-    String? pages,
     String? year,
-    String? date,
     String? doi,
-    String? pmid,
-    String? pmcid,
-    String? arxivId,
-    String? isbn,
-    String? issn,
-    String? url,
-    String? abstractText,
-    String? language,
   }) async {
     state = [
-      for (final d in state)
-        if (d.id == id)
-          d.copyWith(
-            itemType: itemType,
+      for (final doc in state)
+        if (doc.id == id)
+          doc.copyWith(
             title: title,
             authors: authors,
             journal: journal,
-            journalAbbr: journalAbbr,
-            publisher: publisher,
-            volume: volume,
-            issue: issue,
-            pages: pages,
             year: year,
-            date: date,
             doi: doi,
-            pmid: pmid,
-            pmcid: pmcid,
-            arxivId: arxivId,
-            isbn: isbn,
-            issn: issn,
-            url: url,
-            abstractText: abstractText,
-            language: language,
           )
         else
-          d,
+          doc,
     ];
     await _save();
   }
 
-  /// 为无文件条目附加本地 PDF 文件
   Future<void> attachFile(String docId, String sourcePath) async {
-    final doc = state.firstWhere((d) => d.id == docId, orElse: () => state.first);
-    if (doc.id != docId) return;
+    final existing = state.cast<Document?>().firstWhere(
+      (doc) => doc != null && doc.id == docId,
+      orElse: () => null,
+    );
+    if (existing == null) return;
 
     final docsDir = await getDocsDir();
-    final newName = IdentifierResolver.buildPdfFileName(
-      year: doc.year,
-      authors: doc.authors,
-      title: doc.title,
+    final preferredName = IdentifierResolver.buildPdfFileName(
+      year: existing.year,
+      authors: existing.authors,
+      title: existing.title,
       fallbackId: p.basenameWithoutExtension(sourcePath),
     );
-
-    final dir = docsDir.path;
-    var destPath = p.join(dir, newName);
-
-    // 处理文件名冲突
-    if (await File(destPath).exists()) {
-      final nameWithoutExt = p.basenameWithoutExtension(newName);
-      int counter = 2;
-      while (await File(destPath).exists()) {
-        destPath = p.join(dir, '$nameWithoutExt ($counter).pdf');
-        counter++;
-      }
-    }
+    final destPath = await _buildUniqueDestinationPath(
+      docsDir.path,
+      preferredName,
+    );
 
     final sourceFile = File(sourcePath);
-    // 若源文件已在 docsDir 则 rename，否则 copy
-    if (p.dirname(sourcePath) == dir) {
+    if (p.normalize(sourcePath) == p.normalize(destPath)) {
+      state = [
+        for (final doc in state)
+          if (doc.id == docId) doc.copyWith(filePath: destPath) else doc,
+      ];
+      await _save();
+      return;
+    }
+
+    if (p.normalize(p.dirname(sourcePath)) == p.normalize(docsDir.path)) {
       await sourceFile.rename(destPath);
     } else {
       await sourceFile.copy(destPath);
     }
 
+    var updated = existing.copyWith(filePath: destPath);
+    if (_needsMetadataRepair(updated)) {
+      updated = (await _repairDocument(updated)).document;
+    }
+
     state = [
-      for (final d in state)
-        if (d.id == docId) d.copyWith(filePath: destPath) else d,
+      for (final doc in state)
+        if (doc.id == docId) updated else doc,
     ];
     await _save();
-
-    // 触发缩略图生成
-    PdfThumbnailService.instance.getThumbnailPath(destPath);
+    unawaited(PdfThumbnailService.instance.getThumbnailPath(updated.filePath));
   }
 
-  /// 为无文件条目重新下载 PDF（仅 DOI 非空时有效）
   Future<bool> redownloadPdf(String docId, {CancelToken? cancelToken}) async {
-    final doc = state.firstWhere((d) => d.id == docId, orElse: () => state.first);
-    if (doc.id != docId || doc.doi == null || doc.doi!.isEmpty) return false;
+    final doc = state.cast<Document?>().firstWhere(
+      (entry) => entry != null && entry.id == docId,
+      orElse: () => null,
+    );
+    if (doc == null || _isBlank(doc.doi)) return false;
 
     try {
       final downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
@@ -554,35 +462,38 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         year: doc.year,
         authors: doc.authors,
         title: doc.title,
-        fallbackId: p.basenameWithoutExtension(doc.id),
+        fallbackId: doc.id,
         cancelToken: cancelToken,
       );
-      if (downloadedPath.isNotEmpty) {
-        state = [
-          for (final d in state)
-            if (d.id == docId) d.copyWith(filePath: downloadedPath) else d,
-        ];
-        await _save();
-        PdfThumbnailService.instance.getThumbnailPath(downloadedPath);
-        return true;
-      }
-    } catch (e) {
-      debugPrint('重新下载 PDF 失败: $e');
+      if (downloadedPath.isEmpty) return false;
+
+      state = [
+        for (final entry in state)
+          if (entry.id == docId)
+            entry.copyWith(filePath: downloadedPath)
+          else
+            entry,
+      ];
+      await _save();
+      unawaited(PdfThumbnailService.instance.getThumbnailPath(downloadedPath));
+      return true;
+    } catch (error) {
+      debugPrint('重新下载 PDF 失败: $error');
+      return false;
     }
-    return false;
   }
 
-  /// 删除文献（级联删除磁盘文件、提取产物、缩略图缓存）
   Future<void> delete(String id) async {
-    final doc = state.firstWhere((d) => d.id == id, orElse: () => state.first);
-    if (doc.id == id && doc.filePath.isNotEmpty) {
+    final doc = state.cast<Document?>().firstWhere(
+      (entry) => entry != null && entry.id == id,
+      orElse: () => null,
+    );
+    if (doc != null && doc.filePath.isNotEmpty) {
       final filePath = doc.filePath;
       try {
-        // 删除 PDF 文件
         final file = File(filePath);
         if (await file.exists()) await file.delete();
 
-        // 删除提取产物 (.md, .html, _images/)
         final basePath = p.withoutExtension(filePath);
         for (final ext in ['.md', '.html']) {
           final artifact = File('$basePath$ext');
@@ -593,39 +504,272 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
           await imagesDir.delete(recursive: true);
         }
 
-        // 删除缩略图缓存
         await PdfThumbnailService.instance.deleteCacheEntry(filePath);
-      } catch (e) {
-        debugPrint('删除文件失败: $e');
+      } catch (error) {
+        debugPrint('删除文件失败: $error');
       }
     }
-    state = state.where((d) => d.id != id).toList();
+
+    state = state.where((doc) => doc.id != id).toList();
     await _save();
+  }
+
+  Future<_MetadataRepairResult> _repairDocument(
+    Document doc, {
+    CancelToken? cancelToken,
+  }) async {
+    final original = doc;
+
+    try {
+      final fallbackMetadata = DocumentMetadataParser.parseFilePath(
+        doc.filePath,
+      );
+      final pdfMetadata = await PdfMetadataExtractor.instance.extract(
+        doc.filePath,
+      );
+      final combinedMetadata = fallbackMetadata.merge(pdfMetadata);
+      doc = _applyMetadata(doc, combinedMetadata);
+
+      final identifier =
+          combinedMetadata.doi ??
+          (await PdfIdentifierExtractor.instance.extractIdentifier(
+            doc.filePath,
+          ))?.value;
+      if (!_isBlank(identifier)) {
+        final resolved = await IdentifierResolver.instance.resolve(
+          identifier!,
+          metadataOnly: true,
+          cancelToken: cancelToken,
+        );
+        doc = _applyResolvedDocument(doc, resolved);
+      }
+
+      doc = await _renameFileFromMetadata(doc);
+    } catch (error) {
+      debugPrint('元数据修复失败: $error');
+      doc = _applyMetadata(
+        doc,
+        DocumentMetadataParser.parseFilePath(doc.filePath),
+      );
+    }
+
+    return _MetadataRepairResult(
+      document: doc,
+      status: _metadataStatus(original, doc),
+    );
+  }
+
+  Document _applyResolvedDocument(Document target, Document resolved) {
+    return _applyMetadata(
+      target,
+      DocumentMetadata(
+        title: resolved.title,
+        authors: resolved.authors,
+        journal: resolved.journal,
+        year: resolved.year,
+        doi: resolved.doi,
+      ),
+    );
+  }
+
+  Document _applyMetadata(Document doc, DocumentMetadata metadata) {
+    final title = _normalizeMetadataValue(metadata.title);
+    final journal = _normalizeMetadataValue(metadata.journal);
+    final year = _normalizeMetadataValue(metadata.year);
+    final doi = _normalizeMetadataValue(metadata.doi)?.toLowerCase();
+
+    return doc.copyWith(
+      title: title ?? doc.title,
+      authors: metadata.authors.isNotEmpty ? metadata.authors : doc.authors,
+      journal: journal ?? doc.journal,
+      year: year ?? doc.year,
+      doi: doi ?? doc.doi,
+    );
+  }
+
+  bool _needsMetadataRepair(Document doc) {
+    if (doc.filePath.isEmpty) return false;
+    return _looksLikePlaceholderTitle(doc) ||
+        doc.authors.isEmpty ||
+        _isBlank(doc.year) ||
+        (_isBlank(doc.journal) && _isBlank(doc.doi));
+  }
+
+  bool _hasCompleteMetadata(Document doc) {
+    return !_looksLikePlaceholderTitle(doc) &&
+        doc.authors.isNotEmpty &&
+        !_isBlank(doc.year) &&
+        (!_isBlank(doc.journal) || !_isBlank(doc.doi));
+  }
+
+  MetadataStatus _metadataStatus(Document before, Document after) {
+    if (_sameCoreMetadata(before, after)) return MetadataStatus.none;
+    return _hasCompleteMetadata(after)
+        ? MetadataStatus.complete
+        : MetadataStatus.partial;
+  }
+
+  bool _sameCoreMetadata(Document left, Document right) {
+    if (_normalizeMetadataValue(left.title) !=
+        _normalizeMetadataValue(right.title)) {
+      return false;
+    }
+    if (_normalizeMetadataValue(left.journal) !=
+        _normalizeMetadataValue(right.journal)) {
+      return false;
+    }
+    if (_normalizeMetadataValue(left.year) !=
+        _normalizeMetadataValue(right.year)) {
+      return false;
+    }
+    if (_normalizeMetadataValue(left.doi) !=
+        _normalizeMetadataValue(right.doi)) {
+      return false;
+    }
+    if (left.authors.length != right.authors.length) return false;
+    for (int i = 0; i < left.authors.length; i++) {
+      if (_normalizeMetadataValue(left.authors[i]) !=
+          _normalizeMetadataValue(right.authors[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _isDuplicateDocument(Document existing, Document candidate) {
+    if (!_isBlank(existing.doi) && !_isBlank(candidate.doi)) {
+      return existing.doi!.toLowerCase() == candidate.doi!.toLowerCase();
+    }
+
+    final normalizedTitle = _normalizeComparisonKey(existing.title);
+    final candidateTitle = _normalizeComparisonKey(candidate.title);
+    if (normalizedTitle.isEmpty ||
+        candidateTitle.isEmpty ||
+        normalizedTitle != candidateTitle) {
+      return false;
+    }
+
+    final existingYear = _normalizeComparisonKey(existing.year);
+    final candidateYear = _normalizeComparisonKey(candidate.year);
+    if (existingYear.isNotEmpty &&
+        candidateYear.isNotEmpty &&
+        existingYear == candidateYear) {
+      return true;
+    }
+
+    final existingAuthor = existing.authors.isEmpty
+        ? ''
+        : _normalizeComparisonKey(existing.authors.first);
+    final candidateAuthor = candidate.authors.isEmpty
+        ? ''
+        : _normalizeComparisonKey(candidate.authors.first);
+    return existingAuthor.isNotEmpty && existingAuthor == candidateAuthor;
+  }
+
+  bool _looksLikePlaceholderTitle(Document doc) {
+    if (doc.filePath.isEmpty) return false;
+    final normalizedTitle = _normalizeComparisonKey(doc.title);
+    final fileNameTitle = _normalizeComparisonKey(
+      p.basenameWithoutExtension(doc.filePath),
+    );
+    return normalizedTitle.isEmpty || normalizedTitle == fileNameTitle;
+  }
+
+  Future<Document> _renameFileFromMetadata(Document doc) async {
+    if (doc.filePath.isEmpty) return doc;
+
+    final currentPath = p.normalize(doc.filePath);
+    final currentName = p.basename(currentPath);
+    final targetName = IdentifierResolver.buildPdfFileName(
+      year: doc.year,
+      authors: doc.authors,
+      title: doc.title,
+      fallbackId: p.basenameWithoutExtension(currentName),
+    );
+    if (currentName == targetName) return doc;
+
+    final directory = p.dirname(currentPath);
+    var targetPath = p.join(directory, targetName);
+    if (p.normalize(targetPath) == currentPath) return doc;
+
+    if (await File(targetPath).exists()) {
+      final baseName = p.basenameWithoutExtension(targetName);
+      var counter = 2;
+      while (await File(targetPath).exists()) {
+        targetPath = p.join(directory, '$baseName ($counter).pdf');
+        counter++;
+      }
+    }
+
+    await File(doc.filePath).rename(targetPath);
+    await PdfThumbnailService.instance.migrateCacheEntry(
+      doc.filePath,
+      targetPath,
+    );
+    return doc.copyWith(filePath: targetPath);
+  }
+
+  Future<String> _buildUniqueDestinationPath(
+    String directory,
+    String preferredName,
+  ) async {
+    final extension = p.extension(preferredName).isEmpty
+        ? '.pdf'
+        : p.extension(preferredName);
+    final baseName = p.basenameWithoutExtension(preferredName);
+    var candidate = p.join(directory, '$baseName$extension');
+    var counter = 2;
+    while (await File(candidate).exists()) {
+      candidate = p.join(directory, '$baseName ($counter)$extension');
+      counter++;
+    }
+    return candidate;
+  }
+
+  String _newId(String seed) {
+    return '${DateTime.now().microsecondsSinceEpoch}_${seed.hashCode.abs()}';
+  }
+
+  String _normalizeComparisonKey(String? value) {
+    return (value ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  String? _normalizeMetadataValue(String? value) {
+    if (value == null) return null;
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  bool _isBlank(String? value) {
+    return value == null || value.trim().isEmpty;
   }
 }
 
 final documentsProvider =
     StateNotifierProvider<DocumentsNotifier, List<Document>>((ref) {
-  return DocumentsNotifier(GStorage.documents);
-});
+      return DocumentsNotifier(GStorage.documents);
+    });
 
-/// 视图模式：true=网格，false=列表
 final viewModeProvider = StateProvider<bool>((ref) => true);
-
-/// 当前显示删除按钮的文献 ID（null 表示无激活）
 final activeDeleteIdProvider = StateProvider<String?>((ref) => null);
 
-/// 无文件条目数量
 final noFileDocsCountProvider = Provider<int>((ref) {
-  return ref.watch(documentsProvider).where((d) => d.filePath.isEmpty).length;
+  return ref
+      .watch(documentsProvider)
+      .where((doc) => doc.filePath.isEmpty)
+      .length;
 });
 
-/// 无文件条目列表
 final noFileDocsProvider = Provider<List<Document>>((ref) {
-  return ref.watch(documentsProvider).where((d) => d.filePath.isEmpty).toList();
+  return ref
+      .watch(documentsProvider)
+      .where((doc) => doc.filePath.isEmpty)
+      .toList();
 });
 
-/// 有文件条目列表（用于在文献库页面展示）
 final validDocsProvider = Provider<List<Document>>((ref) {
-  return ref.watch(documentsProvider).where((d) => d.filePath.isNotEmpty).toList();
+  return ref
+      .watch(documentsProvider)
+      .where((doc) => doc.filePath.isNotEmpty)
+      .toList();
 });

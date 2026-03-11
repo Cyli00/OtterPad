@@ -1,12 +1,14 @@
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
+
 import '../../../providers/documents_provider.dart';
 import '../../../services/identifier_resolver.dart';
+import '../batch_extract_page.dart';
 import '../search_page.dart';
-import 'toolbar_bottom_sheet.dart';
 import 'identifier_dialog.dart';
+import 'toolbar_bottom_sheet.dart';
 
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({super.key});
@@ -26,13 +28,19 @@ class HomeHeader extends ConsumerWidget {
         if (result != null && context.mounted) {
           final notifier = ref.read(documentsProvider.notifier);
           final messenger = ScaffoldMessenger.of(context);
-          final files = result.files.where((f) => f.path != null).toList();
+          final files = result.files
+              .where((file) => file.path != null)
+              .toList();
           final cancelToken = CancelToken();
-          int addedCount = 0;
+          var importedCount = 0;
+          var duplicateCount = 0;
+          var completeMetadataCount = 0;
+          var partialMetadataCount = 0;
+
+          AddFileResult? lastResult;
           for (int i = 0; i < files.length; i++) {
-            if (cancelToken.isCancelled) break;
-            if (!context.mounted) break;
-            
+            if (cancelToken.isCancelled || !context.mounted) break;
+
             messenger.hideCurrentSnackBar();
             messenger.showSnackBar(
               buildProgressSnackBar(
@@ -40,33 +48,53 @@ class HomeHeader extends ConsumerWidget {
                 current: i + 1,
                 total: files.length,
                 fileName: files[i].name,
-                status: '正在解析...',
+                status: '正在提取 PDF 元数据...',
                 onCancel: () {
                   cancelToken.cancel();
                   messenger.hideCurrentSnackBar();
                 },
               ),
             );
-            try {
-              await notifier.addFile(files[i].path!, cancelToken: cancelToken);
-              addedCount++;
-            } on DioException catch (_) {
-              if (cancelToken.isCancelled) break;
-              rethrow;
+
+            lastResult = await notifier.addFile(
+              files[i].path!,
+              cancelToken: cancelToken,
+            );
+
+            if (lastResult.type == AddFileResultType.duplicate) {
+              duplicateCount++;
+              continue;
+            }
+
+            importedCount++;
+            if (lastResult.metadataStatus == MetadataStatus.complete) {
+              completeMetadataCount++;
+            } else if (lastResult.metadataStatus == MetadataStatus.partial) {
+              partialMetadataCount++;
             }
           }
-          if (context.mounted) {
-            messenger.hideCurrentSnackBar();
-            messenger.showSnackBar(
-              buildResultSnackBar(
-                context: context,
-                message: cancelToken.isCancelled
-                    ? '已取消，已添加 $addedCount/${files.length} 篇文献'
-                    : '已添加 ${files.length} 篇文献',
-              ),
-            );
-          }
+
+          if (!context.mounted) return;
+          messenger.hideCurrentSnackBar();
+
+          final unresolvedMetadataCount =
+              importedCount - completeMetadataCount - partialMetadataCount;
+          final message = _buildAddFileMessage(
+            cancelToken: cancelToken,
+            totalFiles: files.length,
+            importedCount: importedCount,
+            duplicateCount: duplicateCount,
+            completeMetadataCount: completeMetadataCount,
+            partialMetadataCount: partialMetadataCount,
+            unresolvedMetadataCount: unresolvedMetadataCount,
+            lastResult: lastResult,
+          );
+
+          messenger.showSnackBar(
+            buildResultSnackBar(context: context, message: message),
+          );
         }
+
       case ToolbarAction.addByIdentifier:
         if (!context.mounted) return;
         final identifier = await showIdentifierDialog(context);
@@ -79,7 +107,7 @@ class HomeHeader extends ConsumerWidget {
               current: 1,
               total: 1,
               fileName: identifier,
-              status: '正在解析...',
+              status: '正在解析标识符...',
               onCancel: () {
                 cancelToken.cancel();
                 messenger.hideCurrentSnackBar();
@@ -89,27 +117,30 @@ class HomeHeader extends ConsumerWidget {
           );
 
           try {
-            final (doc, result) = await ref
+            final (doc, addResult) = await ref
                 .read(documentsProvider.notifier)
                 .addByIdentifier(identifier, cancelToken: cancelToken);
             messenger.hideCurrentSnackBar();
             if (cancelToken.isCancelled || !context.mounted) return;
-            if (result == AddByIdentifierResult.duplicate) {
+            if (addResult == AddByIdentifierResult.duplicate) {
               messenger.showSnackBar(
                 buildResultSnackBar(context: context, message: '该文献已存在于文库中'),
               );
             } else {
               messenger.showSnackBar(
-                buildResultSnackBar(context: context, message: '已添加: ${doc.title}'),
+                buildResultSnackBar(
+                  context: context,
+                  message: '已添加: ${doc.title}',
+                ),
               );
             }
-          } on IdentifierResolveException catch (e) {
+          } on IdentifierResolveException catch (error) {
             messenger.hideCurrentSnackBar();
             if (cancelToken.isCancelled || !context.mounted) return;
             messenger.showSnackBar(
-              buildResultSnackBar(context: context, message: e.message),
+              buildResultSnackBar(context: context, message: error.message),
             );
-          } on DioException catch (_) {
+          } on DioException {
             messenger.hideCurrentSnackBar();
             if (cancelToken.isCancelled || !context.mounted) return;
             messenger.showSnackBar(
@@ -117,6 +148,13 @@ class HomeHeader extends ConsumerWidget {
             );
           }
         }
+
+      case ToolbarAction.batchExtract:
+        if (!context.mounted) return;
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const BatchExtractPage()));
+
       case ToolbarAction.rebuildLibrary:
         if (!context.mounted) return;
         final messenger = ScaffoldMessenger.of(context);
@@ -124,7 +162,8 @@ class HomeHeader extends ConsumerWidget {
         messenger.showSnackBar(
           buildProgressSnackBar(
             context: context,
-            fileName: '正在扫描文库...',
+            fileName: 'NightReader 文库',
+            status: '准备重构文库...',
             onCancel: () {
               cancelToken.cancel();
               messenger.hideCurrentSnackBar();
@@ -134,51 +173,107 @@ class HomeHeader extends ConsumerWidget {
 
         RebuildResult? result;
         try {
-          result = await ref.read(documentsProvider.notifier).rebuild(
-            cancelToken: cancelToken,
-            onProgress: (progress) {
-              if (!context.mounted || cancelToken.isCancelled) return;
-              messenger.hideCurrentSnackBar();
-              messenger.showSnackBar(
-                buildProgressSnackBar(
-                  context: context,
-                  current: progress.current,
-                  total: progress.total,
-                  fileName: progress.fileName,
-                  status: progress.status,
-                  onCancel: () {
-                    cancelToken.cancel();
-                    messenger.hideCurrentSnackBar();
-                  },
-                ),
+          result = await ref
+              .read(documentsProvider.notifier)
+              .rebuild(
+                cancelToken: cancelToken,
+                onProgress: (progress) {
+                  if (!context.mounted || cancelToken.isCancelled) return;
+                  messenger.hideCurrentSnackBar();
+                  messenger.showSnackBar(
+                    buildProgressSnackBar(
+                      context: context,
+                      current: progress.current,
+                      total: progress.total,
+                      fileName: progress.fileName,
+                      status: progress.status,
+                      onCancel: () {
+                        cancelToken.cancel();
+                        messenger.hideCurrentSnackBar();
+                      },
+                    ),
+                  );
+                },
               );
-            },
-          );
-        } on DioException catch (_) {
-          // CancelToken 取消时 Dio 会抛出异常，静默处理
+        } on DioException {
+          // CancelToken 取消时 Dio 会抛异常，这里静默处理。
         }
 
         if (!context.mounted) return;
         messenger.hideCurrentSnackBar();
 
-        String message = cancelToken.isCancelled ? '已取消重构' : '文库重构已结束';
+        var message = cancelToken.isCancelled ? '已取消重构文库' : '文库重构完成';
         if (result != null) {
           final parts = <String>[];
-          if (result.addedCount > 0) parts.add('新增 ${result.addedCount} 篇');
-          if (result.removedCount > 0) parts.add('清理 ${result.removedCount} 篇');
-          if (result.downloadedCount > 0) parts.add('下载 ${result.downloadedCount} 篇');
-          if (result.repairedCount > 0) parts.add('修复 ${result.repairedCount} 篇');
-          if (result.noFileCount > 0) parts.add('${result.noFileCount} 个无文件条目');
+          if (result.addedCount > 0) {
+            parts.add('新增 ${result.addedCount} 篇');
+          }
+          if (result.removedCount > 0) {
+            parts.add('清理 ${result.removedCount} 篇');
+          }
+          if (result.downloadedCount > 0) {
+            parts.add('补回 PDF ${result.downloadedCount} 篇');
+          }
+          if (result.repairedCount > 0) {
+            parts.add('修复元数据 ${result.repairedCount} 篇');
+          }
+          if (result.unresolvedCount > 0) {
+            parts.add('仍有 ${result.unresolvedCount} 篇待补全元数据');
+          }
+          if (result.noFileCount > 0) {
+            parts.add('${result.noFileCount} 个无文件条目');
+          }
           if (parts.isEmpty) {
-            message += '，文库状态良好';
+            message += '，文库状态正常';
           } else {
-            message += '：${parts.join('、')}';
+            message += '：${parts.join('，')}';
           }
         }
+
         messenger.showSnackBar(
           buildResultSnackBar(context: context, message: message),
         );
     }
+  }
+
+  String _buildAddFileMessage({
+    required CancelToken cancelToken,
+    required int totalFiles,
+    required int importedCount,
+    required int duplicateCount,
+    required int completeMetadataCount,
+    required int partialMetadataCount,
+    required int unresolvedMetadataCount,
+    required AddFileResult? lastResult,
+  }) {
+    if (totalFiles == 1 && lastResult?.document != null) {
+      final doc = lastResult!.document!;
+      if (lastResult.type == AddFileResultType.duplicate) {
+        return '文库中已存在: ${doc.title}';
+      }
+      switch (lastResult.metadataStatus) {
+        case MetadataStatus.complete:
+          return '已导入并提取元数据: ${doc.title}';
+        case MetadataStatus.partial:
+          return '已导入 ${doc.title}，仅提取到部分元数据';
+        case MetadataStatus.none:
+          return '已导入 ${doc.title}，未识别到可用元数据';
+      }
+    }
+
+    final parts = <String>[];
+    if (importedCount > 0) parts.add('导入 $importedCount 篇');
+    if (duplicateCount > 0) parts.add('重复 $duplicateCount 篇');
+    if (completeMetadataCount > 0) parts.add('完整元数据 $completeMetadataCount 篇');
+    if (partialMetadataCount > 0) parts.add('部分元数据 $partialMetadataCount 篇');
+    if (unresolvedMetadataCount > 0) {
+      parts.add('未识别元数据 $unresolvedMetadataCount 篇');
+    }
+    if (parts.isEmpty) {
+      return cancelToken.isCancelled ? '已取消导入' : '未导入任何文件';
+    }
+    final prefix = cancelToken.isCancelled ? '已取消导入' : '导入完成';
+    return '$prefix：${parts.join('，')}';
   }
 
   @override
@@ -199,20 +294,17 @@ class HomeHeader extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            // 搜索框
             Expanded(
               child: GestureDetector(
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) => const SearchPage()),
-                  );
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const SearchPage()));
                 },
                 child: Container(
                   height: isMobile ? 44 : 48,
                   decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest
-                        .withAlpha(150),
+                    color: colorScheme.surfaceContainerHighest.withAlpha(150),
                     borderRadius: BorderRadius.circular(24.0),
                     border: Border.all(
                       color: colorScheme.outlineVariant.withAlpha(100),
@@ -244,22 +336,15 @@ class HomeHeader extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 8.0),
-
-            // 按钮 1：视图切换
             _HeaderButton(
-              icon: isGrid
-                  ? Icons.view_list_rounded
-                  : Icons.grid_view_rounded,
+              icon: isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
               tooltip: isGrid ? '切换列表视图' : '切换网格视图',
               size: isMobile ? 36 : 40,
               onPressed: () {
                 ref.read(viewModeProvider.notifier).state = !isGrid;
               },
             ),
-
             const SizedBox(width: 8.0),
-
-            // 按钮 2：工具栏
             _HeaderButton(
               icon: Icons.add_circle_outline_rounded,
               tooltip: '工具',
@@ -271,10 +356,7 @@ class HomeHeader extends ConsumerWidget {
                 }
               },
             ),
-
             const SizedBox(width: 8.0),
-
-            // 用户头像
             Container(
               width: isMobile ? 36 : 40,
               height: isMobile ? 36 : 40,
