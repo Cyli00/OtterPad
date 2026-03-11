@@ -100,7 +100,7 @@ class DocExtractService {
     final payload = <String, dynamic>{
       'file': fileData,
       'fileType': 0,
-      ..._buildOptions(state),
+      ...buildOptions(state),
     };
 
     final url = apiUrl.endsWith('/')
@@ -202,11 +202,6 @@ class DocExtractService {
     if (result.images.isNotEmpty) {
       await Directory(imgDir).create(recursive: true);
 
-      // BOS 预签名 URL 包含自含签名，不能附加 Authorization 头，也不能经过代理
-      // （代理会修改 Host/Via 头，破坏签名校验 → 400）。
-      // token == null 表示来自批量提取，使用临时纯净 Dio 直连 BOS。
-      final downloadDio = token == null ? Dio() : _dio;
-
       for (final entry in result.images.entries) {
         final value = entry.value;
 
@@ -218,7 +213,9 @@ class DocExtractService {
             await Directory(p.dirname(imgPath)).create(recursive: true);
             await File(imgPath).writeAsBytes(bytes);
             localPaths[entry.key] = imgPath;
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[DocExtract] Base64 图片解码失败: ${entry.key} → $e');
+          }
           continue;
         }
 
@@ -228,11 +225,15 @@ class DocExtractService {
           final imgPath = p.join(imgDir, entry.key);
           await Directory(p.dirname(imgPath)).create(recursive: true);
 
-          final imgResponse = await downloadDio.get<List<int>>(
+          // BOS 预签名 URL 在查询参数中自含签名，不应附加 Authorization 头；
+          // HTTPS CONNECT 隧道不修改请求内容，可安全经过代理。
+          // 始终使用 _dio（保留代理 + 超时配置），仅对非 BOS URL 附加认证头。
+          final isBosPresigned = value.contains('authorization=bce-auth');
+          final imgResponse = await _dio.get<List<int>>(
             value,
             options: Options(
               responseType: ResponseType.bytes,
-              headers: token != null
+              headers: (!isBosPresigned && token != null)
                   ? {'Authorization': 'token $token'}
                   : null,
             ),
@@ -249,8 +250,23 @@ class DocExtractService {
 
     result.imageDir = imgDir;
 
+    // 下载失败的图片：将 .md 中的相对路径替换为网络 URL，作为渲染回退
+    var resolvedMarkdown = result.markdown;
+    for (final entry in networkUrls.entries) {
+      if (!localPaths.containsKey(entry.key)) {
+        // HTML <img src="relPath"> 和 Markdown ![](relPath) 两种格式都替换
+        resolvedMarkdown = resolvedMarkdown
+            .replaceAll('src="${entry.key}"', 'src="${entry.value}"')
+            .replaceAll('(${entry.key})', '(${entry.value})');
+      }
+    }
+    if (resolvedMarkdown != result.markdown) {
+      await File(mdPath).writeAsString(resolvedMarkdown, flush: true);
+    }
+
     // Markdown → HTML，优先用本地路径，回退到网络 URL
-    final htmlBody = _markdownToHtml(result.markdown, localPaths, networkUrls);
+    final htmlBody =
+        _markdownToHtml(resolvedMarkdown, localPaths, networkUrls);
     final htmlPath = p.join(dir, '$baseName.html');
     await File(htmlPath).writeAsString(htmlBody, flush: true);
 
@@ -260,12 +276,55 @@ class DocExtractService {
 
   // ─── 静态工具 ──────────────────────────────────────────────────────────────
 
-  /// 将 Markdown 中的图片相对路径替换为绝对 file:/// 路径。
+  /// 预处理 PaddleOCR 输出的 Markdown 并解析图片路径。
+  ///
+  /// PaddleOCR 的 Markdown 输出包含 HTML 内联标签：
+  /// - 图片：`<div style="text-align: center;"><img src="path" .../></div>`
+  /// - 图注：`<div style="text-align: center;">Figure 1 caption</div>`
+  ///
+  /// [flutter_markdown_plus] 的 `imageBuilder` 仅拦截标准 Markdown 图片语法，
+  /// 无法处理 HTML `<img>` 标签。此方法将 HTML 格式统一转换为 Markdown 语法，
+  /// 并将相对路径解析为 `file:///` 绝对路径。
   ///
   /// [imageDir] 为图片保存目录的绝对路径（如 `{pdfDir}/{baseName}_images/`）。
-  /// 仅替换非 HTTP/file 协议的相对路径，且本地文件确实存在的情况。
   static String resolveMarkdownImagePaths(String markdown, String imageDir) {
-    return markdown.replaceAllMapped(
+    var processed = markdown;
+
+    // Step 1: <div><img src="path" ...></div> → ![alt](path)
+    processed = processed.replaceAllMapped(
+      RegExp(r'<div[^>]*>\s*<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>\s*</div>'),
+      (match) {
+        final src = match.group(1)!;
+        final altMatch = RegExp(r'alt="([^"]*)"').firstMatch(match.group(0)!);
+        final alt = altMatch?.group(1) ?? '';
+        return '![$alt]($src)';
+      },
+    );
+
+    // Step 2: <div style="text-align: center;">caption</div> → *caption*
+    processed = processed.replaceAllMapped(
+      RegExp(
+          r'<div\s+style="text-align:\s*center;\s*">\s*(.+?)\s*</div>'),
+      (match) {
+        final content = match.group(1)!;
+        if (content.contains('<img')) return match.group(0)!;
+        return '*$content*';
+      },
+    );
+
+    // Step 3: 剩余的独立 <img> 标签 → ![alt](path)
+    processed = processed.replaceAllMapped(
+      RegExp(r'<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>'),
+      (match) {
+        final src = match.group(1)!;
+        final altMatch = RegExp(r'alt="([^"]*)"').firstMatch(match.group(0)!);
+        final alt = altMatch?.group(1) ?? '';
+        return '![$alt]($src)';
+      },
+    );
+
+    // Step 4: 将相对路径解析为 file:/// 绝对路径
+    processed = processed.replaceAllMapped(
       RegExp(r'!\[([^\]]*)\]\(([^)]+)\)'),
       (match) {
         final alt = match.group(1)!;
@@ -286,11 +345,13 @@ class DocExtractService {
         return match.group(0)!;
       },
     );
+
+    return processed;
   }
 
   // ─── 内部工具 ──────────────────────────────────────────────────────────────
 
-  Map<String, dynamic> _buildOptions(DocExtractApiState state) {
+  static Map<String, dynamic> buildOptions(DocExtractApiState state) {
     return {
       'useLayoutDetection': state.useLayoutDetection,
       'useChartRecognition': state.useChartRecognition,

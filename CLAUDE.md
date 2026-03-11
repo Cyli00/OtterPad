@@ -1,4 +1,4 @@
-# Project Guidelines
+:# Project Guidelines
 
 ## Language
 
@@ -10,6 +10,7 @@ Do not edit files in the `android/`, `windows/`, `linux/`, `macos/`, `ios/`, and
 
 ## Compact Rules
 
+| **IMPORTANT**: Use HAIKU model to COMPACT !!!
 - Before executing compact, confirm what you accomplished in current project (<16 tokens for each, in Chinese)
 - Write each of them to ~/CLAUDE.md below **Completed Tasks**.
 - Remove similar accomplished tasks from ~/CLAUDE.md below **Todolist**
@@ -51,27 +52,45 @@ When adding or updating dependencies in `pubspec.yaml`:
 
 ## Completed Tasks
 
+### 基础设施 (Infrastructure)
 - Flutter 项目初始化与目录结构搭建
 - Riverpod 状态管理迁移
 - MD3 主题系统与动态配色
+
+### 存储与模型 (Storage & Models)
 - 收藏夹系统 (Hive CRUD + 默认文库)
-- PDF 缩略图服务与封面渲染
-- 文献库页面 (搜索/视图切换/工具栏)
-- 书架页面与收藏夹详情页
 - Document 模型与文件导入
-- DOI/PMID/arXiv/ISBN 标识符解析服务
+
+### PDF 处理 (PDF Processing)
+- PDF 缩略图服务与封面渲染
 - PDF DOI 自动提取
+- 修复 PDF 解析锁死导致标识符提取与缩略图卡顿
+
+### 标识符解析与文献获取 (Identifier Resolution & PDF Acquisition)
+- DOI/PMID/arXiv/ISBN 标识符解析服务
 - 文库重构与元数据自动修复
+- 出版商 PDF 直接获取 (DOI 重定向 + 8 家 URL 模式)
+- IdentifierResolver 添加 applyProxy/testConnectivity
+
+### 网络与代理 (Networking & Proxy)
 - 代理设置 (自定义/系统/无) + Hive 持久化
 - 网络设置页面与连通性测试
-- IdentifierResolver 添加 applyProxy/testConnectivity
-- SnackBar 取消按钮 + CancelToken 全链路传递
-- 出版商 PDF 直接获取 (DOI 重定向 + 8 家 URL 模式)
-- 修复 PDF 解析锁死导致标识符提取与缩略图卡顿
-- 优化库重构 O(N²) Riverpod 状态更新引发的 UI 卡顿
+
+### 用户界面 (User Interface)
+- 文献库页面 (搜索/视图切换/工具栏)
+- 书架页面与收藏夹详情页
 - 无文件条目的统一归类、详情页及手动附加/重新下载功能
 - 隐藏主文献库视图中的无文件条目
+- SnackBar 取消按钮 + CancelToken 全链路传递
 - 模型服务设置页面 MD3 UI 重构
+
+### 性能优化 (Performance)
+- 优化库重构 O(N²) Riverpod 状态更新引发的 UI 卡顿
+
+### 文档提取 (Document Extraction)
+- Batch extraction 异步任务 API 集成
+- 文档提取结果显示 (Markdown/LaTeX 渲染)
+- API 设置页面 MD3 UI 重构
 
 ## Todolist
 
