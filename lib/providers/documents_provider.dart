@@ -19,21 +19,32 @@ enum AddByIdentifierResult { success, duplicate }
 
 /// rebuild() 的返回结果
 class RebuildResult {
+  final int addedCount;
+  final int removedCount;
+  final int downloadedCount;
+  final int repairedCount;
   final int noFileCount;
   final bool cancelled;
-  const RebuildResult({required this.noFileCount, required this.cancelled});
+  const RebuildResult({
+    required this.addedCount,
+    required this.removedCount,
+    required this.downloadedCount,
+    required this.repairedCount,
+    required this.noFileCount,
+    required this.cancelled,
+  });
 }
 
 /// rebuild() 进度信息
 class RebuildProgress {
-  final int current;
-  final int total;
+  final int? current;
+  final int? total;
   final String fileName;
   final String status;
 
   const RebuildProgress({
-    required this.current,
-    required this.total,
+    this.current,
+    this.total,
     required this.fileName,
     required this.status,
   });
@@ -287,9 +298,18 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     final docsDir = await getDocsDir();
     final existingPaths = state.map((d) => d.filePath).toSet();
     bool changed = false;
+    int addedCount = 0;
+    int removedCount = 0;
+    int downloadedCount = 0;
+    int repairedCount = 0;
 
     // Phase A — 扫描新文件
+    onProgress?.call(const RebuildProgress(
+      fileName: '文库目录',
+      status: '正在扫描新文件...',
+    ));
     await for (final entity in docsDir.list()) {
+      if (cancelToken?.isCancelled == true) break;
       if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
         if (!existingPaths.contains(entity.path)) {
           final parsed = _parseFileName(entity.path);
@@ -303,16 +323,22 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
           );
           state = [...state, doc];
           changed = true;
+          addedCount++;
         }
       }
     }
 
     // Phase A — 清理缺失文件
+    onProgress?.call(const RebuildProgress(
+      fileName: '文库目录',
+      status: '正在检查文件完整性...',
+    ));
     final validDocs = <Document>[];
     for (final doc in state) {
       if (doc.filePath.isEmpty || await File(doc.filePath).exists()) {
         validDocs.add(doc);
       } else {
+        removedCount++;
         // 如果文件丢失且有 DOI，则保留条目但清空 filePath，以便后续尝试重新下载
         if (doc.doi != null && doc.doi!.isNotEmpty) {
           validDocs.add(doc.copyWith(filePath: ''));
@@ -351,6 +377,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
           );
           if (downloadedPath.isNotEmpty) {
             updatedMap[doc.id] = doc.copyWith(filePath: downloadedPath);
+            downloadedCount++;
           }
         } catch (e) {
           debugPrint('下载缺失 PDF 失败: $e');
@@ -386,6 +413,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
         final repaired = await _repairDocument(doc, cancelToken: cancelToken);
         updatedMap[doc.id] = repaired;
+        repairedCount++;
         
         // 批处理状态更新：每修复 5 个刷新一次 UI，避免频繁重建导致主线程卡顿
         if ((i + 1) % 5 == 0) {
@@ -407,6 +435,10 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
     final noFileCount = state.where((d) => d.filePath.isEmpty).length;
     return RebuildResult(
+      addedCount: addedCount,
+      removedCount: removedCount,
+      downloadedCount: downloadedCount,
+      repairedCount: repairedCount,
       noFileCount: noFileCount,
       cancelled: cancelToken?.isCancelled == true,
     );

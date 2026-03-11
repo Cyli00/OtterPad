@@ -86,7 +86,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (filePath.isEmpty || !File(filePath).existsSync()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PDF 文件不存在')),
+        buildResultSnackBar(context: context, message: 'PDF 文件不存在'),
       );
       return;
     }
@@ -153,23 +153,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('已取消提取')));
+          ..showSnackBar(buildResultSnackBar(context: context, message: '已取消提取'));
         return;
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('网络错误: ${e.message}')));
+        ..showSnackBar(buildResultSnackBar(context: context, message: '网络错误: ${e.message}'));
     } on DocExtractException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(e.message)));
+        ..showSnackBar(buildResultSnackBar(context: context, message: e.message));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('提取失败: $e')));
+        ..showSnackBar(buildResultSnackBar(context: context, message: '提取失败: $e'));
     } finally {
       if (mounted) setState(() => _extracting = false);
       _cancelToken = null;

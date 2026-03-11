@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/documents_provider.dart';
 import '../library/widgets/doc_list_card.dart';
+import '../library/widgets/toolbar_bottom_sheet.dart';
 
 /// 无文件条目详情页
 class NoFileEntriesPage extends ConsumerWidget {
@@ -144,12 +145,12 @@ class NoFileEntriesPage extends ConsumerWidget {
           .attachFile(docId, result.files.first.path!);
       if (!context.mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('文件附加成功')),
+        buildResultSnackBar(context: context, message: '文件附加成功'),
       );
     } catch (e) {
       if (!context.mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('附加文件失败: $e')),
+        buildResultSnackBar(context: context, message: '附加文件失败: $e'),
       );
     }
   }

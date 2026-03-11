@@ -58,12 +58,11 @@ class HomeHeader extends ConsumerWidget {
           if (context.mounted) {
             messenger.hideCurrentSnackBar();
             messenger.showSnackBar(
-              SnackBar(
-                content: Text(
-                  cancelToken.isCancelled
-                      ? '已取消，已添加 $addedCount/${files.length} 篇文献'
-                      : '已添加 ${files.length} 篇文献',
-                ),
+              buildResultSnackBar(
+                context: context,
+                message: cancelToken.isCancelled
+                    ? '已取消，已添加 $addedCount/${files.length} 篇文献'
+                    : '已添加 ${files.length} 篇文献',
               ),
             );
           }
@@ -97,24 +96,24 @@ class HomeHeader extends ConsumerWidget {
             if (cancelToken.isCancelled || !context.mounted) return;
             if (result == AddByIdentifierResult.duplicate) {
               messenger.showSnackBar(
-                const SnackBar(content: Text('该文献已存在于文库中')),
+                buildResultSnackBar(context: context, message: '该文献已存在于文库中'),
               );
             } else {
               messenger.showSnackBar(
-                SnackBar(content: Text('已添加: ${doc.title}')),
+                buildResultSnackBar(context: context, message: '已添加: ${doc.title}'),
               );
             }
           } on IdentifierResolveException catch (e) {
             messenger.hideCurrentSnackBar();
             if (cancelToken.isCancelled || !context.mounted) return;
             messenger.showSnackBar(
-              SnackBar(content: Text(e.message)),
+              buildResultSnackBar(context: context, message: e.message),
             );
           } on DioException catch (_) {
             messenger.hideCurrentSnackBar();
             if (cancelToken.isCancelled || !context.mounted) return;
             messenger.showSnackBar(
-              const SnackBar(content: Text('网络请求失败，请稍后重试')),
+              buildResultSnackBar(context: context, message: '网络请求失败，请稍后重试'),
             );
           }
         }
@@ -163,11 +162,21 @@ class HomeHeader extends ConsumerWidget {
         messenger.hideCurrentSnackBar();
 
         String message = cancelToken.isCancelled ? '已取消重构' : '文库重构已结束';
-        if (result != null && result.noFileCount > 0) {
-          message += '，有 ${result.noFileCount} 个条目被转移到无文件条目';
+        if (result != null) {
+          final parts = <String>[];
+          if (result.addedCount > 0) parts.add('新增 ${result.addedCount} 篇');
+          if (result.removedCount > 0) parts.add('清理 ${result.removedCount} 篇');
+          if (result.downloadedCount > 0) parts.add('下载 ${result.downloadedCount} 篇');
+          if (result.repairedCount > 0) parts.add('修复 ${result.repairedCount} 篇');
+          if (result.noFileCount > 0) parts.add('${result.noFileCount} 个无文件条目');
+          if (parts.isEmpty) {
+            message += '，文库状态良好';
+          } else {
+            message += '：${parts.join('、')}';
+          }
         }
         messenger.showSnackBar(
-          SnackBar(content: Text(message)),
+          buildResultSnackBar(context: context, message: message),
         );
     }
   }

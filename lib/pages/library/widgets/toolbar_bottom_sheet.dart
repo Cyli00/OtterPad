@@ -92,6 +92,26 @@ SnackBar buildProgressSnackBar({
   );
 }
 
+/// 构建结果提示 SnackBar（统一浮动样式）
+SnackBar buildResultSnackBar({
+  BuildContext? context,
+  required String message,
+  Duration duration = const Duration(seconds: 4),
+}) {
+  final isMobile = context != null ? MediaQuery.sizeOf(context).width < 600 : true;
+
+  return SnackBar(
+    behavior: SnackBarBehavior.floating,
+    width: isMobile ? null : 400,
+    margin: isMobile ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0) : null,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+    elevation: 6,
+    content: Text(message, style: const TextStyle(fontSize: 14)),
+    duration: duration,
+  );
+}
+
 /// 工具栏 Bottom Sheet
 Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
   final theme = Theme.of(context);
