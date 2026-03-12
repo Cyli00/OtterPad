@@ -163,9 +163,8 @@ class DocExtractService {
       pages.add(_PageResult(markdown: text, images: images));
     }
 
-    final fullMarkdown = MarkdownPreprocessor.process(
-      pages.map((p) => p.markdown).join('\n\n'),
-    );
+    // [TEST] 跳过预处理，保留原始 Markdown
+    final fullMarkdown = pages.map((p) => p.markdown).join('\n\n');
     final allImages = <String, String>{};
     for (final page in pages) {
       allImages.addAll(page.images);
