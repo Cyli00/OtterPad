@@ -108,15 +108,15 @@ class ExtractResultPage extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline_rounded,
-                      size: 48, color: cs.error),
+                  Icon(Icons.error_outline_rounded, size: 48, color: cs.error),
                   const SizedBox(height: 16),
                   Text('加载失败', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   Text(
                     snapshot.error.toString(),
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -127,9 +127,12 @@ class ExtractResultPage extends StatelessWidget {
           final content = snapshot.data ?? '';
           if (content.isEmpty) {
             return Center(
-              child: Text('提取结果为空',
-                  style: theme.textTheme.bodyLarge
-                      ?.copyWith(color: cs.onSurfaceVariant)),
+              child: Text(
+                '提取结果为空',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
             );
           }
 
@@ -138,34 +141,41 @@ class ExtractResultPage extends StatelessWidget {
             child: MarkdownBody(
               data: content,
               builders: {
+
                 'latex': NRLatexElementBuilder(
                   textStyle: TextStyle(color: cs.onSurface),
                 ),
               },
               extensionSet: md.ExtensionSet(
-                [LatexBlockSyntax(), ...md.ExtensionSet.gitHubWeb.blockSyntaxes],
-                [NRLatexInlineSyntax(), ...md.ExtensionSet.gitHubWeb.inlineSyntaxes],
+                [
+                  LatexBlockSyntax(),
+                  ...md.ExtensionSet.gitHubWeb.blockSyntaxes,
+                ],
+                [
+                  NRLatexInlineSyntax(),
+                  ...md.ExtensionSet.gitHubWeb.inlineSyntaxes,
+                ],
               ),
               imageBuilder: (uri, title, alt) {
                 if (uri.scheme == 'file') {
                   final file = File(uri.toFilePath());
                   if (file.existsSync()) {
-                    return Image.file(
-                      file,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => const Icon(
-                        Icons.broken_image_rounded,
-                        size: 48,
+                    return Center(
+                      child: Image.file(
+                        file,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) =>
+                            const Icon(Icons.broken_image_rounded, size: 48),
                       ),
                     );
                   }
                 }
-                return Image.network(
-                  uri.toString(),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const Icon(
-                    Icons.broken_image_rounded,
-                    size: 48,
+                return Center(
+                  child: Image.network(
+                    uri.toString(),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.broken_image_rounded, size: 48),
                   ),
                 );
               },

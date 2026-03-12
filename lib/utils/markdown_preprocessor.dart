@@ -4,7 +4,6 @@ class MarkdownPreprocessor {
     result = _sanitizeLatex(result);
     result = _fixLatexSpacing(result);
     result = _simplifyInlineLatex(result);
-    result = _stitchInlineMathPunctuation(result);
     result = _normalizeInlineSpacing(result);
     result = _healBrokenParagraphs(result);
     result = _cleanSpecificFooters(result);
@@ -72,6 +71,19 @@ class MarkdownPreprocessor {
     return text.replaceAllMapped(RegExp(r'\$([^\$\n]+)\$'), (match) {
       final inner = match.group(1)!.trim();
 
+      const symbolMap = {
+        r'\approx': '≈',
+        r'\sim': '∼',
+        r'\times': '×',
+        r'\pm': '±',
+        r'\leq': '≤',
+        r'\geq': '≥',
+        r'\neq': '≠',
+      };
+      if (symbolMap.containsKey(inner)) {
+        return symbolMap[inner]!;
+      }
+
       final superscriptMatch = RegExp(
         r'^\{\}\s*\^\{([^{}]+)\}$',
       ).firstMatch(inner);
@@ -121,14 +133,6 @@ class MarkdownPreprocessor {
       buffer.write(map[char] ?? char);
     }
     return buffer.toString();
-  }
-
-  static String _stitchInlineMathPunctuation(String text) {
-    return text.replaceAllMapped(RegExp(r'\$([^\$\n]+)\$([.,;:!?])'), (match) {
-      final inner = match.group(1)!.trimRight();
-      final punctuation = match.group(2)!;
-      return '\$$inner${r'\text{'}$punctuation}\$';
-    });
   }
 
   static String _normalizeInlineSpacing(String text) {

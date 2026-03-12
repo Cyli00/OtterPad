@@ -3,35 +3,31 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
 
-/// 自定义行内 LaTeX 语法
-///
-/// 修复 flutter_markdown_plus_latex 的 LatexInlineSyntax 存在的问题：
-/// 原版正则尾部有 `(?=[\s?!.,:？！。，：]|$)` lookahead，
-/// 要求 `$` 后必须跟空白/标点/行尾，导致 `${}^{2}$UCL` 等模式无法匹配。
 class NRLatexInlineSyntax extends md.InlineSyntax {
   NRLatexInlineSyntax() : super(_pattern);
 
-  // 只处理 $...$ 行内公式（$$...$$ 块级由 LatexBlockSyntax 处理）
-  // 移除了尾部 lookahead，允许 $ 后紧跟任意字符
-  static const _pattern = r'\$([^\$\n]+?)\$';
+  static const _pattern = r'\$([^\$\n]+?)\$([.,;:!?])?';
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
     final equation = match.group(1)!.trim();
-    if (equation.isEmpty) return false;
+    if (equation.isEmpty) {
+      return false;
+    }
 
     final element = md.Element.text('latex', equation);
     element.attributes['MathStyle'] = 'text';
+
+    final trailingText = match.group(2);
+    if (trailingText != null && trailingText.isNotEmpty) {
+      element.attributes['TrailingText'] = trailingText;
+    }
+
     parser.addNode(element);
     return true;
   }
 }
 
-/// 自定义 LaTeX 元素构建器
-///
-/// 修复原版 LatexElementBuilder 的两个问题：
-/// 1. 行内公式被 SingleChildScrollView 包裹，导致后续文字换行
-/// 2. 解析失败时无 fallback，显示红色错误 widget
 class NRLatexElementBuilder extends MarkdownElementBuilder {
   NRLatexElementBuilder({this.textStyle, this.textScaleFactor});
 
@@ -46,34 +42,58 @@ class NRLatexElementBuilder extends MarkdownElementBuilder {
     TextStyle? parentStyle,
   ) {
     final text = element.textContent;
-    if (text.isEmpty) return const SizedBox();
+    if (text.isEmpty) {
+      return const SizedBox();
+    }
 
     final isDisplay = element.attributes['MathStyle'] == 'display';
-
+    final effectiveStyle =
+        parentStyle ??
+        preferredStyle ??
+        textStyle ??
+        DefaultTextStyle.of(context).style;
     final mathWidget = Math.tex(
       text,
-      textStyle: textStyle,
+      textStyle: effectiveStyle,
       mathStyle: isDisplay ? MathStyle.display : MathStyle.text,
       textScaleFactor: textScaleFactor,
       onErrorFallback: (e) => Text(
         '\$$text\$',
-        style: textStyle?.copyWith(
-              fontStyle: FontStyle.italic,
-              fontSize: (textStyle?.fontSize ?? 14) * 0.9,
-            ) ??
-            const TextStyle(fontStyle: FontStyle.italic),
+        style: effectiveStyle.copyWith(
+          fontStyle: FontStyle.italic,
+          fontSize: (effectiveStyle.fontSize ?? 14) * 0.9,
+        ),
       ),
     );
 
-    // 块级公式允许水平滚动；行内公式直接嵌入文本流
     if (isDisplay) {
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.antiAlias,
-        child: mathWidget,
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: Center(child: mathWidget),
+            ),
+          );
+        },
       );
     }
 
-    return mathWidget;
+    final trailingText = element.attributes['TrailingText'];
+    if (trailingText == null || trailingText.isEmpty) {
+      return mathWidget;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        mathWidget,
+        Text(trailingText, style: effectiveStyle),
+      ],
+    );
   }
 }
+

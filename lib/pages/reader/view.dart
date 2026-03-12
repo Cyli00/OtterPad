@@ -22,10 +22,7 @@ import '../setting/api_settings_page.dart';
 class ReaderPage extends ConsumerStatefulWidget {
   final Document document;
 
-  const ReaderPage({
-    super.key,
-    required this.document,
-  });
+  const ReaderPage({super.key, required this.document});
 
   @override
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
@@ -64,8 +61,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) =>
-          _DocumentInfoSheet(document: widget.document),
+      builder: (context) => _DocumentInfoSheet(document: widget.document),
     );
   }
 
@@ -80,11 +76,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           content: const Text('请先在设置中配置文档提取 API'),
           action: SnackBarAction(
             label: '前往设置',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ApiSettingsPage(),
-              ),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ApiSettingsPage())),
           ),
         ),
       );
@@ -165,7 +159,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
       final resolvedMd = DocExtractService.resolveMarkdownImagePaths(
         result.markdown,
-        result.imageDir ?? p.join(p.dirname(filePath), '${p.basenameWithoutExtension(filePath)}_images'),
+        result.imageDir ??
+            p.join(
+              p.dirname(filePath),
+              '${p.basenameWithoutExtension(filePath)}_images',
+            ),
       );
 
       setState(() {
@@ -177,20 +175,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (e.type == DioExceptionType.cancel) {
         scaffoldMessenger.hideCurrentSnackBar();
         if (!mounted) return;
-        scaffoldMessenger.showSnackBar(buildResultSnackBar(context: context, message: '已取消提取'));
+        scaffoldMessenger.showSnackBar(
+          buildResultSnackBar(context: context, message: '已取消提取'),
+        );
         return;
       }
       scaffoldMessenger.hideCurrentSnackBar();
       if (!mounted) return;
-      scaffoldMessenger.showSnackBar(buildResultSnackBar(context: context, message: '网络错误: ${e.message}'));
+      scaffoldMessenger.showSnackBar(
+        buildResultSnackBar(context: context, message: '网络错误: ${e.message}'),
+      );
     } on DocExtractException catch (e) {
       scaffoldMessenger.hideCurrentSnackBar();
       if (!mounted) return;
-      scaffoldMessenger.showSnackBar(buildResultSnackBar(context: context, message: e.message));
+      scaffoldMessenger.showSnackBar(
+        buildResultSnackBar(context: context, message: e.message),
+      );
     } catch (e) {
       scaffoldMessenger.hideCurrentSnackBar();
       if (!mounted) return;
-      scaffoldMessenger.showSnackBar(buildResultSnackBar(context: context, message: '提取失败: $e'));
+      scaffoldMessenger.showSnackBar(
+        buildResultSnackBar(context: context, message: '提取失败: $e'),
+      );
     } finally {
       if (mounted) setState(() => _extracting = false);
       _cancelToken = null;
@@ -273,9 +279,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (_hasResult) {
       return IconButton(
         icon: Icon(
-          _showPreview
-              ? Icons.picture_as_pdf_rounded
-              : Icons.article_rounded,
+          _showPreview ? Icons.picture_as_pdf_rounded : Icons.article_rounded,
           size: 20,
         ),
         tooltip: _showPreview ? '查看 PDF' : '查看提取结果',
@@ -297,9 +301,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     return PdfViewer.file(
       widget.document.filePath,
-      params: const PdfViewerParams(
-        backgroundColor: Colors.transparent,
-      ),
+      params: const PdfViewerParams(backgroundColor: Colors.transparent),
     );
   }
 
@@ -323,9 +325,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         }
         if (snapshot.hasError || (snapshot.data?.isEmpty ?? true)) {
           return Center(
-            child: Text('加载失败',
-                style: theme.textTheme.bodyLarge
-                    ?.copyWith(color: theme.colorScheme.error)),
+            child: Text(
+              '加载失败',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
           );
         }
         return SingleChildScrollView(
@@ -333,34 +338,38 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           child: MarkdownBody(
             data: snapshot.data!,
             builders: {
+
               'latex': NRLatexElementBuilder(
                 textStyle: TextStyle(color: theme.colorScheme.onSurface),
               ),
             },
             extensionSet: md.ExtensionSet(
               [LatexBlockSyntax(), ...md.ExtensionSet.gitHubWeb.blockSyntaxes],
-              [NRLatexInlineSyntax(), ...md.ExtensionSet.gitHubWeb.inlineSyntaxes],
+              [
+                NRLatexInlineSyntax(),
+                ...md.ExtensionSet.gitHubWeb.inlineSyntaxes,
+              ],
             ),
             imageBuilder: (uri, title, alt) {
               if (uri.scheme == 'file') {
                 final file = File(uri.toFilePath());
                 if (file.existsSync()) {
-                  return Image.file(
-                    file,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Icon(
-                      Icons.broken_image_rounded,
-                      size: 48,
+                  return Center(
+                    child: Image.file(
+                      file,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) =>
+                          const Icon(Icons.broken_image_rounded, size: 48),
                     ),
                   );
                 }
               }
-              return Image.network(
-                uri.toString(),
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Icon(
-                  Icons.broken_image_rounded,
-                  size: 48,
+              return Center(
+                child: Image.network(
+                  uri.toString(),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) =>
+                      const Icon(Icons.broken_image_rounded, size: 48),
                 ),
               );
             },
@@ -375,18 +384,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline_rounded,
-              size: 48, color: colorScheme.error),
+          Icon(Icons.error_outline_rounded, size: 48, color: colorScheme.error),
           const SizedBox(height: 16),
-          Text('找不到该文献的 PDF 文件',
-              style: theme.textTheme.titleMedium),
+          Text('找不到该文献的 PDF 文件', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32.0),
             child: Text(
               widget.document.filePath,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ),
@@ -448,9 +456,7 @@ class _DocumentInfoSheet extends StatelessWidget {
         constraints: BoxConstraints(maxHeight: maxHeight),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(28),
-          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -469,8 +475,7 @@ class _DocumentInfoSheet extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -496,14 +501,13 @@ class _DocumentInfoSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _buildInfoRow(
-                        context, '作者', document.authors.join(', ')),
+                    _buildInfoRow(context, '作者', document.authors.join(', ')),
                     _buildInfoRow(context, '期刊', document.journal ?? ''),
                     _buildInfoRow(context, '年份', document.year ?? ''),
                     _buildInfoRow(context, 'DOI', document.doi ?? ''),
                     SizedBox(
-                        height:
-                            MediaQuery.of(context).padding.bottom + 16),
+                      height: MediaQuery.of(context).padding.bottom + 16,
+                    ),
                   ],
                 ),
               ),
