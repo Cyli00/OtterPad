@@ -38,8 +38,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   String? _highlightQuery;
   int? _targetCharOffset;
 
+  // 搜索结果导航
+  List<SearchResult> _searchResults = [];
+  int _currentResultIndex = 0;
+
   // Markdown 滚动控制
   final _scrollController = ScrollController();
+
+  // 缓存加载 Future，避免 FutureBuilder 反复创建新实例
+  Future<String>? _loadFuture;
 
   // 外观面板
   final _appearanceKey = GlobalKey();
@@ -208,12 +215,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // ─── 搜索 ───
 
   Future<void> _openSearch() async {
-    // 确保 Markdown 内容已加载（供搜索使用）
     if (_mdContent == null && _mdPath != null) {
       _mdContent = await _loadAndResolveMarkdown();
     }
     if (!mounted) return;
-    _clearHighlight();
     setState(() => _searchActive = true);
   }
 
@@ -221,12 +226,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     setState(() => _searchActive = false);
   }
 
-  void _onSearchResultTap(int charOffset, String query) {
+  void _onSearchResultTap(
+    List<SearchResult> results,
+    int tappedIndex,
+    String query,
+  ) {
     setState(() {
       _searchActive = false;
       _showPreview = true;
+      _searchResults = results;
+      _currentResultIndex = tappedIndex;
       _highlightQuery = query;
-      _targetCharOffset = charOffset;
+      _targetCharOffset = results[tappedIndex].charOffset;
     });
   }
 
@@ -235,8 +246,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       setState(() {
         _highlightQuery = null;
         _targetCharOffset = null;
+        _searchResults = [];
+        _currentResultIndex = 0;
       });
     }
+  }
+
+  void _goToPrevResult() {
+    if (_searchResults.isEmpty) return;
+    setState(() {
+      _currentResultIndex =
+          (_currentResultIndex - 1 + _searchResults.length) %
+              _searchResults.length;
+      _targetCharOffset = _searchResults[_currentResultIndex].charOffset;
+    });
+  }
+
+  void _goToNextResult() {
+    if (_searchResults.isEmpty) return;
+    setState(() {
+      _currentResultIndex =
+          (_currentResultIndex + 1) % _searchResults.length;
+      _targetCharOffset = _searchResults[_currentResultIndex].charOffset;
+    });
   }
 
   // ─── 外观面板 ───
@@ -295,6 +327,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ? readerSettings.backgroundColor
         : cs.surface;
 
+    final isHighlightMode = _highlightQuery != null;
+
     return Scaffold(
       backgroundColor: cs.surface,
       body: SafeArea(
@@ -303,7 +337,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             // ── 主内容层 ──
             Column(
               children: [
-                _buildToolbar(theme, cs),
+                if (isHighlightMode)
+                  _buildHighlightSearchBar(cs)
+                else
+                  _buildToolbar(theme, cs),
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
@@ -316,6 +353,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 ),
               ],
             ),
+            // ── 浮动搜索结果导航器 ──
+            if (isHighlightMode && _searchResults.isNotEmpty)
+              Positioned(
+                right: 16,
+                bottom: 32,
+                child: _buildResultNavigator(cs),
+              ),
             // ── 搜索遮罩层 ──
             if (_searchActive && _mdContent != null)
               Positioned.fill(
@@ -324,6 +368,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   readerSettings: readerSettings,
                   onResultTap: _onSearchResultTap,
                   onDismiss: _closeSearch,
+                  initialQuery: _highlightQuery,
                 ),
               ),
           ],
@@ -351,27 +396,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             const Spacer(),
-            // 搜索 / 取消高亮
+            // 搜索
             if (_hasResult)
-              _highlightQuery != null
-                  ? IconButton(
-                      icon: Icon(
-                        Icons.close_rounded,
-                        size: 22,
-                        color: cs.onSurfaceVariant,
-                      ),
-                      tooltip: '退出搜索',
-                      onPressed: _clearHighlight,
-                    )
-                  : IconButton(
-                      icon: Icon(
-                        Icons.search_rounded,
-                        size: 22,
-                        color: cs.onSurfaceVariant,
-                      ),
-                      tooltip: '搜索',
-                      onPressed: _openSearch,
-                    ),
+              IconButton(
+                icon: Icon(
+                  Icons.search_rounded,
+                  size: 22,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: '搜索',
+                onPressed: _openSearch,
+              ),
             // 提取/切换按钮
             _buildExtractButton(cs),
             // 重新提取
@@ -399,21 +434,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             if (_showPreview && _hasResult)
               IconButton(
                 key: _appearanceKey,
-                icon: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: cs.onSurfaceVariant, width: 1.5),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'A',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
+                icon: Text(
+                  'A',
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 tooltip: '外观设置',
@@ -422,6 +448,128 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             const SizedBox(width: 4),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 高亮浏览模式下的顶部搜索栏：显示当前查询词，点击可重新搜索，✕ 退出搜索
+  Widget _buildHighlightSearchBar(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(
+                Icons.chevron_left_rounded,
+                size: 28,
+                color: cs.onSurface,
+              ),
+              tooltip: '返回',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: GestureDetector(
+                onTap: _openSearch,
+                child: Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.search_rounded,
+                        size: 18,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _highlightQuery ?? '',
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 15,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: Icon(
+                Icons.close_rounded,
+                size: 22,
+                color: cs.onSurfaceVariant,
+              ),
+              tooltip: '退出搜索',
+              onPressed: _clearHighlight,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 右下角浮动导航器：上/下雪佛龙 + 当前/总数 计数器
+  Widget _buildResultNavigator(ColorScheme cs) {
+    final current = _currentResultIndex + 1;
+    final total = _searchResults.length;
+
+    return Material(
+      elevation: 2,
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: IconButton(
+              icon: Icon(
+                Icons.expand_less_rounded,
+                size: 24,
+                color: cs.onSurface,
+              ),
+              tooltip: '上一个结果',
+              onPressed: _goToPrevResult,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              '$current/$total',
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: IconButton(
+              icon: Icon(
+                Icons.expand_more_rounded,
+                size: 24,
+                color: cs.onSurface,
+              ),
+              tooltip: '下一个结果',
+              onPressed: _goToNextResult,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -479,10 +627,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ThemeData theme,
     ReaderSettingsState settings,
   ) {
+    // 内容已加载时直接渲染，避免 FutureBuilder 每次 setState 创建新 Future
+    // 导致 ReaderMarkdownBody 状态（_useBlockMode / _hasScrolled）被销毁
+    if (_mdContent != null) {
+      return ReaderMarkdownBody(
+        data: _mdContent!,
+        settings: settings,
+        scrollController: _scrollController,
+        highlightQuery: _highlightQuery,
+        targetCharOffset: _targetCharOffset,
+      );
+    }
+
+    _loadFuture ??= _loadAndResolveMarkdown();
+
     return FutureBuilder<String>(
-      future: _mdContent != null
-          ? Future.value(_mdContent!)
-          : _loadAndResolveMarkdown(),
+      future: _loadFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(
@@ -501,6 +661,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           );
         }
+        _mdContent = snapshot.data!;
         return ReaderMarkdownBody(
           data: snapshot.data!,
           settings: settings,

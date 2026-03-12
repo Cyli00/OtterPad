@@ -101,9 +101,11 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
 
   Widget _buildBlockBased(BuildContext context) {
     final blocks = _splitIntoBlocks(widget.data);
-    final targetIndex = _findTargetBlock(blocks, widget.targetCharOffset!);
+    final targetIndex = widget.targetCharOffset != null
+        ? _findTargetBlock(blocks, widget.targetCharOffset!)
+        : -1;
 
-    _scheduleScrollToTarget();
+    if (targetIndex >= 0) _scheduleScrollToTarget();
 
     return SingleChildScrollView(
       controller: widget.scrollController,

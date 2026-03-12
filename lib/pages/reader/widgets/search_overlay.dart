@@ -25,8 +25,12 @@ class SearchResult {
 class SearchOverlay extends StatefulWidget {
   final String markdownContent;
   final ReaderSettingsState readerSettings;
-  final void Function(int charOffset, String query) onResultTap;
+  final void Function(List<SearchResult> results, int tappedIndex, String query)
+      onResultTap;
   final VoidCallback onDismiss;
+
+  /// 从高亮模式重新搜索时，预填上次查询词
+  final String? initialQuery;
 
   const SearchOverlay({
     super.key,
@@ -34,6 +38,7 @@ class SearchOverlay extends StatefulWidget {
     required this.readerSettings,
     required this.onResultTap,
     required this.onDismiss,
+    this.initialQuery,
   });
 
   @override
@@ -49,9 +54,17 @@ class _SearchOverlayState extends State<SearchOverlay> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
-    });
+    if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
+      _controller.text = widget.initialQuery!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _performSearch(widget.initialQuery!);
+        _focusNode.requestFocus();
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _focusNode.requestFocus();
+      });
+    }
   }
 
   @override
@@ -321,7 +334,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
               text: result.plainText,
               query: query,
               cs: cs,
-              onTap: () => widget.onResultTap(result.charOffset, query),
+              onTap: () => widget.onResultTap(_results, index, query),
             ),
           ],
         );
