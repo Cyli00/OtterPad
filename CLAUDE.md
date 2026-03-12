@@ -54,8 +54,10 @@ When adding or updating dependencies in `pubspec.yaml`:
 
 ### 基础设施 (Infrastructure)
 - Flutter 项目初始化与目录结构搭建
-- Riverpod 状态管理迁移
+- Riverpod 状态管理迁移 (全局状态已使用 flutter_riverpod，局部 UI 状态保留 setState)
 - MD3 主题系统与动态配色
+- go_router 声明式路由 + StatefulShellRoute 标签导航
+- flutter_animate 动画系统重构
 
 ### 存储与模型 (Storage & Models)
 - 收藏夹系统 (Hive CRUD + 默认文库)
@@ -93,7 +95,3 @@ When adding or updating dependencies in `pubspec.yaml`:
 - API 设置页面 MD3 UI 重构
 
 ## Todolist
-
-1. 目前状态管理是否都是用的flutter_riverpod?如果不是，请把所有状态管理都改成flutter_riverpod，方便管理
-2. 使用go_router进行页面导航，同时为桌面端、移动端不同的设置做router，和flutter_riverpod配合
-3. 我需要引入flutter_animate进行动画设计，请你帮忙用 flutter_animate 重新设计项目中所有的动画
