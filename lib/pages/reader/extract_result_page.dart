@@ -3,8 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart';
+import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart'
+    show LatexBlockSyntax;
 import 'package:markdown/markdown.dart' as md;
+
+import '../../utils/latex_syntax.dart';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
@@ -135,13 +138,13 @@ class ExtractResultPage extends StatelessWidget {
             child: MarkdownBody(
               data: content,
               builders: {
-                'latex': LatexElementBuilder(
+                'latex': NRLatexElementBuilder(
                   textStyle: TextStyle(color: cs.onSurface),
                 ),
               },
               extensionSet: md.ExtensionSet(
                 [LatexBlockSyntax(), ...md.ExtensionSet.gitHubWeb.blockSyntaxes],
-                [LatexInlineSyntax(), ...md.ExtensionSet.gitHubWeb.inlineSyntaxes],
+                [NRLatexInlineSyntax(), ...md.ExtensionSet.gitHubWeb.inlineSyntaxes],
               ),
               imageBuilder: (uri, title, alt) {
                 if (uri.scheme == 'file') {

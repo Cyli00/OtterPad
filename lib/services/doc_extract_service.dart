@@ -341,8 +341,8 @@ class DocExtractService {
 
         final localFile = File(p.join(imageDir, imgPath));
         if (localFile.existsSync()) {
-          final absPath = localFile.path.replaceAll('\\', '/');
-          return '![$alt](file:///$absPath)';
+          final uri = Uri.file(localFile.path);
+          return '![$alt]($uri)';
         }
 
         return match.group(0)!;

@@ -4,7 +4,10 @@ import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart';
+import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart'
+    show LatexBlockSyntax;
+
+import '../../utils/latex_syntax.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:path/path.dart' as p;
@@ -330,13 +333,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           child: MarkdownBody(
             data: snapshot.data!,
             builders: {
-              'latex': LatexElementBuilder(
+              'latex': NRLatexElementBuilder(
                 textStyle: TextStyle(color: theme.colorScheme.onSurface),
               ),
             },
             extensionSet: md.ExtensionSet(
               [LatexBlockSyntax(), ...md.ExtensionSet.gitHubWeb.blockSyntaxes],
-              [LatexInlineSyntax(), ...md.ExtensionSet.gitHubWeb.inlineSyntaxes],
+              [NRLatexInlineSyntax(), ...md.ExtensionSet.gitHubWeb.inlineSyntaxes],
             ),
             imageBuilder: (uri, title, alt) {
               if (uri.scheme == 'file') {
