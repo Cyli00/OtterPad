@@ -497,6 +497,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           scrollController: _scrollController,
           highlightQuery: _highlightQuery,
           targetCharOffset: _targetCharOffset,
+          onHighlightDismissed: _clearHighlight,
         );
       },
     );

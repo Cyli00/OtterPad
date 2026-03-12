@@ -94,4 +94,6 @@ When adding or updating dependencies in `pubspec.yaml`:
 
 ## Todolist
 
-- 提取的文本与PDF原文分栏对照显示，并支持点击文本块高亮联动定位 PDF 坐标 (需要重构数据存储及UI)
+1. 目前状态管理是否都是用的flutter_riverpod?如果不是，请把所有状态管理都改成flutter_riverpod，方便管理
+2. 使用go_router进行页面导航，同时为桌面端、移动端不同的设置做router，和flutter_riverpod配合
+3. 我需要引入flutter_animate进行动画设计，请你帮忙用 flutter_animate 重新设计项目中所有的动画

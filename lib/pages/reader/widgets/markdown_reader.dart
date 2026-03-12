@@ -27,6 +27,9 @@ class ReaderMarkdownBody extends StatefulWidget {
   /// 目标段落在原始 Markdown 中的字符偏移
   final int? targetCharOffset;
 
+  /// 高亮 block 滚出视口后的回调，用于清除高亮状态
+  final VoidCallback? onHighlightDismissed;
+
   const ReaderMarkdownBody({
     super.key,
     required this.data,
@@ -34,6 +37,7 @@ class ReaderMarkdownBody extends StatefulWidget {
     this.scrollController,
     this.highlightQuery,
     this.targetCharOffset,
+    this.onHighlightDismissed,
   });
 
   @override
@@ -43,6 +47,7 @@ class ReaderMarkdownBody extends StatefulWidget {
 class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
   final _targetKey = GlobalKey();
   bool _hasScrolled = false;
+  bool _monitoring = false;
 
   @override
   void didUpdateWidget(covariant ReaderMarkdownBody oldWidget) {
@@ -50,7 +55,14 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
     if (widget.targetCharOffset != oldWidget.targetCharOffset ||
         widget.highlightQuery != oldWidget.highlightQuery) {
       _hasScrolled = false;
+      _monitoring = false;
     }
+  }
+
+  @override
+  void dispose() {
+    _stopMonitoring();
+    super.dispose();
   }
 
   bool get _isHighlightMode =>
@@ -69,10 +81,50 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
           alignment: 0.0,
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeInOut,
-        );
+        ).then((_) {
+          if (mounted) _startMonitoring();
+        });
         _hasScrolled = true;
       }
     });
+  }
+
+  // ─── 视口监听：高亮 block 滑出后自动解除 ───
+
+  void _startMonitoring() {
+    if (_monitoring) return;
+    _monitoring = true;
+    widget.scrollController?.addListener(_onScroll);
+  }
+
+  void _stopMonitoring() {
+    widget.scrollController?.removeListener(_onScroll);
+    _monitoring = false;
+  }
+
+  void _onScroll() {
+    final ctx = _targetKey.currentContext;
+    if (ctx == null) {
+      _dismiss();
+      return;
+    }
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) {
+      _dismiss();
+      return;
+    }
+    final offset = box.localToGlobal(Offset.zero);
+    final height = box.size.height;
+    final screen = MediaQuery.sizeOf(ctx);
+    // 目标 block 完全滚出视口（上方或下方）
+    if (offset.dy + height < 0 || offset.dy > screen.height) {
+      _dismiss();
+    }
+  }
+
+  void _dismiss() {
+    _stopMonitoring();
+    widget.onHighlightDismissed?.call();
   }
 
   @override
@@ -354,7 +406,9 @@ class _HighlightInlineSyntax extends md.InlineSyntax {
   }
 }
 
-/// 搜索词高亮渲染器，使用 MD3 primaryContainer 配色
+/// 搜索词高亮渲染器，使用 MD3 primaryContainer 配色。
+/// 返回 RichText 而非 Container，使 _mergeInlineChildren 可将其合并到
+/// 相邻 TextSpan 中，避免单词内部断行（如 "shows" 中 "show" 与 "s" 分行）。
 class _HighlightElementBuilder extends MarkdownElementBuilder {
   final Color backgroundColor;
   final Color textColor;
@@ -373,15 +427,14 @@ class _HighlightElementBuilder extends MarkdownElementBuilder {
   ) {
     final style =
         parentStyle ?? preferredStyle ?? DefaultTextStyle.of(context).style;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(
-        element.textContent,
-        style: style.copyWith(color: textColor, fontWeight: FontWeight.w600),
+    return RichText(
+      text: TextSpan(
+        text: element.textContent,
+        style: style.copyWith(
+          color: textColor,
+          fontWeight: FontWeight.w600,
+          backgroundColor: backgroundColor,
+        ),
       ),
     );
   }

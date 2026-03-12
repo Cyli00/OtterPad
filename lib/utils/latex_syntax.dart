@@ -81,19 +81,19 @@ class NRLatexElementBuilder extends MarkdownElementBuilder {
       );
     }
 
+    // 包裹为 RichText + WidgetSpan，使 _mergeInlineChildren 可将公式
+    // 与相邻文本合并到同一个 RichText 中，避免公式前后异常断行。
     final trailingText = element.attributes['TrailingText'];
-    if (trailingText == null || trailingText.isEmpty) {
-      return mathWidget;
-    }
+    final spans = <InlineSpan>[
+      WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: mathWidget,
+      ),
+      if (trailingText != null && trailingText.isNotEmpty)
+        TextSpan(text: trailingText, style: effectiveStyle),
+    ];
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        mathWidget,
-        Text(trailingText, style: effectiveStyle),
-      ],
-    );
+    return RichText(text: TextSpan(children: spans));
   }
 }
 
