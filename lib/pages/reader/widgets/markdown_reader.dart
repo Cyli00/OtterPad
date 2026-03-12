@@ -27,9 +27,6 @@ class ReaderMarkdownBody extends StatefulWidget {
   /// 目标段落在原始 Markdown 中的字符偏移
   final int? targetCharOffset;
 
-  /// 高亮 block 滚出视口后的回调，用于清除高亮状态
-  final VoidCallback? onHighlightDismissed;
-
   const ReaderMarkdownBody({
     super.key,
     required this.data,
@@ -37,7 +34,6 @@ class ReaderMarkdownBody extends StatefulWidget {
     this.scrollController,
     this.highlightQuery,
     this.targetCharOffset,
-    this.onHighlightDismissed,
   });
 
   @override
@@ -47,7 +43,9 @@ class ReaderMarkdownBody extends StatefulWidget {
 class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
   final _targetKey = GlobalKey();
   bool _hasScrolled = false;
-  bool _monitoring = false;
+
+  /// 进入高亮模式后锁定 block-based 渲染，避免取消高亮时切换 widget 树导致闪屏
+  bool _useBlockMode = false;
 
   @override
   void didUpdateWidget(covariant ReaderMarkdownBody oldWidget) {
@@ -55,14 +53,8 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
     if (widget.targetCharOffset != oldWidget.targetCharOffset ||
         widget.highlightQuery != oldWidget.highlightQuery) {
       _hasScrolled = false;
-      _monitoring = false;
+      if (_isHighlightMode) _useBlockMode = true;
     }
-  }
-
-  @override
-  void dispose() {
-    _stopMonitoring();
-    super.dispose();
   }
 
   bool get _isHighlightMode =>
@@ -81,55 +73,15 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
           alignment: 0.0,
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeInOut,
-        ).then((_) {
-          if (mounted) _startMonitoring();
-        });
+        );
         _hasScrolled = true;
       }
     });
   }
 
-  // ─── 视口监听：高亮 block 滑出后自动解除 ───
-
-  void _startMonitoring() {
-    if (_monitoring) return;
-    _monitoring = true;
-    widget.scrollController?.addListener(_onScroll);
-  }
-
-  void _stopMonitoring() {
-    widget.scrollController?.removeListener(_onScroll);
-    _monitoring = false;
-  }
-
-  void _onScroll() {
-    final ctx = _targetKey.currentContext;
-    if (ctx == null) {
-      _dismiss();
-      return;
-    }
-    final box = ctx.findRenderObject() as RenderBox?;
-    if (box == null || !box.attached) {
-      _dismiss();
-      return;
-    }
-    final offset = box.localToGlobal(Offset.zero);
-    final height = box.size.height;
-    final screen = MediaQuery.sizeOf(ctx);
-    // 目标 block 完全滚出视口（上方或下方）
-    if (offset.dy + height < 0 || offset.dy > screen.height) {
-      _dismiss();
-    }
-  }
-
-  void _dismiss() {
-    _stopMonitoring();
-    widget.onHighlightDismissed?.call();
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_isHighlightMode) {
+    if (_useBlockMode) {
       return _buildBlockBased(context);
     }
     return _buildSingleBody(context);
@@ -197,7 +149,7 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       ...md.ExtensionSet.gitHubWeb.inlineSyntaxes,
     ];
 
-    // 高亮模式：注入搜索词语法（优先级最低，不干扰 LaTeX 等）
+    // 高亮模式：注入搜索词语法（父组件清除 highlightQuery 后自动停止注入）
     if (_isHighlightMode) {
       inlineSyntaxes.add(_HighlightInlineSyntax(widget.highlightQuery!));
       builders['highlight'] = _HighlightElementBuilder(

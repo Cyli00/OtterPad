@@ -351,17 +351,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             const Spacer(),
-            // 搜索（有提取结果时可用）
+            // 搜索 / 取消高亮
             if (_hasResult)
-              IconButton(
-                icon: Icon(
-                  Icons.search_rounded,
-                  size: 22,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: '搜索',
-                onPressed: _openSearch,
-              ),
+              _highlightQuery != null
+                  ? IconButton(
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 22,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      tooltip: '退出搜索',
+                      onPressed: _clearHighlight,
+                    )
+                  : IconButton(
+                      icon: Icon(
+                        Icons.search_rounded,
+                        size: 22,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      tooltip: '搜索',
+                      onPressed: _openSearch,
+                    ),
             // 提取/切换按钮
             _buildExtractButton(cs),
             // 重新提取
@@ -497,7 +507,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           scrollController: _scrollController,
           highlightQuery: _highlightQuery,
           targetCharOffset: _targetCharOffset,
-          onHighlightDismissed: _clearHighlight,
         );
       },
     );
