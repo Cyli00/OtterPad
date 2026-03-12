@@ -28,7 +28,9 @@
       "WebFetch(domain:fluttergems.dev)",
       "Bash(grep -n \"tag == ''code''\" /c/Users/leahd/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_markdown_plus-1.0.7/lib/src/builder.dart)",
       "Bash(find /c/Users/leahd/AppData/Local/Pub/Cache/hosted/pub.dev -type d -name *markdown-*)",
-      "Bash(find /e/gitProjects/NightReader/.dart_tool -name *flutter_markdown* -type d)"
+      "Bash(find /e/gitProjects/NightReader/.dart_tool -name *flutter_markdown* -type d)",
+      "Bash(git checkout:*)",
+      "Bash(dart pub:*)"
     ]
   },
   "outputStyle": "Explanatory"
