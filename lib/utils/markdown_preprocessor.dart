@@ -1,52 +1,53 @@
 class MarkdownPreprocessor {
-  /// 执行完整的 Markdown 预处理流程
   static String process(String markdown) {
     var result = markdown;
     result = _sanitizeLatex(result);
     result = _fixLatexSpacing(result);
+    result = _simplifyInlineLatex(result);
+    result = _stitchInlineMathPunctuation(result);
+    result = _normalizeInlineSpacing(result);
     result = _healBrokenParagraphs(result);
     result = _cleanSpecificFooters(result);
-
-    // 清理 Paddle 有时输出的空表格标签
     result = result.replaceAll(RegExp(r'<table[^>]*>\s*</table>'), '');
-
     return result;
   }
 
-  /// 清理 PaddleOCR 输出中冗余 / 不标准的 LaTeX 命令
   static String _sanitizeLatex(String text) {
-    var res = text;
+    var res = text
+        .replaceAllMapped(RegExp(r'\\pmb(?=\s*\{)'), (_) => r'\boldsymbol')
+        .replaceAllMapped(RegExp(r'\\mbox(?=\s*\{)'), (_) => r'\text');
 
-    // 去除嵌套重复的 \boldsymbol{\boldsymbol{x}} → \boldsymbol{x}
-    // PaddleOCR 经常对同一符号重复加粗
     for (var i = 0; i < 3; i++) {
       final prev = res;
       res = res.replaceAllMapped(
         RegExp(r'\\boldsymbol\{\\boldsymbol\{([^}]*)\}\}'),
-        (m) => '\\boldsymbol{${m.group(1)}}',
+        (m) =>
+            r'\boldsymbol{'
+            '${m.group(1)}'
+            '}',
       );
-      if (res == prev) break;
+      if (res == prev) {
+        break;
+      }
     }
 
-    // \begin{array}{r l} → \begin{array}{rl}
-    // 部分渲染器对列说明符中的空格兼容性不佳
     res = res.replaceAllMapped(
       RegExp(r'\\begin\{array\}\{([rclp|]+(?:\s+[rclp|]+)+)\}'),
-      (m) => '\\begin{array}{${m.group(1)!.replaceAll(' ', '')}}',
+      (m) =>
+          r'\begin{array}{'
+          '${m.group(1)!.replaceAll(' ', '')}'
+          '}',
     );
 
     return res;
   }
 
-  /// 修复 LaTeX 数学公式前后的多余空格
   static String _fixLatexSpacing(String text) {
-    // 1. 行内公式（单$）: `$ ^{1,2} $` → `$^{1,2}$`
     var res = text.replaceAllMapped(RegExp(r'\$([^\$\n]+)\$'), (match) {
       final trimmed = match.group(1)!.trim();
       return '\$$trimmed\$';
     });
 
-    // 2. 块级公式（独占行的双$$）: 规范化为 \n$$\n...\n$$\n
     res = res.replaceAllMapped(
       RegExp(
         r'^[ \t]*\$\$[ \t]*$(.*?)^[ \t]*\$\$[ \t]*$',
@@ -59,7 +60,6 @@ class MarkdownPreprocessor {
       },
     );
 
-    // 3. 行内的双$$ `$$ math $$` 转为块级
     res = res.replaceAllMapped(RegExp(r'\$\$(.*?)\$\$'), (match) {
       final inner = match.group(1)?.trim() ?? '';
       return '\n\$\$\n$inner\n\$\$\n';
@@ -68,7 +68,86 @@ class MarkdownPreprocessor {
     return res;
   }
 
-  /// 启发式合并断裂段落
+  static String _simplifyInlineLatex(String text) {
+    return text.replaceAllMapped(RegExp(r'\$([^\$\n]+)\$'), (match) {
+      final inner = match.group(1)!.trim();
+
+      final superscriptMatch = RegExp(
+        r'^\{\}\s*\^\{([^{}]+)\}$',
+      ).firstMatch(inner);
+      if (superscriptMatch != null) {
+        return _toSuperscriptText(superscriptMatch.group(1)!);
+      }
+
+      final plainTextMatch = RegExp(
+        r'^\\(?:underline|text|textrm|texttt|textsf|textbf)\{((?:[^{}]|\{[^{}]*\})+)\}$',
+      ).firstMatch(inner);
+      if (plainTextMatch != null) {
+        return plainTextMatch
+            .group(1)!
+            .replaceAllMapped(
+              RegExp(r'\\text\{([^{}]+)\}'),
+              (nested) => nested.group(1)!,
+            );
+      }
+
+      return '\$$inner\$';
+    });
+  }
+
+  static String _toSuperscriptText(String text) {
+    const map = {
+      '0': '\u2070',
+      '1': '\u00B9',
+      '2': '\u00B2',
+      '3': '\u00B3',
+      '4': '\u2074',
+      '5': '\u2075',
+      '6': '\u2076',
+      '7': '\u2077',
+      '8': '\u2078',
+      '9': '\u2079',
+      '+': '\u207A',
+      '-': '\u207B',
+      '=': '\u207C',
+      '(': '\u207D',
+      ')': '\u207E',
+      'n': '\u207F',
+      'i': '\u2071',
+    };
+
+    final buffer = StringBuffer();
+    for (final char in text.split('')) {
+      buffer.write(map[char] ?? char);
+    }
+    return buffer.toString();
+  }
+
+  static String _stitchInlineMathPunctuation(String text) {
+    return text.replaceAllMapped(RegExp(r'\$([^\$\n]+)\$([.,;:!?])'), (match) {
+      final inner = match.group(1)!.trimRight();
+      final punctuation = match.group(2)!;
+      return '\$$inner${r'\text{'}$punctuation}\$';
+    });
+  }
+
+  static String _normalizeInlineSpacing(String text) {
+    const superscriptChars =
+        r'\u2070\u00B9\u00B2\u00B3\u2074-\u2079\u207A-\u207E\u207F\u2071';
+
+    var result = text.replaceAllMapped(
+      RegExp('(?<=\\S)\\s+([$superscriptChars]+)'),
+      (match) => match.group(1)!,
+    );
+
+    result = result.replaceAllMapped(
+      RegExp('([$superscriptChars]+)\\s+([.,;:!?])'),
+      (match) => '${match.group(1)}${match.group(2)}',
+    );
+
+    return result;
+  }
+
   static String _healBrokenParagraphs(String text) {
     final lines = text.split('\n');
     final buffer = StringBuffer();
@@ -77,7 +156,6 @@ class MarkdownPreprocessor {
     for (int i = 0; i < lines.length; i++) {
       final current = lines[i];
 
-      // 跟踪 $$ 块级公式范围，内部不做任何合并
       if (current.trim() == r'$$') {
         inMathBlock = !inMathBlock;
         buffer.writeln(current);
@@ -97,13 +175,11 @@ class MarkdownPreprocessor {
       final currentTrimmed = current.trimRight();
       final nextTrimmed = next.trimLeft();
 
-      // 当前行或下一行为空，不合并
       if (currentTrimmed.isEmpty || nextTrimmed.isEmpty) {
         buffer.writeln(current);
         continue;
       }
 
-      // 下一行是 $$ 块起始，不合并
       if (nextTrimmed == r'$$') {
         buffer.writeln(current);
         continue;
@@ -111,24 +187,38 @@ class MarkdownPreprocessor {
 
       final lastChar = currentTrimmed[currentTrimmed.length - 1];
       final firstCharNext = nextTrimmed[0];
-
-      // 当前行以行内 LaTeX $ 结尾，不合并（保留公式与后文的分行）
-      if (lastChar == r'$') {
-        buffer.writeln(current);
-        continue;
-      }
-
       final isSentenceEnd = const {
-        '.', ':', '?', '!', ';',
-        '。', '：', '？', '！', '；',
-        '"', '\u201D', "'", '\u2019',
+        '.',
+        ':',
+        '?',
+        '!',
+        ';',
+        '"',
+        '\u201D',
+        "'",
+        '\u2019',
+        '\u3002',
+        '\uFF1A',
+        '\uFF1F',
+        '\uFF01',
+        '\uFF1B',
       }.contains(lastChar);
-
       final isNextLowercase = RegExp(r'[a-z]').hasMatch(firstCharNext);
-      final isCurrentHeadingOrList =
-          RegExp(r'^(\s*#|\s*[-*]|\s*\d+\.\s+)').hasMatch(current);
+      final isCurrentHeadingOrList = RegExp(
+        r'^(\s*#|\s*[-*]|\s*\d+\.\s+)',
+      ).hasMatch(current);
       final isHtmlTag =
           currentTrimmed.endsWith('>') || nextTrimmed.startsWith('<');
+      final isNextContinuationPunctuation = RegExp(
+        r"""^[\.,:;!?\)\]\}"'\uFF0C\u3002\uFF1B\uFF1A\uFF01\uFF1F\u3001\u300B\u300D\u300F\u3011]""",
+      ).hasMatch(nextTrimmed);
+
+      if (isNextContinuationPunctuation &&
+          !isCurrentHeadingOrList &&
+          !isHtmlTag) {
+        buffer.write(currentTrimmed);
+        continue;
+      }
 
       if (!isSentenceEnd &&
           isNextLowercase &&
@@ -143,7 +233,6 @@ class MarkdownPreprocessor {
     return buffer.toString();
   }
 
-  /// 清理无意义的重复性干扰文本
   static String _cleanSpecificFooters(String text) {
     var res = text.replaceAll(
       RegExp(
@@ -155,7 +244,6 @@ class MarkdownPreprocessor {
       '',
     );
 
-    // 压缩连续空行
     res = res.replaceAll(RegExp(r'\n{3,}'), '\n\n');
     return res;
   }

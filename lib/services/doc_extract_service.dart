@@ -51,11 +51,13 @@ class DocExtractService {
   DocExtractService._();
   static final DocExtractService instance = DocExtractService._();
 
-  late final Dio _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 300),
-    sendTimeout: const Duration(seconds: 120),
-  ));
+  late final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 300),
+      sendTimeout: const Duration(seconds: 120),
+    ),
+  );
 
   // ─── 代理配置 ──────────────────────────────────────────────────────────────
 
@@ -164,7 +166,9 @@ class DocExtractService {
     }
 
     // [TEST] 跳过预处理，保留原始 Markdown
-    final fullMarkdown = pages.map((p) => p.markdown).join('\n\n');
+    final fullMarkdown = MarkdownPreprocessor.process(
+      pages.map((p) => p.markdown).join('\n\n'),
+    );
     final allImages = <String, String>{};
     for (final page in pages) {
       allImages.addAll(page.images);
@@ -267,8 +271,7 @@ class DocExtractService {
     }
 
     // Markdown → HTML，优先用本地路径，回退到网络 URL
-    final htmlBody =
-        _markdownToHtml(resolvedMarkdown, localPaths, networkUrls);
+    final htmlBody = _markdownToHtml(resolvedMarkdown, localPaths, networkUrls);
     final htmlPath = p.join(dir, '$baseName.html');
     await File(htmlPath).writeAsString(htmlBody, flush: true);
 
@@ -305,8 +308,7 @@ class DocExtractService {
 
     // Step 2: <div style="text-align: center;">caption</div> → *caption*
     processed = processed.replaceAllMapped(
-      RegExp(
-          r'<div\s+style="text-align:\s*center;\s*">\s*(.+?)\s*</div>'),
+      RegExp(r'<div\s+style="text-align:\s*center;\s*">\s*(.+?)\s*</div>'),
       (match) {
         final content = match.group(1)!;
         if (content.contains('<img')) return match.group(0)!;
@@ -326,6 +328,8 @@ class DocExtractService {
     );
 
     // Step 4: 将相对路径解析为 file:/// 绝对路径
+    processed = MarkdownPreprocessor.process(processed);
+
     processed = processed.replaceAllMapped(
       RegExp(r'!\[([^\]]*)\]\(([^)]+)\)'),
       (match) {
