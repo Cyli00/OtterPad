@@ -4,15 +4,16 @@ import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/models/book/document.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/reader_settings_provider.dart';
+import '../../router/app_routes.dart';
 import '../../services/doc_extract_service.dart';
 import '../library/widgets/toolbar_bottom_sheet.dart';
-import '../setting/api_settings_page.dart';
 import 'widgets/appearance_panel.dart';
 import 'widgets/markdown_reader.dart';
 import 'widgets/search_overlay.dart';
@@ -84,9 +85,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           content: const Text('请先在设置中配置文档提取 API'),
           action: SnackBarAction(
             label: '前往设置',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ApiSettingsPage()),
-            ),
+            onPressed: () => context.push(AppRoutes.settingsApi),
           ),
         ),
       );
@@ -393,7 +392,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 color: cs.onSurface,
               ),
               tooltip: '返回',
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.pop(),
             ),
             const Spacer(),
             // 搜索
@@ -467,7 +466,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 color: cs.onSurface,
               ),
               tooltip: '返回',
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.pop(),
             ),
             const SizedBox(width: 4),
             Expanded(

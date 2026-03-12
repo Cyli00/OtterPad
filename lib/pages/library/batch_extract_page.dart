@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/book/document.dart';
@@ -348,7 +349,7 @@ class _SelectableDocCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
+      duration: 150.ms,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: isSelected
@@ -433,23 +434,18 @@ class _SelectableDocCard extends StatelessWidget {
                 ),
                 // 选择指示器
                 const SizedBox(width: 8),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  transitionBuilder: (child, animation) => ScaleTransition(
-                    scale: animation,
-                    child: child,
-                  ),
-                  child: Icon(
-                    isSelected
-                        ? Icons.check_circle_rounded
-                        : Icons.radio_button_unchecked_rounded,
-                    key: ValueKey(isSelected),
-                    color: isSelected
-                        ? colorScheme.primary
-                        : colorScheme.outlineVariant,
-                    size: 24,
-                  ),
-                ),
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  key: ValueKey(isSelected),
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
+                  size: 24,
+                )
+                    .animate(target: isSelected ? 1 : 0)
+                    .scaleXY(begin: 0.8, end: 1, duration: 200.ms, curve: Curves.easeOutBack),
               ],
             ),
           ),

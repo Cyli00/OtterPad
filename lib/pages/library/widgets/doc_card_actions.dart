@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../data/models/book/document.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/favorites_provider.dart';
-import '../../reader/view.dart';
+import '../../../router/app_routes.dart';
 
 /// 文献卡片统一交互入口
 ///
@@ -12,9 +13,7 @@ import '../../reader/view.dart';
 class DocCardActions {
   /// 点击卡片 → 打开 PDF 阅读器
   static void openReader(BuildContext context, Document doc) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ReaderPage(document: doc)),
-    );
+    context.push(AppRoutes.reader, extra: doc);
   }
 
   /// 删除文献（级联：文库条目 + 磁盘文件 + 提取产物 + 缩略图 + 收藏夹引用）

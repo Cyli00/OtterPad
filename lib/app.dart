@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'pages/main/view.dart';
 import 'providers/theme_provider.dart';
+import 'router/app_router.dart';
 
 /// 各平台系统默认字体族
 String? get _systemFontFamily {
@@ -22,6 +22,7 @@ class NightReaderApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeState = ref.watch(themeProvider);
+    final router = ref.watch(routerProvider);
 
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
@@ -50,7 +51,7 @@ class NightReaderApp extends ConsumerWidget {
           );
         }
 
-        return MaterialApp(
+        return MaterialApp.router(
           title: '晚读 Otero',
           debugShowCheckedModeBanner: false,
           themeMode: themeState.mode,
@@ -64,6 +65,7 @@ class NightReaderApp extends ConsumerWidget {
             useMaterial3: true,
             fontFamily: _systemFontFamily,
           ),
+          routerConfig: router,
           builder: (context, child) {
             final brightness = Theme.of(context).brightness;
             final iconBrightness = brightness == Brightness.light
@@ -82,7 +84,6 @@ class NightReaderApp extends ConsumerWidget {
               child: child!,
             );
           },
-          home: const MainPage(),
         );
       },
     );

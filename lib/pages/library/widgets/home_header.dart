@@ -2,11 +2,11 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../providers/documents_provider.dart';
+import '../../../router/app_routes.dart';
 import '../../../services/identifier_resolver.dart';
-import '../batch_extract_page.dart';
-import '../search_page.dart';
 import 'identifier_dialog.dart';
 import 'toolbar_bottom_sheet.dart';
 
@@ -151,9 +151,7 @@ class HomeHeader extends ConsumerWidget {
 
       case ToolbarAction.batchExtract:
         if (!context.mounted) return;
-        await Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const BatchExtractPage()));
+        await context.push(AppRoutes.libraryBatchExtract);
 
       case ToolbarAction.rebuildLibrary:
         if (!context.mounted) return;
@@ -296,11 +294,7 @@ class HomeHeader extends ConsumerWidget {
           children: [
             Expanded(
               child: GestureDetector(
-                onTap: () {
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => const SearchPage()));
-                },
+                onTap: () => context.push(AppRoutes.librarySearch),
                 child: Container(
                   height: isMobile ? 44 : 48,
                   decoration: BoxDecoration(

@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
-import 'api_settings_page.dart';
-import 'network_settings_page.dart';
+import '../../router/app_routes.dart';
 
 bool get _isDesktop =>
     Platform.isWindows || Platform.isMacOS || Platform.isLinux;
@@ -41,21 +41,13 @@ class SettingPage extends StatelessWidget {
                   icon: Icons.wifi_rounded,
                   title: '网络设置',
                   subtitle: '代理配置',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const NetworkSettingsPage(),
-                    ),
-                  ),
+                  onTap: () => context.push(AppRoutes.settingsNetwork),
                 ),
               _SettingsTile(
                 icon: Icons.hub_rounded,
                 title: '模型服务',
                 subtitle: 'Agent 模型 · 文档提取接口',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const ApiSettingsPage(),
-                  ),
-                ),
+                onTap: () => context.push(AppRoutes.settingsApi),
               ),
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/documents_provider.dart';
 import 'pdf_cover.dart';
@@ -176,33 +177,27 @@ class DocumentCard extends ConsumerWidget {
           right: 4,
           child: IgnorePointer(
             ignoring: !showDelete,
-            child: AnimatedScale(
-              scale: showDelete ? 1.0 : 0.0,
-              duration: Duration(milliseconds: showDelete ? 250 : 150),
-              curve: showDelete ? Curves.easeOutBack : Curves.easeIn,
-              child: AnimatedOpacity(
-                opacity: showDelete ? 1.0 : 0.0,
-                duration: Duration(milliseconds: showDelete ? 200 : 100),
-                child: Material(
-                  type: MaterialType.circle,
-                  color: colorScheme.errorContainer,
-                  elevation: 1,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => _confirmDelete(context, ref),
-                    child: SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: Icon(
-                        Icons.remove_rounded,
-                        size: 20,
-                        color: colorScheme.onErrorContainer,
-                      ),
-                    ),
+            child: Material(
+              type: MaterialType.circle,
+              color: colorScheme.errorContainer,
+              elevation: 1,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => _confirmDelete(context, ref),
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Icon(
+                    Icons.remove_rounded,
+                    size: 20,
+                    color: colorScheme.onErrorContainer,
                   ),
                 ),
               ),
-            ),
+            )
+                .animate(target: showDelete ? 1 : 0)
+                .scaleXY(begin: 0, end: 1, curve: Curves.easeOutBack, duration: 250.ms)
+                .fade(begin: 0, end: 1, duration: 200.ms),
           ),
         ),
       ],

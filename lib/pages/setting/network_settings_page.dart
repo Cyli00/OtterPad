@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../providers/proxy_provider.dart';
 import '../../services/identifier_resolver.dart';
@@ -17,7 +19,7 @@ class NetworkSettingsPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('网络设置'),
         leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded),
         ),
       ),
@@ -147,13 +149,23 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     const Text('手动指定代理地址，如 Clash 的 127.0.0.1:7890'),
                 value: ProxyMode.custom,
               ),
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 200),
-                crossFadeState: proxy.mode == ProxyMode.custom
-                    ? CrossFadeState.showFirst
-                    : CrossFadeState.showSecond,
-                secondChild: const SizedBox.shrink(),
-                firstChild: Padding(
+              Animate(
+                target: proxy.mode == ProxyMode.custom ? 1 : 0,
+                effects: [
+                  FadeEffect(duration: 200.ms),
+                  CustomEffect(
+                    duration: 200.ms,
+                    curve: Curves.easeOut,
+                    builder: (context, value, child) => ClipRect(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        heightFactor: value,
+                        child: child,
+                      ),
+                    ),
+                  ),
+                ],
+                child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                   child: Row(

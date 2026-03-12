@@ -1,23 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
+import '../../router/app_routes.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
-import 'favorite_detail_page.dart';
-import 'no_file_entries_page.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
 
   void _openDetail(BuildContext context, Favorite favorite) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => FavoriteDetailPage(favorite: favorite),
-      ),
-    );
+    context.push(AppRoutes.shelfFavorite, extra: favorite);
   }
 
   Future<void> _confirmDelete(
@@ -130,13 +126,8 @@ class ShelfPage extends ConsumerWidget {
                               ),
                             )
                           : null,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const NoFileEntriesPage(),
-                          ),
-                        );
-                      },
+                      onTap: () =>
+                          context.push(AppRoutes.shelfNoFileEntries),
                     );
                   },
                 ),

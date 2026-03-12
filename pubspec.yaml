@@ -13,6 +13,12 @@ dependencies:
   # 状态管理
   flutter_riverpod: ^3.2.1
 
+  # 声明式路由
+  go_router: ^17.1.0
+
+  # 动画
+  flutter_animate: ^4.5.2
+
   # 偏好存储
   shared_preferences: ^2.5.4
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import '../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
@@ -34,7 +35,7 @@ class FavoriteDetailPage extends ConsumerWidget {
                   children: [
                     // 返回按钮
                     IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => context.pop(),
                       icon: const Icon(Icons.arrow_back_ios_new_rounded),
                       style: IconButton.styleFrom(
                         foregroundColor: colorScheme.onSurface,

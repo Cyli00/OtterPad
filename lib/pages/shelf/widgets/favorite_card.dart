@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../library/widgets/pdf_cover.dart';
 
 class FavoriteCard extends StatefulWidget {
@@ -296,35 +297,33 @@ class _FavoriteCardState extends State<FavoriteCard> {
               Positioned(
                 top: -8,
                 right: -8,
-                child: AnimatedScale(
-                  scale: _showDelete ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutBack,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: widget.onDelete,
-                    child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Center(
-                        child: Material(
-                          color: colorScheme.error,
-                          shape: const CircleBorder(),
-                          elevation: 2,
-                          child: SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: Icon(
-                              Icons.remove,
-                              size: 18,
-                              color: colorScheme.onError,
-                            ),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onDelete,
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Center(
+                      child: Material(
+                        color: colorScheme.error,
+                        shape: const CircleBorder(),
+                        elevation: 2,
+                        child: SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: Icon(
+                            Icons.remove,
+                            size: 18,
+                            color: colorScheme.onError,
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                )
+                    .animate(target: _showDelete ? 1 : 0)
+                    .scaleXY(begin: 0, end: 1, curve: Curves.easeOutBack, duration: 200.ms)
+                    .fade(begin: 0, end: 1, duration: 150.ms),
               ),
           ],
         ),

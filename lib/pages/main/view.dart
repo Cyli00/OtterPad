@@ -1,31 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../widgets/layout/adaptive_scaffold.dart';
 import '../../widgets/layout/adaptive_navigation.dart';
-import '../library/view.dart';
-import '../shelf/view.dart';
-import '../setting/view.dart';
 
-class MainPage extends ConsumerStatefulWidget {
-  const MainPage({super.key});
+/// 主导航外壳，由 StatefulShellRoute 驱动 Tab 切换
+class MainShell extends StatelessWidget {
+  final StatefulNavigationShell navigationShell;
 
-  @override
-  ConsumerState<MainPage> createState() => _MainPageState();
-}
-
-class _MainPageState extends ConsumerState<MainPage> {
-  int _currentIndex = 0;
+  const MainShell({super.key, required this.navigationShell});
 
   void _onDestinationSelected(int index) {
-    if (index != _currentIndex) {
-      setState(() => _currentIndex = index);
-    }
+    navigationShell.goBranch(
+      index,
+      initialLocation: index == navigationShell.currentIndex,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
-      selectedIndex: _currentIndex,
+      selectedIndex: navigationShell.currentIndex,
       onDestinationSelected: _onDestinationSelected,
       destinations: const [
         AdaptiveDestination(
@@ -44,14 +38,7 @@ class _MainPageState extends ConsumerState<MainPage> {
           label: '设置',
         ),
       ],
-      body: IndexedStack(
-        index: _currentIndex,
-        children: const [
-          LibraryPage(),
-          ShelfPage(),
-          SettingPage(),
-        ],
-      ),
+      body: navigationShell,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/documents_provider.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/toolbar_bottom_sheet.dart';
@@ -30,7 +31,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => context.pop(),
                       icon: const Icon(Icons.arrow_back_ios_new_rounded),
                       style: IconButton.styleFrom(
                         foregroundColor: colorScheme.onSurface,

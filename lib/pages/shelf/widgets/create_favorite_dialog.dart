@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 // 常用 emoji 列表，按类别分组
 const List<String> _emojis = [
@@ -204,8 +205,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                         });
                                       },
                                       child: AnimatedContainer(
-                                        duration: const Duration(
-                                            milliseconds: 200),
+                                        duration: 200.ms,
                                         curve: Curves.easeOutCubic,
                                         decoration: BoxDecoration(
                                           color: isSelected
@@ -233,7 +233,14 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                             forceStrutHeight: true,
                                             height: 1.0,
                                           ),
-                                        ),
+                                        )
+                                            .animate(target: isSelected ? 1 : 0)
+                                            .scaleXY(
+                                              begin: 1,
+                                              end: 1.15,
+                                              duration: 150.ms,
+                                              curve: Curves.easeOutBack,
+                                            ),
                                       ),
                                     );
                                   },
