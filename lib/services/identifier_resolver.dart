@@ -760,10 +760,7 @@ class IdentifierResolver {
           final map = author as Map<String, dynamic>;
           final given = map['given'] as String? ?? '';
           final family = map['family'] as String? ?? '';
-          return '$family, $given'.trim().replaceAll(
-            RegExp(r'^,\s*|,\s*$'),
-            '',
-          );
+          return '$given $family'.trim();
         })
         .where((name) => name.isNotEmpty)
         .toList();

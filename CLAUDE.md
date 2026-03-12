@@ -1,4 +1,4 @@
-:# Project Guidelines
+# Project Guidelines
 
 ## Language
 

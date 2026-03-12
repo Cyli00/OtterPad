@@ -5,6 +5,7 @@ patch.txt
 .gitconfig-codex
 .codex_tmp*
 /test/
+/.agents/
 
 # Miscellaneous
 *.class

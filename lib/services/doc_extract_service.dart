@@ -8,6 +8,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:path/path.dart' as p;
 
 import '../providers/api_provider.dart';
+import '../utils/markdown_preprocessor.dart';
 
 /// 文档提取异常
 class DocExtractException implements Exception {
@@ -162,7 +163,9 @@ class DocExtractService {
       pages.add(_PageResult(markdown: text, images: images));
     }
 
-    final fullMarkdown = pages.map((p) => p.markdown).join('\n\n');
+    final fullMarkdown = MarkdownPreprocessor.process(
+      pages.map((p) => p.markdown).join('\n\n'),
+    );
     final allImages = <String, String>{};
     for (final page in pages) {
       allImages.addAll(page.images);

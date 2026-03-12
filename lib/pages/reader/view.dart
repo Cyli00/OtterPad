@@ -102,15 +102,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     setState(() => _extracting = true);
     _cancelToken = CancelToken();
 
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    scaffoldMessenger.showSnackBar(
       buildProgressSnackBar(
         context: context,
         fileName: widget.document.title,
         status: '正在提取文档…',
         onCancel: () {
           _cancelToken?.cancel();
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          scaffoldMessenger.hideCurrentSnackBar();
         },
         duration: const Duration(minutes: 10),
       ),
@@ -125,8 +127,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         cancelToken: _cancelToken,
       );
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
+      if (!mounted) {
+        scaffoldMessenger.hideCurrentSnackBar();
+        return;
+      }
+      scaffoldMessenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
           buildProgressSnackBar(
@@ -144,8 +149,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         token: docState.apiKey,
       );
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (!mounted) {
+        scaffoldMessenger.hideCurrentSnackBar();
+        return;
+      }
+      scaffoldMessenger.hideCurrentSnackBar();
 
       // 用原始 Markdown + 已下载的本地图片路径生成可渲染内容
       final mdPath = p.join(
@@ -164,26 +172,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       });
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
+        scaffoldMessenger.hideCurrentSnackBar();
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(buildResultSnackBar(context: context, message: '已取消提取'));
+        scaffoldMessenger.showSnackBar(buildResultSnackBar(context: context, message: '已取消提取'));
         return;
       }
+      scaffoldMessenger.hideCurrentSnackBar();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(buildResultSnackBar(context: context, message: '网络错误: ${e.message}'));
+      scaffoldMessenger.showSnackBar(buildResultSnackBar(context: context, message: '网络错误: ${e.message}'));
     } on DocExtractException catch (e) {
+      scaffoldMessenger.hideCurrentSnackBar();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(buildResultSnackBar(context: context, message: e.message));
+      scaffoldMessenger.showSnackBar(buildResultSnackBar(context: context, message: e.message));
     } catch (e) {
+      scaffoldMessenger.hideCurrentSnackBar();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(buildResultSnackBar(context: context, message: '提取失败: $e'));
+      scaffoldMessenger.showSnackBar(buildResultSnackBar(context: context, message: '提取失败: $e'));
     } finally {
       if (mounted) setState(() => _extracting = false);
       _cancelToken = null;
