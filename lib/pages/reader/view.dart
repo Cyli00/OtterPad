@@ -3,21 +3,19 @@ import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart'
-    show LatexBlockSyntax;
-
-import '../../utils/latex_syntax.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:markdown/markdown.dart' as md;
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/models/book/document.dart';
 import '../../providers/api_provider.dart';
+import '../../providers/reader_settings_provider.dart';
 import '../../services/doc_extract_service.dart';
 import '../library/widgets/toolbar_bottom_sheet.dart';
 import '../setting/api_settings_page.dart';
+import 'widgets/appearance_panel.dart';
+import 'widgets/markdown_reader.dart';
+import 'widgets/search_overlay.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
   final Document document;
@@ -31,9 +29,21 @@ class ReaderPage extends ConsumerStatefulWidget {
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _extracting = false;
   bool _showPreview = false;
-  String? _mdPath; // 已保存的 .md 路径
-  String? _mdContent; // 图片路径已解析的 Markdown 内容
+  String? _mdPath;
+  String? _mdContent;
   CancelToken? _cancelToken;
+
+  // 搜索
+  bool _searchActive = false;
+  String? _highlightQuery;
+  int? _targetCharOffset;
+
+  // Markdown 滚动控制
+  final _scrollController = ScrollController();
+
+  // 外观面板
+  final _appearanceKey = GlobalKey();
+  OverlayEntry? _appearanceEntry;
 
   @override
   void initState() {
@@ -41,7 +51,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _checkExistingResult();
   }
 
-  /// 检查 PDF 同目录是否已有 .md 提取结果
   void _checkExistingResult() {
     final filePath = widget.document.filePath;
     if (filePath.isEmpty) return;
@@ -56,19 +65,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   bool get _hasResult => _mdPath != null || _mdContent != null;
 
-  void _showDocumentInfo(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _DocumentInfoSheet(document: widget.document),
-    );
-  }
+  // ─── 提取逻辑 ───
 
   Future<void> _onExtractPressed() async {
     final docState = ref.read(docExtractApiProvider);
 
-    // 检查 API 配置
     if (docState.baseUrl.isEmpty || docState.apiKey.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,16 +77,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           content: const Text('请先在设置中配置文档提取 API'),
           action: SnackBarAction(
             label: '前往设置',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const ApiSettingsPage())),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ApiSettingsPage()),
+            ),
           ),
         ),
       );
       return;
     }
 
-    // 检查文件
     final filePath = widget.document.filePath;
     if (filePath.isEmpty || !File(filePath).existsSync()) {
       if (!mounted) return;
@@ -95,7 +95,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
 
-    // 开始提取
     setState(() => _extracting = true);
     _cancelToken = CancelToken();
 
@@ -139,7 +138,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           ),
         );
 
-      // 保存到磁盘（传入 token 以便图片下载可能需要认证）
       await DocExtractService.instance.saveResult(
         filePath,
         result,
@@ -152,7 +150,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       }
       scaffoldMessenger.hideCurrentSnackBar();
 
-      // 用原始 Markdown + 已下载的本地图片路径生成可渲染内容
       final mdPath = p.join(
         p.dirname(filePath),
         '${p.basenameWithoutExtension(filePath)}.md',
@@ -204,14 +201,86 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _togglePreview() {
+    _clearHighlight();
     setState(() => _showPreview = !_showPreview);
+  }
+
+  // ─── 搜索 ───
+
+  Future<void> _openSearch() async {
+    // 确保 Markdown 内容已加载（供搜索使用）
+    if (_mdContent == null && _mdPath != null) {
+      _mdContent = await _loadAndResolveMarkdown();
+    }
+    if (!mounted) return;
+    _clearHighlight();
+    setState(() => _searchActive = true);
+  }
+
+  void _closeSearch() {
+    setState(() => _searchActive = false);
+  }
+
+  void _onSearchResultTap(int charOffset, String query) {
+    setState(() {
+      _searchActive = false;
+      _showPreview = true;
+      _highlightQuery = query;
+      _targetCharOffset = charOffset;
+    });
+  }
+
+  void _clearHighlight() {
+    if (_highlightQuery != null || _targetCharOffset != null) {
+      setState(() {
+        _highlightQuery = null;
+        _targetCharOffset = null;
+      });
+    }
+  }
+
+  // ─── 外观面板 ───
+
+  void _toggleAppearancePanel() {
+    if (_appearanceEntry != null) {
+      _appearanceEntry!.remove();
+      _appearanceEntry = null;
+      return;
+    }
+    _appearanceEntry = showAppearancePanel(
+      context: context,
+      anchorKey: _appearanceKey,
+      ref: ref,
+      onDismiss: () => _appearanceEntry = null,
+    );
+  }
+
+  void _showDocumentInfo(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _DocumentInfoSheet(document: widget.document),
+    );
+  }
+
+  Future<String> _loadAndResolveMarkdown() async {
+    final raw = await File(_mdPath!).readAsString();
+    final baseName = p.basenameWithoutExtension(_mdPath!);
+    final dir = p.dirname(_mdPath!);
+    final imageDir = p.join(dir, '${baseName}_images');
+    return DocExtractService.resolveMarkdownImagePaths(raw, imageDir);
   }
 
   @override
   void dispose() {
     _cancelToken?.cancel();
+    _scrollController.dispose();
+    _appearanceEntry?.remove();
     super.dispose();
   }
+
+  // ─── UI ───
 
   @override
   Widget build(BuildContext context) {
@@ -219,52 +288,135 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final fileExists =
         doc.filePath.isNotEmpty && File(doc.filePath).existsSync();
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
+    final readerSettings = ref.watch(readerSettingsProvider);
+
+    final contentBg = (_showPreview && _hasResult)
+        ? readerSettings.backgroundColor
+        : cs.surface;
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 48,
-        elevation: 0,
-        backgroundColor: colorScheme.surfaceContainerLowest,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          doc.title,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        centerTitle: true,
-        actions: [
-          _buildExtractButton(colorScheme),
-          if (_hasResult && !_extracting)
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 20),
-              tooltip: '重新提取',
-              onPressed: _onExtractPressed,
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // ── 主内容层 ──
+            Column(
+              children: [
+                _buildToolbar(theme, cs),
+                Expanded(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    color: contentBg,
+                    child: fileExists
+                        ? _buildBody(theme, cs, readerSettings)
+                        : _buildFileNotFound(theme, cs),
+                  ),
+                ),
+              ],
             ),
-          IconButton(
-            icon: const Icon(Icons.info_outline_rounded, size: 20),
-            tooltip: '文献信息',
-            onPressed: () => _showDocumentInfo(context),
-          ),
-          const SizedBox(width: 8),
-        ],
+            // ── 搜索遮罩层 ──
+            if (_searchActive && _mdContent != null)
+              Positioned.fill(
+                child: SearchOverlay(
+                  markdownContent: _mdContent!,
+                  readerSettings: readerSettings,
+                  onResultTap: _onSearchResultTap,
+                  onDismiss: _closeSearch,
+                ),
+              ),
+          ],
+        ),
       ),
-      body: fileExists
-          ? _buildBody(theme, colorScheme)
-          : _buildFileNotFound(theme, colorScheme),
     );
   }
 
-  /// 根据状态构建不同形态的按钮：提取中 / 切换预览 / 开始提取
-  Widget _buildExtractButton(ColorScheme colorScheme) {
+  /// 工具栏：返回 / 搜索 / PDF切换 / 刷新 / 信息 / 外观
+  Widget _buildToolbar(ThemeData theme, ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            // 返回按钮
+            IconButton(
+              icon: Icon(
+                Icons.chevron_left_rounded,
+                size: 28,
+                color: cs.onSurface,
+              ),
+              tooltip: '返回',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            const Spacer(),
+            // 搜索（有提取结果时可用）
+            if (_hasResult)
+              IconButton(
+                icon: Icon(
+                  Icons.search_rounded,
+                  size: 22,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: '搜索',
+                onPressed: _openSearch,
+              ),
+            // 提取/切换按钮
+            _buildExtractButton(cs),
+            // 重新提取
+            if (_hasResult && !_extracting)
+              IconButton(
+                icon: Icon(
+                  Icons.sync_rounded,
+                  size: 22,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: '重新提取',
+                onPressed: _onExtractPressed,
+              ),
+            // 文献信息
+            IconButton(
+              icon: Icon(
+                Icons.info_outline_rounded,
+                size: 22,
+                color: cs.onSurfaceVariant,
+              ),
+              tooltip: '文献信息',
+              onPressed: () => _showDocumentInfo(context),
+            ),
+            // 外观设置（仅 Markdown 预览模式下显示）
+            if (_showPreview && _hasResult)
+              IconButton(
+                key: _appearanceKey,
+                icon: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: cs.onSurfaceVariant, width: 1.5),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'A',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                tooltip: '外观设置',
+                onPressed: _toggleAppearancePanel,
+              ),
+            const SizedBox(width: 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExtractButton(ColorScheme cs) {
     if (_extracting) {
       return const Padding(
         padding: EdgeInsets.all(12),
@@ -280,7 +432,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return IconButton(
         icon: Icon(
           _showPreview ? Icons.picture_as_pdf_rounded : Icons.article_rounded,
-          size: 20,
+          size: 22,
+          color: cs.onSurfaceVariant,
         ),
         tooltip: _showPreview ? '查看 PDF' : '查看提取结果',
         onPressed: _togglePreview,
@@ -288,16 +441,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
 
     return IconButton(
-      icon: const Icon(Icons.document_scanner_rounded, size: 20),
+      icon: Icon(
+        Icons.document_scanner_rounded,
+        size: 22,
+        color: cs.onSurfaceVariant,
+      ),
       tooltip: '文档提取',
       onPressed: _onExtractPressed,
     );
   }
 
-  /// 构建主体区域：PDF 视图 或 Markdown 预览
-  Widget _buildBody(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildBody(
+    ThemeData theme,
+    ColorScheme cs,
+    ReaderSettingsState readerSettings,
+  ) {
     if (_showPreview && _hasResult) {
-      return _buildMarkdownPreview(theme);
+      return _buildMarkdownPreview(theme, readerSettings);
     }
     return PdfViewer.file(
       widget.document.filePath,
@@ -305,23 +465,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  /// 从磁盘加载 .md 文件并解析图片路径
-  Future<String> _loadAndResolveMarkdown() async {
-    final raw = await File(_mdPath!).readAsString();
-    final baseName = p.basenameWithoutExtension(_mdPath!);
-    final dir = p.dirname(_mdPath!);
-    final imageDir = p.join(dir, '${baseName}_images');
-    return DocExtractService.resolveMarkdownImagePaths(raw, imageDir);
-  }
-
-  Widget _buildMarkdownPreview(ThemeData theme) {
+  Widget _buildMarkdownPreview(
+    ThemeData theme,
+    ReaderSettingsState settings,
+  ) {
     return FutureBuilder<String>(
       future: _mdContent != null
           ? Future.value(_mdContent!)
           : _loadAndResolveMarkdown(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(
+            child: CircularProgressIndicator(
+              color: settings.textColor.withAlpha(120),
+            ),
+          );
         }
         if (snapshot.hasError || (snapshot.data?.isEmpty ?? true)) {
           return Center(
@@ -333,58 +491,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           );
         }
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: MarkdownBody(
-            data: snapshot.data!,
-            builders: {
-
-              'latex': NRLatexElementBuilder(
-                textStyle: TextStyle(color: theme.colorScheme.onSurface),
-              ),
-            },
-            extensionSet: md.ExtensionSet(
-              [LatexBlockSyntax(), ...md.ExtensionSet.gitHubWeb.blockSyntaxes],
-              [
-                NRLatexInlineSyntax(),
-                ...md.ExtensionSet.gitHubWeb.inlineSyntaxes,
-              ],
-            ),
-            imageBuilder: (uri, title, alt) {
-              if (uri.scheme == 'file') {
-                final file = File(uri.toFilePath());
-                if (file.existsSync()) {
-                  return Center(
-                    child: Image.file(
-                      file,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.broken_image_rounded, size: 48),
-                    ),
-                  );
-                }
-              }
-              return Center(
-                child: Image.network(
-                  uri.toString(),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) =>
-                      const Icon(Icons.broken_image_rounded, size: 48),
-                ),
-              );
-            },
-          ),
+        return ReaderMarkdownBody(
+          data: snapshot.data!,
+          settings: settings,
+          scrollController: _scrollController,
+          highlightQuery: _highlightQuery,
+          targetCharOffset: _targetCharOffset,
         );
       },
     );
   }
 
-  Widget _buildFileNotFound(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildFileNotFound(ThemeData theme, ColorScheme cs) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline_rounded, size: 48, color: colorScheme.error),
+          Icon(Icons.error_outline_rounded, size: 48, color: cs.error),
           const SizedBox(height: 16),
           Text('找不到该文献的 PDF 文件', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
@@ -393,7 +516,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             child: Text(
               widget.document.filePath,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+                color: cs.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
             ),
@@ -404,6 +527,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 }
 
+// ─── 文献信息底部弹窗 ───
+
 class _DocumentInfoSheet extends StatelessWidget {
   final Document document;
 
@@ -412,7 +537,7 @@ class _DocumentInfoSheet extends StatelessWidget {
   Widget _buildInfoRow(BuildContext context, String label, String value) {
     if (value.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -424,7 +549,7 @@ class _DocumentInfoSheet extends StatelessWidget {
             child: Text(
               label,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+                color: cs.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -433,7 +558,7 @@ class _DocumentInfoSheet extends StatelessWidget {
             child: Text(
               value,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurface,
+                color: cs.onSurface,
                 height: 1.4,
               ),
             ),
@@ -446,8 +571,7 @@ class _DocumentInfoSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
+    final cs = theme.colorScheme;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.85;
 
     return BackdropFilter(
@@ -455,7 +579,7 @@ class _DocumentInfoSheet extends StatelessWidget {
       child: Container(
         constraints: BoxConstraints(maxHeight: maxHeight),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
+          color: cs.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
@@ -468,7 +592,7 @@ class _DocumentInfoSheet extends StatelessWidget {
                 width: 32,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: colorScheme.onSurfaceVariant.withAlpha(80),
+                  color: cs.onSurfaceVariant.withAlpha(80),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -482,7 +606,7 @@ class _DocumentInfoSheet extends StatelessWidget {
                   '文献信息',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -501,7 +625,8 @@ class _DocumentInfoSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _buildInfoRow(context, '作者', document.authors.join(', ')),
+                    _buildInfoRow(
+                        context, '作者', document.authors.join(', ')),
                     _buildInfoRow(context, '期刊', document.journal ?? ''),
                     _buildInfoRow(context, '年份', document.year ?? ''),
                     _buildInfoRow(context, 'DOI', document.doi ?? ''),
