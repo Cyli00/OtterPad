@@ -173,26 +173,45 @@ class ExtractResultPage extends StatelessWidget {
                 ],
               ),
               imageBuilder: (uri, title, alt) {
-                if (uri.scheme == 'file') {
-                  final file = File(uri.toFilePath());
-                  if (file.existsSync()) {
-                    return Center(
-                      child: Image.file(
-                        file,
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    Widget image;
+                    if (uri.scheme == 'file') {
+                      final file = File(uri.toFilePath());
+                      if (file.existsSync()) {
+                        image = Image.file(
+                          file,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Icon(
+                              Icons.broken_image_rounded, size: 48),
+                        );
+                      } else {
+                        image = Image.network(
+                          uri.toString(),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Icon(
+                              Icons.broken_image_rounded, size: 48),
+                        );
+                      }
+                    } else {
+                      image = Image.network(
+                        uri.toString(),
                         fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) =>
-                            const Icon(Icons.broken_image_rounded, size: 48),
+                        errorBuilder: (_, _, _) => const Icon(
+                            Icons.broken_image_rounded, size: 48),
+                      );
+                    }
+                    return Center(
+                      child: ConstrainedBox(
+                        constraints:
+                            BoxConstraints(maxWidth: constraints.maxWidth),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: image,
+                        ),
                       ),
                     );
-                  }
-                }
-                return Center(
-                  child: Image.network(
-                    uri.toString(),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) =>
-                        const Icon(Icons.broken_image_rounded, size: 48),
-                  ),
+                  },
                 );
               },
             ),

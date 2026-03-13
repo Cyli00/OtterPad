@@ -51,6 +51,19 @@ class SettingPage extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          // ── 外观设置 ──
+          _SettingsGroup(
+            title: '外观设置',
+            children: [
+              _SettingsTile(
+                icon: Icons.palette_outlined,
+                title: '外观设置',
+                subtitle: '默认阅读模式',
+                onTap: () => context.push(AppRoutes.settingsAppearance),
+              ),
+            ],
+          ),
         ],
       ),
     );

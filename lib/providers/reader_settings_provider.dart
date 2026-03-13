@@ -17,6 +17,17 @@ enum ReaderTheme {
       };
 }
 
+/// 默认阅读模式
+enum DefaultReadingMode {
+  pdf,
+  markdown;
+
+  String get label => switch (this) {
+        DefaultReadingMode.pdf => 'PDF',
+        DefaultReadingMode.markdown => 'Markdown',
+      };
+}
+
 /// 阅读器字体族
 enum ReaderFont {
   serif,
@@ -41,22 +52,26 @@ class ReaderSettingsState {
   final ReaderTheme theme;
   final ReaderFont font;
   final double fontSize;
+  final DefaultReadingMode defaultReadingMode;
 
   const ReaderSettingsState({
     this.theme = ReaderTheme.light,
     this.font = ReaderFont.serif,
     this.fontSize = 16.0,
+    this.defaultReadingMode = DefaultReadingMode.pdf,
   });
 
   ReaderSettingsState copyWith({
     ReaderTheme? theme,
     ReaderFont? font,
     double? fontSize,
+    DefaultReadingMode? defaultReadingMode,
   }) {
     return ReaderSettingsState(
       theme: theme ?? this.theme,
       font: font ?? this.font,
       fontSize: fontSize ?? this.fontSize,
+      defaultReadingMode: defaultReadingMode ?? this.defaultReadingMode,
     );
   }
 
@@ -110,6 +125,7 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   static const _kTheme = 'reader_theme';
   static const _kFont = 'reader_font';
   static const _kFontSize = 'reader_font_size';
+  static const _kDefaultMode = 'reader_default_mode';
 
   ReaderSettingsNotifier() : super(_load());
 
@@ -118,6 +134,7 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     final themeIndex = box.get(_kTheme, defaultValue: 0) as int;
     final fontIndex = box.get(_kFont, defaultValue: 0) as int;
     final fontSize = box.get(_kFontSize, defaultValue: 16.0) as double;
+    final modeIndex = box.get(_kDefaultMode, defaultValue: 0) as int;
     return ReaderSettingsState(
       theme: ReaderTheme.values[themeIndex.clamp(0, 2)],
       font: ReaderFont.values[fontIndex.clamp(0, 2)],
@@ -125,6 +142,8 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
         ReaderSettingsState.minFontSize,
         ReaderSettingsState.maxFontSize,
       ),
+      defaultReadingMode:
+          DefaultReadingMode.values[modeIndex.clamp(0, 1)],
     );
   }
 
@@ -145,6 +164,11 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     );
     state = state.copyWith(fontSize: clamped);
     GStorage.setting.put(_kFontSize, clamped);
+  }
+
+  void setDefaultReadingMode(DefaultReadingMode mode) {
+    state = state.copyWith(defaultReadingMode: mode);
+    GStorage.setting.put(_kDefaultMode, mode.index);
   }
 }
 

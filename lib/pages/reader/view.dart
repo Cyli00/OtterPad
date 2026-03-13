@@ -60,6 +60,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void initState() {
     super.initState();
     _checkExistingResult();
+    // 根据用户偏好设置默认阅读模式，仅在有 Markdown 结果时生效
+    final defaultMode = ref.read(readerSettingsProvider).defaultReadingMode;
+    if (defaultMode == DefaultReadingMode.markdown && _hasResult) {
+      _showPreview = true;
+    }
   }
 
   void _checkExistingResult() {

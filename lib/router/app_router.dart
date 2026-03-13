@@ -11,6 +11,7 @@ import '../pages/library/view.dart';
 import '../pages/main/view.dart';
 import '../pages/reader/view.dart';
 import '../pages/setting/api_settings_page.dart';
+import '../pages/setting/appearance_settings_page.dart';
 import '../pages/setting/network_settings_page.dart';
 import '../pages/setting/view.dart';
 import '../pages/shelf/favorite_detail_page.dart';
@@ -146,6 +147,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const ApiSettingsPage(),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'appearance',
+                    parentNavigatorKey: _rootNavigatorKey,
+                    pageBuilder: (context, state) => _buildAnimatedPage(
+                      state: state,
+                      child: const AppearanceSettingsPage(),
                     ),
                   ),
                 ],

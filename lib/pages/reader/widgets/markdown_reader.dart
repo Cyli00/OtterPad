@@ -255,42 +255,54 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
   }
 
   Widget _buildImage(Uri uri, String? title, String? alt) {
-    if (uri.scheme == 'file') {
-      final file = File(uri.toFilePath());
-      if (file.existsSync()) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Image.file(
-                file,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Icon(
-                  Icons.broken_image_rounded,
-                  size: 48,
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        Widget image;
+        if (uri.scheme == 'file') {
+          final file = File(uri.toFilePath());
+          if (file.existsSync()) {
+            image = Image.file(
+              file,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.broken_image_rounded,
+                size: 48,
               ),
-            ),
-          ),
-        );
-      }
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Center(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: Image.network(
+            );
+          } else {
+            image = Image.network(
+              uri.toString(),
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.broken_image_rounded,
+                size: 48,
+              ),
+            );
+          }
+        } else {
+          image = Image.network(
             uri.toString(),
             fit: BoxFit.contain,
             errorBuilder: (_, _, _) => const Icon(
               Icons.broken_image_rounded,
               size: 48,
             ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: image,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

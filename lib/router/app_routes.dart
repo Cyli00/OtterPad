@@ -15,4 +15,5 @@ abstract class AppRoutes {
   // 设置子页面
   static const settingsNetwork = '/settings/network';
   static const settingsApi = '/settings/api';
+  static const settingsAppearance = '/settings/appearance';
 }
