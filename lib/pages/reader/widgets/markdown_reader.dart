@@ -144,6 +144,7 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
           fontFamily: settings.font.fontFamily,
         ),
       ),
+      'emoji': _EmojiElementBuilder(),
     };
 
     final inlineSyntaxes = <md.InlineSyntax>[
@@ -357,6 +358,23 @@ class _HighlightInlineSyntax extends md.InlineSyntax {
     final el = md.Element.text('highlight', match.group(0)!);
     parser.addNode(el);
     return true;
+  }
+}
+
+/// Emoji 渲染器：将 :shortcode: 解析后的 Unicode emoji 以文本形式输出。
+class _EmojiElementBuilder extends MarkdownElementBuilder {
+  @override
+  Widget visitElementAfterWithContext(
+    BuildContext context,
+    md.Element element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) {
+    final style =
+        parentStyle ?? preferredStyle ?? DefaultTextStyle.of(context).style;
+    return RichText(
+      text: TextSpan(text: element.textContent, style: style),
+    );
   }
 }
 

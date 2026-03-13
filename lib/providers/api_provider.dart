@@ -122,16 +122,16 @@ class DocExtractApiState {
   final String apiKey; // Access Token
 
   // ── 提取选项 ──
-  final bool useLayoutDetection;
   final bool useChartRecognition;
   final bool useDocOrientationClassify;
   final bool useDocUnwarping;
   final bool useSealRecognition;
   final bool useOcrForImageBlock;
-  final bool mergeTables;
-  final bool relevelTitles;
   final bool restructurePages;
   final bool layoutNms;
+  final double layoutThreshold;
+  final double repetitionPenalty;
+  final bool prettifyMarkdown;
 
   // ── Markdown 忽略标签 ──
   final List<String> markdownIgnoreLabels;
@@ -139,48 +139,48 @@ class DocExtractApiState {
   const DocExtractApiState({
     this.baseUrl = '',
     this.apiKey = '',
-    this.useLayoutDetection = true,
     this.useChartRecognition = false,
     this.useDocOrientationClassify = false,
     this.useDocUnwarping = false,
     this.useSealRecognition = false,
     this.useOcrForImageBlock = false,
-    this.mergeTables = true,
-    this.relevelTitles = true,
     this.restructurePages = true,
     this.layoutNms = true,
+    this.layoutThreshold = 0.5,
+    this.repetitionPenalty = 1.0,
+    this.prettifyMarkdown = false,
     this.markdownIgnoreLabels = kDefaultIgnoreLabels,
   });
 
   DocExtractApiState copyWith({
     String? baseUrl,
     String? apiKey,
-    bool? useLayoutDetection,
     bool? useChartRecognition,
     bool? useDocOrientationClassify,
     bool? useDocUnwarping,
     bool? useSealRecognition,
     bool? useOcrForImageBlock,
-    bool? mergeTables,
-    bool? relevelTitles,
     bool? restructurePages,
     bool? layoutNms,
+    double? layoutThreshold,
+    double? repetitionPenalty,
+    bool? prettifyMarkdown,
     List<String>? markdownIgnoreLabels,
   }) =>
       DocExtractApiState(
         baseUrl: baseUrl ?? this.baseUrl,
         apiKey: apiKey ?? this.apiKey,
-        useLayoutDetection: useLayoutDetection ?? this.useLayoutDetection,
         useChartRecognition: useChartRecognition ?? this.useChartRecognition,
         useDocOrientationClassify:
             useDocOrientationClassify ?? this.useDocOrientationClassify,
         useDocUnwarping: useDocUnwarping ?? this.useDocUnwarping,
         useSealRecognition: useSealRecognition ?? this.useSealRecognition,
         useOcrForImageBlock: useOcrForImageBlock ?? this.useOcrForImageBlock,
-        mergeTables: mergeTables ?? this.mergeTables,
-        relevelTitles: relevelTitles ?? this.relevelTitles,
         restructurePages: restructurePages ?? this.restructurePages,
         layoutNms: layoutNms ?? this.layoutNms,
+        layoutThreshold: layoutThreshold ?? this.layoutThreshold,
+        repetitionPenalty: repetitionPenalty ?? this.repetitionPenalty,
+        prettifyMarkdown: prettifyMarkdown ?? this.prettifyMarkdown,
         markdownIgnoreLabels:
             markdownIgnoreLabels ?? this.markdownIgnoreLabels,
       );
@@ -198,8 +198,6 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     final baseUrl = box.get(_baseUrlKey, defaultValue: '') as String;
     final apiKey = box.get(_apiKeyKey, defaultValue: '') as String;
 
-    final useLayoutDetection =
-        box.get('${_prefix}useLayoutDetection', defaultValue: true) as bool;
     final useChartRecognition =
         box.get('${_prefix}useChartRecognition', defaultValue: false) as bool;
     final useDocOrientationClassify = box.get(
@@ -211,14 +209,16 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         box.get('${_prefix}useSealRecognition', defaultValue: false) as bool;
     final useOcrForImageBlock =
         box.get('${_prefix}useOcrForImageBlock', defaultValue: false) as bool;
-    final mergeTables =
-        box.get('${_prefix}mergeTables', defaultValue: true) as bool;
-    final relevelTitles =
-        box.get('${_prefix}relevelTitles', defaultValue: true) as bool;
     final restructurePages =
         box.get('${_prefix}restructurePages', defaultValue: true) as bool;
     final layoutNms =
         box.get('${_prefix}layoutNms', defaultValue: true) as bool;
+    final layoutThreshold =
+        box.get('${_prefix}layoutThreshold', defaultValue: 0.5) as double;
+    final repetitionPenalty =
+        box.get('${_prefix}repetitionPenalty', defaultValue: 1.0) as double;
+    final prettifyMarkdown =
+        box.get('${_prefix}prettifyMarkdown', defaultValue: false) as bool;
 
     final rawLabels = box.get('${_prefix}markdownIgnoreLabels') as List?;
     final markdownIgnoreLabels = rawLabels != null
@@ -228,16 +228,16 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     return DocExtractApiState(
       baseUrl: baseUrl,
       apiKey: apiKey,
-      useLayoutDetection: useLayoutDetection,
       useChartRecognition: useChartRecognition,
       useDocOrientationClassify: useDocOrientationClassify,
       useDocUnwarping: useDocUnwarping,
       useSealRecognition: useSealRecognition,
       useOcrForImageBlock: useOcrForImageBlock,
-      mergeTables: mergeTables,
-      relevelTitles: relevelTitles,
       restructurePages: restructurePages,
       layoutNms: layoutNms,
+      layoutThreshold: layoutThreshold,
+      repetitionPenalty: repetitionPenalty,
+      prettifyMarkdown: prettifyMarkdown,
       markdownIgnoreLabels: markdownIgnoreLabels,
     );
   }
@@ -254,8 +254,6 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
 
   Future<void> setBool(String field, bool value) async {
     switch (field) {
-      case 'useLayoutDetection':
-        state = state.copyWith(useLayoutDetection: value);
       case 'useChartRecognition':
         state = state.copyWith(useChartRecognition: value);
       case 'useDocOrientationClassify':
@@ -266,14 +264,22 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         state = state.copyWith(useSealRecognition: value);
       case 'useOcrForImageBlock':
         state = state.copyWith(useOcrForImageBlock: value);
-      case 'mergeTables':
-        state = state.copyWith(mergeTables: value);
-      case 'relevelTitles':
-        state = state.copyWith(relevelTitles: value);
       case 'restructurePages':
         state = state.copyWith(restructurePages: value);
       case 'layoutNms':
         state = state.copyWith(layoutNms: value);
+      case 'prettifyMarkdown':
+        state = state.copyWith(prettifyMarkdown: value);
+    }
+    await GStorage.setting.put('$_prefix$field', value);
+  }
+
+  Future<void> setDouble(String field, double value) async {
+    switch (field) {
+      case 'layoutThreshold':
+        state = state.copyWith(layoutThreshold: value);
+      case 'repetitionPenalty':
+        state = state.copyWith(repetitionPenalty: value);
     }
     await GStorage.setting.put('$_prefix$field', value);
   }

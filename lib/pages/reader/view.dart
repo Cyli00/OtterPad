@@ -46,6 +46,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // Markdown 滚动控制
   final _scrollController = ScrollController();
 
+  // PDF 控制器（用于滚动滑条）
+  final _pdfController = PdfViewerController();
+
   // 缓存加载 Future，避免 FutureBuilder 反复创建新实例
   Future<String>? _loadFuture;
 
@@ -618,7 +621,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     return PdfViewer.file(
       widget.document.filePath,
-      params: const PdfViewerParams(backgroundColor: Colors.transparent),
+      controller: _pdfController,
+      params: PdfViewerParams(
+        backgroundColor: Colors.transparent,
+        viewerOverlayBuilder: (context, size, handleLinkTap) => [
+          PdfViewerScrollThumb(
+            controller: _pdfController,
+            orientation: ScrollbarOrientation.right,
+            thumbSize: const Size(40, 25),
+          ),
+        ],
+      ),
     );
   }
 

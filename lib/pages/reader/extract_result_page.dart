@@ -13,6 +13,22 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../services/doc_extract_service.dart';
 
+class _EmojiElementBuilder extends MarkdownElementBuilder {
+  @override
+  Widget visitElementAfterWithContext(
+    BuildContext context,
+    md.Element element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) {
+    final style =
+        parentStyle ?? preferredStyle ?? DefaultTextStyle.of(context).style;
+    return RichText(
+      text: TextSpan(text: element.textContent, style: style),
+    );
+  }
+}
+
 /// Markdown 提取结果展示页
 ///
 /// 支持两种加载方式：
@@ -141,10 +157,10 @@ class ExtractResultPage extends StatelessWidget {
             child: MarkdownBody(
               data: content,
               builders: {
-
                 'latex': NRLatexElementBuilder(
                   textStyle: TextStyle(color: cs.onSurface),
                 ),
+                'emoji': _EmojiElementBuilder(),
               },
               extensionSet: md.ExtensionSet(
                 [

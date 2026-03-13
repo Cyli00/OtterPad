@@ -359,16 +359,18 @@ class DocExtractService {
 
   static Map<String, dynamic> buildOptions(DocExtractApiState state) {
     return {
-      'useLayoutDetection': state.useLayoutDetection,
+      'useLayoutDetection': true,
       'useChartRecognition': state.useChartRecognition,
       'useDocOrientationClassify': state.useDocOrientationClassify,
       'useDocUnwarping': state.useDocUnwarping,
       'useSealRecognition': state.useSealRecognition,
       'useOcrForImageBlock': state.useOcrForImageBlock,
-      'mergeTables': state.mergeTables,
-      'relevelTitles': state.relevelTitles,
       'restructurePages': state.restructurePages,
       'layoutNms': state.layoutNms,
+      'layoutThreshold': state.layoutThreshold,
+      'repetitionPenalty': state.repetitionPenalty,
+      'temperature': 0,
+      'prettifyMarkdown': state.prettifyMarkdown,
       if (state.markdownIgnoreLabels.isNotEmpty)
         'markdownIgnoreLabels': state.markdownIgnoreLabels,
     };

@@ -53,29 +53,25 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   // ── 提取选项开关列表 ──────────────────────────────────────────────────────
 
   static const _optionDefs = <(String, String, String)>[
-    ('useLayoutDetection', '版面检测', '识别文档区域并排序'),
     ('useChartRecognition', '图表识别', '将图表解析为表格'),
     ('useDocOrientationClassify', '方向校正', '自动纠正 0°/90°/180°/270° 旋转'),
     ('useDocUnwarping', '弯曲校正', '校正弯曲或褶皱的文档'),
     ('useSealRecognition', '印章识别', '识别文档中的印章'),
     ('useOcrForImageBlock', '图片区 OCR', '对图片区域执行文字识别'),
-    ('mergeTables', '跨页合并表格', '自动合并跨页表格'),
-    ('relevelTitles', '标题层级重排', '重新识别段落标题层级'),
     ('restructurePages', '多页重构', '重构多页文档结构'),
     ('layoutNms', '去重叠检测框', '移除重叠的版面检测框'),
+    ('prettifyMarkdown', '美化 Markdown', '输出美化后的 Markdown 文本'),
   ];
 
   bool _getOptionValue(DocExtractApiState s, String field) => switch (field) {
-    'useLayoutDetection' => s.useLayoutDetection,
     'useChartRecognition' => s.useChartRecognition,
     'useDocOrientationClassify' => s.useDocOrientationClassify,
     'useDocUnwarping' => s.useDocUnwarping,
     'useSealRecognition' => s.useSealRecognition,
     'useOcrForImageBlock' => s.useOcrForImageBlock,
-    'mergeTables' => s.mergeTables,
-    'relevelTitles' => s.relevelTitles,
     'restructurePages' => s.restructurePages,
     'layoutNms' => s.layoutNms,
+    'prettifyMarkdown' => s.prettifyMarkdown,
     _ => false,
   };
 
@@ -123,6 +119,65 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
       }
     }
     return tiles;
+  }
+
+  // ── 滑动条构建 ──────────────────────────────────────────────────────────────
+
+  Widget _buildSliderTile(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required ValueChanged<double> onChanged,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                value.toStringAsFixed(2),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: [const FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
   }
 
   // ── 忽略标签 Chips ─────────────────────────────────────────────────────────
@@ -498,7 +553,49 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             title: '提取选项',
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(children: _buildOptionTiles(context)),
+              child: Column(
+                children: [
+                  ..._buildOptionTiles(context),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 20,
+                    endIndent: 20,
+                    color: cs.outlineVariant.withAlpha(40),
+                  ),
+                  _buildSliderTile(
+                    context,
+                    title: '版面检测阈值',
+                    subtitle: '区域过滤的置信度阈值，值越高保留的区域越少',
+                    value: ref.watch(docExtractApiProvider).layoutThreshold,
+                    min: 0.0,
+                    max: 1.0,
+                    divisions: 20,
+                    onChanged: (v) => ref
+                        .read(docExtractApiProvider.notifier)
+                        .setDouble('layoutThreshold', v),
+                  ),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 20,
+                    endIndent: 20,
+                    color: cs.outlineVariant.withAlpha(40),
+                  ),
+                  _buildSliderTile(
+                    context,
+                    title: '重复惩罚',
+                    subtitle: '出现重复文字或表格内容时适当调高',
+                    value: ref.watch(docExtractApiProvider).repetitionPenalty,
+                    min: 1.0,
+                    max: 2.0,
+                    divisions: 20,
+                    onChanged: (v) => ref
+                        .read(docExtractApiProvider.notifier)
+                        .setDouble('repetitionPenalty', v),
+                  ),
+                ],
+              ),
             ),
           ),
 

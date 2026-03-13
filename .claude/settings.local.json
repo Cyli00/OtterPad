@@ -30,7 +30,12 @@
       "Bash(find /c/Users/leahd/AppData/Local/Pub/Cache/hosted/pub.dev -type d -name *markdown-*)",
       "Bash(find /e/gitProjects/NightReader/.dart_tool -name *flutter_markdown* -type d)",
       "Bash(git checkout:*)",
-      "Bash(dart pub:*)"
+      "Bash(dart pub:*)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(p[''''rootUri'''']\\) for p in d[''''packages''''] if p[''''name''''] in \\(''''markdown'''',''''pdfrx''''\\)]\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//e/gitProjects/NightReader/$LOCALAPPDATA/Pub/**)",
+      "Read(//e/gitProjects/NightReader/$LOCALAPPDATA/Pub/Cache/hosted/**)",
+      "Read(//c/Users/leahd/AppData/Local/Pub/Cache/hosted/pub.dev/**)"
     ]
   },
   "outputStyle": "Explanatory"
