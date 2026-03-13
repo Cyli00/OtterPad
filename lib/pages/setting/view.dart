@@ -59,7 +59,7 @@ class SettingPage extends StatelessWidget {
               _SettingsTile(
                 icon: Icons.palette_outlined,
                 title: '外观设置',
-                subtitle: '默认阅读模式',
+                subtitle: '主题模式 · 主题色彩 · 阅读模式',
                 onTap: () => context.push(AppRoutes.settingsAppearance),
               ),
             ],

@@ -134,6 +134,7 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       color: settings.textColor,
       fontSize: settings.fontSize,
       fontFamily: settings.font.fontFamily,
+      fontFamilyFallback: settings.font.fontFamilyFallback,
       height: 1.7,
     );
 
@@ -142,6 +143,7 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
         textStyle: TextStyle(
           color: settings.textColor,
           fontFamily: settings.font.fontFamily,
+          fontFamilyFallback: settings.font.fontFamilyFallback,
         ),
       ),
       'emoji': _EmojiElementBuilder(),
@@ -218,7 +220,13 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       ),
       blockquotePadding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
       code: TextStyle(
-        fontFamily: 'monospace',
+        fontFamily: 'Consolas',
+        fontFamilyFallback: const [
+          'Cascadia Mono',
+          'Courier New',
+          'Menlo',
+          'Noto Sans Mono',
+        ],
         fontSize: settings.fontSize * 0.88,
         color: settings.textColor,
         backgroundColor: settings.theme == ReaderTheme.dark

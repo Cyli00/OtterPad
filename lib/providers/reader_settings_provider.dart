@@ -40,11 +40,29 @@ enum ReaderFont {
         ReaderFont.mono => 'Mono',
       };
 
-  /// 映射到实际字体族名
+  /// 映射到实际字体族名（首选字体）
   String? get fontFamily => switch (this) {
-        ReaderFont.serif => 'Noto Serif',
+        ReaderFont.serif => 'Georgia',
         ReaderFont.sans => null, // 使用系统默认
-        ReaderFont.mono => 'monospace',
+        ReaderFont.mono => 'Consolas',
+      };
+
+  /// 跨平台备选字体列表
+  List<String>? get fontFamilyFallback => switch (this) {
+        ReaderFont.serif => const [
+            'Noto Serif CJK SC',
+            'SimSun',
+            'STSong',
+            'Times New Roman',
+            'Noto Serif',
+          ],
+        ReaderFont.sans => null,
+        ReaderFont.mono => const [
+            'Cascadia Mono',
+            'Courier New',
+            'Menlo',
+            'Noto Sans Mono',
+          ],
       };
 }
 
