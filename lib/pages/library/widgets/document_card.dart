@@ -154,11 +154,14 @@ class DocumentCard extends ConsumerWidget {
                       ],
                       if (year.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(
-                          year,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color:
-                                colorScheme.onSurfaceVariant.withAlpha(180),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            year,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color:
+                                  colorScheme.onSurfaceVariant.withAlpha(180),
+                            ),
                           ),
                         ),
                       ],

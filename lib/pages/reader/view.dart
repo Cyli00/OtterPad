@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
@@ -27,7 +28,8 @@ class ReaderPage extends ConsumerStatefulWidget {
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
 }
 
-class _ReaderPageState extends ConsumerState<ReaderPage> {
+class _ReaderPageState extends ConsumerState<ReaderPage>
+    with SingleTickerProviderStateMixin {
   bool _extracting = false;
   bool _showPreview = false;
   String? _mdPath;
@@ -56,26 +58,65 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _appearanceKey = GlobalKey();
   OverlayEntry? _appearanceEntry;
 
+  // 异步初始化状态
+  bool _initialized = false;
+  bool? _fileExists;
+
+  // Markdown 入场动画（与路由转场 _buildAnimatedPage 保持一致）
+  late final AnimationController _enterController;
+
   @override
   void initState() {
     super.initState();
-    _checkExistingResult();
-    // 根据用户偏好设置默认阅读模式，仅在有 Markdown 结果时生效
-    final defaultMode = ref.read(readerSettingsProvider).defaultReadingMode;
-    if (defaultMode == DefaultReadingMode.markdown && _hasResult) {
-      _showPreview = true;
-    }
+    _enterController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _initAsync();
   }
 
-  void _checkExistingResult() {
+  Future<void> _initAsync() async {
     final filePath = widget.document.filePath;
-    if (filePath.isEmpty) return;
-    final mdPath = p.join(
-      p.dirname(filePath),
-      '${p.basenameWithoutExtension(filePath)}.md',
-    );
-    if (File(mdPath).existsSync()) {
-      _mdPath = mdPath;
+
+    // 异步检查文件是否存在，不阻塞转场动画
+    final fileExists =
+        filePath.isNotEmpty && await File(filePath).exists();
+
+    // 异步检查 .md 文件
+    if (filePath.isNotEmpty) {
+      final mdPath = p.join(
+        p.dirname(filePath),
+        '${p.basenameWithoutExtension(filePath)}.md',
+      );
+      if (await File(mdPath).exists()) {
+        _mdPath = mdPath;
+      }
+    }
+
+    if (!mounted) return;
+
+    final defaultMode = ref.read(readerSettingsProvider).defaultReadingMode;
+    final wantMarkdown =
+        defaultMode == DefaultReadingMode.markdown && _hasResult;
+
+    // 先加载完 Markdown 内容，再显示页面并播放入场动画
+    if (wantMarkdown && _mdContent == null && _mdPath != null) {
+      _mdContent = await _loadAndResolveMarkdown();
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _fileExists = fileExists;
+      _showPreview = wantMarkdown;
+      _initialized = true;
+    });
+
+    // widget 树构建完成后再启动动画，确保首帧从 offset 起始位置开始
+    if (wantMarkdown && _mdContent != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _enterController.forward();
+      });
     }
   }
 
@@ -177,10 +218,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
       );
 
+      _enterController.reset();
       setState(() {
         _mdPath = mdPath;
         _mdContent = resolvedMd;
         _showPreview = true;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _enterController.forward();
       });
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
@@ -216,7 +261,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _togglePreview() {
     _clearHighlight();
+    final enteringMarkdown = !_showPreview;
+    if (enteringMarkdown) _enterController.reset();
     setState(() => _showPreview = !_showPreview);
+    if (enteringMarkdown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _enterController.forward();
+      });
+    }
   }
 
   // ─── 搜索 ───
@@ -315,6 +367,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void dispose() {
     _cancelToken?.cancel();
     _scrollController.dispose();
+    _enterController.dispose();
     _appearanceEntry?.remove();
     super.dispose();
   }
@@ -323,12 +376,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   Widget build(BuildContext context) {
-    final doc = widget.document;
-    final fileExists =
-        doc.filePath.isNotEmpty && File(doc.filePath).existsSync();
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final readerSettings = ref.watch(readerSettingsProvider);
+
+    // 异步初始化完成前显示骨架加载状态
+    if (!_initialized) {
+      return Scaffold(
+        backgroundColor: cs.surface,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildToolbar(theme, cs),
+              Expanded(
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: cs.primary.withAlpha(120),
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final fileExists = _fileExists ?? false;
 
     final contentBg = (_showPreview && _hasResult)
         ? readerSettings.backgroundColor
@@ -427,16 +501,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 tooltip: '重新提取',
                 onPressed: _onExtractPressed,
               ),
-            // 文献信息
-            IconButton(
-              icon: Icon(
-                Icons.info_outline_rounded,
-                size: 22,
-                color: cs.onSurfaceVariant,
+            // 文献信息 (仅在 PDF 模式下显示)
+            if (!_showPreview)
+              IconButton(
+                icon: Icon(
+                  Icons.info_outline_rounded,
+                  size: 22,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: '文献信息',
+                onPressed: () => _showDocumentInfo(context),
               ),
-              tooltip: '文献信息',
-              onPressed: () => _showDocumentInfo(context),
-            ),
             // 外观设置（仅 Markdown 预览模式下显示）
             if (_showPreview && _hasResult)
               IconButton(
@@ -633,7 +708,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           PdfViewerScrollThumb(
             controller: _pdfController,
             orientation: ScrollbarOrientation.right,
-            thumbSize: const Size(40, 25),
+            // 与 Material 系统滚动条尺寸接近
+            thumbSize: const Size(8, 48),
+            margin: 2,
+            thumbBuilder: (context, thumbSize, pageNumber, controller) {
+              return _PdfScrollThumb(size: thumbSize);
+            },
           ),
         ],
       ),
@@ -644,29 +724,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ThemeData theme,
     ReaderSettingsState settings,
   ) {
-    // 内容已加载时直接渲染，避免 FutureBuilder 每次 setState 创建新 Future
-    // 导致 ReaderMarkdownBody 状态（_useBlockMode / _hasScrolled）被销毁
+    // 内容已就绪：直接渲染并包裹入场动画
     if (_mdContent != null) {
-      return ReaderMarkdownBody(
-        data: _mdContent!,
-        settings: settings,
-        scrollController: _scrollController,
-        highlightQuery: _highlightQuery,
-        targetCharOffset: _targetCharOffset,
+      return _buildSlideIn(
+        child: ReaderMarkdownBody(
+          data: _mdContent!,
+          settings: settings,
+          scrollController: _scrollController,
+          highlightQuery: _highlightQuery,
+          targetCharOffset: _targetCharOffset,
+        ),
       );
     }
 
+    // 兜底：手动切换到 Markdown 但内容尚未加载（从 PDF 模式切过来）
     _loadFuture ??= _loadAndResolveMarkdown();
 
     return FutureBuilder<String>(
       future: _loadFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(
-              color: settings.textColor.withAlpha(120),
-            ),
-          );
+          return _buildMarkdownSkeleton(settings);
         }
         if (snapshot.hasError || (snapshot.data?.isEmpty ?? true)) {
           return Center(
@@ -679,14 +757,103 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           );
         }
         _mdContent = snapshot.data!;
-        return ReaderMarkdownBody(
-          data: snapshot.data!,
-          settings: settings,
-          scrollController: _scrollController,
-          highlightQuery: _highlightQuery,
-          targetCharOffset: _targetCharOffset,
+        // 下一帧启动动画
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _enterController.forward();
+        });
+        return _buildSlideIn(
+          child: ReaderMarkdownBody(
+            data: snapshot.data!,
+            settings: settings,
+            scrollController: _scrollController,
+            highlightQuery: _highlightQuery,
+            targetCharOffset: _targetCharOffset,
+          ),
         );
       },
+    );
+  }
+
+  /// 入场动画：与路由页面转场 (_buildAnimatedPage) 参数一致
+  /// fade(0→1) + slideY(0.04→0)，300ms easeOut
+  Widget _buildSlideIn({required Widget child}) {
+    final curved = CurvedAnimation(
+      parent: _enterController,
+      curve: Curves.easeOut,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.04),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
+      ),
+    );
+  }
+
+  /// 文档加载中的骨架屏，模拟 Markdown 内容排版
+  Widget _buildMarkdownSkeleton(ReaderSettingsState settings) {
+    final shimmerBase = settings.textColor.withAlpha(18);
+    final shimmerHighlight = settings.textColor.withAlpha(36);
+
+    Widget line(double widthFraction, double height) {
+      return Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: shimmerBase,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        margin: const EdgeInsets.only(bottom: 10),
+        width: double.infinity,
+      ).animate(onPlay: (c) => c.repeat(reverse: true)).shimmer(
+            color: shimmerHighlight,
+            duration: const Duration(milliseconds: 1200),
+          );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 模拟标题
+          FractionallySizedBox(
+            widthFactor: 0.6,
+            child: line(0.6, 22),
+          ),
+          const SizedBox(height: 16),
+          // 模拟正文段落
+          line(1.0, 14),
+          line(1.0, 14),
+          FractionallySizedBox(
+            widthFactor: 0.85,
+            child: line(0.85, 14),
+          ),
+          const SizedBox(height: 12),
+          line(1.0, 14),
+          line(1.0, 14),
+          line(1.0, 14),
+          FractionallySizedBox(
+            widthFactor: 0.7,
+            child: line(0.7, 14),
+          ),
+          const SizedBox(height: 16),
+          // 模拟小标题
+          FractionallySizedBox(
+            widthFactor: 0.45,
+            child: line(0.45, 18),
+          ),
+          const SizedBox(height: 12),
+          line(1.0, 14),
+          line(1.0, 14),
+          FractionallySizedBox(
+            widthFactor: 0.9,
+            child: line(0.9, 14),
+          ),
+        ],
+      ),
     );
   }
 
@@ -826,6 +993,44 @@ class _DocumentInfoSheet extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── PDF 滚动条（模拟 Material 系统滚动条外观） ───
+
+class _PdfScrollThumb extends StatefulWidget {
+  final Size size;
+  const _PdfScrollThumb({required this.size});
+
+  @override
+  State<_PdfScrollThumb> createState() => _PdfScrollThumbState();
+}
+
+class _PdfScrollThumbState extends State<_PdfScrollThumb> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // 与 Material Scrollbar 一致：默认半透明，悬停时加深
+    final color = _hovered
+        ? cs.onSurface.withAlpha(128)
+        : cs.onSurface.withAlpha(66);
+    final width = _hovered ? widget.size.width + 4 : widget.size.width;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: width,
+        height: widget.size.height,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(width / 2),
         ),
       ),
     );

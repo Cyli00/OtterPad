@@ -23,12 +23,14 @@ class BookshelfGrid extends ConsumerWidget {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+        // ┌─ 网格卡片最大宽度（可调） ──────────────────────────────┐
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 300, // ← 调大 = 更宽卡片、更少列数
           mainAxisSpacing: 16.0,
           crossAxisSpacing: 16.0,
-          childAspectRatio: 0.52,
+          childAspectRatio: 0.618  // ← 宽高比，调小 = 更高的卡片
         ),
+        // └──────────────────────────────────────────────────────────┘
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             final doc = docs[index];

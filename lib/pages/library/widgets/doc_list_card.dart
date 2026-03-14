@@ -89,8 +89,8 @@ class DocListCard extends ConsumerWidget {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: SizedBox(
-                            width: 100,
-                            height: 140,
+                            width: 120,  // ← 列表缩略图宽度（可调）
+                            height: 168, // ← 列表缩略图高度（可调）
                             child: PdfCoverRender(
                               assetPath: doc.filePath,
                               fit: BoxFit.cover,

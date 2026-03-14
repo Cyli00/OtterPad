@@ -32,9 +32,7 @@ class SettingPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
-          // ── 通用设置 ──
-          _SettingsGroup(
-            title: '通用设置',
+          _SettingsCard(
             children: [
               if (_isDesktop)
                 _SettingsTile(
@@ -49,13 +47,6 @@ class SettingPage extends StatelessWidget {
                 subtitle: 'Agent 模型 · 文档提取接口',
                 onTap: () => context.push(AppRoutes.settingsApi),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // ── 外观设置 ──
-          _SettingsGroup(
-            title: '外观设置',
-            children: [
               _SettingsTile(
                 icon: Icons.palette_outlined,
                 title: '外观设置',
@@ -70,60 +61,40 @@ class SettingPage extends StatelessWidget {
   }
 }
 
-// ── 设置项分组卡片 ──
+// ── 设置项卡片 ──
 
-class _SettingsGroup extends StatelessWidget {
-  final String title;
+class _SettingsCard extends StatelessWidget {
   final List<Widget> children;
 
-  const _SettingsGroup({
-    required this.title,
-    required this.children,
-  });
+  const _SettingsCard({required this.children});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
     if (children.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 8),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: cs.onSurface,
-            ),
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              for (int i = 0; i < children.length; i++) ...[
-                children[i],
-                if (i < children.length - 1)
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    indent: 80,
-                    endIndent: 20,
-                    color: cs.outlineVariant.withAlpha(80),
-                  ),
-              ]
-            ],
-          ),
-        ),
-      ],
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i < children.length - 1)
+              Divider(
+                height: 1,
+                thickness: 1,
+                indent: 80,
+                endIndent: 20,
+                color: cs.outlineVariant.withAlpha(80),
+              ),
+          ]
+        ],
+      ),
     );
   }
 }

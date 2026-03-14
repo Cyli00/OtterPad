@@ -35,7 +35,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Read(//e/gitProjects/NightReader/$LOCALAPPDATA/Pub/**)",
       "Read(//e/gitProjects/NightReader/$LOCALAPPDATA/Pub/Cache/hosted/**)",
-      "Read(//c/Users/leahd/AppData/Local/Pub/Cache/hosted/pub.dev/**)"
+      "Read(//c/Users/leahd/AppData/Local/Pub/Cache/hosted/pub.dev/**)",
+      "Read(//e/gitProjects/NightReader/$LOCALAPPDATA/Pub/Cache/hosted/pub.dev/pdfrx-*/**)",
+      "Bash(2)"
     ]
   },
   "outputStyle": "Explanatory"
