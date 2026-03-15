@@ -36,15 +36,14 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
 
   static const List<Color> presetColors = [
     Colors.blue,
+    Colors.indigo,
     Colors.purple,
+    Colors.pink,
+    Colors.red,
+    Colors.lightGreen,
     Colors.green,
     Colors.orange,
-    Colors.pink,
-    Colors.teal,
-    Colors.red,
-    Colors.indigo,
-    Colors.amber,
-    Colors.cyan,
+    Colors.amber
   ];
 
   ThemeNotifier(this._prefs) : super(_loadTheme(_prefs));

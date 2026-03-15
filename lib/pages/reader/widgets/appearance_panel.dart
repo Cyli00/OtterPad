@@ -5,8 +5,8 @@ import '../../../providers/reader_settings_provider.dart';
 
 /// 阅读器外观设置浮层
 ///
-/// 从工具栏 "A" 按钮下方弹出，包含主题 / 字体 / 字号三组设置。
-/// 字号 Slider 仅在松手时写入 Provider（方案 A），拖动过程零重建。
+/// 从工具栏 "A" 按钮下方弹出，包含字体族 / 字号 / 主题预设三组设置。
+/// 字号 Slider 仅在松手时写入 Provider，拖动过程零重建。
 class AppearancePanel extends ConsumerStatefulWidget {
   final VoidCallback onDismiss;
 
@@ -34,181 +34,252 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
 
     return Material(
       elevation: 3,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       color: cs.surfaceContainerHigh,
       surfaceTintColor: cs.surfaceTint,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: IntrinsicWidth(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── 主题 ──
-              Text(
-                'Theme:',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w600,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── 字体族 ──
+            _SectionTitle(
+              icon: Icons.text_fields,
+              title: '字体',
+            ),
+            const SizedBox(height: 12),
+            _FontFamilySelector(
+              current: settings.font,
+              onChanged: notifier.setFont,
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── 字号 ──
+            Row(
+              children: [
+                _SectionTitle(
+                  icon: Icons.format_size,
+                  title: '字号',
                 ),
-              ),
-              const SizedBox(height: 8),
-              _ThemeSelector(
-                current: settings.theme,
-                onChanged: notifier.setTheme,
-              ),
-
-              const SizedBox(height: 16),
-
-              // ── 字体 ──
-              Text(
-                'Font:',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              _FontSelector(
-                current: settings.font,
-                onChanged: notifier.setFont,
-              ),
-
-              const SizedBox(height: 16),
-
-              // ── 字号 ──
-              Text(
-                'Font size:',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: 220,
-                child: SliderTheme(
-                  data: SliderThemeData(
-                    trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 8,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 16,
-                    ),
-                    activeTrackColor: cs.primary,
-                    inactiveTrackColor: cs.surfaceContainerHighest,
-                    thumbColor: cs.primary,
-                  ),
-                  child: Slider(
-                    value: _localFontSize,
-                    min: ReaderSettingsState.minFontSize,
-                    max: ReaderSettingsState.maxFontSize,
-                    onChanged: (v) => setState(() => _localFontSize = v),
-                    onChangeEnd: notifier.setFontSize,
+                const Spacer(),
+                Text(
+                  '${_localFontSize.round()}px',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(
+                  enabledThumbRadius: 8,
+                ),
+                overlayShape: const RoundSliderOverlayShape(
+                  overlayRadius: 16,
+                ),
+                activeTrackColor: cs.primary,
+                inactiveTrackColor: cs.surfaceContainerHighest,
+                thumbColor: cs.primary,
               ),
-            ],
-          ),
+              child: Slider(
+                value: _localFontSize,
+                min: ReaderSettingsState.minFontSize,
+                max: ReaderSettingsState.maxFontSize,
+                onChanged: (v) => setState(() => _localFontSize = v),
+                onChangeEnd: notifier.setFontSize,
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── 主题预设 ──
+            _SectionTitle(
+              icon: Icons.palette_outlined,
+              title: '主题预设',
+            ),
+            const SizedBox(height: 12),
+            _ThemePresetSelector(
+              current: settings.theme,
+              onChanged: notifier.setTheme,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// 主题选择行：Light / Sepia / Dark
-class _ThemeSelector extends StatelessWidget {
-  final ReaderTheme current;
-  final ValueChanged<ReaderTheme> onChanged;
+/// 分区标题：图标 + 文字
+class _SectionTitle extends StatelessWidget {
+  final IconData icon;
+  final String title;
 
-  const _ThemeSelector({required this.current, required this.onChanged});
+  const _SectionTitle({required this.icon, required this.title});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: ReaderTheme.values.map((t) {
-        final selected = t == current;
-        return Padding(
-          padding: EdgeInsets.only(
-            right: t != ReaderTheme.values.last ? 8 : 0,
+      children: [
+        Icon(icon, size: 18, color: cs.primary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: tt.titleSmall?.copyWith(
+            color: cs.onSurface,
+            fontWeight: FontWeight.w600,
           ),
-          child: _OptionChip(
-            label: t.label,
-            selected: selected,
-            onTap: () => onChanged(t),
-          ),
-        );
-      }).toList(),
+        ),
+      ],
     );
   }
 }
 
-/// 字体选择行：Serif / Sans / Mono
-class _FontSelector extends StatelessWidget {
+/// 字体族选择：大圆角卡片，用对应字体渲染名称作为预览
+class _FontFamilySelector extends StatelessWidget {
   final ReaderFont current;
   final ValueChanged<ReaderFont> onChanged;
 
-  const _FontSelector({required this.current, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: ReaderFont.values.map((f) {
-        final selected = f == current;
-        return Padding(
-          padding: EdgeInsets.only(
-            right: f != ReaderFont.values.last ? 8 : 0,
-          ),
-          child: _OptionChip(
-            label: f.label,
-            selected: selected,
-            onTap: () => onChanged(f),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-/// 统一的可选芯片按钮
-class _OptionChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _OptionChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
+  const _FontFamilySelector({
+    required this.current,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: selected ? cs.secondaryContainer : cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 60, minHeight: 36),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected
-                      ? cs.onSecondaryContainer
-                      : cs.onSurfaceVariant,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+    return Row(
+      children: ReaderFont.values.map((f) {
+        final selected = f == current;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: f != ReaderFont.values.last ? 8 : 0,
+            ),
+            child: Material(
+              color: selected
+                  ? cs.primaryContainer
+                  : cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => onChanged(f),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selected ? cs.primary : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    f.label,
+                    style: TextStyle(
+                      fontFamily: f.fontFamily,
+                      fontFamilyFallback: f.fontFamilyFallback,
+                      fontSize: 15,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.w400,
+                      color: selected
+                          ? cs.onPrimaryContainer
+                          : cs.onSurfaceVariant,
+                    ),
+                  ),
                 ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// 主题预设选择：可视化预览卡片
+class _ThemePresetSelector extends StatelessWidget {
+  final ReaderTheme current;
+  final ValueChanged<ReaderTheme> onChanged;
+
+  const _ThemePresetSelector({
+    required this.current,
+    required this.onChanged,
+  });
+
+  /// 每个主题的预览配色
+  static const _previewColors = {
+    ReaderTheme.light: (bg: Color(0xFFFFFFFF), line: Color(0xFF444444)),
+    ReaderTheme.sepia: (bg: Color(0xFFF5EDDC), line: Color(0xFF6B5D4A)),
+    ReaderTheme.dark: (bg: Color(0xFF1C1B1F), line: Color(0xFFB0B0B0)),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      children: ReaderTheme.values.map((t) {
+        final selected = t == current;
+        final colors = _previewColors[t]!;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: t != ReaderTheme.values.last ? 10 : 0,
+            ),
+            child: GestureDetector(
+              onTap: () => onChanged(t),
+              child: Column(
+                children: [
+                  // 预览卡片
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: colors.bg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selected ? cs.primary : cs.outlineVariant,
+                        width: selected ? 2.5 : 1,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 36,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: colors.line,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // 标签
+                  Text(
+                    t.label,
+                    style: tt.labelMedium?.copyWith(
+                      color: selected ? cs.primary : cs.onSurfaceVariant,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -239,8 +310,7 @@ OverlayEntry showAppearancePanel({
       final size = renderBox.size;
       final screenWidth = MediaQuery.sizeOf(context).width;
 
-      // 面板宽度约 260，右对齐于按钮
-      const panelWidth = 260.0;
+      const panelWidth = 320.0;
       final right = screenWidth - offset.dx - size.width;
       final top = offset.dy + size.height + 4;
 
