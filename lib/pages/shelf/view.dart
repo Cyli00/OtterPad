@@ -87,17 +87,17 @@ class ShelfPage extends ConsumerWidget {
                 
                 // 菜单列表项
                 LibraryMenuItem(
-                  icon: Icons.cloud_upload_rounded,
+                  icon: Icons.cloud_sync,
                   title: '已同步',
                   onTap: () {},
                 ),
                 LibraryMenuItem(
-                  icon: Icons.history_rounded,
+                  icon: Icons.history,
                   title: '阅读历史',
                   onTap: () {},
                 ),
                 LibraryMenuItem(
-                  icon: Icons.star_outline_rounded,
+                  icon: Icons.grade,
                   title: '星标条目',
                   onTap: () {},
                 ),
@@ -105,7 +105,7 @@ class ShelfPage extends ConsumerWidget {
                   builder: (context, ref, _) {
                     final count = ref.watch(noFileDocsCountProvider);
                     return LibraryMenuItem(
-                      icon: Icons.description_outlined,
+                      icon: Icons.description,
                       title: '无文件条目',
                       trailing: count > 0
                           ? Container(
@@ -120,7 +120,7 @@ class ShelfPage extends ConsumerWidget {
                               child: Text(
                                 '$count',
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onErrorContainer,
+                                  color: theme.colorScheme.error,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -218,13 +218,13 @@ class ShelfPage extends ConsumerWidget {
                           width: 24,
                           height: 24,
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
+                            borderRadius: BorderRadius.circular(6),
                             color: theme.colorScheme.primaryContainer,
                           ),
                           alignment: Alignment.center,
                           child: Text(
                             fav.emoji,
-                            style: const TextStyle(fontSize: 13),
+                            style: const TextStyle(fontSize: 13, height: 1.0),
                           ),
                         ),
                         pdfAssets: fav.docPaths,

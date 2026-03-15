@@ -126,6 +126,22 @@ class HomeHeader extends ConsumerWidget {
               messenger.showSnackBar(
                 buildResultSnackBar(context: context, message: '该文献已存在于文库中'),
               );
+            } else if (doc.filePath.isEmpty) {
+              messenger.showSnackBar(
+                buildResultSnackBar(
+                  context: context,
+                  message: '已添加「${doc.title}」，但未获取到关联 PDF',
+                  duration: const Duration(seconds: 6),
+                  action: SnackBarAction(
+                    label: '去添加',
+                    onPressed: () {
+                      if (context.mounted) {
+                        context.push(AppRoutes.shelfNoFileEntries);
+                      }
+                    },
+                  ),
+                ),
+              );
             } else {
               messenger.showSnackBar(
                 buildResultSnackBar(

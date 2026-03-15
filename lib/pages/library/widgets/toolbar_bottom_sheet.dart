@@ -87,6 +87,7 @@ SnackBar buildResultSnackBar({
   BuildContext? context,
   required String message,
   Duration duration = const Duration(seconds: 4),
+  SnackBarAction? action,
 }) {
   final isMobile = context != null
       ? MediaQuery.sizeOf(context).width < 600
@@ -102,6 +103,7 @@ SnackBar buildResultSnackBar({
     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
     elevation: 6,
     content: Text(message, style: const TextStyle(fontSize: 14)),
+    action: action,
     duration: duration,
   );
 }

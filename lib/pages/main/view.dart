@@ -23,18 +23,18 @@ class MainShell extends StatelessWidget {
       onDestinationSelected: _onDestinationSelected,
       destinations: const [
         AdaptiveDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home),
+          icon: Icon(Icons.auto_awesome_mosaic),
+          selectedIcon: Icon(Icons.auto_awesome_mosaic),
           label: '首页',
         ),
         AdaptiveDestination(
-          icon: Icon(Icons.folder_copy_outlined),
+          icon: Icon(Icons.folder_copy),
           selectedIcon: Icon(Icons.folder_copy),
           label: '库',
         ),
         AdaptiveDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings),
+          icon: Icon(Icons.construction),
+          selectedIcon: Icon(Icons.construction),
           label: '设置',
         ),
       ],

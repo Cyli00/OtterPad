@@ -36,19 +36,19 @@ class SettingPage extends StatelessWidget {
             children: [
               if (_isDesktop)
                 _SettingsTile(
-                  icon: Icons.wifi_rounded,
+                  icon: Icons.dns,
                   title: '网络设置',
                   subtitle: '代理配置',
                   onTap: () => context.push(AppRoutes.settingsNetwork),
                 ),
               _SettingsTile(
-                icon: Icons.hub_rounded,
+                icon: Icons.memory,
                 title: '模型服务',
                 subtitle: 'Agent 模型 · 文档提取接口',
                 onTap: () => context.push(AppRoutes.settingsApi),
               ),
               _SettingsTile(
-                icon: Icons.palette_outlined,
+                icon: Icons.palette,
                 title: '外观设置',
                 subtitle: '主题模式 · 主题色彩 · 阅读模式',
                 onTap: () => context.push(AppRoutes.settingsAppearance),
