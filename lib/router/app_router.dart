@@ -5,8 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import '../data/models/book/document.dart';
 import '../data/models/collection/favorite.dart';
-import '../pages/library/batch_delete_page.dart';
-import '../pages/library/batch_extract_page.dart';
 import '../pages/library/search_page.dart';
 import '../pages/library/view.dart';
 import '../pages/main/view.dart';
@@ -83,28 +81,6 @@ final routerProvider = Provider<GoRouter>((ref) {
                       state: state,
                       child: const SearchPage(),
                     ),
-                  ),
-                  GoRoute(
-                    path: 'batch-extract',
-                    parentNavigatorKey: _rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
-                      state: state,
-                      child: const BatchExtractPage(),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'batch-delete',
-                    parentNavigatorKey: _rootNavigatorKey,
-                    pageBuilder: (context, state) {
-                      final extra = state.extra as Map<String, String?>?;
-                      return _buildAnimatedPage(
-                        state: state,
-                        child: BatchDeletePage(
-                          favoriteId: extra?['favoriteId'],
-                          initialSelectedId: extra?['initialSelectedId'],
-                        ),
-                      );
-                    },
                   ),
                 ],
               ),

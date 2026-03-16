@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary, batchExtract }
+enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
 Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
   final theme = Theme.of(context);
@@ -67,13 +67,6 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                 subtitle: '重新扫描目录，补回 PDF 并重试提取核心元数据',
                 onTap: () =>
                     Navigator.pop(context, ToolbarAction.rebuildLibrary),
-              ),
-              _SheetItem(
-                icon: Icons.auto_awesome_rounded,
-                title: '批量文献提取',
-                subtitle: '选择文献，使用 AI 将 PDF 转为带排版的 HTML',
-                onTap: () =>
-                    Navigator.pop(context, ToolbarAction.batchExtract),
               ),
               SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
             ],

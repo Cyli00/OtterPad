@@ -40,10 +40,6 @@ class HomeHeader extends ConsumerWidget {
           tasks.addByIdentifier(identifier);
         }
 
-      case ToolbarAction.batchExtract:
-        if (!context.mounted) return;
-        context.push(AppRoutes.libraryBatchExtract);
-
       case ToolbarAction.rebuildLibrary:
         tasks.rebuildLibrary();
     }
@@ -57,90 +53,88 @@ class HomeHeader extends ConsumerWidget {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isMobile = screenWidth < 600;
 
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16.0,
-          right: 16.0,
-          top: isMobile ? 4.0 : 8.0,
-          bottom: 16.0,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () => context.push(AppRoutes.librarySearch),
-                child: Container(
-                  height: isMobile ? 44 : 48,
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest.withAlpha(150),
-                    borderRadius: BorderRadius.circular(24.0),
-                    border: Border.all(
-                      color: colorScheme.outlineVariant.withAlpha(100),
-                      width: 1,
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16.0,
+        right: 16.0,
+        top: isMobile ? 4.0 : 8.0,
+        bottom: 16.0,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => context.push(AppRoutes.librarySearch),
+              child: Container(
+                height: isMobile ? 44 : 48,
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest.withAlpha(150),
+                  borderRadius: BorderRadius.circular(24.0),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withAlpha(100),
+                    width: 1,
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.search_rounded,
+                      color: colorScheme.onSurfaceVariant,
+                      size: isMobile ? 20 : 24,
                     ),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.search_rounded,
-                        color: colorScheme.onSurfaceVariant,
-                        size: isMobile ? 20 : 24,
-                      ),
-                      const SizedBox(width: 8.0),
-                      Expanded(
-                        child: Text(
-                          isMobile ? '搜索文献...' : '搜索文献、作者、关键词...',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontSize: isMobile ? 14 : 15,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 8.0),
+                    Expanded(
+                      child: Text(
+                        isMobile ? '搜索文献...' : '搜索文献、作者、关键词...',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: isMobile ? 14 : 15,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 8.0),
-            _HeaderButton(
-              icon: isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
-              tooltip: isGrid ? '切换列表视图' : '切换网格视图',
-              size: isMobile ? 36 : 40,
-              onPressed: () {
-                ref.read(viewModeProvider.notifier).state = !isGrid;
-              },
+          ),
+          const SizedBox(width: 8.0),
+          _HeaderButton(
+            icon: isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
+            tooltip: isGrid ? '切换列表视图' : '切换网格视图',
+            size: isMobile ? 36 : 40,
+            onPressed: () {
+              ref.read(viewModeProvider.notifier).state = !isGrid;
+            },
+          ),
+          const SizedBox(width: 8.0),
+          _HeaderButton(
+            icon: Icons.add_circle_outline_rounded,
+            tooltip: '工具',
+            size: isMobile ? 36 : 40,
+            onPressed: () async {
+              final action = await showToolbarSheet(context);
+              if (action != null && context.mounted) {
+                _handleToolbarAction(context, ref, action);
+              }
+            },
+          ),
+          const SizedBox(width: 8.0),
+          Container(
+            width: isMobile ? 36 : 40,
+            height: isMobile ? 36 : 40,
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: 8.0),
-            _HeaderButton(
-              icon: Icons.add_circle_outline_rounded,
-              tooltip: '工具',
-              size: isMobile ? 36 : 40,
-              onPressed: () async {
-                final action = await showToolbarSheet(context);
-                if (action != null && context.mounted) {
-                  _handleToolbarAction(context, ref, action);
-                }
-              },
+            child: Icon(
+              Icons.person_outline_rounded,
+              color: colorScheme.primary,
+              size: isMobile ? 20 : 22,
             ),
-            const SizedBox(width: 8.0),
-            Container(
-              width: isMobile ? 36 : 40,
-              height: isMobile ? 36 : 40,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.person_outline_rounded,
-                color: colorScheme.primary,
-                size: isMobile ? 20 : 22,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

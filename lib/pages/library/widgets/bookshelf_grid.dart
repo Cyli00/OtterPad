@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../providers/documents_provider.dart';
-import '../../../router/app_routes.dart';
+import '../../../providers/selection_provider.dart';
 import 'doc_card_actions.dart';
 import 'document_card.dart';
 
@@ -12,6 +11,9 @@ class BookshelfGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final docs = ref.watch(validDocsProvider);
+    final selection = ref.watch(selectionProvider);
+    final isSelectionMode =
+        selection.isActive && selection.sourceContext == 'library';
 
     if (docs.isEmpty) {
       return const SliverToBoxAdapter(
@@ -44,15 +46,14 @@ class BookshelfGrid extends ConsumerWidget {
               authors: doc.authors.join(', '),
               journalName: doc.journal ?? '',
               year: doc.year ?? '',
-              isBookmarked: false,
+              isSelectionMode: isSelectionMode,
+              isSelected: selection.selectedIds.contains(doc.id),
               onTap: () => DocCardActions.openReader(context, doc),
-              onBookmarkToggle: () {},
-              onMoreTap: () {},
-              onDelete: () => DocCardActions.delete(ref, doc.id),
-              onBatchDelete: () => context.push(
-                AppRoutes.libraryBatchDelete,
-                extra: <String, String?>{'initialSelectedId': doc.id},
-              ),
+              onLongPress: () => ref
+                  .read(selectionProvider.notifier)
+                  .enter(doc.id, 'library'),
+              onSelectionTap: () =>
+                  ref.read(selectionProvider.notifier).toggle(doc.id),
             );
           },
           childCount: docs.length,

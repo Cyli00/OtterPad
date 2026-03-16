@@ -6,8 +6,6 @@ abstract class AppRoutes {
 
   // 文献库子页面
   static const librarySearch = '/library/search';
-  static const libraryBatchExtract = '/library/batch-extract';
-  static const libraryBatchDelete = '/library/batch-delete';
 
   // 书架子页面
   static const shelfFavorite = '/shelf/favorite';

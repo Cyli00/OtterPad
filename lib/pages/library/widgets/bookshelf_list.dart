@@ -1,27 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../providers/documents_provider.dart';
-import '../../../router/app_routes.dart';
+import '../../../providers/selection_provider.dart';
 import 'doc_card_actions.dart';
 import 'doc_list_card.dart';
 
 /// 文献库列表视图
 ///
 /// 窄屏（<900dp）：单栏 [SliverList]，卡片自然高度。
-/// 宽屏（≥900dp）：双栏 [SliverGrid]，内容区居中且不超过 [_kMaxContentWidth]。
+/// 中屏（≥900dp）：双栏 [SliverGrid]。
+/// 宽屏（≥1800dp）：三栏 [SliverGrid]，内容区居中且不超过 [_kMaxContentWidth]。
 class BookshelfList extends ConsumerWidget {
   const BookshelfList({super.key});
 
-  // ┌─ 桌面端布局参数（可调） ──────────────────────────────┐
-  static const _kTwoColumnBreakpoint = 900.0; // ← 双栏触发宽度
-  static const _kMaxContentWidth = 1200.0; // ← 内容区最大宽度
-  static const _kCardHeight = 160.0; // ← 双栏模式卡片高度
+  // ┌─ 桌面端布局参数（可调） ──────────────────────────────────┐
+  static const _kTwoColumnBreakpoint = 900; // ← 双栏触发宽度
+  static const _kThreeColumnBreakpoint = 1800; // ← 三栏触发宽度
+  static const _kMaxContentWidth = 2700; // ← 内容区最大宽度
+  static const _kCardHeight = 200.0; // ← 多栏模式卡片高度（≥ 缩略图168 + padding32）
   // └──────────────────────────────────────────────────────────┘
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final docs = ref.watch(validDocsProvider);
+    final selection = ref.watch(selectionProvider);
+    final isSelectionMode =
+        selection.isActive && selection.sourceContext == 'library';
 
     if (docs.isEmpty) {
       return const SliverToBoxAdapter(
@@ -32,12 +36,30 @@ class BookshelfList extends ConsumerWidget {
       );
     }
 
+    Widget buildCard(int index) {
+      final doc = docs[index];
+      return DocListCard(
+        doc: doc,
+        isSelectionMode: isSelectionMode,
+        isSelected: selection.selectedIds.contains(doc.id),
+        onTap: () => DocCardActions.openReader(context, doc),
+        onLongPress: () =>
+            ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
+        onSelectionTap: () =>
+            ref.read(selectionProvider.notifier).toggle(doc.id),
+      );
+    }
+
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.crossAxisExtent;
-        final useTwoColumns = width >= _kTwoColumnBreakpoint;
+        final columnCount = width >= _kThreeColumnBreakpoint
+            ? 3
+            : width >= _kTwoColumnBreakpoint
+                ? 2
+                : 1;
 
-        if (useTwoColumns) {
+        if (columnCount >= 2) {
           final contentWidth = width.clamp(0.0, _kMaxContentWidth);
           final hPadding = (width - contentWidth) / 2 + 16;
 
@@ -45,25 +67,14 @@ class BookshelfList extends ConsumerWidget {
             padding:
                 EdgeInsets.symmetric(horizontal: hPadding, vertical: 8.0),
             sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columnCount,
                 mainAxisExtent: _kCardHeight,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 12,
               ),
               delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final doc = docs[index];
-                  return DocListCard(
-                    doc: doc,
-                    onTap: () => DocCardActions.openReader(context, doc),
-                    onDelete: () => DocCardActions.delete(ref, doc.id),
-                    onBatchDelete: () => context.push(
-                      AppRoutes.libraryBatchDelete,
-                      extra: <String, String?>{'initialSelectedId': doc.id},
-                    ),
-                  );
-                },
+                (context, index) => buildCard(index),
                 childCount: docs.length,
               ),
             ),
@@ -77,18 +88,7 @@ class BookshelfList extends ConsumerWidget {
           sliver: SliverList.separated(
             itemCount: docs.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              return DocListCard(
-                doc: doc,
-                onTap: () => DocCardActions.openReader(context, doc),
-                onDelete: () => DocCardActions.delete(ref, doc.id),
-                onBatchDelete: () => context.push(
-                  AppRoutes.libraryBatchDelete,
-                  extra: <String, String?>{'initialSelectedId': doc.id},
-                ),
-              );
-            },
+            itemBuilder: (context, index) => buildCard(index),
           ),
         );
       },

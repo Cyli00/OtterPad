@@ -105,6 +105,7 @@ When adding or updating dependencies in `pubspec.yaml`:
 - 隐藏主文献库视图中的无文件条目
 - SnackBar 取消按钮 + CancelToken 全链路传递
 - 模型服务设置页面 MD3 UI 重构
+- 内联多选模式 (SelectionProvider + SelectionAppBar；支持网格/列表视图、文献库/收藏夹/无文件条目页；迁移批量提取功能)
 
 ### 性能优化 (Performance)
 - 优化库重构 O(N²) Riverpod 状态更新引发的 UI 卡顿
