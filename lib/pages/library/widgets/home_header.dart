@@ -1,12 +1,11 @@
-import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../providers/documents_provider.dart';
+import '../../../providers/task_provider.dart';
 import '../../../router/app_routes.dart';
-import '../../../services/identifier_resolver.dart';
 import 'identifier_dialog.dart';
 import 'toolbar_bottom_sheet.dart';
 
@@ -18,6 +17,7 @@ class HomeHeader extends ConsumerWidget {
     WidgetRef ref,
     ToolbarAction action,
   ) async {
+    final tasks = ref.read(taskProvider.notifier);
     switch (action) {
       case ToolbarAction.addFile:
         final result = await FilePicker.platform.pickFiles(
@@ -25,269 +25,28 @@ class HomeHeader extends ConsumerWidget {
           allowedExtensions: ['pdf'],
           allowMultiple: true,
         );
-        if (result != null && context.mounted) {
-          final notifier = ref.read(documentsProvider.notifier);
-          final messenger = ScaffoldMessenger.of(context);
-          final files = result.files
-              .where((file) => file.path != null)
+        if (result != null) {
+          final paths = result.files
+              .where((f) => f.path != null)
+              .map((f) => f.path!)
               .toList();
-          final cancelToken = CancelToken();
-          var importedCount = 0;
-          var duplicateCount = 0;
-          var completeMetadataCount = 0;
-          var partialMetadataCount = 0;
-
-          AddFileResult? lastResult;
-          for (int i = 0; i < files.length; i++) {
-            if (cancelToken.isCancelled || !context.mounted) break;
-
-            messenger.hideCurrentSnackBar();
-            messenger.showSnackBar(
-              buildProgressSnackBar(
-                context: context,
-                current: i + 1,
-                total: files.length,
-                fileName: files[i].name,
-                status: '正在提取 PDF 元数据...',
-                onCancel: () {
-                  cancelToken.cancel();
-                  messenger.hideCurrentSnackBar();
-                },
-              ),
-            );
-
-            lastResult = await notifier.addFile(
-              files[i].path!,
-              cancelToken: cancelToken,
-            );
-
-            if (lastResult.type == AddFileResultType.duplicate) {
-              duplicateCount++;
-              continue;
-            }
-
-            importedCount++;
-            if (lastResult.metadataStatus == MetadataStatus.complete) {
-              completeMetadataCount++;
-            } else if (lastResult.metadataStatus == MetadataStatus.partial) {
-              partialMetadataCount++;
-            }
-          }
-
-          if (!context.mounted) return;
-          messenger.hideCurrentSnackBar();
-
-          final unresolvedMetadataCount =
-              importedCount - completeMetadataCount - partialMetadataCount;
-          final message = _buildAddFileMessage(
-            cancelToken: cancelToken,
-            totalFiles: files.length,
-            importedCount: importedCount,
-            duplicateCount: duplicateCount,
-            completeMetadataCount: completeMetadataCount,
-            partialMetadataCount: partialMetadataCount,
-            unresolvedMetadataCount: unresolvedMetadataCount,
-            lastResult: lastResult,
-          );
-
-          messenger.showSnackBar(
-            buildResultSnackBar(context: context, message: message),
-          );
+          tasks.addFiles(paths);
         }
 
       case ToolbarAction.addByIdentifier:
         if (!context.mounted) return;
         final identifier = await showIdentifierDialog(context);
-        if (identifier != null && context.mounted) {
-          final messenger = ScaffoldMessenger.of(context);
-          final cancelToken = CancelToken();
-          messenger.showSnackBar(
-            buildProgressSnackBar(
-              context: context,
-              current: 1,
-              total: 1,
-              fileName: identifier,
-              status: '正在解析标识符...',
-              onCancel: () {
-                cancelToken.cancel();
-                messenger.hideCurrentSnackBar();
-              },
-              duration: const Duration(seconds: 30),
-            ),
-          );
-
-          try {
-            final (doc, addResult) = await ref
-                .read(documentsProvider.notifier)
-                .addByIdentifier(identifier, cancelToken: cancelToken);
-            messenger.hideCurrentSnackBar();
-            if (cancelToken.isCancelled || !context.mounted) return;
-            if (addResult == AddByIdentifierResult.duplicate) {
-              messenger.showSnackBar(
-                buildResultSnackBar(context: context, message: '该文献已存在于文库中'),
-              );
-            } else if (doc.filePath.isEmpty) {
-              messenger.showSnackBar(
-                buildResultSnackBar(
-                  context: context,
-                  message: '已添加「${doc.title}」，但未获取到关联 PDF',
-                  duration: const Duration(seconds: 6),
-                  action: SnackBarAction(
-                    label: '去添加',
-                    onPressed: () {
-                      if (context.mounted) {
-                        context.push(AppRoutes.shelfNoFileEntries);
-                      }
-                    },
-                  ),
-                ),
-              );
-            } else {
-              messenger.showSnackBar(
-                buildResultSnackBar(
-                  context: context,
-                  message: '已添加: ${doc.title}',
-                ),
-              );
-            }
-          } on IdentifierResolveException catch (error) {
-            messenger.hideCurrentSnackBar();
-            if (cancelToken.isCancelled || !context.mounted) return;
-            messenger.showSnackBar(
-              buildResultSnackBar(context: context, message: error.message),
-            );
-          } on DioException {
-            messenger.hideCurrentSnackBar();
-            if (cancelToken.isCancelled || !context.mounted) return;
-            messenger.showSnackBar(
-              buildResultSnackBar(context: context, message: '网络请求失败，请稍后重试'),
-            );
-          }
+        if (identifier != null) {
+          tasks.addByIdentifier(identifier);
         }
 
       case ToolbarAction.batchExtract:
         if (!context.mounted) return;
-        await context.push(AppRoutes.libraryBatchExtract);
+        context.push(AppRoutes.libraryBatchExtract);
 
       case ToolbarAction.rebuildLibrary:
-        if (!context.mounted) return;
-        final messenger = ScaffoldMessenger.of(context);
-        final cancelToken = CancelToken();
-        messenger.showSnackBar(
-          buildProgressSnackBar(
-            context: context,
-            fileName: 'NightReader 文库',
-            status: '准备重构文库...',
-            onCancel: () {
-              cancelToken.cancel();
-              messenger.hideCurrentSnackBar();
-            },
-          ),
-        );
-
-        RebuildResult? result;
-        try {
-          result = await ref
-              .read(documentsProvider.notifier)
-              .rebuild(
-                cancelToken: cancelToken,
-                onProgress: (progress) {
-                  if (!context.mounted || cancelToken.isCancelled) return;
-                  messenger.hideCurrentSnackBar();
-                  messenger.showSnackBar(
-                    buildProgressSnackBar(
-                      context: context,
-                      current: progress.current,
-                      total: progress.total,
-                      fileName: progress.fileName,
-                      status: progress.status,
-                      onCancel: () {
-                        cancelToken.cancel();
-                        messenger.hideCurrentSnackBar();
-                      },
-                    ),
-                  );
-                },
-              );
-        } on DioException {
-          // CancelToken 取消时 Dio 会抛异常，这里静默处理。
-        }
-
-        if (!context.mounted) return;
-        messenger.hideCurrentSnackBar();
-
-        var message = cancelToken.isCancelled ? '已取消重构文库' : '文库重构完成';
-        if (result != null) {
-          final parts = <String>[];
-          if (result.addedCount > 0) {
-            parts.add('新增 ${result.addedCount} 篇');
-          }
-          if (result.removedCount > 0) {
-            parts.add('清理 ${result.removedCount} 篇');
-          }
-          if (result.downloadedCount > 0) {
-            parts.add('补回 PDF ${result.downloadedCount} 篇');
-          }
-          if (result.repairedCount > 0) {
-            parts.add('修复元数据 ${result.repairedCount} 篇');
-          }
-          if (result.unresolvedCount > 0) {
-            parts.add('仍有 ${result.unresolvedCount} 篇待补全元数据');
-          }
-          if (result.noFileCount > 0) {
-            parts.add('${result.noFileCount} 个无文件条目');
-          }
-          if (parts.isEmpty) {
-            message += '，文库状态正常';
-          } else {
-            message += '：${parts.join('，')}';
-          }
-        }
-
-        messenger.showSnackBar(
-          buildResultSnackBar(context: context, message: message),
-        );
+        tasks.rebuildLibrary();
     }
-  }
-
-  String _buildAddFileMessage({
-    required CancelToken cancelToken,
-    required int totalFiles,
-    required int importedCount,
-    required int duplicateCount,
-    required int completeMetadataCount,
-    required int partialMetadataCount,
-    required int unresolvedMetadataCount,
-    required AddFileResult? lastResult,
-  }) {
-    if (totalFiles == 1 && lastResult?.document != null) {
-      final doc = lastResult!.document!;
-      if (lastResult.type == AddFileResultType.duplicate) {
-        return '文库中已存在: ${doc.title}';
-      }
-      switch (lastResult.metadataStatus) {
-        case MetadataStatus.complete:
-          return '已导入并提取元数据: ${doc.title}';
-        case MetadataStatus.partial:
-          return '已导入 ${doc.title}，仅提取到部分元数据';
-        case MetadataStatus.none:
-          return '已导入 ${doc.title}，未识别到可用元数据';
-      }
-    }
-
-    final parts = <String>[];
-    if (importedCount > 0) parts.add('导入 $importedCount 篇');
-    if (duplicateCount > 0) parts.add('重复 $duplicateCount 篇');
-    if (completeMetadataCount > 0) parts.add('完整元数据 $completeMetadataCount 篇');
-    if (partialMetadataCount > 0) parts.add('部分元数据 $partialMetadataCount 篇');
-    if (unresolvedMetadataCount > 0) {
-      parts.add('未识别元数据 $unresolvedMetadataCount 篇');
-    }
-    if (parts.isEmpty) {
-      return cancelToken.isCancelled ? '已取消导入' : '未导入任何文件';
-    }
-    final prefix = cancelToken.isCancelled ? '已取消导入' : '导入完成';
-    return '$prefix：${parts.join('，')}';
   }
 
   @override

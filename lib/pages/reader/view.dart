@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,9 +11,9 @@ import 'package:pdfrx/pdfrx.dart';
 import '../../../data/models/book/document.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/reader_settings_provider.dart';
-import '../../router/app_routes.dart';
+import '../../providers/task_provider.dart';
 import '../../services/doc_extract_service.dart';
-import '../library/widgets/toolbar_bottom_sheet.dart';
+import '../../services/snackbar_service.dart';
 import 'widgets/appearance_panel.dart';
 import 'widgets/markdown_reader.dart';
 import 'widgets/search_overlay.dart';
@@ -30,11 +29,9 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage>
     with SingleTickerProviderStateMixin {
-  bool _extracting = false;
   bool _showPreview = false;
   String? _mdPath;
   String? _mdContent;
-  CancelToken? _cancelToken;
 
   // 搜索
   bool _searchActive = false;
@@ -124,139 +121,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // ─── 提取逻辑 ───
 
-  Future<void> _onExtractPressed() async {
-    final docState = ref.read(docExtractApiProvider);
-
-    if (docState.baseUrl.isEmpty || docState.apiKey.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('请先在设置中配置文档提取 API'),
-          action: SnackBarAction(
-            label: '前往设置',
-            onPressed: () => context.push(AppRoutes.settingsApi),
-          ),
-        ),
-      );
-      return;
-    }
-
+  void _onExtractPressed() {
     final filePath = widget.document.filePath;
     if (filePath.isEmpty || !File(filePath).existsSync()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        buildResultSnackBar(context: context, message: 'PDF 文件不存在'),
-      );
+      ref.read(snackBarServiceProvider).showResult(message: 'PDF 文件不存在');
       return;
     }
 
-    setState(() => _extracting = true);
-    _cancelToken = CancelToken();
-
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-    if (!mounted) return;
-    scaffoldMessenger.showSnackBar(
-      buildProgressSnackBar(
-        context: context,
-        fileName: widget.document.title,
-        status: '正在提取文档…',
-        onCancel: () {
-          _cancelToken?.cancel();
-          scaffoldMessenger.hideCurrentSnackBar();
-        },
-        duration: const Duration(minutes: 10),
-      ),
-    );
-
-    try {
-      final result = await DocExtractService.instance.extract(
-        filePath: filePath,
-        apiUrl: docState.baseUrl,
-        token: docState.apiKey,
-        state: docState,
-        cancelToken: _cancelToken,
-      );
-
-      if (!mounted) {
-        scaffoldMessenger.hideCurrentSnackBar();
-        return;
-      }
-      scaffoldMessenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          buildProgressSnackBar(
-            context: context,
-            fileName: widget.document.title,
-            status: '正在保存结果…',
-            onCancel: () {},
-          ),
-        );
-
-      await DocExtractService.instance.saveResult(
-        filePath,
-        result,
-        token: docState.apiKey,
-      );
-
-      if (!mounted) {
-        scaffoldMessenger.hideCurrentSnackBar();
-        return;
-      }
-      scaffoldMessenger.hideCurrentSnackBar();
-
-      final mdPath = p.join(
-        p.dirname(filePath),
-        '${p.basenameWithoutExtension(filePath)}.md',
-      );
-      final resolvedMd = DocExtractService.resolveMarkdownImagePaths(
-        result.markdown,
-        result.imageDir ??
-            p.join(
-              p.dirname(filePath),
-              '${p.basenameWithoutExtension(filePath)}_images',
-            ),
-      );
-
-      _enterController.reset();
-      setState(() {
-        _mdPath = mdPath;
-        _mdContent = resolvedMd;
-        _showPreview = true;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _enterController.forward();
-      });
-    } on DioException catch (e) {
-      if (e.type == DioExceptionType.cancel) {
-        scaffoldMessenger.hideCurrentSnackBar();
+    ref.read(taskProvider.notifier).extractDocument(
+      filePath: filePath,
+      title: widget.document.title,
+      apiState: ref.read(docExtractApiProvider),
+      onSuccess: (mdPath, resolvedMd) {
         if (!mounted) return;
-        scaffoldMessenger.showSnackBar(
-          buildResultSnackBar(context: context, message: '已取消提取'),
-        );
-        return;
-      }
-      scaffoldMessenger.hideCurrentSnackBar();
-      if (!mounted) return;
-      scaffoldMessenger.showSnackBar(
-        buildResultSnackBar(context: context, message: '网络错误: ${e.message}'),
-      );
-    } on DocExtractException catch (e) {
-      scaffoldMessenger.hideCurrentSnackBar();
-      if (!mounted) return;
-      scaffoldMessenger.showSnackBar(
-        buildResultSnackBar(context: context, message: e.message),
-      );
-    } catch (e) {
-      scaffoldMessenger.hideCurrentSnackBar();
-      if (!mounted) return;
-      scaffoldMessenger.showSnackBar(
-        buildResultSnackBar(context: context, message: '提取失败: $e'),
-      );
-    } finally {
-      if (mounted) setState(() => _extracting = false);
-      _cancelToken = null;
-    }
+        _enterController.reset();
+        setState(() {
+          _mdPath = mdPath;
+          _mdContent = resolvedMd;
+          _showPreview = true;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _enterController.forward();
+        });
+      },
+    );
   }
 
   void _togglePreview() {
@@ -365,7 +253,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   @override
   void dispose() {
-    _cancelToken?.cancel();
     _scrollController.dispose();
     _enterController.dispose();
     _appearanceEntry?.remove();
@@ -379,6 +266,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final readerSettings = ref.watch(readerSettingsProvider);
+    final extracting = ref.watch(taskProvider.select(
+      (tasks) => tasks[TaskType.extractDocument]?.status == TaskStatus.running,
+    ));
 
     // 异步初始化完成前显示骨架加载状态
     if (!_initialized) {
@@ -421,7 +311,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 if (isHighlightMode)
                   _buildHighlightSearchBar(cs)
                 else
-                  _buildToolbar(theme, cs),
+                  _buildToolbar(theme, cs, extracting: extracting),
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
@@ -459,7 +349,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   /// 工具栏：返回 / 搜索 / PDF切换 / 刷新 / 信息 / 外观
-  Widget _buildToolbar(ThemeData theme, ColorScheme cs) {
+  Widget _buildToolbar(ThemeData theme, ColorScheme cs, {bool extracting = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: SizedBox(
@@ -489,9 +379,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 onPressed: _openSearch,
               ),
             // 提取/切换按钮
-            _buildExtractButton(cs),
+            _buildExtractButton(cs, extracting),
             // 重新提取
-            if (_hasResult && !_extracting)
+            if (_hasResult && !extracting)
               IconButton(
                 icon: Icon(
                   Icons.sync_rounded,
@@ -656,8 +546,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Widget _buildExtractButton(ColorScheme cs) {
-    if (_extracting) {
+  Widget _buildExtractButton(ColorScheme cs, bool extracting) {
+    if (extracting) {
       return const Padding(
         padding: EdgeInsets.all(12),
         child: SizedBox(

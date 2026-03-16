@@ -15,9 +15,33 @@ Do not edit files in the `android/`, `windows/`, `linux/`, `macos/`, `ios/`, and
 - Write each of them to ~/CLAUDE.md below **Completed Tasks**.
 - Remove similar accomplished tasks from ~/CLAUDE.md below **Todolist**
 
-## Database Management
+## Infrastructure Modules (Must Use)
 
+The following modules are mandatory when their scenarios apply. **Do NOT bypass them with raw alternatives.**
 
+### SnackBar & Task System
+
+- **SnackBarService** (`lib/services/snackbar_service.dart`) — All user-facing notifications (progress, result, error) MUST go through `ref.read(snackBarServiceProvider)`. NEVER use `ScaffoldMessenger.of(context).showSnackBar()` directly — it breaks on navigation.
+- **TaskProvider** (`lib/providers/task_provider.dart`) — All long-running operations (file import, identifier resolution, library rebuild, PDF redownload, document extraction) MUST be dispatched via `ref.read(taskProvider.notifier)`. NEVER await these operations in widget methods or manage CancelTokens in widget state.
+
+### PDF Processing
+
+- **PdfProcessLock** (`lib/services/pdf_process_lock.dart`) — Any operation that opens a full PDF (thumbnails, text extraction) MUST run inside `PdfProcessLock.instance.run(...)` to prevent OOM from concurrent PDF loads.
+- **PdfThumbnailService** (`lib/services/pdf_thumbnail_service.dart`) — Use `PdfThumbnailService.instance.getThumbnailPath(filePath)` for cover images. NEVER load PDFs directly for thumbnail rendering.
+
+### Identifier & Metadata
+
+- **IdentifierParser** (`lib/services/identifier_parser.dart`) — Use `IdentifierParser.parse(raw)` to normalize DOI/PMID/arXiv/ISBN input. NEVER write custom regex for identifier detection.
+- **IdentifierResolver** (`lib/services/identifier_resolver.dart`) — Use `IdentifierResolver.instance.resolve(...)` for metadata lookup and PDF download. NEVER call publisher APIs or Unpaywall directly.
+- **DocumentMetadataParser** (`lib/services/document_metadata_parser.dart`) — Use static methods (`parseFilePath`, `extractDoi`, `extractYear`) for text-based metadata extraction. NEVER write inline regex for DOI/year patterns.
+
+### Network & Proxy
+
+- **ProxyProvider** (`lib/providers/proxy_provider.dart`) — Manages proxy config and auto-syncs to all Dio instances (IdentifierResolver, DocExtractService, BatchExtractService). NEVER configure proxy on individual services.
+
+### Storage
+
+- **GStorage** (`lib/core/storage/storage.dart`) — Access Hive boxes via `GStorage.setting`, `GStorage.documents`, `GStorage.favorites`. NEVER call `Hive.openBox()` directly.
 
 ## UI Design Rules (Strict MD3 Compliance)
 

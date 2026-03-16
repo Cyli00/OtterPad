@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart'
     show LatexBlockSyntax;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import '../../utils/latex_syntax.dart';
@@ -12,6 +13,7 @@ import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
 import '../../services/doc_extract_service.dart';
+import '../../services/snackbar_service.dart';
 
 class _EmojiElementBuilder extends MarkdownElementBuilder {
   @override
@@ -34,7 +36,7 @@ class _EmojiElementBuilder extends MarkdownElementBuilder {
 /// 支持两种加载方式：
 /// - [markdownContent] 直接传入已解析图片路径的 Markdown（刚提取的）
 /// - [filePath] 从磁盘加载已保存的 .md 文件（图片路径需要解析）
-class ExtractResultPage extends StatelessWidget {
+class ExtractResultPage extends ConsumerWidget {
   final String title;
   final String? markdownContent;
   final String? filePath;
@@ -68,7 +70,7 @@ class ExtractResultPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final sharePath = _htmlPath ?? filePath;
@@ -92,14 +94,10 @@ class ExtractResultPage extends StatelessWidget {
             onPressed: () async {
               final content = await _loadContent();
               await Clipboard.setData(ClipboardData(text: content));
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('已复制到剪贴板'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              }
+              ref.read(snackBarServiceProvider).showResult(
+                    message: '已复制到剪贴板',
+                    duration: const Duration(seconds: 2),
+                  );
             },
           ),
           if (sharePath != null)

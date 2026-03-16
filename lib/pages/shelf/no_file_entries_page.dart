@@ -1,11 +1,12 @@
-import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../providers/documents_provider.dart';
+import '../../providers/task_provider.dart';
+import '../../services/snackbar_service.dart';
 import '../library/widgets/doc_list_card.dart';
-import '../library/widgets/toolbar_bottom_sheet.dart';
 
 /// 无文件条目详情页
 class NoFileEntriesPage extends ConsumerWidget {
@@ -106,8 +107,8 @@ class NoFileEntriesPage extends ConsumerWidget {
                           if (hasDoi) ...[
                             const SizedBox(width: 8),
                             OutlinedButton.icon(
-                              onPressed: () => _handleRedownload(
-                                  context, ref, doc.id, doc.title),
+                              onPressed: () =>
+                                  _handleRedownload(ref, doc.id, doc.title),
                               icon: const Icon(Icons.download_rounded,
                                   size: 18),
                               label: const Text('重新下载'),
@@ -137,63 +138,19 @@ class NoFileEntriesPage extends ConsumerWidget {
       allowedExtensions: ['pdf'],
     );
     if (result == null || result.files.first.path == null) return;
-    if (!context.mounted) return;
 
-    final messenger = ScaffoldMessenger.of(context);
+    final snackBar = ref.read(snackBarServiceProvider);
     try {
       await ref
           .read(documentsProvider.notifier)
           .attachFile(docId, result.files.first.path!);
-      if (!context.mounted) return;
-      messenger.showSnackBar(
-        buildResultSnackBar(context: context, message: '文件附加成功'),
-      );
+      snackBar.showResult(message: '文件附加成功');
     } catch (e) {
-      if (!context.mounted) return;
-      messenger.showSnackBar(
-        buildResultSnackBar(context: context, message: '附加文件失败: $e'),
-      );
+      snackBar.showResult(message: '附加文件失败: $e');
     }
   }
 
-  Future<void> _handleRedownload(
-    BuildContext context,
-    WidgetRef ref,
-    String docId,
-    String docTitle,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final cancelToken = CancelToken();
-
-    messenger.showSnackBar(
-      buildProgressSnackBar(
-        context: context,
-        current: 1,
-        total: 1,
-        fileName: docTitle,
-        status: '正在重新下载...',
-        onCancel: () {
-          cancelToken.cancel();
-          messenger.hideCurrentSnackBar();
-        },
-        duration: const Duration(seconds: 30),
-      ),
-    );
-
-    final success = await ref
-        .read(documentsProvider.notifier)
-        .redownloadPdf(docId, cancelToken: cancelToken);
-
-    if (!context.mounted) return;
-    messenger.hideCurrentSnackBar();
-
-    if (cancelToken.isCancelled) return;
-
-    messenger.showSnackBar(
-      buildResultSnackBar(
-        context: context,
-        message: success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源',
-      ),
-    );
+  void _handleRedownload(WidgetRef ref, String docId, String docTitle) {
+    ref.read(taskProvider.notifier).redownloadPdf(docId, docTitle);
   }
 }

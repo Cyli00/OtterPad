@@ -11,8 +11,8 @@ import '../../providers/api_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../services/batch_extract_service.dart';
+import '../../services/snackbar_service.dart';
 import 'widgets/pdf_cover.dart';
-import 'widgets/toolbar_bottom_sheet.dart';
 
 // ─── 批量提取选择页面 ────────────────────────────────────────────────────────
 
@@ -94,13 +94,9 @@ class _BatchExtractPageState extends ConsumerState<BatchExtractPage> {
 
     final apiState = ref.read(docExtractApiProvider);
     if (apiState.apiKey.isEmpty || apiState.baseUrl.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        buildResultSnackBar(
-          context: context,
-          message: '请先在设置中配置文档提取 API（Base URL 和 Access Token）',
-        ),
-      );
+      ref.read(snackBarServiceProvider).showResult(
+            message: '请先在设置中配置文档提取 API（Base URL 和 Access Token）',
+          );
       return;
     }
 
@@ -112,13 +108,9 @@ class _BatchExtractPageState extends ConsumerState<BatchExtractPage> {
         .toList();
 
     if (selectedDocs.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        buildResultSnackBar(
-          context: context,
-          message: '所选文献中无本地 PDF 文件，无法提取',
-        ),
-      );
+      ref.read(snackBarServiceProvider).showResult(
+            message: '所选文献中无本地 PDF 文件，无法提取',
+          );
       return;
     }
 

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
+import 'services/snackbar_service.dart';
 
 /// 各平台系统默认字体族
 String? get _systemFontFamily {
@@ -52,6 +53,7 @@ class NightReaderApp extends ConsumerWidget {
         }
 
         return MaterialApp.router(
+          scaffoldMessengerKey: scaffoldMessengerKey,
           title: '晚读 Otero',
           debugShowCheckedModeBanner: false,
           themeMode: themeState.mode,
