@@ -106,8 +106,8 @@ class NoFileEntriesPage extends ConsumerWidget {
                           if (hasDoi) ...[
                             const SizedBox(width: 8),
                             OutlinedButton.icon(
-                              onPressed: () =>
-                                  _handleRedownload(context, ref, doc.id),
+                              onPressed: () => _handleRedownload(
+                                  context, ref, doc.id, doc.title),
                               icon: const Icon(Icons.download_rounded,
                                   size: 18),
                               label: const Text('重新下载'),
@@ -160,31 +160,23 @@ class NoFileEntriesPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     String docId,
+    String docTitle,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final cancelToken = CancelToken();
 
     messenger.showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 12),
-            Text('正在重新下载...'),
-          ],
-        ),
+      buildProgressSnackBar(
+        context: context,
+        current: 1,
+        total: 1,
+        fileName: docTitle,
+        status: '正在重新下载...',
+        onCancel: () {
+          cancelToken.cancel();
+          messenger.hideCurrentSnackBar();
+        },
         duration: const Duration(seconds: 30),
-        action: SnackBarAction(
-          label: '取消',
-          onPressed: () {
-            cancelToken.cancel();
-            messenger.hideCurrentSnackBar();
-          },
-        ),
       ),
     );
 
@@ -198,8 +190,9 @@ class NoFileEntriesPage extends ConsumerWidget {
     if (cancelToken.isCancelled) return;
 
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(success ? '下载成功' : '下载失败，未找到可用的 PDF 源'),
+      buildResultSnackBar(
+        context: context,
+        message: success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源',
       ),
     );
   }

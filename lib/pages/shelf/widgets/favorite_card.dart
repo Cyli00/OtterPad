@@ -281,7 +281,7 @@ class _FavoriteCardState extends State<FavoriteCard> {
                       ),
                       child: Center(
                         child: Text(
-                          '查看文库 · ${widget.totalCount} 篇文献',
+                          '查看文库 · 共 ${widget.totalCount} 篇',
                           style: theme.textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: colorScheme.primary,
