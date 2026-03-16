@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/documents_provider.dart';
 import '../../providers/task_provider.dart';
@@ -92,6 +93,19 @@ class NoFileEntriesPage extends ConsumerWidget {
                             if (hasDoi) ...[
                               const SizedBox(width: 4),
                               IconButton.filledTonal(
+                                onPressed: () =>
+                                    _handleOpenDoi(doc.doi!),
+                                icon:
+                                    const Icon(Icons.language_rounded),
+                                iconSize: 18,
+                                tooltip: '在浏览器中查看',
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(36, 36),
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton.filledTonal(
                                 onPressed: () => _handleRedownload(
                                     ref, doc.id, doc.title),
                                 icon:
@@ -139,6 +153,11 @@ class NoFileEntriesPage extends ConsumerWidget {
     } catch (e) {
       snackBar.showResult(message: '附加文件失败: $e');
     }
+  }
+
+  void _handleOpenDoi(String doi) {
+    final url = doi.startsWith('http') ? doi : 'https://doi.org/$doi';
+    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
   void _handleRedownload(WidgetRef ref, String docId, String docTitle) {

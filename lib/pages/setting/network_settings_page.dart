@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../providers/proxy_provider.dart';
 import '../../services/identifier_resolver.dart';
@@ -15,21 +14,25 @@ class NetworkSettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(
           '网络设置',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
-        leading: IconButton(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
+        centerTitle: false,
+        backgroundColor: cs.surface,
+        scrolledUnderElevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
+            .copyWith(bottom: 40),
         children: const [
           _ProxySettingsSection(),
         ],
@@ -124,132 +127,227 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
     }
   }
 
+  Widget _buildGroup(
+    BuildContext context, {
+    required String title,
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
+          child: Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: child,
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _fieldDeco(
+    BuildContext context, {
+    required String hint,
+    Widget? suffix,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: theme.textTheme.bodyMedium?.copyWith(
+        color: cs.onSurfaceVariant.withAlpha(120),
+      ),
+      filled: true,
+      fillColor: cs.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: cs.outlineVariant.withAlpha(100),
+          width: 1,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.primary, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 16,
+      ),
+      isDense: true,
+      suffixIcon: suffix,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final proxy = ref.watch(proxyProvider);
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    return Card(
-      elevation: 0,
-      color: cs.surfaceContainerLow,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: RadioGroup<ProxyMode>(
-          groupValue: proxy.mode,
-          onChanged: (v) {
-            if (v != null) ref.read(proxyProvider.notifier).setMode(v);
-          },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text('代理', style: tt.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold)),
-              ),
-              RadioListTile<ProxyMode>(
-                title: const Text('自定义代理'),
-                subtitle:
-                    const Text('手动指定代理地址'),
-                value: ProxyMode.custom,
-              ),
-              Animate(
-                target: proxy.mode == ProxyMode.custom ? 1 : 0,
-                effects: [
-                  FadeEffect(duration: 200.ms),
-                  CustomEffect(
-                    duration: 200.ms,
-                    curve: Curves.easeOut,
-                    builder: (context, value, child) => ClipRect(
-                      child: Align(
-                        alignment: Alignment.topCenter,
-                        heightFactor: value,
-                        child: child,
-                      ),
-                    ),
+    return Column(
+      children: [
+        // ── 代理设置 ──
+        _buildGroup(
+          context,
+          title: '代理',
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: RadioGroup<ProxyMode>(
+              groupValue: proxy.mode,
+              onChanged: (v) {
+                if (v != null) ref.read(proxyProvider.notifier).setMode(v);
+              },
+              child: Column(
+                children: [
+                  RadioListTile<ProxyMode>(
+                    title: const Text('自定义代理'),
+                    subtitle: const Text('手动指定代理地址'),
+                    value: ProxyMode.custom,
                   ),
-                ],
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: TextField(
-                          controller: _hostController,
-                          decoration: InputDecoration(
-                            labelText: '主机地址',
-                            hintText: '127.0.0.1',
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                            filled: true,
-                            fillColor: cs.surfaceContainerHighest,
+                  Animate(
+                    target: proxy.mode == ProxyMode.custom ? 1 : 0,
+                    effects: [
+                      FadeEffect(duration: 200.ms),
+                      CustomEffect(
+                        duration: 200.ms,
+                        curve: Curves.easeOut,
+                        builder: (context, value, child) => ClipRect(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            heightFactor: value,
+                            child: child,
                           ),
-                          onChanged: (_) => _onAddressChanged(),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 1,
-                        child: TextField(
-                          controller: _portController,
-                          decoration: InputDecoration(
-                            labelText: '端口',
-                            hintText: '7890',
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                            filled: true,
-                            fillColor: cs.surfaceContainerHighest,
-                          ),
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(5),
-                          ],
-                          onChanged: (_) => _onAddressChanged(),
                         ),
                       ),
                     ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '主机地址',
+                                  style:
+                                      theme.textTheme.titleSmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _hostController,
+                                  decoration: _fieldDeco(
+                                    context,
+                                    hint: '127.0.0.1',
+                                  ),
+                                  onChanged: (_) => _onAddressChanged(),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '端口',
+                                  style:
+                                      theme.textTheme.titleSmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _portController,
+                                  decoration: _fieldDeco(
+                                    context,
+                                    hint: '7890',
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(5),
+                                  ],
+                                  onChanged: (_) => _onAddressChanged(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  RadioListTile<ProxyMode>(
+                    title: const Text('系统代理'),
+                    subtitle: const Text('使用系统环境变量中的代理设置'),
+                    value: ProxyMode.system,
+                  ),
+                  RadioListTile<ProxyMode>(
+                    title: const Text('不使用代理'),
+                    subtitle: const Text('直接连接网络'),
+                    value: ProxyMode.none,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // ── 连通性测试 ──
+        _buildGroup(
+          context,
+          title: '连通性测试',
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '测试地址',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
-              RadioListTile<ProxyMode>(
-                title: const Text('系统代理'),
-                subtitle: const Text('使用系统环境变量中的代理设置'),
-                value: ProxyMode.system,
-              ),
-              RadioListTile<ProxyMode>(
-                title: const Text('不使用代理'),
-                subtitle: const Text('直接连接网络'),
-                value: ProxyMode.none,
-              ),
-
-              // ── 连通性测试 ──
-              const Divider(indent: 16, endIndent: 16),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text('连通性测试', style: tt.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold)),
-              ),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
+                const SizedBox(height: 12),
+                Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _urlController,
-                        decoration: InputDecoration(
-                          labelText: '测试地址',
-                          hintText: 'https://google.com',
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                          filled: true,
-                          fillColor: cs.surfaceContainerHighest,
+                        decoration: _fieldDeco(
+                          context,
+                          hint: 'https://google.com',
                         ),
                       ),
                     ),
@@ -271,11 +369,9 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     ),
                   ],
                 ),
-              ),
-              if (_testResult.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: Row(
+                if (_testResult.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
                       Icon(
                         _testStatus == _TestStatus.success
@@ -290,7 +386,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                       Expanded(
                         child: Text(
                           _testResult,
-                          style: tt.bodyMedium?.copyWith(
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             color: _testStatus == _TestStatus.success
                                 ? cs.primary
                                 : cs.error,
@@ -299,12 +395,12 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                       ),
                     ],
                   ),
-                ),
-              const SizedBox(height: 8),
-            ],
+                ],
+              ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
