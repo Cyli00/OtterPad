@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../providers/documents_provider.dart';
+import '../../../router/app_routes.dart';
 import 'doc_card_actions.dart';
 import 'document_card.dart';
 
@@ -47,6 +49,10 @@ class BookshelfGrid extends ConsumerWidget {
               onBookmarkToggle: () {},
               onMoreTap: () {},
               onDelete: () => DocCardActions.delete(ref, doc.id),
+              onBatchDelete: () => context.push(
+                AppRoutes.libraryBatchDelete,
+                extra: <String, String?>{'initialSelectedId': doc.id},
+              ),
             );
           },
           childCount: docs.length,

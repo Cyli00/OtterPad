@@ -751,7 +751,6 @@ final documentsProvider =
     });
 
 final viewModeProvider = StateProvider<bool>((ref) => true);
-final activeDeleteIdProvider = StateProvider<String?>((ref) => null);
 
 final noFileDocsCountProvider = Provider<int>((ref) {
   return ref

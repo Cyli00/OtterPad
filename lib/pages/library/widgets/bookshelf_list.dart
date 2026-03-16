@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../providers/documents_provider.dart';
+import '../../../router/app_routes.dart';
 import 'doc_card_actions.dart';
 import 'doc_list_card.dart';
 
@@ -56,6 +58,10 @@ class BookshelfList extends ConsumerWidget {
                     doc: doc,
                     onTap: () => DocCardActions.openReader(context, doc),
                     onDelete: () => DocCardActions.delete(ref, doc.id),
+                    onBatchDelete: () => context.push(
+                      AppRoutes.libraryBatchDelete,
+                      extra: <String, String?>{'initialSelectedId': doc.id},
+                    ),
                   );
                 },
                 childCount: docs.length,
@@ -77,6 +83,10 @@ class BookshelfList extends ConsumerWidget {
                 doc: doc,
                 onTap: () => DocCardActions.openReader(context, doc),
                 onDelete: () => DocCardActions.delete(ref, doc.id),
+                onBatchDelete: () => context.push(
+                  AppRoutes.libraryBatchDelete,
+                  extra: <String, String?>{'initialSelectedId': doc.id},
+                ),
               );
             },
           ),

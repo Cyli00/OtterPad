@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/documents_provider.dart';
+import '../../router/app_routes.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 
@@ -22,44 +23,21 @@ class FavoriteDetailPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        backgroundColor: colorScheme.surface,
+        title: Text(
+          favorite.name,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        leading: IconButton(
+          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+      ),
       body: CustomScrollView(
         slivers: [
-          // 顶部区域：返回按钮 + 标题
-          SliverToBoxAdapter(
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 24, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 返回按钮
-                    IconButton(
-                      onPressed: () => context.pop(),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                      style: IconButton.styleFrom(
-                        foregroundColor: colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // 收藏夹标题
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        favorite.name,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           // 文献列表
           if (favorite.docPaths.isEmpty)
             SliverFillRemaining(
@@ -107,6 +85,15 @@ class FavoriteDetailPage extends ConsumerWidget {
                     onTap: () => DocCardActions.openReader(context, doc),
                     onDelete: doc.id.isNotEmpty
                         ? () => DocCardActions.delete(ref, doc.id)
+                        : null,
+                    onBatchDelete: doc.id.isNotEmpty
+                        ? () => context.push(
+                              AppRoutes.libraryBatchDelete,
+                              extra: <String, String?>{
+                                'favoriteId': favorite.id,
+                                'initialSelectedId': doc.id,
+                              },
+                            )
                         : null,
                   );
                 },

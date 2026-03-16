@@ -20,42 +20,21 @@ class NoFileEntriesPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        backgroundColor: colorScheme.surface,
+        title: Text(
+          '无文件条目',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        leading: IconButton(
+          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+      ),
       body: CustomScrollView(
         slivers: [
-          // 顶部：返回按钮 + 标题
-          SliverToBoxAdapter(
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 24, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    IconButton(
-                      onPressed: () => context.pop(),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                      style: IconButton.styleFrom(
-                        foregroundColor: colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        '无文件条目',
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           // 空状态
           if (noFileDocs.isEmpty)
             SliverFillRemaining(
@@ -90,31 +69,43 @@ class NoFileEntriesPage extends ConsumerWidget {
                   final hasDoi =
                       doc.doi != null && doc.doi!.isNotEmpty;
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  return Stack(
                     children: [
                       DocListCard(doc: doc),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          FilledButton.tonalIcon(
-                            onPressed: () =>
-                                _handleAttachFile(context, ref, doc.id),
-                            icon: const Icon(Icons.attach_file_rounded,
-                                size: 18),
-                            label: const Text('附加文件'),
-                          ),
-                          if (hasDoi) ...[
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
+                      Positioned(
+                        right: 8,
+                        bottom: 8,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton.filledTonal(
                               onPressed: () =>
-                                  _handleRedownload(ref, doc.id, doc.title),
-                              icon: const Icon(Icons.download_rounded,
-                                  size: 18),
-                              label: const Text('重新下载'),
+                                  _handleAttachFile(context, ref, doc.id),
+                              icon: const Icon(Icons.attach_file_rounded),
+                              iconSize: 18,
+                              tooltip: '附加文件',
+                              style: IconButton.styleFrom(
+                                minimumSize: const Size(36, 36),
+                                padding: EdgeInsets.zero,
+                              ),
                             ),
+                            if (hasDoi) ...[
+                              const SizedBox(width: 4),
+                              IconButton.filledTonal(
+                                onPressed: () => _handleRedownload(
+                                    ref, doc.id, doc.title),
+                                icon:
+                                    const Icon(Icons.download_rounded),
+                                iconSize: 18,
+                                tooltip: '重新下载',
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(36, 36),
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ],
                   );

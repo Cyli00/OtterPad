@@ -17,7 +17,12 @@ class NetworkSettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('网络设置'),
+        title: Text(
+          '网络设置',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         leading: IconButton(
           onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded),
@@ -141,12 +146,13 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text('代理', style: tt.titleMedium),
+                child: Text('代理', style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold)),
               ),
               RadioListTile<ProxyMode>(
-                title: const Text('自定义代理（推荐）'),
+                title: const Text('自定义代理'),
                 subtitle:
-                    const Text('手动指定代理地址，如 Clash 的 127.0.0.1:7890'),
+                    const Text('手动指定代理地址'),
                 value: ProxyMode.custom,
               ),
               Animate(
@@ -226,7 +232,8 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text('连通性测试', style: tt.titleMedium),
+                child: Text('连通性测试', style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold)),
               ),
               Padding(
                 padding:
