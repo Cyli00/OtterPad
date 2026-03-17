@@ -1,11 +1,13 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart'
     show LatexBlockSyntax;
 import 'package:markdown/markdown.dart' as md;
 
+import '../../../data/models/book/highlight.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../utils/latex_syntax.dart';
 
@@ -27,6 +29,13 @@ class ReaderMarkdownBody extends StatefulWidget {
   /// 目标段落在原始 Markdown 中的字符偏移
   final int? targetCharOffset;
 
+  /// 用户划线列表
+  final List<Highlight> highlights;
+
+  /// 单击已划线文本时回调（传递 Highlight 对象和点击全局坐标）
+  final void Function(Highlight highlight, Offset globalPosition)?
+      onHighlightTap;
+
   const ReaderMarkdownBody({
     super.key,
     required this.data,
@@ -34,6 +43,8 @@ class ReaderMarkdownBody extends StatefulWidget {
     this.scrollController,
     this.highlightQuery,
     this.targetCharOffset,
+    this.highlights = const [],
+    this.onHighlightTap,
   });
 
   @override
@@ -47,6 +58,9 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
   /// 进入高亮模式后锁定 block-based 渲染，避免取消高亮时切换 widget 树导致闪屏
   bool _useBlockMode = false;
 
+  /// 管理用户划线的 TapGestureRecognizer，在 dispose 时统一释放
+  _UserHighlightBuilder? _highlightBuilder;
+
   @override
   void didUpdateWidget(covariant ReaderMarkdownBody oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -54,6 +68,11 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
         widget.highlightQuery != oldWidget.highlightQuery) {
       _hasScrolled = false;
       if (_isHighlightMode) _useBlockMode = true;
+    }
+    // 划线变化时重建 builder
+    if (widget.highlights != oldWidget.highlights) {
+      _highlightBuilder?.dispose();
+      _highlightBuilder = null;
     }
   }
 
@@ -77,6 +96,12 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
         _hasScrolled = true;
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _highlightBuilder?.dispose();
+    super.dispose();
   }
 
   @override
@@ -154,7 +179,7 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       ...md.ExtensionSet.gitHubWeb.inlineSyntaxes,
     ];
 
-    // 高亮模式：注入搜索词语法（父组件清除 highlightQuery 后自动停止注入）
+    // 搜索高亮模式
     if (_isHighlightMode) {
       inlineSyntaxes.add(_HighlightInlineSyntax(widget.highlightQuery!));
       builders['highlight'] = _HighlightElementBuilder(
@@ -163,9 +188,31 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       );
     }
 
+    // 用户标记
+    if (widget.highlights.isNotEmpty) {
+      inlineSyntaxes.insert(
+        0,
+        _UserHighlightSyntax(widget.highlights),
+      );
+      _highlightBuilder?.dispose();
+      _highlightBuilder = _UserHighlightBuilder(
+        highlights: widget.highlights,
+        highlightColor: cs.primary.withAlpha(50),
+        onTap: (highlight, position) {
+          widget.onHighlightTap?.call(highlight, position);
+        },
+      );
+      builders['user_highlight'] = _highlightBuilder!;
+    }
+
     final styleSheet = _buildStyleSheet(settings, baseStyle);
 
+    // 用 ValueKey 强制 MarkdownBody 在标记变化时完整重建，
+    // 因为 flutter_markdown 只在 data/styleSheet 变化时才重新解析。
+    final highlightKey = widget.highlights.map((h) => h.id).join(',');
+
     return MarkdownBody(
+      key: ValueKey('md_$highlightKey'),
       data: data,
       styleSheet: styleSheet,
       builders: builders,
@@ -427,6 +474,111 @@ class _HighlightElementBuilder extends MarkdownElementBuilder {
           fontWeight: FontWeight.w600,
           backgroundColor: backgroundColor,
         ),
+      ),
+    );
+  }
+}
+
+// ─── 用户标记 InlineSyntax + ElementBuilder ───
+
+/// 匹配所有已保存标记文本的 InlineSyntax。
+///
+/// 将多条标记文本构建为一个正则交替模式 `(text1|text2|...)`，
+/// 按长度降序排列确保长文本优先匹配。
+class _UserHighlightSyntax extends md.InlineSyntax {
+  _UserHighlightSyntax(List<Highlight> highlights)
+      : super(_buildPattern(highlights));
+
+  static String _buildPattern(List<Highlight> highlights) {
+    if (highlights.isEmpty) return r'(?!)'; // 永不匹配
+    // 跨段落标记按换行拆分为独立片段，InlineSyntax 只能匹配单段落内容
+    final fragments = <String>{};
+    for (final h in highlights) {
+      for (final line in h.text.split(RegExp(r'\n+'))) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) fragments.add(RegExp.escape(trimmed));
+      }
+    }
+    if (fragments.isEmpty) return r'(?!)';
+    final sorted = fragments.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    return '(${sorted.join('|')})';
+  }
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final el = md.Element.text('user_highlight', match.group(0)!);
+    parser.addNode(el);
+    return true;
+  }
+}
+
+/// 用户标记渲染器：MD3 主题色半透明背景 + 点击手势。
+///
+/// 内部维护 [TapGestureRecognizer] 列表，使用方需在 widget dispose 时
+/// 调用 [dispose] 释放资源。
+class _UserHighlightBuilder extends MarkdownElementBuilder {
+  final List<Highlight> highlights;
+  final Color highlightColor;
+  final void Function(Highlight highlight, Offset globalPosition) onTap;
+  final List<TapGestureRecognizer> _recognizers = [];
+
+  _UserHighlightBuilder({
+    required this.highlights,
+    required this.highlightColor,
+    required this.onTap,
+  });
+
+  void dispose() {
+    for (final r in _recognizers) {
+      r.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  @override
+  Widget visitElementAfterWithContext(
+    BuildContext context,
+    md.Element element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) {
+    final style =
+        parentStyle ?? preferredStyle ?? DefaultTextStyle.of(context).style;
+    final text = element.textContent;
+
+    // 精确匹配；历史含 \n 数据做片段回退
+    var idx = highlights.indexWhere((h) => h.text == text);
+    if (idx < 0) {
+      idx = highlights.indexWhere(
+        (h) =>
+            h.text.contains('\n') &&
+            h.text.split(RegExp(r'\n+')).any((l) => l.trim() == text),
+      );
+    }
+
+    // 无匹配时仅渲染高亮背景，不绑定手势
+    if (idx < 0) {
+      return RichText(
+        text: TextSpan(
+          text: text,
+          style: style.copyWith(backgroundColor: highlightColor),
+        ),
+      );
+    }
+
+    final highlight = highlights[idx];
+    final recognizer = TapGestureRecognizer()
+      ..onTapUp = (details) {
+        onTap(highlight, details.globalPosition);
+      };
+    _recognizers.add(recognizer);
+
+    return RichText(
+      text: TextSpan(
+        text: text,
+        style: style.copyWith(backgroundColor: highlightColor),
+        recognizer: recognizer,
       ),
     );
   }

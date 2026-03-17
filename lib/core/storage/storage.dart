@@ -8,8 +8,8 @@ import 'package:path_provider/path_provider.dart';
 class GStorage {
   static late Box _settingBox;
   static late Box _favoritesBox;
-
   static late Box _documentsBox;
+  static late Box _highlightsBox;
 
   static Future<void> init() async {
     final appDir = await getApplicationDocumentsDirectory();
@@ -22,13 +22,16 @@ class GStorage {
       Hive.openBox('settings'),
       Hive.openBox('favorites'),
       Hive.openBox('documents'),
+      Hive.openBox('highlights'),
     ]);
     _settingBox = results[0];
     _favoritesBox = results[1];
     _documentsBox = results[2];
+    _highlightsBox = results[3];
   }
 
   static Box get setting => _settingBox;
   static Box get favorites => _favoritesBox;
   static Box get documents => _documentsBox;
+  static Box get highlights => _highlightsBox;
 }

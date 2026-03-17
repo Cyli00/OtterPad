@@ -11,6 +11,52 @@ class MarkdownPreprocessor {
     return result;
   }
 
+  /// 通过元数据标题匹配，过滤 Markdown 中标题行之前的冗余内容（如期刊名）。
+  ///
+  /// 例如提取结果为：
+  /// ```
+  /// # Cell Metabolism
+  /// # Microglial lipid droplet accumulation in tauopathy brain...
+  /// ```
+  /// 传入 title="Microglial lipid droplet accumulation..."，
+  /// 则会删除 "# Cell Metabolism" 及其之前的所有内容。
+  static String filterBeforeTitle(String markdown, String? title) {
+    if (title == null || title.trim().isEmpty) return markdown;
+
+    final lines = markdown.split('\n');
+    int titleLineIndex = -1;
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (!line.startsWith('#')) continue;
+
+      final headingText = line.replaceFirst(RegExp(r'^#+\s*'), '').trim();
+      if (_isMatchingTitle(headingText, title.trim())) {
+        titleLineIndex = i;
+        break;
+      }
+    }
+
+    if (titleLineIndex <= 0) return markdown;
+
+    return lines.sublist(titleLineIndex).join('\n');
+  }
+
+  static bool _isMatchingTitle(String heading, String title) {
+    final h = heading.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final t = title.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+    if (h == t) return true;
+    if (h.contains(t) || t.contains(h)) return true;
+
+    // 词汇重叠度 >= 80%（忽略短词）
+    final titleWords = t.split(' ').where((w) => w.length > 2).toSet();
+    if (titleWords.isEmpty) return false;
+    final headingWords = h.split(' ').toSet();
+    final overlap = titleWords.intersection(headingWords).length;
+    return overlap / titleWords.length >= 0.8;
+  }
+
   static String _sanitizeLatex(String text) {
     var res = text
         .replaceAllMapped(RegExp(r'\\pmb(?=\s*\{)'), (_) => r'\boldsymbol')

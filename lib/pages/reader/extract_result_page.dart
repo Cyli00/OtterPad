@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../services/doc_extract_service.dart';
 import '../../services/snackbar_service.dart';
+import '../../utils/markdown_preprocessor.dart';
 
 class _EmojiElementBuilder extends MarkdownElementBuilder {
   @override
@@ -48,15 +49,19 @@ class ExtractResultPage extends ConsumerWidget {
     this.filePath,
   }) : assert(markdownContent != null || filePath != null);
 
-  /// 加载并解析 Markdown 内容（图片路径替换为绝对路径）
+  /// 加载并解析 Markdown 内容（图片路径替换为绝对路径 + 标题过滤）
   Future<String> _loadContent() async {
-    if (markdownContent != null) return markdownContent!;
-
-    final raw = await File(filePath!).readAsString();
-    final baseName = p.basenameWithoutExtension(filePath!);
-    final dir = p.dirname(filePath!);
-    final imageDir = p.join(dir, '${baseName}_images');
-    return DocExtractService.resolveMarkdownImagePaths(raw, imageDir);
+    String content;
+    if (markdownContent != null) {
+      content = markdownContent!;
+    } else {
+      final raw = await File(filePath!).readAsString();
+      final baseName = p.basenameWithoutExtension(filePath!);
+      final dir = p.dirname(filePath!);
+      final imageDir = p.join(dir, '${baseName}_images');
+      content = DocExtractService.resolveMarkdownImagePaths(raw, imageDir);
+    }
+    return MarkdownPreprocessor.filterBeforeTitle(content, title);
   }
 
   /// 获取对应的 .html 文件路径（用于分享）
