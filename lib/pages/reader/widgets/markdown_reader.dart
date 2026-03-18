@@ -1,15 +1,11 @@
-import 'dart:io';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart'
-    show LatexBlockSyntax;
 import 'package:markdown/markdown.dart' as md;
 
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/reader_settings_provider.dart';
-import '../../../utils/latex_syntax.dart';
+import 'markdown_rendering.dart';
 
 /// 可配置外观的 Markdown 渲染组件，专用于阅读器。
 ///
@@ -34,7 +30,7 @@ class ReaderMarkdownBody extends StatefulWidget {
 
   /// 单击已划线文本时回调（传递 Highlight 对象和点击全局坐标）
   final void Function(Highlight highlight, Offset globalPosition)?
-      onHighlightTap;
+  onHighlightTap;
 
   const ReaderMarkdownBody({
     super.key,
@@ -58,21 +54,40 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
   /// 进入高亮模式后锁定 block-based 渲染，避免取消高亮时切换 widget 树导致闪屏
   bool _useBlockMode = false;
 
-  /// 管理用户划线的 TapGestureRecognizer，在 dispose 时统一释放
-  _UserHighlightBuilder? _highlightBuilder;
+  List<_MdBlock>? _cachedBlocks;
+  String? _cachedBlockSource;
+  _ReaderMarkdownRenderResources? _renderResources;
+
+  bool _isHighlightModeFor(ReaderMarkdownBody widget) {
+    return widget.highlightQuery != null &&
+        widget.highlightQuery!.isNotEmpty &&
+        widget.targetCharOffset != null;
+  }
 
   @override
   void didUpdateWidget(covariant ReaderMarkdownBody oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final oldHighlightMode = _isHighlightModeFor(oldWidget);
     if (widget.targetCharOffset != oldWidget.targetCharOffset ||
         widget.highlightQuery != oldWidget.highlightQuery) {
       _hasScrolled = false;
       if (_isHighlightMode) _useBlockMode = true;
+      if (!_isHighlightMode && oldHighlightMode && _useBlockMode) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _isHighlightMode || !_useBlockMode) return;
+          setState(() => _useBlockMode = false);
+        });
+      }
     }
-    // 划线变化时重建 builder
-    if (widget.highlights != oldWidget.highlights) {
-      _highlightBuilder?.dispose();
-      _highlightBuilder = null;
+    if (widget.data != oldWidget.data) {
+      _cachedBlockSource = null;
+      _cachedBlocks = null;
+    }
+    if (widget.settings != oldWidget.settings ||
+        widget.highlightQuery != oldWidget.highlightQuery ||
+        widget.highlights != oldWidget.highlights ||
+        widget.onHighlightTap != oldWidget.onHighlightTap) {
+      _disposeRenderResources();
     }
   }
 
@@ -100,32 +115,40 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
 
   @override
   void dispose() {
-    _highlightBuilder?.dispose();
+    _disposeRenderResources();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_useBlockMode) {
-      return _buildBlockBased(context);
+    final resources = _resolveRenderResources(context);
+    final useBlockMode = _useBlockMode || _isHighlightMode;
+    if (useBlockMode) {
+      return _buildBlockBased(resources);
     }
-    return _buildSingleBody(context);
+    return _buildSingleBody(resources);
   }
 
   // ─── 普通模式：单 MarkdownBody ───
 
-  Widget _buildSingleBody(BuildContext context) {
+  Widget _buildSingleBody(_ReaderMarkdownRenderResources resources) {
+    resources.prepareForBuild();
     return SingleChildScrollView(
       controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-      child: _markdownBody(widget.data, context),
+      child: _markdownBody(
+        data: widget.data,
+        keySuffix: 'full_${resources.renderKeySalt}',
+        resources: resources,
+      ),
     );
   }
 
   // ─── 高亮模式：按段落拆分 + 精准跳转 ───
 
-  Widget _buildBlockBased(BuildContext context) {
-    final blocks = _splitIntoBlocks(widget.data);
+  Widget _buildBlockBased(_ReaderMarkdownRenderResources resources) {
+    resources.prepareForBuild();
+    final blocks = _getBlocks();
     final targetIndex = widget.targetCharOffset != null
         ? _findTargetBlock(blocks, widget.targetCharOffset!)
         : -1;
@@ -139,7 +162,11 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: List.generate(blocks.length, (i) {
           final block = blocks[i];
-          Widget child = _markdownBody(block.text, context);
+          Widget child = _markdownBody(
+            data: block.text,
+            keySuffix: '${block.charOffset}_${resources.renderKeySalt}',
+            resources: resources,
+          );
           if (i == targetIndex) {
             child = Container(key: _targetKey, child: child);
           }
@@ -151,214 +178,53 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
 
   // ─── 共享的 MarkdownBody 构造 ───
 
-  Widget _markdownBody(String data, BuildContext context) {
-    final settings = widget.settings;
-    final cs = Theme.of(context).colorScheme;
-
-    final baseStyle = TextStyle(
-      color: settings.textColor,
-      fontSize: settings.fontSize,
-      fontFamily: settings.font.fontFamily,
-      fontFamilyFallback: settings.font.fontFamilyFallback,
-      height: 1.7,
-    );
-
-    final builders = <String, MarkdownElementBuilder>{
-      'latex': NRLatexElementBuilder(
-        textStyle: TextStyle(
-          color: settings.textColor,
-          fontFamily: settings.font.fontFamily,
-          fontFamilyFallback: settings.font.fontFamilyFallback,
-        ),
-      ),
-      'emoji': _EmojiElementBuilder(),
-    };
-
-    final inlineSyntaxes = <md.InlineSyntax>[
-      NRLatexInlineSyntax(),
-      ...md.ExtensionSet.gitHubWeb.inlineSyntaxes,
-    ];
-
-    // 搜索高亮模式
-    if (_isHighlightMode) {
-      inlineSyntaxes.add(_HighlightInlineSyntax(widget.highlightQuery!));
-      builders['highlight'] = _HighlightElementBuilder(
-        backgroundColor: cs.primaryContainer,
-        textColor: cs.onPrimaryContainer,
-      );
-    }
-
-    // 用户标记
-    if (widget.highlights.isNotEmpty) {
-      inlineSyntaxes.insert(
-        0,
-        _UserHighlightSyntax(widget.highlights),
-      );
-      _highlightBuilder?.dispose();
-      _highlightBuilder = _UserHighlightBuilder(
-        highlights: widget.highlights,
-        highlightColor: cs.primary.withAlpha(50),
-        onTap: (highlight, position) {
-          widget.onHighlightTap?.call(highlight, position);
-        },
-      );
-      builders['user_highlight'] = _highlightBuilder!;
-    }
-
-    final styleSheet = _buildStyleSheet(settings, baseStyle);
-
-    // 用 ValueKey 强制 MarkdownBody 在标记变化时完整重建，
-    // 因为 flutter_markdown 只在 data/styleSheet 变化时才重新解析。
-    final highlightKey = widget.highlights.map((h) => h.id).join(',');
-
+  Widget _markdownBody({
+    required String data,
+    required String keySuffix,
+    required _ReaderMarkdownRenderResources resources,
+  }) {
     return MarkdownBody(
-      key: ValueKey('md_$highlightKey'),
+      key: ValueKey('md_$keySuffix'),
       data: data,
-      styleSheet: styleSheet,
-      builders: builders,
-      extensionSet: md.ExtensionSet(
-        [LatexBlockSyntax(), ...md.ExtensionSet.gitHubWeb.blockSyntaxes],
-        inlineSyntaxes,
-      ),
-      imageBuilder: _buildImage,
+      styleSheet: resources.styleSheet,
+      builders: resources.builders,
+      extensionSet: resources.extensionSet,
+      imageBuilder: buildMarkdownImage,
     );
   }
 
-  MarkdownStyleSheet _buildStyleSheet(
-    ReaderSettingsState settings,
-    TextStyle baseStyle,
-  ) {
-    return MarkdownStyleSheet(
-      p: baseStyle,
-      h1: baseStyle.copyWith(
-        fontSize: settings.fontSize * 1.6,
-        fontWeight: FontWeight.w700,
-        height: 1.3,
-      ),
-      h2: baseStyle.copyWith(
-        fontSize: settings.fontSize * 1.35,
-        fontWeight: FontWeight.w700,
-        height: 1.35,
-      ),
-      h3: baseStyle.copyWith(
-        fontSize: settings.fontSize * 1.15,
-        fontWeight: FontWeight.w600,
-        height: 1.4,
-      ),
-      h4: baseStyle.copyWith(
-        fontSize: settings.fontSize * 1.05,
-        fontWeight: FontWeight.w600,
-        height: 1.4,
-      ),
-      h5: baseStyle.copyWith(fontWeight: FontWeight.w600, height: 1.4),
-      h6: baseStyle.copyWith(
-        fontWeight: FontWeight.w500,
-        color: settings.secondaryTextColor,
-        height: 1.4,
-      ),
-      blockquote: baseStyle.copyWith(
-        color: settings.secondaryTextColor,
-        fontStyle: FontStyle.italic,
-      ),
-      blockquoteDecoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: settings.dividerColor, width: 3),
-        ),
-      ),
-      blockquotePadding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
-      code: TextStyle(
-        fontFamily: 'Consolas',
-        fontFamilyFallback: const [
-          'Cascadia Mono',
-          'Courier New',
-          'Menlo',
-          'Noto Sans Mono',
-        ],
-        fontSize: settings.fontSize * 0.88,
-        color: settings.textColor,
-        backgroundColor: settings.theme == ReaderTheme.dark
-            ? const Color(0xFF2D2D3A)
-            : const Color(0xFFF5F5F5),
-      ),
-      codeblockDecoration: BoxDecoration(
-        color: settings.theme == ReaderTheme.dark
-            ? const Color(0xFF2D2D3A)
-            : const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      codeblockPadding: const EdgeInsets.all(12),
-      a: baseStyle.copyWith(
-        color: settings.linkColor,
-        decoration: TextDecoration.none,
-      ),
-      listBullet: baseStyle.copyWith(color: settings.secondaryTextColor),
-      tableHead: baseStyle.copyWith(fontWeight: FontWeight.w600),
-      tableBody: baseStyle,
-      tableBorder: TableBorder.all(color: settings.dividerColor, width: 0.5),
-      tableHeadAlign: TextAlign.left,
-      tableCellsPadding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
-      horizontalRuleDecoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: settings.dividerColor, width: 1),
-        ),
-      ),
-      blockSpacing: settings.fontSize * 0.8,
-    );
+  List<_MdBlock> _getBlocks() {
+    if (_cachedBlockSource != widget.data || _cachedBlocks == null) {
+      _cachedBlockSource = widget.data;
+      _cachedBlocks = _splitIntoBlocks(widget.data);
+    }
+    return _cachedBlocks!;
   }
 
-  Widget _buildImage(Uri uri, String? title, String? alt) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        Widget image;
-        if (uri.scheme == 'file') {
-          final file = File(uri.toFilePath());
-          if (file.existsSync()) {
-            image = Image.file(
-              file,
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const Icon(
-                Icons.broken_image_rounded,
-                size: 48,
-              ),
-            );
-          } else {
-            image = Image.network(
-              uri.toString(),
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const Icon(
-                Icons.broken_image_rounded,
-                size: 48,
-              ),
-            );
-          }
-        } else {
-          image = Image.network(
-            uri.toString(),
-            fit: BoxFit.contain,
-            errorBuilder: (_, _, _) => const Icon(
-              Icons.broken_image_rounded,
-              size: 48,
-            ),
-          );
-        }
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: image,
-              ),
-            ),
-          ),
-        );
-      },
+  _ReaderMarkdownRenderResources _resolveRenderResources(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final resources = _renderResources;
+    if (resources != null &&
+        resources.primary == colorScheme.primary &&
+        resources.primaryContainer == colorScheme.primaryContainer &&
+        resources.onPrimaryContainer == colorScheme.onPrimaryContainer) {
+      return resources;
+    }
+    _disposeRenderResources();
+    final next = _ReaderMarkdownRenderResources.create(
+      settings: widget.settings,
+      colorScheme: colorScheme,
+      highlightQuery: _isHighlightMode ? widget.highlightQuery : null,
+      highlights: widget.highlights,
+      onHighlightTap: widget.onHighlightTap,
     );
+    _renderResources = next;
+    return next;
+  }
+
+  void _disposeRenderResources() {
+    _renderResources?.dispose();
+    _renderResources = null;
   }
 }
 
@@ -394,17 +260,29 @@ List<_MdBlock> _splitIntoBlocks(String markdown) {
 }
 
 int _findTargetBlock(List<_MdBlock> blocks, int charOffset) {
-  for (var i = blocks.length - 1; i >= 0; i--) {
-    if (blocks[i].charOffset <= charOffset) return i;
+  var low = 0;
+  var high = blocks.length - 1;
+  var result = 0;
+
+  while (low <= high) {
+    final mid = low + ((high - low) >> 1);
+    final offset = blocks[mid].charOffset;
+    if (offset <= charOffset) {
+      result = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
   }
-  return 0;
+
+  return result;
 }
 
 // ─── 搜索词高亮 InlineSyntax ───
 
 class _HighlightInlineSyntax extends md.InlineSyntax {
   _HighlightInlineSyntax(String query)
-      : super(_buildCaseInsensitivePattern(query));
+    : super(_buildCaseInsensitivePattern(query));
 
   /// 将查询词转为大小写不敏感的正则模式
   /// "where" → "([wW][hH][eE][rR][eE])"
@@ -425,23 +303,6 @@ class _HighlightInlineSyntax extends md.InlineSyntax {
     final el = md.Element.text('highlight', match.group(0)!);
     parser.addNode(el);
     return true;
-  }
-}
-
-/// Emoji 渲染器：将 :shortcode: 解析后的 Unicode emoji 以文本形式输出。
-class _EmojiElementBuilder extends MarkdownElementBuilder {
-  @override
-  Widget visitElementAfterWithContext(
-    BuildContext context,
-    md.Element element,
-    TextStyle? preferredStyle,
-    TextStyle? parentStyle,
-  ) {
-    final style =
-        parentStyle ?? preferredStyle ?? DefaultTextStyle.of(context).style;
-    return RichText(
-      text: TextSpan(text: element.textContent, style: style),
-    );
   }
 }
 
@@ -486,24 +347,7 @@ class _HighlightElementBuilder extends MarkdownElementBuilder {
 /// 将多条标记文本构建为一个正则交替模式 `(text1|text2|...)`，
 /// 按长度降序排列确保长文本优先匹配。
 class _UserHighlightSyntax extends md.InlineSyntax {
-  _UserHighlightSyntax(List<Highlight> highlights)
-      : super(_buildPattern(highlights));
-
-  static String _buildPattern(List<Highlight> highlights) {
-    if (highlights.isEmpty) return r'(?!)'; // 永不匹配
-    // 跨段落标记按换行拆分为独立片段，InlineSyntax 只能匹配单段落内容
-    final fragments = <String>{};
-    for (final h in highlights) {
-      for (final line in h.text.split(RegExp(r'\n+'))) {
-        final trimmed = line.trim();
-        if (trimmed.isNotEmpty) fragments.add(RegExp.escape(trimmed));
-      }
-    }
-    if (fragments.isEmpty) return r'(?!)';
-    final sorted = fragments.toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
-    return '(${sorted.join('|')})';
-  }
+  _UserHighlightSyntax(super.pattern);
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -518,13 +362,13 @@ class _UserHighlightSyntax extends md.InlineSyntax {
 /// 内部维护 [TapGestureRecognizer] 列表，使用方需在 widget dispose 时
 /// 调用 [dispose] 释放资源。
 class _UserHighlightBuilder extends MarkdownElementBuilder {
-  final List<Highlight> highlights;
+  final Map<String, Highlight> highlightByFragment;
   final Color highlightColor;
   final void Function(Highlight highlight, Offset globalPosition) onTap;
   final List<TapGestureRecognizer> _recognizers = [];
 
   _UserHighlightBuilder({
-    required this.highlights,
+    required this.highlightByFragment,
     required this.highlightColor,
     required this.onTap,
   });
@@ -546,19 +390,10 @@ class _UserHighlightBuilder extends MarkdownElementBuilder {
     final style =
         parentStyle ?? preferredStyle ?? DefaultTextStyle.of(context).style;
     final text = element.textContent;
-
-    // 精确匹配；历史含 \n 数据做片段回退
-    var idx = highlights.indexWhere((h) => h.text == text);
-    if (idx < 0) {
-      idx = highlights.indexWhere(
-        (h) =>
-            h.text.contains('\n') &&
-            h.text.split(RegExp(r'\n+')).any((l) => l.trim() == text),
-      );
-    }
+    final highlight = highlightByFragment[text];
 
     // 无匹配时仅渲染高亮背景，不绑定手势
-    if (idx < 0) {
+    if (highlight == null) {
       return RichText(
         text: TextSpan(
           text: text,
@@ -567,7 +402,6 @@ class _UserHighlightBuilder extends MarkdownElementBuilder {
       );
     }
 
-    final highlight = highlights[idx];
     final recognizer = TapGestureRecognizer()
       ..onTapUp = (details) {
         onTap(highlight, details.globalPosition);
@@ -582,4 +416,231 @@ class _UserHighlightBuilder extends MarkdownElementBuilder {
       ),
     );
   }
+}
+
+class _ReaderMarkdownRenderResources {
+  final MarkdownStyleSheet styleSheet;
+  final Map<String, MarkdownElementBuilder> builders;
+  final md.ExtensionSet extensionSet;
+  final String renderKeySalt;
+  final Color primary;
+  final Color primaryContainer;
+  final Color onPrimaryContainer;
+  final _UserHighlightBuilder? highlightBuilder;
+
+  const _ReaderMarkdownRenderResources({
+    required this.styleSheet,
+    required this.builders,
+    required this.extensionSet,
+    required this.renderKeySalt,
+    required this.primary,
+    required this.primaryContainer,
+    required this.onPrimaryContainer,
+    required this.highlightBuilder,
+  });
+
+  factory _ReaderMarkdownRenderResources.create({
+    required ReaderSettingsState settings,
+    required ColorScheme colorScheme,
+    required String? highlightQuery,
+    required List<Highlight> highlights,
+    required void Function(Highlight highlight, Offset globalPosition)?
+    onHighlightTap,
+  }) {
+    final baseStyle = TextStyle(
+      color: settings.textColor,
+      fontSize: settings.fontSize,
+      fontFamily: settings.font.fontFamily,
+      fontFamilyFallback: settings.font.fontFamilyFallback,
+      height: 1.7,
+    );
+
+    final extraBuilders = <String, MarkdownElementBuilder>{};
+    final prefixSyntaxes = <md.InlineSyntax>[];
+    final suffixSyntaxes = <md.InlineSyntax>[];
+
+    _UserHighlightBuilder? highlightBuilder;
+    if (highlights.isNotEmpty) {
+      final fragmentIndex = _UserHighlightFragmentIndex.fromHighlights(
+        highlights,
+      );
+      prefixSyntaxes.add(_UserHighlightSyntax(fragmentIndex.pattern));
+      highlightBuilder = _UserHighlightBuilder(
+        highlightByFragment: fragmentIndex.highlightByFragment,
+        highlightColor: colorScheme.primary.withAlpha(50),
+        onTap: (highlight, position) {
+          onHighlightTap?.call(highlight, position);
+        },
+      );
+      extraBuilders['user_highlight'] = highlightBuilder;
+    }
+
+    if (highlightQuery != null && highlightQuery.isNotEmpty) {
+      suffixSyntaxes.add(_HighlightInlineSyntax(highlightQuery));
+      extraBuilders['highlight'] = _HighlightElementBuilder(
+        backgroundColor: colorScheme.primaryContainer,
+        textColor: colorScheme.onPrimaryContainer,
+      );
+    }
+
+    final inlineSyntaxes = buildMarkdownInlineSyntaxes(
+      prefix: prefixSyntaxes,
+      suffix: suffixSyntaxes,
+    );
+
+    return _ReaderMarkdownRenderResources(
+      styleSheet: _buildStyleSheet(settings, baseStyle),
+      builders: buildMarkdownBuilders(
+        latexTextStyle: TextStyle(
+          color: settings.textColor,
+          fontFamily: settings.font.fontFamily,
+          fontFamilyFallback: settings.font.fontFamilyFallback,
+        ),
+        extraBuilders: extraBuilders,
+      ),
+      extensionSet: buildMarkdownExtensionSet(inlineSyntaxes),
+      renderKeySalt: Object.hash(
+        highlightQuery,
+        Object.hashAll(
+          highlights.map((h) => Object.hash(h.id, h.text, h.groupId)),
+        ),
+      ).toString(),
+      primary: colorScheme.primary,
+      primaryContainer: colorScheme.primaryContainer,
+      onPrimaryContainer: colorScheme.onPrimaryContainer,
+      highlightBuilder: highlightBuilder,
+    );
+  }
+
+  void dispose() {
+    highlightBuilder?.dispose();
+  }
+
+  void prepareForBuild() {
+    highlightBuilder?.dispose();
+  }
+}
+
+class _UserHighlightFragmentIndex {
+  final String pattern;
+  final Map<String, Highlight> highlightByFragment;
+
+  const _UserHighlightFragmentIndex({
+    required this.pattern,
+    required this.highlightByFragment,
+  });
+
+  factory _UserHighlightFragmentIndex.fromHighlights(
+    List<Highlight> highlights,
+  ) {
+    if (highlights.isEmpty) {
+      return const _UserHighlightFragmentIndex(
+        pattern: r'(?!)',
+        highlightByFragment: {},
+      );
+    }
+
+    final highlightByFragment = <String, Highlight>{};
+    for (final highlight in highlights) {
+      for (final line in highlight.text.split(RegExp(r'\n+'))) {
+        final fragment = line.trim();
+        if (fragment.isEmpty) continue;
+        highlightByFragment.putIfAbsent(fragment, () => highlight);
+      }
+    }
+
+    if (highlightByFragment.isEmpty) {
+      return const _UserHighlightFragmentIndex(
+        pattern: r'(?!)',
+        highlightByFragment: {},
+      );
+    }
+
+    final escapedFragments =
+        highlightByFragment.keys.map(RegExp.escape).toList()
+          ..sort((a, b) => b.length.compareTo(a.length));
+
+    return _UserHighlightFragmentIndex(
+      pattern: '(${escapedFragments.join('|')})',
+      highlightByFragment: highlightByFragment,
+    );
+  }
+}
+
+MarkdownStyleSheet _buildStyleSheet(
+  ReaderSettingsState settings,
+  TextStyle baseStyle,
+) {
+  return MarkdownStyleSheet(
+    p: baseStyle,
+    h1: baseStyle.copyWith(
+      fontSize: settings.fontSize * 1.6,
+      fontWeight: FontWeight.w700,
+      height: 1.3,
+    ),
+    h2: baseStyle.copyWith(
+      fontSize: settings.fontSize * 1.35,
+      fontWeight: FontWeight.w700,
+      height: 1.35,
+    ),
+    h3: baseStyle.copyWith(
+      fontSize: settings.fontSize * 1.15,
+      fontWeight: FontWeight.w600,
+      height: 1.4,
+    ),
+    h4: baseStyle.copyWith(
+      fontSize: settings.fontSize * 1.05,
+      fontWeight: FontWeight.w600,
+      height: 1.4,
+    ),
+    h5: baseStyle.copyWith(fontWeight: FontWeight.w600, height: 1.4),
+    h6: baseStyle.copyWith(
+      fontWeight: FontWeight.w500,
+      color: settings.secondaryTextColor,
+      height: 1.4,
+    ),
+    blockquote: baseStyle.copyWith(
+      color: settings.secondaryTextColor,
+      fontStyle: FontStyle.italic,
+    ),
+    blockquoteDecoration: BoxDecoration(
+      border: Border(left: BorderSide(color: settings.dividerColor, width: 3)),
+    ),
+    blockquotePadding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+    code: TextStyle(
+      fontFamily: 'Consolas',
+      fontFamilyFallback: const [
+        'Cascadia Mono',
+        'Courier New',
+        'Menlo',
+        'Noto Sans Mono',
+      ],
+      fontSize: settings.fontSize * 0.88,
+      color: settings.textColor,
+      backgroundColor: settings.theme == ReaderTheme.dark
+          ? const Color(0xFF2D2D3A)
+          : const Color(0xFFF5F5F5),
+    ),
+    codeblockDecoration: BoxDecoration(
+      color: settings.theme == ReaderTheme.dark
+          ? const Color(0xFF2D2D3A)
+          : const Color(0xFFF5F5F5),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    codeblockPadding: const EdgeInsets.all(12),
+    a: baseStyle.copyWith(
+      color: settings.linkColor,
+      decoration: TextDecoration.none,
+    ),
+    listBullet: baseStyle.copyWith(color: settings.secondaryTextColor),
+    tableHead: baseStyle.copyWith(fontWeight: FontWeight.w600),
+    tableBody: baseStyle,
+    tableBorder: TableBorder.all(color: settings.dividerColor, width: 0.5),
+    tableHeadAlign: TextAlign.left,
+    tableCellsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    horizontalRuleDecoration: BoxDecoration(
+      border: Border(top: BorderSide(color: settings.dividerColor, width: 1)),
+    ),
+    blockSpacing: settings.fontSize * 0.8,
+  );
 }

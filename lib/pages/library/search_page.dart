@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../data/models/book/document.dart';
 import '../../providers/documents_provider.dart';
 import 'widgets/pdf_cover.dart';
 
@@ -37,8 +39,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final docs = ref.watch(documentsProvider);
-    final filtered =
-        _query.isEmpty ? [] : docs.where((d) => d.matchesQuery(_query)).toList();
+    final filtered = _query.isEmpty
+        ? []
+        : docs.where((d) => d.matchesQuery(_query)).toList();
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -105,8 +108,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           Icon(
                             Icons.search_rounded,
                             size: 64,
-                            color:
-                                colorScheme.onSurfaceVariant.withAlpha(80),
+                            color: colorScheme.onSurfaceVariant.withAlpha(80),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -119,148 +121,156 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       ),
                     )
                   : filtered.isEmpty
-                      ? Center(
-                          child: Text(
-                            '未找到匹配的文献',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final doc = filtered[index];
-                            return Card(
-                              elevation: 0,
-                              margin: EdgeInsets.zero,
-                              color: colorScheme.surfaceContainerLow,
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(16),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: InkWell(
-                                onTap: () {
-                                  // TODO: 打开 PDF 阅读器
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Row(
-                                    children: [
-                                      // 缩略图
-                                      if (doc.filePath.isNotEmpty)
-                                        ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(
-                                                  8),
-                                          child: SizedBox(
-                                            width: 56,
-                                            height: 76,
-                                            child: PdfCoverRender(
-                                              assetPath:
-                                                  doc.filePath,
-                                              fit: BoxFit.cover,
-                                            ),
-                                          ),
-                                        )
-                                      else
-                                        Container(
-                                          width: 56,
-                                          height: 76,
-                                          decoration: BoxDecoration(
-                                            color: colorScheme
-                                                .surfaceContainerHighest,
-                                            borderRadius:
-                                                BorderRadius.circular(
-                                                    8),
-                                          ),
-                                          child: Icon(
-                                            Icons.picture_as_pdf,
-                                            color: colorScheme
-                                                .onSurfaceVariant
-                                                .withAlpha(100),
-                                          ),
-                                        ),
-                                      const SizedBox(width: 12),
-                                      // 文献信息
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment
-                                                  .start,
-                                          children: [
-                                            Text(
-                                              doc.title,
-                                              style: theme
-                                                  .textTheme
-                                                  .bodyMedium
-                                                  ?.copyWith(
-                                                fontWeight:
-                                                    FontWeight.bold,
-                                                height: 1.25,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow
-                                                  .ellipsis,
-                                            ),
-                                            if (doc.authors
-                                                .isNotEmpty) ...[
-                                              const SizedBox(
-                                                  height: 4),
-                                              Text(
-                                                doc.authors
-                                                    .join(', '),
-                                                style: theme
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.copyWith(
-                                                  color: colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                                maxLines: 1,
-                                                overflow:
-                                                    TextOverflow
-                                                        .ellipsis,
-                                              ),
-                                            ],
-                                            if (doc.year != null) ...[
-                                              const SizedBox(
-                                                  height: 2),
-                                              Text(
-                                                [
-                                                  if (doc.journal !=
-                                                      null)
-                                                    doc.journal!,
-                                                  doc.year!,
-                                                ].join(' · '),
-                                                style: theme
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.copyWith(
-                                                  color: colorScheme
-                                                      .onSurfaceVariant
-                                                      .withAlpha(
-                                                          160),
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
+                  ? Center(
+                      child: Text(
+                        '未找到匹配的文献',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => Divider(
+                        height: 1,
+                        color: colorScheme.outlineVariant.withAlpha(120),
+                        indent: 88,
+                      ),
+                      itemBuilder: (context, index) {
+                        final doc = filtered[index];
+                        return _DocumentSearchResultTile(
+                          doc: doc,
+                          colorScheme: colorScheme,
+                          onTap: () {
+                            // TODO: 打开 PDF 阅读器
+                          },
+                        );
+                      },
+                    ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DocumentSearchResultTile extends StatelessWidget {
+  final Document doc;
+  final ColorScheme colorScheme;
+  final VoidCallback onTap;
+
+  const _DocumentSearchResultTile({
+    required this.doc,
+    required this.colorScheme,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final meta = [
+      if (doc.journal != null && doc.journal!.isNotEmpty) doc.journal!,
+      if (doc.year != null && doc.year!.isNotEmpty) doc.year!,
+    ].join(' · ');
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _DocumentCover(doc: doc, colorScheme: colorScheme),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      doc.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (doc.authors.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        doc.authors.join(', '),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        meta,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant.withAlpha(170),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DocumentCover extends StatelessWidget {
+  final Document doc;
+  final ColorScheme colorScheme;
+
+  const _DocumentCover({required this.doc, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    if (doc.filePath.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 56,
+          height: 76,
+          child: PdfCoverRender(assetPath: doc.filePath, fit: BoxFit.cover),
+        ),
+      );
+    }
+
+    return Container(
+      width: 56,
+      height: 76,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        Icons.picture_as_pdf_rounded,
+        color: colorScheme.onSurfaceVariant.withAlpha(120),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../providers/reader_settings_provider.dart';
+import '../../../services/reader/search_heading_pattern_service.dart';
 
 /// Markdown 内容搜索结果
 class SearchResult {
@@ -20,13 +21,13 @@ class SearchResult {
 /// 全屏搜索遮罩层
 ///
 /// 覆盖在阅读器内容之上，高斯模糊底层视图。
-/// 用户输入搜索词并确认后，以段落为单位展示匹配结果卡片。
+/// 用户输入搜索词并确认后，以段落为单位展示匹配结果。
 /// 所有 UI 色调从 MD3 [ColorScheme] 获取。
 class SearchOverlay extends StatefulWidget {
   final String markdownContent;
   final ReaderSettingsState readerSettings;
   final void Function(List<SearchResult> results, int tappedIndex, String query)
-      onResultTap;
+  onResultTap;
   final VoidCallback onDismiss;
 
   /// 从高亮模式重新搜索时，预填上次查询词
@@ -50,10 +51,12 @@ class _SearchOverlayState extends State<SearchOverlay> {
   final _focusNode = FocusNode();
   List<SearchResult> _results = [];
   bool _hasSearched = false;
+  SearchHeadingPatternConfig? _headingPatternConfig;
 
   @override
   void initState() {
     super.initState();
+    _warmUpHeadingPatterns();
     if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
       _controller.text = widget.initialQuery!;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -76,7 +79,19 @@ class _SearchOverlayState extends State<SearchOverlay> {
 
   // ─── 搜索逻辑 ───
 
-  void _performSearch(String query) {
+  Future<void> _warmUpHeadingPatterns() async {
+    _headingPatternConfig ??= await SearchHeadingPatternService.load();
+  }
+
+  Future<SearchHeadingPatternConfig> _loadHeadingPatternConfig() async {
+    final config = _headingPatternConfig;
+    if (config != null) return config;
+    final loaded = await SearchHeadingPatternService.load();
+    _headingPatternConfig = loaded;
+    return loaded;
+  }
+
+  Future<void> _performSearch(String query) async {
     if (query.isEmpty) {
       setState(() {
         _results = [];
@@ -85,17 +100,21 @@ class _SearchOverlayState extends State<SearchOverlay> {
       return;
     }
 
-    final blocks = _parseBlocks(widget.markdownContent);
+    final patternConfig = await _loadHeadingPatternConfig();
+    if (!mounted) return;
+    final blocks = _parseBlocks(widget.markdownContent, patternConfig);
     final lowerQuery = query.toLowerCase();
     final results = <SearchResult>[];
 
     for (final block in blocks) {
       if (block.plainText.toLowerCase().contains(lowerQuery)) {
-        results.add(SearchResult(
-          heading: block.heading,
-          plainText: block.plainText,
-          charOffset: block.charOffset,
-        ));
+        results.add(
+          SearchResult(
+            heading: block.heading,
+            plainText: block.plainText,
+            charOffset: block.charOffset,
+          ),
+        );
       }
     }
 
@@ -105,7 +124,10 @@ class _SearchOverlayState extends State<SearchOverlay> {
     });
   }
 
-  List<_TextBlock> _parseBlocks(String markdown) {
+  List<_TextBlock> _parseBlocks(
+    String markdown,
+    SearchHeadingPatternConfig patternConfig,
+  ) {
     final blocks = <_TextBlock>[];
     final lines = markdown.split('\n');
     var currentHeading = '';
@@ -113,41 +135,36 @@ class _SearchOverlayState extends State<SearchOverlay> {
     var blockStartOffset = 0;
     var currentOffset = 0;
 
+    void flushBlock() {
+      if (blockBuffer.isEmpty) return;
+      final rawText = blockBuffer.toString().trim();
+      if (rawText.isNotEmpty) {
+        blocks.add(
+          _TextBlock(
+            heading: currentHeading,
+            plainText: _stripMarkdown(rawText),
+            charOffset: blockStartOffset,
+          ),
+        );
+      }
+      blockBuffer = StringBuffer();
+    }
+
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       final lineLength = line.length + 1;
 
       if (line.trim().isEmpty) {
-        if (blockBuffer.isNotEmpty) {
-          final rawText = blockBuffer.toString().trim();
-          if (rawText.isNotEmpty) {
-            blocks.add(_TextBlock(
-              heading: currentHeading,
-              plainText: _stripMarkdown(rawText),
-              charOffset: blockStartOffset,
-            ));
-          }
-          blockBuffer = StringBuffer();
-        }
+        flushBlock();
         currentOffset += lineLength;
         blockStartOffset = currentOffset;
         continue;
       }
 
-      final headingMatch = RegExp(r'^(#{1,6})\s+(.+)$').firstMatch(line);
-      if (headingMatch != null) {
-        if (blockBuffer.isNotEmpty) {
-          final rawText = blockBuffer.toString().trim();
-          if (rawText.isNotEmpty) {
-            blocks.add(_TextBlock(
-              heading: currentHeading,
-              plainText: _stripMarkdown(rawText),
-              charOffset: blockStartOffset,
-            ));
-          }
-          blockBuffer = StringBuffer();
-        }
-        currentHeading = headingMatch.group(2)!.trim();
+      final sectionMarker = _resolveSectionMarker(lines, i, patternConfig);
+      if (sectionMarker != null) {
+        flushBlock();
+        currentHeading = sectionMarker.heading ?? '';
         blockStartOffset = currentOffset;
       }
 
@@ -158,23 +175,81 @@ class _SearchOverlayState extends State<SearchOverlay> {
       currentOffset += lineLength;
     }
 
-    if (blockBuffer.isNotEmpty) {
-      final rawText = blockBuffer.toString().trim();
-      if (rawText.isNotEmpty) {
-        blocks.add(_TextBlock(
-          heading: currentHeading,
-          plainText: _stripMarkdown(rawText),
-          charOffset: blockStartOffset,
-        ));
+    flushBlock();
+
+    return blocks;
+  }
+
+  _SectionMarker? _resolveSectionMarker(
+    List<String> lines,
+    int index,
+    SearchHeadingPatternConfig patternConfig,
+  ) {
+    final line = lines[index];
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return null;
+
+    final candidates = <String>{};
+    final atxHeading = patternConfig.atxHeadingPattern.firstMatch(line);
+    if (atxHeading != null) {
+      candidates.add(atxHeading.group(1)!.trim());
+    }
+
+    final nextLine = index + 1 < lines.length ? lines[index + 1].trim() : null;
+    if (nextLine != null &&
+        patternConfig.setextUnderlinePattern.hasMatch(nextLine)) {
+      candidates.add(trimmed);
+    }
+
+    if (_canBeStandaloneSectionHeading(trimmed)) {
+      candidates.add(trimmed);
+    }
+
+    for (final candidate in candidates) {
+      final normalized = _normalizeSectionCandidate(candidate, patternConfig);
+      if (normalized.isEmpty) continue;
+
+      for (final pattern in patternConfig.headingPatterns) {
+        if (pattern.pattern.hasMatch(normalized)) {
+          return _SectionMarker.heading(pattern.display);
+        }
+      }
+
+      if (patternConfig.resetPatterns.any(
+        (pattern) => pattern.hasMatch(normalized),
+      )) {
+        return const _SectionMarker.reset();
       }
     }
 
-    return blocks;
+    return null;
+  }
+
+  bool _canBeStandaloneSectionHeading(String text) {
+    if (text.length > 80) return false;
+    return !text.contains(RegExp(r'[.!?]'));
+  }
+
+  String _normalizeSectionCandidate(
+    String raw,
+    SearchHeadingPatternConfig patternConfig,
+  ) {
+    var text = raw.trim();
+    text = text.replaceAll(RegExp(r'^\s{0,3}#{1,6}\s*'), '');
+    text = text.replaceAll(RegExp(r'\s*#*\s*$'), '');
+    text = text.replaceAll(RegExp(r'^(?:\*\*?|__?)\s*'), '');
+    text = text.replaceAll(RegExp(r'\s*(?:\*\*?|__?)$'), '');
+    text = text.replaceAll(RegExp(r'^`+|`+$'), '');
+    text = text.replaceAll(patternConfig.numberingPrefixPattern, '');
+    text = text.replaceAll(RegExp(r'\s*[:.-]\s*$'), '');
+    text = text.replaceAll(RegExp(r'\s{2,}'), ' ');
+    return text.trim();
   }
 
   static String _stripMarkdown(String text) {
     var result = text;
     result = result.replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '');
+    result = result.replaceAll(RegExp(r'^[=-]{3,}\s*$', multiLine: true), '');
     result = result.replaceAllMapped(
       RegExp(r'!\[([^\]]*)\]\([^)]+\)'),
       (m) => m.group(1) ?? '',
@@ -211,15 +286,15 @@ class _SearchOverlayState extends State<SearchOverlay> {
         padding: EdgeInsets.only(top: safePadding.top),
         child: Column(
           children: [
-            _buildSearchBar(settings, cs),
-            Expanded(child: _buildResults(settings, cs)),
+            _buildSearchBar(cs),
+            Expanded(child: _buildResults(cs)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSearchBar(ReaderSettingsState settings, ColorScheme cs) {
+  Widget _buildSearchBar(ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
@@ -233,7 +308,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 textAlignVertical: TextAlignVertical.center,
                 style: TextStyle(color: cs.onSurface, fontSize: 15),
                 decoration: InputDecoration(
-                  hintText: 'Search paper content or authors',
+                  hintText: '搜索正文内容',
                   hintStyle: TextStyle(
                     color: cs.onSurfaceVariant.withAlpha(160),
                     fontSize: 15,
@@ -293,7 +368,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
     );
   }
 
-  Widget _buildResults(ReaderSettingsState settings, ColorScheme cs) {
+  Widget _buildResults(ColorScheme cs) {
     if (!_hasSearched) return const SizedBox.shrink();
 
     if (_results.isEmpty) {
@@ -308,12 +383,26 @@ class _SearchOverlayState extends State<SearchOverlay> {
     final query = _controller.text;
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-      itemCount: _results.length,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: _results.length + 1,
       itemBuilder: (context, index) {
-        final result = _results[index];
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '找到 ${_results.length} 条匹配',
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+
+        final result = _results[index - 1];
         final showHeading =
-            index == 0 || _results[index - 1].heading != result.heading;
+            index == 1 || _results[index - 2].heading != result.heading;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,19 +411,20 @@ class _SearchOverlayState extends State<SearchOverlay> {
               Padding(
                 padding: const EdgeInsets.only(top: 12, bottom: 8),
                 child: Text(
-                  result.heading,
+                  result.heading.toUpperCase(),
                   style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 16,
+                    color: cs.onSurfaceVariant,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ),
-            _ResultCard(
+            _ResultListItem(
               text: result.plainText,
               query: query,
               cs: cs,
-              onTap: () => widget.onResultTap(_results, index, query),
+              onTap: () => widget.onResultTap(_results, index - 1, query),
             ),
           ],
         );
@@ -357,15 +447,15 @@ class _TextBlock {
   });
 }
 
-// ─── 搜索结果卡片（MD3 配色） ───
+// ─── 搜索结果条目（MD3 列表样式） ───
 
-class _ResultCard extends StatelessWidget {
+class _ResultListItem extends StatelessWidget {
   final String text;
   final String query;
   final ColorScheme cs;
   final VoidCallback onTap;
 
-  const _ResultCard({
+  const _ResultListItem({
     required this.text,
     required this.query,
     required this.cs,
@@ -375,24 +465,32 @@ class _ResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final snippet = _buildSnippet(text, query, maxLength: 150);
+    final textColor = cs.onSurface;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-        clipBehavior: Clip.antiAlias,
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return cs.primary.withAlpha(20);
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return cs.primary.withAlpha(12);
+            }
+            if (states.contains(WidgetState.focused)) {
+              return cs.primary.withAlpha(16);
+            }
+            return null;
+          }),
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(color: cs.primary, width: 3),
-              ),
-            ),
-            child: _buildHighlightedText(snippet, query),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: _buildHighlightedText(snippet, query, textColor),
           ),
         ),
       ),
@@ -422,11 +520,11 @@ class _ResultCard extends StatelessWidget {
     return snippet;
   }
 
-  Widget _buildHighlightedText(String snippet, String query) {
+  Widget _buildHighlightedText(String snippet, String query, Color textColor) {
     if (query.isEmpty) {
       return Text(
         snippet,
-        style: TextStyle(color: cs.onSurface, fontSize: 14, height: 1.6),
+        style: TextStyle(color: textColor, fontSize: 14, height: 1.6),
         maxLines: 4,
         overflow: TextOverflow.ellipsis,
       );
@@ -446,23 +544,36 @@ class _ResultCard extends StatelessWidget {
       if (matchIndex > start) {
         spans.add(TextSpan(text: snippet.substring(start, matchIndex)));
       }
-      spans.add(TextSpan(
-        text: snippet.substring(matchIndex, matchIndex + query.length),
-        style: TextStyle(
-          color: cs.primary,
-          fontWeight: FontWeight.w700,
+      spans.add(
+        TextSpan(
+          text: snippet.substring(matchIndex, matchIndex + query.length),
+          style: TextStyle(
+            color: cs.primary,
+            fontWeight: FontWeight.w600,
+            backgroundColor: cs.primaryContainer.withAlpha(100),
+          ),
         ),
-      ));
+      );
       start = matchIndex + query.length;
     }
 
     return RichText(
       text: TextSpan(
-        style: TextStyle(color: cs.onSurface, fontSize: 14, height: 1.6),
+        style: TextStyle(color: textColor, fontSize: 14, height: 1.6),
         children: spans,
       ),
       maxLines: 4,
       overflow: TextOverflow.ellipsis,
     );
   }
+}
+
+class _SectionMarker {
+  final String? heading;
+
+  const _SectionMarker._(this.heading);
+
+  const _SectionMarker.heading(String heading) : this._(heading);
+
+  const _SectionMarker.reset() : this._(null);
 }
