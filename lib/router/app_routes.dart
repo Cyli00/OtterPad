@@ -15,4 +15,6 @@ abstract class AppRoutes {
   static const settingsNetwork = '/settings/network';
   static const settingsApi = '/settings/api';
   static const settingsAppearance = '/settings/appearance';
+  static const settingsBackup = '/settings/backup';
+  static const settingsBackupHome = '/settings/backupHome';
 }

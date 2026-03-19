@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/storage/storage.dart';
 import 'providers/proxy_provider.dart';
-import 'providers/theme_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,17 +17,9 @@ Future<void> main() async {
   await pdfrxFlutterInitialize();
 
   // 并行初始化
-  final results = await Future.wait([
-    SharedPreferences.getInstance(),
-    GStorage.init(),
-  ]);
-  final prefs = results[0] as SharedPreferences;
+  await GStorage.init();
 
-  final container = ProviderContainer(
-    overrides: [
-      sharedPreferencesProvider.overrideWithValue(prefs),
-    ],
-  );
+  final container = ProviderContainer();
 
   // 初始化代理配置
   container.read(proxyProvider.notifier).applyInitial();

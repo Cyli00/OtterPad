@@ -85,6 +85,10 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     state = state.copyWith(apiKey: key);
     await GStorage.setting.put(_apiKeyKey, key);
   }
+
+  void reload() {
+    state = _load();
+  }
 }
 
 final agentApiProvider = StateNotifierProvider<AgentApiNotifier, AgentApiState>(
@@ -308,6 +312,10 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
   Future<void> setIgnoreLabels(List<String> labels) async {
     state = state.copyWith(markdownIgnoreLabels: labels);
     await GStorage.setting.put('${_prefix}markdownIgnoreLabels', labels);
+  }
+
+  void reload() {
+    state = _load();
   }
 }
 

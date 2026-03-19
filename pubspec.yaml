@@ -20,8 +20,6 @@ dependencies:
   flutter_animate: ^4.5.2
 
   # 偏好存储
-  shared_preferences: ^2.5.4
-
   # 网络
   dio: ^5.9.0
   connectivity_plus: ^6.0.0

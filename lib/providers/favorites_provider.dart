@@ -29,6 +29,10 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
         .toList();
   }
 
+  void reload() {
+    _load();
+  }
+
   /// 持久化到 Hive
   Future<void> _save() async {
     final encoded = state.map((f) => jsonEncode(f.toJson())).toList();

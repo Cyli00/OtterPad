@@ -188,6 +188,10 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     state = state.copyWith(defaultReadingMode: mode);
     GStorage.setting.put(_kDefaultMode, mode.index);
   }
+
+  void reload() {
+    state = _load();
+  }
 }
 
 final readerSettingsProvider =

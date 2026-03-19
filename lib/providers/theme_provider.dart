@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/storage/storage.dart';
 
 class ThemeState {
   final ThemeMode mode;
@@ -32,7 +32,6 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
   static const String _themeModeKey = 'theme_mode';
   static const String _seedColorKey = 'seed_color';
   static const String _dynamicColorKey = 'use_dynamic_color';
-  final SharedPreferences _prefs;
 
   static const List<Color> presetColors = [
     Colors.blue,
@@ -43,13 +42,14 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
     Colors.lightGreen,
     Colors.green,
     Colors.orange,
-    Colors.amber
+    Colors.amber,
   ];
 
-  ThemeNotifier(this._prefs) : super(_loadTheme(_prefs));
+  ThemeNotifier() : super(_loadTheme());
 
-  static ThemeState _loadTheme(SharedPreferences prefs) {
-    final savedMode = prefs.getString(_themeModeKey);
+  static ThemeState _loadTheme() {
+    final box = GStorage.setting;
+    final savedMode = box.get(_themeModeKey, defaultValue: 'system') as String;
     ThemeMode mode = ThemeMode.system;
     if (savedMode == 'light') {
       mode = ThemeMode.light;
@@ -57,17 +57,14 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
       mode = ThemeMode.dark;
     }
 
-    final savedColorValue = prefs.getInt(_seedColorKey);
-    Color seedColor = Colors.blue;
-    if (savedColorValue != null) {
-      seedColor = Color(savedColorValue);
-    }
-
-    final useDynamicColor = prefs.getBool(_dynamicColorKey) ?? false;
+    final savedColorValue =
+        box.get(_seedColorKey, defaultValue: Colors.blue.toARGB32()) as int;
+    final useDynamicColor =
+        box.get(_dynamicColorKey, defaultValue: false) as bool;
 
     return ThemeState(
       mode: mode,
-      seedColor: seedColor,
+      seedColor: Color(savedColorValue),
       useDynamicColor: useDynamicColor,
     );
   }
@@ -80,28 +77,25 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
     } else if (mode == ThemeMode.dark) {
       value = 'dark';
     }
-    await _prefs.setString(_themeModeKey, value);
+    await GStorage.setting.put(_themeModeKey, value);
   }
 
   Future<void> setSeedColor(Color color) async {
     state = state.copyWith(seedColor: color, useDynamicColor: false);
-    await _prefs.setInt(_seedColorKey, color.toARGB32());
-    await _prefs.setBool(_dynamicColorKey, false);
+    await GStorage.setting.put(_seedColorKey, color.toARGB32());
+    await GStorage.setting.put(_dynamicColorKey, false);
   }
 
   Future<void> setUseDynamicColor(bool value) async {
     state = state.copyWith(useDynamicColor: value);
-    await _prefs.setBool(_dynamicColorKey, value);
+    await GStorage.setting.put(_dynamicColorKey, value);
+  }
+
+  void reload() {
+    state = _loadTheme();
   }
 }
 
-/// SharedPreferences Provider
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError();
-});
-
-/// Theme Provider
 final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeState>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return ThemeNotifier(prefs);
+  return ThemeNotifier();
 });

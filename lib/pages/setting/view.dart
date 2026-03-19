@@ -53,6 +53,12 @@ class SettingPage extends StatelessWidget {
                 subtitle: '主题模式 · 主题色彩 · 阅读模式',
                 onTap: () => context.push(AppRoutes.settingsAppearance),
               ),
+              _SettingsTile(
+                icon: Icons.backup_table_rounded,
+                title: '备份设置',
+                subtitle: '本地导出 · WebDAV 备份 · 恢复范围',
+                onTap: () => context.push(AppRoutes.settingsBackup),
+              ),
             ],
           ),
         ],

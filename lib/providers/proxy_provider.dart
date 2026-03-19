@@ -74,6 +74,11 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
 
   /// 启动时调用，将已保存的配置应用到 Dio
   void applyInitial() => _applyToResolver();
+
+  void reload() {
+    state = _load();
+    _applyToResolver();
+  }
 }
 
 final proxyProvider = StateNotifierProvider<ProxyNotifier, ProxyState>((ref) {

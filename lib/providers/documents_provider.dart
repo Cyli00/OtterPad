@@ -111,6 +111,10 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     }
   }
 
+  void reload() {
+    _load();
+  }
+
   Future<void> _save() async {
     final encoded = state.map((doc) => jsonEncode(doc.toJson())).toList();
     await _box.put('documents', encoded);
