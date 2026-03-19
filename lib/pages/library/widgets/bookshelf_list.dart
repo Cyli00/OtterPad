@@ -17,7 +17,7 @@ class BookshelfList extends ConsumerWidget {
   static const _kTwoColumnBreakpoint = 900; // ← 双栏触发宽度
   static const _kThreeColumnBreakpoint = 1800; // ← 三栏触发宽度
   static const _kMaxContentWidth = 2700; // ← 内容区最大宽度
-  static const _kCardHeight = 200.0; // ← 多栏模式卡片高度（≥ 缩略图168 + padding32）
+  static const _kCardHeight = 208.0; // ← 预留选中态边框后的多栏模式卡片高度
   // └──────────────────────────────────────────────────────────┘
 
   @override
@@ -56,16 +56,15 @@ class BookshelfList extends ConsumerWidget {
         final columnCount = width >= _kThreeColumnBreakpoint
             ? 3
             : width >= _kTwoColumnBreakpoint
-                ? 2
-                : 1;
+            ? 2
+            : 1;
 
         if (columnCount >= 2) {
           final contentWidth = width.clamp(0.0, _kMaxContentWidth);
           final hPadding = (width - contentWidth) / 2 + 16;
 
           return SliverPadding(
-            padding:
-                EdgeInsets.symmetric(horizontal: hPadding, vertical: 8.0),
+            padding: EdgeInsets.symmetric(horizontal: hPadding, vertical: 8.0),
             sliver: SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columnCount,
@@ -83,8 +82,7 @@ class BookshelfList extends ConsumerWidget {
 
         // 窄屏：单栏列表
         return SliverPadding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           sliver: SliverList.separated(
             itemCount: docs.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),

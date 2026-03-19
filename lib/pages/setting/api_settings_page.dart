@@ -13,6 +13,18 @@ class ApiSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
+  static const _layoutMergeBboxesModes = <(String, String)>[
+    ('small', '偏小'),
+    ('large', '偏大'),
+  ];
+
+  static const _layoutShapeModes = <(String, String)>[
+    ('auto', '自动'),
+    ('rect', '矩形'),
+    ('quad', '四边形'),
+    ('poly', '多边形'),
+  ];
+
   late final TextEditingController _agentUrlCtrl;
   late final TextEditingController _agentKeyCtrl;
   late final TextEditingController _docUrlCtrl;
@@ -75,6 +87,17 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     _ => false,
   };
 
+  Widget _buildDivider(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Divider(
+      height: 1,
+      thickness: 1,
+      indent: 20,
+      endIndent: 20,
+      color: cs.outlineVariant.withAlpha(40),
+    );
+  }
+
   List<Widget> _buildOptionTiles(BuildContext context) {
     final docState = ref.watch(docExtractApiProvider);
     final theme = Theme.of(context);
@@ -102,26 +125,115 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
               ref.read(docExtractApiProvider.notifier).setBool(field, v),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 20,
-            vertical: 8,
+            vertical: 4,
           ),
         ),
       );
-      if (i < _optionDefs.length - 1) {
-        tiles.add(
-          Divider(
-            height: 1,
-            thickness: 1,
-            indent: 20,
-            endIndent: 20,
-            color: cs.outlineVariant.withAlpha(40),
-          ),
-        );
-      }
+      tiles.add(_buildDivider(context));
     }
     return tiles;
   }
 
-  // ── 滑动条构建 ──────────────────────────────────────────────────────────────
+  // ── 参数卡片与滑动条 ────────────────────────────────────────────────────────
+
+  Widget _buildSplitParameterItem(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final header = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
+        );
+
+        final selector = ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: constraints.maxWidth * 0.45,
+          ),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: child,
+          ),
+        );
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: header),
+              const SizedBox(width: 24),
+              selector,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSingleSelectChips(
+    BuildContext context, {
+    required String value,
+    required List<(String, String)> items,
+    required ValueChanged<String> onChanged,
+    WrapAlignment alignment = WrapAlignment.start,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Wrap(
+      alignment: alignment,
+      spacing: 8,
+      runSpacing: 8,
+      children: items.map((item) {
+        final selected = item.$1 == value;
+        return FilterChip(
+          label: Text(item.$2),
+          selected: selected,
+          showCheckmark: false,
+          color: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return cs.primaryContainer;
+            }
+            return cs.surface;
+          }),
+          side: BorderSide(
+            color: selected
+                ? Colors.transparent
+                : cs.outlineVariant.withAlpha(100),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          labelStyle: theme.textTheme.labelLarge?.copyWith(
+            color: selected ? cs.onPrimaryContainer : cs.onSurface,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+          onSelected: (_) => onChanged(item.$1),
+        );
+      }).toList(),
+    );
+  }
 
   Widget _buildSliderTile(
     BuildContext context, {
@@ -131,49 +243,80 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     required double min,
     required double max,
     required int divisions,
+    required double defaultValue,
     required ValueChanged<double> onChanged,
+    VoidCallback? onReset,
   }) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child: Text(
-                  title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                value.toStringAsFixed(2),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: cs.primary,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: [const FontFeature.tabularFigures()],
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  value.toStringAsFixed(2),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: cs.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-          Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: value,
+                  min: min,
+                  max: max,
+                  divisions: divisions,
+                  onChanged: onChanged,
+                ),
+              ),
+              if (onReset != null)
+                IconButton(
+                  onPressed: onReset,
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  tooltip: '恢复默认',
+                  color: cs.onSurfaceVariant,
+                ),
+            ],
           ),
         ],
       ),
@@ -272,6 +415,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final agentState = ref.watch(agentApiProvider);
+    final docState = ref.watch(docExtractApiProvider);
 
     InputDecoration fieldDeco({required String hint, Widget? suffix}) =>
         InputDecoration(
@@ -556,43 +700,72 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
               child: Column(
                 children: [
                   ..._buildOptionTiles(context),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    indent: 20,
-                    endIndent: 20,
-                    color: cs.outlineVariant.withAlpha(40),
+                  _buildSplitParameterItem(
+                    context,
+                    title: '邻近文本块合并模式',
+                    subtitle: '控制版面检测后相邻文本块的合并策略',
+                    child: _buildSingleSelectChips(
+                      context,
+                      value: docState.layoutMergeBboxesMode,
+                      items: _layoutMergeBboxesModes,
+                      onChanged: (v) {
+                        ref
+                            .read(docExtractApiProvider.notifier)
+                            .setString('layoutMergeBboxesMode', v);
+                      },
+                      alignment: WrapAlignment.end,
+                    ),
                   ),
+                  _buildDivider(context),
+                  _buildSplitParameterItem(
+                    context,
+                    title: '版面几何形状',
+                    subtitle: '版面检测框的几何形状表示',
+                    child: _buildSingleSelectChips(
+                      context,
+                      value: docState.layoutShapeMode,
+                      items: _layoutShapeModes,
+                      onChanged: (v) {
+                        ref
+                            .read(docExtractApiProvider.notifier)
+                            .setString('layoutShapeMode', v);
+                      },
+                      alignment: WrapAlignment.end,
+                    ),
+                  ),
+                  _buildDivider(context),
                   _buildSliderTile(
                     context,
                     title: '版面检测阈值',
-                    subtitle: '区域过滤的置信度阈值，值越高保留的区域越少',
-                    value: ref.watch(docExtractApiProvider).layoutThreshold,
+                    subtitle: '区域过滤的阈值，值越高保留的区域越少',
+                    value: docState.layoutThreshold,
                     min: 0.0,
                     max: 1.0,
                     divisions: 20,
+                    defaultValue: 0.5,
                     onChanged: (v) => ref
                         .read(docExtractApiProvider.notifier)
                         .setDouble('layoutThreshold', v),
+                    onReset: () => ref
+                        .read(docExtractApiProvider.notifier)
+                        .setDouble('layoutThreshold', 0.5),
                   ),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    indent: 20,
-                    endIndent: 20,
-                    color: cs.outlineVariant.withAlpha(40),
-                  ),
+                  _buildDivider(context),
                   _buildSliderTile(
                     context,
                     title: '重复惩罚',
                     subtitle: '出现重复文字或表格内容时适当调高',
-                    value: ref.watch(docExtractApiProvider).repetitionPenalty,
+                    value: docState.repetitionPenalty,
                     min: 1.0,
                     max: 2.0,
                     divisions: 20,
+                    defaultValue: 1.0,
                     onChanged: (v) => ref
                         .read(docExtractApiProvider.notifier)
                         .setDouble('repetitionPenalty', v),
+                    onReset: () => ref
+                        .read(docExtractApiProvider.notifier)
+                        .setDouble('repetitionPenalty', 1.0),
                   ),
                 ],
               ),

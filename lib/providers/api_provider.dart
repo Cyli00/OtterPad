@@ -7,23 +7,23 @@ enum AgentApiProvider { openai, anthropic, gemini }
 
 extension AgentApiProviderExt on AgentApiProvider {
   String get label => switch (this) {
-        AgentApiProvider.openai => 'OpenAI',
-        AgentApiProvider.anthropic => 'Anthropic',
-        AgentApiProvider.gemini => 'Gemini',
-      };
+    AgentApiProvider.openai => 'OpenAI',
+    AgentApiProvider.anthropic => 'Anthropic',
+    AgentApiProvider.gemini => 'Gemini',
+  };
 
   String get defaultBaseUrl => switch (this) {
-        AgentApiProvider.openai => 'https://api.openai.com/v1',
-        AgentApiProvider.anthropic => 'https://api.anthropic.com',
-        AgentApiProvider.gemini =>
-          'https://generativelanguage.googleapis.com/v1beta',
-      };
+    AgentApiProvider.openai => 'https://api.openai.com/v1',
+    AgentApiProvider.anthropic => 'https://api.anthropic.com',
+    AgentApiProvider.gemini =>
+      'https://generativelanguage.googleapis.com/v1beta',
+  };
 
   String get apiKeyHint => switch (this) {
-        AgentApiProvider.openai => 'sk-...',
-        AgentApiProvider.anthropic => 'sk-ant-...',
-        AgentApiProvider.gemini => 'AI...',
-      };
+    AgentApiProvider.openai => 'sk-...',
+    AgentApiProvider.anthropic => 'sk-ant-...',
+    AgentApiProvider.gemini => 'AI...',
+  };
 }
 
 // ─── Agent API ───────────────────────────────────────────────────────────────
@@ -43,12 +43,11 @@ class AgentApiState {
     AgentApiProvider? provider,
     String? baseUrl,
     String? apiKey,
-  }) =>
-      AgentApiState(
-        provider: provider ?? this.provider,
-        baseUrl: baseUrl ?? this.baseUrl,
-        apiKey: apiKey ?? this.apiKey,
-      );
+  }) => AgentApiState(
+    provider: provider ?? this.provider,
+    baseUrl: baseUrl ?? this.baseUrl,
+    apiKey: apiKey ?? this.apiKey,
+  );
 }
 
 class AgentApiNotifier extends StateNotifier<AgentApiState> {
@@ -88,8 +87,7 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
   }
 }
 
-final agentApiProvider =
-    StateNotifierProvider<AgentApiNotifier, AgentApiState>(
+final agentApiProvider = StateNotifierProvider<AgentApiNotifier, AgentApiState>(
   (ref) => AgentApiNotifier(),
 );
 
@@ -129,6 +127,8 @@ class DocExtractApiState {
   final bool useOcrForImageBlock;
   final bool restructurePages;
   final bool layoutNms;
+  final String layoutMergeBboxesMode;
+  final String layoutShapeMode;
   final double layoutThreshold;
   final double repetitionPenalty;
   final bool prettifyMarkdown;
@@ -146,6 +146,8 @@ class DocExtractApiState {
     this.useOcrForImageBlock = false,
     this.restructurePages = true,
     this.layoutNms = true,
+    this.layoutMergeBboxesMode = 'large',
+    this.layoutShapeMode = 'auto',
     this.layoutThreshold = 0.5,
     this.repetitionPenalty = 1.0,
     this.prettifyMarkdown = false,
@@ -162,28 +164,30 @@ class DocExtractApiState {
     bool? useOcrForImageBlock,
     bool? restructurePages,
     bool? layoutNms,
+    String? layoutMergeBboxesMode,
+    String? layoutShapeMode,
     double? layoutThreshold,
     double? repetitionPenalty,
     bool? prettifyMarkdown,
     List<String>? markdownIgnoreLabels,
-  }) =>
-      DocExtractApiState(
-        baseUrl: baseUrl ?? this.baseUrl,
-        apiKey: apiKey ?? this.apiKey,
-        useChartRecognition: useChartRecognition ?? this.useChartRecognition,
-        useDocOrientationClassify:
-            useDocOrientationClassify ?? this.useDocOrientationClassify,
-        useDocUnwarping: useDocUnwarping ?? this.useDocUnwarping,
-        useSealRecognition: useSealRecognition ?? this.useSealRecognition,
-        useOcrForImageBlock: useOcrForImageBlock ?? this.useOcrForImageBlock,
-        restructurePages: restructurePages ?? this.restructurePages,
-        layoutNms: layoutNms ?? this.layoutNms,
-        layoutThreshold: layoutThreshold ?? this.layoutThreshold,
-        repetitionPenalty: repetitionPenalty ?? this.repetitionPenalty,
-        prettifyMarkdown: prettifyMarkdown ?? this.prettifyMarkdown,
-        markdownIgnoreLabels:
-            markdownIgnoreLabels ?? this.markdownIgnoreLabels,
-      );
+  }) => DocExtractApiState(
+    baseUrl: baseUrl ?? this.baseUrl,
+    apiKey: apiKey ?? this.apiKey,
+    useChartRecognition: useChartRecognition ?? this.useChartRecognition,
+    useDocOrientationClassify:
+        useDocOrientationClassify ?? this.useDocOrientationClassify,
+    useDocUnwarping: useDocUnwarping ?? this.useDocUnwarping,
+    useSealRecognition: useSealRecognition ?? this.useSealRecognition,
+    useOcrForImageBlock: useOcrForImageBlock ?? this.useOcrForImageBlock,
+    restructurePages: restructurePages ?? this.restructurePages,
+    layoutNms: layoutNms ?? this.layoutNms,
+    layoutMergeBboxesMode: layoutMergeBboxesMode ?? this.layoutMergeBboxesMode,
+    layoutShapeMode: layoutShapeMode ?? this.layoutShapeMode,
+    layoutThreshold: layoutThreshold ?? this.layoutThreshold,
+    repetitionPenalty: repetitionPenalty ?? this.repetitionPenalty,
+    prettifyMarkdown: prettifyMarkdown ?? this.prettifyMarkdown,
+    markdownIgnoreLabels: markdownIgnoreLabels ?? this.markdownIgnoreLabels,
+  );
 }
 
 class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
@@ -200,9 +204,9 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
 
     final useChartRecognition =
         box.get('${_prefix}useChartRecognition', defaultValue: false) as bool;
-    final useDocOrientationClassify = box.get(
-        '${_prefix}useDocOrientationClassify',
-        defaultValue: false) as bool;
+    final useDocOrientationClassify =
+        box.get('${_prefix}useDocOrientationClassify', defaultValue: false)
+            as bool;
     final useDocUnwarping =
         box.get('${_prefix}useDocUnwarping', defaultValue: false) as bool;
     final useSealRecognition =
@@ -213,6 +217,11 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         box.get('${_prefix}restructurePages', defaultValue: true) as bool;
     final layoutNms =
         box.get('${_prefix}layoutNms', defaultValue: true) as bool;
+    final layoutMergeBboxesMode =
+        box.get('${_prefix}layoutMergeBboxesMode', defaultValue: 'large')
+            as String;
+    final layoutShapeMode =
+        box.get('${_prefix}layoutShapeMode', defaultValue: 'auto') as String;
     final layoutThreshold =
         box.get('${_prefix}layoutThreshold', defaultValue: 0.5) as double;
     final repetitionPenalty =
@@ -235,6 +244,8 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
       useOcrForImageBlock: useOcrForImageBlock,
       restructurePages: restructurePages,
       layoutNms: layoutNms,
+      layoutMergeBboxesMode: layoutMergeBboxesMode,
+      layoutShapeMode: layoutShapeMode,
       layoutThreshold: layoutThreshold,
       repetitionPenalty: repetitionPenalty,
       prettifyMarkdown: prettifyMarkdown,
@@ -284,6 +295,16 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     await GStorage.setting.put('$_prefix$field', value);
   }
 
+  Future<void> setString(String field, String value) async {
+    switch (field) {
+      case 'layoutMergeBboxesMode':
+        state = state.copyWith(layoutMergeBboxesMode: value);
+      case 'layoutShapeMode':
+        state = state.copyWith(layoutShapeMode: value);
+    }
+    await GStorage.setting.put('$_prefix$field', value);
+  }
+
   Future<void> setIgnoreLabels(List<String> labels) async {
     state = state.copyWith(markdownIgnoreLabels: labels);
     await GStorage.setting.put('${_prefix}markdownIgnoreLabels', labels);
@@ -292,5 +313,5 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
 
 final docExtractApiProvider =
     StateNotifierProvider<DocExtractApiNotifier, DocExtractApiState>(
-  (ref) => DocExtractApiNotifier(),
-);
+      (ref) => DocExtractApiNotifier(),
+    );
