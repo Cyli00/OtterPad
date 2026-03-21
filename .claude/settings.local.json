@@ -39,7 +39,14 @@
       "Read(//e/gitProjects/NightReader/$LOCALAPPDATA/Pub/Cache/hosted/pub.dev/pdfrx-*/**)",
       "Bash(2)",
       "Skill(commit)",
-      "Skill(commit:*)"
+      "Skill(commit:*)",
+      "mcp__dart__add_roots",
+      "mcp__dart__analyze_files",
+      "mcp__dart__dart_format",
+      "mcp__dart__list_running_apps",
+      "mcp__dart__list_devices",
+      "mcp__dart__launch_app",
+      "mcp__dart__connect_dart_tooling_daemon"
     ]
   },
   "outputStyle": "Explanatory",

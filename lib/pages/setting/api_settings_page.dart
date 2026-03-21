@@ -62,16 +62,25 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     super.dispose();
   }
 
-  // ── 提取选项开关列表 ──────────────────────────────────────────────────────
+  // ── 提取选项开关分组 ────────────────────────────────────────────────────────
 
-  static const _optionDefs = <(String, String, String)>[
+  static const _recognitionDefs = <(String, String, String)>[
     ('useChartRecognition', '图表识别', '将图表解析为表格'),
-    ('useDocOrientationClassify', '方向校正', '自动纠正 0°/90°/180°/270° 旋转'),
-    ('useDocUnwarping', '弯曲校正', '校正弯曲或褶皱的文档'),
     ('useSealRecognition', '印章识别', '识别文档中的印章'),
     ('useOcrForImageBlock', '图片区 OCR', '对图片区域执行文字识别'),
-    ('restructurePages', '多页重构', '重构多页文档结构'),
+  ];
+
+  static const _correctionDefs = <(String, String, String)>[
+    ('useDocOrientationClassify', '方向校正', '自动纠正 0°/90°/180°/270° 旋转'),
+    ('useDocUnwarping', '弯曲校正', '校正弯曲或褶皱的文档'),
+  ];
+
+  static const _layoutDefs = <(String, String, String)>[
     ('layoutNms', '去重叠检测框', '移除重叠的版面检测框'),
+  ];
+
+  static const _outputDefs = <(String, String, String)>[
+    ('restructurePages', '多页重构', '重构多页文档结构'),
     ('prettifyMarkdown', '美化 Markdown', '输出美化后的 Markdown 文本'),
   ];
 
@@ -87,6 +96,8 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     _ => false,
   };
 
+  // ── 通用组件 ────────────────────────────────────────────────────────────────
+
   Widget _buildDivider(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Divider(
@@ -98,14 +109,43 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     );
   }
 
-  List<Widget> _buildOptionTiles(BuildContext context) {
-    final docState = ref.watch(docExtractApiProvider);
+  Widget _buildSectionDivider(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Divider(
+      height: 1,
+      thickness: 1,
+      indent: 20,
+      endIndent: 20,
+      color: cs.outlineVariant.withAlpha(80),
+    );
+  }
+
+  Widget _buildSubHeader(BuildContext context, String title) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
+      child: Text(
+        title,
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: cs.onSurfaceVariant,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildSwitchGroup(
+    BuildContext context,
+    DocExtractApiState docState,
+    List<(String, String, String)> defs,
+  ) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
     final tiles = <Widget>[];
-    for (int i = 0; i < _optionDefs.length; i++) {
-      final (field, title, subtitle) = _optionDefs[i];
+    for (int i = 0; i < defs.length; i++) {
+      final (field, title, subtitle) = defs[i];
       tiles.add(
         SwitchListTile(
           title: Text(
@@ -121,15 +161,18 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             ),
           ),
           value: _getOptionValue(docState, field),
-          onChanged: (v) =>
-              ref.read(docExtractApiProvider.notifier).setBool(field, v),
+          onChanged: (v) {
+            if (_getOptionValue(docState, field) != v) {
+              ref.read(docExtractApiProvider.notifier).setBool(field, v);
+            }
+          },
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 20,
             vertical: 4,
           ),
         ),
       );
-      tiles.add(_buildDivider(context));
+      if (i < defs.length - 1) tiles.add(_buildDivider(context));
     }
     return tiles;
   }
@@ -167,13 +210,8 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
         );
 
         final selector = ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: constraints.maxWidth * 0.45,
-          ),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: child,
-          ),
+          constraints: BoxConstraints(maxWidth: constraints.maxWidth * 0.45),
+          child: Align(alignment: Alignment.centerRight, child: child),
         );
 
         return Padding(
@@ -335,8 +373,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     'aside_text': '旁注',
   };
 
-  Widget _buildIgnoreLabelChips(BuildContext context) {
-    final docState = ref.watch(docExtractApiProvider);
+  Widget _buildIgnoreLabelChips(BuildContext context, DocExtractApiState docState) {
     final selected = docState.markdownIgnoreLabels;
     final cs = Theme.of(context).colorScheme;
 
@@ -389,12 +426,16 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
+          child: Row(
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ),
         Container(
@@ -494,9 +535,13 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                           )
                           .toList(),
                       selected: {agentState.provider},
-                      onSelectionChanged: (set) => ref
-                          .read(agentApiProvider.notifier)
-                          .setProvider(set.first),
+                      onSelectionChanged: (set) {
+                        if (agentState.provider != set.first) {
+                          ref
+                              .read(agentApiProvider.notifier)
+                              .setProvider(set.first);
+                        }
+                      },
                       style: SegmentedButton.styleFrom(
                         backgroundColor: cs.surface,
                         selectedBackgroundColor: cs.primaryContainer,
@@ -581,224 +626,240 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             ),
           ),
 
-          // ── 文档提取 API ────────────────────────────────────────────────────
+          // ── 文档提取 ──────────────────────────────────────────────────────
           _buildGroup(
             context,
-            title: '文档提取 API',
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.secondaryContainer.withAlpha(150),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.auto_awesome_rounded,
-                          size: 20,
-                          color: cs.secondary,
+            title: '文档提取',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 认证配置 ──
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '百度 AI Studio 文档 (PaddleOCR-VL-1.5)',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: cs.onSecondaryContainer,
-                              fontWeight: FontWeight.w500,
+                        decoration: BoxDecoration(
+                          color: cs.secondaryContainer.withAlpha(150),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.auto_awesome_rounded,
+                              size: 20,
+                              color: cs.secondary,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '百度 AI Studio 文档 (PaddleOCR-VL-1.5)',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: cs.onSecondaryContainer,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'API URL',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _docUrlCtrl,
+                        onChanged: (v) {
+                          _docUrlTimer?.cancel();
+                          _docUrlTimer = Timer(
+                            const Duration(milliseconds: 600),
+                            () {
+                              ref
+                                  .read(docExtractApiProvider.notifier)
+                                  .setBaseUrl(v.trim());
+                            },
+                          );
+                        },
+                        decoration: fieldDeco(
+                          hint: 'https://xxx.aistudio-app.com',
+                        ),
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Access Token',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _docKeyCtrl,
+                        onChanged: (v) {
+                          _docKeyTimer?.cancel();
+                          _docKeyTimer = Timer(
+                            const Duration(milliseconds: 600),
+                            () {
+                              ref
+                                  .read(docExtractApiProvider.notifier)
+                                  .setApiKey(v.trim());
+                            },
+                          );
+                        },
+                        obscureText: _docKeyObscured,
+                        decoration: fieldDeco(
+                          hint: 'token ...',
+                          suffix: IconButton(
+                            icon: Icon(
+                              _docKeyObscured
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              size: 20,
+                            ),
+                            onPressed: () => setState(
+                              () => _docKeyObscured = !_docKeyObscured,
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'API URL',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _docUrlCtrl,
-                    onChanged: (v) {
-                      _docUrlTimer?.cancel();
-                      _docUrlTimer = Timer(
-                        const Duration(milliseconds: 600),
-                        () {
-                          ref
-                              .read(docExtractApiProvider.notifier)
-                              .setBaseUrl(v.trim());
-                        },
-                      );
-                    },
-                    decoration: fieldDeco(hint: 'https://xxx.aistudio-app.com'),
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Access Token',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _docKeyCtrl,
-                    onChanged: (v) {
-                      _docKeyTimer?.cancel();
-                      _docKeyTimer = Timer(
-                        const Duration(milliseconds: 600),
-                        () {
-                          ref
-                              .read(docExtractApiProvider.notifier)
-                              .setApiKey(v.trim());
-                        },
-                      );
-                    },
-                    obscureText: _docKeyObscured,
-                    decoration: fieldDeco(
-                      hint: 'token ...',
-                      suffix: IconButton(
-                        icon: Icon(
-                          _docKeyObscured
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 20,
-                        ),
-                        onPressed: () =>
-                            setState(() => _docKeyObscured = !_docKeyObscured),
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        style: theme.textTheme.bodyMedium,
                       ),
-                    ),
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    style: theme.textTheme.bodyMedium,
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ),
+                ),
+                _buildSectionDivider(context),
 
-          // ── 提取选项 ────────────────────────────────────────────────────────
-          _buildGroup(
-            context,
-            title: '提取选项',
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                children: [
-                  ..._buildOptionTiles(context),
-                  _buildSplitParameterItem(
+                // ── 识别增强 ──
+                _buildSubHeader(context, '识别增强'),
+                ..._buildSwitchGroup(context, docState, _recognitionDefs),
+                _buildSectionDivider(context),
+
+                // ── 文档校正 ──
+                _buildSubHeader(context, '文档校正'),
+                ..._buildSwitchGroup(context, docState, _correctionDefs),
+                _buildSectionDivider(context),
+
+                // ── 版面分析 ──
+                _buildSubHeader(context, '版面分析'),
+                ..._buildSwitchGroup(context, docState, _layoutDefs),
+                _buildDivider(context),
+                _buildSplitParameterItem(
+                  context,
+                  title: '邻近文本块合并模式',
+                  subtitle: '控制版面检测后相邻文本块的合并策略',
+                  child: _buildSingleSelectChips(
                     context,
-                    title: '邻近文本块合并模式',
-                    subtitle: '控制版面检测后相邻文本块的合并策略',
-                    child: _buildSingleSelectChips(
-                      context,
-                      value: docState.layoutMergeBboxesMode,
-                      items: _layoutMergeBboxesModes,
-                      onChanged: (v) {
+                    value: docState.layoutMergeBboxesMode,
+                    items: _layoutMergeBboxesModes,
+                    onChanged: (v) {
+                      if (docState.layoutMergeBboxesMode != v) {
                         ref
                             .read(docExtractApiProvider.notifier)
                             .setString('layoutMergeBboxesMode', v);
-                      },
-                      alignment: WrapAlignment.end,
-                    ),
+                      }
+                    },
+                    alignment: WrapAlignment.end,
                   ),
-                  _buildDivider(context),
-                  _buildSplitParameterItem(
+                ),
+                _buildDivider(context),
+                _buildSplitParameterItem(
+                  context,
+                  title: '版面几何形状',
+                  subtitle: '版面检测框的几何形状表示',
+                  child: _buildSingleSelectChips(
                     context,
-                    title: '版面几何形状',
-                    subtitle: '版面检测框的几何形状表示',
-                    child: _buildSingleSelectChips(
-                      context,
-                      value: docState.layoutShapeMode,
-                      items: _layoutShapeModes,
-                      onChanged: (v) {
+                    value: docState.layoutShapeMode,
+                    items: _layoutShapeModes,
+                    onChanged: (v) {
+                      if (docState.layoutShapeMode != v) {
                         ref
                             .read(docExtractApiProvider.notifier)
                             .setString('layoutShapeMode', v);
-                      },
-                      alignment: WrapAlignment.end,
-                    ),
+                      }
+                    },
+                    alignment: WrapAlignment.end,
                   ),
-                  _buildDivider(context),
-                  _buildSliderTile(
-                    context,
-                    title: '版面检测阈值',
-                    subtitle: '区域过滤的阈值，值越高保留的区域越少',
-                    value: docState.layoutThreshold,
-                    min: 0.0,
-                    max: 1.0,
-                    divisions: 20,
-                    defaultValue: 0.5,
-                    onChanged: (v) => ref
-                        .read(docExtractApiProvider.notifier)
-                        .setDouble('layoutThreshold', v),
-                    onReset: () => ref
-                        .read(docExtractApiProvider.notifier)
-                        .setDouble('layoutThreshold', 0.5),
-                  ),
-                  _buildDivider(context),
-                  _buildSliderTile(
-                    context,
-                    title: '重复惩罚',
-                    subtitle: '出现重复文字或表格内容时适当调高',
-                    value: docState.repetitionPenalty,
-                    min: 1.0,
-                    max: 2.0,
-                    divisions: 20,
-                    defaultValue: 1.0,
-                    onChanged: (v) => ref
-                        .read(docExtractApiProvider.notifier)
-                        .setDouble('repetitionPenalty', v),
-                    onReset: () => ref
-                        .read(docExtractApiProvider.notifier)
-                        .setDouble('repetitionPenalty', 1.0),
-                  ),
-                ],
-              ),
-            ),
-          ),
+                ),
+                _buildDivider(context),
+                _buildSliderTile(
+                  context,
+                  title: '版面检测阈值',
+                  subtitle: '区域过滤的阈值，值越高保留的区域越少',
+                  value: docState.layoutThreshold,
+                  min: 0.0,
+                  max: 1.0,
+                  divisions: 20,
+                  defaultValue: 0.5,
+                  onChanged: (v) => ref
+                      .read(docExtractApiProvider.notifier)
+                      .setDouble('layoutThreshold', v),
+                  onReset: () => ref
+                      .read(docExtractApiProvider.notifier)
+                      .setDouble('layoutThreshold', 0.5),
+                ),
+                _buildSectionDivider(context),
 
-          // ── Markdown 忽略标签 ───────────────────────────────────────────────
-          _buildGroup(
-            context,
-            title: '提取过滤',
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Markdown 忽略标签',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
-                    ),
+                // ── 输出控制 ──
+                _buildSubHeader(context, '输出控制'),
+                ..._buildSwitchGroup(context, docState, _outputDefs),
+                _buildDivider(context),
+                _buildSliderTile(
+                  context,
+                  title: '重复惩罚',
+                  subtitle: '出现重复文字或表格内容时适当调高',
+                  value: docState.repetitionPenalty,
+                  min: 1.0,
+                  max: 2.0,
+                  divisions: 20,
+                  defaultValue: 1.0,
+                  onChanged: (v) => ref
+                      .read(docExtractApiProvider.notifier)
+                      .setDouble('repetitionPenalty', v),
+                  onReset: () => ref
+                      .read(docExtractApiProvider.notifier)
+                      .setDouble('repetitionPenalty', 1.0),
+                ),
+                _buildDivider(context),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Markdown 忽略标签',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '勾选的标签区域将不会输出到 Markdown 结果中，默认全忽略。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildIgnoreLabelChips(context, docState),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '勾选的标签区域将不会输出到 Markdown 结果中，默认全忽略。',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildIgnoreLabelChips(context),
-                ],
-              ),
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
           ),
         ],
