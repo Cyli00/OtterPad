@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
+import '../../providers/starred_provider.dart';
 import '../../router/app_routes.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
@@ -96,10 +97,34 @@ class ShelfPage extends ConsumerWidget {
                   title: '阅读历史',
                   onTap: () {},
                 ),
-                LibraryMenuItem(
-                  icon: Icons.grade,
-                  title: '星标条目',
-                  onTap: () {},
+                Consumer(
+                  builder: (context, ref, _) {
+                    final count = ref.watch(starredCountProvider);
+                    return LibraryMenuItem(
+                      icon: Icons.grade,
+                      title: '星标条目',
+                      trailing: count > 0
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.tertiaryContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.tertiary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          : null,
+                      onTap: () => context.push(AppRoutes.shelfStarred),
+                    );
+                  },
                 ),
                 Consumer(
                   builder: (context, ref, _) {

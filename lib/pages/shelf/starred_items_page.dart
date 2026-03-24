@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path/path.dart' as p;
-import '../../data/models/book/document.dart';
-import '../../data/models/collection/favorite.dart';
+
 import '../../providers/api_provider.dart';
 import '../../providers/documents_provider.dart';
-import '../../providers/favorites_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../providers/starred_provider.dart';
@@ -17,38 +14,22 @@ import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
 
-/// 收藏夹详情页：展示书单内所有文献
-class FavoriteDetailPage extends ConsumerWidget {
-  final Favorite favorite;
+/// 星标条目页面：展示所有星标文献，布局与收藏夹详情页一致
+class StarredItemsPage extends ConsumerWidget {
+  const StarredItemsPage({super.key});
 
-  const FavoriteDetailPage({super.key, required this.favorite});
-
-  String get _sourceContext => 'favorite:${favorite.id}';
+  static const _sourceContext = 'starred';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final docs = ref.watch(documentsProvider);
+    final starredDocs = ref.watch(starredDocsProvider);
     final selection = ref.watch(selectionProvider);
     final isSelectionMode =
         selection.isActive && selection.sourceContext == _sourceContext;
 
-    // 解析收藏夹内的文献列表
-    final favDocs = <Document>[];
-    for (final docPath in favorite.docPaths) {
-      final doc = docs.where((d) => d.filePath == docPath).firstOrNull ??
-          Document(
-            id: '',
-            title: p.basenameWithoutExtension(docPath),
-            authors: [],
-            filePath: docPath,
-            addedAt: DateTime.now(),
-          );
-      favDocs.add(doc);
-    }
-
-    final allIds = favDocs.where((d) => d.id.isNotEmpty).map((d) => d.id).toSet();
+    final allIds = starredDocs.map((d) => d.id).toSet();
     final allSelected =
         allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
@@ -68,20 +49,15 @@ class FavoriteDetailPage extends ConsumerWidget {
                 allSelected: allSelected,
                 onSelectAll: () =>
                     ref.read(selectionProvider.notifier).toggleAll(allIds),
-                onStar: () => ref
-                    .read(starredProvider.notifier)
-                    .toggleMany(selection.selectedIds),
-                onRemoveFromFavorite: () =>
-                    _removeFromFavorite(context, ref, selection, favDocs),
+                onStar: () => _unstarSelected(ref, selection),
                 onExtract: () =>
-                    _extractSelected(context, ref, selection, favDocs),
-                onDelete: () =>
-                    _deleteSelected(context, ref, selection),
+                    _extractSelected(context, ref, selection, starredDocs),
+                onDelete: () => _deleteSelected(context, ref, selection),
               )
             : AppBar(
                 backgroundColor: colorScheme.surface,
                 title: Text(
-                  favorite.name,
+                  '星标条目',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -93,20 +69,20 @@ class FavoriteDetailPage extends ConsumerWidget {
               ),
         body: CustomScrollView(
           slivers: [
-            if (favorite.docPaths.isEmpty)
+            if (starredDocs.isEmpty)
               SliverFillRemaining(
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.menu_book_outlined,
+                        Icons.star_border_rounded,
                         size: 64,
                         color: colorScheme.onSurfaceVariant.withAlpha(80),
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        '暂无文献',
+                        '暂无星标条目',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -119,31 +95,25 @@ class FavoriteDetailPage extends ConsumerWidget {
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverList.separated(
-                  itemCount: favDocs.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemCount: starredDocs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
-                    final doc = favDocs[index];
-
+                    final doc = starredDocs[index];
                     return DocListCard(
                       doc: doc,
                       isSelectionMode: isSelectionMode,
                       isSelected: selection.selectedIds.contains(doc.id),
                       onTap: () => DocCardActions.openReader(context, doc),
-                      onLongPress: doc.id.isNotEmpty
-                          ? () => ref
-                              .read(selectionProvider.notifier)
-                              .enter(doc.id, _sourceContext)
-                          : null,
-                      onSelectionTap: doc.id.isNotEmpty
-                          ? () => ref
-                              .read(selectionProvider.notifier)
-                              .toggle(doc.id)
-                          : null,
+                      onLongPress: () => ref
+                          .read(selectionProvider.notifier)
+                          .enter(doc.id, _sourceContext),
+                      onSelectionTap: () => ref
+                          .read(selectionProvider.notifier)
+                          .toggle(doc.id),
                     );
                   },
                 ),
               ),
-
             const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
         ),
@@ -151,28 +121,15 @@ class FavoriteDetailPage extends ConsumerWidget {
     );
   }
 
-  /// 从收藏夹中移除选中文献（不删除文献本身）
-  void _removeFromFavorite(
-    BuildContext context,
-    WidgetRef ref,
-    SelectionState selection,
-    List<Document> favDocs,
-  ) {
+  void _unstarSelected(WidgetRef ref, SelectionState selection) {
     final count = selection.selectedIds.length;
-    for (final doc in favDocs) {
-      if (selection.selectedIds.contains(doc.id) && doc.filePath.isNotEmpty) {
-        ref
-            .read(favoritesProvider.notifier)
-            .removeDoc(favorite.id, doc.filePath);
-      }
-    }
+    ref.read(starredProvider.notifier).toggleMany(selection.selectedIds);
     ref
         .read(snackBarServiceProvider)
-        .showResult(message: '已从收藏夹移除 $count 篇文献');
+        .showResult(message: '已取消 $count 个星标');
     ref.read(selectionProvider.notifier).exit();
   }
 
-  /// 批量删除选中文献（真正删除）
   Future<void> _deleteSelected(
     BuildContext context,
     WidgetRef ref,
@@ -212,12 +169,11 @@ class FavoriteDetailPage extends ConsumerWidget {
     ref.read(selectionProvider.notifier).exit();
   }
 
-  /// 批量提取选中文献
   Future<void> _extractSelected(
     BuildContext context,
     WidgetRef ref,
     SelectionState selection,
-    List<Document> favDocs,
+    List docs,
   ) async {
     final apiState = ref.read(docExtractApiProvider);
     if (apiState.apiKey.isEmpty || apiState.baseUrl.isEmpty) {
@@ -227,7 +183,7 @@ class FavoriteDetailPage extends ConsumerWidget {
       return;
     }
 
-    final selectedDocs = favDocs
+    final selectedDocs = docs
         .where((d) =>
             selection.selectedIds.contains(d.id) && d.filePath.isNotEmpty)
         .toList();

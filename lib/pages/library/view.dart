@@ -5,6 +5,7 @@ import '../../providers/api_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
+import '../../providers/starred_provider.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
 import 'widgets/batch_progress_sheet.dart';
@@ -314,6 +315,20 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               tooltip: '文本提取',
               backgroundColor: cs.primaryContainer,
               foregroundColor: cs.primary,
+            ),
+            const SizedBox(width: 8),
+            _actionButton(
+              icon: Icons.star_rounded,
+              size: buttonSize,
+              iconSize: iconSize,
+              onPressed: hasSelection
+                  ? () => ref
+                      .read(starredProvider.notifier)
+                      .toggleMany(selection.selectedIds)
+                  : null,
+              tooltip: '星标',
+              backgroundColor: cs.tertiaryContainer,
+              foregroundColor: cs.tertiary,
             ),
             const SizedBox(width: 8),
             _actionButton(

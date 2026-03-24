@@ -9,6 +9,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onSelectAll;
   final bool allSelected;
   final VoidCallback? onExtract;
+  final VoidCallback? onStar;
   final VoidCallback? onRemoveFromFavorite;
   final VoidCallback onDelete;
 
@@ -19,6 +20,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onSelectAll,
     required this.allSelected,
     this.onExtract,
+    this.onStar,
     this.onRemoveFromFavorite,
     required this.onDelete,
   });
@@ -54,6 +56,12 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           tooltip: allSelected ? '取消全选' : '全选',
         ),
+        if (onStar != null)
+          IconButton(
+            onPressed: selectedCount > 0 ? onStar : null,
+            icon: const Icon(Icons.star_rounded),
+            tooltip: '星标',
+          ),
         if (onRemoveFromFavorite != null)
           IconButton(
             onPressed: selectedCount > 0 ? onRemoveFromFavorite : null,
@@ -89,6 +97,7 @@ class SliverSelectionBar extends StatelessWidget {
   final VoidCallback onSelectAll;
   final bool allSelected;
   final VoidCallback? onExtract;
+  final VoidCallback? onStar;
   final VoidCallback onDelete;
 
   const SliverSelectionBar({
@@ -98,6 +107,7 @@ class SliverSelectionBar extends StatelessWidget {
     required this.onSelectAll,
     required this.allSelected,
     this.onExtract,
+    this.onStar,
     required this.onDelete,
   });
 
@@ -139,6 +149,12 @@ class SliverSelectionBar extends StatelessWidget {
                 ),
                 tooltip: allSelected ? '取消全选' : '全选',
               ),
+              if (onStar != null)
+                IconButton(
+                  onPressed: selectedCount > 0 ? onStar : null,
+                  icon: const Icon(Icons.star_rounded),
+                  tooltip: '星标',
+                ),
               if (onExtract != null)
                 IconButton(
                   onPressed: selectedCount > 0 ? onExtract : null,
