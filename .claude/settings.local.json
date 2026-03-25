@@ -46,7 +46,8 @@
       "mcp__dart__list_running_apps",
       "mcp__dart__list_devices",
       "mcp__dart__launch_app",
-      "mcp__dart__connect_dart_tooling_daemon"
+      "mcp__dart__connect_dart_tooling_daemon",
+      "mcp__dart__read_package_uris"
     ]
   },
   "outputStyle": "Explanatory",

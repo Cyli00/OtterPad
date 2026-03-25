@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -16,7 +17,7 @@ import '../../providers/api_provider.dart';
 import '../../providers/highlight_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
-import '../../services/doc_extract_service.dart';
+import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/markdown_preprocessor.dart';
 import 'widgets/appearance_panel.dart';
@@ -53,9 +54,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // PDF 控制器（用于滚动滑条）
   final _pdfController = PdfViewerController();
+  PdfTextSearcher? _pdfSearcher;
+  VoidCallback? _disposePdfSearchListener;
+  final _pdfSearchController = TextEditingController();
+  final _pdfSearchFocusNode = FocusNode();
+  String _pdfSearchQuery = '';
 
-  // 缓存加载 Future，避免 FutureBuilder 反复创建新实例
+  // 缓存加载 Future，避免重复创建相同加载任务
   Future<String>? _loadFuture;
+  Future<MarkdownSearchSnapshot>? _searchSnapshotFuture;
+  String? _markdownCacheKey;
 
   // 文本选择
   String? _selectedText;
@@ -75,6 +83,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   // 异步初始化状态
   bool _initialized = false;
   bool? _fileExists;
+  bool _markdownLoading = false;
+  Object? _markdownLoadError;
 
   // Markdown 入场动画（与路由转场 _buildAnimatedPage 保持一致）
   late final AnimationController _enterController;
@@ -92,19 +102,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<void> _initAsync() async {
     final filePath = widget.document.filePath;
 
-    // 异步检查文件是否存在，不阻塞转场动画
-    final fileExists =
-        filePath.isNotEmpty && await File(filePath).exists();
+    final fileExistsFuture = filePath.isNotEmpty
+        ? File(filePath).exists()
+        : Future.value(false);
+    final mdPathFuture = _findMarkdownPath(filePath);
 
-    // 异步检查 .md 文件
-    if (filePath.isNotEmpty) {
-      final mdPath = p.join(
-        p.dirname(filePath),
-        '${p.basenameWithoutExtension(filePath)}.md',
-      );
-      if (await File(mdPath).exists()) {
-        _mdPath = mdPath;
-      }
+    final fileExists = await fileExistsFuture;
+    final mdPath = await mdPathFuture;
+    if (mdPath != null) {
+      _mdPath = mdPath;
     }
 
     if (!mounted) return;
@@ -113,24 +119,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final wantMarkdown =
         defaultMode == DefaultReadingMode.markdown && _hasResult;
 
-    // 先加载完 Markdown 内容，再显示页面并播放入场动画
-    if (wantMarkdown && _mdContent == null && _mdPath != null) {
-      _mdContent = await _loadAndResolveMarkdown();
-    }
-
-    if (!mounted) return;
-
     setState(() {
       _fileExists = fileExists;
       _showPreview = wantMarkdown;
       _initialized = true;
+      _markdownLoading = wantMarkdown && _mdContent == null && _mdPath != null;
+      _markdownLoadError = null;
     });
 
-    // widget 树构建完成后再启动动画，确保首帧从 offset 起始位置开始
-    if (wantMarkdown && _mdContent != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _enterController.forward();
-      });
+    if (wantMarkdown) {
+      unawaited(_ensureMarkdownReady());
     }
   }
 
@@ -149,16 +147,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       filePath: filePath,
       title: widget.document.title,
       apiState: ref.read(docExtractApiProvider),
-      onSuccess: (mdPath, resolvedMd) {
+      onSuccess: (mdPath, markdownContent) async {
         if (!mounted) return;
         _enterController.reset();
-        final filtered = MarkdownPreprocessor.filterBeforeTitle(
-          resolvedMd,
-          widget.document.title,
+        final nextContent = markdownContent;
+        final cacheService = MarkdownDocumentCacheService.instance;
+        final cacheKey = cacheService.buildMemoryCacheKey(
+          mdPath: mdPath,
+          title: widget.document.title,
+          markdownContent: nextContent,
+        );
+        cacheService.primeResolvedContent(
+          cacheKey: cacheKey,
+          content: nextContent,
         );
         setState(() {
           _mdPath = mdPath;
-          _mdContent = filtered;
+          _mdContent = nextContent;
+          _markdownCacheKey = cacheKey;
+          _searchSnapshotFuture = cacheService.getSearchSnapshot(
+            cacheKey: cacheKey,
+            markdownContent: nextContent,
+          );
           _showPreview = true;
         });
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -171,27 +181,103 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void _togglePreview() {
     _clearHighlight();
     final enteringMarkdown = !_showPreview;
-    if (enteringMarkdown) _enterController.reset();
-    setState(() => _showPreview = !_showPreview);
     if (enteringMarkdown) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _enterController.forward();
-      });
+      _enterController.reset();
+      _pdfSearchFocusNode.unfocus();
+      _pdfSearchController.clear();
+      _pdfSearcher?.resetTextSearch();
+    }
+    setState(() {
+      _showPreview = !_showPreview;
+      _searchActive = false;
+      if (enteringMarkdown) {
+        _pdfSearchQuery = '';
+      }
+    });
+    if (enteringMarkdown) {
+      unawaited(_ensureMarkdownReady());
     }
   }
 
   // ─── 搜索 ───
 
   Future<void> _openSearch() async {
-    if (_mdContent == null && _mdPath != null) {
-      _mdContent = await _loadAndResolveMarkdown();
+    if (_showPreview) {
+      if (_mdContent == null && _mdPath != null) {
+        await _ensureMarkdownReady(playAnimation: false);
+      }
+      if (!mounted || _mdContent == null) return;
+      setState(() => _searchActive = true);
+      return;
     }
-    if (!mounted) return;
+
+    if (!(_fileExists ?? false)) return;
+    if (_pdfSearchController.text != _pdfSearchQuery) {
+      _pdfSearchController.text = _pdfSearchQuery;
+    }
     setState(() => _searchActive = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _pdfSearchFocusNode.requestFocus();
+      _pdfSearchController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _pdfSearchController.text.length,
+      );
+    });
   }
 
   void _closeSearch() {
-    setState(() => _searchActive = false);
+    if (_showPreview) {
+      setState(() => _searchActive = false);
+      return;
+    }
+    _clearPdfSearch();
+  }
+
+  void _bindPdfSearcher(PdfDocument document, PdfViewerController controller) {
+    _disposePdfSearchListener?.call();
+    _pdfSearcher?.dispose();
+
+    final searcher = PdfTextSearcher(controller);
+    _disposePdfSearchListener = searcher.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _pdfSearcher = searcher;
+
+    if (_pdfSearchQuery.isNotEmpty) {
+      searcher.startTextSearch(_pdfSearchQuery, searchImmediately: true);
+    }
+  }
+
+  void _performPdfSearch(String query, {bool searchImmediately = false}) {
+    final normalized = query.trim();
+    if (_pdfSearchQuery != normalized) {
+      setState(() => _pdfSearchQuery = normalized);
+    }
+
+    final searcher = _pdfSearcher;
+    if (searcher == null) return;
+
+    if (normalized.isEmpty) {
+      searcher.resetTextSearch();
+      return;
+    }
+
+    searcher.startTextSearch(
+      normalized,
+      goToFirstMatch: true,
+      searchImmediately: searchImmediately,
+    );
+  }
+
+  void _clearPdfSearch() {
+    _pdfSearchController.clear();
+    _pdfSearchFocusNode.unfocus();
+    _pdfSearcher?.resetTextSearch();
+    setState(() {
+      _searchActive = false;
+      _pdfSearchQuery = '';
+    });
   }
 
   void _onSearchResultTap(
@@ -239,6 +325,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
   }
 
+  Future<void> _goToPrevPdfResult() async {
+    final searcher = _pdfSearcher;
+    if (searcher == null || searcher.matches.isEmpty) return;
+    await searcher.goToPrevMatch();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _goToNextPdfResult() async {
+    final searcher = _pdfSearcher;
+    if (searcher == null || searcher.matches.isEmpty) return;
+    await searcher.goToNextMatch();
+    if (mounted) setState(() {});
+  }
+
   // ─── 外观面板 ───
 
   void _toggleAppearancePanel() {
@@ -264,17 +364,81 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<String> _loadAndResolveMarkdown() async {
-    final raw = await File(_mdPath!).readAsString();
-    final baseName = p.basenameWithoutExtension(_mdPath!);
-    final dir = p.dirname(_mdPath!);
-    final imageDir = p.join(dir, '${baseName}_images');
-    var resolved = DocExtractService.resolveMarkdownImagePaths(raw, imageDir);
-    resolved = MarkdownPreprocessor.filterBeforeTitle(
-      resolved,
-      widget.document.title,
+  Future<String?> _findMarkdownPath(String filePath) async {
+    if (filePath.isEmpty) return null;
+    final mdPath = p.join(
+      p.dirname(filePath),
+      '${p.basenameWithoutExtension(filePath)}.md',
     );
-    return resolved;
+    return await File(mdPath).exists() ? mdPath : null;
+  }
+
+  Future<void> _ensureMarkdownReady({bool playAnimation = true}) async {
+    if (_mdContent != null) {
+      _prewarmSearchSnapshot();
+      if (playAnimation) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _enterController.forward();
+        });
+      }
+      return;
+    }
+    if (_mdPath == null) return;
+
+    _loadFuture ??= _loadAndResolveMarkdown();
+
+    final shouldSetLoading = !_markdownLoading;
+    if (shouldSetLoading && mounted) {
+      setState(() {
+        _markdownLoading = true;
+        _markdownLoadError = null;
+      });
+    }
+
+    try {
+      final content = await _loadFuture!;
+      if (!mounted) return;
+      setState(() {
+        _mdContent = content;
+        _markdownLoading = false;
+        _markdownLoadError = null;
+      });
+      _prewarmSearchSnapshot();
+      if (playAnimation) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _enterController.forward();
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _markdownLoading = false;
+        _markdownLoadError = error;
+      });
+    }
+  }
+
+  void _prewarmSearchSnapshot() {
+    final content = _mdContent;
+    final cacheKey = _markdownCacheKey;
+    if (content == null || cacheKey == null || _searchSnapshotFuture != null) {
+      return;
+    }
+    final cacheService = MarkdownDocumentCacheService.instance;
+    _searchSnapshotFuture = cacheService.getSearchSnapshot(
+      cacheKey: cacheKey,
+      markdownContent: content,
+    );
+  }
+
+  Future<String> _loadAndResolveMarkdown() async {
+    final resolved = await MarkdownDocumentCacheService.instance.loadDocument(
+      mdPath: _mdPath!,
+      title: widget.document.title,
+    );
+    _markdownCacheKey = resolved.cacheKey;
+    _searchSnapshotFuture = null;
+    return resolved.content;
   }
 
   // ─── 标记 ───
@@ -641,6 +805,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   @override
   void dispose() {
+    _disposePdfSearchListener?.call();
+    _pdfSearcher?.dispose();
+    _pdfSearchController.dispose();
+    _pdfSearchFocusNode.dispose();
     _scrollController.dispose();
     _enterController.dispose();
     _appearanceEntry?.remove();
@@ -688,7 +856,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ? readerSettings.backgroundColor
         : cs.surface;
 
-    final isHighlightMode = _highlightQuery != null;
+    final isMarkdownHighlightMode = _showPreview && _highlightQuery != null;
+    final pdfMatchCount = _pdfSearcher?.matches.length ?? 0;
+    final showPdfNavigator = !_showPreview && _pdfSearchQuery.isNotEmpty;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -698,8 +868,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             // ── 主内容层 ──
             Column(
               children: [
-                if (isHighlightMode)
+                if (isMarkdownHighlightMode)
                   _buildHighlightSearchBar(cs)
+                else if (_searchActive && !_showPreview)
+                  _buildPdfSearchBar(cs)
                 else
                   _buildToolbar(theme, cs, extracting: extracting),
                 Expanded(
@@ -715,18 +887,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ],
             ),
             // ── 浮动搜索结果导航器 ──
-            if (isHighlightMode && _searchResults.isNotEmpty)
+            if (isMarkdownHighlightMode && _searchResults.isNotEmpty)
               Positioned(
                 right: 16,
                 bottom: 32,
                 child: _buildResultNavigator(cs),
               ),
+            if (showPdfNavigator)
+              Positioned(
+                right: 16,
+                bottom: 32,
+                child: _buildPdfResultNavigator(cs, pdfMatchCount),
+              ),
             // ── 搜索遮罩层 ──
-            if (_searchActive && _mdContent != null)
+            if (_searchActive && _showPreview && _searchSnapshotFuture != null)
               Positioned.fill(
                 child: SearchOverlay(
-                  markdownContent: _mdContent!,
                   readerSettings: readerSettings,
+                  searchSnapshotFuture: _searchSnapshotFuture!,
                   onResultTap: _onSearchResultTap,
                   onDismiss: _closeSearch,
                   initialQuery: _highlightQuery,
@@ -758,7 +936,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ),
             const Spacer(),
             // 搜索
-            if (_hasResult)
+            if ((_showPreview && _hasResult) || (!_showPreview && (_fileExists ?? false)))
               IconButton(
                 icon: Icon(
                   Icons.search_rounded,
@@ -808,6 +986,86 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 onPressed: _toggleAppearancePanel,
               ),
             const SizedBox(width: 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPdfSearchBar(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(
+                Icons.chevron_left_rounded,
+                size: 28,
+                color: cs.onSurface,
+              ),
+              tooltip: '返回',
+              onPressed: () => context.pop(),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: SizedBox(
+                height: 40,
+                child: TextField(
+                  controller: _pdfSearchController,
+                  focusNode: _pdfSearchFocusNode,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: TextStyle(color: cs.onSurface, fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: '搜索 PDF 内容',
+                    hintStyle: TextStyle(
+                      color: cs.onSurfaceVariant.withAlpha(160),
+                      fontSize: 15,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    suffixIcon: _pdfSearchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              Icons.cancel_rounded,
+                              size: 18,
+                              color: cs.onSurfaceVariant,
+                            ),
+                            onPressed: _clearPdfSearch,
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: cs.surfaceContainerHigh,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (value) =>
+                      _performPdfSearch(value, searchImmediately: true),
+                  onChanged: (value) {
+                    setState(() {});
+                    _performPdfSearch(value);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: Icon(
+                Icons.close_rounded,
+                size: 22,
+                color: cs.onSurfaceVariant,
+              ),
+              tooltip: '退出搜索',
+              onPressed: _clearPdfSearch,
+            ),
           ],
         ),
       ),
@@ -877,6 +1135,78 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPdfResultNavigator(ColorScheme cs, int total) {
+    final current = (_pdfSearcher?.currentIndex ?? -1) + 1;
+    final progress = _pdfSearcher?.searchProgress;
+    final searching = _pdfSearcher?.isSearching ?? false;
+
+    return Material(
+      elevation: 2,
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: IconButton(
+              icon: Icon(
+                Icons.expand_less_rounded,
+                size: 24,
+                color: cs.onSurface,
+              ),
+              tooltip: '上一个结果',
+              onPressed: total > 0 ? _goToPrevPdfResult : null,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              children: [
+                Text(
+                  total > 0 ? '$current/$total' : '0/0',
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (searching && progress != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: SizedBox(
+                      width: 28,
+                      child: LinearProgressIndicator(
+                        value: progress.clamp(0.0, 1.0),
+                        minHeight: 2,
+                        backgroundColor: cs.surfaceContainerHighest,
+                        color: cs.primary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: IconButton(
+              icon: Icon(
+                Icons.expand_more_rounded,
+                size: 24,
+                color: cs.onSurface,
+              ),
+              tooltip: '下一个结果',
+              onPressed: total > 0 ? _goToNextPdfResult : null,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -984,6 +1314,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       controller: _pdfController,
       params: PdfViewerParams(
         backgroundColor: Colors.transparent,
+        matchTextColor: cs.primaryContainer.withAlpha(150),
+        activeMatchTextColor: cs.primary.withAlpha(72),
+        onViewerReady: _bindPdfSearcher,
+        pagePaintCallbacks: _pdfSearcher == null
+            ? null
+            : [_pdfSearcher!.pageTextMatchPaintCallback],
         viewerOverlayBuilder: (context, size, handleLinkTap) => [
           PdfViewerScrollThumb(
             controller: _pdfController,
@@ -1006,61 +1342,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ) {
     final highlights = ref.watch(highlightProvider(widget.document.id));
 
-    // 内容已就绪：直接渲染并包裹入场动画
-    if (_mdContent != null) {
-      return _buildSlideIn(
-        child: _wrapWithSelection(
-          ReaderMarkdownBody(
-            data: _mdContent!,
-            settings: settings,
-            scrollController: _scrollController,
-            highlightQuery: _highlightQuery,
-            targetCharOffset: _targetCharOffset,
-            highlights: highlights,
-            onHighlightTap: _onHighlightTap,
+    if (_markdownLoadError != null) {
+      return Center(
+        child: Text(
+          '加载失败',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.error,
           ),
         ),
       );
     }
 
-    // 兜底：手动切换到 Markdown 但内容尚未加载（从 PDF 模式切过来）
-    _loadFuture ??= _loadAndResolveMarkdown();
-
-    return FutureBuilder<String>(
-      future: _loadFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildMarkdownSkeleton(settings);
-        }
-        if (snapshot.hasError || (snapshot.data?.isEmpty ?? true)) {
-          return Center(
-            child: Text(
-              '加载失败',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.error,
+    return Stack(
+      children: [
+        if (_mdContent == null)
+          Positioned.fill(child: _buildMarkdownSkeleton(settings)),
+        if (_mdContent != null)
+          Positioned.fill(
+            child: _buildSlideIn(
+              child: _wrapWithSelection(
+                ReaderMarkdownBody(
+                  key: ValueKey('reader_md_${_mdContent.hashCode}'),
+                  data: _mdContent!,
+                  settings: settings,
+                  scrollController: _scrollController,
+                  highlightQuery: _highlightQuery,
+                  targetCharOffset: _targetCharOffset,
+                  highlights: highlights,
+                  onHighlightTap: _onHighlightTap,
+                ),
               ),
             ),
-          );
-        }
-        _mdContent = snapshot.data!;
-        // 下一帧启动动画
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _enterController.forward();
-        });
-        return _buildSlideIn(
-          child: _wrapWithSelection(
-            ReaderMarkdownBody(
-              data: snapshot.data!,
-              settings: settings,
-              scrollController: _scrollController,
-              highlightQuery: _highlightQuery,
-              targetCharOffset: _targetCharOffset,
-              highlights: highlights,
-              onHighlightTap: _onHighlightTap,
-            ),
           ),
-        );
-      },
+      ],
     );
   }
 

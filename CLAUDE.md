@@ -115,7 +115,41 @@ When adding or updating dependencies in `pubspec.yaml`:
 - 文档提取结果显示 (Markdown/LaTeX 渲染)
 - API 设置页面 MD3 UI 重构
 
+#### Flutter / Dart 调用文档版面解析 API
+
+##### 同步解析（layout-parsing）
+- Endpoint: `<baseUrl>/layout-parsing`
+- 认证头：`Authorization: token <TOKEN>`
+- `Content-Type: application/json`
+- PDF 本地文件需先读取为字节并转 base64
+- PDF 的 `fileType` 固定为 `0`
+- 可选参数直接平铺到请求根 payload
+- 成功结果在 `response.data["result"]["layoutParsingResults"]`
+
+##### 异步解析（Job API）
+- Endpoint: `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs`
+- 认证头：`Authorization: bearer <TOKEN>`
+- 本地文件模式使用 `multipart/form-data`
+- `model` 固定为 `PaddleOCR-VL-1.5`
+- 本地文件模式下 `optionalPayload` 需 `jsonEncode(...)`
+- 提交成功后得到 `jobId`
+- 轮询 `GET /jobs/{jobId}`
+- 完成后读取 `data.resultUrl.jsonUrl`
+- 下载的 JSONL 每行格式：`{"result":{"layoutParsingResults":[...]}}`
+
+##### 本项目产物约定
+- `{baseName}.raw.md`：API 原始 Markdown
+- `{baseName}.md`：阅读器使用的预处理 Markdown（已完成图片路径解析与标题前裁剪）
+- `{baseName}.jsonl`：官方结果；同步接口本地封装为单行 JSONL，异步接口保存服务端原始 JSONL
+- `{baseName}_images/`：Markdown 引用图片的本地目录
+- 不再生成 `{baseName}.html`
+
+##### 当前代码入口
+- 同步解析入口：`lib/services/doc_extract_service.dart`
+- 异步解析入口：`lib/services/batch_extract_service.dart`
+- 阅读缓存入口：`lib/services/reader/markdown_document_cache_service.dart`
+
 ## Todolist
 
-- pdf阅读页面的搜索似乎套用了markdown的搜索逻辑，这是不对的！pdf阅读器使用的包里应该有自带的search功能模块
-- 
+- Markdown 阅读器仍可继续优化：缓存已解析内容/预热结果，进一步缩短首开延迟。
+- 段落内提及的figure应该能被检出和点击高亮。
