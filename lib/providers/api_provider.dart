@@ -131,11 +131,9 @@ class DocExtractApiState {
   final bool useOcrForImageBlock;
   final bool restructurePages;
   final bool layoutNms;
-  final String layoutMergeBboxesMode;
   final String layoutShapeMode;
   final double layoutThreshold;
   final double repetitionPenalty;
-  final bool prettifyMarkdown;
 
   // ── Markdown 忽略标签 ──
   final List<String> markdownIgnoreLabels;
@@ -150,11 +148,9 @@ class DocExtractApiState {
     this.useOcrForImageBlock = false,
     this.restructurePages = true,
     this.layoutNms = true,
-    this.layoutMergeBboxesMode = 'large',
     this.layoutShapeMode = 'auto',
     this.layoutThreshold = 0.5,
     this.repetitionPenalty = 1.0,
-    this.prettifyMarkdown = false,
     this.markdownIgnoreLabels = kDefaultIgnoreLabels,
   });
 
@@ -168,11 +164,9 @@ class DocExtractApiState {
     bool? useOcrForImageBlock,
     bool? restructurePages,
     bool? layoutNms,
-    String? layoutMergeBboxesMode,
     String? layoutShapeMode,
     double? layoutThreshold,
     double? repetitionPenalty,
-    bool? prettifyMarkdown,
     List<String>? markdownIgnoreLabels,
   }) => DocExtractApiState(
     baseUrl: baseUrl ?? this.baseUrl,
@@ -185,11 +179,9 @@ class DocExtractApiState {
     useOcrForImageBlock: useOcrForImageBlock ?? this.useOcrForImageBlock,
     restructurePages: restructurePages ?? this.restructurePages,
     layoutNms: layoutNms ?? this.layoutNms,
-    layoutMergeBboxesMode: layoutMergeBboxesMode ?? this.layoutMergeBboxesMode,
     layoutShapeMode: layoutShapeMode ?? this.layoutShapeMode,
     layoutThreshold: layoutThreshold ?? this.layoutThreshold,
     repetitionPenalty: repetitionPenalty ?? this.repetitionPenalty,
-    prettifyMarkdown: prettifyMarkdown ?? this.prettifyMarkdown,
     markdownIgnoreLabels: markdownIgnoreLabels ?? this.markdownIgnoreLabels,
   );
 }
@@ -221,17 +213,12 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         box.get('${_prefix}restructurePages', defaultValue: true) as bool;
     final layoutNms =
         box.get('${_prefix}layoutNms', defaultValue: true) as bool;
-    final layoutMergeBboxesMode =
-        box.get('${_prefix}layoutMergeBboxesMode', defaultValue: 'large')
-            as String;
     final layoutShapeMode =
         box.get('${_prefix}layoutShapeMode', defaultValue: 'auto') as String;
     final layoutThreshold =
         box.get('${_prefix}layoutThreshold', defaultValue: 0.5) as double;
     final repetitionPenalty =
         box.get('${_prefix}repetitionPenalty', defaultValue: 1.0) as double;
-    final prettifyMarkdown =
-        box.get('${_prefix}prettifyMarkdown', defaultValue: false) as bool;
 
     final rawLabels = box.get('${_prefix}markdownIgnoreLabels') as List?;
     final markdownIgnoreLabels = rawLabels != null
@@ -248,11 +235,9 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
       useOcrForImageBlock: useOcrForImageBlock,
       restructurePages: restructurePages,
       layoutNms: layoutNms,
-      layoutMergeBboxesMode: layoutMergeBboxesMode,
       layoutShapeMode: layoutShapeMode,
       layoutThreshold: layoutThreshold,
       repetitionPenalty: repetitionPenalty,
-      prettifyMarkdown: prettifyMarkdown,
       markdownIgnoreLabels: markdownIgnoreLabels,
     );
   }
@@ -283,8 +268,6 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         state = state.copyWith(restructurePages: value);
       case 'layoutNms':
         state = state.copyWith(layoutNms: value);
-      case 'prettifyMarkdown':
-        state = state.copyWith(prettifyMarkdown: value);
     }
     await GStorage.setting.put('$_prefix$field', value);
   }
@@ -301,8 +284,6 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
 
   Future<void> setString(String field, String value) async {
     switch (field) {
-      case 'layoutMergeBboxesMode':
-        state = state.copyWith(layoutMergeBboxesMode: value);
       case 'layoutShapeMode':
         state = state.copyWith(layoutShapeMode: value);
     }

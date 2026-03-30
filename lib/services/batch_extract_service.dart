@@ -68,7 +68,7 @@ class BatchExtractProgress {
   });
 }
 
-/// documentId → 已保存的 HTML 路径（null 表示该文献提取失败）
+/// documentId → 已保存的阅读版 Markdown 路径（null 表示该文献提取失败）
 typedef BatchExtractResults = Map<String, String?>;
 
 class BatchExtractException implements Exception {
@@ -256,13 +256,8 @@ class BatchExtractService {
     return [];
   }
 
-  /// 从 JSONL URL 下载结果并解析为 (合并Markdown, 图片Map)。
-  ///
-  /// JSONL 每行格式：{"result": {"layoutParsingResults": [...]}}
-  /// 与同步 API 的 result 结构相同，因此可复用 [DocExtractService.saveResult]。
-  Future<(String, Map<String, String>)> _parseJsonlResult(
-    String jsonlUrl,
-  ) async {
+  /// 从 JSONL URL 下载结果并解析为 [DocExtractResult]。
+  Future<DocExtractResult> _parseJsonlResult(String jsonlUrl) async {
     final Response<String> response;
     try {
       response = await _dio.get<String>(
@@ -273,10 +268,11 @@ class BatchExtractService {
       throw BatchExtractException('下载提取结果失败: ${e.message ?? e.type.name}');
     }
 
+    final jsonlContent = response.data ?? '';
     final markdownParts = <String>[];
     final allImages = <String, String>{};
 
-    for (final line in (response.data ?? '').trim().split('\n')) {
+    for (final line in jsonlContent.trim().split('\n')) {
       final trimmed = line.trim();
       if (trimmed.isEmpty) continue;
       try {
@@ -301,7 +297,11 @@ class BatchExtractService {
       }
     }
 
-    return (markdownParts.join('\n\n'), allImages);
+    return DocExtractResult(
+      rawMarkdown: markdownParts.join('\n\n'),
+      images: allImages,
+      jsonlContent: jsonlContent,
+    );
   }
 
   /// 从轮询数据中更新单个 Job 的状态，完成时自动下载并保存结果。
@@ -328,14 +328,15 @@ class BatchExtractService {
 
         if (jsonlUrl != null) {
           try {
-            final (markdown, images) = await _parseJsonlResult(jsonlUrl);
+            final extractResult = await _parseJsonlResult(jsonlUrl);
             final item =
                 items.firstWhere((i) => i.documentId == status.documentId);
-            final extractResult =
-                DocExtractResult(markdown: markdown, images: images);
-            // BOS 预签名 URL 不应附加 Authorization 头
-            final savedPath = await DocExtractService.instance
-                .saveResult(item.filePath, extractResult, token: null);
+            final savedPath = await DocExtractService.instance.saveResult(
+              item.filePath,
+              extractResult,
+              token: null,
+              title: item.title,
+            );
             status.savedPath = savedPath;
             results[status.documentId] = savedPath;
           } catch (e) {
@@ -352,10 +353,16 @@ class BatchExtractService {
             final markdown = mdResponse.data ?? '';
             final item =
                 items.firstWhere((i) => i.documentId == status.documentId);
-            final extractResult =
-                DocExtractResult(markdown: markdown, images: {});
-            final savedPath = await DocExtractService.instance
-                .saveResult(item.filePath, extractResult, token: null);
+            final extractResult = DocExtractResult(
+              rawMarkdown: markdown,
+              images: {},
+            );
+            final savedPath = await DocExtractService.instance.saveResult(
+              item.filePath,
+              extractResult,
+              token: null,
+              title: item.title,
+            );
             status.savedPath = savedPath;
             results[status.documentId] = savedPath;
           } catch (e) {

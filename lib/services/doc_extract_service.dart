@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
-import 'package:markdown/markdown.dart' as md;
 import 'package:path/path.dart' as p;
 
 import '../providers/api_provider.dart';
@@ -22,31 +21,35 @@ class DocExtractException implements Exception {
 /// 单页提取结果
 class _PageResult {
   final String markdown;
-  final Map<String, String> images; // 相对路径 → 图片下载 URL
+  final Map<String, String> images;
 
   const _PageResult({required this.markdown, required this.images});
 }
 
 /// 文档提取结果
 class DocExtractResult {
-  final String markdown;
+  final String rawMarkdown;
   final Map<String, String> images;
-  String? savedPath; // 保存后的 .html 文件路径
-  String? imageDir; // 图片保存目录的绝对路径
+  final String? jsonlContent;
+  String? savedPath;
+  String? rawPath;
+  String? jsonlPath;
+  String? imageDir;
+  String? processedMarkdown;
 
   DocExtractResult({
-    required this.markdown,
+    required this.rawMarkdown,
     required this.images,
+    this.jsonlContent,
     this.savedPath,
+    this.rawPath,
+    this.jsonlPath,
     this.imageDir,
+    this.processedMarkdown,
   });
 }
 
 /// 百度 AI Studio PaddleOCR-VL 文档版面解析服务
-///
-/// 将 PDF 文件通过 Layout Parsing API 提取为 Markdown，
-/// 然后转换为带排版的 HTML 文件保存。
-/// 单例模式，与 [IdentifierResolver] 保持一致的 Dio + 代理模式。
 class DocExtractService {
   DocExtractService._();
   static final DocExtractService instance = DocExtractService._();
@@ -58,8 +61,6 @@ class DocExtractService {
       sendTimeout: const Duration(seconds: 120),
     ),
   );
-
-  // ─── 代理配置 ──────────────────────────────────────────────────────────────
 
   void applyProxy(Enum mode, String host, int port) {
     final adapter = IOHttpClientAdapter();
@@ -83,8 +84,6 @@ class DocExtractService {
     _dio.httpClientAdapter = adapter;
   }
 
-  // ─── 主方法：提取 PDF → Markdown ──────────────────────────────────────────
-
   Future<DocExtractResult> extract({
     required String filePath,
     required String apiUrl,
@@ -106,9 +105,12 @@ class DocExtractService {
       ...buildOptions(state),
     };
 
-    final url = apiUrl.endsWith('/')
-        ? '${apiUrl}layout-parsing'
-        : '$apiUrl/layout-parsing';
+    final normalizedApiUrl = apiUrl.trim();
+    final url = normalizedApiUrl.endsWith('/layout-parsing')
+      ? normalizedApiUrl
+      : normalizedApiUrl.endsWith('/')
+      ? '${normalizedApiUrl}layout-parsing'
+      : '$normalizedApiUrl/layout-parsing';
 
     final Response<Map<String, dynamic>> response;
     try {
@@ -165,44 +167,46 @@ class DocExtractService {
       pages.add(_PageResult(markdown: text, images: images));
     }
 
-    // [TEST] 跳过预处理，保留原始 Markdown
-    final fullMarkdown = MarkdownPreprocessor.process(
-      pages.map((p) => p.markdown).join('\n\n'),
-    );
+    final rawMarkdown = pages.map((p) => p.markdown).join('\n\n');
     final allImages = <String, String>{};
     for (final page in pages) {
       allImages.addAll(page.images);
     }
 
-    return DocExtractResult(markdown: fullMarkdown, images: allImages);
+    return DocExtractResult(
+      rawMarkdown: rawMarkdown,
+      images: allImages,
+      jsonlContent: jsonEncode({'result': result}),
+    );
   }
 
-  // ─── 保存结果到磁盘 ──────────────────────────────────────────────────────
-
-  /// 将提取结果保存到 PDF 同目录。
-  ///
   /// 输出文件：
-  /// - `{pdfName}.md` — 原始 Markdown
-  /// - `{pdfName}.html` — 带排版的 HTML（图片用 file:// 绝对路径引用）
-  /// - `{pdfName}_images/` — 提取到的图片
-  ///
-  /// [token] 传入 Access Token，部分图片 URL 可能需要认证才能下载。
+  /// - `{pdfName}.raw.md`：API 原始 Markdown
+  /// - `{pdfName}.md`：阅读器使用的预处理 Markdown
+  /// - `{pdfName}.jsonl`：官方结果；同步接口本地封装为单行 JSONL
+  /// - `{pdfName}_images/`：提取到的图片
   Future<String> saveResult(
     String pdfPath,
     DocExtractResult result, {
     String? token,
+    String? title,
   }) async {
     final dir = p.dirname(pdfPath);
     final baseName = p.basenameWithoutExtension(pdfPath);
     final imgDir = p.join(dir, '${baseName}_images');
-
-    // 保存原始 Markdown
+    final rawMdPath = p.join(dir, '$baseName.raw.md');
     final mdPath = p.join(dir, '$baseName.md');
-    await File(mdPath).writeAsString(result.markdown, flush: true);
+    final jsonlPath = p.join(dir, '$baseName.jsonl');
 
-    // 下载图片到本地，收集 <相对路径 → 绝对本地路径> 映射
+    await File(rawMdPath).writeAsString(result.rawMarkdown, flush: true);
+    result.rawPath = rawMdPath;
+
+    if (result.jsonlContent != null) {
+      await File(jsonlPath).writeAsString(result.jsonlContent!, flush: true);
+      result.jsonlPath = jsonlPath;
+    }
+
     final localPaths = <String, String>{};
-    // 同时收集 <相对路径 → 原始网络 URL> 作为回退
     final networkUrls = <String, String>{};
 
     if (result.images.isNotEmpty) {
@@ -211,7 +215,6 @@ class DocExtractService {
       for (final entry in result.images.entries) {
         final value = entry.value;
 
-        // 非 HTTP URL（如 Base64 数据）：直接解码写入文件
         if (!value.startsWith('http://') && !value.startsWith('https://')) {
           try {
             final bytes = base64Decode(value);
@@ -230,10 +233,6 @@ class DocExtractService {
         try {
           final imgPath = p.join(imgDir, entry.key);
           await Directory(p.dirname(imgPath)).create(recursive: true);
-
-          // BOS 预签名 URL 在查询参数中自含签名，不应附加 Authorization 头；
-          // HTTPS CONNECT 隧道不修改请求内容，可安全经过代理。
-          // 始终使用 _dio（保留代理 + 超时配置），仅对非 BOS URL 附加认证头。
           final isBosPresigned = value.contains('authorization=bce-auth');
           final imgResponse = await _dio.get<List<int>>(
             value,
@@ -256,46 +255,31 @@ class DocExtractService {
 
     result.imageDir = imgDir;
 
-    // 下载失败的图片：将 .md 中的相对路径替换为网络 URL，作为渲染回退
-    var resolvedMarkdown = result.markdown;
+    var resolvedMarkdown = result.rawMarkdown;
     for (final entry in networkUrls.entries) {
       if (!localPaths.containsKey(entry.key)) {
-        // HTML <img src="relPath"> 和 Markdown ![](relPath) 两种格式都替换
         resolvedMarkdown = resolvedMarkdown
             .replaceAll('src="${entry.key}"', 'src="${entry.value}"')
             .replaceAll('(${entry.key})', '(${entry.value})');
       }
     }
-    if (resolvedMarkdown != result.markdown) {
-      await File(mdPath).writeAsString(resolvedMarkdown, flush: true);
-    }
 
-    // Markdown → HTML，优先用本地路径，回退到网络 URL
-    final htmlBody = _markdownToHtml(resolvedMarkdown, localPaths, networkUrls);
-    final htmlPath = p.join(dir, '$baseName.html');
-    await File(htmlPath).writeAsString(htmlBody, flush: true);
+    resolvedMarkdown = resolveMarkdownImagePaths(resolvedMarkdown, imgDir);
+    resolvedMarkdown = MarkdownPreprocessor.filterBeforeTitle(
+      resolvedMarkdown,
+      title,
+    );
 
-    result.savedPath = htmlPath;
-    return htmlPath;
+    await File(mdPath).writeAsString(resolvedMarkdown, flush: true);
+    result.processedMarkdown = resolvedMarkdown;
+    result.savedPath = mdPath;
+    return mdPath;
   }
 
-  // ─── 静态工具 ──────────────────────────────────────────────────────────────
-
-  /// 预处理 PaddleOCR 输出的 Markdown 并解析图片路径。
-  ///
-  /// PaddleOCR 的 Markdown 输出包含 HTML 内联标签：
-  /// - 图片：`<div style="text-align: center;"><img src="path" .../></div>`
-  /// - 图注：`<div style="text-align: center;">Figure 1 caption</div>`
-  ///
-  /// [flutter_markdown_plus] 的 `imageBuilder` 仅拦截标准 Markdown 图片语法，
-  /// 无法处理 HTML `<img>` 标签。此方法将 HTML 格式统一转换为 Markdown 语法，
-  /// 并将相对路径解析为 `file:///` 绝对路径。
-  ///
-  /// [imageDir] 为图片保存目录的绝对路径（如 `{pdfDir}/{baseName}_images/`）。
+  /// 规范化图片标签并将相对路径解析为 `file:///` 绝对路径。
   static String resolveMarkdownImagePaths(String markdown, String imageDir) {
     var processed = markdown;
 
-    // Step 1: <div><img src="path" ...></div> → ![alt](path)
     processed = processed.replaceAllMapped(
       RegExp(r'<div[^>]*>\s*<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>\s*</div>'),
       (match) {
@@ -306,7 +290,6 @@ class DocExtractService {
       },
     );
 
-    // Step 2: <div style="text-align: center;">caption</div> → *caption*
     processed = processed.replaceAllMapped(
       RegExp(r'<div\s+style="text-align:\s*center;\s*">\s*(.+?)\s*</div>'),
       (match) {
@@ -316,7 +299,6 @@ class DocExtractService {
       },
     );
 
-    // Step 3: 剩余的独立 <img> 标签 → ![alt](path)
     processed = processed.replaceAllMapped(
       RegExp(r'<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>'),
       (match) {
@@ -327,7 +309,6 @@ class DocExtractService {
       },
     );
 
-    // Step 4: 将相对路径解析为 file:/// 绝对路径
     processed = MarkdownPreprocessor.process(processed);
 
     processed = processed.replaceAllMapped(
@@ -355,174 +336,27 @@ class DocExtractService {
     return processed;
   }
 
-  // ─── 内部工具 ──────────────────────────────────────────────────────────────
-
   static Map<String, dynamic> buildOptions(DocExtractApiState state) {
     return {
+      'markdownIgnoreLabels': state.markdownIgnoreLabels,
+      'promptLabel': 'ocr',
       'useLayoutDetection': true,
       'useChartRecognition': state.useChartRecognition,
       'useDocOrientationClassify': state.useDocOrientationClassify,
       'useDocUnwarping': state.useDocUnwarping,
       'useSealRecognition': state.useSealRecognition,
       'useOcrForImageBlock': state.useOcrForImageBlock,
+      'mergeTables': true,
+      'relevelTitles': true,
       'restructurePages': state.restructurePages,
+      'topP': 1,
       'layoutNms': state.layoutNms,
-      'layoutMergeBboxesMode': state.layoutMergeBboxesMode,
       'layoutShapeMode': state.layoutShapeMode,
       'layoutThreshold': state.layoutThreshold,
+      'minPixels': 147384,
+      'maxPixels': 2822400,
       'repetitionPenalty': state.repetitionPenalty,
       'temperature': 0,
-      'prettifyMarkdown': state.prettifyMarkdown,
-      if (state.markdownIgnoreLabels.isNotEmpty)
-        'markdownIgnoreLabels': state.markdownIgnoreLabels,
     };
   }
-
-  /// 将 Markdown 转为带完整排版的 HTML。
-  ///
-  /// 图片引用替换优先级：本地文件（file:///）→ 网络 URL → 保留原始路径。
-  String _markdownToHtml(
-    String markdown,
-    Map<String, String> localPaths,
-    Map<String, String> networkUrls,
-  ) {
-    var processed = markdown;
-
-    // 在 Markdown 源码中替换图片路径
-    final allKeys = {...localPaths.keys, ...networkUrls.keys};
-    for (final key in allKeys) {
-      String replacement;
-      if (localPaths.containsKey(key)) {
-        // file:/// URI 需要正斜杠
-        final absPath = localPaths[key]!.replaceAll('\\', '/');
-        replacement = 'file:///$absPath';
-      } else if (networkUrls.containsKey(key)) {
-        replacement = networkUrls[key]!;
-      } else {
-        continue;
-      }
-      // 替换 Markdown 图片语法 ![alt](key) 中的 key
-      processed = processed.replaceAll('($key)', '($replacement)');
-    }
-
-    // 转换为 HTML
-    final htmlBody = md.markdownToHtml(
-      processed,
-      extensionSet: md.ExtensionSet.gitHubWeb,
-    );
-
-    // 二次处理 HTML：捕捉遗漏的 src="relative_path" 图片引用
-    var finalHtml = htmlBody;
-    for (final key in allKeys) {
-      if (finalHtml.contains('src="$key"')) {
-        String replacement;
-        if (localPaths.containsKey(key)) {
-          final absPath = localPaths[key]!.replaceAll('\\', '/');
-          replacement = 'file:///$absPath';
-        } else {
-          replacement = networkUrls[key]!;
-        }
-        finalHtml = finalHtml.replaceAll('src="$key"', 'src="$replacement"');
-      }
-    }
-
-    return '''<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-$_htmlCss
-</style>
-</head>
-<body>
-<article>
-$finalHtml
-</article>
-</body>
-</html>''';
-  }
-
-  static const _htmlCss = '''
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
-  font-size: 15px;
-  line-height: 1.8;
-  color: #1a1a1a;
-  padding: 20px 16px;
-  max-width: 800px;
-  margin: 0 auto;
-}
-article { word-wrap: break-word; overflow-wrap: break-word; }
-
-h1 { font-size: 1.6em; margin: 1.2em 0 0.6em; font-weight: 700; }
-h2 { font-size: 1.35em; margin: 1em 0 0.5em; font-weight: 700; }
-h3 { font-size: 1.15em; margin: 0.8em 0 0.4em; font-weight: 600; }
-h4, h5, h6 { font-size: 1em; margin: 0.6em 0 0.3em; font-weight: 600; }
-
-p { margin: 0.6em 0; }
-a { color: #1565c0; text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-img {
-  max-width: 100%;
-  height: auto;
-  display: block;
-  margin: 1em auto;
-  border-radius: 4px;
-}
-
-blockquote {
-  border-left: 3px solid #1565c0;
-  padding: 0.4em 1em;
-  margin: 0.8em 0;
-  color: #555;
-  background: #f5f7fa;
-  border-radius: 0 4px 4px 0;
-}
-
-code {
-  font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
-  font-size: 0.88em;
-  background: #f0f2f5;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-pre {
-  background: #f0f2f5;
-  padding: 12px 16px;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin: 0.8em 0;
-}
-pre code { background: none; padding: 0; }
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-  font-size: 0.92em;
-}
-th, td {
-  border: 1px solid #d0d7de;
-  padding: 8px 12px;
-  text-align: left;
-}
-th {
-  background: #f0f2f5;
-  font-weight: 600;
-}
-tr:nth-child(even) td { background: #fafbfc; }
-
-ul, ol { padding-left: 1.8em; margin: 0.5em 0; }
-li { margin: 0.2em 0; }
-
-hr {
-  border: none;
-  border-top: 1px solid #d0d7de;
-  margin: 1.5em 0;
-}
-''';
 }
