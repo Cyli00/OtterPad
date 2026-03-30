@@ -321,7 +321,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
     required String filePath,
     required String title,
     required DocExtractApiState apiState,
-    required void Function(String mdPath, String resolvedMd) onSuccess,
+    required void Function(String mdPath, String markdownContent) onSuccess,
   }) async {
     if (isRunning(TaskType.extractDocument)) {
       _snackBar.showResult(message: '正在提取文档，请稍候');
@@ -369,29 +369,18 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
         onCancel: () {},
       );
 
-      await DocExtractService.instance.saveResult(
+      final savedMdPath = await DocExtractService.instance.saveResult(
         filePath,
         result,
         token: apiState.apiKey,
+        title: title,
       );
 
       _snackBar.hide();
       _finishTask(TaskType.extractDocument, TaskStatus.completed);
       _snackBar.showResult(message: '文档提取完成：$title');
 
-      final mdPath = p.join(
-        p.dirname(filePath),
-        '${p.basenameWithoutExtension(filePath)}.md',
-      );
-      final resolvedMd = DocExtractService.resolveMarkdownImagePaths(
-        result.markdown,
-        result.imageDir ??
-            p.join(
-              p.dirname(filePath),
-              '${p.basenameWithoutExtension(filePath)}_images',
-            ),
-      );
-      onSuccess(mdPath, resolvedMd);
+      onSuccess(savedMdPath, result.processedMarkdown ?? '');
     } on DioException catch (e) {
       _snackBar.hide();
       if (e.type == DioExceptionType.cancel || token.isCancelled) {

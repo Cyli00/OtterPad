@@ -13,11 +13,6 @@ class ApiSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
-  static const _layoutMergeBboxesModes = <(String, String)>[
-    ('small', '偏小'),
-    ('large', '偏大'),
-  ];
-
   static const _layoutShapeModes = <(String, String)>[
     ('auto', '自动'),
     ('rect', '矩形'),
@@ -81,7 +76,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
 
   static const _outputDefs = <(String, String, String)>[
     ('restructurePages', '多页重构', '重构多页文档结构'),
-    ('prettifyMarkdown', '美化 Markdown', '输出美化后的 Markdown 文本'),
   ];
 
   bool _getOptionValue(DocExtractApiState s, String field) => switch (field) {
@@ -92,7 +86,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     'useOcrForImageBlock' => s.useOcrForImageBlock,
     'restructurePages' => s.restructurePages,
     'layoutNms' => s.layoutNms,
-    'prettifyMarkdown' => s.prettifyMarkdown,
     _ => false,
   };
 
@@ -756,25 +749,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                 // ── 版面分析 ──
                 _buildSubHeader(context, '版面分析'),
                 ..._buildSwitchGroup(context, docState, _layoutDefs),
-                _buildDivider(context),
-                _buildSplitParameterItem(
-                  context,
-                  title: '邻近文本块合并模式',
-                  subtitle: '控制版面检测后相邻文本块的合并策略',
-                  child: _buildSingleSelectChips(
-                    context,
-                    value: docState.layoutMergeBboxesMode,
-                    items: _layoutMergeBboxesModes,
-                    onChanged: (v) {
-                      if (docState.layoutMergeBboxesMode != v) {
-                        ref
-                            .read(docExtractApiProvider.notifier)
-                            .setString('layoutMergeBboxesMode', v);
-                      }
-                    },
-                    alignment: WrapAlignment.end,
-                  ),
-                ),
                 _buildDivider(context),
                 _buildSplitParameterItem(
                   context,

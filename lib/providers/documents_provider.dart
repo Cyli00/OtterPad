@@ -499,8 +499,8 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         if (await file.exists()) await file.delete();
 
         final basePath = p.withoutExtension(filePath);
-        for (final ext in ['.md', '.html']) {
-          final artifact = File('$basePath$ext');
+        for (final suffix in ['.raw.md', '.md', '.jsonl']) {
+          final artifact = File('$basePath$suffix');
           if (await artifact.exists()) await artifact.delete();
         }
         final imagesDir = Directory('${basePath}_images');
@@ -777,11 +777,11 @@ final validDocsProvider = Provider<List<Document>>((ref) {
       .toList();
 });
 
-/// 过滤出尚未提取（尚未生成 .html 文件）的有效文档，供批量提取页面使用
+/// 过滤出尚未提取（尚未生成 .md 文件）的有效文档，供批量提取页面使用
 final unextractedDocsProvider = Provider<List<Document>>((ref) {
   return ref.watch(validDocsProvider).where((doc) {
     if (doc.filePath.isEmpty) return false;
-    final htmlPath = '${p.withoutExtension(doc.filePath)}.html';
-    return !File(htmlPath).existsSync();
+    final mdPath = '${p.withoutExtension(doc.filePath)}.md';
+    return !File(mdPath).existsSync();
   }).toList();
 });
