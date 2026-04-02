@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' show min;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
@@ -170,8 +171,8 @@ class _OutlinePanelState extends State<OutlinePanel>
         TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(text: 'Sections'),
             Tab(text: 'Figures'),
+            Tab(text: 'Sections'),
             Tab(text: 'References'),
           ],
           labelColor: cs.primary,
@@ -189,15 +190,15 @@ class _OutlinePanelState extends State<OutlinePanel>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _SectionsTab(
-                headings: _headings,
-                onTap: _navigateAndClose,
-              ),
               _FiguresTab(
                 figures: _figures,
                 loaded: _figuresLoaded,
                 markdownContent: widget.markdownContent,
                 onNavigate: _navigateAndClose,
+              ),
+              _SectionsTab(
+                headings: _headings,
+                onTap: _navigateAndClose,
               ),
               _ReferencesTab(
                 references: _references,
@@ -207,53 +208,6 @@ class _OutlinePanelState extends State<OutlinePanel>
           ),
         ),
       ],
-    );
-  }
-}
-
-// ─── Sections Tab ───
-
-class _SectionsTab extends StatelessWidget {
-  final List<OutlineHeading> headings;
-  final void Function(int charOffset) onTap;
-
-  const _SectionsTab({required this.headings, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    if (headings.isEmpty) {
-      return const _EmptyState(
-        icon: Icons.segment_rounded,
-        message: '未找到章节标题',
-      );
-    }
-
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: headings.length,
-      itemBuilder: (context, index) {
-        final h = headings[index];
-        final indent = (h.level - 1) * 16.0;
-        final isTopLevel = h.level <= 2;
-
-        return InkWell(
-          onTap: () => onTap(h.charOffset),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(16 + indent, 14, 16, 14),
-            child: Text(
-              h.title,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.primary,
-                fontWeight: isTopLevel ? FontWeight.w600 : FontWeight.normal,
-                fontSize: isTopLevel ? 15 : 14,
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -308,6 +262,7 @@ class _FiguresTab extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 标题（最多1行）
             Text(
               fig.captionText,
               style: theme.textTheme.titleSmall?.copyWith(
@@ -315,10 +270,11 @@ class _FiguresTab extends StatelessWidget {
                 color: cs.onSurface,
                 height: 1.4,
               ),
-              maxLines: 3,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 10),
+            // 图片
             if (imageExists)
               GestureDetector(
                 onTap: () => _showViewer(context, fig),
@@ -348,6 +304,7 @@ class _FiguresTab extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 8),
+            // 操作按钮
             Row(
               children: [
                 _ActionLink(
@@ -379,10 +336,63 @@ class _FiguresTab extends StatelessWidget {
 
   void _showViewer(BuildContext context, FigureManifestEntry figure) {
     Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (_) => _FigureViewerPage(figure: figure),
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierDismissible: false,
+        transitionDuration: const Duration(milliseconds: 250),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (_, __, ___) => _FigureViewerPage(figure: figure),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
       ),
+    );
+  }
+}
+
+// ─── Sections Tab ───
+
+class _SectionsTab extends StatelessWidget {
+  final List<OutlineHeading> headings;
+  final void Function(int charOffset) onTap;
+
+  const _SectionsTab({required this.headings, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (headings.isEmpty) {
+      return const _EmptyState(
+        icon: Icons.segment_rounded,
+        message: '未找到章节标题',
+      );
+    }
+
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: headings.length,
+      itemBuilder: (context, index) {
+        final h = headings[index];
+        final indent = (h.level - 1) * 16.0;
+        final isTopLevel = h.level <= 2;
+
+        return InkWell(
+          onTap: () => onTap(h.charOffset),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16 + indent, 14, 16, 14),
+            child: Text(
+              h.title,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.primary,
+                fontWeight: isTopLevel ? FontWeight.w600 : FontWeight.normal,
+                fontSize: isTopLevel ? 15 : 14,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -521,59 +531,175 @@ class _ActionLink extends StatelessWidget {
   }
 }
 
-// ─── 图片全屏查看器 ───
+// ─── 图片全屏查看器（下滑退出） ───
 
-class _FigureViewerPage extends StatelessWidget {
+class _FigureViewerPage extends StatefulWidget {
   final FigureManifestEntry figure;
 
   const _FigureViewerPage({required this.figure});
 
   @override
+  State<_FigureViewerPage> createState() => _FigureViewerPageState();
+}
+
+class _FigureViewerPageState extends State<_FigureViewerPage>
+    with SingleTickerProviderStateMixin {
+  double _dragOffset = 0;
+  late final AnimationController _resetController;
+  double _resetFrom = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _resetController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..addListener(() {
+        setState(() {
+          _dragOffset =
+              lerpDouble(_resetFrom, 0, _resetController.value) ?? 0;
+        });
+      });
+  }
+
+  @override
+  void dispose() {
+    _resetController.dispose();
+    super.dispose();
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_resetController.isAnimating) return;
+    setState(() {
+      _dragOffset =
+          (_dragOffset + details.delta.dy).clamp(0.0, double.infinity);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    if (_dragOffset > 120 || (details.primaryVelocity ?? 0) > 600) {
+      Navigator.of(context).pop();
+    } else {
+      _resetFrom = _dragOffset;
+      _resetController.forward(from: 0);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.black54,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: InteractiveViewer(
-              minScale: 0.5,
-              maxScale: 4.0,
-              child: Center(
-                child: Image.file(
-                  File(figure.imagePath),
-                  fit: BoxFit.contain,
+    final progress = (_dragOffset / 350).clamp(0.0, 1.0);
+    final bgOpacity = (1.0 - progress * 0.7).clamp(0.0, 1.0);
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return GestureDetector(
+      onVerticalDragUpdate: _onDragUpdate,
+      onVerticalDragEnd: _onDragEnd,
+      behavior: HitTestBehavior.opaque,
+      child: Material(
+        color: Colors.black.withOpacity(bgOpacity * 0.96),
+        child: Transform.translate(
+          offset: Offset(0, _dragOffset),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                // ── 顶栏 ──
+                SizedBox(
+                  height: 48,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        color: Colors.white70,
+                        onPressed: () => Navigator.of(context).pop(),
+                        tooltip: '关闭',
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                // ── 图片 ──
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.file(
+                          File(widget.figure.imagePath),
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // ── 标题面板 ──
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    16,
+                    16,
+                    bottomPadding + 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.07),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 完整标题
+                      Expanded(
+                        child: Text(
+                          widget.figure.captionText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            height: 1.55,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // 翻译按钮
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.translate_rounded,
+                              size: 18,
+                            ),
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.white.withOpacity(0.1),
+                              foregroundColor: Colors.white60,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: EdgeInsets.zero,
+                            ),
+                            tooltip: '翻译',
+                            onPressed: () {
+                              // TODO: 翻译功能
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              12,
-              16,
-              MediaQuery.of(context).padding.bottom + 12,
-            ),
-            color: Colors.black87,
-            width: double.infinity,
-            child: Text(
-              figure.captionText,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 13,
-                height: 1.4,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
