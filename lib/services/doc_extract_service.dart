@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show min, max;
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -8,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import '../providers/api_provider.dart';
 import '../utils/markdown_preprocessor.dart';
+import 'figure_extract_service.dart';
 
 /// 文档提取异常
 class DocExtractException implements Exception {
@@ -30,20 +32,20 @@ class _PageResult {
 class DocExtractResult {
   final String rawMarkdown;
   final Map<String, String> images;
-  final String? jsonlContent;
+  final String? jsonContent;
   String? savedPath;
   String? rawPath;
-  String? jsonlPath;
+  String? jsonPath;
   String? imageDir;
   String? processedMarkdown;
 
   DocExtractResult({
     required this.rawMarkdown,
     required this.images,
-    this.jsonlContent,
+    this.jsonContent,
     this.savedPath,
     this.rawPath,
-    this.jsonlPath,
+    this.jsonPath,
     this.imageDir,
     this.processedMarkdown,
   });
@@ -176,15 +178,21 @@ class DocExtractService {
     return DocExtractResult(
       rawMarkdown: rawMarkdown,
       images: allImages,
-      jsonlContent: jsonEncode({'result': result}),
+      jsonContent: jsonEncode(parsingResults),
     );
   }
 
   /// 输出文件：
   /// - `{pdfName}.raw.md`：API 原始 Markdown
   /// - `{pdfName}.md`：阅读器使用的预处理 Markdown
-  /// - `{pdfName}.jsonl`：官方结果；同步接口本地封装为单行 JSONL
-  /// - `{pdfName}_images/`：提取到的图片
+  /// - `{pdfName}.json`：版面解析完整结果（扁平页面数组）
+  /// - `{pdfName}_figures/`：本地裁切的 figure 图片 + figures.json
+  ///
+  /// 流程（参照 PaddleApiTest/main.py）：
+  /// 1. 保存 raw.md + JSON
+  /// 2. 从 PDF 本地裁切 figure 图片（FigureExtractService）
+  /// 3. 用 block_ids 匹配替换 Markdown 中的 figure 区域为本地图片
+  /// 4. 清理残留 HTML 图片标签 → LaTeX 预处理 → 标题过滤
   Future<String> saveResult(
     String pdfPath,
     DocExtractResult result, {
@@ -193,86 +201,53 @@ class DocExtractService {
   }) async {
     final dir = p.dirname(pdfPath);
     final baseName = p.basenameWithoutExtension(pdfPath);
-    final imgDir = p.join(dir, '${baseName}_images');
     final rawMdPath = p.join(dir, '$baseName.raw.md');
     final mdPath = p.join(dir, '$baseName.md');
-    final jsonlPath = p.join(dir, '$baseName.jsonl');
+    final jsonPath = p.join(dir, '$baseName.json');
 
+    // 1. 保存原始文件
     await File(rawMdPath).writeAsString(result.rawMarkdown, flush: true);
     result.rawPath = rawMdPath;
 
-    if (result.jsonlContent != null) {
-      await File(jsonlPath).writeAsString(result.jsonlContent!, flush: true);
-      result.jsonlPath = jsonlPath;
+    if (result.jsonContent != null) {
+      await File(jsonPath).writeAsString(result.jsonContent!, flush: true);
+      result.jsonPath = jsonPath;
     }
 
-    final localPaths = <String, String>{};
-    final networkUrls = <String, String>{};
-
-    if (result.images.isNotEmpty) {
-      await Directory(imgDir).create(recursive: true);
-
-      for (final entry in result.images.entries) {
-        final value = entry.value;
-
-        if (!value.startsWith('http://') && !value.startsWith('https://')) {
-          try {
-            final bytes = base64Decode(value);
-            final imgPath = p.join(imgDir, entry.key);
-            await Directory(p.dirname(imgPath)).create(recursive: true);
-            await File(imgPath).writeAsBytes(bytes);
-            localPaths[entry.key] = imgPath;
-          } catch (e) {
-            debugPrint('[DocExtract] Base64 图片解码失败: ${entry.key} → $e');
-          }
-          continue;
-        }
-
-        networkUrls[entry.key] = value;
-
-        try {
-          final imgPath = p.join(imgDir, entry.key);
-          await Directory(p.dirname(imgPath)).create(recursive: true);
-          final isBosPresigned = value.contains('authorization=bce-auth');
-          final imgResponse = await _dio.get<List<int>>(
-            value,
-            options: Options(
-              responseType: ResponseType.bytes,
-              headers: (!isBosPresigned && token != null)
-                  ? {'Authorization': 'token $token'}
-                  : null,
-            ),
-          );
-          if (imgResponse.data != null && imgResponse.data!.isNotEmpty) {
-            await File(imgPath).writeAsBytes(imgResponse.data!);
-            localPaths[entry.key] = imgPath;
-          }
-        } catch (e) {
-          debugPrint('[DocExtract] 图片下载失败: ${entry.key} → $e');
-        }
+    // 2. 从 PDF 提取 figure → 替换 Markdown 中的 figure 区域
+    var processedMarkdown = result.rawMarkdown;
+    if (result.jsonContent != null) {
+      try {
+        await FigureExtractService.instance.init();
+        final figResult = await FigureExtractService.instance.extractFigures(
+          resultPath: jsonPath,
+          pdfPath: pdfPath,
+        );
+        processedMarkdown = replaceFigureRegions(
+          jsonContent: result.jsonContent!,
+          figures: figResult.entries,
+          mdDir: dir,
+        );
+      } catch (e) {
+        debugPrint('[DocExtract] Figure 提取/替换失败，回退原始 Markdown: $e');
       }
     }
 
-    result.imageDir = imgDir;
+    // 3. 清理残留 API 图片标签 + 居中 div → 斜体
+    processedMarkdown = _stripApiImageTags(processedMarkdown);
+    processedMarkdown = _convertCenteredDivs(processedMarkdown);
 
-    var resolvedMarkdown = result.rawMarkdown;
-    for (final entry in networkUrls.entries) {
-      if (!localPaths.containsKey(entry.key)) {
-        resolvedMarkdown = resolvedMarkdown
-            .replaceAll('src="${entry.key}"', 'src="${entry.value}"')
-            .replaceAll('(${entry.key})', '(${entry.value})');
-      }
-    }
-
-    resolvedMarkdown = resolveMarkdownImagePaths(resolvedMarkdown, imgDir);
-    resolvedMarkdown = MarkdownPreprocessor.filterBeforeTitle(
-      resolvedMarkdown,
+    // 4. LaTeX / 格式预处理 + 标题过滤
+    processedMarkdown = MarkdownPreprocessor.process(processedMarkdown);
+    processedMarkdown = MarkdownPreprocessor.filterBeforeTitle(
+      processedMarkdown,
       title,
     );
 
-    await File(mdPath).writeAsString(resolvedMarkdown, flush: true);
-    result.processedMarkdown = resolvedMarkdown;
+    await File(mdPath).writeAsString(processedMarkdown, flush: true);
+    result.processedMarkdown = processedMarkdown;
     result.savedPath = mdPath;
+    result.imageDir = p.join(dir, '${baseName}_figures');
     return mdPath;
   }
 
@@ -334,6 +309,212 @@ class DocExtractService {
     );
 
     return processed;
+  }
+
+  // ─── Figure 替换（移植自 PaddleApiTest/replace_md.py） ─────────────────
+
+  /// 用本地 figure 图片替换原始 Markdown 中的 figure 区域。
+  ///
+  /// 按页遍历 API JSON，通过 block_ids 在每页的 raw markdown.text 中
+  /// 精确定位 figure 行范围，替换为 `![caption](file:///path/to/figure.png)`。
+  static String replaceFigureRegions({
+    required String jsonContent,
+    required List<FigureManifestEntry> figures,
+    required String mdDir,
+  }) {
+    final pages = jsonDecode(jsonContent) as List<dynamic>;
+
+    final pageFigs = <int, List<FigureManifestEntry>>{};
+    for (final fig in figures) {
+      pageFigs.putIfAbsent(fig.pageIndex, () => []).add(fig);
+    }
+
+    final mdPages = <String>[];
+    for (var pageIdx = 0; pageIdx < pages.length; pageIdx++) {
+      final page = pages[pageIdx] as Map<String, dynamic>;
+      var mdText = (page['markdown'] as Map<String, dynamic>?)?['text']
+              as String? ??
+          '';
+
+      if (pageFigs.containsKey(pageIdx)) {
+        final pageBlocks = (page['prunedResult']
+                    as Map<String, dynamic>?)?['parsing_res_list']
+                as List<dynamic>? ??
+            [];
+        mdText =
+            _replaceInPageMd(mdText, pageFigs[pageIdx]!, pageBlocks, mdDir);
+      }
+      mdPages.add(mdText);
+    }
+
+    return mdPages.join('\n\n');
+  }
+
+  /// 在单页 raw markdown 中替换 figure 区域为本地图片引用
+  static String _replaceInPageMd(
+    String mdText,
+    List<FigureManifestEntry> pageFigures,
+    List<dynamic> rawBlocks,
+    String mdDir,
+  ) {
+    final lines = mdText.split('\n');
+    final usedLines = <int>{};
+
+    final blockMap = <String, Map<String, dynamic>>{};
+    for (final b in rawBlocks) {
+      final block = b as Map<String, dynamic>;
+      final id = block['block_id']?.toString() ?? '';
+      if (id.isNotEmpty) blockMap[id] = block;
+    }
+
+    final replacements = <(int, int, String)>[];
+    for (final fig in pageFigures) {
+      final region =
+          _findFigureRegion(lines, blockMap, fig.blockIds, usedLines);
+      if (region == null) {
+        debugPrint(
+          '[DocExtract] 未定位到 '
+          '"${fig.captionText.substring(0, min(30, fig.captionText.length))}…"',
+        );
+        continue;
+      }
+      final (start, end) = region;
+      usedLines.addAll(List.generate(end - start, (i) => start + i));
+
+      final uri = Uri.file(fig.imagePath);
+      replacements.add((start, end, '\n![${fig.captionText}]($uri)\n'));
+    }
+
+    // 从后往前替换，保持行号不偏移
+    replacements.sort((a, b) => b.$1.compareTo(a.$1));
+    for (final r in replacements) {
+      lines.replaceRange(r.$1, r.$2, [r.$3]);
+    }
+
+    return lines.join('\n');
+  }
+
+  /// 通过 block 内容/bbox 在 markdown 行中定位 figure 所占的行范围
+  static (int, int)? _findFigureRegion(
+    List<String> lines,
+    Map<String, Map<String, dynamic>> blockMap,
+    List<String> blockIds,
+    Set<int> usedLines,
+  ) {
+    final matched = <int>{};
+
+    for (final bid in blockIds) {
+      final block = blockMap[bid];
+      if (block == null) continue;
+
+      final label = block['block_label'] as String? ?? '';
+      final content = (block['block_content'] as String? ?? '').trim();
+
+      int? idx;
+      if (label == 'figure_title' && content.isNotEmpty) {
+        idx = _findLine(
+          lines,
+          content.substring(0, min(30, content.length)),
+          usedLines,
+        );
+      } else if (label == 'image' || label == 'chart') {
+        final bbox = block['block_bbox'] as List<dynamic>?;
+        if (bbox != null && bbox.length >= 4) {
+          idx = _findLine(
+            lines,
+            '_${bbox[0]}_${bbox[1]}_${bbox[2]}_${bbox[3]}',
+            usedLines,
+          );
+        }
+      } else if (label == 'vision_footnote' && content.isNotEmpty) {
+        idx = _findLine(
+          lines,
+          content.substring(0, min(20, content.length)),
+          usedLines,
+        );
+      } else if (label == 'table' && content.isNotEmpty) {
+        idx = _findLine(
+          lines,
+          content.substring(0, min(30, content.length)),
+          usedLines,
+        );
+      }
+
+      if (idx != null) matched.add(idx);
+    }
+
+    if (matched.isEmpty) return null;
+
+    var start = matched.reduce(min);
+    var end = matched.reduce(max) + 1;
+
+    // 向上收纳紧邻空行
+    while (start > 0 &&
+        lines[start - 1].trim().isEmpty &&
+        !usedLines.contains(start - 1)) {
+      start--;
+    }
+    // 向下收纳紧邻空行
+    while (end < lines.length &&
+        lines[end].trim().isEmpty &&
+        !usedLines.contains(end)) {
+      end++;
+    }
+
+    return (start, end);
+  }
+
+  /// 在行列表中找到包含 [text] 的第一行（跳过已使用的行）
+  static int? _findLine(
+    List<String> lines,
+    String text,
+    Set<int> usedLines,
+  ) {
+    for (var i = 0; i < lines.length; i++) {
+      if (!usedLines.contains(i) && lines[i].contains(text)) return i;
+    }
+    return null;
+  }
+
+  /// 移除 API 生成的 HTML 图片标签（figure 已替换为 `![]()`，其余无本地文件）
+  static String _stripApiImageTags(String markdown) {
+    var result = markdown;
+    // <div><img src="relative_path"></div>
+    result = result.replaceAllMapped(
+      RegExp(
+          r'<div[^>]*>\s*<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>\s*</div>'),
+      (match) {
+        final src = match.group(1)!;
+        if (src.startsWith('http') || src.startsWith('file:///')) {
+          return match.group(0)!;
+        }
+        return '';
+      },
+    );
+    // 独立 <img> 标签
+    result = result.replaceAllMapped(
+      RegExp(r'<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>'),
+      (match) {
+        final src = match.group(1)!;
+        if (src.startsWith('http') || src.startsWith('file:///')) {
+          return match.group(0)!;
+        }
+        return '';
+      },
+    );
+    return result;
+  }
+
+  /// 将居中文本 div 转为斜体（含 img 的 div 直接移除）
+  static String _convertCenteredDivs(String markdown) {
+    return markdown.replaceAllMapped(
+      RegExp(r'<div\s+style="text-align:\s*center;\s*">\s*(.+?)\s*</div>'),
+      (match) {
+        final content = match.group(1)!;
+        if (content.contains('<img')) return '';
+        return '*$content*';
+      },
+    );
   }
 
   static Map<String, dynamic> buildOptions(DocExtractApiState state) {

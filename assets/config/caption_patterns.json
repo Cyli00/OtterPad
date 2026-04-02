@@ -1,0 +1,20 @@
+{
+    "prefixes": [
+        "Figure", "Fig.", "Fig", "FIGURE", "FIG.", "FIG",
+        "Table", "TABLE",
+        "Scheme", "Chart", "Plate", "Map", "Box", "Diagram", "Exhibit",
+        "Supplementary Figure", "Extended Data Figure",
+        "Suppl. Fig.", "Suppl Fig.", "Suppl. Fig", "Suppl Fig",
+        "S1 Fig.", "S1 Fig",
+        "Appendix Figure",
+        "图", "表", "附图",
+        "Abbildung", "Abb.", "Tabelle",
+        "Figura", "Tabla", "Cuadro",
+        "図", "表",
+        "Рис.", "Рисунок", "Таблица",
+        "그림", "표",
+        "Hình", "Bảng"
+    ],
+    "number_pattern": "\\s*(?:\\d+(?:\\.\\d+)?|[A-Z](?:\\.\\d+)?|S\\d+)",
+    "suffix_pattern": "(?:[.:()\uff1a\uff0e\u3001]|\\s|$)"
+}

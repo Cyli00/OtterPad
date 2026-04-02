@@ -40,7 +40,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     final docState = ref.read(docExtractApiProvider);
     _agentUrlCtrl = TextEditingController(text: agentState.baseUrl);
     _agentKeyCtrl = TextEditingController(text: agentState.apiKey);
-    _docUrlCtrl = TextEditingController(text: docState.baseUrl);
+    _docUrlCtrl = TextEditingController(text: docState.syncBaseUrl);
     _docKeyCtrl = TextEditingController(text: docState.apiKey);
   }
 
@@ -662,40 +662,20 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Text(
-                        'API URL',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _docUrlCtrl,
-                        onChanged: (v) {
-                          _docUrlTimer?.cancel();
-                          _docUrlTimer = Timer(
-                            const Duration(milliseconds: 600),
-                            () {
-                              ref
-                                  .read(docExtractApiProvider.notifier)
-                                  .setBaseUrl(v.trim());
-                            },
-                          );
-                        },
-                        decoration: fieldDeco(
-                          hint: 'https://xxx.aistudio-app.com',
-                        ),
-                        keyboardType: TextInputType.url,
-                        autocorrect: false,
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 24),
+
+                      // ── Access Token（必填） ──
                       Text(
                         'Access Token',
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: cs.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '用于异步 Job API 认证，必填。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -729,6 +709,65 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                         ),
                         autocorrect: false,
                         enableSuggestions: false,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // ── 同步 API URL（可选 fallback） ──
+                      Row(
+                        children: [
+                          Text(
+                            '同步 API',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '可选',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '配置后在异步提取失败时自动回退到同步接口。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _docUrlCtrl,
+                        onChanged: (v) {
+                          _docUrlTimer?.cancel();
+                          _docUrlTimer = Timer(
+                            const Duration(milliseconds: 600),
+                            () {
+                              ref
+                                  .read(docExtractApiProvider.notifier)
+                                  .setSyncBaseUrl(v.trim());
+                            },
+                          );
+                        },
+                        decoration: fieldDeco(
+                          hint: 'https://xxx.aistudio-app.com',
+                        ),
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],

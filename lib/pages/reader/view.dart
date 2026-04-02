@@ -19,6 +19,7 @@ import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
 import 'widgets/appearance_panel.dart';
 import 'widgets/markdown_reader.dart';
+import 'widgets/outline_panel.dart';
 import 'widgets/search_overlay.dart';
 import 'widgets/selection_toolbar.dart';
 
@@ -33,6 +34,8 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage>
     with SingleTickerProviderStateMixin {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   bool _showPreview = false;
   String? _mdPath;
   String? _mdContent;
@@ -357,6 +360,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  // ─── 大纲导航 ───
+
+  void _onOutlineNavigate(int charOffset) {
+    if (_mdContent == null ||
+        _mdContent!.isEmpty ||
+        !_scrollController.hasClients) return;
+    final maxExtent = _scrollController.position.maxScrollExtent;
+    if (maxExtent <= 0) return;
+    final ratio = charOffset / _mdContent!.length;
+    _scrollController.animateTo(
+      (ratio * maxExtent).clamp(0.0, maxExtent),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+    );
+  }
+
   void _showDocumentInfo(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -612,7 +631,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final showPdfNavigator = !_showPreview && _pdfSearchQuery.isNotEmpty;
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: cs.surface,
+      endDrawerEnableOpenDragGesture: false,
+      endDrawer: (_showPreview && _mdContent != null)
+          ? Drawer(
+              width: MediaQuery.sizeOf(context).width > 500
+                  ? 400.0
+                  : MediaQuery.sizeOf(context).width * 0.85,
+              child: SafeArea(
+                child: OutlinePanel(
+                  key: ValueKey(_mdContent.hashCode),
+                  markdownContent: _mdContent!,
+                  pdfPath: widget.document.filePath,
+                  onNavigate: _onOutlineNavigate,
+                ),
+              ),
+            )
+          : null,
       body: SafeArea(
         child: Stack(
           children: [
@@ -696,6 +732,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 ),
                 tooltip: '搜索',
                 onPressed: _openSearch,
+              ),
+            // 大纲（仅 Markdown 模式且内容已加载）
+            if (_showPreview && _hasResult && _mdContent != null)
+              IconButton(
+                icon: Icon(
+                  Icons.toc_rounded,
+                  size: 22,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: '大纲',
+                onPressed: () =>
+                    _scaffoldKey.currentState?.openEndDrawer(),
               ),
             // 提取/切换按钮
             _buildExtractButton(cs, extracting),

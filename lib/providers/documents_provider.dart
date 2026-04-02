@@ -499,7 +499,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         if (await file.exists()) await file.delete();
 
         final basePath = p.withoutExtension(filePath);
-        for (final suffix in ['.raw.md', '.md', '.jsonl']) {
+        for (final suffix in ['.raw.md', '.md', '.json']) {
           final artifact = File('$basePath$suffix');
           if (await artifact.exists()) await artifact.delete();
         }

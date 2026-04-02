@@ -127,9 +127,8 @@ class BatchExtractService {
   /// 每组并发提交的最大 Job 数
   static const int _maxConcurrent = 3;
 
-  String _jobUrl(String apiBaseUrl) {
-    return 'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs';
-  }
+  static const _jobApiUrl =
+      'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs';
 
   BatchExtractProgress _buildProgress(
     List<BatchJobStatus> statuses,
@@ -256,7 +255,7 @@ class BatchExtractService {
     return [];
   }
 
-  /// 从 JSONL URL 下载结果并解析为 [DocExtractResult]。
+  /// 从 JSONL URL 下载结果，展平为页面数组后返回 [DocExtractResult]。
   Future<DocExtractResult> _parseJsonlResult(String jsonlUrl) async {
     final Response<String> response;
     try {
@@ -268,11 +267,12 @@ class BatchExtractService {
       throw BatchExtractException('下载提取结果失败: ${e.message ?? e.type.name}');
     }
 
-    final jsonlContent = response.data ?? '';
+    final rawContent = response.data ?? '';
     final markdownParts = <String>[];
     final allImages = <String, String>{};
+    final allPages = <Map<String, dynamic>>[];
 
-    for (final line in jsonlContent.trim().split('\n')) {
+    for (final line in rawContent.trim().split('\n')) {
       final trimmed = line.trim();
       if (trimmed.isEmpty) continue;
       try {
@@ -282,6 +282,7 @@ class BatchExtractService {
         if (parsingResults == null) continue;
 
         for (final page in parsingResults) {
+          allPages.add(page as Map<String, dynamic>);
           final mdSection = page['markdown'] as Map<String, dynamic>?;
           if (mdSection == null) continue;
           markdownParts.add(mdSection['text'] as String? ?? '');
@@ -293,14 +294,14 @@ class BatchExtractService {
           }
         }
       } catch (e) {
-        debugPrint('[BatchExtract] 解析 JSONL 行失败: $e');
+        debugPrint('[BatchExtract] 解析结果行失败: $e');
       }
     }
 
     return DocExtractResult(
       rawMarkdown: markdownParts.join('\n\n'),
       images: allImages,
-      jsonlContent: jsonlContent,
+      jsonContent: jsonEncode(allPages),
     );
   }
 
@@ -381,7 +382,85 @@ class BatchExtractService {
     }
   }
 
-  // ─── 主方法 ────────────────────────────────────────────────────────────────
+  // ─── 单文档异步提取 ─────────────────────────────────────────────────────────
+
+  /// 轮询间隔（秒）
+  static const _pollInterval = Duration(seconds: 5);
+
+  /// 提交单个文档的异步提取任务，轮询直到完成，返回原始 [DocExtractResult]。
+  ///
+  /// 这是单文档场景的首选入口，与 [extractBatch] 使用相同的 Job API。
+  /// 调用方自行决定是否 [DocExtractService.saveResult]。
+  Future<DocExtractResult> extractSingle({
+    required String filePath,
+    required String token,
+    required DocExtractApiState state,
+    void Function(String status, int extractedPages, int totalPages)?
+        onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    final jobUrl = _jobApiUrl;
+
+    // 1. 提交 Job
+    onProgress?.call('正在提交任务…', 0, 0);
+    final jobId = await _submitJob(
+      filePath: filePath,
+      jobUrl: jobUrl,
+      token: token,
+      state: state,
+      cancelToken: cancelToken,
+    );
+
+    // 2. 轮询直到完成
+    while (true) {
+      if (cancelToken?.isCancelled == true) {
+        throw DioException(
+          requestOptions: RequestOptions(),
+          type: DioExceptionType.cancel,
+        );
+      }
+
+      await Future.delayed(_pollInterval);
+
+      final data = await _pollOnce(jobId, jobUrl, token);
+      final jobState = data['state'] as String? ?? '';
+
+      switch (jobState) {
+        case 'pending':
+          onProgress?.call('排队中…', 0, 0);
+        case 'running':
+          final prog = data['extractProgress'] as Map?;
+          final extracted = (prog?['extractedPages'] as int?) ?? 0;
+          final total = (prog?['totalPages'] as int?) ?? 0;
+          onProgress?.call('正在提取…', extracted, total);
+        case 'done':
+          final resultUrl = data['resultUrl'] as Map?;
+          final jsonlUrl = resultUrl?['jsonUrl'] as String?;
+          if (jsonlUrl != null) {
+            onProgress?.call('正在下载结果…', 0, 0);
+            return _parseJsonlResult(jsonlUrl);
+          }
+          // 回退：仅有 Markdown URL
+          final markdownUrl = resultUrl?['markdownUrl'] as String?;
+          if (markdownUrl != null) {
+            final mdResponse = await _dio.get<String>(
+              markdownUrl,
+              options: Options(responseType: ResponseType.plain),
+            );
+            return DocExtractResult(
+              rawMarkdown: mdResponse.data ?? '',
+              images: {},
+            );
+          }
+          throw const BatchExtractException('任务完成但无结果 URL');
+        case 'failed':
+          final errorMsg = data['errorMsg'] as String? ?? '提取失败';
+          throw BatchExtractException(errorMsg);
+      }
+    }
+  }
+
+  // ─── 批量提取 ──────────────────────────────────────────────────────────────
 
   /// 批量异步提取文档，返回 documentId → 保存路径（null 表示失败）。
   ///
@@ -392,7 +471,6 @@ class BatchExtractService {
   /// - 批量查询失败时自动回退到逐个轮询
   Future<BatchExtractResults> extractBatch({
     required List<BatchExtractItem> items,
-    required String apiBaseUrl,
     required String token,
     required DocExtractApiState state,
     void Function(BatchExtractProgress)? onProgress,
@@ -406,7 +484,7 @@ class BatchExtractService {
             ))
         .toList();
     final results = <String, String?>{};
-    final jobUrl = _jobUrl(apiBaseUrl);
+    final jobUrl = _jobApiUrl;
     final batchId = 'nr_${DateTime.now().millisecondsSinceEpoch}';
 
     // Phase 1：并发提交 Job（每组最多 _maxConcurrent 个）

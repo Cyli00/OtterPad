@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
+import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
 import '../services/identifier_resolver.dart';
 import '../services/snackbar_service.dart';
@@ -328,9 +329,9 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
       return;
     }
 
-    if (apiState.baseUrl.isEmpty || apiState.apiKey.isEmpty) {
+    if (!apiState.isConfigured) {
       _snackBar.showResult(
-        message: '请先在设置中配置文档提取 API',
+        message: '请先在设置中配置文档提取 Access Token',
         action: SnackBarAction(
           label: '前往设置',
           onPressed: () => _router.push(AppRoutes.settingsApi),
@@ -344,17 +345,16 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
 
     _snackBar.showProgress(
       fileName: title,
-      status: '正在提取文档…',
+      status: '正在提交任务…',
       onCancel: () => cancelTask(TaskType.extractDocument),
       duration: const Duration(minutes: 10),
     );
 
     try {
-      final result = await DocExtractService.instance.extract(
+      final result = await _extractAsync(
         filePath: filePath,
-        apiUrl: apiState.baseUrl,
-        token: apiState.apiKey,
-        state: apiState,
+        title: title,
+        apiState: apiState,
         cancelToken: token,
       );
 
@@ -394,10 +394,68 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
       _snackBar.hide();
       _finishTask(TaskType.extractDocument, TaskStatus.failed);
       _snackBar.showResult(message: e.message);
+    } on BatchExtractException catch (e) {
+      _snackBar.hide();
+      _finishTask(TaskType.extractDocument, TaskStatus.failed);
+      _snackBar.showResult(message: e.message);
     } catch (e) {
       _snackBar.hide();
       _finishTask(TaskType.extractDocument, TaskStatus.failed);
       _snackBar.showResult(message: '提取失败: $e');
+    }
+  }
+
+  /// 异步 Job API 优先，失败时 fallback 到同步 API（若已配置）。
+  Future<DocExtractResult> _extractAsync({
+    required String filePath,
+    required String title,
+    required DocExtractApiState apiState,
+    required CancelToken cancelToken,
+  }) async {
+    try {
+      return await BatchExtractService.instance.extractSingle(
+        filePath: filePath,
+        token: apiState.apiKey,
+        state: apiState,
+        onProgress: (status, extracted, total) {
+          if (cancelToken.isCancelled) return;
+          final pageInfo = total > 0 ? ' ($extracted/$total 页)' : '';
+          _snackBar.showProgress(
+            fileName: title,
+            status: '$status$pageInfo',
+            onCancel: () => cancelTask(TaskType.extractDocument),
+            duration: const Duration(minutes: 10),
+          );
+        },
+        cancelToken: cancelToken,
+      );
+    } catch (asyncError) {
+      // 用户取消时直接抛出，不 fallback
+      if (cancelToken.isCancelled ||
+          (asyncError is DioException &&
+              asyncError.type == DioExceptionType.cancel)) {
+        rethrow;
+      }
+
+      // 无同步 fallback 配置，直接抛出原始错误
+      if (!apiState.hasSyncFallback) rethrow;
+
+      // fallback 到同步 API
+      debugPrint('[TaskProvider] 异步提取失败，回退到同步 API: $asyncError');
+      _snackBar.showProgress(
+        fileName: title,
+        status: '异步失败，尝试同步提取…',
+        onCancel: () => cancelTask(TaskType.extractDocument),
+        duration: const Duration(minutes: 10),
+      );
+
+      return DocExtractService.instance.extract(
+        filePath: filePath,
+        apiUrl: apiState.syncBaseUrl,
+        token: apiState.apiKey,
+        state: apiState,
+        cancelToken: cancelToken,
+      );
     }
   }
 

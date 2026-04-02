@@ -86,9 +86,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     if (selection.selectedIds.isEmpty) return;
 
     final apiState = ref.read(docExtractApiProvider);
-    if (apiState.apiKey.isEmpty || apiState.baseUrl.isEmpty) {
+    if (!apiState.isConfigured) {
       ref.read(snackBarServiceProvider).showResult(
-            message: '请先在设置中配置文档提取 API（Base URL 和 Access Token）',
+            message: '请先在设置中配置文档提取 Access Token',
           );
       return;
     }

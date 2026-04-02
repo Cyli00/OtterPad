@@ -56,7 +56,6 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
     try {
       await BatchExtractService.instance.extractBatch(
         items: widget.items,
-        apiBaseUrl: widget.apiState.baseUrl,
         token: widget.apiState.apiKey,
         state: widget.apiState,
         onProgress: (progress) {
