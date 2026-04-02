@@ -35,15 +35,14 @@ class HighlightNotifier extends StateNotifier<List<Highlight>> {
     GStorage.highlights.put(documentId, json);
   }
 
-  /// 添加标记（可选 [groupId] 用于跨段落标记的联动删除）
-  void add(String text, {String? groupId}) {
+  /// 添加标记，直接存储完整选区文本。
+  void add(String text) {
     if (state.any((h) => h.text == text)) return;
 
     final highlight = Highlight(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       documentId: documentId,
       text: text,
-      groupId: groupId,
       createdAt: DateTime.now(),
     );
     state = [...state, highlight];

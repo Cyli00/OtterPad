@@ -12,14 +12,11 @@ import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/models/book/document.dart';
-import '../../data/models/book/highlight.dart';
 import '../../providers/api_provider.dart';
-import '../../providers/highlight_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
-import '../../utils/markdown_preprocessor.dart';
 import 'widgets/appearance_panel.dart';
 import 'widgets/markdown_reader.dart';
 import 'widgets/search_overlay.dart';
@@ -69,12 +66,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _selectedText;
   String? _textOnPointerDown;
   Offset? _pointerDownPosition;
-  bool _highlightTapHandled = false;
 
-  // 选择/标记工具栏 Overlay
+  // 选择工具栏 Overlay
   final _selectionAreaKey = GlobalKey();
   OverlayEntry? _selectionToolbarEntry;
-  OverlayEntry? _highlightToolbarEntry;
 
   // 外观面板
   final _appearanceKey = GlobalKey();
@@ -88,6 +83,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // Markdown 入场动画（与路由转场 _buildAnimatedPage 保持一致）
   late final AnimationController _enterController;
+  bool _skeletonVisible = true;
 
   @override
   void initState() {
@@ -150,6 +146,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       onSuccess: (mdPath, markdownContent) async {
         if (!mounted) return;
         _enterController.reset();
+        _skeletonVisible = true;
         final nextContent = markdownContent;
         final cacheService = MarkdownDocumentCacheService.instance;
         final cacheKey = cacheService.buildMemoryCacheKey(
@@ -171,8 +168,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           );
           _showPreview = true;
         });
+        // 双层回调：第一帧完成 MarkdownBody 重量级构建，第二帧启动动画
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _enterController.forward();
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _enterController.forward();
+          });
         });
       },
     );
@@ -183,6 +184,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final enteringMarkdown = !_showPreview;
     if (enteringMarkdown) {
       _enterController.reset();
+      _skeletonVisible = true;
       _pdfSearchFocusNode.unfocus();
       _pdfSearchController.clear();
       _pdfSearcher?.resetTextSearch();
@@ -377,8 +379,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mdContent != null) {
       _prewarmSearchSnapshot();
       if (playAnimation) {
+        // 双层回调：第一帧完成 MarkdownBody 重量级构建，第二帧启动动画
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _enterController.forward();
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _enterController.forward();
+          });
         });
       }
       return;
@@ -405,8 +411,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       });
       _prewarmSearchSnapshot();
       if (playAnimation) {
+        // 双层回调：第一帧完成 MarkdownBody 重量级构建，第二帧启动动画
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _enterController.forward();
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _enterController.forward();
+          });
         });
       }
     } catch (error) {
@@ -441,215 +451,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return resolved.content;
   }
 
-  // ─── 标记 ───
-
-  /// 将选中文本拆分为与 Markdown 段落对齐的独立片段。
-  ///
-  /// 用 _mdContent 的段落结构作为基准，通过去空格归一化后的子串匹配
-  /// 找出选区覆盖的段落，返回每个段落的 inline 文本（即 InlineSyntax
-  /// 实际处理的内容，不含 #、•、> 等 block 标记）。
-  List<String> _resolveHighlightFragments(String selectedText) {
-    if (_mdContent == null || selectedText.trim().isEmpty) {
-      return [selectedText.trim()];
-    }
-
-    String norm(String s) => s.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-    final normalizedSel = norm(selectedText);
-    if (normalizedSel.isEmpty) return [selectedText.trim()];
-
-    // 1. 将 markdown 拆分为 block，提取每个 block 的 inline 文本
-    final blocks = _mdContent!.split(RegExp(r'\n\n+'));
-    final inlineTexts = <String>[];
-    for (final block in blocks) {
-      final trimmed = block.trim();
-      if (trimmed.isEmpty) continue;
-
-      final lines = trimmed.split('\n');
-      final isList = lines.length > 1 &&
-          lines.every(
-            (l) => RegExp(r'^\s*[\-\*•]|\d+\.').hasMatch(l.trim()),
-          );
-
-      if (isList) {
-        for (final line in lines) {
-          var t = line.trim();
-          t = t.replaceFirst(RegExp(r'^[\-\*•]\s*'), '');
-          t = t.replaceFirst(RegExp(r'^\d+\.\s*'), '');
-          t = t.trim();
-          if (t.isNotEmpty) inlineTexts.add(t);
-        }
-      } else {
-        var t = trimmed;
-        t = t.replaceFirst(RegExp(r'^#{1,6}\s+'), '');
-        t = t.replaceFirst(RegExp(r'^[\-\*•]\s+'), '');
-        t = t.replaceFirst(RegExp(r'^\d+\.\s+'), '');
-        t = t.replaceFirst(RegExp(r'^>\s+'), '');
-        t = t.replaceAll('\n', ' ').trim();
-        if (t.isNotEmpty) inlineTexts.add(t);
-      }
-    }
-
-    // 2. 顺序扫描：在归一化选区中按文档顺序匹配段落
-    final result = <String>[];
-    int scanPos = 0;
-    for (final inlineText in inlineTexts) {
-      final normalizedBlock = norm(inlineText);
-      if (normalizedBlock.isEmpty) continue;
-      final idx = normalizedSel.indexOf(normalizedBlock, scanPos);
-      if (idx != -1) {
-        result.add(inlineText);
-        scanPos = idx + normalizedBlock.length;
-      }
-    }
-
-    // 3. 兜底：markdown 匹配失败时按换行拆分
-    if (result.isEmpty) {
-      for (final line in selectedText.split(RegExp(r'[\n\r]+'))) {
-        final trimmed = line.trim();
-        if (trimmed.isNotEmpty) result.add(trimmed);
-      }
-    }
-    if (result.isEmpty) result.add(selectedText.trim());
-    return result;
-  }
+  // ─── 标记（功能待重新设计） ───
 
   void _addHighlight(String text) {
-    if (text.trim().isEmpty) return;
-    final notifier = ref.read(highlightProvider(widget.document.id).notifier);
-    final fragments = _resolveHighlightFragments(text);
-    // 多片段共享 groupId，删除时联动
-    final groupId = fragments.length > 1
-        ? DateTime.now().microsecondsSinceEpoch.toString()
-        : null;
-    for (final fragment in fragments) {
-      notifier.add(fragment, groupId: groupId);
-    }
-    ref.read(snackBarServiceProvider).showResult(
-          message: '已添加标记',
-          duration: const Duration(seconds: 1),
-        );
+    // TODO: 重新设计标记功能
   }
 
-  void _removeHighlight(String highlightId) {
-    ref.read(highlightProvider(widget.document.id).notifier).remove(highlightId);
-    ref.read(snackBarServiceProvider).showResult(
-          message: '已删除标记',
-          duration: const Duration(seconds: 1),
-        );
-  }
-
-  void _showNoteDialog({required String text, String? highlightId, String? existingNote}) {
-    final controller = TextEditingController(text: existingNote ?? '');
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        final theme = Theme.of(ctx);
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-            ),
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 32,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: cs.onSurfaceVariant.withAlpha(80),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '做笔记',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    text.length > 100 ? '${text.substring(0, 100)}...' : text,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  maxLines: 4,
-                  minLines: 2,
-                  decoration: InputDecoration(
-                    hintText: '写下你的想法...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () {
-                    final note = controller.text.trim();
-                    final notifier = ref.read(
-                      highlightProvider(widget.document.id).notifier,
-                    );
-                    if (highlightId != null) {
-                      notifier.updateNote(highlightId, note);
-                    } else {
-                      final fragments = _resolveHighlightFragments(text);
-                      final groupId = fragments.length > 1
-                          ? DateTime.now().microsecondsSinceEpoch.toString()
-                          : null;
-                      for (final f in fragments) {
-                        notifier.add(f, groupId: groupId);
-                      }
-                      if (note.isNotEmpty) {
-                        final highlights = ref.read(
-                          highlightProvider(widget.document.id),
-                        );
-                        for (final f in fragments) {
-                          final matches =
-                              highlights.where((h) => h.text == f);
-                          if (matches.isNotEmpty) {
-                            notifier.updateNote(matches.last.id, note);
-                          }
-                        }
-                      }
-                    }
-                    Navigator.of(ctx).pop();
-                  },
-                  child: const Text('保存'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  void _showNoteDialog({required String text}) {
+    // TODO: 重新设计做笔记功能
   }
 
   // ─── 选择/标记工具栏 ───
@@ -746,63 +555,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  /// 点击已标记文本时弹出编辑工具栏
-  void _onHighlightTap(Highlight highlight, Offset globalPosition) {
-    _highlightTapHandled = true;
-    _dismissSelectionToolbar();
-    _highlightToolbarEntry?.remove();
-
-    // 定位点击处的段落边界
-    final box = _findParagraphAt(globalPosition);
-    Rect bounds;
-    if (box != null) {
-      final topLeft = box.localToGlobal(Offset.zero);
-      bounds = topLeft & box.size;
-    } else {
-      final lh = _lineHeight;
-      bounds = Rect.fromLTRB(
-        globalPosition.dx - 100,
-        globalPosition.dy - lh * 0.3,
-        globalPosition.dx + 100,
-        globalPosition.dy + lh * 0.7,
-      );
-    }
-
-    _highlightToolbarEntry = showReadingToolbar(
-      context: context,
-      anchorAbove: Offset(bounds.center.dx, bounds.top - _kToolbarGap),
-      anchorBelow: Offset(bounds.center.dx, bounds.bottom + _kToolbarGap),
-      onDismiss: () => _highlightToolbarEntry = null,
-      actions: [
-        ReadingToolbarAction(
-          icon: Icons.copy_rounded,
-          label: '复制',
-          onTap: () {
-            Clipboard.setData(ClipboardData(text: highlight.text));
-            ref.read(snackBarServiceProvider).showResult(
-                  message: '已复制到剪贴板',
-                  duration: const Duration(seconds: 1),
-                );
-          },
-        ),
-        ReadingToolbarAction(
-          icon: Icons.highlight_off_rounded,
-          label: '删除标记',
-          onTap: () => _removeHighlight(highlight.id),
-        ),
-        ReadingToolbarAction(
-          icon: Icons.edit_note_rounded,
-          label: '做笔记',
-          onTap: () => _showNoteDialog(
-            text: highlight.text,
-            highlightId: highlight.id,
-            existingNote: highlight.note,
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   void dispose() {
     _disposePdfSearchListener?.call();
@@ -813,7 +565,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _enterController.dispose();
     _appearanceEntry?.remove();
     _selectionToolbarEntry?.remove();
-    _highlightToolbarEntry?.remove();
     super.dispose();
   }
 
@@ -1340,8 +1091,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     ThemeData theme,
     ReaderSettingsState settings,
   ) {
-    final highlights = ref.watch(highlightProvider(widget.document.id));
-
     if (_markdownLoadError != null) {
       return Center(
         child: Text(
@@ -1355,8 +1104,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return Stack(
       children: [
-        if (_mdContent == null)
-          Positioned.fill(child: _buildMarkdownSkeleton(settings)),
+        // 内容层（底层）
         if (_mdContent != null)
           Positioned.fill(
             child: _buildSlideIn(
@@ -1368,9 +1116,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   scrollController: _scrollController,
                   highlightQuery: _highlightQuery,
                   targetCharOffset: _targetCharOffset,
-                  highlights: highlights,
-                  onHighlightTap: _onHighlightTap,
                 ),
+              ),
+            ),
+          ),
+        // 骨架屏层（顶层）：内容就绪后交叉渐变淡出
+        if (_mdContent == null || _skeletonVisible)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: _mdContent != null,
+              child: AnimatedOpacity(
+                opacity: _mdContent != null ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                onEnd: () {
+                  if (_mdContent != null && mounted) {
+                    setState(() => _skeletonVisible = false);
+                  }
+                },
+                child: _buildMarkdownSkeleton(settings),
               ),
             ),
           ),
@@ -1386,17 +1150,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (event) {
-        _highlightTapHandled = false;
         _pointerDownPosition = event.position;
         _textOnPointerDown = _selectedText;
         _dismissSelectionToolbar();
-        _highlightToolbarEntry?.remove();
-        _highlightToolbarEntry = null;
       },
       onPointerUp: (event) {
         final downPos = _pointerDownPosition ?? event.position;
         Future.delayed(const Duration(milliseconds: 100), () {
-          if (!mounted || _highlightTapHandled) return;
+          if (!mounted) return;
           if (_selectedText != null &&
               _selectedText!.isNotEmpty &&
               _selectedText != _textOnPointerDown) {

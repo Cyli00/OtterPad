@@ -25,6 +25,8 @@ class GStorage {
       _initialized = true;
     }
     await _openBoxes();
+    // 清空旧版标记数据（功能已移除，待重新设计）
+    if (_highlightsBox.isNotEmpty) await _highlightsBox.clear();
   }
 
   static Future<void> reopen() async {

@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(cd:*)",
       "Bash(flutter:*)",
       "mcp__plugin_context7_context7__resolve-library-id",
       "mcp__plugin_context7_context7__query-docs",
@@ -47,7 +48,12 @@
       "mcp__dart__list_devices",
       "mcp__dart__launch_app",
       "mcp__dart__connect_dart_tooling_daemon",
-      "mcp__dart__read_package_uris"
+      "mcp__dart__read_package_uris",
+      "Bash(python3 -c:*)",
+      "Read(//e/gitProjects/NightReader/$HOME/**)",
+      "Read(//c/Users/**)",
+      "Bash(git rm:*)",
+      "Bash(xxd)"
     ]
   },
   "outputStyle": "Explanatory",

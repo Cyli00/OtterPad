@@ -5,8 +5,6 @@ class MarkdownPreprocessor {
     result = _fixLatexSpacing(result);
     result = _simplifyInlineLatex(result);
     result = _normalizeInlineSpacing(result);
-    result = _healBrokenParagraphs(result);
-    result = _cleanSpecificFooters(result);
     result = result.replaceAll(RegExp(r'<table[^>]*>\s*</table>'), '');
     return result;
   }
@@ -198,103 +196,4 @@ class MarkdownPreprocessor {
     return result;
   }
 
-  static String _healBrokenParagraphs(String text) {
-    final lines = text.split('\n');
-    final buffer = StringBuffer();
-    var inMathBlock = false;
-
-    for (int i = 0; i < lines.length; i++) {
-      final current = lines[i];
-
-      if (current.trim() == r'$$') {
-        inMathBlock = !inMathBlock;
-        buffer.writeln(current);
-        continue;
-      }
-      if (inMathBlock) {
-        buffer.writeln(current);
-        continue;
-      }
-
-      if (i == lines.length - 1) {
-        buffer.writeln(current);
-        break;
-      }
-
-      final next = lines[i + 1];
-      final currentTrimmed = current.trimRight();
-      final nextTrimmed = next.trimLeft();
-
-      if (currentTrimmed.isEmpty || nextTrimmed.isEmpty) {
-        buffer.writeln(current);
-        continue;
-      }
-
-      if (nextTrimmed == r'$$') {
-        buffer.writeln(current);
-        continue;
-      }
-
-      final lastChar = currentTrimmed[currentTrimmed.length - 1];
-      final firstCharNext = nextTrimmed[0];
-      final isSentenceEnd = const {
-        '.',
-        ':',
-        '?',
-        '!',
-        ';',
-        '"',
-        '\u201D',
-        "'",
-        '\u2019',
-        '\u3002',
-        '\uFF1A',
-        '\uFF1F',
-        '\uFF01',
-        '\uFF1B',
-      }.contains(lastChar);
-      final isNextLowercase = RegExp(r'[a-z]').hasMatch(firstCharNext);
-      final isCurrentHeadingOrList = RegExp(
-        r'^(\s*#|\s*[-*]|\s*\d+\.\s+)',
-      ).hasMatch(current);
-      final isHtmlTag =
-          currentTrimmed.endsWith('>') || nextTrimmed.startsWith('<');
-      final isNextContinuationPunctuation = RegExp(
-        r"""^[\.,:;!?\)\]\}"'\uFF0C\u3002\uFF1B\uFF1A\uFF01\uFF1F\u3001\u300B\u300D\u300F\u3011]""",
-      ).hasMatch(nextTrimmed);
-
-      if (isNextContinuationPunctuation &&
-          !isCurrentHeadingOrList &&
-          !isHtmlTag) {
-        buffer.write(currentTrimmed);
-        continue;
-      }
-
-      if (!isSentenceEnd &&
-          isNextLowercase &&
-          !isCurrentHeadingOrList &&
-          !isHtmlTag) {
-        buffer.write('$currentTrimmed ');
-      } else {
-        buffer.writeln(current);
-      }
-    }
-
-    return buffer.toString();
-  }
-
-  static String _cleanSpecificFooters(String text) {
-    var res = text.replaceAll(
-      RegExp(
-        r'bioRxiv preprint doi:.*?(?:International license\.|license\.)',
-        multiLine: true,
-        caseSensitive: false,
-        dotAll: true,
-      ),
-      '',
-    );
-
-    res = res.replaceAll(RegExp(r'\n{3,}'), '\n\n');
-    return res;
-  }
 }
