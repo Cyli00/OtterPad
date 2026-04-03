@@ -62,61 +62,35 @@ When adding or updating dependencies in `pubspec.yaml`:
 
 ## Completed Tasks
 
-### 基础设施 (Infrastructure)
+> 服务层模块的用法和文件路径见上方 **Infrastructure Modules**，此处仅记录架构决策、UI 页面等未被覆盖的条目。
+
+### 架构与基础设施
+
 - Riverpod 状态管理 (`lib/providers/`) — 全局状态 flutter_riverpod，局部 UI 保留 setState
 - MD3 主题系统与动态配色 (`lib/common/theme/app_theme.dart`, `lib/providers/theme_provider.dart`)
 - go_router 声明式路由 + StatefulShellRoute 标签导航 (`lib/router/app_router.dart`, `lib/router/app_routes.dart`)
 - 响应式布局 (`lib/widgets/layout/adaptive_scaffold.dart`, `lib/utils/responsive.dart`)
-- SnackBar 取消按钮 + CancelToken 全链路传递 (`lib/services/snackbar_service.dart`)
 
-### 存储与模型 (Storage & Models)
-- Hive 存储单例 (`lib/core/storage/storage.dart`)
+### 数据模型
+
 - Document 模型与文件导入 (`lib/data/models/book/document.dart`, `lib/providers/documents_provider.dart`)
 - 收藏夹系统 (`lib/data/models/collection/favorite.dart`, `lib/providers/favorites_provider.dart`)
 - 星标文献 (`lib/providers/starred_provider.dart`)
 - 备份与恢复 (`lib/services/backup_restore_service.dart`, `lib/services/backup_s3_service.dart`, `lib/providers/backup_provider.dart`)
 
-### PDF 处理 (PDF Processing)
-- PDF 缩略图服务 (`lib/services/pdf_thumbnail_service.dart`)
-- PDF DOI/标识符提取 (`lib/services/pdf_identifier_extractor.dart`)
-- PDF 元数据提取 (`lib/services/pdf_metadata_extractor.dart`)
-- 全局 PDF 处理锁 (`lib/services/pdf_process_lock.dart`)
+### 用户界面
 
-### 标识符解析与文献获取 (Identifier Resolution)
-- DOI/PMID/arXiv/ISBN 解析 (`lib/services/identifier_parser.dart`)
-- 元数据查询与 PDF 获取 (`lib/services/identifier_resolver.dart`)
-- 文本元数据解析 (`lib/services/document_metadata_parser.dart`)
-
-### 网络与代理 (Networking & Proxy)
-- 代理设置与自动同步 (`lib/providers/proxy_provider.dart`, `lib/pages/setting/network_settings_page.dart`)
-
-### 用户界面 (User Interface)
-- 文献库页面 (`lib/pages/library/view.dart`, `lib/pages/library/search_page.dart`)
-- 文献库组件：网格/列表视图 (`lib/pages/library/widgets/bookshelf_grid.dart`, `bookshelf_list.dart`)、卡片 (`document_card.dart`, `doc_list_card.dart`)、封面 (`pdf_cover.dart`)
-- 书架与收藏夹 (`lib/pages/shelf/view.dart`, `favorite_detail_page.dart`, `starred_items_page.dart`, `no_file_entries_page.dart`)
+- 文献库：页面 (`lib/pages/library/`)、网格/列表视图、卡片、封面
+- 书架与收藏夹 (`lib/pages/shelf/`)
 - 内联多选模式 (`lib/providers/selection_provider.dart`, `lib/pages/library/widgets/selection_app_bar.dart`)
-- API 设置页面 (`lib/pages/setting/api_settings_page.dart`)
-- 外观设置 (`lib/pages/setting/appearance_settings_page.dart`)
-
-### 文档提取 (Document Extraction)
-- 异步 Job API 单文档/批量提取 (`lib/services/batch_extract_service.dart`)
-- 同步 API fallback (`lib/services/doc_extract_service.dart`)
 - 批量提取进度面板 (`lib/pages/library/widgets/batch_progress_sheet.dart`)
-- 提取结果显示 (`lib/pages/reader/extract_result_page.dart`)
-- API 配置状态 (`lib/providers/api_provider.dart` — `DocExtractApiState`)
-- Figure 裁剪 + Markdown 替换 (`lib/services/figure_extract_service.dart`, `lib/services/doc_extract_service.dart` — `replaceFigureRegions`)
-- 提取管线统一为 JSON 格式，淘汰 JSONL；`_images/` 已废弃，图片统一走 `_figures/`
+- 设置页面：API (`api_settings_page.dart`)、外观 (`appearance_settings_page.dart`)、网络 (`network_settings_page.dart`)
+- 阅读器主页面 (`lib/pages/reader/view.dart`)、外观面板、提取结果页
+- 阅读器主题配置 (`lib/providers/reader_settings_provider.dart`)
 
-### Markdown 阅读器 (Reader)
-- 渲染引擎：markdown_widget SpanNode 架构 (`lib/pages/reader/widgets/md_widget/`)
-- 自定义节点：LaTeX (`nr_latex_node.dart`)、图片 (`nr_image_node.dart`)、标记 (`nr_mark_node.dart`)
-- 搜索高亮 (`nr_search_highlight_builder.dart`)
-- 阅读器主题配置 (`nr_markdown_config.dart`, `lib/providers/reader_settings_provider.dart`)
-- 外观面板 (`lib/pages/reader/widgets/appearance_panel.dart`)
-- 文档缓存与搜索快照 (`lib/services/reader/markdown_document_cache_service.dart`)
-- Markdown 预处理 (`lib/utils/markdown_preprocessor.dart`)
-- 标题匹配规则 (`lib/services/reader/search_heading_pattern_service.dart`, `assets/config/search_heading_patterns.json`)
-- 阅读器主页面 (`lib/pages/reader/view.dart`)
+### 文档提取（决策记录）
+
+- 提取管线统一为 JSON 格式，淘汰 JSONL；`_images/` 已废弃，图片统一走 `_figures/`
 
 #### Flutter / Dart 调用文档版面解析 API
 
