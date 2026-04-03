@@ -233,11 +233,9 @@ class DocExtractService {
       }
     }
 
-    // 3. 清理残留 API 图片标签 + 居中 div → 斜体
+    // 3. 清理残留标签 + 格式预处理
     processedMarkdown = _stripApiImageTags(processedMarkdown);
     processedMarkdown = _convertCenteredDivs(processedMarkdown);
-
-    // 4. LaTeX / 格式预处理 + 标题过滤
     processedMarkdown = MarkdownPreprocessor.process(processedMarkdown);
     processedMarkdown = MarkdownPreprocessor.filterBeforeTitle(
       processedMarkdown,
@@ -382,7 +380,7 @@ class DocExtractService {
       usedLines.addAll(List.generate(end - start, (i) => start + i));
 
       final uri = Uri.file(fig.imagePath);
-      replacements.add((start, end, '\n![${fig.captionText}]($uri)\n'));
+      replacements.add((start, end, '\n![fig:${fig.captionText}]($uri)\n'));
     }
 
     // 从后往前替换，保持行号不偏移
@@ -448,6 +446,9 @@ class DocExtractService {
     var start = matched.reduce(min);
     var end = matched.reduce(max) + 1;
 
+    // 扩展到完整 <table>...</table> 块（API 表格是跨行 HTML）
+    (start, end) = _expandToTableBounds(lines, start, end);
+
     // 向上收纳紧邻空行
     while (start > 0 &&
         lines[start - 1].trim().isEmpty &&
@@ -474,6 +475,42 @@ class DocExtractService {
       if (!usedLines.contains(i) && lines[i].contains(text)) return i;
     }
     return null;
+  }
+
+  /// 扩展行范围以覆盖完整的 `<table>...</table>` HTML 块。
+  ///
+  /// API 输出的 table 是跨多行 HTML，而 block_content 是纯文本，
+  /// 导致 `_findLine()` 只能匹配到中间某一行或完全匹配不到。
+  /// 此方法在已有区间及其邻近范围内扫描 `<table` 标签，
+  /// 找到后向上/向下扩展到完整的 `<table>...</table>` 边界。
+  static (int, int) _expandToTableBounds(
+    List<String> lines,
+    int start,
+    int end,
+  ) {
+    var s = start;
+    var e = end;
+
+    // 在区间及上下各 3 行的缓冲区内扫描 <table 标签
+    final scanStart = (start - 3).clamp(0, lines.length);
+    final scanEnd = (end + 3).clamp(0, lines.length);
+
+    for (var i = scanStart; i < scanEnd; i++) {
+      if (lines[i].contains('<table')) {
+        s = min(s, i);
+        // 向下找对应的 </table>
+        var tableEnd = i + 1;
+        while (tableEnd < lines.length &&
+            !lines[tableEnd].contains('</table>')) {
+          tableEnd++;
+        }
+        if (tableEnd < lines.length) {
+          e = max(e, tableEnd + 1);
+        }
+      }
+    }
+
+    return (s, e);
   }
 
   /// 移除 API 生成的 HTML 图片标签（figure 已替换为 `![]()`，其余无本地文件）

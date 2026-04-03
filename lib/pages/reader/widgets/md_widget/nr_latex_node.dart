@@ -125,12 +125,16 @@ class NRLatexSpanNode extends SpanNode {
     if (trailingText != null && trailingText.isNotEmpty) {
       return WidgetSpan(
         alignment: PlaceholderAlignment.middle,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            mathWidget,
-            Text(trailingText, style: style),
-          ],
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              mathWidget,
+              Text(trailingText, style: style),
+            ],
+          ),
         ),
       );
     }

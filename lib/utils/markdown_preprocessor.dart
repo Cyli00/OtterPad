@@ -3,6 +3,7 @@ class MarkdownPreprocessor {
     var result = markdown;
     result = _sanitizeLatex(result);
     result = _fixLatexSpacing(result);
+    result = _promoteInlineEquations(result);
     result = _simplifyInlineLatex(result);
     result = _normalizeInlineSpacing(result);
     result = result.replaceAll(RegExp(r'<table[^>]*>\s*</table>'), '');
@@ -53,6 +54,21 @@ class MarkdownPreprocessor {
     final headingWords = h.split(' ').toSet();
     final overlap = titleWords.intersection(headingWords).length;
     return overlap / titleWords.length >= 0.8;
+  }
+
+  /// 将独占一行的长内联公式（$...$）提升为块级公式（$$...$$）。
+  /// API 提取经常将独立的 display 方程误标为 inline。
+  static String _promoteInlineEquations(String text) {
+    return text.replaceAllMapped(
+      RegExp(r'^[ \t]*\$([^\$\n]+)\$[ \t]*$', multiLine: true),
+      (match) {
+        final inner = match.group(1)!.trim();
+        if (inner.contains('=') || inner.length > 60) {
+          return '\n\$\$\n$inner\n\$\$\n';
+        }
+        return match.group(0)!;
+      },
+    );
   }
 
   static String _sanitizeLatex(String text) {

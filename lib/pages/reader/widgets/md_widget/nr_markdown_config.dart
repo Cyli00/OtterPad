@@ -115,7 +115,12 @@ MarkdownConfig buildReaderMarkdownConfig({
       bodyPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     ),
     HrConfig(height: 1, color: settings.dividerColor),
-    NRImgConfig(),
+    NRImgConfig(
+      captionStyle: baseStyle.copyWith(
+        fontSize: settings.fontSize * 0.85,
+        color: settings.secondaryTextColor,
+      ),
+    ),
   ]);
 }
 

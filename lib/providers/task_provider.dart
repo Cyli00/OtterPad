@@ -366,7 +366,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
       _snackBar.showProgress(
         fileName: title,
         status: '正在保存结果…',
-        onCancel: () {},
+        onCancel: () => cancelTask(TaskType.extractDocument),
       );
 
       final savedMdPath = await DocExtractService.instance.saveResult(
@@ -377,8 +377,18 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
       );
 
       _snackBar.hide();
+
+      if (token.isCancelled) {
+        _finishTask(TaskType.extractDocument, TaskStatus.cancelled);
+        _snackBar.showResult(message: '已取消提取');
+        return;
+      }
+
       _finishTask(TaskType.extractDocument, TaskStatus.completed);
-      _snackBar.showResult(message: '文档提取完成：$title');
+      _snackBar.showResult(
+        message: '文档提取完成：$title',
+        duration: const Duration(seconds: 6),
+      );
 
       onSuccess(savedMdPath, result.processedMarkdown ?? '');
     } on DioException catch (e) {

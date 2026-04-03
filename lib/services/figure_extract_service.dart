@@ -299,60 +299,56 @@ class FigureExtractService {
 
   // ─── PDF 渲染 + 裁剪 ─────────────────────────────────
 
-  /// 渲染指定 PDF 页面并裁剪出 [bbox] 区域，返回 PNG 字节。
+  /// 渲染整页 PDF 为 [renderZoom] 倍率的 [ui.Image]。
   ///
-  /// [bbox] 为已缩放到 [renderZoom] 的像素坐标 `[left, top, right, bottom]`。
-  static Future<Uint8List?> _renderAndCrop(
-    PdfPage page,
-    List<double> bbox,
-  ) async {
-    final renderWidth = page.width * renderZoom;
-    final renderHeight = page.height * renderZoom;
-
+  /// 同一页的多个 figure 应共用此结果，避免重复渲染。
+  /// 调用方须负责 dispose 返回的 Image。
+  static Future<ui.Image?> _renderFullPage(PdfPage page) async {
     final rendered = await page.render(
-      fullWidth: renderWidth,
-      fullHeight: renderHeight,
+      fullWidth: page.width * renderZoom,
+      fullHeight: page.height * renderZoom,
     );
     if (rendered == null) return null;
+    return rendered.createImage();
+  }
 
-    final fullImage = await rendered.createImage();
+  /// 从已渲染的整页图片中裁剪出 [bbox] 区域，返回 PNG 字节。
+  ///
+  /// [bbox] 为已缩放到 [renderZoom] 的像素坐标 `[left, top, right, bottom]`。
+  static Future<Uint8List?> _cropRegion(
+    ui.Image fullImage,
+    List<double> bbox,
+  ) async {
+    final cropLeft = bbox[0].clamp(0, fullImage.width.toDouble()).toInt();
+    final cropTop = bbox[1].clamp(0, fullImage.height.toDouble()).toInt();
+    final cropRight = bbox[2].clamp(0, fullImage.width.toDouble()).toInt();
+    final cropBottom = bbox[3].clamp(0, fullImage.height.toDouble()).toInt();
 
-    try {
-      // 裁剪区域（夹紧到页面范围内）
-      final cropLeft = bbox[0].clamp(0, fullImage.width.toDouble()).toInt();
-      final cropTop = bbox[1].clamp(0, fullImage.height.toDouble()).toInt();
-      final cropRight = bbox[2].clamp(0, fullImage.width.toDouble()).toInt();
-      final cropBottom = bbox[3].clamp(0, fullImage.height.toDouble()).toInt();
+    final cropWidth = cropRight - cropLeft;
+    final cropHeight = cropBottom - cropTop;
+    if (cropWidth <= 0 || cropHeight <= 0) return null;
 
-      final cropWidth = cropRight - cropLeft;
-      final cropHeight = cropBottom - cropTop;
-      if (cropWidth <= 0 || cropHeight <= 0) return null;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    canvas.drawImageRect(
+      fullImage,
+      ui.Rect.fromLTWH(
+        cropLeft.toDouble(),
+        cropTop.toDouble(),
+        cropWidth.toDouble(),
+        cropHeight.toDouble(),
+      ),
+      ui.Rect.fromLTWH(0, 0, cropWidth.toDouble(), cropHeight.toDouble()),
+      ui.Paint(),
+    );
 
-      // 使用 Canvas 绘制裁剪区域
-      final recorder = ui.PictureRecorder();
-      final canvas = ui.Canvas(recorder);
-      canvas.drawImageRect(
-        fullImage,
-        ui.Rect.fromLTWH(
-          cropLeft.toDouble(),
-          cropTop.toDouble(),
-          cropWidth.toDouble(),
-          cropHeight.toDouble(),
-        ),
-        ui.Rect.fromLTWH(0, 0, cropWidth.toDouble(), cropHeight.toDouble()),
-        ui.Paint(),
-      );
+    final picture = recorder.endRecording();
+    final cropped = await picture.toImage(cropWidth, cropHeight);
+    final byteData =
+        await cropped.toByteData(format: ui.ImageByteFormat.png);
+    cropped.dispose();
 
-      final picture = recorder.endRecording();
-      final cropped = await picture.toImage(cropWidth, cropHeight);
-      final byteData =
-          await cropped.toByteData(format: ui.ImageByteFormat.png);
-      cropped.dispose();
-
-      return byteData?.buffer.asUint8List();
-    } finally {
-      fullImage.dispose();
-    }
+    return byteData?.buffer.asUint8List();
   }
 
   // ─── 公开入口 ─────────────────────────────────────────
@@ -413,11 +409,15 @@ class FigureExtractService {
     final totalSegments = segments.length;
     onProgress?.call(0, totalSegments);
 
-    // 准备输出目录
+    // 准备输出目录（重新提取时清理旧文件）
     final dir = p.dirname(pdfPath);
     final baseName = p.basenameWithoutExtension(pdfPath);
     final outputDir = p.join(dir, '${baseName}_figures');
-    await Directory(outputDir).create(recursive: true);
+    final outputDirObj = Directory(outputDir);
+    if (outputDirObj.existsSync()) {
+      await outputDirObj.delete(recursive: true);
+    }
+    await outputDirObj.create(recursive: true);
 
     // 通过 PdfProcessLock 串行渲染，防止并发 OOM
     final manifest = <FigureManifestEntry>[];
@@ -449,33 +449,45 @@ class FigureExtractService {
           }
 
           final page = document.pages[pageIdx];
-
-          for (final (idx, seg) in entry.value) {
-            final apiBbox = computeMergedBbox(seg.blocks);
-            final renderBbox = scaleBbox(apiBbox);
-
-            final pngBytes = await _renderAndCrop(page, renderBbox);
-            if (pngBytes == null) {
-              debugPrint('[FigureExtract] 页 $pageIdx 裁剪失败');
+          final fullImage = await _renderFullPage(page);
+          if (fullImage == null) {
+            debugPrint('[FigureExtract] 页 $pageIdx 渲染失败');
+            for (final (idx, _) in entry.value) {
               onProgress?.call(idx + 1, totalSegments);
-              continue;
             }
+            continue;
+          }
 
-            final name = seg.captionName.isNotEmpty
-                ? _sanitizeFilename(seg.captionName)
-                : 'fig$figureIndex';
-            final outPath = p.join(outputDir, '$name.png');
-            await File(outPath).writeAsBytes(pngBytes);
+          try {
+            for (final (idx, seg) in entry.value) {
+              final apiBbox = computeMergedBbox(seg.blocks);
+              final renderBbox = scaleBbox(apiBbox);
 
-            manifest.add(FigureManifestEntry(
-              imagePath: outPath,
-              captionText: seg.captionText,
-              pageIndex: pageIdx,
-              blockIds: seg.blocks.map((b) => b.blockId).toList(),
-            ));
+              final pngBytes = await _cropRegion(fullImage, renderBbox);
+              if (pngBytes == null) {
+                debugPrint('[FigureExtract] 页 $pageIdx 裁剪失败');
+                onProgress?.call(idx + 1, totalSegments);
+                continue;
+              }
 
-            figureIndex++;
-            onProgress?.call(idx + 1, totalSegments);
+              final name = seg.captionName.isNotEmpty
+                  ? _sanitizeFilename(seg.captionName)
+                  : 'fig$figureIndex';
+              final outPath = p.join(outputDir, '$name.png');
+              await File(outPath).writeAsBytes(pngBytes);
+
+              manifest.add(FigureManifestEntry(
+                imagePath: outPath,
+                captionText: seg.captionText,
+                pageIndex: pageIdx,
+                blockIds: seg.blocks.map((b) => b.blockId).toList(),
+              ));
+
+              figureIndex++;
+              onProgress?.call(idx + 1, totalSegments);
+            }
+          } finally {
+            fullImage.dispose();
           }
         }
       } finally {
