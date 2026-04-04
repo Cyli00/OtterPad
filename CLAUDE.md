@@ -47,8 +47,7 @@
 
 ### Reader
 
-- **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 文件加载 + 内存缓存 + 搜索快照构建。
-- **SearchHeadingPatternService** (`lib/services/reader/search_heading_pattern_service.dart`) — 从 `assets/config/search_heading_patterns.json` 加载标题匹配规则。
+- **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 文件加载 + 内存缓存 + 搜索快照构建。搜索快照的标题检测从提取 `.json` 中 `block_label: "paragraph_title"` 读取，无 JSON 时回退 ATX heading。
 - **MarkdownPreprocessor** (`lib/utils/markdown_preprocessor.dart`) — Markdown 预处理：LaTeX 修复、标题过滤、空表格移除。
 - **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 自定义 SpanNode：LaTeX (`nr_latex_node`)、图片 (`nr_image_node`)、标记 (`nr_mark_node`)、搜索高亮 (`nr_search_highlight_builder`)、主题配置 (`nr_markdown_config`)。
 
@@ -165,4 +164,4 @@
 
 - 后续raw.md的保存可以删去，目前只是用于测试
 - 段落内提及的figure应该能被检出和点击高亮
-- @assets/config/search_heading_patterns.json 希望能考虑到主流语言学术期刊的标题、行业研报、小说等标题的正则过滤
+- markdown搜索内容的上下标、公式等内容也没有被正常地渲染出来

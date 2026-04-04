@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' show min;
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
@@ -7,18 +6,6 @@ import 'package:flutter/material.dart';
 import '../../../services/figure_extract_service.dart';
 
 // ─── 数据模型 ───
-
-class OutlineHeading {
-  final int level;
-  final String title;
-  final int charOffset;
-
-  const OutlineHeading({
-    required this.level,
-    required this.title,
-    required this.charOffset,
-  });
-}
 
 class ReferenceItem {
   final int number;
@@ -33,23 +20,6 @@ class ReferenceItem {
 }
 
 // ─── 解析工具 ───
-
-/// 从 Markdown 中提取所有 ATX 标题及其字符偏移
-List<OutlineHeading> parseHeadings(String markdown) {
-  final headings = <OutlineHeading>[];
-  final re = RegExp(r'^(#{1,6})\s+(.+?)(?:\s+#+\s*)?$', multiLine: true);
-  for (final match in re.allMatches(markdown)) {
-    final title = _stripInlineFormatting(match.group(2)!);
-    if (title.isNotEmpty) {
-      headings.add(OutlineHeading(
-        level: match.group(1)!.length,
-        title: title,
-        charOffset: match.start,
-      ));
-    }
-  }
-  return headings;
-}
 
 /// 从 Markdown 中提取参考文献列表（定位 References 标题后按编号切分）
 List<ReferenceItem> parseReferences(String markdown) {
@@ -93,14 +63,6 @@ List<ReferenceItem> parseReferences(String markdown) {
   return items;
 }
 
-String _stripInlineFormatting(String text) {
-  return text
-      .replaceAll(RegExp(r'\*{1,3}'), '')
-      .replaceAll(RegExp(r'`'), '')
-      .replaceAll(RegExp(r'\[([^\]]+)\]\([^)]+\)'), r'$1')
-      .trim();
-}
-
 // ─── 大纲面板 ───
 
 class OutlinePanel extends StatefulWidget {
@@ -122,7 +84,6 @@ class OutlinePanel extends StatefulWidget {
 class _OutlinePanelState extends State<OutlinePanel>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  late final List<OutlineHeading> _headings;
   late final List<ReferenceItem> _references;
   List<FigureManifestEntry>? _figures;
   bool _figuresLoaded = false;
@@ -130,8 +91,7 @@ class _OutlinePanelState extends State<OutlinePanel>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _headings = parseHeadings(widget.markdownContent);
+    _tabController = TabController(length: 2, vsync: this);
     _references = parseReferences(widget.markdownContent);
     _loadFigures();
   }
@@ -172,7 +132,6 @@ class _OutlinePanelState extends State<OutlinePanel>
           controller: _tabController,
           tabs: const [
             Tab(text: 'Figures'),
-            Tab(text: 'Sections'),
             Tab(text: 'References'),
           ],
           labelColor: cs.primary,
@@ -195,10 +154,6 @@ class _OutlinePanelState extends State<OutlinePanel>
                 loaded: _figuresLoaded,
                 markdownContent: widget.markdownContent,
                 onNavigate: _navigateAndClose,
-              ),
-              _SectionsTab(
-                headings: _headings,
-                onTap: _navigateAndClose,
               ),
               _ReferencesTab(
                 references: _references,
@@ -310,14 +265,7 @@ class _FiguresTab extends StatelessWidget {
                 _ActionLink(
                   icon: Icons.article_outlined,
                   label: '在文中查看',
-                  onTap: () {
-                    final searchText = fig.captionText.substring(
-                      0,
-                      min(40, fig.captionText.length),
-                    );
-                    final idx = markdownContent.indexOf(searchText);
-                    if (idx >= 0) onNavigate(idx);
-                  },
+                  onTap: () => _navigateToFigure(fig),
                 ),
                 const SizedBox(width: 16),
                 if (imageExists)
@@ -334,6 +282,12 @@ class _FiguresTab extends StatelessWidget {
     );
   }
 
+  void _navigateToFigure(FigureManifestEntry fig) {
+    final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
+    final idx = markdownContent.indexOf(fileName);
+    if (idx >= 0) onNavigate(idx);
+  }
+
   void _showViewer(BuildContext context, FigureManifestEntry figure) {
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder<void>(
@@ -346,53 +300,6 @@ class _FiguresTab extends StatelessWidget {
           return FadeTransition(opacity: animation, child: child);
         },
       ),
-    );
-  }
-}
-
-// ─── Sections Tab ───
-
-class _SectionsTab extends StatelessWidget {
-  final List<OutlineHeading> headings;
-  final void Function(int charOffset) onTap;
-
-  const _SectionsTab({required this.headings, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    if (headings.isEmpty) {
-      return const _EmptyState(
-        icon: Icons.segment_rounded,
-        message: '未找到章节标题',
-      );
-    }
-
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: headings.length,
-      itemBuilder: (context, index) {
-        final h = headings[index];
-        final indent = (h.level - 1) * 16.0;
-        final isTopLevel = h.level <= 2;
-
-        return InkWell(
-          onTap: () => onTap(h.charOffset),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(16 + indent, 14, 16, 14),
-            child: Text(
-              h.title,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.primary,
-                fontWeight: isTopLevel ? FontWeight.w600 : FontWeight.normal,
-                fontSize: isTopLevel ? 15 : 14,
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
+import 'package:scroll_to_index/scroll_to_index.dart';
 
 import '../../../providers/reader_settings_provider.dart';
 import 'md_widget/nr_markdown_config.dart';
@@ -8,15 +9,12 @@ import 'md_widget/nr_search_highlight_builder.dart';
 /// 虚拟化 Markdown 渲染组件，专用于阅读器。
 ///
 /// 使用 [MarkdownGenerator.buildWidgets] 预构建 widget 列表，
-/// 通过 [ListView.builder] 仅构建屏幕可见 widget，大幅提升
-/// 首帧渲染速度和窗口 resize 流畅度。
-///
-/// 搜索高亮通过 [SearchHighlightBuilder] 在 richTextBuilder 层面实现，
-/// 跳转通过字符偏移比例估算滚动位置（与 outline 导航一致）。
+/// 通过 [ListView.builder] + [AutoScrollTag] 仅构建屏幕可见 widget，
+/// 支持通过 [AutoScrollController.scrollToIndex] 精确跳转到任意 widget。
 class ReaderMarkdownBody extends StatefulWidget {
   final String data;
   final ReaderSettingsState settings;
-  final ScrollController? scrollController;
+  final AutoScrollController? scrollController;
 
   /// 需要高亮的搜索词
   final String? highlightQuery;
@@ -74,28 +72,25 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
     return _cachedWidgets!;
   }
 
-  /// 通过字符偏移比例估算滚动位置并跳转。
-  ///
-  /// 双层 postFrameCallback：第一帧 ListView.builder 构建可见 widget，
-  /// 第二帧 layout 完成后 maxScrollExtent 可用。
+  /// 搜索高亮跳转：通过 charOffset 计算 widget index，精确滚动。
   void _scrollToTarget() {
     if (_hasScrolled) return;
     _hasScrolled = true;
+    final controller = widget.scrollController;
+    if (controller == null) return;
+    final index = _charOffsetToWidgetIndex(
+      widget.data,
+      widget.targetCharOffset!,
+    );
+    final widgets = _cachedWidgets;
+    final safeIndex =
+        widgets != null ? index.clamp(0, widgets.length - 1) : index;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final controller = widget.scrollController;
-        if (controller == null || !controller.hasClients) return;
-        final maxExtent = controller.position.maxScrollExtent;
-        if (maxExtent <= 0) return;
-        final ratio = widget.targetCharOffset! / widget.data.length;
-        controller.animateTo(
-          (ratio * maxExtent).clamp(0.0, maxExtent),
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOut,
-        );
-      });
+      controller.scrollToIndex(
+        safeIndex,
+        preferPosition: AutoScrollPosition.begin,
+      );
     });
   }
 
@@ -109,14 +104,24 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
   Widget build(BuildContext context) {
     final resources = _resolveRenderResources(context);
     final widgets = _getWidgets(resources);
+    final controller = widget.scrollController;
 
     if (_isHighlightMode) _scrollToTarget();
 
     return ListView.builder(
-      controller: widget.scrollController,
+      controller: controller,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
       itemCount: widgets.length,
-      itemBuilder: (_, index) => widgets[index],
+      itemBuilder: (ctx, index) {
+        final child = widgets[index];
+        if (controller == null) return child;
+        return AutoScrollTag(
+          key: ValueKey(index),
+          controller: controller,
+          index: index,
+          child: child,
+        );
+      },
     );
   }
 
@@ -141,6 +146,22 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
   void _disposeRenderResources() {
     _renderResources = null;
   }
+}
+
+// ─── charOffset → widget index 映射 ───
+
+/// 将 Markdown 字符偏移转换为 [MarkdownGenerator.buildWidgets] 的 widget 索引。
+///
+/// 原理：markdown parser 按块级元素分组（段落、标题、图片等），
+/// 块间以空行分隔。统计 charOffset 前的空行分隔符数量即为 widget 索引。
+int _charOffsetToWidgetIndex(String markdown, int charOffset) {
+  final breaks = RegExp(r'\n\n+').allMatches(markdown);
+  var index = 0;
+  for (final brk in breaks) {
+    if (brk.start >= charOffset) break;
+    index++;
+  }
+  return index;
 }
 
 // ─── 渲染资源管理 ───

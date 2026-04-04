@@ -85,6 +85,7 @@ dependencies:
   markdown_widget: ^2.3.2+8
   html: ^0.15.6
   animations: ^2.1.2
+  scroll_to_index: ^3.0.1
 
 dev_dependencies:
   flutter_test:

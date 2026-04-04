@@ -6,8 +6,8 @@ import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
@@ -51,7 +51,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int _currentResultIndex = 0;
 
   // Markdown 滚动控制
-  final _scrollController = ScrollController();
+  final _scrollController = AutoScrollController();
 
   // PDF 控制器（用于滚动滑条）
   final _pdfController = PdfViewerController();
@@ -65,6 +65,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<String>? _loadFuture;
   Future<MarkdownSearchSnapshot>? _searchSnapshotFuture;
   String? _markdownCacheKey;
+  String? _jsonPath;
 
   // 文本选择
   String? _selectedText;
@@ -103,6 +104,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final mdPath = await mdPathFuture;
     if (mdPath != null) {
       _mdPath = mdPath;
+      _jsonPath = _deriveJsonPath(filePath);
     }
 
     if (!mounted) return;
@@ -155,9 +157,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _mdPath = mdPath;
           _mdContent = markdownContent;
           _markdownCacheKey = cacheKey;
+          _jsonPath = _deriveJsonPath(mdPath);
           _searchSnapshotFuture = cacheService.getSearchSnapshot(
             cacheKey: cacheKey,
             markdownContent: markdownContent,
+            jsonPath: _jsonPath,
           );
           _showPreview = true;
         });
@@ -344,16 +348,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   // ─── 大纲导航 ───
 
   void _onOutlineNavigate(int charOffset) {
-    if (_mdContent == null ||
-        _mdContent!.isEmpty ||
-        !_scrollController.hasClients) return;
-    final maxExtent = _scrollController.position.maxScrollExtent;
-    if (maxExtent <= 0) return;
-    final ratio = charOffset / _mdContent!.length;
-    _scrollController.animateTo(
-      (ratio * maxExtent).clamp(0.0, maxExtent),
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
+    if (_mdContent == null || _mdContent!.isEmpty) return;
+
+    // charOffset → widget index：统计目标位置前的段落分隔符数量
+    final breaks = RegExp(r'\n\n+').allMatches(_mdContent!);
+    var widgetIndex = 0;
+    for (final brk in breaks) {
+      if (brk.start >= charOffset) break;
+      widgetIndex++;
+    }
+
+    // 回退 1 个 widget 显示上文，使目标内容出现在视口内
+    _scrollController.scrollToIndex(
+      (widgetIndex - 1).clamp(0, widgetIndex),
+      preferPosition: AutoScrollPosition.begin,
     );
   }
 
@@ -364,6 +372,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       backgroundColor: Colors.transparent,
       builder: (context) => _DocumentInfoSheet(document: widget.document),
     );
+  }
+
+  String? _deriveJsonPath(String filePath) {
+    if (filePath.isEmpty) return null;
+    final jsonPath = p.join(
+      p.dirname(filePath),
+      '${p.basenameWithoutExtension(filePath)}.json',
+    );
+    return File(jsonPath).existsSync() ? jsonPath : null;
   }
 
   Future<String?> _findMarkdownPath(String filePath) async {
@@ -420,6 +437,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _searchSnapshotFuture = cacheService.getSearchSnapshot(
       cacheKey: cacheKey,
       markdownContent: content,
+      jsonPath: _jsonPath,
     );
   }
 

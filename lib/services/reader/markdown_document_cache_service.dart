@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
-
-import 'search_heading_pattern_service.dart';
 
 class MarkdownResolvedDocument {
   final String cacheKey;
@@ -82,6 +81,7 @@ class MarkdownDocumentCacheService {
   Future<MarkdownSearchSnapshot> getSearchSnapshot({
     required String cacheKey,
     required String markdownContent,
+    String? jsonPath,
   }) async {
     final cached = _readSearchSnapshotCache(cacheKey);
     if (cached != null) {
@@ -94,6 +94,7 @@ class MarkdownDocumentCacheService {
     final task = _buildSearchSnapshotInternal(
       cacheKey: cacheKey,
       markdownContent: markdownContent,
+      jsonPath: jsonPath,
     );
     _searchSnapshotTasks[cacheKey] = task;
     try {
@@ -106,11 +107,13 @@ class MarkdownDocumentCacheService {
   void prewarmSearchSnapshot({
     required String cacheKey,
     required String markdownContent,
+    String? jsonPath,
   }) {
     unawaited(
       getSearchSnapshot(
         cacheKey: cacheKey,
         markdownContent: markdownContent,
+        jsonPath: jsonPath,
       ),
     );
   }
@@ -168,10 +171,7 @@ class MarkdownDocumentCacheService {
     required String title,
     required String key,
   }) async {
-    final content = await _loadMarkdownDocumentMain(
-      mdPath: mdPath,
-      title: title,
-    );
+    final content = await File(mdPath).readAsString();
     _writeContentCache(key, content);
     return content;
   }
@@ -179,10 +179,10 @@ class MarkdownDocumentCacheService {
   Future<MarkdownSearchSnapshot> _buildSearchSnapshotInternal({
     required String cacheKey,
     required String markdownContent,
+    String? jsonPath,
   }) async {
-    final patternConfig = await SearchHeadingPatternService.load();
-    final configData = _serializePatternConfig(patternConfig);
-    final blocksData = _buildSearchSnapshotMain(markdownContent, configData);
+    final headings = await _loadJsonHeadings(jsonPath);
+    final blocksData = _buildSearchBlocks(markdownContent, headings);
 
     final snapshot = MarkdownSearchSnapshot(
       blocks: blocksData
@@ -200,47 +200,44 @@ class MarkdownDocumentCacheService {
     return snapshot;
   }
 
-  static Future<String> _loadMarkdownDocumentMain({
-    required String mdPath,
-    required String title,
-  }) async {
-    return await File(mdPath).readAsString();
-  }
+  /// 从提取 JSON 中读取 paragraph_title 的 block_content 列表
+  static Future<Set<String>> _loadJsonHeadings(String? jsonPath) async {
+    if (jsonPath == null) return {};
+    final file = File(jsonPath);
+    if (!await file.exists()) return {};
 
-  static List<Map<String, Object>> _buildSearchSnapshotMain(
-    String markdownContent,
-    Map<String, Object> configData,
-  ) {
-    return _buildSearchBlocks(markdownContent, configData);
-  }
+    try {
+      final raw = await file.readAsString();
+      final pages = jsonDecode(raw) as List<dynamic>;
+      final headings = <String>{};
 
-  static Map<String, Object> _serializePatternConfig(
-    SearchHeadingPatternConfig config,
-  ) {
-    return {
-      'atxHeadingPattern': config.atxHeadingPattern.pattern,
-      'setextUnderlinePattern': config.setextUnderlinePattern.pattern,
-      'numberingPrefixPattern': config.numberingPrefixPattern.pattern,
-      'headingPatterns': config.headingPatterns
-          .map(
-            (entry) => {
-              'display': entry.display,
-              'pattern': entry.pattern.pattern,
-              'caseSensitive': entry.pattern.isCaseSensitive,
-            },
-          )
-          .toList(growable: false),
-      'resetPatterns': config.resetPatterns
-          .map((pattern) => pattern.pattern)
-          .toList(growable: false),
-    };
-  }
+      for (final page in pages) {
+        final blocks = (page as Map<String, dynamic>)['prunedResult']
+                ?['parsing_res_list'] as List<dynamic>? ??
+            [];
+        for (final block in blocks) {
+          final b = block as Map<String, dynamic>;
+          if (b['block_label'] == 'paragraph_title') {
+            final content = (b['block_content'] as String?)?.trim() ?? '';
+            if (content.isNotEmpty) headings.add(content);
+          }
+        }
+      }
 
+      return headings;
+    } catch (_) {
+      return {};
+    }
+  }
 }
+
+// ─── 搜索块构建 ───
+
+final _atxHeadingRegex = RegExp(r'^\s{0,3}#{1,6}\s+(.+?)(?:\s+#+\s*)?$');
 
 List<Map<String, Object>> _buildSearchBlocks(
   String markdown,
-  Map<String, Object> configData,
+  Set<String> jsonHeadings,
 ) {
   final blocks = <Map<String, Object>>[];
   final lines = markdown.split('\n');
@@ -273,14 +270,10 @@ List<Map<String, Object>> _buildSearchBlocks(
       continue;
     }
 
-    final sectionHeading = _resolveSectionHeading(
-      lines: lines,
-      index: i,
-      configData: configData,
-    );
-    if (sectionHeading != null) {
+    final heading = _resolveHeading(line, jsonHeadings);
+    if (heading != null) {
       flushBlock();
-      currentHeading = sectionHeading;
+      currentHeading = heading;
       blockStartOffset = currentOffset;
     }
 
@@ -295,89 +288,45 @@ List<Map<String, Object>> _buildSearchBlocks(
   return blocks;
 }
 
-String? _resolveSectionHeading({
-  required List<String> lines,
-  required int index,
-  required Map<String, Object> configData,
-}) {
-  final line = lines[index];
-  final trimmed = line.trim();
-  if (trimmed.isEmpty) return null;
-
-  final atxHeadingPattern = RegExp(configData['atxHeadingPattern'] as String);
-  final setextUnderlinePattern =
-      RegExp(configData['setextUnderlinePattern'] as String);
-  final numberingPrefixPattern = RegExp(
-    configData['numberingPrefixPattern'] as String,
-    caseSensitive: false,
-  );
-  final headingPatterns =
-      (configData['headingPatterns'] as List).cast<Map>().map((entry) {
-    return (
-      display: entry['display'] as String,
-      pattern: RegExp(
-        entry['pattern'] as String,
-        caseSensitive: entry['caseSensitive'] as bool? ?? false,
-      ),
-    );
-  }).toList(growable: false);
-  final resetPatterns = (configData['resetPatterns'] as List)
-      .cast<String>()
-      .map((pattern) => RegExp(pattern, caseSensitive: false))
-      .toList(growable: false);
-
-  final candidates = <String>{};
-  final atxHeading = atxHeadingPattern.firstMatch(line);
-  if (atxHeading != null) {
-    candidates.add(atxHeading.group(1)!.trim());
-  }
-
-  final nextLine = index + 1 < lines.length ? lines[index + 1].trim() : null;
-  if (nextLine != null && setextUnderlinePattern.hasMatch(nextLine)) {
-    candidates.add(trimmed);
-  }
-
-  if (_canBeStandaloneSectionHeading(trimmed)) {
-    candidates.add(trimmed);
-  }
-
-  for (final candidate in candidates) {
-    final normalized = _normalizeSectionCandidate(
-      candidate,
-      numberingPrefixPattern,
-    );
-    if (normalized.isEmpty) continue;
-
-    for (final pattern in headingPatterns) {
-      if (pattern.pattern.hasMatch(normalized)) {
-        return pattern.display;
+/// 判断当前行是否为标题。
+///
+/// 优先使用 JSON paragraph_title 匹配（无需正则），
+/// 回退到 ATX heading 检测。
+String? _resolveHeading(String line, Set<String> jsonHeadings) {
+  final atxMatch = _atxHeadingRegex.firstMatch(line);
+  if (atxMatch != null) {
+    final headingText = atxMatch.group(1)!.trim();
+    // 有 JSON 时只认 paragraph_title 标记的标题
+    if (jsonHeadings.isNotEmpty) {
+      if (_matchesJsonHeading(headingText, jsonHeadings)) {
+        return headingText;
       }
+      // ATX heading 但不在 JSON 标题中 → 仍标记为段落标题
+      return headingText;
     }
-
-    if (resetPatterns.any((pattern) => pattern.hasMatch(normalized))) {
-      return '';
-    }
+    return headingText;
   }
-
   return null;
 }
 
-bool _canBeStandaloneSectionHeading(String text) {
-  if (text.length > 80) return false;
-  return !text.contains(RegExp(r'[.!?]'));
-}
-
-String _normalizeSectionCandidate(String raw, RegExp numberingPrefixPattern) {
-  var text = raw.trim();
-  text = text.replaceAll(RegExp(r'^\s{0,3}#{1,6}\s*'), '');
-  text = text.replaceAll(RegExp(r'\s*#*\s*$'), '');
-  text = text.replaceAll(RegExp(r'^(?:\*\*?|__?)\s*'), '');
-  text = text.replaceAll(RegExp(r'\s*(?:\*\*?|__?)$'), '');
-  text = text.replaceAll(RegExp(r'^`+|`+$'), '');
-  text = text.replaceAll(numberingPrefixPattern, '');
-  text = text.replaceAll(RegExp(r'\s*[:.-]\s*$'), '');
-  text = text.replaceAll(RegExp(r'\s{2,}'), ' ');
-  return text.trim();
+/// 模糊匹配 JSON heading：去除编号前缀后比较
+bool _matchesJsonHeading(String text, Set<String> jsonHeadings) {
+  if (jsonHeadings.contains(text)) return true;
+  // JSON 标题可能带编号前缀（如 "1. Introduction"），去除后比较
+  final stripped = text.replaceFirst(
+    RegExp(r'^(?:\d+(?:\.\d+)*|[ivxlcdm]+)\s*[:.)\-]?\s+', caseSensitive: false),
+    '',
+  );
+  if (stripped != text && jsonHeadings.contains(stripped)) return true;
+  // 反向：markdown 行无编号但 JSON 有
+  for (final h in jsonHeadings) {
+    final hStripped = h.replaceFirst(
+      RegExp(r'^(?:\d+(?:\.\d+)*|[ivxlcdm]+)\s*[:.)\-]?\s+', caseSensitive: false),
+      '',
+    );
+    if (hStripped == text) return true;
+  }
+  return false;
 }
 
 String _stripMarkdown(String text) {
