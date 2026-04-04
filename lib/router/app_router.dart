@@ -1,5 +1,5 @@
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -22,7 +22,7 @@ import 'app_routes.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
-/// 统一的页面过渡动画：fade + slideY，符合 MD3 Emphasized 过渡规范
+/// 统一路由转场：FadeThroughTransition（旧页淡出 → 新页淡入）
 CustomTransitionPage<T> _buildAnimatedPage<T>({
   required Widget child,
   required GoRouterState state,
@@ -30,21 +30,14 @@ CustomTransitionPage<T> _buildAnimatedPage<T>({
   return CustomTransitionPage<T>(
     key: state.pageKey,
     child: child,
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 300),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return child
-          .animate(autoPlay: false, value: animation.value)
-          .fade(
-            begin: 0,
-            end: 1,
-            duration: 300.ms,
-            curve: Curves.easeOut,
-          )
-          .slideY(
-            begin: 0.04,
-            end: 0,
-            duration: 300.ms,
-            curve: Curves.easeOut,
-          );
+      return FadeThroughTransition(
+        animation: animation,
+        secondaryAnimation: secondaryAnimation,
+        child: child,
+      );
     },
   );
 }

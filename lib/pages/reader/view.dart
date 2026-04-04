@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
@@ -33,7 +34,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 }
 
 class _ReaderPageState extends ConsumerState<ReaderPage>
-    with SingleTickerProviderStateMixin {
+    {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   bool _showPreview = false;
@@ -84,17 +85,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _markdownLoading = false;
   Object? _markdownLoadError;
 
-  // Markdown 入场动画（与路由转场 _buildAnimatedPage 保持一致）
-  late final AnimationController _enterController;
-  bool _skeletonVisible = true;
-
   @override
   void initState() {
     super.initState();
-    _enterController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
     _initAsync();
   }
 
@@ -146,37 +139,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       filePath: filePath,
       title: widget.document.title,
       apiState: ref.read(docExtractApiProvider),
-      onSuccess: (mdPath, markdownContent) async {
+      onSuccess: (mdPath, markdownContent) {
         if (!mounted) return;
-        _enterController.reset();
-        _skeletonVisible = true;
-        final nextContent = markdownContent;
         final cacheService = MarkdownDocumentCacheService.instance;
         final cacheKey = cacheService.buildMemoryCacheKey(
           mdPath: mdPath,
           title: widget.document.title,
-          markdownContent: nextContent,
+          markdownContent: markdownContent,
         );
         cacheService.primeResolvedContent(
           cacheKey: cacheKey,
-          content: nextContent,
+          content: markdownContent,
         );
         setState(() {
           _mdPath = mdPath;
-          _mdContent = nextContent;
+          _mdContent = markdownContent;
           _markdownCacheKey = cacheKey;
           _searchSnapshotFuture = cacheService.getSearchSnapshot(
             cacheKey: cacheKey,
-            markdownContent: nextContent,
+            markdownContent: markdownContent,
           );
           _showPreview = true;
-        });
-        // 双层回调：第一帧完成 MarkdownBody 重量级构建，第二帧启动动画
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _enterController.forward();
-          });
         });
       },
     );
@@ -186,8 +169,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _clearHighlight();
     final enteringMarkdown = !_showPreview;
     if (enteringMarkdown) {
-      _enterController.reset();
-      _skeletonVisible = true;
       _pdfSearchFocusNode.unfocus();
       _pdfSearchController.clear();
       _pdfSearcher?.resetTextSearch();
@@ -209,7 +190,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<void> _openSearch() async {
     if (_showPreview) {
       if (_mdContent == null && _mdPath != null) {
-        await _ensureMarkdownReady(playAnimation: false);
+        await _ensureMarkdownReady();
       }
       if (!mounted || _mdContent == null) return;
       setState(() => _searchActive = true);
@@ -394,18 +375,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return await File(mdPath).exists() ? mdPath : null;
   }
 
-  Future<void> _ensureMarkdownReady({bool playAnimation = true}) async {
+  Future<void> _ensureMarkdownReady() async {
     if (_mdContent != null) {
       _prewarmSearchSnapshot();
-      if (playAnimation) {
-        // 双层回调：第一帧完成 MarkdownBody 重量级构建，第二帧启动动画
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _enterController.forward();
-          });
-        });
-      }
       return;
     }
     if (_mdPath == null) return;
@@ -429,15 +401,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _markdownLoadError = null;
       });
       _prewarmSearchSnapshot();
-      if (playAnimation) {
-        // 双层回调：第一帧完成 MarkdownBody 重量级构建，第二帧启动动画
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _enterController.forward();
-          });
-        });
-      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -581,7 +544,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _pdfSearchController.dispose();
     _pdfSearchFocusNode.dispose();
     _scrollController.dispose();
-    _enterController.dispose();
     _appearanceEntry?.remove();
     _selectionToolbarEntry?.remove();
     super.dispose();
@@ -1105,33 +1067,50 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     ColorScheme cs,
     ReaderSettingsState readerSettings,
   ) {
-    if (_showPreview && _hasResult) {
-      return _buildMarkdownPreview(theme, readerSettings);
-    }
-    return PdfViewer.file(
-      widget.document.filePath,
-      controller: _pdfController,
-      params: PdfViewerParams(
-        backgroundColor: Colors.transparent,
-        matchTextColor: cs.primaryContainer.withAlpha(150),
-        activeMatchTextColor: cs.primary.withAlpha(72),
-        onViewerReady: _bindPdfSearcher,
-        pagePaintCallbacks: _pdfSearcher == null
-            ? null
-            : [_pdfSearcher!.pageTextMatchPaintCallback],
-        viewerOverlayBuilder: (context, size, handleLinkTap) => [
-          PdfViewerScrollThumb(
-            controller: _pdfController,
-            orientation: ScrollbarOrientation.right,
-            // 与 Material 系统滚动条尺寸接近
-            thumbSize: const Size(8, 48),
-            margin: 2,
-            thumbBuilder: (context, thumbSize, pageNumber, controller) {
-              return _PdfScrollThumb(size: thumbSize);
-            },
-          ),
-        ],
-      ),
+    final showMarkdown = _showPreview && _hasResult;
+
+    return PageTransitionSwitcher(
+      duration: const Duration(milliseconds: 300),
+      reverse: !showMarkdown,
+      transitionBuilder: (child, animation, secondaryAnimation) {
+        return SharedAxisTransition(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          transitionType: SharedAxisTransitionType.horizontal,
+          child: child,
+        );
+      },
+      child: showMarkdown
+          ? KeyedSubtree(
+              key: const ValueKey('markdown'),
+              child: _buildMarkdownPreview(theme, readerSettings),
+            )
+          : PdfViewer.file(
+              key: const ValueKey('pdf'),
+              widget.document.filePath,
+              controller: _pdfController,
+              params: PdfViewerParams(
+                backgroundColor: Colors.transparent,
+                matchTextColor: cs.primaryContainer.withAlpha(150),
+                activeMatchTextColor: cs.primary.withAlpha(72),
+                onViewerReady: _bindPdfSearcher,
+                pagePaintCallbacks: _pdfSearcher == null
+                    ? null
+                    : [_pdfSearcher!.pageTextMatchPaintCallback],
+                viewerOverlayBuilder: (context, size, handleLinkTap) => [
+                  PdfViewerScrollThumb(
+                    controller: _pdfController,
+                    orientation: ScrollbarOrientation.right,
+                    thumbSize: const Size(8, 48),
+                    margin: 2,
+                    thumbBuilder:
+                        (context, thumbSize, pageNumber, controller) {
+                      return _PdfScrollThumb(size: thumbSize);
+                    },
+                  ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -1150,43 +1129,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
     }
 
-    return Stack(
-      children: [
-        // 内容层（底层）
-        if (_mdContent != null)
-          Positioned.fill(
-            child: _buildSlideIn(
-              child: _wrapWithSelection(
-                ReaderMarkdownBody(
-                  key: ValueKey('reader_md_${_mdContent.hashCode}'),
-                  data: _mdContent!,
-                  settings: settings,
-                  scrollController: _scrollController,
-                  highlightQuery: _highlightQuery,
-                  targetCharOffset: _targetCharOffset,
-                ),
-              ),
-            ),
-          ),
-        // 骨架屏层（顶层）：内容就绪后交叉渐变淡出
-        if (_mdContent == null || _skeletonVisible)
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: _mdContent != null,
-              child: AnimatedOpacity(
-                opacity: _mdContent != null ? 0.0 : 1.0,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-                onEnd: () {
-                  if (_mdContent != null && mounted) {
-                    setState(() => _skeletonVisible = false);
-                  }
-                },
-                child: _buildMarkdownSkeleton(settings),
-              ),
-            ),
-          ),
-      ],
+    if (_mdContent == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return _wrapWithSelection(
+      ReaderMarkdownBody(
+        key: ValueKey('reader_md_${_mdContent.hashCode}'),
+        data: _mdContent!,
+        settings: settings,
+        scrollController: _scrollController,
+        highlightQuery: _highlightQuery,
+        targetCharOffset: _targetCharOffset,
+      ),
     );
   }
 
@@ -1227,88 +1182,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  /// 入场动画：与路由页面转场 (_buildAnimatedPage) 参数一致
-  /// fade(0→1) + slideY(0.04→0)，300ms easeOut
-  Widget _buildSlideIn({required Widget child}) {
-    final curved = CurvedAnimation(
-      parent: _enterController,
-      curve: Curves.easeOut,
-    );
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.04),
-          end: Offset.zero,
-        ).animate(curved),
-        child: child,
-      ),
-    );
-  }
-
-  /// 文档加载中的骨架屏，模拟 Markdown 内容排版
-  Widget _buildMarkdownSkeleton(ReaderSettingsState settings) {
-    final shimmerBase = settings.textColor.withAlpha(18);
-    final shimmerHighlight = settings.textColor.withAlpha(36);
-
-    Widget line(double widthFraction, double height) {
-      return Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: shimmerBase,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        margin: const EdgeInsets.only(bottom: 10),
-        width: double.infinity,
-      ).animate(onPlay: (c) => c.repeat(reverse: true)).shimmer(
-            color: shimmerHighlight,
-            duration: const Duration(milliseconds: 1200),
-          );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 模拟标题
-          FractionallySizedBox(
-            widthFactor: 0.6,
-            child: line(0.6, 22),
-          ),
-          const SizedBox(height: 16),
-          // 模拟正文段落
-          line(1.0, 14),
-          line(1.0, 14),
-          FractionallySizedBox(
-            widthFactor: 0.85,
-            child: line(0.85, 14),
-          ),
-          const SizedBox(height: 12),
-          line(1.0, 14),
-          line(1.0, 14),
-          line(1.0, 14),
-          FractionallySizedBox(
-            widthFactor: 0.7,
-            child: line(0.7, 14),
-          ),
-          const SizedBox(height: 16),
-          // 模拟小标题
-          FractionallySizedBox(
-            widthFactor: 0.45,
-            child: line(0.45, 18),
-          ),
-          const SizedBox(height: 12),
-          line(1.0, 14),
-          line(1.0, 14),
-          FractionallySizedBox(
-            widthFactor: 0.9,
-            child: line(0.9, 14),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildFileNotFound(ThemeData theme, ColorScheme cs) {
     return Center(
