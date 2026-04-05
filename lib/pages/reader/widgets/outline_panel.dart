@@ -1,9 +1,8 @@
 import 'dart:io';
-import 'dart:ui' show lerpDouble;
-
 import 'package:flutter/material.dart';
 
 import '../../../services/figure_extract_service.dart';
+import 'figure_viewer.dart';
 
 // ─── 数据模型 ───
 
@@ -232,7 +231,7 @@ class _FiguresTab extends StatelessWidget {
             // 图片
             if (imageExists)
               GestureDetector(
-                onTap: () => _showViewer(context, fig),
+                onTap: () => showFigureViewer(context, figures!, initialIndex: index),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.file(
@@ -272,7 +271,7 @@ class _FiguresTab extends StatelessWidget {
                   _ActionLink(
                     icon: Icons.open_in_full_rounded,
                     label: '查看原图',
-                    onTap: () => _showViewer(context, fig),
+                    onTap: () => showFigureViewer(context, figures!, initialIndex: index),
                   ),
               ],
             ),
@@ -288,20 +287,6 @@ class _FiguresTab extends StatelessWidget {
     if (idx >= 0) onNavigate(idx);
   }
 
-  void _showViewer(BuildContext context, FigureManifestEntry figure) {
-    Navigator.of(context, rootNavigator: true).push(
-      PageRouteBuilder<void>(
-        opaque: false,
-        barrierDismissible: false,
-        transitionDuration: const Duration(milliseconds: 250),
-        reverseTransitionDuration: const Duration(milliseconds: 200),
-        pageBuilder: (_, __, ___) => _FigureViewerPage(figure: figure),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-      ),
-    );
-  }
 }
 
 // ─── References Tab ───
@@ -438,176 +423,3 @@ class _ActionLink extends StatelessWidget {
   }
 }
 
-// ─── 图片全屏查看器（下滑退出） ───
-
-class _FigureViewerPage extends StatefulWidget {
-  final FigureManifestEntry figure;
-
-  const _FigureViewerPage({required this.figure});
-
-  @override
-  State<_FigureViewerPage> createState() => _FigureViewerPageState();
-}
-
-class _FigureViewerPageState extends State<_FigureViewerPage>
-    with SingleTickerProviderStateMixin {
-  double _dragOffset = 0;
-  late final AnimationController _resetController;
-  double _resetFrom = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _resetController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    )..addListener(() {
-        setState(() {
-          _dragOffset =
-              lerpDouble(_resetFrom, 0, _resetController.value) ?? 0;
-        });
-      });
-  }
-
-  @override
-  void dispose() {
-    _resetController.dispose();
-    super.dispose();
-  }
-
-  void _onDragUpdate(DragUpdateDetails details) {
-    if (_resetController.isAnimating) return;
-    setState(() {
-      _dragOffset =
-          (_dragOffset + details.delta.dy).clamp(0.0, double.infinity);
-    });
-  }
-
-  void _onDragEnd(DragEndDetails details) {
-    if (_dragOffset > 120 || (details.primaryVelocity ?? 0) > 600) {
-      Navigator.of(context).pop();
-    } else {
-      _resetFrom = _dragOffset;
-      _resetController.forward(from: 0);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = (_dragOffset / 350).clamp(0.0, 1.0);
-    final bgOpacity = (1.0 - progress * 0.7).clamp(0.0, 1.0);
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-
-    return GestureDetector(
-      onVerticalDragUpdate: _onDragUpdate,
-      onVerticalDragEnd: _onDragEnd,
-      behavior: HitTestBehavior.opaque,
-      child: Material(
-        color: Colors.black.withOpacity(bgOpacity * 0.96),
-        child: Transform.translate(
-          offset: Offset(0, _dragOffset),
-          child: SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                // ── 顶栏 ──
-                SizedBox(
-                  height: 48,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: IconButton(
-                        icon: const Icon(Icons.close_rounded),
-                        color: Colors.white70,
-                        onPressed: () => Navigator.of(context).pop(),
-                        tooltip: '关闭',
-                      ),
-                    ),
-                  ),
-                ),
-                // ── 图片 ──
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Center(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Image.file(
-                          File(widget.figure.imagePath),
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // ── 标题面板 ──
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    16,
-                    16,
-                    bottomPadding + 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.07),
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 完整标题
-                      Expanded(
-                        child: Text(
-                          widget.figure.captionText,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            height: 1.55,
-                            fontWeight: FontWeight.w400,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // 翻译按钮
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.translate_rounded,
-                              size: 18,
-                            ),
-                            style: IconButton.styleFrom(
-                              backgroundColor: Colors.white.withOpacity(0.1),
-                              foregroundColor: Colors.white60,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                            tooltip: '翻译',
-                            onPressed: () {
-                              // TODO: 翻译功能
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

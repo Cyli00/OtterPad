@@ -50,6 +50,7 @@
 - **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 文件加载 + 内存缓存 + 搜索快照构建。搜索快照的标题检测从提取 `.json` 中 `block_label: "paragraph_title"` 读取，无 JSON 时回退 ATX heading。
 - **MarkdownPreprocessor** (`lib/utils/markdown_preprocessor.dart`) — Markdown 预处理：LaTeX 修复、标题过滤、空表格移除。
 - **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 自定义 SpanNode：LaTeX (`nr_latex_node`)、图片 (`nr_image_node`)、标记 (`nr_mark_node`)、搜索高亮 (`nr_search_highlight_builder`)、主题配置 (`nr_markdown_config`)。
+- **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — Figure 全屏查看器（宽度优先适配 + Ctrl+滚轮/手势缩放 + 下滑退出），通过 `showFigureViewer()` 打开。
 
 ## Transition & Animation Spec
 
