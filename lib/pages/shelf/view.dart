@@ -9,6 +9,7 @@ import '../../router/app_routes.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
@@ -88,12 +89,12 @@ class ShelfPage extends ConsumerWidget {
                 
                 // 菜单列表项
                 LibraryMenuItem(
-                  icon: Icons.cloud_sync,
+                  icon: Symbols.cloud_sync,
                   title: '已同步',
                   onTap: () {},
                 ),
                 LibraryMenuItem(
-                  icon: Icons.history,
+                  icon: Symbols.history,
                   title: '阅读历史',
                   onTap: () {},
                 ),
@@ -101,7 +102,7 @@ class ShelfPage extends ConsumerWidget {
                   builder: (context, ref, _) {
                     final count = ref.watch(starredCountProvider);
                     return LibraryMenuItem(
-                      icon: Icons.grade,
+                      icon: Symbols.grade,
                       title: '星标条目',
                       trailing: count > 0
                           ? Container(
@@ -130,7 +131,7 @@ class ShelfPage extends ConsumerWidget {
                   builder: (context, ref, _) {
                     final count = ref.watch(noFileDocsCountProvider);
                     return LibraryMenuItem(
-                      icon: Icons.description,
+                      icon: Symbols.description,
                       title: '无文件条目',
                       trailing: count > 0
                           ? Container(
@@ -186,7 +187,7 @@ class ShelfPage extends ConsumerWidget {
                     ),
                     const Spacer(),
                     IconButton(
-                      icon: const Icon(Icons.add),
+                      icon: const Icon(Symbols.add),
                       color: theme.colorScheme.onSurfaceVariant,
                       onPressed: () async {
                         final result =
@@ -224,7 +225,7 @@ class ShelfPage extends ConsumerWidget {
                               color: theme.colorScheme.primaryContainer,
                             ),
                             child: Icon(
-                              Icons.menu_book_rounded,
+                              Symbols.menu_book_rounded,
                               size: 14,
                               color: theme.colorScheme.primary,
                             ),

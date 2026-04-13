@@ -76,7 +76,7 @@ class ReaderSettingsState {
     this.theme = ReaderTheme.light,
     this.font = ReaderFont.serif,
     this.fontSize = 16.0,
-    this.defaultReadingMode = DefaultReadingMode.pdf,
+    this.defaultReadingMode = DefaultReadingMode.markdown,
   });
 
   ReaderSettingsState copyWith({

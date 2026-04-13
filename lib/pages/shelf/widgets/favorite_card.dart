@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../library/widgets/pdf_cover.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class FavoriteCard extends StatefulWidget {
   final String title;
@@ -34,7 +35,7 @@ class _FavoriteCardState extends State<FavoriteCard> {
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Center(
         child: Icon(
-          Icons.picture_as_pdf,
+          Symbols.picture_as_pdf,
           color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(100),
           size: 24,
         ),
@@ -312,7 +313,7 @@ class _FavoriteCardState extends State<FavoriteCard> {
                           width: 28,
                           height: 28,
                           child: Icon(
-                            Icons.remove,
+                            Symbols.remove,
                             size: 18,
                             color: colorScheme.onError,
                           ),

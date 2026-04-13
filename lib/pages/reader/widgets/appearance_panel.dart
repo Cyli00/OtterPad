@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/reader_settings_provider.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 阅读器外观设置浮层
 ///
@@ -45,7 +46,7 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
           children: [
             // ── 字体族 ──
             _SectionTitle(
-              icon: Icons.text_fields,
+              icon: Symbols.text_fields,
               title: '字体',
             ),
             const SizedBox(height: 12),
@@ -60,7 +61,7 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
             Row(
               children: [
                 _SectionTitle(
-                  icon: Icons.format_size,
+                  icon: Symbols.format_size,
                   title: '字号',
                 ),
                 const Spacer(),
@@ -100,7 +101,7 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
 
             // ── 主题预设 ──
             _SectionTitle(
-              icon: Icons.palette_outlined,
+              icon: Symbols.palette,
               title: '主题预设',
             ),
             const SizedBox(height: 12),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../widgets/layout/adaptive_scaffold.dart';
 import '../../widgets/layout/adaptive_navigation.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 主导航外壳，由 StatefulShellRoute 驱动 Tab 切换
 class MainShell extends StatelessWidget {
@@ -23,18 +24,18 @@ class MainShell extends StatelessWidget {
       onDestinationSelected: _onDestinationSelected,
       destinations: const [
         AdaptiveDestination(
-          icon: Icon(Icons.auto_awesome_mosaic),
-          selectedIcon: Icon(Icons.auto_awesome_mosaic),
+          icon: Icon(Symbols.auto_awesome_mosaic),
+          selectedIcon: Icon(Symbols.auto_awesome_mosaic),
           label: '首页',
         ),
         AdaptiveDestination(
-          icon: Icon(Icons.folder_copy),
-          selectedIcon: Icon(Icons.folder_copy),
+          icon: Icon(Symbols.folder_copy),
+          selectedIcon: Icon(Symbols.folder_copy),
           label: '库',
         ),
         AdaptiveDestination(
-          icon: Icon(Icons.construction),
-          selectedIcon: Icon(Icons.construction),
+          icon: Icon(Symbols.construction),
+          selectedIcon: Icon(Symbols.construction),
           label: '设置',
         ),
       ],

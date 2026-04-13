@@ -23,6 +23,7 @@ import 'widgets/markdown_reader.dart';
 import 'widgets/outline_panel.dart';
 import 'widgets/search_overlay.dart';
 import 'widgets/selection_toolbar.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
   final Document document;
@@ -509,7 +510,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       onDismiss: () => _selectionToolbarEntry = null,
       actions: [
         ReadingToolbarAction(
-          icon: Icons.copy_rounded,
+          icon: Symbols.content_copy_rounded,
           label: '复制',
           onTap: () {
             if (_selectedText != null) {
@@ -522,7 +523,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           },
         ),
         ReadingToolbarAction(
-          icon: Icons.highlight_rounded,
+          icon: Symbols.highlight_rounded,
           label: '标记',
           onTap: () {
             if (_selectedText != null && _selectedText!.trim().isNotEmpty) {
@@ -531,7 +532,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           },
         ),
         ReadingToolbarAction(
-          icon: Icons.edit_note_rounded,
+          icon: Symbols.edit_note_rounded,
           label: '做笔记',
           onTap: () {
             final text = _selectedText;
@@ -683,7 +684,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             // 返回按钮
             IconButton(
               icon: Icon(
-                Icons.chevron_left_rounded,
+                Symbols.chevron_left_rounded,
                 size: 28,
                 color: cs.onSurface,
               ),
@@ -695,7 +696,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             if ((_showPreview && _hasResult) || (!_showPreview && (_fileExists ?? false)))
               IconButton(
                 icon: Icon(
-                  Icons.search_rounded,
+                  Symbols.search_rounded,
                   size: 22,
                   color: cs.onSurfaceVariant,
                 ),
@@ -706,7 +707,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             if (_showPreview && _hasResult && _mdContent != null)
               IconButton(
                 icon: Icon(
-                  Icons.toc_rounded,
+                  Symbols.toc_rounded,
                   size: 22,
                   color: cs.onSurfaceVariant,
                 ),
@@ -720,7 +721,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             if (_hasResult && !extracting)
               IconButton(
                 icon: Icon(
-                  Icons.sync_rounded,
+                  Symbols.sync_rounded,
                   size: 22,
                   color: cs.onSurfaceVariant,
                 ),
@@ -731,7 +732,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             if (!_showPreview)
               IconButton(
                 icon: Icon(
-                  Icons.info_outline_rounded,
+                  Symbols.info_rounded,
                   size: 22,
                   color: cs.onSurfaceVariant,
                 ),
@@ -769,7 +770,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           children: [
             IconButton(
               icon: Icon(
-                Icons.chevron_left_rounded,
+                Symbols.chevron_left_rounded,
                 size: 28,
                 color: cs.onSurface,
               ),
@@ -792,14 +793,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       fontSize: 15,
                     ),
                     prefixIcon: Icon(
-                      Icons.search_rounded,
+                      Symbols.search_rounded,
                       size: 20,
                       color: cs.onSurfaceVariant,
                     ),
                     suffixIcon: _pdfSearchController.text.isNotEmpty
                         ? IconButton(
                             icon: Icon(
-                              Icons.cancel_rounded,
+                              Symbols.cancel_rounded,
                               size: 18,
                               color: cs.onSurfaceVariant,
                             ),
@@ -827,7 +828,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             const SizedBox(width: 4),
             IconButton(
               icon: Icon(
-                Icons.close_rounded,
+                Symbols.close_rounded,
                 size: 22,
                 color: cs.onSurfaceVariant,
               ),
@@ -850,7 +851,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           children: [
             IconButton(
               icon: Icon(
-                Icons.chevron_left_rounded,
+                Symbols.chevron_left_rounded,
                 size: 28,
                 color: cs.onSurface,
               ),
@@ -871,7 +872,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   child: Row(
                     children: [
                       Icon(
-                        Icons.search_rounded,
+                        Symbols.search_rounded,
                         size: 18,
                         color: cs.onSurfaceVariant,
                       ),
@@ -894,7 +895,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             const SizedBox(width: 4),
             IconButton(
               icon: Icon(
-                Icons.close_rounded,
+                Symbols.close_rounded,
                 size: 22,
                 color: cs.onSurfaceVariant,
               ),
@@ -925,7 +926,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             height: 48,
             child: IconButton(
               icon: Icon(
-                Icons.expand_less_rounded,
+                Symbols.expand_less_rounded,
                 size: 24,
                 color: cs.onSurface,
               ),
@@ -966,7 +967,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             height: 48,
             child: IconButton(
               icon: Icon(
-                Icons.expand_more_rounded,
+                Symbols.expand_more_rounded,
                 size: 24,
                 color: cs.onSurface,
               ),
@@ -997,7 +998,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             height: 48,
             child: IconButton(
               icon: Icon(
-                Icons.expand_less_rounded,
+                Symbols.expand_less_rounded,
                 size: 24,
                 color: cs.onSurface,
               ),
@@ -1021,7 +1022,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             height: 48,
             child: IconButton(
               icon: Icon(
-                Icons.expand_more_rounded,
+                Symbols.expand_more_rounded,
                 size: 24,
                 color: cs.onSurface,
               ),
@@ -1049,7 +1050,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_hasResult) {
       return IconButton(
         icon: Icon(
-          _showPreview ? Icons.picture_as_pdf_rounded : Icons.article_rounded,
+          _showPreview ? Symbols.picture_as_pdf_rounded : Symbols.article_rounded,
           size: 22,
           color: cs.onSurfaceVariant,
         ),
@@ -1060,7 +1061,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return IconButton(
       icon: Icon(
-        Icons.document_scanner_rounded,
+        Symbols.document_scanner_rounded,
         size: 22,
         color: cs.onSurfaceVariant,
       ),
@@ -1194,7 +1195,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline_rounded, size: 48, color: cs.error),
+          Icon(Symbols.error_rounded, size: 48, color: cs.error),
           const SizedBox(height: 16),
           Text('找不到该文献的 PDF 文件', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),

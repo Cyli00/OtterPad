@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/book/document.dart';
 import '../../providers/documents_provider.dart';
 import 'widgets/pdf_cover.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 文献搜索页面
 class SearchPage extends ConsumerStatefulWidget {
@@ -55,7 +56,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 children: [
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
+                    icon: const Icon(Symbols.arrow_back_rounded),
                   ),
                   const SizedBox(width: 4),
                   Expanded(
@@ -77,7 +78,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           vertical: 12,
                         ),
                         prefixIcon: Icon(
-                          Icons.search,
+                          Symbols.search,
                           color: colorScheme.onSurfaceVariant,
                         ),
                         suffixIcon: _query.isNotEmpty
@@ -87,7 +88,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                   setState(() => _query = '');
                                 },
                                 icon: Icon(
-                                  Icons.clear_rounded,
+                                  Symbols.clear_rounded,
                                   color: colorScheme.onSurfaceVariant,
                                 ),
                               )
@@ -106,7 +107,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.search_rounded,
+                            Symbols.search_rounded,
                             size: 64,
                             color: colorScheme.onSurfaceVariant.withAlpha(80),
                           ),
@@ -230,7 +231,7 @@ class _DocumentSearchResultTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Icon(
-                  Icons.chevron_right_rounded,
+                  Symbols.chevron_right_rounded,
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -269,7 +270,7 @@ class _DocumentCover extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(
-        Icons.picture_as_pdf_rounded,
+        Symbols.picture_as_pdf_rounded,
         color: colorScheme.onSurfaceVariant.withAlpha(120),
       ),
     );

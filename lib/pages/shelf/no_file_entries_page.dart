@@ -12,6 +12,7 @@ import '../../services/snackbar_service.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 无文件条目详情页
 class NoFileEntriesPage extends ConsumerWidget {
@@ -64,7 +65,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                 ),
                 leading: IconButton(
                   onPressed: () => context.pop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
+                  icon: const Icon(Symbols.arrow_back_rounded),
                 ),
               ),
         body: CustomScrollView(
@@ -76,7 +77,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.check_circle_outline_rounded,
+                        Symbols.check_circle_rounded,
                         size: 64,
                         color: colorScheme.onSurfaceVariant.withAlpha(80),
                       ),
@@ -128,7 +129,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                                   onPressed: () => _handleAttachFile(
                                       context, ref, doc.id),
                                   icon: const Icon(
-                                      Icons.attach_file_rounded),
+                                      Symbols.attach_file_rounded),
                                   iconSize: 18,
                                   tooltip: '附加文件',
                                   style: IconButton.styleFrom(
@@ -142,7 +143,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                                     onPressed: () =>
                                         _handleOpenDoi(doc.doi!),
                                     icon: const Icon(
-                                        Icons.language_rounded),
+                                        Symbols.language_rounded),
                                     iconSize: 18,
                                     tooltip: '在浏览器中查看',
                                     style: IconButton.styleFrom(
@@ -155,7 +156,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                                     onPressed: () => _handleRedownload(
                                         ref, doc.id, doc.title),
                                     icon: const Icon(
-                                        Icons.download_rounded),
+                                        Symbols.download_rounded),
                                     iconSize: 18,
                                     tooltip: '重新下载',
                                     style: IconButton.styleFrom(

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 通过标识符添加条目对话框
 /// 返回用户输入的标识符字符串，取消返回 null
@@ -99,7 +100,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
             Row(
               children: [
                 Icon(
-                  Icons.travel_explore_rounded,
+                  Symbols.travel_explore_rounded,
                   color: colorScheme.primary,
                 ),
                 const SizedBox(width: 12),
@@ -115,7 +116,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: Icon(
-                    Icons.close_rounded,
+                    Symbols.close_rounded,
                     color: colorScheme.onSurfaceVariant,
                   ),
                   style: IconButton.styleFrom(

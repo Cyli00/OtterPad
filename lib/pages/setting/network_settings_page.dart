@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/proxy_provider.dart';
 import '../../services/identifier_resolver.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class NetworkSettingsPage extends StatelessWidget {
   const NetworkSettingsPage({super.key});
@@ -364,7 +365,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                                 color: cs.onSecondaryContainer,
                               ),
                             )
-                          : const Icon(Icons.network_ping_rounded),
+                          : const Icon(Symbols.network_ping_rounded),
                       label: const Text('测试'),
                     ),
                   ],
@@ -375,8 +376,8 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     children: [
                       Icon(
                         _testStatus == _TestStatus.success
-                            ? Icons.check_circle_rounded
-                            : Icons.error_rounded,
+                            ? Symbols.check_circle_rounded
+                            : Symbols.error_rounded,
                         size: 20,
                         color: _testStatus == _TestStatus.success
                             ? cs.primary

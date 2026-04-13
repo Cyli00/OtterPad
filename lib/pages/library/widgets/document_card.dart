@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'pdf_cover.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 文献网格卡片
 ///
@@ -83,7 +84,7 @@ class DocumentCard extends StatelessWidget {
                             color: colorScheme.surfaceContainerHighest,
                             child: Center(
                               child: Icon(
-                                Icons.article_outlined,
+                                Symbols.article,
                                 color: colorScheme.onSurfaceVariant
                                     .withAlpha(80),
                                 size: 48,
@@ -103,7 +104,7 @@ class DocumentCard extends StatelessWidget {
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              Icons.check_rounded,
+                              Symbols.check_rounded,
                               color: colorScheme.onPrimary,
                               size: 28,
                             ),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../../services/figure_extract_service.dart';
 import 'figure_viewer.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 // ─── 数据模型 ───
 
@@ -194,7 +195,7 @@ class _FiguresTab extends StatelessWidget {
     }
     if (figures == null || figures!.isEmpty) {
       return const _EmptyState(
-        icon: Icons.image_not_supported_outlined,
+        icon: Symbols.image_not_supported,
         message: '未找到图表\n请先提取文档',
       );
     }
@@ -255,7 +256,7 @@ class _FiguresTab extends StatelessWidget {
                 ),
                 child: Center(
                   child: Icon(
-                    Icons.broken_image_outlined,
+                    Symbols.broken_image,
                     color: cs.onSurfaceVariant.withAlpha(120),
                     size: 32,
                   ),
@@ -266,14 +267,14 @@ class _FiguresTab extends StatelessWidget {
             Row(
               children: [
                 _ActionLink(
-                  icon: Icons.article_outlined,
+                  icon: Symbols.article,
                   label: '在文中查看',
                   onTap: () => _navigateToFigure(fig),
                 ),
                 const SizedBox(width: 16),
                 if (imageExists)
                   _ActionLink(
-                    icon: Icons.open_in_full_rounded,
+                    icon: Symbols.open_in_full_rounded,
                     label: '查看原图',
                     onTap: () => showFigureViewer(context, figures!, initialIndex: index),
                   ),
@@ -304,7 +305,7 @@ class _ReferencesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (references.isEmpty) {
       return const _EmptyState(
-        icon: Icons.menu_book_rounded,
+        icon: Symbols.menu_book_rounded,
         message: '未找到参考文献',
       );
     }

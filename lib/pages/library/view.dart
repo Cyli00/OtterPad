@@ -13,6 +13,7 @@ import 'widgets/bookshelf_grid.dart';
 import 'widgets/bookshelf_list.dart';
 import 'widgets/doc_card_actions.dart';
 import 'widgets/home_header.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -281,7 +282,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               child: IconButton(
                 onPressed: () =>
                     ref.read(selectionProvider.notifier).exit(),
-                icon: Icon(Icons.close_rounded, size: iconSize),
+                icon: Icon(Symbols.close_rounded, size: iconSize),
                 padding: EdgeInsets.zero,
                 tooltip: '退出多选',
               ),
@@ -296,8 +297,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
             const Spacer(),
             _actionButton(
               icon: allSelected
-                  ? Icons.deselect_rounded
-                  : Icons.select_all_rounded,
+                  ? Symbols.deselect_rounded
+                  : Symbols.select_all_rounded,
               size: buttonSize,
               iconSize: iconSize,
               onPressed: () =>
@@ -308,7 +309,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
             ),
             const SizedBox(width: 8),
             _actionButton(
-              icon: Icons.auto_awesome_rounded,
+              icon: Symbols.auto_awesome_rounded,
               size: buttonSize,
               iconSize: iconSize,
               onPressed: hasSelection ? _extractSelected : null,
@@ -318,7 +319,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
             ),
             const SizedBox(width: 8),
             _actionButton(
-              icon: Icons.star_rounded,
+              icon: Symbols.star_rounded,
               size: buttonSize,
               iconSize: iconSize,
               onPressed: hasSelection
@@ -332,7 +333,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
             ),
             const SizedBox(width: 8),
             _actionButton(
-              icon: Icons.delete_outline_rounded,
+              icon: Symbols.delete_rounded,
               size: buttonSize,
               iconSize: iconSize,
               onPressed: hasSelection ? _deleteSelected : null,

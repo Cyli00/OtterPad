@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
@@ -49,20 +50,20 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                 ),
               ),
               _SheetItem(
-                icon: Icons.note_add_outlined,
+                icon: Symbols.note_add,
                 title: '添加文件',
                 subtitle: '导入本地 PDF，并提取标题、作者、期刊、年份与 DOI',
                 onTap: () => Navigator.pop(context, ToolbarAction.addFile),
               ),
               _SheetItem(
-                icon: Icons.travel_explore_rounded,
+                icon: Symbols.travel_explore_rounded,
                 title: '通过标识符添加',
                 subtitle: '输入 DOI、PMID、arXiv ID 或 ISBN 直接创建条目',
                 onTap: () =>
                     Navigator.pop(context, ToolbarAction.addByIdentifier),
               ),
               _SheetItem(
-                icon: Icons.refresh_rounded,
+                icon: Symbols.refresh_rounded,
                 title: '重构文库',
                 subtitle: '重新扫描目录，补回 PDF 并重试提取核心元数据',
                 onTap: () =>
@@ -133,7 +134,7 @@ class _SheetItem extends StatelessWidget {
               ),
             ),
             Icon(
-              Icons.chevron_right_rounded,
+              Symbols.chevron_right_rounded,
               color: colorScheme.onSurfaceVariant.withAlpha(120),
             ),
           ],

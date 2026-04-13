@@ -8,6 +8,7 @@ import '../../../providers/task_provider.dart';
 import '../../../router/app_routes.dart';
 import 'identifier_dialog.dart';
 import 'toolbar_bottom_sheet.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({super.key});
@@ -79,7 +80,7 @@ class HomeHeader extends ConsumerWidget {
                 child: Row(
                   children: [
                     Icon(
-                      Icons.search_rounded,
+                      Symbols.search_rounded,
                       color: colorScheme.onSurfaceVariant,
                       size: isMobile ? 20 : 24,
                     ),
@@ -101,7 +102,7 @@ class HomeHeader extends ConsumerWidget {
           ),
           const SizedBox(width: 8.0),
           _HeaderButton(
-            icon: isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
+            icon: isGrid ? Symbols.view_list_rounded : Symbols.grid_view_rounded,
             tooltip: isGrid ? '切换列表视图' : '切换网格视图',
             size: isMobile ? 36 : 40,
             onPressed: () {
@@ -110,7 +111,7 @@ class HomeHeader extends ConsumerWidget {
           ),
           const SizedBox(width: 8.0),
           _HeaderButton(
-            icon: Icons.add_circle_outline_rounded,
+            icon: Symbols.add_circle_rounded,
             tooltip: '工具',
             size: isMobile ? 36 : 40,
             onPressed: () async {
@@ -129,7 +130,7 @@ class HomeHeader extends ConsumerWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              Icons.person_outline_rounded,
+              Symbols.person_rounded,
               color: colorScheme.primary,
               size: isMobile ? 20 : 22,
             ),

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/api_provider.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 文档助手 Agent API 配置区块
 class AgentApiSection extends ConsumerStatefulWidget {
@@ -157,7 +158,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle_rounded,
+            const Icon(Symbols.check_circle_rounded,
                 color: Colors.green, size: 18),
             const SizedBox(width: 8),
             Expanded(child: Text('$modelId 连接成功')),
@@ -175,7 +176,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       SnackBar(
         content: Row(
           children: [
-            Icon(Icons.error_outline_rounded, color: cs.error, size: 18),
+            Icon(Symbols.error_rounded, color: cs.error, size: 18),
             const SizedBox(width: 8),
             Expanded(
               child: SelectableText(
@@ -210,6 +211,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         providerLabel: s.provider.label,
         addedModels: s.models,
         onAdd: (id) => ref.read(agentApiProvider.notifier).addModel(id),
+        onRemove: (id) {
+          ref.read(agentApiProvider.notifier).removeModel(id);
+          _modelTestResults.remove(id);
+        },
       ),
     );
   }
@@ -318,8 +323,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               suffix: IconButton(
                 icon: Icon(
                   _keyObscured
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
+                      ? Symbols.visibility_off
+                      : Symbols.visibility,
                   size: 20,
                 ),
                 onPressed: () =>
@@ -353,7 +358,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               hint: agentState.provider.defaultBaseUrl,
               suffix: IconButton(
                 icon: Icon(
-                  Icons.tune_rounded,
+                  Symbols.tune_rounded,
                   size: 20,
                   color: agentState.apiKey.isNotEmpty
                       ? cs.primary
@@ -456,7 +461,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                                 )
                               : IconButton(
                                   icon: Icon(
-                                    Icons.monitor_heart_outlined,
+                                    Symbols.vital_signs,
                                     size: 20,
                                     color: isOk
                                         ? cs.primary
@@ -479,7 +484,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                           height: 32,
                           child: IconButton(
                             icon: Icon(
-                              Icons.close_rounded,
+                              Symbols.close_rounded,
                               size: 18,
                               color: cs.onSurfaceVariant.withAlpha(120),
                             ),
@@ -515,6 +520,7 @@ class _ModelManageSheet extends StatefulWidget {
   final String providerLabel;
   final List<String> addedModels;
   final ValueChanged<String> onAdd;
+  final ValueChanged<String> onRemove;
 
   const _ModelManageSheet({
     required this.baseUrl,
@@ -523,6 +529,7 @@ class _ModelManageSheet extends StatefulWidget {
     required this.providerLabel,
     required this.addedModels,
     required this.onAdd,
+    required this.onRemove,
   });
 
   static const _anthropicModels = [
@@ -540,11 +547,12 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   bool _loading = true;
   String? _error;
   String _query = '';
-  final _addedDuringSession = <String>{};
+  late final Set<String> _localAdded;
 
   @override
   void initState() {
     super.initState();
+    _localAdded = Set<String>.from(widget.addedModels);
     _fetchModels();
   }
 
@@ -619,8 +627,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     return _models!.where((m) => m.toLowerCase().contains(q)).toList();
   }
 
-  bool _isAdded(String id) =>
-      widget.addedModels.contains(id) || _addedDuringSession.contains(id);
+  bool _isAdded(String id) => _localAdded.contains(id);
 
   @override
   Widget build(BuildContext context) {
@@ -628,8 +635,14 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     final cs = theme.colorScheme;
     final maxH = MediaQuery.sizeOf(context).height * 0.75;
     final filtered = _filtered;
-    final addedCount =
-        _addedDuringSession.length + widget.addedModels.length;
+    final addedCount = _localAdded.length;
+    // 主题色在色盘上的互补色（hue + 180°），保留 primaryContainer 的明度/饱和度特征
+    final containerHsl = HSLColor.fromColor(cs.primaryContainer);
+    final onContainerHsl = HSLColor.fromColor(cs.onPrimaryContainer);
+    final compContainer =
+        containerHsl.withHue((containerHsl.hue + 180) % 360).toColor();
+    final onCompContainer =
+        onContainerHsl.withHue((onContainerHsl.hue + 180) % 360).toColor();
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
@@ -670,6 +683,8 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 2),
+                      constraints: const BoxConstraints(minWidth: 28),
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: cs.primaryContainer,
                         borderRadius: BorderRadius.circular(10),
@@ -682,16 +697,36 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                         ),
                       ),
                     ),
+                    if (addedCount > 0) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        constraints: const BoxConstraints(minWidth: 28),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: compContainer,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$addedCount',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: onCompContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                   const Spacer(),
                   IconButton(
-                    icon: Icon(Icons.refresh_rounded,
+                    icon: Icon(Symbols.refresh_rounded,
                         size: 20, color: cs.onSurfaceVariant),
                     tooltip: '刷新',
                     onPressed: _fetchModels,
                   ),
                   IconButton(
-                    icon: Icon(Icons.close_rounded,
+                    icon: Icon(Symbols.close_rounded,
                         size: 20, color: cs.onSurfaceVariant),
                     tooltip: '关闭',
                     onPressed: () => Navigator.pop(context),
@@ -711,7 +746,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                   hintStyle: theme.textTheme.bodyMedium?.copyWith(
                     color: cs.onSurfaceVariant.withAlpha(120),
                   ),
-                  prefixIcon: Icon(Icons.search_rounded,
+                  prefixIcon: Icon(Symbols.search_rounded,
                       size: 20, color: cs.onSurfaceVariant),
                   filled: true,
                   fillColor: cs.surface,
@@ -726,21 +761,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
               ),
             ),
             const SizedBox(height: 8),
-            if (addedCount > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 24, vertical: 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '已添加 $addedCount 个模型',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
             Flexible(
               child: _loading
                   ? const Padding(
@@ -755,7 +775,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.cloud_off_rounded,
+                              Icon(Symbols.cloud_off_rounded,
                                   size: 40,
                                   color: cs.error.withAlpha(160)),
                               const SizedBox(height: 12),
@@ -799,87 +819,57 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                                       ? cs.primaryContainer.withAlpha(60)
                                       : Colors.transparent,
                                   borderRadius: BorderRadius.circular(14),
-                                  child: InkWell(
-                                    borderRadius:
-                                        BorderRadius.circular(14),
-                                    onTap: added
-                                        ? null
-                                        : () {
-                                            widget.onAdd(id);
-                                            setState(() =>
-                                                _addedDuringSession
-                                                    .add(id));
-                                          },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 12),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              id,
-                                              style: theme
-                                                  .textTheme.bodyMedium
-                                                  ?.copyWith(
-                                                fontWeight: added
-                                                    ? FontWeight.w600
-                                                    : FontWeight.w400,
-                                                color: added
-                                                    ? cs.primary
-                                                    : cs.onSurface,
-                                              ),
-                                              maxLines: 1,
-                                              overflow:
-                                                  TextOverflow.ellipsis,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 6),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            id,
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
+                                              fontWeight: added
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w400,
+                                              color: added
+                                                  ? cs.primary
+                                                  : cs.onSurface,
                                             ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          const SizedBox(width: 8),
-                                          if (added)
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: cs.primary
-                                                    .withAlpha(30),
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        8),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize:
-                                                    MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                      Icons.check_rounded,
-                                                      size: 14,
-                                                      color: cs.primary),
-                                                  const SizedBox(
-                                                      width: 4),
-                                                  Text(
-                                                    '已添加',
-                                                    style: theme.textTheme
-                                                        .labelSmall
-                                                        ?.copyWith(
-                                                      color: cs.primary,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            )
-                                          else
-                                            Icon(
-                                                Icons
-                                                    .add_circle_outline,
-                                                size: 22,
-                                                color:
-                                                    cs.onSurfaceVariant),
-                                        ],
-                                      ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 32,
+                                          height: 32,
+                                          child: IconButton(
+                                            icon: Icon(
+                                              added
+                                                  ? Symbols.remove_rounded
+                                                  : Symbols.add_rounded,
+                                              size: 22,
+                                              color: added
+                                                  ? cs.primary
+                                                  : cs.onSurfaceVariant,
+                                            ),
+                                            padding: EdgeInsets.zero,
+                                            tooltip: added ? '移除' : '添加',
+                                            onPressed: () {
+                                              if (added) {
+                                                widget.onRemove(id);
+                                                setState(() =>
+                                                    _localAdded.remove(id));
+                                              } else {
+                                                widget.onAdd(id);
+                                                setState(() =>
+                                                    _localAdded.add(id));
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 );

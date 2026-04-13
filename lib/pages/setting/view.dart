@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../router/app_routes.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 bool get _isDesktop =>
     Platform.isWindows || Platform.isMacOS || Platform.isLinux;
@@ -36,25 +37,25 @@ class SettingPage extends StatelessWidget {
             children: [
               if (_isDesktop)
                 _SettingsTile(
-                  icon: Icons.dns,
+                  icon: Symbols.dns,
                   title: '网络设置',
                   subtitle: '代理配置',
                   onTap: () => context.push(AppRoutes.settingsNetwork),
                 ),
               _SettingsTile(
-                icon: Icons.memory,
+                icon: Symbols.memory,
                 title: '模型服务',
                 subtitle: 'Agent 模型 · 文档提取接口',
                 onTap: () => context.push(AppRoutes.settingsApi),
               ),
               _SettingsTile(
-                icon: Icons.palette,
+                icon: Symbols.palette,
                 title: '外观设置',
                 subtitle: '主题模式 · 主题色彩 · 阅读模式',
                 onTap: () => context.push(AppRoutes.settingsAppearance),
               ),
               _SettingsTile(
-                icon: Icons.backup_table_rounded,
+                icon: Symbols.backup_table_rounded,
                 title: '备份设置',
                 subtitle: '本地导出 · WebDAV 备份 · 恢复范围',
                 onTap: () => context.push(AppRoutes.settingsBackup),
@@ -167,7 +168,7 @@ class _SettingsTile extends StatelessWidget {
                 ),
               ),
               Icon(
-                Icons.chevron_right_rounded,
+                Symbols.chevron_right_rounded,
                 color: colorScheme.onSurfaceVariant.withAlpha(120),
               ),
             ],

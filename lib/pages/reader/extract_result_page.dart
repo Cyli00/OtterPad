@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
 import 'widgets/md_widget/nr_markdown_config.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// Markdown 提取结果展示页
 ///
@@ -59,7 +60,7 @@ class ExtractResultPage extends ConsumerWidget {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.copy_rounded, size: 20),
+            icon: const Icon(Symbols.content_copy_rounded, size: 20),
             tooltip: '复制全部',
             onPressed: () async {
               final content = await _loadContent();
@@ -72,7 +73,7 @@ class ExtractResultPage extends ConsumerWidget {
           ),
           if (sharePath != null)
             IconButton(
-              icon: const Icon(Icons.share_rounded, size: 20),
+              icon: const Icon(Symbols.share_rounded, size: 20),
               tooltip: '分享',
               onPressed: () {
                 Share.shareXFiles([XFile(sharePath)]);
@@ -92,7 +93,7 @@ class ExtractResultPage extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline_rounded, size: 48, color: cs.error),
+                  Icon(Symbols.error_rounded, size: 48, color: cs.error),
                   const SizedBox(height: 16),
                   Text('加载失败', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),

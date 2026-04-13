@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/api_provider.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 文档提取 API 配置区块
 class ExtractApiSection extends ConsumerStatefulWidget {
@@ -294,7 +295,7 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
               if (onReset != null)
                 IconButton(
                   onPressed: onReset,
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  icon: const Icon(Symbols.refresh_rounded, size: 20),
                   tooltip: '恢复默认',
                   color: cs.onSurfaceVariant,
                 ),
@@ -398,7 +399,7 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.auto_awesome_rounded,
+                    Icon(Symbols.auto_awesome_rounded,
                         size: 20, color: cs.secondary),
                     const SizedBox(width: 12),
                     Expanded(
@@ -442,8 +443,8 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
                   suffix: IconButton(
                     icon: Icon(
                       _keyObscured
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
+                          ? Symbols.visibility_off
+                          : Symbols.visibility,
                       size: 20,
                     ),
                     onPressed: () =>

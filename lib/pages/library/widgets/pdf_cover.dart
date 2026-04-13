@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../services/pdf_thumbnail_service.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// PDF 封面组件：从磁盘缓存加载预渲染的 PNG 缩略图。
 class PdfCoverRender extends StatefulWidget {
@@ -93,7 +94,7 @@ class _PdfCoverRenderState extends State<PdfCoverRender> {
         height: widget.height,
         color: theme.colorScheme.surfaceContainerHighest,
         child: Icon(
-          Icons.picture_as_pdf,
+          Symbols.picture_as_pdf,
           color: theme.colorScheme.onSurfaceVariant.withAlpha(100),
           size: 48,
         ),

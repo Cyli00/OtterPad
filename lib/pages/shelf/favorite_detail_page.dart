@@ -16,6 +16,7 @@ import '../library/widgets/batch_progress_sheet.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 收藏夹详情页：展示书单内所有文献
 class FavoriteDetailPage extends ConsumerWidget {
@@ -88,7 +89,7 @@ class FavoriteDetailPage extends ConsumerWidget {
                 ),
                 leading: IconButton(
                   onPressed: () => context.pop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
+                  icon: const Icon(Symbols.arrow_back_rounded),
                 ),
               ),
         body: CustomScrollView(
@@ -100,7 +101,7 @@ class FavoriteDetailPage extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.menu_book_outlined,
+                        Symbols.menu_book,
                         size: 64,
                         color: colorScheme.onSurfaceVariant.withAlpha(80),
                       ),

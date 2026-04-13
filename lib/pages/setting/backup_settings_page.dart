@@ -17,6 +17,7 @@ import '../../providers/theme_provider.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
 import '../../services/snackbar_service.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
   const BackupSettingsPage({super.key});
@@ -84,12 +85,12 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                               segments: const [
                                 ButtonSegment(
                                   value: BackupRemoteType.s3,
-                                  icon: Icon(Icons.cloud_circle_outlined),
+                                  icon: Icon(Symbols.cloud_circle),
                                   label: Text('S3'),
                                 ),
                                 ButtonSegment(
                                   value: BackupRemoteType.webdav,
-                                  icon: Icon(Icons.cloud_sync_outlined),
+                                  icon: Icon(Symbols.cloud_sync),
                                   label: Text('WebDAV'),
                                 ),
                               ],
@@ -119,7 +120,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     _buildRemoteConfigTile(context, remoteType, s3, webDav),
                     _buildDivider(context),
                     _ActionTile(
-                      icon: Icons.cloud_upload_rounded,
+                      icon: Symbols.cloud_upload_rounded,
                       title: '备份到${remoteType.label}',
                       subtitle: _remoteConfigured(remoteType, s3, webDav)
                           ? '上传完整备份到${_remoteTargetLabel(remoteType, s3, webDav)}'
@@ -129,7 +130,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     ),
                     _buildDivider(context),
                     _ActionTile(
-                      icon: Icons.cloud_download_rounded,
+                      icon: Symbols.cloud_download_rounded,
                       title: '从${remoteType.label}恢复',
                       subtitle: _remoteConfigured(remoteType, s3, webDav)
                           ? '下载${_remoteTargetLabel(remoteType, s3, webDav)}并恢复'
@@ -146,7 +147,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 child: Column(
                   children: [
                     _ActionTile(
-                      icon: Icons.download_rounded,
+                      icon: Symbols.download_rounded,
                       title: '导出备份文件',
                       subtitle: '生成 zip 备份并保存到本地',
                       enabled: !_busy,
@@ -154,7 +155,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     ),
                     _buildDivider(context),
                     _ActionTile(
-                      icon: Icons.restore_page_rounded,
+                      icon: Symbols.restore_page_rounded,
                       title: '从备份文件恢复',
                       subtitle: '选择本地 zip 备份文件进行恢复',
                       enabled: !_busy,
@@ -262,8 +263,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     final configured = _remoteConfigured(remoteType, s3, webDav);
     final title = remoteType == BackupRemoteType.s3 ? 'S3 配置' : 'WebDAV 配置';
     final icon = remoteType == BackupRemoteType.s3
-        ? Icons.cloud_circle_rounded
-        : Icons.cloud_sync_rounded;
+        ? Symbols.cloud_circle_rounded
+        : Symbols.cloud_sync_rounded;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -766,7 +767,7 @@ class _ActionTile extends StatelessWidget {
                 ),
               ),
               Icon(
-                Icons.chevron_right_rounded,
+                Symbols.chevron_right_rounded,
                 color: cs.onSurfaceVariant.withAlpha(120),
               ),
             ],
@@ -988,18 +989,18 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
       children: [
         _ConfigField(
           controller: _serverController,
-          icon: Icons.link_rounded,
+          icon: Symbols.link_rounded,
           hint: '地址',
           helperText: 'WebDAV服务器地址',
         ),
         _ConfigField(
           controller: _userController,
-          icon: Icons.account_circle_rounded,
+          icon: Symbols.account_circle_rounded,
           hint: '账号',
         ),
         _ConfigField(
           controller: _passwordController,
-          icon: Icons.password_rounded,
+          icon: Symbols.password_rounded,
           hint: '密码',
           obscureText: _obscurePassword,
           suffixIcon: IconButton(
@@ -1010,8 +1011,8 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
             },
             icon: Icon(
               _obscurePassword
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined,
+                  ? Symbols.visibility
+                  : Symbols.visibility_off,
             ),
           ),
         ),
@@ -1088,28 +1089,28 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
       children: [
         _ConfigField(
           controller: _endpointController,
-          icon: Icons.link_rounded,
+          icon: Symbols.link_rounded,
           hint: '地址',
           helperText: 'S3 / R2 / MinIO Endpoint',
         ),
         _ConfigField(
           controller: _regionController,
-          icon: Icons.public_rounded,
+          icon: Symbols.public_rounded,
           hint: '区域',
         ),
         _ConfigField(
           controller: _bucketController,
-          icon: Icons.inventory_2_rounded,
+          icon: Symbols.inventory_2_rounded,
           hint: 'Bucket',
         ),
         _ConfigField(
           controller: _accessKeyController,
-          icon: Icons.vpn_key_rounded,
+          icon: Symbols.vpn_key_rounded,
           hint: 'Access Key',
         ),
         _ConfigField(
           controller: _secretKeyController,
-          icon: Icons.key_rounded,
+          icon: Symbols.key_rounded,
           hint: 'Secret Key',
           obscureText: _obscureSecretKey,
           suffixIcon: IconButton(
@@ -1120,14 +1121,14 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
             },
             icon: Icon(
               _obscureSecretKey
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined,
+                  ? Symbols.visibility
+                  : Symbols.visibility_off,
             ),
           ),
         ),
         _ConfigField(
           controller: _objectKeyController,
-          icon: Icons.description_outlined,
+          icon: Symbols.description,
           hint: '对象路径',
           helperText: '默认可用 night-reader/night_reader_backup.zip',
         ),

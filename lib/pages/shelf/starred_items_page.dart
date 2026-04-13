@@ -12,6 +12,7 @@ import '../library/widgets/batch_progress_sheet.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 星标条目页面：展示所有星标文献，布局与收藏夹详情页一致
 class StarredItemsPage extends ConsumerWidget {
@@ -63,7 +64,7 @@ class StarredItemsPage extends ConsumerWidget {
                 ),
                 leading: IconButton(
                   onPressed: () => context.pop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
+                  icon: const Icon(Symbols.arrow_back_rounded),
                 ),
               ),
         body: CustomScrollView(
@@ -75,7 +76,7 @@ class StarredItemsPage extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.star_border_rounded,
+                        Symbols.star_border_rounded,
                         size: 64,
                         color: colorScheme.onSurfaceVariant.withAlpha(80),
                       ),

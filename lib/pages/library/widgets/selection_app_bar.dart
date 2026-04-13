@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 多选模式顶部操作栏（普通 AppBar 版）
 ///
@@ -37,7 +38,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: colorScheme.surface,
       leading: IconButton(
         onPressed: onClose,
-        icon: const Icon(Icons.close_rounded),
+        icon: const Icon(Symbols.close_rounded),
         tooltip: '退出多选',
       ),
       title: Text(
@@ -51,33 +52,33 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
           onPressed: onSelectAll,
           icon: Icon(
             allSelected
-                ? Icons.deselect_rounded
-                : Icons.select_all_rounded,
+                ? Symbols.deselect_rounded
+                : Symbols.select_all_rounded,
           ),
           tooltip: allSelected ? '取消全选' : '全选',
         ),
         if (onStar != null)
           IconButton(
             onPressed: selectedCount > 0 ? onStar : null,
-            icon: const Icon(Icons.star_rounded),
+            icon: const Icon(Symbols.star_rounded),
             tooltip: '星标',
           ),
         if (onRemoveFromFavorite != null)
           IconButton(
             onPressed: selectedCount > 0 ? onRemoveFromFavorite : null,
-            icon: const Icon(Icons.bookmark_remove_outlined),
+            icon: const Icon(Symbols.bookmark_remove),
             tooltip: '移出收藏夹',
           ),
         if (onExtract != null)
           IconButton(
             onPressed: selectedCount > 0 ? onExtract : null,
-            icon: const Icon(Icons.auto_awesome_rounded),
+            icon: const Icon(Symbols.auto_awesome_rounded),
             tooltip: '文本提取',
           ),
         IconButton(
           onPressed: selectedCount > 0 ? onDelete : null,
           icon: Icon(
-            Icons.delete_outline_rounded,
+            Symbols.delete_rounded,
             color: selectedCount > 0 ? colorScheme.error : null,
           ),
           tooltip: '删除',
@@ -129,7 +130,7 @@ class SliverSelectionBar extends StatelessWidget {
               const SizedBox(width: 4),
               IconButton(
                 onPressed: onClose,
-                icon: const Icon(Icons.close_rounded),
+                icon: const Icon(Symbols.close_rounded),
                 tooltip: '退出多选',
               ),
               const SizedBox(width: 8),
@@ -144,27 +145,27 @@ class SliverSelectionBar extends StatelessWidget {
                 onPressed: onSelectAll,
                 icon: Icon(
                   allSelected
-                      ? Icons.deselect_rounded
-                      : Icons.select_all_rounded,
+                      ? Symbols.deselect_rounded
+                      : Symbols.select_all_rounded,
                 ),
                 tooltip: allSelected ? '取消全选' : '全选',
               ),
               if (onStar != null)
                 IconButton(
                   onPressed: selectedCount > 0 ? onStar : null,
-                  icon: const Icon(Icons.star_rounded),
+                  icon: const Icon(Symbols.star_rounded),
                   tooltip: '星标',
                 ),
               if (onExtract != null)
                 IconButton(
                   onPressed: selectedCount > 0 ? onExtract : null,
-                  icon: const Icon(Icons.auto_awesome_rounded),
+                  icon: const Icon(Symbols.auto_awesome_rounded),
                   tooltip: '文本提取',
                 ),
               IconButton(
                 onPressed: selectedCount > 0 ? onDelete : null,
                 icon: Icon(
-                  Icons.delete_outline_rounded,
+                  Symbols.delete_rounded,
                   color: selectedCount > 0 ? colorScheme.error : null,
                 ),
                 tooltip: '删除',

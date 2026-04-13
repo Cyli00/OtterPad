@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../data/models/book/document.dart';
 import 'pdf_cover.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 文献列表卡片（文献库列表视图 + 收藏夹详情页共用）
 ///
@@ -96,7 +97,7 @@ class DocListCard extends StatelessWidget {
                                         shape: BoxShape.circle,
                                       ),
                                       child: Icon(
-                                        Icons.check_rounded,
+                                        Symbols.check_rounded,
                                         color: colorScheme.onPrimary,
                                         size: 22,
                                       ),
@@ -178,7 +179,7 @@ class DocListCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        Icons.format_quote_rounded,
+                        Symbols.format_quote_rounded,
                         size: 24,
                         color: colorScheme.outlineVariant,
                       ),

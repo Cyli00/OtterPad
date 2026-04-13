@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../providers/api_provider.dart';
 import '../../../services/batch_extract_service.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 // ─── 批量提取进度 Sheet ────────────────────────────────────────────────────────
 
@@ -150,8 +151,8 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
                   else
                     Icon(
                       failed == 0
-                          ? Icons.check_circle_rounded
-                          : Icons.warning_amber_rounded,
+                          ? Symbols.check_circle_rounded
+                          : Symbols.warning_amber_rounded,
                       color:
                           failed == 0 ? colorScheme.primary : colorScheme.error,
                       size: 28,
@@ -236,7 +237,7 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
                           _cancelToken.cancel();
                           Navigator.pop(context);
                         },
-                        icon: const Icon(Icons.cancel_outlined),
+                        icon: const Icon(Symbols.cancel),
                         label: const Text('取消提取'),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 48),
@@ -247,7 +248,7 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
                       )
                     : FilledButton.icon(
                         onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.check_rounded),
+                        icon: const Icon(Symbols.check_rounded),
                         label: Text(
                           failed == 0 ? '完成' : '关闭（$failed 篇失败）',
                         ),
@@ -299,13 +300,13 @@ class JobStatusTile extends StatelessWidget {
     final (Widget leading, String subtitle, Color subtitleColor) =
         switch (state) {
       BatchJobState.pending => (
-          Icon(Icons.schedule_rounded,
+          Icon(Symbols.schedule_rounded,
               color: colorScheme.onSurfaceVariant, size: 20),
           '等待提交',
           colorScheme.onSurfaceVariant,
         ),
       BatchJobState.submitted => (
-          Icon(Icons.cloud_upload_outlined,
+          Icon(Symbols.cloud_upload,
               color: colorScheme.primary, size: 20),
           '已提交，等待处理',
           colorScheme.onSurfaceVariant,
@@ -324,18 +325,18 @@ class JobStatusTile extends StatelessWidget {
           colorScheme.onSurfaceVariant,
         ),
       BatchJobState.done => (
-          Icon(Icons.check_circle_rounded,
+          Icon(Symbols.check_circle_rounded,
               color: colorScheme.primary, size: 20),
           totalPages > 0 ? '完成（共 $totalPages 页）' : '提取完成',
           colorScheme.onSurfaceVariant,
         ),
       BatchJobState.failed => (
-          Icon(Icons.error_rounded, color: colorScheme.error, size: 20),
+          Icon(Symbols.error_rounded, color: colorScheme.error, size: 20),
           error ?? '提取失败',
           colorScheme.error,
         ),
       BatchJobState.cancelled => (
-          Icon(Icons.cancel_rounded,
+          Icon(Symbols.cancel_rounded,
               color: colorScheme.onSurfaceVariant, size: 20),
           '已取消',
           colorScheme.onSurfaceVariant,

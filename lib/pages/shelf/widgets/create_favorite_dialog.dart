@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 // 常用 emoji 列表，按类别分组
 const List<String> _emojis = [
@@ -140,7 +141,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: Icon(
-                      Icons.close_rounded,
+                      Symbols.close_rounded,
                       color: colorScheme.onSurfaceVariant,
                     ),
                     style: IconButton.styleFrom(

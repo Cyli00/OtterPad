@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/theme_provider.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
   const AppearanceSettingsPage({super.key});
@@ -48,17 +49,17 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     ButtonSegment(
                       value: ThemeMode.system,
                       label: Text('自动'),
-                      icon: Icon(Icons.brightness_auto),
+                      icon: Icon(Symbols.brightness_auto),
                     ),
                     ButtonSegment(
                       value: ThemeMode.light,
                       label: Text('浅色'),
-                      icon: Icon(Icons.wb_sunny_outlined),
+                      icon: Icon(Symbols.wb_sunny),
                     ),
                     ButtonSegment(
                       value: ThemeMode.dark,
                       label: Text('深色'),
-                      icon: Icon(Icons.dark_mode_outlined),
+                      icon: Icon(Symbols.dark_mode),
                     ),
                   ],
                   selected: {themeState.mode},
@@ -109,7 +110,10 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: SegmentedButton<DefaultReadingMode>(
-                      segments: DefaultReadingMode.values
+                      segments: const [
+                        DefaultReadingMode.markdown,
+                        DefaultReadingMode.pdf,
+                      ]
                           .map(
                             (m) => ButtonSegment(
                               value: m,
@@ -294,7 +298,7 @@ class _ColorCircle extends StatelessWidget {
                   ),
                 ),
                 child: const Icon(
-                  Icons.auto_awesome,
+                  Symbols.auto_awesome,
                   color: Colors.white,
                   size: 20,
                 ),

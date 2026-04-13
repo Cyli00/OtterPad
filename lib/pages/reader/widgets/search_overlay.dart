@@ -6,6 +6,7 @@ import '../../../services/reader/markdown_document_cache_service.dart';
 import '../../../utils/markdown_preprocessor.dart';
 import 'md_widget/nr_markdown_config.dart';
 import 'md_widget/nr_search_highlight_builder.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// Markdown 内容搜索结果
 class SearchResult {
@@ -147,7 +148,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
         child: Row(
           children: [
             IconButton(
-              icon: Icon(Icons.chevron_left_rounded,
+              icon: Icon(Symbols.chevron_left_rounded,
                   size: 28, color: cs.onSurface),
               tooltip: '返回',
               onPressed: widget.onDismiss,
@@ -167,11 +168,11 @@ class _SearchOverlayState extends State<SearchOverlay> {
                       color: cs.onSurfaceVariant.withAlpha(160),
                       fontSize: 15,
                     ),
-                    prefixIcon: Icon(Icons.search_rounded,
+                    prefixIcon: Icon(Symbols.search_rounded,
                         size: 20, color: cs.onSurfaceVariant),
                     suffixIcon: _controller.text.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.cancel_rounded,
+                            icon: Icon(Symbols.cancel_rounded,
                                 size: 18, color: cs.onSurfaceVariant),
                             onPressed: () {
                               _controller.clear();
@@ -199,7 +200,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
             ),
             const SizedBox(width: 4),
             IconButton(
-              icon: Icon(Icons.close_rounded,
+              icon: Icon(Symbols.close_rounded,
                   size: 22, color: cs.onSurfaceVariant),
               tooltip: '退出搜索',
               onPressed: widget.onDismiss,

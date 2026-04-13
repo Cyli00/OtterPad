@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown_widget/markdown_widget.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// figure caption 的 alt text 前缀约定
 const _figPrefix = 'fig:';
@@ -311,6 +312,6 @@ class _BrokenImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Icon(Icons.broken_image_rounded, size: 48);
+    return const Icon(Symbols.broken_image_rounded, size: 48);
   }
 }

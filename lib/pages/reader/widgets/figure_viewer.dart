@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../services/figure_extract_service.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// 以 fade 转场打开 [FigureViewer]。
 ///
@@ -220,7 +221,7 @@ class _FigureViewerState extends State<FigureViewer>
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
-              icon: const Icon(Icons.close_rounded),
+              icon: const Icon(Symbols.close_rounded),
               color: Colors.white70,
               onPressed: () => Navigator.of(context).pop(),
               tooltip: '关闭',
@@ -270,7 +271,7 @@ class _FigureViewerState extends State<FigureViewer>
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isLeft ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
+              isLeft ? Symbols.chevron_left_rounded : Symbols.chevron_right_rounded,
               color: Colors.white70,
               size: 28,
             ),
@@ -313,7 +314,7 @@ class _FigureViewerState extends State<FigureViewer>
               width: 36,
               height: 36,
               child: IconButton(
-                icon: const Icon(Icons.translate_rounded, size: 18),
+                icon: const Icon(Symbols.translate_rounded, size: 18),
                 style: IconButton.styleFrom(
                   backgroundColor: const Color(0x1AFFFFFF),
                   foregroundColor: Colors.white60,
