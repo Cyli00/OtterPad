@@ -75,7 +75,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                           Text(
                             '备份方式',
                             style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -287,7 +288,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.bodyLarge?.copyWith(
+                  style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: cs.onSurface,
                   ),
@@ -750,7 +751,7 @@ class _ActionTile extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: theme.textTheme.bodyLarge?.copyWith(
+                      style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
                         color: enabled ? cs.onSurface : cs.onSurfaceVariant,
                       ),

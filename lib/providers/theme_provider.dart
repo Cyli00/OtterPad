@@ -8,22 +8,26 @@ class ThemeState {
   final ThemeMode mode;
   final Color seedColor;
   final bool useDynamicColor;
+  final double textScale;
 
   const ThemeState({
     required this.mode,
     required this.seedColor,
     this.useDynamicColor = false,
+    this.textScale = 1.0,
   });
 
   ThemeState copyWith({
     ThemeMode? mode,
     Color? seedColor,
     bool? useDynamicColor,
+    double? textScale,
   }) {
     return ThemeState(
       mode: mode ?? this.mode,
       seedColor: seedColor ?? this.seedColor,
       useDynamicColor: useDynamicColor ?? this.useDynamicColor,
+      textScale: textScale ?? this.textScale,
     );
   }
 }
@@ -32,6 +36,10 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
   static const String _themeModeKey = 'theme_mode';
   static const String _seedColorKey = 'seed_color';
   static const String _dynamicColorKey = 'use_dynamic_color';
+  static const String _textScaleKey = 'text_scale';
+
+  /// 系统文字缩放预设：标准 / 大 / 特大
+  static const List<double> textScalePresets = [1.0, 1.15, 1.3];
 
   static const List<Color> presetColors = [
     Colors.blue,
@@ -61,11 +69,14 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
         box.get(_seedColorKey, defaultValue: Colors.blue.toARGB32()) as int;
     final useDynamicColor =
         box.get(_dynamicColorKey, defaultValue: false) as bool;
+    final textScale =
+        (box.get(_textScaleKey, defaultValue: 1.0) as num).toDouble();
 
     return ThemeState(
       mode: mode,
       seedColor: Color(savedColorValue),
       useDynamicColor: useDynamicColor,
+      textScale: textScale,
     );
   }
 
@@ -89,6 +100,11 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
   Future<void> setUseDynamicColor(bool value) async {
     state = state.copyWith(useDynamicColor: value);
     await GStorage.setting.put(_dynamicColorKey, value);
+  }
+
+  Future<void> setTextScale(double scale) async {
+    state = state.copyWith(textScale: scale);
+    await GStorage.setting.put(_textScaleKey, scale);
   }
 
   void reload() {

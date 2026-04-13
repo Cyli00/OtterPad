@@ -145,9 +145,83 @@ class AppearanceSettingsPage extends ConsumerWidget {
               ),
             ),
           ),
+
+          // ── 文字大小 ──
+          _buildGroup(
+            context,
+            title: '文字大小',
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '系统文字缩放',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<double>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 1.0,
+                          label: Text('标准'),
+                        ),
+                        ButtonSegment(
+                          value: 1.15,
+                          label: Text('大'),
+                        ),
+                        ButtonSegment(
+                          value: 1.3,
+                          label: Text('特大'),
+                        ),
+                      ],
+                      selected: {_closestPreset(themeState.textScale)},
+                      onSelectionChanged: (set) => ref
+                          .read(themeProvider.notifier)
+                          .setTextScale(set.first),
+                      style: SegmentedButton.styleFrom(
+                        backgroundColor: cs.surface,
+                        selectedBackgroundColor: cs.primaryContainer,
+                        side: BorderSide(
+                          color: cs.outlineVariant.withAlpha(100),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '影响整个应用的文字显示大小，重启后仍保留',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// 把任意 textScale 吸附到最接近的预设值，避免 SegmentedButton 出现"无选中"状态
+  double _closestPreset(double current) {
+    final presets = ThemeNotifier.textScalePresets;
+    double best = presets.first;
+    double minDiff = (current - best).abs();
+    for (final p in presets.skip(1)) {
+      final diff = (current - p).abs();
+      if (diff < minDiff) {
+        minDiff = diff;
+        best = p;
+      }
+    }
+    return best;
   }
 
   /// 切换应用主题模式时，同步更新阅读器内部主题

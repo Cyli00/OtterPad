@@ -88,19 +88,29 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
 
   // ── 通用构建器 ──
 
-  Widget _divider() {
+  Widget _helpIcon(String message) {
     final cs = Theme.of(context).colorScheme;
-    return Divider(
-      height: 1, thickness: 1, indent: 20, endIndent: 20,
-      color: cs.outlineVariant.withAlpha(40),
-    );
-  }
-
-  Widget _sectionDivider() {
-    final cs = Theme.of(context).colorScheme;
-    return Divider(
-      height: 1, thickness: 1, indent: 20, endIndent: 20,
-      color: cs.outlineVariant.withAlpha(80),
+    return Tooltip(
+      message: message,
+      triggerMode: TooltipTriggerMode.tap,
+      showDuration: const Duration(seconds: 4),
+      preferBelow: true,
+      verticalOffset: 16,
+      decoration: BoxDecoration(
+        color: cs.inverseSurface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(
+          Symbols.help_rounded,
+          size: 16,
+          color: cs.onSurfaceVariant,
+        ),
+      ),
     );
   }
 
@@ -108,12 +118,12 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 8),
+      padding: const EdgeInsets.only(left: 20, right: 20, top: 28, bottom: 8),
       child: Text(
         title,
-        style: theme.textTheme.labelLarge?.copyWith(
-          color: cs.onSurfaceVariant,
-          letterSpacing: 0.5,
+        style: theme.textTheme.titleMedium?.copyWith(
+          color: cs.primary,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );
@@ -122,113 +132,49 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
   List<Widget> _switchGroup(DocExtractApiState docState,
       List<(String, String, String)> defs) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final tiles = <Widget>[];
-    for (int i = 0; i < defs.length; i++) {
-      final (field, title, subtitle) = defs[i];
+    for (final def in defs) {
+      final (field, title, subtitle) = def;
+      final value = _getOptionValue(docState, field);
       tiles.add(
-        SwitchListTile(
-          title: Text(title,
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-          subtitle: Text(subtitle,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: cs.onSurfaceVariant)),
-          value: _getOptionValue(docState, field),
-          onChanged: (v) {
-            if (_getOptionValue(docState, field) != v) {
-              ref.read(docExtractApiProvider.notifier).setBool(field, v);
-            }
-          },
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20, vertical: 4),
-        ),
-      );
-      if (i < defs.length - 1) tiles.add(_divider());
-    }
-    return tiles;
-  }
-
-  Widget _splitParameterItem({
-    required String title,
-    required String subtitle,
-    required Widget child,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text(subtitle,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant)),
+                    Flexible(
+                      child: Text(title,
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 4),
+                    _helpIcon(subtitle),
                   ],
                 ),
               ),
-              const SizedBox(width: 24),
-              ConstrainedBox(
-                constraints:
-                    BoxConstraints(maxWidth: constraints.maxWidth * 0.45),
-                child: Align(alignment: Alignment.centerRight, child: child),
+              Transform.scale(
+                scale: 0.8,
+                child: Switch(
+                  value: value,
+                  onChanged: (v) {
+                    if (value != v) {
+                      ref
+                          .read(docExtractApiProvider.notifier)
+                          .setBool(field, v);
+                    }
+                  },
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  Widget _singleSelectChips({
-    required String value,
-    required List<(String, String)> items,
-    required ValueChanged<String> onChanged,
-    WrapAlignment alignment = WrapAlignment.start,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Wrap(
-      alignment: alignment,
-      spacing: 8,
-      runSpacing: 8,
-      children: items.map((item) {
-        final selected = item.$1 == value;
-        return FilterChip(
-          label: Text(item.$2),
-          selected: selected,
-          showCheckmark: false,
-          color: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return cs.primaryContainer;
-            }
-            return cs.surface;
-          }),
-          side: BorderSide(
-            color: selected
-                ? Colors.transparent
-                : cs.outlineVariant.withAlpha(100),
-          ),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
-          labelStyle: theme.textTheme.labelLarge?.copyWith(
-            color: selected ? cs.onPrimaryContainer : cs.onSurface,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          ),
-          onSelected: (_) => onChanged(item.$1),
-        );
-      }).toList(),
-    );
+        ),
+      );
+    }
+    return tiles;
   }
 
   Widget _sliderTile({
@@ -252,16 +198,16 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text(subtitle,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant)),
+                    Flexible(
+                      child: Text(title,
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 4),
+                    _helpIcon(subtitle),
                   ],
                 ),
               ),
@@ -290,6 +236,7 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
                 child: Slider(
                   value: value, min: min, max: max,
                   divisions: divisions, onChanged: onChanged,
+                  padding: EdgeInsets.zero,
                 ),
               ),
               if (onReset != null)
@@ -417,13 +364,28 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
               const SizedBox(height: 24),
 
               // ── Access Token ──
-              Text('Access Token',
+              Row(
+                children: [
+              Text('API Key',
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
                   )),
+              const SizedBox(width: 8),
+              Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text('必填',
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: cs.onSurfaceVariant)),
+                ),]
+              ),
               const SizedBox(height: 4),
-              Text('用于异步 Job API 认证，必填。',
+              Text('用于异步 Job API 认证',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: cs.onSurfaceVariant)),
               const SizedBox(height: 12),
@@ -460,7 +422,7 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
               // ── 同步 API URL ──
               Row(
                 children: [
-                  Text('同步 API',
+                  Text('同步 Base URL',
                       style: theme.textTheme.titleSmall?.copyWith(
                         color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
@@ -480,7 +442,7 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
                 ],
               ),
               const SizedBox(height: 4),
-              Text('配置后在异步提取失败时自动回退到同步接口。',
+              Text('异步提取失败时回退到同步接口',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: cs.onSurfaceVariant)),
               const SizedBox(height: 12),
@@ -503,39 +465,55 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
             ],
           ),
         ),
-        _sectionDivider(),
-
-        // ── 识别增强 ──
-        _subHeader('识别增强'),
-        ..._switchGroup(docState, _recognitionDefs),
-        _sectionDivider(),
-
-        // ── 文档校正 ──
-        _subHeader('文档校正'),
-        ..._switchGroup(docState, _correctionDefs),
-        _sectionDivider(),
-
         // ── 版面分析 ──
         _subHeader('版面分析'),
         ..._switchGroup(docState, _layoutDefs),
-        _divider(),
-        _splitParameterItem(
-          title: '版面几何形状',
-          subtitle: '版面检测框的几何形状表示',
-          child: _singleSelectChips(
-            value: docState.layoutShapeMode,
-            items: _layoutShapeModes,
-            onChanged: (v) {
-              if (docState.layoutShapeMode != v) {
-                ref
-                    .read(docExtractApiProvider.notifier)
-                    .setString('layoutShapeMode', v);
-              }
-            },
-            alignment: WrapAlignment.end,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('版面几何形状',
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 4),
+                  _helpIcon('版面检测框的几何形状表示'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<String>(
+                  segments: _layoutShapeModes
+                      .map((m) => ButtonSegment(
+                            value: m.$1,
+                            label: Text(m.$2),
+                          ))
+                      .toList(),
+                  selected: {docState.layoutShapeMode},
+                  onSelectionChanged: (set) {
+                    final v = set.first;
+                    if (docState.layoutShapeMode != v) {
+                      ref
+                          .read(docExtractApiProvider.notifier)
+                          .setString('layoutShapeMode', v);
+                    }
+                  },
+                  style: SegmentedButton.styleFrom(
+                    backgroundColor: cs.surface,
+                    selectedBackgroundColor: cs.primaryContainer,
+                    side: BorderSide(
+                      color: cs.outlineVariant.withAlpha(100),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        _divider(),
         _sliderTile(
           title: '版面检测阈值',
           subtitle: '区域过滤的阈值，值越高保留的区域越少',
@@ -548,12 +526,10 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
               .read(docExtractApiProvider.notifier)
               .setDouble('layoutThreshold', 0.5),
         ),
-        _sectionDivider(),
 
         // ── 输出控制 ──
         _subHeader('输出控制'),
         ..._switchGroup(docState, _outputDefs),
-        _divider(),
         _sliderTile(
           title: '重复惩罚',
           subtitle: '出现重复文字或表格内容时适当调高',
@@ -566,26 +542,36 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
               .read(docExtractApiProvider.notifier)
               .setDouble('repetitionPenalty', 1.0),
         ),
-        _divider(),
+
+        // ── 识别增强 ──
+        _subHeader('识别增强'),
+        ..._switchGroup(docState, _recognitionDefs),
         Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Markdown 忽略标签',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: cs.onSurface,
-                  )),
-              const SizedBox(height: 6),
-              Text('勾选的标签区域将不会输出到 Markdown 结果中，默认全忽略。',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: cs.onSurfaceVariant)),
-              const SizedBox(height: 16),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Markdown 忽略标签',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      )),
+                  const SizedBox(width: 4),
+                  _helpIcon('勾选的标签区域将不会输出到 Markdown 结果中，默认全忽略。'),
+                ],
+              ),
+              const SizedBox(height: 12),
               _ignoreLabelChips(docState),
             ],
           ),
         ),
+
+        // ── 文档校正 ──
+        _subHeader('文档校正'),
+        ..._switchGroup(docState, _correctionDefs),
         const SizedBox(height: 8),
       ],
     );

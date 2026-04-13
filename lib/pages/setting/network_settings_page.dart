@@ -221,8 +221,12 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
               child: Column(
                 children: [
                   RadioListTile<ProxyMode>(
-                    title: const Text('自定义代理'),
-                    subtitle: const Text('手动指定代理地址'),
+                    title: Text('自定义代理',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    subtitle: Text('手动指定代理地址',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant)),
                     value: ProxyMode.custom,
                   ),
                   Animate(
@@ -309,13 +313,21 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     ),
                   ),
                   RadioListTile<ProxyMode>(
-                    title: const Text('系统代理'),
-                    subtitle: const Text('使用系统环境变量中的代理设置'),
+                    title: Text('系统代理',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    subtitle: Text('使用系统环境变量中的代理设置',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant)),
                     value: ProxyMode.system,
                   ),
                   RadioListTile<ProxyMode>(
-                    title: const Text('不使用代理'),
-                    subtitle: const Text('直接连接网络'),
+                    title: Text('不使用代理',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    subtitle: Text('直接连接网络',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant)),
                     value: ProxyMode.none,
                   ),
                 ],

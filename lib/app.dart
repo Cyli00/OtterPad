@@ -73,17 +73,23 @@ class NightReaderApp extends ConsumerWidget {
             final iconBrightness = brightness == Brightness.light
                 ? Brightness.dark
                 : Brightness.light;
-            return AnnotatedRegion<SystemUiOverlayStyle>(
-              value: SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: iconBrightness,
-                systemNavigationBarIconBrightness: iconBrightness,
-                systemNavigationBarColor: Colors.transparent,
-                systemNavigationBarDividerColor:
-                    Colors.transparent.withAlpha(1),
-                systemNavigationBarContrastEnforced: false,
+            final mq = MediaQuery.of(context);
+            return MediaQuery(
+              data: mq.copyWith(
+                textScaler: TextScaler.linear(themeState.textScale),
               ),
-              child: child!,
+              child: AnnotatedRegion<SystemUiOverlayStyle>(
+                value: SystemUiOverlayStyle(
+                  statusBarColor: Colors.transparent,
+                  statusBarIconBrightness: iconBrightness,
+                  systemNavigationBarIconBrightness: iconBrightness,
+                  systemNavigationBarColor: Colors.transparent,
+                  systemNavigationBarDividerColor:
+                      Colors.transparent.withAlpha(1),
+                  systemNavigationBarContrastEnforced: false,
+                ),
+                child: child!,
+              ),
             );
           },
         );
