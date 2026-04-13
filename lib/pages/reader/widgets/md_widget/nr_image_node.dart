@@ -11,8 +11,13 @@ const _figPrefix = 'fig:';
 ///
 /// 当 alt text 以 `fig:` 开头时，在图片下方渲染 caption 文字。
 class NRImgConfig extends ImgConfig {
-  NRImgConfig({super.errorBuilder, TextStyle? captionStyle})
-      : super(
+  NRImgConfig({
+    super.errorBuilder,
+    TextStyle? captionStyle,
+    String? highlightQuery,
+    Color? highlightBg,
+    Color? highlightFg,
+  }) : super(
           builder: (url, attrs) {
             final alt = attrs['alt'] ?? '';
             final isFigure = alt.startsWith(_figPrefix);
@@ -59,9 +64,14 @@ class NRImgConfig extends ImgConfig {
                       ),
                       child: Text.rich(
                         TextSpan(
-                          children: _parseCaptionSpans(
-                            caption,
-                            captionStyle ?? const TextStyle(),
+                          children: _highlightSpans(
+                            _parseCaptionSpans(
+                              caption,
+                              captionStyle ?? const TextStyle(),
+                            ),
+                            highlightQuery,
+                            highlightBg,
+                            highlightFg,
                           ),
                         ),
                         textAlign: TextAlign.center,
@@ -72,6 +82,52 @@ class NRImgConfig extends ImgConfig {
             );
           },
         );
+}
+
+/// 在已解析的 span 列表中高亮搜索词。
+///
+/// 只处理 [TextSpan]（纯文本），[WidgetSpan]（LaTeX 公式）跳过。
+List<InlineSpan> _highlightSpans(
+  List<InlineSpan> spans,
+  String? query,
+  Color? bg,
+  Color? fg,
+) {
+  if (query == null || query.isEmpty) return spans;
+  final lowerQuery = query.toLowerCase();
+  final result = <InlineSpan>[];
+
+  for (final span in spans) {
+    if (span is! TextSpan || span.text == null || span.text!.isEmpty) {
+      result.add(span);
+      continue;
+    }
+    final text = span.text!;
+    final lower = text.toLowerCase();
+    var start = 0;
+
+    while (start < text.length) {
+      final idx = lower.indexOf(lowerQuery, start);
+      if (idx < 0) {
+        result.add(TextSpan(text: text.substring(start), style: span.style));
+        break;
+      }
+      if (idx > start) {
+        result.add(TextSpan(text: text.substring(start, idx), style: span.style));
+      }
+      result.add(TextSpan(
+        text: text.substring(idx, idx + query.length),
+        style: span.style?.copyWith(
+          backgroundColor: bg,
+          color: fg,
+          fontWeight: FontWeight.w600,
+        ),
+      ));
+      start = idx + query.length;
+    }
+  }
+
+  return result;
 }
 
 /// 解析 caption 中的 LaTeX，返回混合 TextSpan/WidgetSpan 列表。

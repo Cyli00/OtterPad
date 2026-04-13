@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../services/figure_extract_service.dart';
 import 'figure_viewer.dart';
@@ -125,43 +126,43 @@ class _OutlinePanelState extends State<OutlinePanel>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    return Column(
-      children: [
-        TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Figures'),
-            Tab(text: 'References'),
-          ],
-          labelColor: cs.primary,
-          unselectedLabelColor: cs.onSurfaceVariant,
-          indicatorColor: cs.primary,
-          indicatorWeight: 2.5,
-          labelStyle: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelStyle: theme.textTheme.labelLarge,
-          dividerHeight: 0,
-        ),
-        Divider(height: 1, color: cs.outlineVariant.withAlpha(80)),
-        Expanded(
-          child: TabBarView(
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: Column(
+        children: [
+          TabBar(
             controller: _tabController,
-            children: [
-              _FiguresTab(
-                figures: _figures,
-                loaded: _figuresLoaded,
-                markdownContent: widget.markdownContent,
-                onNavigate: _navigateAndClose,
-              ),
-              _ReferencesTab(
-                references: _references,
-                onTap: _navigateAndClose,
-              ),
+            tabs: const [
+              Tab(text: 'Figures'),
+              Tab(text: 'References'),
             ],
+            labelColor: cs.primary,
+            unselectedLabelColor: cs.onSurfaceVariant,
+            indicatorColor: cs.primary,
+            indicatorWeight: 2.5,
+            labelStyle: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+            unselectedLabelStyle: theme.textTheme.labelLarge,
+            dividerHeight: 0,
           ),
-        ),
-      ],
+          Divider(height: 1, color: cs.outlineVariant.withAlpha(80)),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _FiguresTab(
+                  figures: _figures,
+                  loaded: _figuresLoaded,
+                  markdownContent: widget.markdownContent,
+                  onNavigate: _navigateAndClose,
+                ),
+                _ReferencesTab(references: _references),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -232,13 +233,16 @@ class _FiguresTab extends StatelessWidget {
             if (imageExists)
               GestureDetector(
                 onTap: () => showFigureViewer(context, figures!, initialIndex: index),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    imageFile,
-                    fit: BoxFit.contain,
-                    width: double.infinity,
-                    cacheWidth: 600,
+                child: Hero(
+                  tag: 'figure_${fig.imagePath}',
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      imageFile,
+                      fit: BoxFit.contain,
+                      width: double.infinity,
+                      cacheWidth: 600,
+                    ),
                   ),
                 ),
               )
@@ -293,9 +297,8 @@ class _FiguresTab extends StatelessWidget {
 
 class _ReferencesTab extends StatelessWidget {
   final List<ReferenceItem> references;
-  final void Function(int charOffset) onTap;
 
-  const _ReferencesTab({required this.references, required this.onTap});
+  const _ReferencesTab({required this.references});
 
   @override
   Widget build(BuildContext context) {
@@ -317,10 +320,28 @@ class _ReferencesTab extends StatelessWidget {
         height: 1,
       ),
       itemBuilder: (context, index) {
-        final ref = references[index];
+        final item = references[index];
 
         return InkWell(
-          onTap: () => onTap(ref.charOffset),
+          onTap: () {
+            final text = '[${item.number}] ${item.text}';
+            Clipboard.setData(ClipboardData(text: text));
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
+                elevation: 6,
+                duration: const Duration(seconds: 2),
+                content: Text(
+                  '已复制参考文献 ${item.number}',
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ));
+          },
           borderRadius: BorderRadius.circular(8),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -330,7 +351,7 @@ class _ReferencesTab extends StatelessWidget {
                 SizedBox(
                   width: 32,
                   child: Text(
-                    '${ref.number}.',
+                    '${item.number}.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w500,
@@ -339,7 +360,7 @@ class _ReferencesTab extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    ref.text,
+                    item.text,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurface,
                       height: 1.5,

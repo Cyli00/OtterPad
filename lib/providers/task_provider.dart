@@ -358,60 +358,42 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
         cancelToken: token,
       );
 
-      if (token.isCancelled) {
-        _finishTask(TaskType.extractDocument, TaskStatus.cancelled);
-        return;
-      }
+      if (token.isCancelled) return;
 
-      _snackBar.showProgress(
-        fileName: title,
-        status: '正在保存结果…',
-        onCancel: () => cancelTask(TaskType.extractDocument),
-      );
+      // saveResult 通常 1-2 秒内完成，无需中间 snackbar；
+      // 30 秒超时兜底，防止异常阻塞
+      final savedMdPath = await DocExtractService.instance
+          .saveResult(filePath, result, token: apiState.apiKey, title: title)
+          .timeout(const Duration(seconds: 30));
 
-      final savedMdPath = await DocExtractService.instance.saveResult(
-        filePath,
-        result,
-        token: apiState.apiKey,
-        title: title,
-      );
-
-      _snackBar.hide();
-
-      if (token.isCancelled) {
-        _finishTask(TaskType.extractDocument, TaskStatus.cancelled);
-        _snackBar.showResult(message: '已取消提取');
-        return;
-      }
+      if (token.isCancelled) return;
 
       _finishTask(TaskType.extractDocument, TaskStatus.completed);
       _snackBar.showResult(
         message: '文档提取完成：$title',
         duration: const Duration(seconds: 6),
       );
-
       onSuccess(savedMdPath, result.processedMarkdown ?? '');
     } on DioException catch (e) {
-      _snackBar.hide();
       if (e.type == DioExceptionType.cancel || token.isCancelled) {
-        _finishTask(TaskType.extractDocument, TaskStatus.cancelled);
         _snackBar.showResult(message: '已取消提取');
-        return;
+      } else {
+        _snackBar.showResult(message: '网络错误: ${e.message}');
       }
-      _finishTask(TaskType.extractDocument, TaskStatus.failed);
-      _snackBar.showResult(message: '网络错误: ${e.message}');
     } on DocExtractException catch (e) {
-      _snackBar.hide();
-      _finishTask(TaskType.extractDocument, TaskStatus.failed);
       _snackBar.showResult(message: e.message);
     } on BatchExtractException catch (e) {
-      _snackBar.hide();
-      _finishTask(TaskType.extractDocument, TaskStatus.failed);
       _snackBar.showResult(message: e.message);
     } catch (e) {
-      _snackBar.hide();
-      _finishTask(TaskType.extractDocument, TaskStatus.failed);
       _snackBar.showResult(message: '提取失败: $e');
+    } finally {
+      final task = state[TaskType.extractDocument];
+      if (task?.status == TaskStatus.running) {
+        _finishTask(
+          TaskType.extractDocument,
+          token.isCancelled ? TaskStatus.cancelled : TaskStatus.failed,
+        );
+      }
     }
   }
 

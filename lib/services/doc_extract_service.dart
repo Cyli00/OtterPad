@@ -241,6 +241,12 @@ class DocExtractService {
       processedMarkdown,
       title,
     );
+    if (result.jsonContent != null) {
+      processedMarkdown = _normalizeSectionHeadingLevels(
+        processedMarkdown,
+        result.jsonContent!,
+      );
+    }
 
     await File(mdPath).writeAsString(processedMarkdown, flush: true);
     result.processedMarkdown = processedMarkdown;
@@ -511,6 +517,60 @@ class DocExtractService {
     }
 
     return (s, e);
+  }
+
+  /// 将 JSON paragraph_title 对应的 ATX heading 统一为 ##（二级标题）。
+  ///
+  /// API 返回的标题级别不一致（##/###），归一化后渲染大小一致。
+  static String _normalizeSectionHeadingLevels(
+    String markdown,
+    String jsonContent,
+  ) {
+    final titles = _extractParagraphTitles(jsonContent);
+    if (titles.isEmpty) return markdown;
+
+    return markdown.replaceAllMapped(
+      RegExp(r'^(#{1,6})\s+(.+?)(?:\s+#+\s*)?$', multiLine: true),
+      (match) {
+        final level = match.group(1)!;
+        final text = match.group(2)!.trim();
+        if (level == '##') return match.group(0)!;
+        if (_titleSetContains(titles, text)) return '## $text';
+        return match.group(0)!;
+      },
+    );
+  }
+
+  static Set<String> _extractParagraphTitles(String jsonContent) {
+    try {
+      final pages = jsonDecode(jsonContent) as List<dynamic>;
+      final titles = <String>{};
+      for (final page in pages) {
+        final blocks = (page as Map<String, dynamic>)['prunedResult']
+                ?['parsing_res_list'] as List<dynamic>? ??
+            [];
+        for (final block in blocks) {
+          final b = block as Map<String, dynamic>;
+          if (b['block_label'] == 'paragraph_title') {
+            final c = (b['block_content'] as String?)?.trim() ?? '';
+            if (c.isNotEmpty) titles.add(c);
+          }
+        }
+      }
+      return titles;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static bool _titleSetContains(Set<String> titles, String text) {
+    if (titles.contains(text)) return true;
+    final stripped = text.replaceFirst(
+      RegExp(r'^(?:\d+(?:\.\d+)*|[ivxlcdm]+)\s*[:.)\-]?\s+',
+          caseSensitive: false),
+      '',
+    );
+    return stripped != text && titles.contains(stripped);
   }
 
   /// 移除 API 生成的 HTML 图片标签（figure 已替换为 `![]()`，其余无本地文件）

@@ -9,18 +9,16 @@ import 'md_widget/nr_search_highlight_builder.dart';
 /// 虚拟化 Markdown 渲染组件，专用于阅读器。
 ///
 /// 使用 [MarkdownGenerator.buildWidgets] 预构建 widget 列表，
-/// 通过 [ListView.builder] + [AutoScrollTag] 仅构建屏幕可见 widget，
-/// 支持通过 [AutoScrollController.scrollToIndex] 精确跳转到任意 widget。
+/// 通过 [ListView.builder] + [AutoScrollTag] 仅构建屏幕可见 widget。
+/// 搜索高亮通过 [SearchHighlightBuilder] 在 richTextBuilder 层面实现。
+/// 跳转由外部通过 [AutoScrollController.scrollToIndex] 直接控制。
 class ReaderMarkdownBody extends StatefulWidget {
   final String data;
   final ReaderSettingsState settings;
   final AutoScrollController? scrollController;
 
-  /// 需要高亮的搜索词
+  /// 需要高亮的搜索词（仅控制渲染高亮，不触发跳转）
   final String? highlightQuery;
-
-  /// 目标段落在原始 Markdown 中的字符偏移
-  final int? targetCharOffset;
 
   const ReaderMarkdownBody({
     super.key,
@@ -28,7 +26,6 @@ class ReaderMarkdownBody extends StatefulWidget {
     required this.settings,
     this.scrollController,
     this.highlightQuery,
-    this.targetCharOffset,
   });
 
   @override
@@ -36,18 +33,12 @@ class ReaderMarkdownBody extends StatefulWidget {
 }
 
 class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
-  bool _hasScrolled = false;
-
   List<Widget>? _cachedWidgets;
   _RenderResources? _renderResources;
 
   @override
   void didUpdateWidget(covariant ReaderMarkdownBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.targetCharOffset != oldWidget.targetCharOffset ||
-        widget.highlightQuery != oldWidget.highlightQuery) {
-      _hasScrolled = false;
-    }
     if (widget.data != oldWidget.data) {
       _cachedWidgets = null;
     }
@@ -58,10 +49,8 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
     }
   }
 
-  bool get _isHighlightMode =>
-      widget.highlightQuery != null &&
-      widget.highlightQuery!.isNotEmpty &&
-      widget.targetCharOffset != null;
+  bool get _hasHighlight =>
+      widget.highlightQuery != null && widget.highlightQuery!.isNotEmpty;
 
   List<Widget> _getWidgets(_RenderResources resources) {
     if (_cachedWidgets != null) return _cachedWidgets!;
@@ -70,28 +59,6 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       config: resources.config,
     );
     return _cachedWidgets!;
-  }
-
-  /// 搜索高亮跳转：通过 charOffset 计算 widget index，精确滚动。
-  void _scrollToTarget() {
-    if (_hasScrolled) return;
-    _hasScrolled = true;
-    final controller = widget.scrollController;
-    if (controller == null) return;
-    final index = _charOffsetToWidgetIndex(
-      widget.data,
-      widget.targetCharOffset!,
-    );
-    final widgets = _cachedWidgets;
-    final safeIndex =
-        widgets != null ? index.clamp(0, widgets.length - 1) : index;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      controller.scrollToIndex(
-        safeIndex,
-        preferPosition: AutoScrollPosition.begin,
-      );
-    });
   }
 
   @override
@@ -105,8 +72,6 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
     final resources = _resolveRenderResources(context);
     final widgets = _getWidgets(resources);
     final controller = widget.scrollController;
-
-    if (_isHighlightMode) _scrollToTarget();
 
     return ListView.builder(
       controller: controller,
@@ -137,7 +102,7 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
     final next = _RenderResources.create(
       settings: widget.settings,
       colorScheme: colorScheme,
-      highlightQuery: _isHighlightMode ? widget.highlightQuery : null,
+      highlightQuery: _hasHighlight ? widget.highlightQuery : null,
     );
     _renderResources = next;
     return next;
@@ -146,22 +111,6 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
   void _disposeRenderResources() {
     _renderResources = null;
   }
-}
-
-// ─── charOffset → widget index 映射 ───
-
-/// 将 Markdown 字符偏移转换为 [MarkdownGenerator.buildWidgets] 的 widget 索引。
-///
-/// 原理：markdown parser 按块级元素分组（段落、标题、图片等），
-/// 块间以空行分隔。统计 charOffset 前的空行分隔符数量即为 widget 索引。
-int _charOffsetToWidgetIndex(String markdown, int charOffset) {
-  final breaks = RegExp(r'\n\n+').allMatches(markdown);
-  var index = 0;
-  for (final brk in breaks) {
-    if (brk.start >= charOffset) break;
-    index++;
-  }
-  return index;
 }
 
 // ─── 渲染资源管理 ───
@@ -199,6 +148,7 @@ class _RenderResources {
     final config = buildReaderMarkdownConfig(
       settings: settings,
       colorScheme: colorScheme,
+      highlightQuery: highlightQuery,
     );
 
     final generator = buildReaderMarkdownGenerator(

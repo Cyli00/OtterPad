@@ -44,7 +44,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   // 搜索
   bool _searchActive = false;
   String? _highlightQuery;
-  int? _targetCharOffset;
 
   // 搜索结果导航
   List<SearchResult> _searchResults = [];
@@ -63,9 +62,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // 缓存加载 Future，避免重复创建相同加载任务
   Future<String>? _loadFuture;
-  Future<MarkdownSearchSnapshot>? _searchSnapshotFuture;
+  MarkdownSearchSnapshot? _searchSnapshot;
   String? _markdownCacheKey;
-  String? _jsonPath;
 
   // 文本选择
   String? _selectedText;
@@ -104,7 +102,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final mdPath = await mdPathFuture;
     if (mdPath != null) {
       _mdPath = mdPath;
-      _jsonPath = _deriveJsonPath(filePath);
     }
 
     if (!mounted) return;
@@ -157,11 +154,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _mdPath = mdPath;
           _mdContent = markdownContent;
           _markdownCacheKey = cacheKey;
-          _jsonPath = _deriveJsonPath(mdPath);
-          _searchSnapshotFuture = cacheService.getSearchSnapshot(
+          _searchSnapshot = cacheService.getSearchSnapshot(
             cacheKey: cacheKey,
             markdownContent: markdownContent,
-            jsonPath: _jsonPath,
           );
           _showPreview = true;
         });
@@ -275,21 +270,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     int tappedIndex,
     String query,
   ) {
+    final offset = results[tappedIndex].charOffset;
     setState(() {
       _searchActive = false;
       _showPreview = true;
       _searchResults = results;
       _currentResultIndex = tappedIndex;
       _highlightQuery = query;
-      _targetCharOffset = results[tappedIndex].charOffset;
+    });
+    // 等 highlightQuery 触发 widget 重建后再跳转
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToCharOffset(offset);
     });
   }
 
   void _clearHighlight() {
-    if (_highlightQuery != null || _targetCharOffset != null) {
+    if (_highlightQuery != null) {
       setState(() {
         _highlightQuery = null;
-        _targetCharOffset = null;
         _searchResults = [];
         _currentResultIndex = 0;
       });
@@ -302,8 +300,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _currentResultIndex =
           (_currentResultIndex - 1 + _searchResults.length) %
               _searchResults.length;
-      _targetCharOffset = _searchResults[_currentResultIndex].charOffset;
     });
+    _scrollToCharOffset(_searchResults[_currentResultIndex].charOffset);
   }
 
   void _goToNextResult() {
@@ -311,8 +309,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(() {
       _currentResultIndex =
           (_currentResultIndex + 1) % _searchResults.length;
-      _targetCharOffset = _searchResults[_currentResultIndex].charOffset;
     });
+    _scrollToCharOffset(_searchResults[_currentResultIndex].charOffset);
   }
 
   Future<void> _goToPrevPdfResult() async {
@@ -347,23 +345,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // ─── 大纲导航 ───
 
-  void _onOutlineNavigate(int charOffset) {
+  /// 统一跳转：charOffset → widget index → scrollToIndex。
+  ///
+  /// outline "在文中查看"、搜索结果导航、prev/next 全部走这条路径。
+  void _scrollToCharOffset(int charOffset) {
     if (_mdContent == null || _mdContent!.isEmpty) return;
-
-    // charOffset → widget index：统计目标位置前的段落分隔符数量
     final breaks = RegExp(r'\n\n+').allMatches(_mdContent!);
     var widgetIndex = 0;
     for (final brk in breaks) {
       if (brk.start >= charOffset) break;
       widgetIndex++;
     }
-
-    // 回退 1 个 widget 显示上文，使目标内容出现在视口内
     _scrollController.scrollToIndex(
       (widgetIndex - 1).clamp(0, widgetIndex),
       preferPosition: AutoScrollPosition.begin,
     );
   }
+
+  void _onOutlineNavigate(int charOffset) => _scrollToCharOffset(charOffset);
 
   void _showDocumentInfo(BuildContext context) {
     showModalBottomSheet(
@@ -372,15 +371,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       backgroundColor: Colors.transparent,
       builder: (context) => _DocumentInfoSheet(document: widget.document),
     );
-  }
-
-  String? _deriveJsonPath(String filePath) {
-    if (filePath.isEmpty) return null;
-    final jsonPath = p.join(
-      p.dirname(filePath),
-      '${p.basenameWithoutExtension(filePath)}.json',
-    );
-    return File(jsonPath).existsSync() ? jsonPath : null;
   }
 
   Future<String?> _findMarkdownPath(String filePath) async {
@@ -430,14 +420,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void _prewarmSearchSnapshot() {
     final content = _mdContent;
     final cacheKey = _markdownCacheKey;
-    if (content == null || cacheKey == null || _searchSnapshotFuture != null) {
+    if (content == null || cacheKey == null || _searchSnapshot != null) {
       return;
     }
     final cacheService = MarkdownDocumentCacheService.instance;
-    _searchSnapshotFuture = cacheService.getSearchSnapshot(
+    _searchSnapshot = cacheService.getSearchSnapshot(
       cacheKey: cacheKey,
       markdownContent: content,
-      jsonPath: _jsonPath,
     );
   }
 
@@ -447,7 +436,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       title: widget.document.title,
     );
     _markdownCacheKey = resolved.cacheKey;
-    _searchSnapshotFuture = null;
+    _searchSnapshot = null;
     return resolved.content;
   }
 
@@ -667,11 +656,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 child: _buildPdfResultNavigator(cs, pdfMatchCount),
               ),
             // ── 搜索遮罩层 ──
-            if (_searchActive && _showPreview && _searchSnapshotFuture != null)
+            if (_searchActive && _showPreview && _searchSnapshot != null)
               Positioned.fill(
                 child: SearchOverlay(
                   readerSettings: readerSettings,
-                  searchSnapshotFuture: _searchSnapshotFuture!,
+                  searchSnapshot: _searchSnapshot!,
                   onResultTap: _onSearchResultTap,
                   onDismiss: _closeSearch,
                   initialQuery: _highlightQuery,
@@ -1158,7 +1147,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         settings: settings,
         scrollController: _scrollController,
         highlightQuery: _highlightQuery,
-        targetCharOffset: _targetCharOffset,
       ),
     );
   }

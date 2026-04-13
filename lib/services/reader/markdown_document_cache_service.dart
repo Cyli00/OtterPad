@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 
 class MarkdownResolvedDocument {
@@ -43,7 +41,6 @@ class MarkdownDocumentCacheService {
   final _searchSnapshotCache =
       LinkedHashMap<String, MarkdownSearchSnapshot>();
   final _contentTasks = <String, Future<String>>{};
-  final _searchSnapshotTasks = <String, Future<MarkdownSearchSnapshot>>{};
 
   Future<MarkdownResolvedDocument> loadDocument({
     required String mdPath,
@@ -78,43 +75,15 @@ class MarkdownDocumentCacheService {
     _writeContentCache(cacheKey, content);
   }
 
-  Future<MarkdownSearchSnapshot> getSearchSnapshot({
+  MarkdownSearchSnapshot getSearchSnapshot({
     required String cacheKey,
     required String markdownContent,
-    String? jsonPath,
-  }) async {
+  }) {
     final cached = _readSearchSnapshotCache(cacheKey);
-    if (cached != null) {
-      return cached;
-    }
-
-    final running = _searchSnapshotTasks[cacheKey];
-    if (running != null) return await running;
-
-    final task = _buildSearchSnapshotInternal(
+    if (cached != null) return cached;
+    return _buildSearchSnapshotInternal(
       cacheKey: cacheKey,
       markdownContent: markdownContent,
-      jsonPath: jsonPath,
-    );
-    _searchSnapshotTasks[cacheKey] = task;
-    try {
-      return await task;
-    } finally {
-      _searchSnapshotTasks.remove(cacheKey);
-    }
-  }
-
-  void prewarmSearchSnapshot({
-    required String cacheKey,
-    required String markdownContent,
-    String? jsonPath,
-  }) {
-    unawaited(
-      getSearchSnapshot(
-        cacheKey: cacheKey,
-        markdownContent: markdownContent,
-        jsonPath: jsonPath,
-      ),
     );
   }
 
@@ -176,13 +145,11 @@ class MarkdownDocumentCacheService {
     return content;
   }
 
-  Future<MarkdownSearchSnapshot> _buildSearchSnapshotInternal({
+  MarkdownSearchSnapshot _buildSearchSnapshotInternal({
     required String cacheKey,
     required String markdownContent,
-    String? jsonPath,
-  }) async {
-    final headings = await _loadJsonHeadings(jsonPath);
-    final blocksData = _buildSearchBlocks(markdownContent, headings);
+  }) {
+    final blocksData = _buildSearchBlocks(markdownContent);
 
     final snapshot = MarkdownSearchSnapshot(
       blocks: blocksData
@@ -199,46 +166,40 @@ class MarkdownDocumentCacheService {
     _writeSearchSnapshotCache(cacheKey, snapshot);
     return snapshot;
   }
-
-  /// 从提取 JSON 中读取 paragraph_title 的 block_content 列表
-  static Future<Set<String>> _loadJsonHeadings(String? jsonPath) async {
-    if (jsonPath == null) return {};
-    final file = File(jsonPath);
-    if (!await file.exists()) return {};
-
-    try {
-      final raw = await file.readAsString();
-      final pages = jsonDecode(raw) as List<dynamic>;
-      final headings = <String>{};
-
-      for (final page in pages) {
-        final blocks = (page as Map<String, dynamic>)['prunedResult']
-                ?['parsing_res_list'] as List<dynamic>? ??
-            [];
-        for (final block in blocks) {
-          final b = block as Map<String, dynamic>;
-          if (b['block_label'] == 'paragraph_title') {
-            final content = (b['block_content'] as String?)?.trim() ?? '';
-            if (content.isNotEmpty) headings.add(content);
-          }
-        }
-      }
-
-      return headings;
-    } catch (_) {
-      return {};
-    }
-  }
 }
+
+// ─── LaTeX → Unicode 映射 ───
+
+const _latexUnicode = <String, String>{
+  // 希腊字母
+  r'\alpha': 'α', r'\beta': 'β', r'\gamma': 'γ', r'\delta': 'δ',
+  r'\epsilon': 'ε', r'\varepsilon': 'ε', r'\zeta': 'ζ', r'\eta': 'η',
+  r'\theta': 'θ', r'\iota': 'ι', r'\kappa': 'κ', r'\lambda': 'λ',
+  r'\mu': 'μ', r'\nu': 'ν', r'\xi': 'ξ', r'\pi': 'π',
+  r'\rho': 'ρ', r'\sigma': 'σ', r'\tau': 'τ', r'\upsilon': 'υ',
+  r'\phi': 'φ', r'\varphi': 'φ', r'\chi': 'χ', r'\psi': 'ψ', r'\omega': 'ω',
+  r'\Gamma': 'Γ', r'\Delta': 'Δ', r'\Theta': 'Θ', r'\Lambda': 'Λ',
+  r'\Xi': 'Ξ', r'\Pi': 'Π', r'\Sigma': 'Σ', r'\Phi': 'Φ',
+  r'\Psi': 'Ψ', r'\Omega': 'Ω',
+  // 运算符
+  r'\pm': '±', r'\mp': '∓', r'\times': '×', r'\div': '÷', r'\cdot': '·',
+  r'\approx': '≈', r'\sim': '∼', r'\simeq': '≃', r'\neq': '≠',
+  r'\leq': '≤', r'\geq': '≥', r'\ll': '≪', r'\gg': '≫',
+  r'\propto': '∝', r'\equiv': '≡', r'\cong': '≅',
+  // 其他
+  r'\infty': '∞', r'\partial': '∂', r'\nabla': '∇',
+  r'\in': '∈', r'\notin': '∉', r'\subset': '⊂', r'\supset': '⊃',
+  r'\cup': '∪', r'\cap': '∩', r'\forall': '∀', r'\exists': '∃',
+  r'\rightarrow': '→', r'\leftarrow': '←', r'\Rightarrow': '⇒',
+  r'\sum': '∑', r'\prod': '∏', r'\int': '∫',
+};
 
 // ─── 搜索块构建 ───
 
-final _atxHeadingRegex = RegExp(r'^\s{0,3}#{1,6}\s+(.+?)(?:\s+#+\s*)?$');
+/// saveResult 已将 paragraph_title 归一化为 ##，直接匹配二级标题
+final _h2Regex = RegExp(r'^\s{0,3}##\s+(.+?)(?:\s+#+\s*)?$');
 
-List<Map<String, Object>> _buildSearchBlocks(
-  String markdown,
-  Set<String> jsonHeadings,
-) {
+List<Map<String, Object>> _buildSearchBlocks(String markdown) {
   final blocks = <Map<String, Object>>[];
   final lines = markdown.split('\n');
   var currentHeading = '';
@@ -270,10 +231,10 @@ List<Map<String, Object>> _buildSearchBlocks(
       continue;
     }
 
-    final heading = _resolveHeading(line, jsonHeadings);
-    if (heading != null) {
+    final h2Match = _h2Regex.firstMatch(line);
+    if (h2Match != null) {
       flushBlock();
-      currentHeading = heading;
+      currentHeading = h2Match.group(1)!.trim();
       blockStartOffset = currentOffset;
     }
 
@@ -286,47 +247,6 @@ List<Map<String, Object>> _buildSearchBlocks(
 
   flushBlock();
   return blocks;
-}
-
-/// 判断当前行是否为标题。
-///
-/// 优先使用 JSON paragraph_title 匹配（无需正则），
-/// 回退到 ATX heading 检测。
-String? _resolveHeading(String line, Set<String> jsonHeadings) {
-  final atxMatch = _atxHeadingRegex.firstMatch(line);
-  if (atxMatch != null) {
-    final headingText = atxMatch.group(1)!.trim();
-    // 有 JSON 时只认 paragraph_title 标记的标题
-    if (jsonHeadings.isNotEmpty) {
-      if (_matchesJsonHeading(headingText, jsonHeadings)) {
-        return headingText;
-      }
-      // ATX heading 但不在 JSON 标题中 → 仍标记为段落标题
-      return headingText;
-    }
-    return headingText;
-  }
-  return null;
-}
-
-/// 模糊匹配 JSON heading：去除编号前缀后比较
-bool _matchesJsonHeading(String text, Set<String> jsonHeadings) {
-  if (jsonHeadings.contains(text)) return true;
-  // JSON 标题可能带编号前缀（如 "1. Introduction"），去除后比较
-  final stripped = text.replaceFirst(
-    RegExp(r'^(?:\d+(?:\.\d+)*|[ivxlcdm]+)\s*[:.)\-]?\s+', caseSensitive: false),
-    '',
-  );
-  if (stripped != text && jsonHeadings.contains(stripped)) return true;
-  // 反向：markdown 行无编号但 JSON 有
-  for (final h in jsonHeadings) {
-    final hStripped = h.replaceFirst(
-      RegExp(r'^(?:\d+(?:\.\d+)*|[ivxlcdm]+)\s*[:.)\-]?\s+', caseSensitive: false),
-      '',
-    );
-    if (hStripped == text) return true;
-  }
-  return false;
 }
 
 String _stripMarkdown(String text) {
@@ -345,10 +265,18 @@ String _stripMarkdown(String text) {
   result = result.replaceAll(RegExp(r'_{1,3}([^_]+)_{1,3}'), r'$1');
   result = result.replaceAll(RegExp(r'`([^`]+)`'), r'$1');
   result = result.replaceAll(RegExp(r'<[^>]+>'), '');
+  // 剥离 $ 定界符，将常见 LaTeX 命令转为 Unicode
   result = result.replaceAllMapped(
     RegExp(r'\$([^\$\n]+?)\$'),
     (m) => m.group(1) ?? '',
   );
+  result = result.replaceAllMapped(
+    RegExp(r'\\text\{([^}]+)\}'),
+    (m) => m.group(1)!,
+  );
+  for (final e in _latexUnicode.entries) {
+    result = result.replaceAll(e.key, e.value);
+  }
   result = result.replaceAll(RegExp(r'\n+'), ' ');
   result = result.replaceAll(RegExp(r'\s{2,}'), ' ');
   return result.trim();

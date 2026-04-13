@@ -10,6 +10,7 @@ import 'nr_latex_node.dart';
 MarkdownConfig buildReaderMarkdownConfig({
   required ReaderSettingsState settings,
   required ColorScheme colorScheme,
+  String? highlightQuery,
 }) {
   final baseStyle = TextStyle(
     color: settings.textColor,
@@ -120,6 +121,9 @@ MarkdownConfig buildReaderMarkdownConfig({
         fontSize: settings.fontSize * 0.85,
         color: settings.secondaryTextColor,
       ),
+      highlightQuery: highlightQuery,
+      highlightBg: colorScheme.primaryContainer,
+      highlightFg: colorScheme.onPrimaryContainer,
     ),
   ]);
 }

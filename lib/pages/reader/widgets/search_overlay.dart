@@ -1,9 +1,11 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/reader/markdown_document_cache_service.dart';
+import '../../../utils/markdown_preprocessor.dart';
+import 'md_widget/nr_markdown_config.dart';
+import 'md_widget/nr_search_highlight_builder.dart';
 
 /// Markdown 内容搜索结果
 class SearchResult {
@@ -20,17 +22,15 @@ class SearchResult {
 
 /// 全屏搜索遮罩层
 ///
-/// 覆盖在阅读器内容之上，高斯模糊底层视图。
 /// 用户输入搜索词并确认后，以段落为单位展示匹配结果。
-/// 所有 UI 色调从 MD3 [ColorScheme] 获取。
+/// 搜索结果使用与阅读器正文相同的 Markdown 渲染管线（LaTeX、高亮等）。
 class SearchOverlay extends StatefulWidget {
   final ReaderSettingsState readerSettings;
-  final void Function(List<SearchResult> results, int tappedIndex, String query)
-  onResultTap;
+  final void Function(
+          List<SearchResult> results, int tappedIndex, String query)
+      onResultTap;
   final VoidCallback onDismiss;
-  final Future<MarkdownSearchSnapshot> searchSnapshotFuture;
-
-  /// 从高亮模式重新搜索时，预填上次查询词
+  final MarkdownSearchSnapshot searchSnapshot;
   final String? initialQuery;
 
   const SearchOverlay({
@@ -38,7 +38,7 @@ class SearchOverlay extends StatefulWidget {
     required this.readerSettings,
     required this.onResultTap,
     required this.onDismiss,
-    required this.searchSnapshotFuture,
+    required this.searchSnapshot,
     this.initialQuery,
   });
 
@@ -51,7 +51,10 @@ class _SearchOverlayState extends State<SearchOverlay> {
   final _focusNode = FocusNode();
   List<SearchResult> _results = [];
   bool _hasSearched = false;
-  bool _loading = false;
+
+  // 搜索结果渲染资源（与正文共用同一套管线）
+  MarkdownConfig? _mdConfig;
+  MarkdownGenerator? _mdGenerator;
 
   @override
   void initState() {
@@ -76,45 +79,47 @@ class _SearchOverlayState extends State<SearchOverlay> {
     super.dispose();
   }
 
-  // ─── 搜索逻辑 ───
-
-  Future<void> _performSearch(String query) async {
+  void _performSearch(String query) {
     if (query.isEmpty) {
       setState(() {
         _results = [];
         _hasSearched = false;
-        _loading = false;
+        _mdConfig = null;
+        _mdGenerator = null;
       });
       return;
     }
 
-    setState(() {
-      _loading = true;
-    });
-
-    final snapshot = await widget.searchSnapshotFuture;
-    if (!mounted) return;
-
     final lowerQuery = query.toLowerCase();
-    final results = snapshot.blocks
+    final results = widget.searchSnapshot.blocks
         .where((block) => block.plainText.toLowerCase().contains(lowerQuery))
-        .map(
-          (block) => SearchResult(
-            heading: block.heading,
-            plainText: block.plainText,
-            charOffset: block.charOffset,
-          ),
-        )
+        .map((block) => SearchResult(
+              heading: block.heading,
+              plainText: block.plainText,
+              charOffset: block.charOffset,
+            ))
         .toList(growable: false);
+
+    // 构建与正文相同的渲染管线，附加搜索高亮
+    final cs = Theme.of(context).colorScheme;
+    final searchBuilder = SearchHighlightBuilder(searchQuery: query, cs: cs);
+
+    _mdConfig = buildReaderMarkdownConfig(
+      settings: widget.readerSettings,
+      colorScheme: cs,
+      highlightQuery: query,
+    );
+    _mdGenerator = buildReaderMarkdownGenerator(
+      settings: widget.readerSettings,
+      searchRichTextBuilder:
+          searchBuilder.hasHighlights ? searchBuilder.call : null,
+    );
 
     setState(() {
       _results = results;
       _hasSearched = true;
-      _loading = false;
     });
   }
-
-  // ─── UI ───
 
   @override
   Widget build(BuildContext context) {
@@ -122,17 +127,14 @@ class _SearchOverlayState extends State<SearchOverlay> {
     final cs = Theme.of(context).colorScheme;
     final safePadding = MediaQuery.of(context).padding;
 
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-      child: Container(
-        color: settings.backgroundColor.withAlpha(210),
-        padding: EdgeInsets.only(top: safePadding.top),
-        child: Column(
-          children: [
-            _buildSearchBar(cs),
-            Expanded(child: _buildResults(cs)),
-          ],
-        ),
+    return Container(
+      color: settings.backgroundColor,
+      padding: EdgeInsets.only(top: safePadding.top),
+      child: Column(
+        children: [
+          _buildSearchBar(cs),
+          Expanded(child: _buildResults(cs)),
+        ],
       ),
     );
   }
@@ -145,11 +147,8 @@ class _SearchOverlayState extends State<SearchOverlay> {
         child: Row(
           children: [
             IconButton(
-              icon: Icon(
-                Icons.chevron_left_rounded,
-                size: 28,
-                color: cs.onSurface,
-              ),
+              icon: Icon(Icons.chevron_left_rounded,
+                  size: 28, color: cs.onSurface),
               tooltip: '返回',
               onPressed: widget.onDismiss,
             ),
@@ -168,18 +167,12 @@ class _SearchOverlayState extends State<SearchOverlay> {
                       color: cs.onSurfaceVariant.withAlpha(160),
                       fontSize: 15,
                     ),
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      size: 20,
-                      color: cs.onSurfaceVariant,
-                    ),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        size: 20, color: cs.onSurfaceVariant),
                     suffixIcon: _controller.text.isNotEmpty
                         ? IconButton(
-                            icon: Icon(
-                              Icons.cancel_rounded,
-                              size: 18,
-                              color: cs.onSurfaceVariant,
-                            ),
+                            icon: Icon(Icons.cancel_rounded,
+                                size: 18, color: cs.onSurfaceVariant),
                             onPressed: () {
                               _controller.clear();
                               setState(() {
@@ -191,7 +184,8 @@ class _SearchOverlayState extends State<SearchOverlay> {
                         : null,
                     filled: true,
                     fillColor: cs.surfaceContainerHigh,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(28),
                       borderSide: BorderSide.none,
@@ -205,11 +199,8 @@ class _SearchOverlayState extends State<SearchOverlay> {
             ),
             const SizedBox(width: 4),
             IconButton(
-              icon: Icon(
-                Icons.close_rounded,
-                size: 22,
-                color: cs.onSurfaceVariant,
-              ),
+              icon: Icon(Icons.close_rounded,
+                  size: 22, color: cs.onSurfaceVariant),
               tooltip: '退出搜索',
               onPressed: widget.onDismiss,
             ),
@@ -220,15 +211,6 @@ class _SearchOverlayState extends State<SearchOverlay> {
   }
 
   Widget _buildResults(ColorScheme cs) {
-    if (_loading) {
-      return Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: cs.primary,
-        ),
-      );
-    }
-
     if (!_hasSearched) return const SizedBox.shrink();
 
     if (_results.isEmpty) {
@@ -239,8 +221,6 @@ class _SearchOverlayState extends State<SearchOverlay> {
         ),
       );
     }
-
-    final query = _controller.text;
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -280,11 +260,13 @@ class _SearchOverlayState extends State<SearchOverlay> {
                   ),
                 ),
               ),
-            _ResultListItem(
-              text: result.plainText,
-              query: query,
+            _ResultCard(
+              markdownText: result.plainText,
+              config: _mdConfig!,
+              generator: _mdGenerator!,
               cs: cs,
-              onTap: () => widget.onResultTap(_results, index - 1, query),
+              onTap: () =>
+                  widget.onResultTap(_results, index - 1, _controller.text),
             ),
           ],
         );
@@ -293,25 +275,27 @@ class _SearchOverlayState extends State<SearchOverlay> {
   }
 }
 
-// ─── 搜索结果条目（MD3 列表样式） ───
+// ─── 搜索结果卡片（复用正文 Markdown 渲染管线） ───
 
-class _ResultListItem extends StatelessWidget {
-  final String text;
-  final String query;
+class _ResultCard extends StatelessWidget {
+  final String markdownText;
+  final MarkdownConfig config;
+  final MarkdownGenerator generator;
   final ColorScheme cs;
   final VoidCallback onTap;
 
-  const _ResultListItem({
-    required this.text,
-    required this.query,
+  const _ResultCard({
+    required this.markdownText,
+    required this.config,
+    required this.generator,
     required this.cs,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final snippet = _buildSnippet(text, query, maxLength: 150);
-    final textColor = cs.onSurface;
+    // 与正文相同的预处理：裸 LaTeX 包裹 $...$、上标转 Unicode 等
+    final processed = MarkdownPreprocessor.process(markdownText);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -321,95 +305,26 @@ class _ResultListItem extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
-          overlayColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.pressed)) {
-              return cs.primary.withAlpha(20);
-            }
-            if (states.contains(WidgetState.hovered)) {
-              return cs.primary.withAlpha(12);
-            }
-            if (states.contains(WidgetState.focused)) {
-              return cs.primary.withAlpha(16);
-            }
-            return null;
-          }),
-          child: Container(
+          child: SizedBox(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: _buildHighlightedText(snippet, query, textColor),
+            height: 120,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: ClipRect(
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: MarkdownBlock(
+                    data: processed,
+                    selectable: false,
+                    config: config,
+                    generator: generator,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  String _buildSnippet(String text, String query, {int maxLength = 150}) {
-    if (text.length <= maxLength) return text;
-
-    final lowerText = text.toLowerCase();
-    final lowerQuery = query.toLowerCase();
-    final matchIndex = lowerText.indexOf(lowerQuery);
-
-    if (matchIndex < 0) return '${text.substring(0, maxLength)}…';
-
-    var start = (matchIndex - maxLength ~/ 4).clamp(0, text.length);
-    var end = (start + maxLength).clamp(0, text.length);
-
-    if (start > 0) {
-      final spaceIdx = text.indexOf(' ', start);
-      if (spaceIdx > 0 && spaceIdx - start < 20) start = spaceIdx + 1;
-    }
-
-    var snippet = text.substring(start, end);
-    if (start > 0) snippet = '…$snippet';
-    if (end < text.length) snippet = '$snippet…';
-    return snippet;
-  }
-
-  Widget _buildHighlightedText(String snippet, String query, Color textColor) {
-    if (query.isEmpty) {
-      return Text(
-        snippet,
-        style: TextStyle(color: textColor, fontSize: 14, height: 1.6),
-        maxLines: 4,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    final spans = <TextSpan>[];
-    final lowerSnippet = snippet.toLowerCase();
-    final lowerQuery = query.toLowerCase();
-    var start = 0;
-
-    while (start < snippet.length) {
-      final matchIndex = lowerSnippet.indexOf(lowerQuery, start);
-      if (matchIndex < 0) {
-        spans.add(TextSpan(text: snippet.substring(start)));
-        break;
-      }
-      if (matchIndex > start) {
-        spans.add(TextSpan(text: snippet.substring(start, matchIndex)));
-      }
-      spans.add(
-        TextSpan(
-          text: snippet.substring(matchIndex, matchIndex + query.length),
-          style: TextStyle(
-            color: cs.primary,
-            fontWeight: FontWeight.w600,
-            backgroundColor: cs.primaryContainer.withAlpha(100),
-          ),
-        ),
-      );
-      start = matchIndex + query.length;
-    }
-
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(color: textColor, fontSize: 14, height: 1.6),
-        children: spans,
-      ),
-      maxLines: 4,
-      overflow: TextOverflow.ellipsis,
     );
   }
 }
