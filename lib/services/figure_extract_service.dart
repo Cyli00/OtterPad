@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -38,6 +39,13 @@ class LayoutBlock {
       blockContent: json['block_content'] as String? ?? '',
     );
   }
+
+  LayoutBlock copyWith({String? blockLabel}) => LayoutBlock(
+        blockId: blockId,
+        blockLabel: blockLabel ?? this.blockLabel,
+        blockBbox: blockBbox,
+        blockContent: blockContent,
+      );
 }
 
 /// 一个检测到的 figure 区域（由若干连续 block 组成）
@@ -90,6 +98,15 @@ class FigureManifestEntry {
   }
 }
 
+/// 用于主标题连续性恢复的序列状态
+class _CaptionSeries {
+  _CaptionSeries(this.prefix);
+  final String prefix;
+  final Set<int> present = <int>{};
+  int get minNumber => present.reduce((a, b) => a < b ? a : b);
+  int get maxNumber => present.reduce((a, b) => a > b ? a : b);
+}
+
 /// figure 提取的完整结果
 class FigureExtractResult {
   final String outputDir;
@@ -137,6 +154,8 @@ class FigureExtractService {
   // ─── 标题正则（从 assets/config/caption_patterns.json 加载） ───
 
   late final RegExp _mainCaptionRe;
+  late final List<String> _prefixes;
+  late final String _suffixPattern;
   bool _initialized = false;
 
   /// 从 asset bundle 加载 caption 配置并编译正则。
@@ -163,7 +182,30 @@ class FigureExtractService {
       '^(?:$prefixGroup)$numberPattern$suffixPattern',
       caseSensitive: false,
     );
+    _prefixes = List.unmodifiable(prefixes);
+    _suffixPattern = suffixPattern;
     _initialized = true;
+  }
+
+  /// 判断 anchor 是否为表格类（标题以 Table/Tab/表 等前缀开头）。
+  ///
+  /// 用于在分配 `table` / `vision_footnote` block 时优先挂到同类 anchor，
+  /// 避免表格注释被几何上稍近的 figure 抢走。
+  static final _tableAnchorRe = RegExp(
+    r'^(?:table|tab\.?|tabelle|tabla|cuadro|таблица|表|표|bảng)',
+    caseSensitive: false,
+  );
+
+  bool _isTableAnchor(LayoutBlock anchor) =>
+      _tableAnchorRe.hasMatch(anchor.blockContent.trim());
+
+  /// 过滤 OCR 误标：`figure_title` 内容过长且不匹配主标题正则的视为正文噪声。
+  ///
+  /// 其它 figure-label（image/chart/table/vision_footnote）一律放行。
+  bool _isValidFigureBlock(LayoutBlock block) {
+    if (block.blockLabel != 'figure_title') return true;
+    if (isMainCaption(block)) return true;
+    return block.blockContent.trim().length <= _maxSubLabelLength;
   }
 
   /// 判断 block 是否为主标题（Figure N. / Table N.），排除子标签如 (a)、(b)
@@ -212,59 +254,242 @@ class FigureExtractService {
     return pages;
   }
 
-  // ─── Segment 检测（两步分片） ─────────────────────────
+  // ─── 主标题连续性恢复（OCR 误标 fallback） ────────────
+
+  /// 允许被"升格"为主标题的原始 block label。
+  static const _promotableLabels = {'text', 'footer', 'paragraph_title'};
+
+  /// 在 segmentation 之前扫描所有页面，把被 OCR 误标为正文的 Figure/Table
+  /// 标题升格回 `figure_title`，使后续 [findFigureSegments] 能正确识别。
+  ///
+  /// Pattern 自学习：只补全当前文档已经使用的前缀序列；整数序号限定。
+  List<List<LayoutBlock>> _recoverMissingAnchors(
+    List<List<LayoutBlock>> pages,
+  ) {
+    final series = _collectSeries(pages);
+    if (series.isEmpty) return pages;
+
+    // 深拷贝外层 list，页面内部的 LayoutBlock 需要替换时再新建
+    final result = pages.map((page) => List<LayoutBlock>.from(page)).toList();
+
+    for (final s in series.values) {
+      // 中间空缺
+      for (var n = s.minNumber; n <= s.maxNumber; n++) {
+        if (s.present.contains(n)) continue;
+        _tryPromote(result, s.prefix, n);
+      }
+      // 尾端延伸：n+1 开始，找不到就停
+      var probe = s.maxNumber + 1;
+      while (_tryPromote(result, s.prefix, probe)) {
+        probe++;
+      }
+    }
+    return result;
+  }
+
+  /// 扫描所有 anchor，按前缀归类为 [_CaptionSeries]。
+  Map<String, _CaptionSeries> _collectSeries(List<List<LayoutBlock>> pages) {
+    final map = <String, _CaptionSeries>{};
+    for (final page in pages) {
+      for (final b in page) {
+        if (!isMainCaption(b)) continue;
+        final trimmed = b.blockContent.trim();
+        final prefix = _matchPrefix(trimmed);
+        if (prefix == null) continue;
+        final number = _parseIntegerNumber(trimmed, prefix);
+        if (number == null) continue;
+        map
+            .putIfAbsent(prefix, () => _CaptionSeries(prefix))
+            .present
+            .add(number);
+      }
+    }
+    return map;
+  }
+
+  /// 在 [content] 头部匹配已知前缀（长度优先），返回配置中的原始形式。
+  String? _matchPrefix(String content) {
+    for (final p in _prefixes) {
+      if (content.length < p.length) continue;
+      if (content.substring(0, p.length).toLowerCase() == p.toLowerCase()) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  /// 从 "Figure 12." / "FIG. 3:" 之类的字符串里抠出整数序号；
+  /// 非整数形式（"S1"、"3A"、"2.1"）返回 null，不参与续号。
+  int? _parseIntegerNumber(String content, String prefix) {
+    final tail = content.substring(prefix.length).trimLeft();
+    final m = RegExp(r'^(\d+)').firstMatch(tail);
+    if (m == null) return null;
+    final after = tail.substring(m.end);
+    if (after.isEmpty) return int.tryParse(m.group(1)!);
+    final next = after.codeUnitAt(0);
+    // 字母或点紧跟在数字后面（如 "3A"、"3.1"）都拒绝
+    if ((next >= 0x41 && next <= 0x5A) ||
+        (next >= 0x61 && next <= 0x7A) ||
+        next == 0x2E) {
+      return null;
+    }
+    return int.tryParse(m.group(1)!);
+  }
+
+  /// 尝试升格 `<prefix> <number>` 开头的候选 block；成功返回 true。
+  ///
+  /// 跨所有页面的 text/footer/paragraph_title，按阅读顺序取第一个命中。
+  /// 若同一序号有 2 个以上命中视为内嵌引用歧义，拒绝升格。
+  bool _tryPromote(
+    List<List<LayoutBlock>> pages,
+    String prefix,
+    int number,
+  ) {
+    final re = RegExp(
+      '^${RegExp.escape(prefix)}\\s*$number$_suffixPattern',
+      caseSensitive: false,
+    );
+
+    (int, int)? firstHit;
+    var hitCount = 0;
+    outer:
+    for (var pi = 0; pi < pages.length; pi++) {
+      for (var bi = 0; bi < pages[pi].length; bi++) {
+        final b = pages[pi][bi];
+        if (!_promotableLabels.contains(b.blockLabel)) continue;
+        if (!re.hasMatch(b.blockContent.trim())) continue;
+        hitCount++;
+        firstHit ??= (pi, bi);
+        if (hitCount > 1) break outer;
+      }
+    }
+
+    if (firstHit == null || hitCount > 1) return false;
+    final (pi, bi) = firstHit;
+    final original = pages[pi][bi];
+    pages[pi][bi] = original.copyWith(blockLabel: 'figure_title');
+    debugPrint(
+      '[FigureExtract] recovered "$prefix $number" '
+      'on page $pi (block ${original.blockId})',
+    );
+    return true;
+  }
+
+  // ─── Segment 检测（空间聚类） ──────────────────────────
+
+  /// `figure_title` block 被视作合法 figure 构件所允许的最大内容长度。
+  ///
+  /// OCR 偶尔会把正文段落误标为 `figure_title`，这些误标内容通常很长；
+  /// 合法的主标题会通过 [isMainCaption] 放行，子标签（如 `(a)`、`BALB/c WT`）
+  /// 实测不超过 30 字符。超过这个阈值且不匹配主标题正则的 `figure_title`
+  /// 视为噪声，从 figure 聚类中剔除。
+  static const _maxSubLabelLength = 30;
 
   /// 在单页 block 列表中找到所有 figure segment。
   ///
-  /// **第一步**：连续的 figure 相关 block 聚合为粗段落。
-  /// **第二步**：在粗段落内部按主标题（Figure N. / Table N.）做二次切割，
-  /// 同时处理标题在上/在下两种排版风格。
+  /// 每个主标题（Figure N. / Table N.）是一个 segment 锚点，
+  /// 其它 figure-label block（image/chart/table/sub-caption/vision_footnote）
+  /// 按 bbox 最短边距归属到最近的锚点。
+  ///
+  /// 这种做法对"标题在上/下/左/右"四种排版一视同仁，
+  /// 并且不依赖 API 的阅读顺序——当双栏版面把 caption 和 image
+  /// 在阅读顺序上打断时也能正确配对。
   List<List<LayoutBlock>> findFigureSegments(List<LayoutBlock> blocks) {
-    // 第一步：粗分片
-    final rawSegments = <List<LayoutBlock>>[];
-    var current = <LayoutBlock>[];
-    for (final block in blocks) {
-      if (figureLabels.contains(block.blockLabel)) {
-        current.add(block);
-      } else {
-        if (current.isNotEmpty) {
-          rawSegments.add(current);
-          current = [];
-        }
+    final figureBlocks = blocks
+        .where((b) => figureLabels.contains(b.blockLabel))
+        .where(_isValidFigureBlock)
+        .toList();
+    if (figureBlocks.isEmpty) return const [];
+
+    final anchors = figureBlocks.where(isMainCaption).toList();
+    if (anchors.isEmpty) return const [];
+
+    // 按 label 把 anchor 分成两类，用于同类亲和性匹配
+    final tableAnchors = anchors.where(_isTableAnchor).toList();
+    final figureAnchors =
+        anchors.where((a) => !_isTableAnchor(a)).toList();
+
+    final segments = {
+      for (final a in anchors) identityHashCode(a): <LayoutBlock>[a],
+    };
+
+    // 超出阈值的 block 视为与任何锚点都不相关，丢弃。
+    // 0.5 留出余量，使侧向排版中位于另一列的子标题也能配对。
+    final threshold = _pageDiagonal(blocks) * 0.5;
+
+    for (final block in figureBlocks) {
+      if (isMainCaption(block)) continue;
+
+      // 同类优先：table / vision_footnote 偏向 table anchor，
+      // 其它 figure 内容偏向 figure anchor。
+      final preferTable = block.blockLabel == 'table' ||
+          block.blockLabel == 'vision_footnote';
+      final preferred = preferTable ? tableAnchors : figureAnchors;
+
+      final (nearest, gap) = _nearestAnchor(block, preferred);
+      if (nearest != null && gap <= threshold) {
+        segments[identityHashCode(nearest)]!.add(block);
+        continue;
+      }
+
+      // Fallback：同类 anchor 不存在或超距时，退回到所有 anchor 里最近的一个
+      final (fallback, fbGap) = _nearestAnchor(block, anchors);
+      if (fallback != null && fbGap <= threshold) {
+        segments[identityHashCode(fallback)]!.add(block);
       }
     }
-    if (current.isNotEmpty) rawSegments.add(current);
 
-    // 第二步：按主标题二次切割
-    final segments = <List<LayoutBlock>>[];
-    for (final rawSeg in rawSegments) {
-      var sub = <LayoutBlock>[];
-      for (final block in rawSeg) {
-        if (isMainCaption(block)) {
-          final hasContent =
-              sub.any((b) => b.blockLabel != 'figure_title');
-          final subHasCaption = sub.any(isMainCaption);
+    return segments.values.toList();
+  }
 
-          if (hasContent && subHasCaption) {
-            // sub 已是完整的"标题在上"段，切出去；新标题开启下一段
-            segments.add(sub);
-            sub = [block];
-          } else if (hasContent && !subHasCaption) {
-            // sub 有内容但无标题 → "标题在下"，附加后切割
-            sub.add(block);
-            segments.add(sub);
-            sub = [];
-          } else {
-            // sub 无内容 → "标题在上"，先不切
-            sub.add(block);
-          }
-        } else {
-          sub.add(block);
-        }
+  /// 在给定 anchor 列表里返回距离 [block] 最近的那个及其 rect-gap。
+  /// 列表为空时返回 `(null, double.infinity)`。
+  (LayoutBlock?, double) _nearestAnchor(
+    LayoutBlock block,
+    List<LayoutBlock> anchors,
+  ) {
+    LayoutBlock? best;
+    var bestGap = double.infinity;
+    for (final anchor in anchors) {
+      final gap = _rectGap(block.blockBbox, anchor.blockBbox);
+      if (gap < bestGap) {
+        bestGap = gap;
+        best = anchor;
       }
-      if (sub.isNotEmpty) segments.add(sub);
     }
-    return segments;
+    return (best, bestGap);
+  }
+
+  /// 两个 `[l, t, r, b]` 矩形的最短边距（重叠时返回 0）。
+  ///
+  /// 相比中心距，边距在侧排场景下更准确：caption 与 image 的宽度
+  /// 跨度大时，中心距会被拉远，造成漏配。
+  static double _rectGap(List<double> a, List<double> b) {
+    final dx = (a[0] > b[2])
+        ? a[0] - b[2]
+        : (b[0] > a[2] ? b[0] - a[2] : 0.0);
+    final dy = (a[1] > b[3])
+        ? a[1] - b[3]
+        : (b[1] > a[3] ? b[1] - a[3] : 0.0);
+    return math.sqrt(dx * dx + dy * dy);
+  }
+
+  /// 当页所有 block 外接矩形的对角线长度，用作距离阈值的基准。
+  static double _pageDiagonal(List<LayoutBlock> blocks) {
+    if (blocks.isEmpty) return 0;
+    double left = double.infinity;
+    double top = double.infinity;
+    double right = double.negativeInfinity;
+    double bottom = double.negativeInfinity;
+    for (final b in blocks) {
+      if (b.blockBbox[0] < left) left = b.blockBbox[0];
+      if (b.blockBbox[1] < top) top = b.blockBbox[1];
+      if (b.blockBbox[2] > right) right = b.blockBbox[2];
+      if (b.blockBbox[3] > bottom) bottom = b.blockBbox[3];
+    }
+    final w = right - left;
+    final h = bottom - top;
+    return math.sqrt(w * w + h * h);
   }
 
   // ─── BBox 计算 ────────────────────────────────────────
@@ -377,7 +602,7 @@ class FigureExtractService {
     }
 
     final content = await resultFile.readAsString();
-    final allPages = parseLayoutBlocks(content);
+    final allPages = _recoverMissingAnchors(parseLayoutBlocks(content));
 
     // 收集所有 segment（带页码）
     final segments = <FigureSegment>[];

@@ -2,6 +2,7 @@
 
 ## Edit Rules
 
+- 每次项目对 Infrastructure Modules 内部使用的包进行更换，都要在 Infrastructure Modules 内部更新
 - 禁止编辑 `android/`、`windows/`、`linux/`、`macos/`、`ios/`、`web/` 目录，这些由 Flutter 自动生成。
 
 ## Compact Rules
@@ -52,21 +53,27 @@
 - **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 自定义 SpanNode：LaTeX (`nr_latex_node`)、图片 (`nr_image_node`)、标记 (`nr_mark_node`)、搜索高亮 (`nr_search_highlight_builder`)、主题配置 (`nr_markdown_config`)。
 - **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — Figure 全屏查看器（宽度优先适配 + Ctrl+滚轮/手势缩放 + 下滑退出），通过 `showFigureViewer()` 打开。
 
+### Icon System
+
+- **Material Symbols** (`package:material_symbols_icons/symbols.dart`) — 所有图标必须通过 `Symbols.xxx` 使用，禁止用 Flutter 内置的 `Icons.xxx`（Material Icons 旧字体）。项目已整体迁移到 Material Symbols（可变字重 / fill / grade / optical size），不要混用两套图标集。
+
 ## Transition & Animation Spec
 
 使用 `package:animations`（Google 官方 Material motion）实现转场动画。
 
 ### 路由转场（`_buildAnimatedPage`）
 
-| 场景 | 动画 | 参数 | 说明 |
-|------|------|------|------|
-| 全屏推入（首页→阅读器、设置页等） | **FadeThroughTransition** | 300ms, `Curves.easeOut` | 旧页淡出 + 新页淡入，无方向偏见，适合层级跳转 |
+- **场景**：全屏推入（首页→阅读器、设置页等）。
+- **动画**：`FadeThroughTransition`。
+- **参数**：300ms，曲线 `Curves.easeOut`。
+- **语义**：旧页淡出 + 新页淡入，无方向偏见，适合层级跳转。
 
 ### 页内视图切换
 
-| 场景 | 动画 | 参数 | 说明 |
-|------|------|------|------|
-| PDF ↔ Markdown 切换 | **SharedAxisTransition (X)** | 300ms, horizontal | 水平轴共享运动，暗示"同一文档的两种视图" |
+- **场景**：PDF ↔ Markdown 切换。
+- **动画**：`SharedAxisTransition`，`transitionType: SharedAxisTransitionType.horizontal`。
+- **参数**：300ms，水平方向。
+- **语义**：水平轴共享运动，暗示"同一文档的两种视图"。
 
 ### 实现约定
 
@@ -113,7 +120,16 @@
 
 ### 文档提取（决策记录）
 
-- 提取管线统一为 JSON 格式，淘汰 JSONL；`_images/` 已废弃，图片统一走 `_figures/`
+- 提取管线统一为 JSON 格式；图片统一走 `_figures/`
+
+#### Figure 提取（`lib/services/figure_extract_service.dart`）
+
+- 主标题连续性恢复 (`_recoverMissingAnchors`, `_collectSeries`, `_tryPromote`)
+- 空间聚类 (`findFigureSegments`, `_rectGap`, `_pageDiagonal`)
+- Label 亲和归属 (`_isTableAnchor`)
+- OCR 噪声过滤 (`_isValidFigureBlock`)
+- BBox 合并与裁剪 (`computeMergedBbox`, `_cropRegion`)
+- 产物：`{baseName}_figures/Figure_N.png` + `figures.json`
 
 #### Flutter / Dart 调用文档版面解析 API
 
@@ -145,6 +161,7 @@
 - `{baseName}_figures/`：figure 裁剪图片目录（含 `figures.json` 清单）
 
 ##### `saveResult()` 流程
+
 1. 保存 `raw.md` + `.json`
 2. `FigureExtractService.extractFigures()` 从 PDF 裁剪 figure 区域图片
 3. `replaceFigureRegions()` 用 block_ids 在每页 raw markdown 中定位 figure 行范围，替换为 `![caption](file:///path)`
@@ -153,16 +170,10 @@
 6. `MarkdownPreprocessor.process()` + `filterBeforeTitle()` LaTeX 修复与标题过滤
 7. 写入 `.md` 文件
 
-##### 当前代码入口
-- 异步解析（主路径）：`lib/services/batch_extract_service.dart` — `extractSingle()` / `extractBatch()`
-- 同步解析（fallback）：`lib/services/doc_extract_service.dart` — `extract()`
-- 任务调度：`lib/providers/task_provider.dart` — `extractDocument()` 异步优先，自动 fallback
-- 结果保存：`lib/services/doc_extract_service.dart` — `saveResult()`（两条路径共用，内部调用 FigureExtract + replaceFigureRegions）
-- 阅读缓存：`lib/services/reader/markdown_document_cache_service.dart`
-- Figure 提取：`lib/services/figure_extract_service.dart`（由 saveResult 自动调用）
-
 ## Todolist
 
 - 后续raw.md的保存可以删去，目前只是用于测试
 - 段落内提及的figure应该能被检出和点击高亮
 - markdown搜索内容的上下标、公式等内容也没有被正常地渲染出来
+- pdf视图最好也有outline_panel，但是定位的功能可能还要再想一下怎么做，或许需要基于json里的坐标反过来定位到pdf里面的具体页数和位置
+- 图片查看器里面需要允许长按弹出保存图片选项（桌面端右键弹出保存选项）
