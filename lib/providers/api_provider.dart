@@ -48,11 +48,19 @@ class AgentApiState {
   final String apiKey;
   final List<String> models;
 
+  /// 默认模型 id；唯一——切换时旧值自动被覆盖
+  final String? defaultModelId;
+
+  /// 快速模型 id；唯一——切换时旧值自动被覆盖
+  final String? fastModelId;
+
   const AgentApiState({
     this.provider = AgentApiProvider.openai,
     this.baseUrl = '',
     this.apiKey = '',
     this.models = const [],
+    this.defaultModelId,
+    this.fastModelId,
   });
 
   /// 当前生效的 Base URL（用户未填时取服务商默认值）
@@ -64,21 +72,34 @@ class AgentApiState {
     String? baseUrl,
     String? apiKey,
     List<String>? models,
+    // 使用 Object sentinel 以便传 null 清空字段
+    Object? defaultModelId = _sentinel,
+    Object? fastModelId = _sentinel,
   }) => AgentApiState(
     provider: provider ?? this.provider,
     baseUrl: baseUrl ?? this.baseUrl,
     apiKey: apiKey ?? this.apiKey,
     models: models ?? this.models,
+    defaultModelId: identical(defaultModelId, _sentinel)
+        ? this.defaultModelId
+        : defaultModelId as String?,
+    fastModelId: identical(fastModelId, _sentinel)
+        ? this.fastModelId
+        : fastModelId as String?,
   );
 }
+
+const _sentinel = Object();
 
 class AgentApiNotifier extends StateNotifier<AgentApiState> {
   static const _providerKey = 'agent_api_provider';
 
-  // 每个服务商独立存储 key / url / models
+  // 每个服务商独立存储 key / url / models / 场景模型
   static String _baseUrlKey(String p) => 'agent_api_base_url_$p';
   static String _apiKeyKey(String p) => 'agent_api_key_$p';
   static String _modelsKey(String p) => 'agent_api_models_$p';
+  static String _defaultModelKey(String p) => 'agent_api_default_model_$p';
+  static String _fastModelKey(String p) => 'agent_api_fast_model_$p';
 
   AgentApiNotifier() : super(_load());
 
@@ -115,11 +136,23 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     final rawModels = box.get(_modelsKey(p)) as List?;
     final models = rawModels?.cast<String>().toList() ?? <String>[];
 
+    // 读取场景模型；若指向已被删除的 id，则丢弃
+    String? defaultModelId = box.get(_defaultModelKey(p)) as String?;
+    String? fastModelId = box.get(_fastModelKey(p)) as String?;
+    if (defaultModelId != null && !models.contains(defaultModelId)) {
+      defaultModelId = null;
+    }
+    if (fastModelId != null && !models.contains(fastModelId)) {
+      fastModelId = null;
+    }
+
     return AgentApiState(
       provider: provider,
       baseUrl: baseUrl,
       apiKey: apiKey,
       models: models,
+      defaultModelId: defaultModelId,
+      fastModelId: fastModelId,
     );
   }
 
@@ -139,17 +172,71 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     await GStorage.setting.put(_apiKeyKey(state.provider.name), key);
   }
 
-  Future<void> addModel(String modelId) async {
-    if (state.models.contains(modelId)) return;
-    final updated = [...state.models, modelId];
-    state = state.copyWith(models: updated);
-    await GStorage.setting.put(_modelsKey(state.provider.name), updated);
+  /// 添加一个模型；可同时将其设为默认 / 快速模型（唯一——替换旧值）
+  Future<void> addModel(
+    String modelId, {
+    bool setAsDefault = false,
+    bool setAsFast = false,
+  }) async {
+    final box = GStorage.setting;
+    final p = state.provider.name;
+    final List<String> updated = state.models.contains(modelId)
+        ? state.models
+        : [...state.models, modelId];
+
+    state = state.copyWith(
+      models: updated,
+      defaultModelId: setAsDefault ? modelId : _sentinel,
+      fastModelId: setAsFast ? modelId : _sentinel,
+    );
+    await box.put(_modelsKey(p), updated);
+    if (setAsDefault) await box.put(_defaultModelKey(p), modelId);
+    if (setAsFast) await box.put(_fastModelKey(p), modelId);
   }
 
   Future<void> removeModel(String modelId) async {
+    final box = GStorage.setting;
+    final p = state.provider.name;
     final updated = state.models.where((m) => m != modelId).toList();
-    state = state.copyWith(models: updated);
-    await GStorage.setting.put(_modelsKey(state.provider.name), updated);
+
+    // 级联清理：若被删模型恰好是 default/fast，对应字段置空
+    final clearedDefault = state.defaultModelId == modelId;
+    final clearedFast = state.fastModelId == modelId;
+
+    state = state.copyWith(
+      models: updated,
+      defaultModelId: clearedDefault ? null : _sentinel,
+      fastModelId: clearedFast ? null : _sentinel,
+    );
+    await box.put(_modelsKey(p), updated);
+    if (clearedDefault) await box.delete(_defaultModelKey(p));
+    if (clearedFast) await box.delete(_fastModelKey(p));
+  }
+
+  /// 显式切换默认模型；传 null 清空
+  Future<void> setDefaultModel(String? modelId) async {
+    final box = GStorage.setting;
+    final p = state.provider.name;
+    if (modelId != null && !state.models.contains(modelId)) return;
+    state = state.copyWith(defaultModelId: modelId);
+    if (modelId == null) {
+      await box.delete(_defaultModelKey(p));
+    } else {
+      await box.put(_defaultModelKey(p), modelId);
+    }
+  }
+
+  /// 显式切换快速模型；传 null 清空
+  Future<void> setFastModel(String? modelId) async {
+    final box = GStorage.setting;
+    final p = state.provider.name;
+    if (modelId != null && !state.models.contains(modelId)) return;
+    state = state.copyWith(fastModelId: modelId);
+    if (modelId == null) {
+      await box.delete(_fastModelKey(p));
+    } else {
+      await box.put(_fastModelKey(p), modelId);
+    }
   }
 
   void reload() {

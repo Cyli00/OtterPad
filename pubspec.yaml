@@ -87,6 +87,7 @@ dependencies:
   animations: ^2.1.2
   scroll_to_index: ^3.0.1
   extended_image: ^10.0.1
+  flutter_slidable: ^4.0.3
 
   # Material Symbols (3000+ icons, drop-in replacement for Icons.*)
   material_symbols_icons: ^4.2928.1
