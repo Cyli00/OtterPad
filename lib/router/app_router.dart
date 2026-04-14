@@ -16,6 +16,7 @@ import '../pages/setting/network_settings_page.dart';
 import '../pages/setting/view.dart';
 import '../pages/shelf/favorite_detail_page.dart';
 import '../pages/shelf/no_file_entries_page.dart';
+import '../pages/shelf/reading_history_page.dart';
 import '../pages/shelf/starred_items_page.dart';
 import '../pages/shelf/view.dart';
 import 'app_routes.dart';
@@ -105,6 +106,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const StarredItemsPage(),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'history',
+                    parentNavigatorKey: _rootNavigatorKey,
+                    pageBuilder: (context, state) => _buildAnimatedPage(
+                      state: state,
+                      child: const ReadingHistoryPage(),
                     ),
                   ),
                   GoRoute(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
+import '../../providers/history_provider.dart';
 import '../../providers/starred_provider.dart';
 import '../../router/app_routes.dart';
 import 'widgets/library_menu_item.dart';
@@ -93,14 +94,56 @@ class ShelfPage extends ConsumerWidget {
                   title: '已同步',
                   onTap: () {},
                 ),
-                LibraryMenuItem(
-                  icon: Symbols.history,
-                  title: '阅读历史',
-                  onTap: () {},
+                Consumer(
+                  builder: (context, ref, _) {
+                    final count = ref.watch(historyCountProvider);
+                    return LibraryMenuItem(
+                      icon: Symbols.history,
+                      title: '阅读历史',
+                      trailing: count > 0
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSecondaryContainer,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          : null,
+                      onTap: () => context.push(AppRoutes.shelfHistory),
+                    );
+                  },
                 ),
                 Consumer(
                   builder: (context, ref, _) {
                     final count = ref.watch(starredCountProvider);
+                    // 星标角标：取当前 primary 的色相 +180° 作为互补色，
+                    // 再按明暗模式派生 container / onContainer 两档。
+                    final primaryHsl =
+                        HSLColor.fromColor(theme.colorScheme.primary);
+                    final compHue = (primaryHsl.hue + 180) % 360;
+                    final isDark = theme.brightness == Brightness.dark;
+                    final badgeBg = HSLColor.fromAHSL(
+                      1.0,
+                      compHue,
+                      isDark ? 0.35 : 0.80,
+                      isDark ? 0.26 : 0.88,
+                    ).toColor();
+                    final badgeFg = HSLColor.fromAHSL(
+                      1.0,
+                      compHue,
+                      isDark ? 0.85 : 0.60,
+                      isDark ? 0.82 : 0.28,
+                    ).toColor();
                     return LibraryMenuItem(
                       icon: Symbols.grade,
                       title: '星标条目',
@@ -111,13 +154,13 @@ class ShelfPage extends ConsumerWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.tertiaryContainer,
+                                color: badgeBg,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
                                 '$count',
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.tertiary,
+                                  color: badgeFg,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),

@@ -42,7 +42,7 @@ class BookshelfList extends ConsumerWidget {
         doc: doc,
         isSelectionMode: isSelectionMode,
         isSelected: selection.selectedIds.contains(doc.id),
-        onTap: () => DocCardActions.openReader(context, doc),
+        onTap: () => DocCardActions.openReader(context, ref, doc),
         onLongPress: () =>
             ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
         onSelectionTap: () =>

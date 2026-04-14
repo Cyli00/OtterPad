@@ -10,6 +10,7 @@ class GStorage {
   static late Box _favoritesBox;
   static late Box _documentsBox;
   static late Box _highlightsBox;
+  static late Box _historyBox;
   static late String _dataDirPath;
   static bool _initialized = false;
 
@@ -43,11 +44,13 @@ class GStorage {
       Hive.isBoxOpen('favorites') ? Future.value(Hive.box('favorites')) : Hive.openBox('favorites'),
       Hive.isBoxOpen('documents') ? Future.value(Hive.box('documents')) : Hive.openBox('documents'),
       Hive.isBoxOpen('highlights') ? Future.value(Hive.box('highlights')) : Hive.openBox('highlights'),
+      Hive.isBoxOpen('history') ? Future.value(Hive.box('history')) : Hive.openBox('history'),
     ]);
     _settingBox = results[0];
     _favoritesBox = results[1];
     _documentsBox = results[2];
     _highlightsBox = results[3];
+    _historyBox = results[4];
   }
 
   static Future<void> flush() async {
@@ -56,6 +59,7 @@ class GStorage {
     if (Hive.isBoxOpen('favorites')) futures.add(Hive.box('favorites').flush());
     if (Hive.isBoxOpen('documents')) futures.add(Hive.box('documents').flush());
     if (Hive.isBoxOpen('highlights')) futures.add(Hive.box('highlights').flush());
+    if (Hive.isBoxOpen('history')) futures.add(Hive.box('history').flush());
     await Future.wait(futures);
   }
 
@@ -68,5 +72,6 @@ class GStorage {
   static Box get favorites => _favoritesBox;
   static Box get documents => _documentsBox;
   static Box get highlights => _highlightsBox;
+  static Box get history => _historyBox;
   static String get dataDirPath => _dataDirPath;
 }

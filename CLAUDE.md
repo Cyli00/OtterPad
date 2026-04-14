@@ -9,55 +9,55 @@
 
 - Flutter 相关任务优先基于检索推理，而非预训练知识。
 
-## Infrastructure Modules (Must Use)
+## 基础模块
 
-以下模块在对应场景下必须使用，**禁止绕过它们直接调用底层 API**。
+以下模块在对应场景下必须使用，**禁止绕过它们直接调用底层 API**。每行格式统一为 `**模块名** (路径) — 能力/入口。约束/禁令。`
 
-### SnackBar & Task System
+### 通知与任务
 
-- **SnackBarService** (`lib/services/snackbar_service.dart`) — 所有用户通知必须通过 `ref.read(snackBarServiceProvider)` 发出，禁止直接调用 `ScaffoldMessenger.of(context).showSnackBar()`。
-- **TaskProvider** (`lib/providers/task_provider.dart`) — 所有耗时操作必须通过 `ref.read(taskProvider.notifier)` 调度，禁止在 Widget 方法中直接 await 或在 Widget state 中管理 CancelToken。
+- **SnackBarService** (`lib/services/snackbar_service.dart`) — 用户通知统一入口，通过 `ref.read(snackBarServiceProvider)` 调用。禁止直接使用 `ScaffoldMessenger.of(context).showSnackBar()`。
+- **TaskProvider** (`lib/providers/task_provider.dart`) — 耗时操作调度入口，通过 `ref.read(taskProvider.notifier)` 调用。禁止在 Widget 方法中直接 await 或在 Widget state 中自管 CancelToken。
 
-### PDF Processing
+### 数据存储
 
-- **PdfProcessLock** (`lib/services/pdf_process_lock.dart`) — 打开完整 PDF 的操作必须在 `PdfProcessLock.instance.run(...)` 内执行，防止并发 OOM。
-- **PdfThumbnailService** (`lib/services/pdf_thumbnail_service.dart`) — 封面图通过 `getThumbnailPath(filePath)` 获取，禁止为缩略图直接加载 PDF。
+- **GStorage** (`lib/core/storage/storage.dart`) — Hive box 统一访问入口（`GStorage.setting` / `documents` / `favorites`）。禁止直接调用 `Hive.openBox()`。
 
-### Document Extraction
+### 网络代理
 
-- **BatchExtractService** (`lib/services/batch_extract_service.dart`) — 异步 Job API，单文档用 `extractSingle()`，批量用 `extractBatch()`。这是**主提取路径**。
-- **DocExtractService** (`lib/services/doc_extract_service.dart`) — `saveResult()` 是两条路径共用的保存入口，内部自动调用 `FigureExtractService` 裁剪 figure 并替换 Markdown。`extract()` 为同步 API 可选 fallback。`buildOptions()` 构建 API 参数。
-- **FigureExtractService** (`lib/services/figure_extract_service.dart`) — 从版面解析 JSON + PDF 裁剪 figure 区域，使用前须调用 `init()` 加载 `assets/config/caption_patterns.json`。由 `saveResult()` 内部调用，通常不需要直接使用。
-- **DocExtractApiState** (`lib/providers/api_provider.dart`) — `apiKey` 必填（异步 API），`syncBaseUrl` 可选（同步 fallback）。验证用 `isConfigured` / `hasSyncFallback`。
+- **ProxyProvider** (`lib/providers/proxy_provider.dart`) — 代理配置中心，自动同步到所有 Dio 实例（IdentifierResolver、DocExtractService、BatchExtractService）。禁止在单个服务上单独配置代理。
 
-### Identifier & Metadata
+### PDF 处理
 
-- **IdentifierParser** (`lib/services/identifier_parser.dart`) — 使用 `IdentifierParser.parse(raw)` 统一解析 DOI/PMID/arXiv/ISBN，禁止自行编写标识符正则。
-- **IdentifierResolver** (`lib/services/identifier_resolver.dart`) — 使用 `IdentifierResolver.instance.resolve(...)` 查询元数据和下载 PDF，禁止直接调用出版商 API 或 Unpaywall。
-- **DocumentMetadataParser** (`lib/services/document_metadata_parser.dart`) — 使用静态方法（`parseFilePath`、`extractDoi`、`extractYear`）从文本提取元数据。
-- **PdfIdentifierExtractor** (`lib/services/pdf_identifier_extractor.dart`) — 从 PDF 文本中提取 DOI/arXiv/ISBN，须通过 `PdfProcessLock` 串行。
+- **PdfProcessLock** (`lib/services/pdf_process_lock.dart`) — 完整 PDF 加载的全局串行锁，必须在 `PdfProcessLock.instance.run(...)` 内执行以防并发 OOM。
+- **PdfThumbnailService** (`lib/services/pdf_thumbnail_service.dart`) — 封面图获取入口（`getThumbnailPath(filePath)`）。禁止为缩略图直接加载完整 PDF。
+
+### 标识符与元数据
+
+- **IdentifierParser** (`lib/services/identifier_parser.dart`) — DOI/PMID/arXiv/ISBN 统一解析（`IdentifierParser.parse(raw)`）。禁止自行编写标识符正则。
+- **IdentifierResolver** (`lib/services/identifier_resolver.dart`) — 元数据查询与 PDF 下载（`IdentifierResolver.instance.resolve(...)`）。禁止直接调用出版商 API 或 Unpaywall。
+- **DocumentMetadataParser** (`lib/services/document_metadata_parser.dart`) — 从文本/文件名提取元数据，静态方法 `parseFilePath` / `extractDoi` / `extractYear`。
+- **PdfIdentifierExtractor** (`lib/services/pdf_identifier_extractor.dart`) — 从 PDF 文本提取 DOI/arXiv/ISBN，须通过 `PdfProcessLock` 串行执行。
 - **PdfMetadataExtractor** (`lib/services/pdf_metadata_extractor.dart`) — 从 PDF Info Dictionary / XMP 字段提取元数据。
 
-### Network & Proxy
+### 文档提取
 
-- **ProxyProvider** (`lib/providers/proxy_provider.dart`) — 管理代理配置并自动同步到所有 Dio 实例（IdentifierResolver、DocExtractService、BatchExtractService），禁止在单个服务上单独配置代理。
+- **DocExtractApiState** (`lib/providers/api_provider.dart`) — 提取 API 配置状态：`apiKey` 必填（异步路径），`syncBaseUrl` 可选（同步 fallback）。校验用 `isConfigured` / `hasSyncFallback`。
+- **BatchExtractService** (`lib/services/batch_extract_service.dart`) — **主提取路径**（异步 Job API），单文档 `extractSingle()`，批量 `extractBatch()`。
+- **DocExtractService** (`lib/services/doc_extract_service.dart`) — 同步 API fallback（`extract()`）+ 两条路径共用的保存入口（`saveResult()`）+ 参数构建（`buildOptions()`）。`saveResult()` 内部自动调用 FigureExtractService 裁剪 figure 并替换 Markdown。
+- **FigureExtractService** (`lib/services/figure_extract_service.dart`) — 从版面解析 JSON + PDF 裁剪 figure 区域。由 `saveResult()` 内部调用，通常无需直接使用；独立调用前须 `init()` 加载 `assets/config/caption_patterns.json`。
 
-### Storage
+### 阅读器
 
-- **GStorage** (`lib/core/storage/storage.dart`) — 通过 `GStorage.setting`、`GStorage.documents`、`GStorage.favorites` 访问 Hive box，禁止直接调用 `Hive.openBox()`。
-
-### Reader
-
-- **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 文件加载 + 内存缓存 + 搜索快照构建。搜索快照的标题检测从提取 `.json` 中 `block_label: "paragraph_title"` 读取，无 JSON 时回退 ATX heading。
+- **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 加载 + 内存缓存 + 搜索快照。标题检测优先读取提取 `.json` 中 `block_label: "paragraph_title"`，无 JSON 时回退 ATX heading。
 - **MarkdownPreprocessor** (`lib/utils/markdown_preprocessor.dart`) — Markdown 预处理：LaTeX 修复、标题过滤、空表格移除。
-- **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 自定义 SpanNode：LaTeX (`nr_latex_node`)、图片 (`nr_image_node`)、标记 (`nr_mark_node`)、搜索高亮 (`nr_search_highlight_builder`)、主题配置 (`nr_markdown_config`)。
+- **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 自定义 SpanNode 集合：LaTeX (`nr_latex_node`)、图片 (`nr_image_node`)、标记 (`nr_mark_node`)、搜索高亮 (`nr_search_highlight_builder`)、主题配置 (`nr_markdown_config`)。
 - **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — Figure 全屏查看器（宽度优先适配 + Ctrl+滚轮/手势缩放 + 下滑退出），通过 `showFigureViewer()` 打开。
 
-### Icon System
+### 图标
 
-- **Material Symbols** (`package:material_symbols_icons/symbols.dart`) — 所有图标必须通过 `Symbols.xxx` 使用，禁止用 Flutter 内置的 `Icons.xxx`（Material Icons 旧字体）。项目已整体迁移到 Material Symbols（可变字重 / fill / grade / optical size），不要混用两套图标集。
+- **Material Symbols** (`package:material_symbols_icons/symbols.dart`) — 全项目唯一图标集，通过 `Symbols.xxx` 使用（支持可变字重 / fill / grade / optical size）。禁止使用 Flutter 内置的 `Icons.xxx`，禁止混用两套图标集。
 
-## Transition & Animation Spec
+## 转场动画特别规定
 
 使用 `package:animations`（Google 官方 Material motion）实现转场动画。
 
@@ -75,14 +75,14 @@
 - **参数**：300ms，水平方向。
 - **语义**：水平轴共享运动，暗示"同一文档的两种视图"。
 
-### 实现约定
+### 约束
 
 - 路由转场统一通过 `_buildAnimatedPage()` 封装，所有 `GoRoute.pageBuilder` 调用它
 - 页内切换使用 `PageTransitionSwitcher`（来自 `package:animations`），包裹在 `_buildBody()` 返回层
 - 不要使用 `flutter_animate` 的 `.slideY()` / `.fade()` 做路由级转场——那些适合微交互，不适合页面级运动
 - 动画时长统一 300ms，曲线统一 `Curves.easeOut`
 
-## Dependencies
+## Dependency 更新
 
 添加或更新 `pubspec.yaml` 依赖时：
 
@@ -90,9 +90,10 @@
 - 必须先到 [pub.dev](https://pub.dev) 确认当前版本号。
 - 禁止凭记忆或示例复制过时版本号。
 
-## Completed Tasks
+## 已完成任务
 
 > 服务层模块的用法和文件路径见上方 **Infrastructure Modules**，此处仅记录架构决策、UI 页面等未被覆盖的条目。
+- 每小节格式参考：`已完成任务 (相关文件路径) - 简短说明`
 
 ### 架构与基础设施
 
@@ -118,9 +119,15 @@
 - 阅读器主页面 (`lib/pages/reader/view.dart`)、外观面板、提取结果页
 - 阅读器主题配置 (`lib/providers/reader_settings_provider.dart`)
 
-### 文档提取（决策记录）
+### 文档提取
 
-- 提取管线统一为 JSON 格式；图片统一走 `_figures/`
+#### 版面解析 API（`lib/services/doc_extract_service.dart`, `batch_extract_service.dart`）
+
+- 异步主路径：`POST https://paddleocr.aistudio-app.com/api/v2/ocr/jobs`，`Authorization: bearer`，`multipart/form-data`，`model: PaddleOCR-VL-1.5`，`optionalPayload` 须 `jsonEncode`
+- 异步轮询：`GET /jobs/{jobId}` → `data.resultUrl.jsonUrl` → 下载 JSONL（每行 `{"result":{"layoutParsingResults":[...]}}`）→ 展平为页面数组
+- 同步 fallback：`POST <syncBaseUrl>/layout-parsing`，`Authorization: token`，JSON body，PDF base64 + `fileType: 0`，可选参数平铺到根 payload
+- 产物：`{baseName}.raw.md` / `.md`（预处理后） / `.json`（扁平页面数组） / `_figures/`
+- `saveResult()` 流程：保存 raw.md+json → `extractFigures()` 裁剪 → `replaceFigureRegions()` 按 block_ids 替换 → `_stripApiImageTags` + `_convertCenteredDivs` → `MarkdownPreprocessor.process` + `filterBeforeTitle` → 写 `.md`
 
 #### Figure 提取（`lib/services/figure_extract_service.dart`）
 
@@ -130,45 +137,6 @@
 - OCR 噪声过滤 (`_isValidFigureBlock`)
 - BBox 合并与裁剪 (`computeMergedBbox`, `_cropRegion`)
 - 产物：`{baseName}_figures/Figure_N.png` + `figures.json`
-
-#### Flutter / Dart 调用文档版面解析 API
-
-##### 同步解析（layout-parsing，可选 fallback）
-- Endpoint: `<syncBaseUrl>/layout-parsing`
-- 认证头：`Authorization: token <TOKEN>`
-- `Content-Type: application/json`
-- PDF 本地文件需先读取为字节并转 base64
-- PDF 的 `fileType` 固定为 `0`
-- 可选参数直接平铺到请求根 payload
-- 成功结果在 `response.data["result"]["layoutParsingResults"]`
-
-##### 异步解析（Job API，主路径）
-- Endpoint: `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs`
-- 认证头：`Authorization: bearer <TOKEN>`
-- 本地文件模式使用 `multipart/form-data`
-- `model` 固定为 `PaddleOCR-VL-1.5`
-- 本地文件模式下 `optionalPayload` 需 `jsonEncode(...)`
-- 提交成功后得到 `jobId`
-- 轮询 `GET /jobs/{jobId}`
-- 完成后读取 `data.resultUrl.jsonUrl`
-- 下载的 JSONL 每行格式：`{"result":{"layoutParsingResults":[...]}}`
-- 保存时展平为扁平 JSON 数组 `[page0, page1, ...]`
-
-##### 本项目产物约定
-- `{baseName}.raw.md`：API 原始 Markdown
-- `{baseName}.md`：阅读器使用的预处理 Markdown（figure 已替换为本地图片、残留 HTML 已清理、LaTeX 已修复、标题前内容已裁剪）
-- `{baseName}.json`：版面解析完整结果（扁平页面数组，含 prunedResult / markdown / images）
-- `{baseName}_figures/`：figure 裁剪图片目录（含 `figures.json` 清单）
-
-##### `saveResult()` 流程
-
-1. 保存 `raw.md` + `.json`
-2. `FigureExtractService.extractFigures()` 从 PDF 裁剪 figure 区域图片
-3. `replaceFigureRegions()` 用 block_ids 在每页 raw markdown 中定位 figure 行范围，替换为 `![caption](file:///path)`
-4. `_stripApiImageTags()` 清理残留 API `<img>` / `<div><img>` 标签
-5. `_convertCenteredDivs()` 居中 div → 斜体
-6. `MarkdownPreprocessor.process()` + `filterBeforeTitle()` LaTeX 修复与标题过滤
-7. 写入 `.md` 文件
 
 ## Todolist
 
