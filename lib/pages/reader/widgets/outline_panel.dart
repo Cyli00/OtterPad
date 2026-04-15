@@ -12,17 +12,22 @@ class ReferenceItem {
   final int number;
   final String text;
   final int charOffset;
+  final bool isNumbered;
 
   const ReferenceItem({
     required this.number,
     required this.text,
     required this.charOffset,
+    this.isNumbered = true,
   });
 }
 
 // ─── 解析工具 ───
 
-/// 从 Markdown 中提取参考文献列表（定位 References 标题后按编号切分）
+/// 从 Markdown 中提取参考文献列表。
+///
+/// 优先识别编号格式（`1.` / `1)` / `[1]`），无编号时回退到按空行切分的段落模式
+/// （适用于 APA 等 Author-Year 格式）。
 List<ReferenceItem> parseReferences(String markdown) {
   final refHeadingRe = RegExp(
     r'^#{1,3}\s+(?:References|参考文献|Bibliography|Works?\s+Cited)',
@@ -38,13 +43,25 @@ List<ReferenceItem> parseReferences(String markdown) {
   final refSection =
       nextHeading != null ? afterRef.substring(0, nextHeading.start) : afterRef;
 
+  final numbered = _parseNumberedRefs(refSection, refMatch.end);
+  if (numbered.isNotEmpty) return numbered;
+
+  return _parseParagraphRefs(refSection, refMatch.end);
+}
+
+List<ReferenceItem> _parseNumberedRefs(String refSection, int baseOffset) {
   final items = <ReferenceItem>[];
-  final refItemRe = RegExp(r'^\s*(\d+)[.\)]\s+', multiLine: true);
+  // 同时支持 "1. "、"1) " 与 "[1] " 三种前缀
+  final refItemRe = RegExp(
+    r'^\s*(?:\[(\d+)\]|(\d+)[.\)])\s+',
+    multiLine: true,
+  );
   final matches = refItemRe.allMatches(refSection).toList();
 
   for (var i = 0; i < matches.length; i++) {
     final match = matches[i];
-    final num = int.tryParse(match.group(1)!) ?? (i + 1);
+    final numStr = match.group(1) ?? match.group(2)!;
+    final num = int.tryParse(numStr) ?? (i + 1);
     final textStart = match.end;
     final textEnd =
         i + 1 < matches.length ? matches[i + 1].start : refSection.length;
@@ -57,11 +74,53 @@ List<ReferenceItem> parseReferences(String markdown) {
       items.add(ReferenceItem(
         number: num,
         text: text,
-        charOffset: refMatch.end + match.start,
+        charOffset: baseOffset + match.start,
       ));
     }
   }
   return items;
+}
+
+List<ReferenceItem> _parseParagraphRefs(String refSection, int baseOffset) {
+  final items = <ReferenceItem>[];
+  // 按空行切分段落：每条引用默认是一个独立段落
+  final boundary = RegExp(r'\n[ \t]*\n');
+  final matches = boundary.allMatches(refSection).toList();
+
+  final chunks = <({int start, int end})>[];
+  int cursor = 0;
+  for (final m in matches) {
+    chunks.add((start: cursor, end: m.start));
+    cursor = m.end;
+  }
+  chunks.add((start: cursor, end: refSection.length));
+
+  int num = 1;
+  for (final chunk in chunks) {
+    final raw = refSection.substring(chunk.start, chunk.end);
+    final leadingWs = raw.length - raw.trimLeft().length;
+    final normalized =
+        raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    if (normalized.length < 20) continue;
+    if (!_looksLikeReference(normalized)) continue;
+
+    items.add(ReferenceItem(
+      number: num++,
+      text: normalized,
+      charOffset: baseOffset + chunk.start + leadingWs,
+      isNumbered: false,
+    ));
+  }
+  return items;
+}
+
+/// 启发式判断一个段落是否像学术引用：含年份括号 / 裸年份 / DOI / URL。
+bool _looksLikeReference(String text) {
+  return RegExp(
+    r'\((?:19|20)\d{2}[a-z]?\)|\b(?:19|20)\d{2}[.,;]|\bdoi[:\s]|https?://',
+    caseSensitive: false,
+  ).hasMatch(text);
 }
 
 // ─── 大纲面板 ───
@@ -325,7 +384,9 @@ class _ReferencesTab extends StatelessWidget {
 
         return InkWell(
           onTap: () {
-            final text = '[${item.number}] ${item.text}';
+            final text = item.isNumbered
+                ? '[${item.number}] ${item.text}'
+                : item.text;
             Clipboard.setData(ClipboardData(text: text));
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
