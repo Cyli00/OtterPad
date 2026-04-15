@@ -111,7 +111,7 @@ class HomeHeader extends ConsumerWidget {
           ),
           const SizedBox(width: 8.0),
           _HeaderButton(
-            icon: Symbols.add_circle_rounded,
+            icon: Symbols.note_add_rounded,
             tooltip: '工具',
             size: isMobile ? 36 : 40,
             onPressed: () async {

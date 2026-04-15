@@ -82,6 +82,10 @@
 - 不要使用 `flutter_animate` 的 `.slideY()` / `.fade()` 做路由级转场——那些适合微交互，不适合页面级运动
 - 动画时长统一 300ms，曲线统一 `Curves.easeOut`
 
+## Slider 统一范式
+
+所有设置项的数值滑块参照 [api_settings_extract.dart](lib/pages/setting/api_settings_extract.dart) 里的 `_sliderTile` 实现。禁止各页面自造视觉。
+
 ## Dependency 更新
 
 添加或更新 `pubspec.yaml` 依赖时：
@@ -93,7 +97,7 @@
 ## 已完成任务
 
 > 服务层模块的用法和文件路径见上方 **Infrastructure Modules**，此处仅记录架构决策、UI 页面等未被覆盖的条目。
-- 每小节格式参考：`已完成任务 (相关文件路径) - 简短说明`
+> 每小节格式参考：`已完成任务 (相关文件路径) - 简短说明`
 
 ### 架构与基础设施
 

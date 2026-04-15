@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../providers/api_provider.dart';
 import 'agent_model_list_tile.dart';
 import 'agent_model_manage_sheet.dart';
+import 'agent_model_params_sheet.dart';
 import 'agent_model_tester.dart';
 
 /// 文档助手 Agent API 配置区块
@@ -80,8 +81,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Symbols.check_circle_rounded,
-                color: Colors.green, size: 18),
+            const Icon(
+              Symbols.check_circle_rounded,
+              color: Colors.green,
+              size: 18,
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text('$modelId 连接成功')),
           ],
@@ -131,16 +135,28 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       addedModels: s.models,
       currentDefaultModel: s.defaultModelId,
       currentFastModel: s.fastModelId,
-      onAdd: (id, {bool setAsDefault = false, bool setAsFast = false}) =>
-          ref.read(agentApiProvider.notifier).addModel(
-                id,
-                setAsDefault: setAsDefault,
-                setAsFast: setAsFast,
-              ),
+      onAdd: (id, {bool setAsDefault = false, bool setAsFast = false}) => ref
+          .read(agentApiProvider.notifier)
+          .addModel(id, setAsDefault: setAsDefault, setAsFast: setAsFast),
       onRemove: (id) {
         ref.read(agentApiProvider.notifier).removeModel(id);
         _modelTestResults.remove(id);
       },
+    );
+  }
+
+  Future<void> _openModelParamsSheet(String modelId) async {
+    final s = ref.read(agentApiProvider);
+    await showAgentModelParamsSheet(
+      context: context,
+      provider: s.provider,
+      providerLabel: s.provider.label,
+      modelId: modelId,
+      initialParams: s.paramsFor(modelId),
+      onSave: (p) =>
+          ref.read(agentApiProvider.notifier).setModelParams(modelId, p),
+      onReset: () =>
+          ref.read(agentApiProvider.notifier).resetModelParams(modelId),
     );
   }
 
@@ -172,8 +188,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide(color: cs.primary, width: 2),
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
           isDense: true,
           suffixIcon: suffix,
         );
@@ -195,9 +213,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               selected: {agentState.provider},
               onSelectionChanged: (set) {
                 if (agentState.provider != set.first) {
-                  ref
-                      .read(agentApiProvider.notifier)
-                      .setProvider(set.first);
+                  ref.read(agentApiProvider.notifier).setProvider(set.first);
                   final s = ref.read(agentApiProvider);
                   _keyCtrl.text = s.apiKey;
                   _urlCtrl.text = s.baseUrl.isNotEmpty
@@ -234,8 +250,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                   _keyObscured ? Symbols.visibility_off : Symbols.visibility,
                   size: 20,
                 ),
-                onPressed: () =>
-                    setState(() => _keyObscured = !_keyObscured),
+                onPressed: () => setState(() => _keyObscured = !_keyObscured),
               ),
             ),
             autocorrect: false,
@@ -266,8 +281,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                       : cs.onSurfaceVariant.withAlpha(80),
                 ),
                 tooltip: '管理模型',
-                onPressed:
-                    agentState.apiKey.isNotEmpty ? _openModelManageSheet : null,
+                onPressed: agentState.apiKey.isNotEmpty
+                    ? _openModelManageSheet
+                    : null,
               ),
             ),
             keyboardType: TextInputType.url,
@@ -302,12 +318,14 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 isTesting: _modelTesting.contains(modelId),
                 hasTested: hasTested,
                 errorMsg: errorMsg,
+                hasCustomParams: !agentState.paramsFor(modelId).isDefault,
                 onRemove: () {
                   ref.read(agentApiProvider.notifier).removeModel(modelId);
                   _modelTestResults.remove(modelId);
                 },
                 onTest: () => _testModel(modelId),
                 onShowError: () => _showTestError(modelId, errorMsg!),
+                onTune: () => _openModelParamsSheet(modelId),
               );
             }),
           ],

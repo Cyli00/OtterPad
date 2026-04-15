@@ -53,7 +53,12 @@
       "Read(//e/gitProjects/NightReader/$HOME/**)",
       "Read(//c/Users/**)",
       "Bash(git rm:*)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:openai.github.io)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:ai.google.dev)"
     ]
   },
   "outputStyle": "Explanatory",

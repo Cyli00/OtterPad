@@ -42,17 +42,220 @@ extension AgentApiProviderExt on AgentApiProvider {
 
 // ─── Agent API ───────────────────────────────────────────────────────────────
 
+/// 单个模型的可调参数。所有字段可空——`null` 表示"不发送，使用服务商默认"。
+///
+/// 字段按服务商归类：
+/// * 通用：`temperature` / `topP` / `maxTokens` / `systemPrompt`
+/// * OpenAI Responses API：`reasoningEffort` / `verbosity` / `parallelToolCalls` /
+///   `truncation` / `webSearchEnabled` / `webSearchContextSize`
+/// * Anthropic Messages API：`thinkingMode` / `thinkingBudget`（+ 共享 `topK`）
+/// * Gemini GenerateContent：`presencePenalty` / `frequencyPenalty` /
+///   `thinkingBudget`（+ 共享 `topK`）
+///
+/// 真正发往各服务商的请求体序列化（参数名差异、嵌套结构差异）在请求构造层做，
+/// 这里只负责存储用户意图。
+class AgentModelParams {
+  // ── 通用 ───────────────────────────────────────────
+  final double? temperature;
+  final double? topP;
+  final int? maxTokens;
+  final String? systemPrompt;
+
+  // ── Anthropic / Gemini 共享 ────────────────────────
+  final int? topK;
+
+  // ── OpenAI 专属 ────────────────────────────────────
+  /// OpenAI reasoning models：'minimal' | 'low' | 'medium' | 'high'
+  final String? reasoningEffort;
+
+  /// OpenAI Responses API `text.verbosity`：'low' | 'medium' | 'high'
+  final String? verbosity;
+
+  /// OpenAI `parallel_tool_calls`
+  final bool? parallelToolCalls;
+
+  /// OpenAI `truncation`：'auto' | 'disabled'
+  final String? truncation;
+
+  /// 工具调用 —— Web 搜索（OpenAI `web_search` / Gemini `google_search`）
+  final bool? webSearchEnabled;
+
+  /// 搜索上下文大小：'low' | 'medium' | 'high'
+  final String? webSearchContextSize;
+
+  // ── Anthropic 专属 ─────────────────────────────────
+  /// Anthropic `thinking.type`：'disabled' | 'enabled' | 'adaptive'
+  final String? thinkingMode;
+
+  // ── Anthropic + Gemini 共享 ────────────────────────
+  /// Anthropic：`thinking.budget_tokens`；Gemini：`thinkingConfig.thinkingBudget`
+  final int? thinkingBudget;
+
+  // ── Gemini 专属 ────────────────────────────────────
+  /// Gemini `generationConfig.presencePenalty`：-2.0 ~ 2.0
+  final double? presencePenalty;
+
+  /// Gemini `generationConfig.frequencyPenalty`：-2.0 ~ 2.0
+  final double? frequencyPenalty;
+
+  const AgentModelParams({
+    this.temperature,
+    this.topP,
+    this.maxTokens,
+    this.systemPrompt,
+    this.topK,
+    this.reasoningEffort,
+    this.verbosity,
+    this.parallelToolCalls,
+    this.truncation,
+    this.webSearchEnabled,
+    this.webSearchContextSize,
+    this.thinkingMode,
+    this.thinkingBudget,
+    this.presencePenalty,
+    this.frequencyPenalty,
+  });
+
+  /// 全部字段都未设置——意味着完全使用服务商默认值
+  bool get isDefault =>
+      temperature == null &&
+      topP == null &&
+      maxTokens == null &&
+      (systemPrompt == null || systemPrompt!.isEmpty) &&
+      topK == null &&
+      reasoningEffort == null &&
+      verbosity == null &&
+      parallelToolCalls == null &&
+      truncation == null &&
+      webSearchEnabled == null &&
+      webSearchContextSize == null &&
+      thinkingMode == null &&
+      thinkingBudget == null &&
+      presencePenalty == null &&
+      frequencyPenalty == null;
+
+  AgentModelParams copyWith({
+    Object? temperature = _sentinel,
+    Object? topP = _sentinel,
+    Object? maxTokens = _sentinel,
+    Object? systemPrompt = _sentinel,
+    Object? topK = _sentinel,
+    Object? reasoningEffort = _sentinel,
+    Object? verbosity = _sentinel,
+    Object? parallelToolCalls = _sentinel,
+    Object? truncation = _sentinel,
+    Object? webSearchEnabled = _sentinel,
+    Object? webSearchContextSize = _sentinel,
+    Object? thinkingMode = _sentinel,
+    Object? thinkingBudget = _sentinel,
+    Object? presencePenalty = _sentinel,
+    Object? frequencyPenalty = _sentinel,
+  }) => AgentModelParams(
+    temperature: identical(temperature, _sentinel)
+        ? this.temperature
+        : temperature as double?,
+    topP: identical(topP, _sentinel) ? this.topP : topP as double?,
+    maxTokens: identical(maxTokens, _sentinel)
+        ? this.maxTokens
+        : maxTokens as int?,
+    systemPrompt: identical(systemPrompt, _sentinel)
+        ? this.systemPrompt
+        : systemPrompt as String?,
+    topK: identical(topK, _sentinel) ? this.topK : topK as int?,
+    reasoningEffort: identical(reasoningEffort, _sentinel)
+        ? this.reasoningEffort
+        : reasoningEffort as String?,
+    verbosity: identical(verbosity, _sentinel)
+        ? this.verbosity
+        : verbosity as String?,
+    parallelToolCalls: identical(parallelToolCalls, _sentinel)
+        ? this.parallelToolCalls
+        : parallelToolCalls as bool?,
+    truncation: identical(truncation, _sentinel)
+        ? this.truncation
+        : truncation as String?,
+    webSearchEnabled: identical(webSearchEnabled, _sentinel)
+        ? this.webSearchEnabled
+        : webSearchEnabled as bool?,
+    webSearchContextSize: identical(webSearchContextSize, _sentinel)
+        ? this.webSearchContextSize
+        : webSearchContextSize as String?,
+    thinkingMode: identical(thinkingMode, _sentinel)
+        ? this.thinkingMode
+        : thinkingMode as String?,
+    thinkingBudget: identical(thinkingBudget, _sentinel)
+        ? this.thinkingBudget
+        : thinkingBudget as int?,
+    presencePenalty: identical(presencePenalty, _sentinel)
+        ? this.presencePenalty
+        : presencePenalty as double?,
+    frequencyPenalty: identical(frequencyPenalty, _sentinel)
+        ? this.frequencyPenalty
+        : frequencyPenalty as double?,
+  );
+
+  Map<String, dynamic> toJson() => {
+    if (temperature != null) 'temperature': temperature,
+    if (topP != null) 'topP': topP,
+    if (maxTokens != null) 'maxTokens': maxTokens,
+    if (systemPrompt != null && systemPrompt!.isNotEmpty)
+      'systemPrompt': systemPrompt,
+    if (topK != null) 'topK': topK,
+    if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
+    if (verbosity != null) 'verbosity': verbosity,
+    if (parallelToolCalls != null) 'parallelToolCalls': parallelToolCalls,
+    if (truncation != null) 'truncation': truncation,
+    if (webSearchEnabled != null) 'webSearchEnabled': webSearchEnabled,
+    if (webSearchContextSize != null)
+      'webSearchContextSize': webSearchContextSize,
+    if (thinkingMode != null) 'thinkingMode': thinkingMode,
+    if (thinkingBudget != null) 'thinkingBudget': thinkingBudget,
+    if (presencePenalty != null) 'presencePenalty': presencePenalty,
+    if (frequencyPenalty != null) 'frequencyPenalty': frequencyPenalty,
+  };
+
+  factory AgentModelParams.fromJson(Map<String, dynamic> json) =>
+      AgentModelParams(
+        temperature: (json['temperature'] as num?)?.toDouble(),
+        topP: (json['topP'] as num?)?.toDouble(),
+        maxTokens: (json['maxTokens'] as num?)?.toInt(),
+        systemPrompt: json['systemPrompt'] as String?,
+        topK: (json['topK'] as num?)?.toInt(),
+        reasoningEffort: json['reasoningEffort'] as String?,
+        verbosity: json['verbosity'] as String?,
+        parallelToolCalls: json['parallelToolCalls'] as bool?,
+        truncation: json['truncation'] as String?,
+        webSearchEnabled: json['webSearchEnabled'] as bool?,
+        webSearchContextSize: json['webSearchContextSize'] as String?,
+        // 向后兼容：老字段 thinkingEnabled 自动升级为 thinkingMode
+        thinkingMode:
+            json['thinkingMode'] as String? ??
+            (json['thinkingEnabled'] == true
+                ? 'enabled'
+                : json['thinkingEnabled'] == false
+                ? 'disabled'
+                : null),
+        thinkingBudget: (json['thinkingBudget'] as num?)?.toInt(),
+        presencePenalty: (json['presencePenalty'] as num?)?.toDouble(),
+        frequencyPenalty: (json['frequencyPenalty'] as num?)?.toDouble(),
+      );
+}
+
 class AgentApiState {
   final AgentApiProvider provider;
   final String baseUrl;
   final String apiKey;
   final List<String> models;
 
-  /// 默认模型 id；唯一——切换时旧值自动被覆盖
+  /// 默认模型 id；**全局唯一**——跨服务商共享；若全局默认属于其他服务商，
+  /// 当前加载的 state 此字段为 null。
   final String? defaultModelId;
 
-  /// 快速模型 id；唯一——切换时旧值自动被覆盖
+  /// 快速模型 id；**全局唯一**——跨服务商共享；语义与 [defaultModelId] 相同。
   final String? fastModelId;
+
+  /// 每个模型独立的可调参数；缺失的 modelId 视为全部使用服务商默认值
+  final Map<String, AgentModelParams> modelParams;
 
   const AgentApiState({
     this.provider = AgentApiProvider.openai,
@@ -61,11 +264,16 @@ class AgentApiState {
     this.models = const [],
     this.defaultModelId,
     this.fastModelId,
+    this.modelParams = const {},
   });
 
   /// 当前生效的 Base URL（用户未填时取服务商默认值）
   String get effectiveBaseUrl =>
       baseUrl.isNotEmpty ? baseUrl : provider.defaultBaseUrl;
+
+  /// 取指定模型的参数集；从未配置过则返回 const default
+  AgentModelParams paramsFor(String modelId) =>
+      modelParams[modelId] ?? const AgentModelParams();
 
   AgentApiState copyWith({
     AgentApiProvider? provider,
@@ -75,6 +283,7 @@ class AgentApiState {
     // 使用 Object sentinel 以便传 null 清空字段
     Object? defaultModelId = _sentinel,
     Object? fastModelId = _sentinel,
+    Map<String, AgentModelParams>? modelParams,
   }) => AgentApiState(
     provider: provider ?? this.provider,
     baseUrl: baseUrl ?? this.baseUrl,
@@ -86,6 +295,7 @@ class AgentApiState {
     fastModelId: identical(fastModelId, _sentinel)
         ? this.fastModelId
         : fastModelId as String?,
+    modelParams: modelParams ?? this.modelParams,
   );
 }
 
@@ -94,12 +304,20 @@ const _sentinel = Object();
 class AgentApiNotifier extends StateNotifier<AgentApiState> {
   static const _providerKey = 'agent_api_provider';
 
-  // 每个服务商独立存储 key / url / models / 场景模型
+  // 每个服务商独立存储 key / url / models / 模型参数
   static String _baseUrlKey(String p) => 'agent_api_base_url_$p';
   static String _apiKeyKey(String p) => 'agent_api_key_$p';
   static String _modelsKey(String p) => 'agent_api_models_$p';
-  static String _defaultModelKey(String p) => 'agent_api_default_model_$p';
-  static String _fastModelKey(String p) => 'agent_api_fast_model_$p';
+  static String _modelParamsKey(String p) => 'agent_api_model_params_$p';
+
+  // 默认 / 快速模型角色**全局唯一**；存储为 "providerName:modelId" 字符串。
+  // 例："openai:gpt-4o-mini"。空字符串或缺失均视为未设置。
+  static const _globalDefaultKey = 'agent_api_default_model_global';
+  static const _globalFastKey = 'agent_api_fast_model_global';
+
+  // 旧版每服务商独立的角色 key —— 仅用于一次性迁移，之后会被删除。
+  static String _legacyDefaultKey(String p) => 'agent_api_default_model_$p';
+  static String _legacyFastKey(String p) => 'agent_api_fast_model_$p';
 
   AgentApiNotifier() : super(_load());
 
@@ -110,7 +328,68 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
       (e) => e.name == provStr,
       orElse: () => AgentApiProvider.openai,
     );
+    // 把旧版 per-provider 的 default/fast 迁移到新的全局 key。
+    // 迁移只在"尚未存在全局 key"时跑一次；之后 legacy key 被删除，不会再触发。
+    _migrateLegacyRolesIfNeeded(provider);
     return _loadForProvider(provider);
+  }
+
+  /// 解析 "providerName:modelId" 为 `(provider, modelId)`；
+  /// 任一字段缺失或 providerName 无法匹配时返回 `(null, null)`。
+  static (AgentApiProvider?, String?) _parseRole(String? raw) {
+    if (raw == null || raw.isEmpty) return (null, null);
+    final colonIdx = raw.indexOf(':');
+    if (colonIdx <= 0 || colonIdx >= raw.length - 1) return (null, null);
+    final provStr = raw.substring(0, colonIdx);
+    final modelId = raw.substring(colonIdx + 1);
+    for (final prov in AgentApiProvider.values) {
+      if (prov.name == provStr) return (prov, modelId);
+    }
+    return (null, null);
+  }
+
+  /// 把 `(provider, modelId)` 序列化为 "providerName:modelId"。
+  static String _serializeRole(AgentApiProvider provider, String modelId) =>
+      '${provider.name}:$modelId';
+
+  /// 一次性迁移：把旧版每服务商独立的 default/fast 合并为全局单例。
+  /// 偏好当前 provider 的 legacy 值——这通常是用户最近操作的那个。
+  static void _migrateLegacyRolesIfNeeded(AgentApiProvider currentProvider) {
+    final box = GStorage.setting;
+
+    void migrateOne(String globalKey, String Function(String p) legacyKeyFn) {
+      if (!box.containsKey(globalKey)) {
+        // 1) 优先取当前 provider 的 legacy 值
+        String? pickedId;
+        AgentApiProvider? pickedProv;
+        final currentLegacy =
+            box.get(legacyKeyFn(currentProvider.name)) as String?;
+        if (currentLegacy != null && currentLegacy.isNotEmpty) {
+          pickedId = currentLegacy;
+          pickedProv = currentProvider;
+        } else {
+          // 2) 回退：按 enum 顺序挑选第一个非空的
+          for (final prov in AgentApiProvider.values) {
+            final legacy = box.get(legacyKeyFn(prov.name)) as String?;
+            if (legacy != null && legacy.isNotEmpty) {
+              pickedId = legacy;
+              pickedProv = prov;
+              break;
+            }
+          }
+        }
+        if (pickedId != null && pickedProv != null) {
+          box.put(globalKey, _serializeRole(pickedProv, pickedId));
+        }
+      }
+      // 无论是否迁移过，都清理 legacy key，避免下次误读
+      for (final prov in AgentApiProvider.values) {
+        box.delete(legacyKeyFn(prov.name));
+      }
+    }
+
+    migrateOne(_globalDefaultKey, _legacyDefaultKey);
+    migrateOne(_globalFastKey, _legacyFastKey);
   }
 
   /// 旧版默认地址（含版本路径），需要清理
@@ -136,14 +415,38 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     final rawModels = box.get(_modelsKey(p)) as List?;
     final models = rawModels?.cast<String>().toList() ?? <String>[];
 
-    // 读取场景模型；若指向已被删除的 id，则丢弃
-    String? defaultModelId = box.get(_defaultModelKey(p)) as String?;
-    String? fastModelId = box.get(_fastModelKey(p)) as String?;
-    if (defaultModelId != null && !models.contains(defaultModelId)) {
-      defaultModelId = null;
+    // 读取全局默认 / 快速模型；仅当全局角色指向「当前 provider」时才填充 state，
+    // 否则留 null——这正是"跨服务商唯一"的核心：切到别的 provider 时
+    // 看不到属于其他 provider 的角色。
+    final (defaultProv, defaultId) = _parseRole(
+      box.get(_globalDefaultKey) as String?,
+    );
+    final (fastProv, fastId) = _parseRole(box.get(_globalFastKey) as String?);
+    String? defaultModelId;
+    String? fastModelId;
+    if (defaultProv == provider &&
+        defaultId != null &&
+        models.contains(defaultId)) {
+      defaultModelId = defaultId;
     }
-    if (fastModelId != null && !models.contains(fastModelId)) {
-      fastModelId = null;
+    if (fastProv == provider && fastId != null && models.contains(fastId)) {
+      fastModelId = fastId;
+    }
+
+    // 读取每模型参数；同时丢弃指向已删除模型的孤儿条目
+    final modelParams = <String, AgentModelParams>{};
+    final rawParams = box.get(_modelParamsKey(p));
+    if (rawParams is Map) {
+      rawParams.forEach((key, value) {
+        if (key is! String || !models.contains(key)) return;
+        if (value is! Map) return;
+        try {
+          final json = value.cast<String, dynamic>();
+          modelParams[key] = AgentModelParams.fromJson(json);
+        } catch (_) {
+          // 单条解析失败不影响其他模型
+        }
+      });
     }
 
     return AgentApiState(
@@ -153,6 +456,7 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
       models: models,
       defaultModelId: defaultModelId,
       fastModelId: fastModelId,
+      modelParams: modelParams,
     );
   }
 
@@ -172,7 +476,8 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     await GStorage.setting.put(_apiKeyKey(state.provider.name), key);
   }
 
-  /// 添加一个模型；可同时将其设为默认 / 快速模型（唯一——替换旧值）
+  /// 添加一个模型；可同时将其设为默认 / 快速模型（**全局唯一**——替换任何
+  /// 服务商下的旧值）。
   Future<void> addModel(
     String modelId, {
     bool setAsDefault = false,
@@ -190,8 +495,12 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
       fastModelId: setAsFast ? modelId : _sentinel,
     );
     await box.put(_modelsKey(p), updated);
-    if (setAsDefault) await box.put(_defaultModelKey(p), modelId);
-    if (setAsFast) await box.put(_fastModelKey(p), modelId);
+    if (setAsDefault) {
+      await box.put(_globalDefaultKey, _serializeRole(state.provider, modelId));
+    }
+    if (setAsFast) {
+      await box.put(_globalFastKey, _serializeRole(state.provider, modelId));
+    }
   }
 
   Future<void> removeModel(String modelId) async {
@@ -199,45 +508,84 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     final p = state.provider.name;
     final updated = state.models.where((m) => m != modelId).toList();
 
-    // 级联清理：若被删模型恰好是 default/fast，对应字段置空
-    final clearedDefault = state.defaultModelId == modelId;
-    final clearedFast = state.fastModelId == modelId;
+    // 级联清理：只有当全局角色恰好指向「当前 provider + 被删模型」时才清空。
+    // 指向其他 provider 的角色不受影响。
+    final (defaultProv, defaultId) = _parseRole(
+      box.get(_globalDefaultKey) as String?,
+    );
+    final (fastProv, fastId) = _parseRole(box.get(_globalFastKey) as String?);
+    final clearedDefault =
+        defaultProv == state.provider && defaultId == modelId;
+    final clearedFast = fastProv == state.provider && fastId == modelId;
+
+    // 级联清理：被删模型若有自定义参数，一并丢弃，避免孤儿条目长期残留
+    final hadParams = state.modelParams.containsKey(modelId);
+    final updatedParams = hadParams
+        ? (Map<String, AgentModelParams>.from(state.modelParams)
+            ..remove(modelId))
+        : state.modelParams;
 
     state = state.copyWith(
       models: updated,
       defaultModelId: clearedDefault ? null : _sentinel,
       fastModelId: clearedFast ? null : _sentinel,
+      modelParams: updatedParams,
     );
     await box.put(_modelsKey(p), updated);
-    if (clearedDefault) await box.delete(_defaultModelKey(p));
-    if (clearedFast) await box.delete(_fastModelKey(p));
+    if (clearedDefault) await box.delete(_globalDefaultKey);
+    if (clearedFast) await box.delete(_globalFastKey);
+    if (hadParams) {
+      final raw = updatedParams.map((k, v) => MapEntry(k, v.toJson()));
+      await box.put(_modelParamsKey(p), raw);
+    }
   }
 
-  /// 显式切换默认模型；传 null 清空
+  /// 显式切换默认模型；传 null 清空。**全局唯一**——写入时会覆盖任何
+  /// 服务商下的旧角色。
   Future<void> setDefaultModel(String? modelId) async {
     final box = GStorage.setting;
-    final p = state.provider.name;
     if (modelId != null && !state.models.contains(modelId)) return;
     state = state.copyWith(defaultModelId: modelId);
     if (modelId == null) {
-      await box.delete(_defaultModelKey(p));
+      await box.delete(_globalDefaultKey);
     } else {
-      await box.put(_defaultModelKey(p), modelId);
+      await box.put(_globalDefaultKey, _serializeRole(state.provider, modelId));
     }
   }
 
-  /// 显式切换快速模型；传 null 清空
+  /// 显式切换快速模型；传 null 清空。**全局唯一**——写入时会覆盖任何
+  /// 服务商下的旧角色。
   Future<void> setFastModel(String? modelId) async {
     final box = GStorage.setting;
-    final p = state.provider.name;
     if (modelId != null && !state.models.contains(modelId)) return;
     state = state.copyWith(fastModelId: modelId);
     if (modelId == null) {
-      await box.delete(_fastModelKey(p));
+      await box.delete(_globalFastKey);
     } else {
-      await box.put(_fastModelKey(p), modelId);
+      await box.put(_globalFastKey, _serializeRole(state.provider, modelId));
     }
   }
+
+  /// 写入指定模型的参数；若 [params.isDefault] 为 true 则从 map 中移除条目，
+  /// 避免持久化"全 null"的空壳。
+  Future<void> setModelParams(String modelId, AgentModelParams params) async {
+    if (!state.models.contains(modelId)) return;
+    final box = GStorage.setting;
+    final p = state.provider.name;
+    final updated = Map<String, AgentModelParams>.from(state.modelParams);
+    if (params.isDefault) {
+      updated.remove(modelId);
+    } else {
+      updated[modelId] = params;
+    }
+    state = state.copyWith(modelParams: updated);
+    final raw = updated.map((k, v) => MapEntry(k, v.toJson()));
+    await box.put(_modelParamsKey(p), raw);
+  }
+
+  /// 一键重置指定模型的所有参数为服务商默认值
+  Future<void> resetModelParams(String modelId) =>
+      setModelParams(modelId, const AgentModelParams());
 
   void reload() {
     state = _load();

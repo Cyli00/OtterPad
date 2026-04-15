@@ -229,14 +229,23 @@ class _ExtractApiSectionState extends ConsumerState<ExtractApiSection> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                child: Slider(
-                  value: value, min: min, max: max,
-                  divisions: divisions, onChanged: onChanged,
-                  padding: EdgeInsets.zero,
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 8),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 16),
+                    trackHeight: 3,
+                  ),
+                  child: Slider(
+                    value: value, min: min, max: max,
+                    divisions: divisions, onChanged: onChanged,
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
               ),
               if (onReset != null)
