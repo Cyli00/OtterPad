@@ -58,7 +58,10 @@
       "WebFetch(domain:platform.openai.com)",
       "WebFetch(domain:openai.github.io)",
       "WebFetch(domain:docs.anthropic.com)",
-      "WebFetch(domain:ai.google.dev)"
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(gh api:*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" api repos/mengxi-ream/read-frog/git/trees/main?recursive=1)",
+      "WebFetch(domain:api.github.com)"
     ]
   },
   "outputStyle": "Explanatory",

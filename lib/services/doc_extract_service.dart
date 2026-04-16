@@ -255,6 +255,67 @@ class DocExtractService {
     return mdPath;
   }
 
+  /// 从已有的 `.raw.md` + `.json` + PDF 重新排版，跳过 API 请求。
+  ///
+  /// 用于用户修改了 figure 提取逻辑或预处理管道后，
+  /// 不重新调用 API 直接刷新最终 `.md`。
+  Future<(String mdPath, String content)> reprocessMarkdown({
+    required String pdfPath,
+    String? title,
+  }) async {
+    final dir = p.dirname(pdfPath);
+    final baseName = p.basenameWithoutExtension(pdfPath);
+    final rawMdPath = p.join(dir, '$baseName.raw.md');
+    final jsonPath = p.join(dir, '$baseName.json');
+    final mdPath = p.join(dir, '$baseName.md');
+
+    final rawMdFile = File(rawMdPath);
+    if (!rawMdFile.existsSync()) {
+      throw FileSystemException('raw.md 文件不存在，请先提取文档', rawMdPath);
+    }
+
+    var processedMarkdown = await rawMdFile.readAsString();
+
+    // figure 提取 + 替换
+    final jsonFile = File(jsonPath);
+    String? jsonContent;
+    if (jsonFile.existsSync()) {
+      jsonContent = await jsonFile.readAsString();
+      try {
+        await FigureExtractService.instance.init();
+        final figResult = await FigureExtractService.instance.extractFigures(
+          resultPath: jsonPath,
+          pdfPath: pdfPath,
+        );
+        processedMarkdown = replaceFigureRegions(
+          jsonContent: jsonContent,
+          figures: figResult.entries,
+          mdDir: dir,
+        );
+      } catch (e) {
+        debugPrint('[DocExtract] 重新排版: Figure 提取失败，回退原始 Markdown: $e');
+      }
+    }
+
+    // 清理 + 预处理（与 saveResult 完全一致）
+    processedMarkdown = _stripApiImageTags(processedMarkdown);
+    processedMarkdown = _convertCenteredDivs(processedMarkdown);
+    processedMarkdown = MarkdownPreprocessor.process(processedMarkdown);
+    processedMarkdown = MarkdownPreprocessor.filterBeforeTitle(
+      processedMarkdown,
+      title,
+    );
+    if (jsonContent != null) {
+      processedMarkdown = _normalizeSectionHeadingLevels(
+        processedMarkdown,
+        jsonContent,
+      );
+    }
+
+    await File(mdPath).writeAsString(processedMarkdown, flush: true);
+    return (mdPath, processedMarkdown);
+  }
+
   /// 规范化图片标签并将相对路径解析为 `file:///` 绝对路径。
   static String resolveMarkdownImagePaths(String markdown, String imageDir) {
     var processed = markdown;

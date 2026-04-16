@@ -16,6 +16,7 @@ import '../../../data/models/book/document.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
+import '../../services/doc_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
 import 'widgets/markdown_reader.dart';
@@ -172,6 +173,47 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         });
       },
     );
+  }
+
+  Future<void> _onReprocessPressed() async {
+    final filePath = widget.document.filePath;
+    if (filePath.isEmpty || !File(filePath).existsSync()) {
+      ref.read(snackBarServiceProvider).showResult(message: 'PDF 文件不存在');
+      return;
+    }
+
+    ref.read(snackBarServiceProvider).showResult(message: '正在重新排版…');
+    try {
+      final (mdPath, content) = await DocExtractService.instance.reprocessMarkdown(
+        pdfPath: filePath,
+        title: widget.document.title,
+      );
+      if (!mounted) return;
+
+      // 刷新缓存和界面
+      final cacheService = MarkdownDocumentCacheService.instance;
+      final cacheKey = cacheService.buildMemoryCacheKey(
+        mdPath: mdPath,
+        title: widget.document.title,
+        markdownContent: content,
+      );
+      cacheService.primeResolvedContent(cacheKey: cacheKey, content: content);
+
+      setState(() {
+        _mdPath = mdPath;
+        _mdContent = content;
+        _markdownCacheKey = cacheKey;
+        _loadFuture = null;
+        _searchSnapshot = cacheService.getSearchSnapshot(
+          cacheKey: cacheKey,
+          markdownContent: content,
+        );
+      });
+      ref.read(snackBarServiceProvider).showResult(message: '重新排版完成');
+    } catch (e) {
+      if (!mounted) return;
+      ref.read(snackBarServiceProvider).showResult(message: '排版失败: $e');
+    }
   }
 
   void _togglePreview() {
@@ -793,16 +835,48 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 tooltip: '重新提取',
                 onPressed: _onExtractPressed,
               ),
-            // 文献信息
-            IconButton(
+            // 更多操作
+            PopupMenuButton<String>(
               icon: Icon(
-                Symbols.info_rounded,
+                Symbols.more_vert_rounded,
                 size: 22,
                 fill: 1,
                 color: cs.onSurfaceVariant,
               ),
-              tooltip: '文献信息',
-              onPressed: () => _showDocumentInfo(context),
+              tooltip: '更多',
+              onSelected: (value) {
+                switch (value) {
+                  case 'info':
+                    _showDocumentInfo(context);
+                  case 'reprocess':
+                    _onReprocessPressed();
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'info',
+                  child: Row(
+                    children: [
+                      Icon(Symbols.info_rounded, size: 20, fill: 1,
+                          color: cs.onSurface),
+                      const SizedBox(width: 12),
+                      const Text('文献信息'),
+                    ],
+                  ),
+                ),
+                if (_hasResult)
+                  PopupMenuItem(
+                    value: 'reprocess',
+                    child: Row(
+                      children: [
+                        Icon(Symbols.refresh_rounded, size: 20, fill: 1,
+                            color: cs.onSurface),
+                        const SizedBox(width: 12),
+                        const Text('重新排版'),
+                      ],
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 4),
           ],

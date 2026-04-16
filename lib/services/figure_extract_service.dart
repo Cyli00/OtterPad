@@ -40,11 +40,12 @@ class LayoutBlock {
     );
   }
 
-  LayoutBlock copyWith({String? blockLabel}) => LayoutBlock(
+  LayoutBlock copyWith({String? blockLabel, String? blockContent}) =>
+      LayoutBlock(
         blockId: blockId,
         blockLabel: blockLabel ?? this.blockLabel,
         blockBbox: blockBbox,
-        blockContent: blockContent,
+        blockContent: blockContent ?? this.blockContent,
       );
 }
 
@@ -375,6 +376,78 @@ class FigureExtractService {
     return true;
   }
 
+  // ─── 标题格式统一化（统计学去重） ─────────────────────
+
+  /// 为短标签补全完整图注。
+  ///
+  /// 短标签 = 主标题去掉前缀+序号后几乎没有描述文本（≤10 字符），
+  /// 例如 "Figure 5"、"Fig 3."。按序号在全文 `figure_title → text → footer`
+  /// 中搜索任意前缀、同序号、更长的完整图注（如 "Fig. 5. Calcium dynamics..."）。
+  /// 找到后短标签吸收其文本，完整图注降级为 `text`。
+  List<List<LayoutBlock>> _unifyAnchorCaptions(List<List<LayoutBlock>> pages) {
+    final result = pages.map((p) => List<LayoutBlock>.from(p)).toList();
+
+    for (var pi = 0; pi < result.length; pi++) {
+      for (var bi = 0; bi < result[pi].length; bi++) {
+        final b = result[pi][bi];
+        if (!isMainCaption(b)) continue;
+        final trimmed = b.blockContent.trim();
+        final prefix = _matchPrefix(trimmed);
+        if (prefix == null) continue;
+
+        // 判断是否为短标签
+        final tail = trimmed.substring(prefix.length).trimLeft();
+        final numMatch = RegExp(r'^(\d+)').firstMatch(tail);
+        if (numMatch == null) continue;
+        final number = numMatch.group(1)!;
+        final afterNumber = tail.substring(numMatch.end)
+            .replaceAll(RegExp(r'^[.:\s]+'), '')
+            .trim();
+        if (afterNumber.length > 10) continue;
+
+        // 搜索同序号、任意已知前缀的完整图注
+        final allPrefixGroup =
+            _prefixes.map(RegExp.escape).join('|');
+        final searchRe = RegExp(
+          '^(?:$allPrefixGroup)\\s*$number$_suffixPattern',
+          caseSensitive: false,
+        );
+
+        (int pj, int bj)? found;
+        for (final label in ['figure_title', 'text', 'footer']) {
+          for (var pj = 0; pj < result.length && found == null; pj++) {
+            for (var bj = 0; bj < result[pj].length; bj++) {
+              final c = result[pj][bj];
+              if (c.blockLabel != label) continue;
+              if (pj == pi && bj == bi) continue;
+              if (!searchRe.hasMatch(c.blockContent.trim())) continue;
+              if (c.blockContent.length > b.blockContent.length) {
+                found = (pj, bj);
+                break;
+              }
+            }
+          }
+          if (found != null) break;
+        }
+
+        if (found != null) {
+          final (pj, bj) = found;
+          final donor = result[pj][bj];
+          result[pi][bi] = b.copyWith(
+            blockContent: donor.blockContent.trim(),
+          );
+          result[pj][bj] = donor.copyWith(blockLabel: 'text');
+          debugPrint(
+            '[FigureExtract] unified: "$trimmed" ← '
+            '"${donor.blockContent.trim().substring(0, math.min(60, donor.blockContent.trim().length))}…"',
+          );
+        }
+      }
+    }
+
+    return result;
+  }
+
   // ─── Segment 检测（空间聚类） ──────────────────────────
 
   /// `figure_title` block 被视作合法 figure 构件所允许的最大内容长度。
@@ -602,7 +675,9 @@ class FigureExtractService {
     }
 
     final content = await resultFile.readAsString();
-    final allPages = _recoverMissingAnchors(parseLayoutBlocks(content));
+    final allPages = _unifyAnchorCaptions(
+      _recoverMissingAnchors(parseLayoutBlocks(content)),
+    );
 
     // 收集所有 segment（带页码）
     final segments = <FigureSegment>[];
