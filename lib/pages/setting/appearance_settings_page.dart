@@ -228,14 +228,14 @@ class AppearanceSettingsPage extends ConsumerWidget {
   void _syncReaderTheme(WidgetRef ref, BuildContext context, ThemeMode mode) {
     final ReaderTheme readerTheme;
     if (mode == ThemeMode.dark) {
-      readerTheme = ReaderTheme.dark;
+      readerTheme = ReaderTheme.night;
     } else if (mode == ThemeMode.light) {
-      readerTheme = ReaderTheme.light;
+      readerTheme = ReaderTheme.themed;
     } else {
       // 跟随系统：取当前平台亮度
       final brightness = MediaQuery.platformBrightnessOf(context);
       readerTheme =
-          brightness == Brightness.dark ? ReaderTheme.dark : ReaderTheme.light;
+          brightness == Brightness.dark ? ReaderTheme.night : ReaderTheme.themed;
     }
     ref.read(readerSettingsProvider.notifier).setTheme(readerTheme);
   }

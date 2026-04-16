@@ -2,18 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../../providers/reader_settings_provider.dart';
+import '../reader_background.dart';
 import 'nr_custom_text_node.dart';
 import 'nr_image_node.dart';
 import 'nr_latex_node.dart';
 
 /// 将 [ReaderSettingsState] + [ColorScheme] 映射到 [MarkdownConfig]。
+///
+/// 所有颜色统一走 `reader_background.dart` 的 resolver 函数，
+/// 确保 [ReaderTheme.themed] 能正确拿到 [ColorScheme] 派生色。
 MarkdownConfig buildReaderMarkdownConfig({
   required ReaderSettingsState settings,
   required ColorScheme colorScheme,
   String? highlightQuery,
 }) {
+  final theme = settings.theme;
+  final textColor = resolveReaderTextColor(theme, colorScheme);
+  final secondaryColor = resolveReaderSecondaryTextColor(theme, colorScheme);
+  final linkColor = resolveReaderLinkColor(theme, colorScheme);
+  final dividerColor = resolveReaderDividerColor(theme, colorScheme);
+  final codeBlockBg = resolveReaderCodeBlockColor(theme, colorScheme);
+
   final baseStyle = TextStyle(
-    color: settings.textColor,
+    color: textColor,
     fontSize: settings.fontSize,
     fontFamily: settings.font.fontFamily,
     fontFamilyFallback: settings.font.fontFamilyFallback,
@@ -56,13 +67,13 @@ MarkdownConfig buildReaderMarkdownConfig({
     H6Config(
       style: baseStyle.copyWith(
         fontWeight: FontWeight.w500,
-        color: settings.secondaryTextColor,
+        color: secondaryColor,
         height: 1.4,
       ),
     ),
     BlockquoteConfig(
-      sideColor: settings.dividerColor,
-      textColor: settings.secondaryTextColor,
+      sideColor: dividerColor,
+      textColor: secondaryColor,
       sideWith: 3.0,
       padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
     ),
@@ -76,12 +87,10 @@ MarkdownConfig buildReaderMarkdownConfig({
           'Noto Sans Mono',
         ],
         fontSize: settings.fontSize * 0.88,
-        color: settings.textColor,
+        color: textColor,
       ),
       decoration: BoxDecoration(
-        color: settings.theme == ReaderTheme.dark
-            ? const Color(0xFF2D2D3A)
-            : const Color(0xFFF5F5F5),
+        color: codeBlockBg,
         borderRadius: const BorderRadius.all(Radius.circular(8)),
       ),
       padding: const EdgeInsets.all(12),
@@ -96,30 +105,28 @@ MarkdownConfig buildReaderMarkdownConfig({
           'Noto Sans Mono',
         ],
         fontSize: settings.fontSize * 0.88,
-        color: settings.textColor,
-        backgroundColor: settings.theme == ReaderTheme.dark
-            ? const Color(0xFF2D2D3A)
-            : const Color(0xFFF5F5F5),
+        color: textColor,
+        backgroundColor: codeBlockBg,
       ),
     ),
     LinkConfig(
       style: baseStyle.copyWith(
-        color: settings.linkColor,
+        color: linkColor,
         decoration: TextDecoration.none,
       ),
     ),
     TableConfig(
       headerStyle: baseStyle.copyWith(fontWeight: FontWeight.w600),
       bodyStyle: baseStyle,
-      border: TableBorder.all(color: settings.dividerColor, width: 0.5),
+      border: TableBorder.all(color: dividerColor, width: 0.5),
       headPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       bodyPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     ),
-    HrConfig(height: 1, color: settings.dividerColor),
+    HrConfig(height: 1, color: dividerColor),
     NRImgConfig(
       captionStyle: baseStyle.copyWith(
         fontSize: settings.fontSize * 0.85,
-        color: settings.secondaryTextColor,
+        color: secondaryColor,
       ),
       highlightQuery: highlightQuery,
       highlightBg: colorScheme.primaryContainer,

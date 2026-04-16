@@ -170,11 +170,6 @@ class _OutlinePanelState extends State<OutlinePanel>
     }
   }
 
-  void _navigateAndClose(int charOffset) {
-    Scaffold.of(context).closeEndDrawer();
-    widget.onNavigate(charOffset);
-  }
-
   @override
   void dispose() {
     _tabController.dispose();
@@ -215,7 +210,7 @@ class _OutlinePanelState extends State<OutlinePanel>
                   figures: _figures,
                   loaded: _figuresLoaded,
                   markdownContent: widget.markdownContent,
-                  onNavigate: _navigateAndClose,
+                  onNavigate: widget.onNavigate,
                 ),
                 _ReferencesTab(references: _references),
               ],

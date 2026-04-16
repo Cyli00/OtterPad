@@ -192,45 +192,142 @@ class IdentifierResolver {
     CancelToken? cancelToken,
   }) async {
     try {
+      // 切换到 efetch XML 接口：esummary 不返回 MeSH / KeywordList，
+      // 只有 efetch 能拿到受控主题词，用于后续的推荐算法。
       final resp = await _dio.get(
-        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi',
-        queryParameters: {'db': 'pubmed', 'id': pmid, 'retmode': 'json'},
+        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi',
+        queryParameters: {
+          'db': 'pubmed',
+          'id': pmid,
+          'retmode': 'xml',
+        },
+        options: Options(responseType: ResponseType.plain),
         cancelToken: cancelToken,
       );
 
-      final result = resp.data['result'] as Map<String, dynamic>;
-      final entry = result[pmid] as Map<String, dynamic>?;
-      if (entry == null || entry.containsKey('error')) {
+      final xmlDoc = XmlDocument.parse(resp.data as String);
+      final articleNode =
+          xmlDoc.findAllElements('PubmedArticle').firstOrNull;
+      if (articleNode == null) {
+        throw const IdentifierResolveException('未找到该标识符对应的文献');
+      }
+      final medline =
+          articleNode.findElements('MedlineCitation').firstOrNull;
+      final articleEl = medline?.findElements('Article').firstOrNull;
+      if (articleEl == null) {
         throw const IdentifierResolveException('未找到该标识符对应的文献');
       }
 
-      final title = (entry['title'] as String?)?.trim() ?? pmid;
+      final title = articleEl
+              .findElements('ArticleTitle')
+              .firstOrNull
+              ?.innerText
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim()
+              .replaceFirst(RegExp(r'\.$'), '') ??
+          pmid;
+
+      // 作者：优先 ForeName + LastName，否则 Initials + LastName，兜底 CollectiveName
       final authors = <String>[];
-      if (entry['authors'] is List) {
-        for (final author in entry['authors'] as List) {
-          if (author is Map && author['name'] != null) {
-            authors.add(author['name'] as String);
+      final authorList = articleEl.findElements('AuthorList').firstOrNull;
+      if (authorList != null) {
+        for (final author in authorList.findElements('Author')) {
+          final lastName =
+              author.findElements('LastName').firstOrNull?.innerText.trim();
+          final foreName =
+              author.findElements('ForeName').firstOrNull?.innerText.trim();
+          final initials =
+              author.findElements('Initials').firstOrNull?.innerText.trim();
+          final collective = author
+              .findElements('CollectiveName')
+              .firstOrNull
+              ?.innerText
+              .trim();
+          if (lastName != null && lastName.isNotEmpty) {
+            final given =
+                (foreName != null && foreName.isNotEmpty) ? foreName : initials;
+            authors.add(
+              (given != null && given.isNotEmpty) ? '$given $lastName' : lastName,
+            );
+          } else if (collective != null && collective.isNotEmpty) {
+            authors.add(collective);
           }
         }
       }
-      final journal = entry['source'] as String?;
-      final year = _extractPubMedYear(entry['pubdate'] as String?);
 
+      final journalEl = articleEl.findElements('Journal').firstOrNull;
+      final journal = journalEl
+              ?.findElements('Title')
+              .firstOrNull
+              ?.innerText
+              .trim() ??
+          journalEl
+              ?.findElements('ISOAbbreviation')
+              .firstOrNull
+              ?.innerText
+              .trim();
+
+      // 年份：优先 <Year>，否则从 <MedlineDate> 文本里抓 4 位数字
+      final pubDate = journalEl
+          ?.findElements('JournalIssue')
+          .firstOrNull
+          ?.findElements('PubDate')
+          .firstOrNull;
+      String? year =
+          pubDate?.findElements('Year').firstOrNull?.innerText.trim();
+      if ((year == null || year.isEmpty) && pubDate != null) {
+        final medlineDate = pubDate
+            .findElements('MedlineDate')
+            .firstOrNull
+            ?.innerText;
+        year = _extractYearFromString(medlineDate);
+      }
+
+      // DOI + PMCID 在 PubmedData/ArticleIdList 下
       String? doi;
       String? pmcid;
-      if (entry['articleids'] is List) {
-        for (final articleId in entry['articleids'] as List) {
-          if (articleId is Map) {
-            if (articleId['idtype'] == 'doi') {
-              doi = articleId['value'] as String?;
-            }
-            if (articleId['idtype'] == 'pmc') {
-              pmcid = articleId['value'] as String?;
-            }
-          }
+      final articleIds = articleNode
+          .findElements('PubmedData')
+          .firstOrNull
+          ?.findElements('ArticleIdList')
+          .firstOrNull;
+      if (articleIds != null) {
+        for (final aid in articleIds.findElements('ArticleId')) {
+          final idType = aid.getAttribute('IdType');
+          final value = aid.innerText.trim();
+          if (value.isEmpty) continue;
+          if (idType == 'doi') doi = value;
+          if (idType == 'pmc') pmcid = value;
         }
       }
       final normalizedDoi = doi?.toLowerCase();
+
+      // MeSH Descriptor + 作者 KeywordList，合并去重保留顺序
+      final keywords = <String>[];
+      final seenKeywords = <String>{};
+      void addKeyword(String? value) {
+        if (value == null) return;
+        final trimmed = value.trim();
+        if (trimmed.isEmpty) return;
+        final lower = trimmed.toLowerCase();
+        if (seenKeywords.add(lower)) keywords.add(trimmed);
+      }
+
+      final meshList = medline?.findElements('MeshHeadingList').firstOrNull;
+      if (meshList != null) {
+        for (final heading in meshList.findElements('MeshHeading')) {
+          addKeyword(
+            heading.findElements('DescriptorName').firstOrNull?.innerText,
+          );
+        }
+      }
+      final kwLists =
+          medline?.findElements('KeywordList') ?? const <XmlElement>[];
+      for (final kwList in kwLists) {
+        for (final kw in kwList.findElements('Keyword')) {
+          addKeyword(kw.innerText);
+        }
+      }
 
       String filePath = '';
       if (!metadataOnly) {
@@ -302,6 +399,7 @@ class IdentifierResolver {
         journal: journal,
         year: year,
         doi: normalizedDoi,
+        keywords: keywords,
         filePath: filePath,
         addedAt: DateTime.now(),
       );
@@ -778,12 +876,6 @@ class IdentifierResolver {
       }
     }
     return null;
-  }
-
-  String? _extractPubMedYear(String? pubdate) {
-    if (pubdate == null) return null;
-    final match = RegExp(r'\d{4}').firstMatch(pubdate);
-    return match?.group(0);
   }
 
   String? _extractYearFromString(String? text) {

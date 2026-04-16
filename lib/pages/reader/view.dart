@@ -18,9 +18,11 @@ import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
-import 'widgets/appearance_panel.dart';
 import 'widgets/markdown_reader.dart';
 import 'widgets/outline_panel.dart';
+import 'widgets/reader_background.dart';
+import 'widgets/reader_text_sheet.dart';
+import 'widgets/reader_theme_sheet.dart';
 import 'widgets/search_overlay.dart';
 import 'widgets/selection_toolbar.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -75,9 +77,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final _selectionAreaKey = GlobalKey();
   OverlayEntry? _selectionToolbarEntry;
 
-  // 外观面板
-  final _appearanceKey = GlobalKey();
-  OverlayEntry? _appearanceEntry;
+  // 沉浸式：点击 markdown 内容区切换上下工具栏可见性
+  bool _toolbarsVisible = true;
+
+  // 桌面端工具栏自动隐藏
+  Timer? _toolbarHideTimer;
+  static const _kToolbarAutoHideDelay = Duration(seconds: 3);
+  static const _kEdgeTriggerZone = 16.0;
+
+  bool get _isDesktop =>
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
   // 异步初始化状态
   bool _initialized = false;
@@ -328,20 +337,59 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (mounted) setState(() {});
   }
 
-  // ─── 外观面板 ───
+  // ─── 底部面板（字体 / 主题 / 大纲） ───
 
-  void _toggleAppearancePanel() {
-    if (_appearanceEntry != null) {
-      _appearanceEntry!.remove();
-      _appearanceEntry = null;
-      return;
+  void _openTextSheet() {
+    if (_mdContent == null) return;
+    showReaderTextSheet(context);
+  }
+
+  void _openThemeSheet() {
+    showReaderThemeSheet(context);
+  }
+
+  void _openNotesSheet() {
+    // TODO: 笔记查看功能待实现
+  }
+
+  void _openOutlineSheet() {
+    if (_mdContent == null) return;
+    _scaffoldKey.currentState?.openEndDrawer();
+  }
+
+  // ─── 沉浸式 ───
+
+  /// Markdown 区域单击 → 切换上下工具栏显隐。
+  /// 拖拽选择不会触发 onTap（GestureDetector 默认行为）。
+  void _toggleToolbars() {
+    setState(() => _toolbarsVisible = !_toolbarsVisible);
+    // 桌面端：显示后自动倒计时隐藏
+    if (_isDesktop && _toolbarsVisible) _scheduleToolbarHide();
+  }
+
+  /// 桌面端：鼠标悬停时根据位置决定工具栏显隐。
+  ///
+  /// 鼠标靠近上/下边缘 → 显示工具栏并取消隐藏计时；
+  /// 鼠标在内容区 → 启动延迟隐藏。
+  void _onDesktopPointerHover(PointerHoverEvent event) {
+    if (!_showPreview || !_hasResult || _mdContent == null) return;
+    final height = context.size?.height ?? 0;
+    final y = event.localPosition.dy;
+    if (y < _kEdgeTriggerZone || y > height - _kEdgeTriggerZone) {
+      _toolbarHideTimer?.cancel();
+      if (!_toolbarsVisible) setState(() => _toolbarsVisible = true);
+    } else if (_toolbarsVisible) {
+      _scheduleToolbarHide();
     }
-    _appearanceEntry = showAppearancePanel(
-      context: context,
-      anchorKey: _appearanceKey,
-      ref: ref,
-      onDismiss: () => _appearanceEntry = null,
-    );
+  }
+
+  void _scheduleToolbarHide() {
+    _toolbarHideTimer?.cancel();
+    _toolbarHideTimer = Timer(_kToolbarAutoHideDelay, () {
+      if (mounted && _showPreview) {
+        setState(() => _toolbarsVisible = false);
+      }
+    });
   }
 
   // ─── 大纲导航 ───
@@ -362,8 +410,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       preferPosition: AutoScrollPosition.begin,
     );
   }
-
-  void _onOutlineNavigate(int charOffset) => _scrollToCharOffset(charOffset);
 
   void _showDocumentInfo(BuildContext context) {
     showModalBottomSheet(
@@ -547,12 +593,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   @override
   void dispose() {
+    _toolbarHideTimer?.cancel();
     _disposePdfSearchListener?.call();
     _pdfSearcher?.dispose();
     _pdfSearchController.dispose();
     _pdfSearchFocusNode.dispose();
     _scrollController.dispose();
-    _appearanceEntry?.remove();
     _selectionToolbarEntry?.remove();
     super.dispose();
   }
@@ -593,7 +639,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final fileExists = _fileExists ?? false;
 
     final contentBg = (_showPreview && _hasResult)
-        ? readerSettings.backgroundColor
+        ? resolveReaderBackground(readerSettings.theme, cs)
         : cs.surface;
 
     final isMarkdownHighlightMode = _showPreview && _highlightQuery != null;
@@ -604,45 +650,71 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       key: _scaffoldKey,
       backgroundColor: cs.surface,
       endDrawerEnableOpenDragGesture: false,
-      endDrawer: (_showPreview && _mdContent != null)
+      endDrawer: _mdContent != null
           ? Drawer(
-              width: MediaQuery.sizeOf(context).width > 500
-                  ? 400.0
-                  : MediaQuery.sizeOf(context).width * 0.85,
-              child: SafeArea(
-                child: OutlinePanel(
-                  key: ValueKey(_mdContent.hashCode),
-                  markdownContent: _mdContent!,
-                  pdfPath: widget.document.filePath,
-                  onNavigate: _onOutlineNavigate,
-                ),
+              width: 380,
+              child: OutlinePanel(
+                key: ValueKey(_mdContent.hashCode),
+                markdownContent: _mdContent!,
+                pdfPath: widget.document.filePath,
+                onNavigate: (offset) {
+                  _scaffoldKey.currentState?.closeEndDrawer();
+                  _scrollToCharOffset(offset);
+                },
               ),
             )
           : null,
       body: SafeArea(
-        child: Stack(
+        child: Listener(
+          onPointerHover: _isDesktop ? _onDesktopPointerHover : null,
+          child: Stack(
           children: [
-            // ── 主内容层 ──
-            Column(
-              children: [
-                if (isMarkdownHighlightMode)
-                  _buildHighlightSearchBar(cs)
-                else if (_searchActive && !_showPreview)
-                  _buildPdfSearchBar(cs)
-                else
-                  _buildToolbar(theme, cs, extracting: extracting),
-                Expanded(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,
-                    color: contentBg,
-                    child: fileExists
-                        ? _buildBody(theme, cs, readerSettings)
-                        : _buildFileNotFound(theme, cs),
-                  ),
-                ),
-              ],
+            // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
+            Positioned.fill(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                color: contentBg,
+                child: fileExists
+                    ? _buildBody(theme, cs, readerSettings)
+                    : _buildFileNotFound(theme, cs),
+              ),
             ),
+            // ── 顶部工具栏（沉浸式时向上滑出） ──
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                offset:
+                    _toolbarsVisible ? Offset.zero : const Offset(0, -1),
+                child: Container(
+                  color: cs.surface.withValues(alpha: 0.92),
+                  child: isMarkdownHighlightMode
+                      ? _buildHighlightSearchBar(cs)
+                      : (_searchActive && !_showPreview
+                          ? _buildPdfSearchBar(cs)
+                          : _buildToolbar(theme, cs,
+                              extracting: extracting)),
+                ),
+              ),
+            ),
+            // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
+            if (_showPreview && _hasResult && _mdContent != null)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  offset:
+                      _toolbarsVisible ? Offset.zero : const Offset(0, 1),
+                  child: _buildBottomBar(theme, cs),
+                ),
+              ),
             // ── 浮动搜索结果导航器 ──
             if (isMarkdownHighlightMode && _searchResults.isNotEmpty)
               Positioned(
@@ -669,11 +741,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ),
           ],
         ),
+        ),
       ),
     );
   }
 
-  /// 工具栏：返回 / 搜索 / PDF切换 / 刷新 / 信息 / 外观
+  /// 顶部工具栏：返回 / 搜索 / PDF↔MD 切换 / 重新提取 / 信息
+  ///
+  /// 大纲、外观（颜色/背景）、字体面板 3 个按钮已挪到 [_buildBottomBar]。
   Widget _buildToolbar(ThemeData theme, ColorScheme cs, {bool extracting = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -681,11 +756,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         height: 48,
         child: Row(
           children: [
-            // 返回按钮
             IconButton(
               icon: Icon(
                 Symbols.chevron_left_rounded,
                 size: 28,
+                fill: 1,
                 color: cs.onSurface,
               ),
               tooltip: '返回',
@@ -698,22 +773,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 icon: Icon(
                   Symbols.search_rounded,
                   size: 22,
+                  fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
                 tooltip: '搜索',
                 onPressed: _openSearch,
-              ),
-            // 大纲（仅 Markdown 模式且内容已加载）
-            if (_showPreview && _hasResult && _mdContent != null)
-              IconButton(
-                icon: Icon(
-                  Symbols.toc_rounded,
-                  size: 22,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: '大纲',
-                onPressed: () =>
-                    _scaffoldKey.currentState?.openEndDrawer(),
               ),
             // 提取/切换按钮
             _buildExtractButton(cs, extracting),
@@ -723,37 +787,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 icon: Icon(
                   Symbols.sync_rounded,
                   size: 22,
+                  fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
                 tooltip: '重新提取',
                 onPressed: _onExtractPressed,
               ),
-            // 文献信息 (仅在 PDF 模式下显示)
-            if (!_showPreview)
-              IconButton(
-                icon: Icon(
-                  Symbols.info_rounded,
-                  size: 22,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: '文献信息',
-                onPressed: () => _showDocumentInfo(context),
+            // 文献信息
+            IconButton(
+              icon: Icon(
+                Symbols.info_rounded,
+                size: 22,
+                fill: 1,
+                color: cs.onSurfaceVariant,
               ),
-            // 外观设置（仅 Markdown 预览模式下显示）
-            if (_showPreview && _hasResult)
-              IconButton(
-                key: _appearanceKey,
-                icon: Text(
-                  'A',
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                tooltip: '外观设置',
-                onPressed: _toggleAppearancePanel,
-              ),
+              tooltip: '文献信息',
+              onPressed: () => _showDocumentInfo(context),
+            ),
             const SizedBox(width: 4),
           ],
         ),
@@ -772,6 +822,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               icon: Icon(
                 Symbols.chevron_left_rounded,
                 size: 28,
+                fill: 1,
                 color: cs.onSurface,
               ),
               tooltip: '返回',
@@ -795,6 +846,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     prefixIcon: Icon(
                       Symbols.search_rounded,
                       size: 20,
+                      fill: 1,
                       color: cs.onSurfaceVariant,
                     ),
                     suffixIcon: _pdfSearchController.text.isNotEmpty
@@ -802,6 +854,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             icon: Icon(
                               Symbols.cancel_rounded,
                               size: 18,
+                              fill: 1,
                               color: cs.onSurfaceVariant,
                             ),
                             onPressed: _clearPdfSearch,
@@ -830,6 +883,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               icon: Icon(
                 Symbols.close_rounded,
                 size: 22,
+                fill: 1,
                 color: cs.onSurfaceVariant,
               ),
               tooltip: '退出搜索',
@@ -853,6 +907,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               icon: Icon(
                 Symbols.chevron_left_rounded,
                 size: 28,
+                fill: 1,
                 color: cs.onSurface,
               ),
               tooltip: '返回',
@@ -874,6 +929,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       Icon(
                         Symbols.search_rounded,
                         size: 18,
+                        fill: 1,
                         color: cs.onSurfaceVariant,
                       ),
                       const SizedBox(width: 8),
@@ -897,6 +953,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               icon: Icon(
                 Symbols.close_rounded,
                 size: 22,
+                fill: 1,
                 color: cs.onSurfaceVariant,
               ),
               tooltip: '退出搜索',
@@ -928,6 +985,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               icon: Icon(
                 Symbols.expand_less_rounded,
                 size: 24,
+                fill: 1,
                 color: cs.onSurface,
               ),
               tooltip: '上一个结果',
@@ -969,6 +1027,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               icon: Icon(
                 Symbols.expand_more_rounded,
                 size: 24,
+                fill: 1,
                 color: cs.onSurface,
               ),
               tooltip: '下一个结果',
@@ -1000,6 +1059,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               icon: Icon(
                 Symbols.expand_less_rounded,
                 size: 24,
+                fill: 1,
                 color: cs.onSurface,
               ),
               tooltip: '上一个结果',
@@ -1024,6 +1084,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               icon: Icon(
                 Symbols.expand_more_rounded,
                 size: 24,
+                fill: 1,
                 color: cs.onSurface,
               ),
               tooltip: '下一个结果',
@@ -1032,6 +1093,69 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
         ],
       ),
+    );
+  }
+
+  /// 底部工具栏：大纲 / 笔记 / 主题面板 / 字体面板
+  ///
+  /// 仅在 Markdown 模式显示。工具栏背景用 surface 的半透明色，视觉上浮在
+  /// 阅读内容之上；沉浸式状态切换由 [AnimatedSlide] 在 build 里处理。
+  Widget _buildBottomBar(ThemeData theme, ColorScheme cs) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.92),
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
+        ),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom,
+      ),
+      child: SizedBox(
+        height: 56,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _bottomButton(
+              cs,
+              icon: Symbols.menu_rounded,
+              tooltip: '大纲',
+              onTap: _openOutlineSheet,
+            ),
+            _bottomButton(
+              cs,
+              icon: Symbols.stylus_note_rounded,
+              tooltip: '笔记',
+              onTap: _openNotesSheet,
+            ),
+            _bottomButton(
+              cs,
+              icon: Symbols.palette_rounded,
+              tooltip: '颜色 / 背景',
+              onTap: _openThemeSheet,
+            ),
+            _bottomButton(
+              cs,
+              icon: Symbols.text_fields_rounded,
+              tooltip: '字体',
+              onTap: _openTextSheet,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bottomButton(
+    ColorScheme cs, {
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 24, fill: 1, color: cs.onSurfaceVariant),
+      tooltip: tooltip,
+      onPressed: onTap,
     );
   }
 
@@ -1052,6 +1176,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         icon: Icon(
           _showPreview ? Symbols.picture_as_pdf_rounded : Symbols.article_rounded,
           size: 22,
+          fill: 1,
           color: cs.onSurfaceVariant,
         ),
         tooltip: _showPreview ? '查看 PDF' : '查看提取结果',
@@ -1063,6 +1188,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       icon: Icon(
         Symbols.document_scanner_rounded,
         size: 22,
+        fill: 1,
         color: cs.onSurfaceVariant,
       ),
       tooltip: '文档提取',
@@ -1085,6 +1211,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           animation: animation,
           secondaryAnimation: secondaryAnimation,
           transitionType: SharedAxisTransitionType.horizontal,
+          fillColor: Colors.transparent,
           child: child,
         );
       },
@@ -1141,13 +1268,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return const Center(child: CircularProgressIndicator());
     }
 
-    return _wrapWithSelection(
-      ReaderMarkdownBody(
-        key: ValueKey('reader_md_${_mdContent.hashCode}'),
-        data: _mdContent!,
-        settings: settings,
-        scrollController: _scrollController,
-        highlightQuery: _highlightQuery,
+    // 顶/底工具栏高度 + 安全区：给 markdown 内容加 padding，
+    // 避免第一行/最后一行被工具栏 overlay 挡住。
+    final topPad = 48.0 + MediaQuery.of(context).padding.top * 0;
+    final bottomPad = 56.0 + MediaQuery.of(context).padding.bottom;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: _toggleToolbars,
+      child: Padding(
+        padding: EdgeInsets.only(top: topPad, bottom: bottomPad),
+        child: _wrapWithSelection(
+          ReaderMarkdownBody(
+            key: ValueKey('reader_md_${_mdContent.hashCode}'),
+            data: _mdContent!,
+            settings: settings,
+            scrollController: _scrollController,
+            highlightQuery: _highlightQuery,
+          ),
+        ),
       ),
     );
   }

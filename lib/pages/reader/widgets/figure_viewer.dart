@@ -3,11 +3,15 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:extended_image/extended_image.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../services/figure_extract_service.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import '../../../services/snackbar_service.dart';
 
 /// 以 fade 转场打开 [FigureViewer]。
 ///
@@ -55,7 +59,7 @@ Future<void> showFigureViewer(
 }
 
 /// Figure 全屏查看器：左右切换 + 缩放 + Hero 下滑退出。
-class FigureViewer extends StatefulWidget {
+class FigureViewer extends ConsumerStatefulWidget {
   final List<FigureManifestEntry> figures;
   final int initialIndex;
   final Uint8List? backgroundSnapshot;
@@ -68,10 +72,10 @@ class FigureViewer extends StatefulWidget {
   });
 
   @override
-  State<FigureViewer> createState() => _FigureViewerState();
+  ConsumerState<FigureViewer> createState() => _FigureViewerState();
 }
 
-class _FigureViewerState extends State<FigureViewer>
+class _FigureViewerState extends ConsumerState<FigureViewer>
     with TickerProviderStateMixin {
   late int _currentIndex;
   late final ExtendedPageController _pageController;
@@ -233,25 +237,102 @@ class _FigureViewerState extends State<FigureViewer>
   }
 
   Widget _buildImage(FigureManifestEntry fig) {
-    return ExtendedImage.file(
-      File(fig.imagePath),
-      fit: BoxFit.contain,
-      mode: ExtendedImageMode.gesture,
-      enableSlideOutPage: true,
-      heroBuilderForSlidingPage: (child) =>
-          Hero(tag: 'figure_${fig.imagePath}', child: child),
-      initGestureConfigHandler: (_) => GestureConfig(
-        minScale: 0.9,
-        animationMinScale: 0.7,
-        maxScale: 5.0,
-        animationMaxScale: 5.5,
-        speed: 1.0,
-        inertialSpeed: 500.0,
-        initialScale: 1.0,
-        inPageView: _isGallery,
+    // 外层 GestureDetector 只监听 long-press 和右键，不会劫持 pan/scale/double-tap
+    // ——这些继续由内部的 ExtendedImage 手势系统处理。
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPressStart: (details) =>
+          _showSaveMenu(fig, details.globalPosition),
+      onSecondaryTapDown: (details) =>
+          _showSaveMenu(fig, details.globalPosition),
+      child: ExtendedImage.file(
+        File(fig.imagePath),
+        fit: BoxFit.contain,
+        mode: ExtendedImageMode.gesture,
+        enableSlideOutPage: true,
+        heroBuilderForSlidingPage: (child) =>
+            Hero(tag: 'figure_${fig.imagePath}', child: child),
+        initGestureConfigHandler: (_) => GestureConfig(
+          minScale: 0.9,
+          animationMinScale: 0.7,
+          maxScale: 5.0,
+          animationMaxScale: 5.5,
+          speed: 1.0,
+          inertialSpeed: 500.0,
+          initialScale: 1.0,
+          inPageView: _isGallery,
+        ),
+        onDoubleTap: _handleDoubleTap,
       ),
-      onDoubleTap: _handleDoubleTap,
     );
+  }
+
+  Future<void> _showSaveMenu(
+      FigureManifestEntry fig, Offset globalPosition) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final selected = await showMenu<String>(
+      context: context,
+      color: const Color(0xFF2C2C2E),
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        overlay.size.width - globalPosition.dx,
+        overlay.size.height - globalPosition.dy,
+      ),
+      items: const [
+        PopupMenuItem<String>(
+          value: 'save',
+          height: 40,
+          child: Row(
+            children: [
+              Icon(Symbols.download_rounded, size: 18, color: Colors.white70),
+              SizedBox(width: 12),
+              Text('保存图片',
+                  style: TextStyle(color: Colors.white, fontSize: 14)),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (selected == 'save') await _saveFigure(fig);
+  }
+
+  Future<void> _saveFigure(FigureManifestEntry fig) async {
+    final snackBar = ref.read(snackBarServiceProvider);
+    final source = File(fig.imagePath);
+    if (!await source.exists()) {
+      snackBar.showResult(message: '图片文件不存在');
+      return;
+    }
+    final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
+
+    try {
+      if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+        // 桌面：系统保存对话框 + File.copy
+        final targetPath = await FilePicker.platform.saveFile(
+          dialogTitle: '保存图片',
+          fileName: fileName,
+          type: FileType.image,
+          lockParentWindow: true,
+        );
+        if (targetPath == null) return;
+        final target = File(targetPath);
+        if (await target.exists()) await target.delete();
+        await source.copy(target.path);
+        snackBar.showResult(message: '已保存到 ${target.path}');
+      } else {
+        // 移动：交给系统分享面板，用户从中选"保存到相册"/"保存到文件"
+        await Share.shareXFiles(
+          [XFile(fig.imagePath)],
+          subject: fileName,
+        );
+      }
+    } catch (e) {
+      snackBar.showResult(message: '保存失败：$e');
+    }
   }
 
   Widget _buildArrow(bool isLeft, VoidCallback onTap) {

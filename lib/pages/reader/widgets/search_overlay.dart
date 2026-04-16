@@ -3,6 +3,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/reader/markdown_document_cache_service.dart';
+import 'reader_background.dart';
 import '../../../utils/markdown_preprocessor.dart';
 import 'md_widget/nr_markdown_config.dart';
 import 'md_widget/nr_search_highlight_builder.dart';
@@ -129,7 +130,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
     final safePadding = MediaQuery.of(context).padding;
 
     return Container(
-      color: settings.backgroundColor,
+      color: resolveReaderBackground(settings.theme, cs),
       padding: EdgeInsets.only(top: safePadding.top),
       child: Column(
         children: [
