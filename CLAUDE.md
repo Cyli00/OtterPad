@@ -34,7 +34,7 @@
 ### 标识符与元数据
 
 - **IdentifierParser** (`lib/services/identifier_parser.dart`) — DOI/PMID/arXiv/ISBN 统一解析（`IdentifierParser.parse(raw)`）。禁止自行编写标识符正则。
-- **IdentifierResolver** (`lib/services/identifier_resolver.dart`) — 元数据查询与 PDF 下载（`IdentifierResolver.instance.resolve(...)`）。禁止直接调用出版商 API 或 Unpaywall。
+- **IdentifierResolver** (`lib/services/identifier_resolver.dart`) — 元数据查询与 PDF 下载（`IdentifierResolver.instance.resolve(...)`）。PubMed 路径使用 `efetch.fcgi`（XML）而非 `esummary`，可提取 MeSH Descriptor + 作者 KeywordList 填充 `Document.keywords`。禁止直接调用出版商 API 或 Unpaywall。
 - **DocumentMetadataParser** (`lib/services/document_metadata_parser.dart`) — 从文本/文件名提取元数据，静态方法 `parseFilePath` / `extractDoi` / `extractYear`。
 - **PdfIdentifierExtractor** (`lib/services/pdf_identifier_extractor.dart`) — 从 PDF 文本提取 DOI/arXiv/ISBN，须通过 `PdfProcessLock` 串行执行。
 - **PdfMetadataExtractor** (`lib/services/pdf_metadata_extractor.dart`) — 从 PDF Info Dictionary / XMP 字段提取元数据。
@@ -51,11 +51,17 @@
 - **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 加载 + 内存缓存 + 搜索快照。标题检测优先读取提取 `.json` 中 `block_label: "paragraph_title"`，无 JSON 时回退 ATX heading。
 - **MarkdownPreprocessor** (`lib/utils/markdown_preprocessor.dart`) — Markdown 预处理：LaTeX 修复、标题过滤、空表格移除。
 - **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 自定义 SpanNode 集合：LaTeX (`nr_latex_node`)、图片 (`nr_image_node`)、标记 (`nr_mark_node`)、搜索高亮 (`nr_search_highlight_builder`)、主题配置 (`nr_markdown_config`)。
-- **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — Figure 全屏查看器（宽度优先适配 + Ctrl+滚轮/手势缩放 + 下滑退出），通过 `showFigureViewer()` 打开。
+- **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — Figure 全屏查看器（宽度优先适配 + Ctrl+滚轮/手势缩放 + 下滑退出 + 长按/右键保存菜单），通过 `showFigureViewer()` 打开。桌面走 `FilePicker.saveFile` + `File.copy`，移动走 `Share.shareXFiles` 借系统菜单"保存到相册"。
+- **阅读器底部面板** (`lib/pages/reader/widgets/reader_text_sheet.dart`, `reader_theme_sheet.dart`, `reader_background.dart`) — 两个 `showModalBottomSheet` 入口：`showReaderTextSheet` 管字号/字体族；`showReaderThemeSheet` 管颜色（复用 `themeProvider` 的 seed color）+ 背景（`ReaderTheme` 的 4 个值：`themed` / `light` / `sepia` / `dark`）。`themed` 需通过 `resolveReaderBackground(ReaderTheme, ColorScheme)` / `resolveReaderTextColor(...)` 解析到具体颜色。禁止在 widgets 里直接访问 `settings.backgroundColor` 来拿背景色——用 resolver。
+- **阅读器沉浸式模式** (`lib/pages/reader/view.dart`) — Markdown 模式下点击内容区切换 `_toolbarsVisible`，顶/底工具栏用 `AnimatedSlide`（220ms `Curves.easeOut`）上下滑出。内容区用 `Positioned.fill` 占满全屏，工具栏 overlay 在上下方；markdown body 外层包 `GestureDetector(onTap: _toggleToolbars, behavior: HitTestBehavior.translucent)`，拖拽选择不会误触发 onTap。
 
 ### 图标
 
 - **Material Symbols** (`package:material_symbols_icons/symbols.dart`) — 全项目唯一图标集，通过 `Symbols.xxx` 使用（支持可变字重 / fill / grade / optical size）。禁止使用 Flutter 内置的 `Icons.xxx`，禁止混用两套图标集。
+
+### 桌面窗口
+
+- **WindowChrome** (`lib/widgets/window_chrome.dart`) — 桌面端自定义标题栏，替换原生 title bar。通过 `app.dart` 的 `MaterialApp.router.builder` 在路由内容上方注入（仅 `isDesktopChromeTarget == true` 时）。包含 4 个按钮：置顶（toggle `windowManager.setAlwaysOnTop`）/ 最小化 / 最大化↔还原（监听 `WindowListener.onWindowMaximize` 同步状态）/ 关闭。整条 chrome 被 `DragToMoveArea` 包裹，空白区拖拽移动窗口。初始化在 `main.dart`：桌面分支 `windowManager.ensureInitialized()` + `TitleBarStyle.hidden`。禁止在页面级 Scaffold 里再挂 chrome，窗口装饰只属于 app 外层。
 
 ## 转场动画特别规定
 
@@ -108,7 +114,7 @@
 
 ### 数据模型
 
-- Document 模型与文件导入 (`lib/data/models/book/document.dart`, `lib/providers/documents_provider.dart`)
+- Document 模型与文件导入 (`lib/data/models/book/document.dart`, `lib/providers/documents_provider.dart`) — 含 `keywords: List<String>` 字段，PubMed 路径填充 MeSH + 作者 Keyword，其他路径暂为空
 - 收藏夹系统 (`lib/data/models/collection/favorite.dart`, `lib/providers/favorites_provider.dart`)
 - 星标文献 (`lib/providers/starred_provider.dart`)
 - 备份与恢复 (`lib/services/backup_restore_service.dart`, `lib/services/backup_s3_service.dart`, `lib/providers/backup_provider.dart`)
@@ -120,8 +126,12 @@
 - 内联多选模式 (`lib/providers/selection_provider.dart`, `lib/pages/library/widgets/selection_app_bar.dart`)
 - 批量提取进度面板 (`lib/pages/library/widgets/batch_progress_sheet.dart`)
 - 设置页面：API (`api_settings_page.dart`)、外观 (`appearance_settings_page.dart`)、网络 (`network_settings_page.dart`)
-- 阅读器主页面 (`lib/pages/reader/view.dart`)、外观面板、提取结果页
-- 阅读器主题配置 (`lib/providers/reader_settings_provider.dart`)
+- 阅读器主页面 (`lib/pages/reader/view.dart`) — 沉浸式模式 + Stack 分层工具栏 + 底部 5 按钮（大纲/搜索/切换/颜色/字体）；大纲从 endDrawer 改为 bottom sheet
+- 阅读器主题配置 (`lib/providers/reader_settings_provider.dart`) — `ReaderTheme` 含 4 值（`themed`/`light`/`sepia`/`dark`），`themed` 通过 `resolveReaderBackground()` 解析到 `ColorScheme.primaryContainer`
+- 阅读器外观面板 (`reader_text_sheet.dart`, `reader_theme_sheet.dart`) — 两个 bottom sheet 替代旧的 overlay panel（`appearance_panel.dart` 已弃用）
+- 大纲参考文献解析 (`lib/pages/reader/widgets/outline_panel.dart`) — 支持编号格式（`1.`/`1)`/`[1]`）和 Author-Year 段落格式，二级回退
+- 图片查看器保存 (`lib/pages/reader/widgets/figure_viewer.dart`) — 长按/右键弹出保存菜单，桌面 `FilePicker.saveFile`，移动 `Share.shareXFiles`
+- 桌面自定义标题栏 (`lib/widgets/window_chrome.dart`) — 替换原生 title bar，置顶/最小化/最大化/关闭 4 按钮 + `DragToMoveArea` 拖拽
 
 ### 文档提取
 
@@ -147,5 +157,14 @@
 - 后续raw.md的保存可以删去，目前只是用于测试
 - 段落内提及的figure应该能被检出和点击高亮
 - markdown搜索内容的上下标、公式等内容也没有被正常地渲染出来
-- pdf视图最好也有outline_panel，但是定位的功能可能还要再想一下怎么做，或许需要基于json里的坐标反过来定位到pdf里面的具体页数和位置
-- 图片查看器里面需要允许长按弹出保存图片选项（桌面端右键弹出保存选项）
+- 删除物理文件 `lib/pages/reader/widgets/appearance_panel.dart`（已在 refactor 中清空为占位，受工具限制无法 rm）
+- 阅读器字体/排版扩展：边距 slider、行距 slider、阅读模式（上下滚动 vs 左右翻页）
+  - 需要扩展 `ReaderSettingsState` 加 `margin` / `lineHeight` / `scrollDirection` 字段（参照现有 `fontSize` 的 Hive 存储范式）
+  - UI 按 [reader_text_sheet.dart](lib/pages/reader/widgets/reader_text_sheet.dart) 现有的 `_sliderTile` 风格补控件
+  - 左右翻页需要 markdown_reader 结构性改造（ListView → PageView），比单纯加 slider 代价大一个数量级，单独作为一个阶段
+- 基于元数据的文献推荐算法，分阶段推进：
+  1. **Jaccard 基线**（零成本）：PubMed 文献用 `Document.keywords`（MeSH + 作者 KeywordList）直接算集合相似度 `|A∩B|/|A∪B|`
+  2. **Major Topic 过滤**：给 `Document` 补 `primaryKeywords` 或把 keywords 结构升级为 `{name, isPrimary}`，efetch XML 里解析 `MeshHeading/DescriptorName[@MajorTopicYN="Y"]`，只用核心主题算相似度（过滤 `Humans`/`Animals`/`Male` 等背景噪声词）
+  3. **非 PubMed 文献兜底**：用快速 Agent 模型跑 abstract 抽关键词，单独存 `extractedKeywords` 字段，**不要**和受控 MeSH 混入同一字段（自由文本 vs 受控词表不能直接算 Jaccard）
+  4. **MeSH Tree Number + IDF**（高级）：在 efetch 里额外解析 `DescriptorName` 的 tree numbers，配合本地 MeSH 树表（~2MB JSON）按层级距离算相似度；同时全库扫一遍建 IDF 权重，稀有词权重高
+  - 架构原则：PubMed 文献走 MeSH 路径，其他领域走 embedding / 抽取关键词路径，**在更高层融合信号**，不要强行塞进同一个向量空间

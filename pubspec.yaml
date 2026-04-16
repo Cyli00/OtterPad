@@ -92,6 +92,9 @@ dependencies:
   # Material Symbols (3000+ icons, drop-in replacement for Icons.*)
   material_symbols_icons: ^4.2928.1
 
+  # 桌面端自定义标题栏（隐藏原生 title bar + 窗口控制）
+  window_manager: ^0.5.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

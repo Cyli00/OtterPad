@@ -238,7 +238,7 @@ class _FavoriteCardState extends State<FavoriteCard> {
                 children: [
                   Text(
                     widget.title,
-                    style: theme.textTheme.titleLarge?.copyWith(
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
                     ),

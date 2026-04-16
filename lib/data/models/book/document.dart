@@ -6,6 +6,9 @@ class Document {
   final String? journal;
   final String? year;
   final String? doi;
+  /// 关键词列表。PubMed 路径填充为 MeSH Descriptor + 作者 Keyword 合集，
+  /// 其他路径暂时为空，后续可用快速模型基于 abstract 抽取填充。
+  final List<String> keywords;
   final String filePath;
   final DateTime addedAt;
 
@@ -16,6 +19,7 @@ class Document {
     this.journal,
     this.year,
     this.doi,
+    this.keywords = const [],
     required this.filePath,
     required this.addedAt,
   });
@@ -26,6 +30,7 @@ class Document {
     String? journal,
     String? year,
     String? doi,
+    List<String>? keywords,
     String? filePath,
   }) {
     return Document(
@@ -35,6 +40,7 @@ class Document {
       journal: journal ?? this.journal,
       year: year ?? this.year,
       doi: doi ?? this.doi,
+      keywords: keywords ?? this.keywords,
       filePath: filePath ?? this.filePath,
       addedAt: addedAt,
     );
@@ -47,6 +53,7 @@ class Document {
     'journal': journal,
     'year': year,
     'doi': doi,
+    'keywords': keywords,
     'filePath': filePath,
     'addedAt': addedAt.toIso8601String(),
   };
@@ -56,6 +63,13 @@ class Document {
     final authors = rawAuthors == null
         ? <String>[]
         : rawAuthors
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+    final rawKeywords = json['keywords'] as List<dynamic>?;
+    final keywords = rawKeywords == null
+        ? <String>[]
+        : rawKeywords
               .map((e) => e.toString().trim())
               .where((e) => e.isNotEmpty)
               .toList();
@@ -73,6 +87,7 @@ class Document {
                 : null),
       year: (json['year'] as String?)?.trim(),
       doi: (json['doi'] as String?)?.trim(),
+      keywords: keywords,
       filePath: (json['filePath'] as String? ?? '').trim(),
       addedAt: DateTime.parse(json['addedAt'] as String),
     );
@@ -86,6 +101,7 @@ class Document {
     if (journal != null && journal!.toLowerCase().contains(q)) return true;
     if (year != null && year!.contains(q)) return true;
     if (doi != null && doi!.toLowerCase().contains(q)) return true;
+    if (keywords.any((k) => k.toLowerCase().contains(q))) return true;
     return false;
   }
 }

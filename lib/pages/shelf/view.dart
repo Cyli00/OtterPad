@@ -215,17 +215,9 @@ class ShelfPage extends ConsumerWidget {
                   children: [
                     Text(
                       '收藏夹',
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${favorites.length + 1}',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
                       ),
                     ),
                     const Spacer(),
