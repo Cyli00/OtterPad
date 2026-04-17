@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/api_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -378,32 +379,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: cs.secondaryContainer.withAlpha(150),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Symbols.auto_awesome_rounded,
-                              size: 20, color: cs.secondary),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              '百度 AI Studio 文档 (PaddleOCR-VL-1.5)',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: cs.onSecondaryContainer,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
                     // ── API Key ──
                     Row(
                       children: [
@@ -417,19 +392,30 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
+                            color: cs.tertiaryContainer,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text('必填',
                               style: theme.textTheme.labelSmall
-                                  ?.copyWith(color: cs.onSurfaceVariant)),
+                                  ?.copyWith(color: cs.onTertiaryContainer)),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => launchUrl(
+                            Uri.parse(
+                                'https://aistudio.baidu.com/paddleocr'),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                          icon: Icon(Symbols.arrow_outward_rounded,
+                              size: 16, color: cs.onSurfaceVariant),
+                          tooltip: '获取 Token',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                              minWidth: 28, minHeight: 28),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text('用于异步 Job API 认证',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant)),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _keyCtrl,
@@ -482,12 +468,23 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                               style: theme.textTheme.labelSmall
                                   ?.copyWith(color: cs.onSurfaceVariant)),
                         ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => launchUrl(
+                            Uri.parse(
+                                'https://aistudio.baidu.com/paddleocr'),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                          icon: Icon(Symbols.arrow_outward_rounded,
+                              size: 16, color: cs.onSurfaceVariant),
+                          tooltip: '获取地址',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                              minWidth: 28, minHeight: 28),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text('异步提取失败时回退到同步接口',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant)),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _urlCtrl,
