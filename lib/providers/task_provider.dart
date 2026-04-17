@@ -334,7 +334,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
         message: '请先在设置中配置文档提取 Access Token',
         action: SnackBarAction(
           label: '前往设置',
-          onPressed: () => _router.push(AppRoutes.settingsApi),
+          onPressed: () => _router.push(AppRoutes.settingsExtract),
         ),
       );
       return;

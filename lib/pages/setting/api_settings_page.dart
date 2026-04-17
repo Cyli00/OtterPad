@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'api_settings_agent.dart';
-import 'api_settings_extract.dart';
+import 'translation_settings_section.dart';
 
-/// 模型服务设置页 — 组合文档助手 + 文档提取两个独立区块
+/// 模型服务设置页
 class ApiSettingsPage extends StatelessWidget {
   const ApiSettingsPage({super.key});
 
@@ -26,25 +26,22 @@ class ApiSettingsPage extends StatelessWidget {
         scrolledUnderElevation: 0,
       ),
       body: Listener(
-        onPointerDown: (_) =>
-            ScaffoldMessenger.of(context).clearSnackBars(),
+        onPointerDown: (_) => ScaffoldMessenger.of(context).clearSnackBars(),
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
               .copyWith(bottom: 40),
           children: [
-            _buildGroup(context, title: '文档助手', child: const AgentApiSection()),
-            _buildGroup(context, title: '文档提取', child: const ExtractApiSection()),
+            _buildGroup(context, title: 'API 设置', child: const AgentApiSection()),
+            _buildGroup(context, title: '翻译设置', child: const TranslationSettingsSection()),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGroup(
-    BuildContext context, {
-    required String title,
-    required Widget child,
-  }) {
+  /// 复用网络设置/OCR 设置的分组样式：主题色标题 + surfaceContainerHigh 圆角容器
+  Widget _buildGroup(BuildContext context,
+      {required String title, required Widget child}) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Column(

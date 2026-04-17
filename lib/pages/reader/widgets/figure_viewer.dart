@@ -10,8 +10,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../providers/api_provider.dart';
+import '../../../providers/translation_config_provider.dart';
 import '../../../services/figure_extract_service.dart';
 import '../../../services/snackbar_service.dart';
+import '../../../services/translation_service.dart';
 
 /// 以 fade 转场打开 [FigureViewer]。
 ///
@@ -84,6 +87,14 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   VoidCallback? _doubleTapCb;
 
   bool get _isGallery => widget.figures.length > 1;
+
+  // ── 翻译状态（per-figure）──
+  /// figureIndex → 翻译结果
+  final Map<int, String> _translations = {};
+  /// figureIndex → 是否正在请求
+  final Map<int, bool> _translating = {};
+  /// figureIndex → 当前是否显示译文（false = 原文）
+  final Map<int, bool> _showTranslation = {};
 
   @override
   void initState() {
@@ -363,6 +374,13 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   }
 
   Widget _buildCaptionPanel(FigureManifestEntry fig, double bottomPadding) {
+    final idx = _currentIndex;
+    final isTranslating = _translating[idx] == true;
+    final hasTranslation = _translations.containsKey(idx);
+    final showingTranslation = _showTranslation[idx] == true;
+    final displayText =
+        showingTranslation && hasTranslation ? _translations[idx]! : fig.captionText;
+
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(maxHeight: 140),
@@ -377,7 +395,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           Expanded(
             child: SingleChildScrollView(
               child: Text(
-                fig.captionText,
+                displayText,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 15,
@@ -394,24 +412,73 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
             child: SizedBox(
               width: 36,
               height: 36,
-              child: IconButton(
-                icon: const Icon(Symbols.translate_rounded, size: 18),
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0x1AFFFFFF),
-                  foregroundColor: Colors.white60,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  padding: EdgeInsets.zero,
-                ),
-                tooltip: '翻译',
-                onPressed: () {
-                  // TODO: 翻译功能
-                },
-              ),
+              child: isTranslating
+                  ? const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white60,
+                      ),
+                    )
+                  : IconButton(
+                      icon: Icon(
+                        hasTranslation && showingTranslation
+                            ? Symbols.title_rounded
+                            : Symbols.translate_rounded,
+                        size: 18,
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor: hasTranslation && showingTranslation
+                            ? const Color(0x33FFFFFF)
+                            : const Color(0x1AFFFFFF),
+                        foregroundColor: Colors.white60,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        padding: EdgeInsets.zero,
+                      ),
+                      tooltip: hasTranslation
+                          ? (showingTranslation ? '显示原文' : '显示翻译')
+                          : '翻译',
+                      onPressed: () => _handleTranslate(idx, fig),
+                    ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _handleTranslate(int idx, FigureManifestEntry fig) async {
+    // 已有翻译：切换显示
+    if (_translations.containsKey(idx)) {
+      setState(() => _showTranslation[idx] = !(_showTranslation[idx] ?? false));
+      return;
+    }
+
+    // 首次翻译：调用 API
+    setState(() => _translating[idx] = true);
+
+    try {
+      final agentState = ref.read(agentApiProvider);
+      final translationConfig = ref.read(translationConfigProvider);
+      final result = await TranslationService.translate(
+        text: fig.captionText,
+        agentState: agentState,
+        translationConfig: translationConfig,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _translations[idx] = result;
+        _showTranslation[idx] = true;
+        _translating[idx] = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _translating[idx] = false);
+      ref.read(snackBarServiceProvider).showResult(
+            message: '$e'.replaceFirst('Exception: ', ''),
+          );
+    }
   }
 }

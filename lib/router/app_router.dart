@@ -10,6 +10,7 @@ import '../pages/library/view.dart';
 import '../pages/main/view.dart';
 import '../pages/reader/view.dart';
 import '../pages/setting/api_settings_page.dart';
+import '../pages/setting/ocr_settings_page.dart';
 import '../pages/setting/appearance_settings_page.dart';
 import '../pages/setting/backup_settings_page.dart';
 import '../pages/setting/network_settings_page.dart';
@@ -150,6 +151,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const ApiSettingsPage(),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'extract',
+                    parentNavigatorKey: _rootNavigatorKey,
+                    pageBuilder: (context, state) => _buildAnimatedPage(
+                      state: state,
+                      child: const OcrSettingsPage(),
                     ),
                   ),
                   GoRoute(

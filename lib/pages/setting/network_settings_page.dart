@@ -164,11 +164,13 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
   InputDecoration _fieldDeco(
     BuildContext context, {
     required String hint,
+    String? label,
     Widget? suffix,
   }) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return InputDecoration(
+      labelText: label,
       hintText: hint,
       hintStyle: theme.textTheme.bodyMedium?.copyWith(
         color: cs.onSurfaceVariant.withAlpha(120),
@@ -254,58 +256,32 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                         children: [
                           Expanded(
                             flex: 3,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '主机地址',
-                                  style:
-                                      theme.textTheme.titleSmall?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _hostController,
-                                  decoration: _fieldDeco(
-                                    context,
-                                    hint: '127.0.0.1',
-                                  ),
-                                  onChanged: (_) => _onAddressChanged(),
-                                ),
-                              ],
+                            child: TextField(
+                              controller: _hostController,
+                              decoration: _fieldDeco(
+                                context,
+                                hint: '127.0.0.1',
+                                label: '主机地址',
+                              ),
+                              onChanged: (_) => _onAddressChanged(),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '端口',
-                                  style:
-                                      theme.textTheme.titleSmall?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _portController,
-                                  decoration: _fieldDeco(
-                                    context,
-                                    hint: '7890',
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(5),
-                                  ],
-                                  onChanged: (_) => _onAddressChanged(),
-                                ),
+                            child: TextField(
+                              controller: _portController,
+                              decoration: _fieldDeco(
+                                context,
+                                hint: '7890',
+                                label: '端口',
+                              ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(5),
                               ],
+                              onChanged: (_) => _onAddressChanged(),
                             ),
                           ),
                         ],

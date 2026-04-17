@@ -24,7 +24,6 @@ Future<void> showAgentModelParamsSheet({
   required String modelId,
   required AgentModelParams initialParams,
   required ValueChanged<AgentModelParams> onSave,
-  required VoidCallback onReset,
 }) {
   return showModalBottomSheet(
     context: context,
@@ -36,7 +35,6 @@ Future<void> showAgentModelParamsSheet({
       modelId: modelId,
       initialParams: initialParams,
       onSave: onSave,
-      onReset: onReset,
     ),
   );
 }
@@ -47,7 +45,6 @@ class _AgentModelParamsSheet extends StatefulWidget {
   final String modelId;
   final AgentModelParams initialParams;
   final ValueChanged<AgentModelParams> onSave;
-  final VoidCallback onReset;
 
   const _AgentModelParamsSheet({
     required this.provider,
@@ -55,7 +52,6 @@ class _AgentModelParamsSheet extends StatefulWidget {
     required this.modelId,
     required this.initialParams,
     required this.onSave,
-    required this.onReset,
   });
 
   @override
@@ -67,19 +63,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
   Timer? _saveTimer;
 
   late final TextEditingController _maxTokensCtrl;
-  late final TextEditingController _systemPromptCtrl;
   late final TextEditingController _thinkingBudgetCtrl;
-
-  // ── provider-aware 常量 ───────────────────────────────────────────────
-
-  /// Anthropic 的 temperature 上限是 1.0；其它两家都是 2.0
-  double get _temperatureMax =>
-      widget.provider == AgentApiProvider.anthropic ? 1.0 : 2.0;
-
-  int get _temperatureDivisions =>
-      widget.provider == AgentApiProvider.anthropic ? 20 : 40;
-
-  double get _temperatureFallback => 1.0;
 
   // ── 生命周期 ──────────────────────────────────────────────────────────
 
@@ -90,7 +74,6 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
     _maxTokensCtrl = TextEditingController(
       text: _draft.maxTokens?.toString() ?? '',
     );
-    _systemPromptCtrl = TextEditingController(text: _draft.systemPrompt ?? '');
     _thinkingBudgetCtrl = TextEditingController(
       text: _draft.thinkingBudget?.toString() ?? '',
     );
@@ -104,7 +87,6 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       widget.onSave(_draft);
     }
     _maxTokensCtrl.dispose();
-    _systemPromptCtrl.dispose();
     _thinkingBudgetCtrl.dispose();
     super.dispose();
   }
@@ -119,35 +101,6 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
   void _patch(AgentModelParams next) {
     setState(() => _draft = next);
     _scheduleSave();
-  }
-
-  Future<void> _confirmReset() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('重置参数'),
-        content: Text('将 ${widget.modelId} 的所有参数恢复为服务商默认？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('重置'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    _saveTimer?.cancel();
-    setState(() {
-      _draft = const AgentModelParams();
-      _maxTokensCtrl.text = '';
-      _systemPromptCtrl.text = '';
-      _thinkingBudgetCtrl.text = '';
-    });
-    widget.onReset();
   }
 
   // ── Build ──────────────────────────────────────────────────────────────
@@ -198,34 +151,25 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
   }
 
   Widget _buildHeader(ThemeData theme, ColorScheme cs) {
+    // 对齐 toolbar_bottom_sheet 的 header 节奏：
+    // 左侧主标题 + 副标题（模型信息），右侧操作按钮。
+    // 去掉原来的 primary 竖色装饰条，减少视觉噪点。
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 4,
-            height: 28,
-            decoration: BoxDecoration(
-              color: cs.primary,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.modelId,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  '模型参数',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                     color: cs.onSurface,
-                    height: 1.1,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -235,35 +179,21 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
                       bg: cs.primaryContainer,
                       fg: cs.onPrimaryContainer,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '参数调节',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        widget.modelId,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
               ],
             ),
-          ),
-          IconButton(
-            icon: Icon(
-              Symbols.restart_alt_rounded,
-              size: 20,
-              color: cs.onSurfaceVariant,
-            ),
-            tooltip: '重置全部',
-            onPressed: _draft.isDefault ? null : _confirmReset,
-          ),
-          IconButton(
-            icon: Icon(
-              Symbols.close_rounded,
-              size: 20,
-              color: cs.onSurfaceVariant,
-            ),
-            tooltip: '关闭',
-            onPressed: () => Navigator.pop(context),
           ),
         ],
       ),
@@ -273,49 +203,13 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
   List<Widget> _buildBody(ThemeData theme, ColorScheme cs) {
     return [
       _subHeader('通用参数'),
-      _sliderRow(
-        title: '温度 (temperature)',
-        subtitle: widget.provider == AgentApiProvider.anthropic
-            ? 'Anthropic 范围 0.0 – 1.0；越低越确定，越高越发散'
-            : '范围 0.0 – 2.0；越低越确定，越高越发散',
-        value: _draft.temperature,
-        fallback: _temperatureFallback.clamp(0.0, _temperatureMax),
-        min: 0.0,
-        max: _temperatureMax,
-        divisions: _temperatureDivisions,
-        formatter: (v) => v.toStringAsFixed(2),
-        onChanged: (v) => _patch(_draft.copyWith(temperature: v)),
-        onReset: () => _patch(_draft.copyWith(temperature: null)),
-      ),
-      _sliderRow(
-        title: 'Top P',
-        subtitle: '核采样阈值（0.0 – 1.0）；建议与温度二选一调节',
-        value: _draft.topP,
-        fallback: 1.0,
-        min: 0.0,
-        max: 1.0,
-        divisions: 20,
-        formatter: (v) => v.toStringAsFixed(2),
-        onChanged: (v) => _patch(_draft.copyWith(topP: v)),
-        onReset: () => _patch(_draft.copyWith(topP: null)),
-      ),
       _intFieldRow(
-        title: '最大输出 Tokens',
-        subtitle:
-            'OpenAI: max_output_tokens；Anthropic: max_tokens；Gemini: maxOutputTokens。留空使用服务商默认上限',
+        title: '最大输出长度',
+        subtitle: '单次回复的长度上限，留空跟随服务商默认',
         controller: _maxTokensCtrl,
         hint: '如 4096',
         onChanged: (v) =>
             _patch(_draft.copyWith(maxTokens: v == null || v <= 0 ? null : v)),
-      ),
-      _multilineFieldRow(
-        title: 'System Prompt',
-        subtitle:
-            'OpenAI 映射到 instructions；Anthropic 写入顶层 system；Gemini 写入 systemInstruction',
-        controller: _systemPromptCtrl,
-        hint: '例如：你是一位严谨的学术助手，回答时优先引用原文…',
-        onChanged: (v) =>
-            _patch(_draft.copyWith(systemPrompt: v.isEmpty ? null : v)),
       ),
       _subHeader('${widget.providerLabel} 专属'),
       ...switch (widget.provider) {
@@ -331,11 +225,11 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
 
   List<Widget> _openaiRows() => [
     _segmentedRow<String?>(
-      title: 'Reasoning Effort',
-      subtitle: 'reasoning.effort：仅对 o-series / GPT-5 推理模型生效',
+      title: '推理强度',
+      subtitle: '推理模型专用，控制思考深度',
       options: const [
         (null, '默认'),
-        ('minimal', 'minimal'),
+        ('minimal', '最低'),
         ('low', '低'),
         ('medium', '中'),
         ('high', '高'),
@@ -344,8 +238,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onChanged: (v) => _patch(_draft.copyWith(reasoningEffort: v)),
     ),
     _segmentedRow<String?>(
-      title: 'Verbosity',
-      subtitle: 'text.verbosity：控制回答的详略程度，默认 medium',
+      title: '详略程度',
+      subtitle: '回答的啰嗦程度',
       options: const [
         (null, '默认'),
         ('low', '简'),
@@ -356,22 +250,22 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onChanged: (v) => _patch(_draft.copyWith(verbosity: v)),
     ),
     _segmentedRow<bool?>(
-      title: 'Parallel Tool Calls',
-      subtitle: 'parallel_tool_calls：是否允许模型单轮并行调用多个工具',
+      title: '并行工具',
+      subtitle: '是否允许模型同时调用多个工具',
       options: const [(null, '默认'), (true, '允许'), (false, '串行')],
       selected: _draft.parallelToolCalls,
       onChanged: (v) => _patch(_draft.copyWith(parallelToolCalls: v)),
     ),
     _segmentedRow<String?>(
-      title: 'Truncation',
-      subtitle: 'truncation：上下文超限时是否自动截断，默认 disabled',
-      options: const [(null, '默认'), ('auto', 'auto'), ('disabled', 'disabled')],
+      title: '上下文截断',
+      subtitle: '超长对话是否自动截断',
+      options: const [(null, '默认'), ('auto', '自动'), ('disabled', '关闭')],
       selected: _draft.truncation,
       onChanged: (v) => _patch(_draft.copyWith(truncation: v)),
     ),
     _segmentedRow<bool?>(
-      title: 'Web Search 工具',
-      subtitle: 'tools 中注入内置 web_search 工具，允许模型联网检索',
+      title: '联网搜索',
+      subtitle: '让模型可以上网查资料',
       options: const [(null, '默认'), (true, '开启'), (false, '关闭')],
       selected: _draft.webSearchEnabled,
       onChanged: (v) => _patch(
@@ -386,8 +280,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       curve: Curves.easeOut,
       child: _draft.webSearchEnabled == true
           ? _segmentedRow<String?>(
-              title: '搜索上下文大小',
-              subtitle: 'search_context_size：检索结果拼入上下文的信息量',
+              title: '搜索信息量',
+              subtitle: '检索结果拼入对话的详略',
               options: const [
                 (null, '默认'),
                 ('low', '低'),
@@ -407,8 +301,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
     final showBudget = mode == 'enabled' || mode == 'adaptive';
     return [
       _sliderRow(
-        title: 'Top K',
-        subtitle: 'top_k：每步候选 token 数；0 表示不限制',
+        title: '候选词数',
+        subtitle: '每步从多少个候选词里挑选，0 表示不限',
         value: _draft.topK?.toDouble(),
         fallback: 40,
         min: 0,
@@ -419,13 +313,13 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
         onReset: () => _patch(_draft.copyWith(topK: null)),
       ),
       _segmentedRow<String?>(
-        title: '深度思考 (thinking)',
-        subtitle: 'thinking.type：adaptive 由模型自行决定是否思考',
+        title: '深度思考',
+        subtitle: '自适应让模型自行决定是否思考',
         options: const [
           (null, '默认'),
-          ('disabled', 'disabled'),
-          ('enabled', 'enabled'),
-          ('adaptive', 'adaptive'),
+          ('disabled', '关闭'),
+          ('enabled', '开启'),
+          ('adaptive', '自适应'),
         ],
         selected: _draft.thinkingMode,
         onChanged: (v) => _patch(
@@ -443,8 +337,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
         curve: Curves.easeOut,
         child: showBudget
             ? _intFieldRow(
-                title: 'Thinking Budget',
-                subtitle: 'thinking.budget_tokens：最少 1024，必须小于 max_tokens',
+                title: '思考预算',
+                subtitle: '思考环节能花多少 token，最少 1024',
                 controller: _thinkingBudgetCtrl,
                 hint: '如 4096',
                 onChanged: (v) {
@@ -464,8 +358,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
 
   List<Widget> _geminiRows() => [
     _sliderRow(
-      title: 'Top K',
-      subtitle: 'topK：gemini-2.5 Pro 上限 64，Flash 上限 40',
+      title: '候选词数',
+      subtitle: '每步从多少个候选词里挑选，上限随模型',
       value: _draft.topK?.toDouble(),
       fallback: 40,
       min: 0,
@@ -476,8 +370,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onReset: () => _patch(_draft.copyWith(topK: null)),
     ),
     _sliderRow(
-      title: 'Presence Penalty',
-      subtitle: 'presencePenalty：范围 -2.0 ~ 2.0；正值抑制重复出现的主题',
+      title: '话题新鲜度',
+      subtitle: '正值鼓励换新话题，负值偏好重复',
       value: _draft.presencePenalty,
       fallback: 0,
       min: -2,
@@ -488,8 +382,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onReset: () => _patch(_draft.copyWith(presencePenalty: null)),
     ),
     _sliderRow(
-      title: 'Frequency Penalty',
-      subtitle: 'frequencyPenalty：范围 -2.0 ~ 2.0；正值降低高频 token 概率',
+      title: '用词多样度',
+      subtitle: '正值鼓励词汇丰富，负值允许重复用词',
       value: _draft.frequencyPenalty,
       fallback: 0,
       min: -2,
@@ -500,8 +394,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onReset: () => _patch(_draft.copyWith(frequencyPenalty: null)),
     ),
     _intFieldRow(
-      title: 'Thinking Budget',
-      subtitle: 'thinkingConfig.thinkingBudget：0 关闭思考，Flash 最大 24576',
+      title: '思考预算',
+      subtitle: '思考能花多少 token，0 表示关闭',
       controller: _thinkingBudgetCtrl,
       hint: '如 4096',
       onChanged: (v) => _patch(
@@ -568,7 +462,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
     final cs = theme.colorScheme;
     final isSet = value != null;
     final displayValue = value ?? fallback;
-    final chipText = isSet ? formatter(displayValue) : '默认';
+    final chipText = formatter(displayValue);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -753,49 +647,6 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
                 onChanged(int.tryParse(trimmed));
               }
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _multilineFieldRow({
-    required String title,
-    required String subtitle,
-    required TextEditingController controller,
-    required String hint,
-    required ValueChanged<String> onChanged,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              _helpIcon(subtitle),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: controller,
-            minLines: 2,
-            maxLines: 6,
-            style: theme.textTheme.bodyMedium,
-            decoration: _fieldDeco(theme, cs, hint: hint),
-            onChanged: (v) => onChanged(v.trim()),
           ),
         ],
       ),

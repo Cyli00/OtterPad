@@ -45,8 +45,14 @@ class SettingPage extends StatelessWidget {
               _SettingsTile(
                 icon: Symbols.memory,
                 title: '模型服务',
-                subtitle: 'Agent 模型 · 文档提取接口',
+                subtitle: '模型接口 · ',
                 onTap: () => context.push(AppRoutes.settingsApi),
+              ),
+              _SettingsTile(
+                icon: Symbols.document_scanner,
+                title: 'OCR 设置',
+                subtitle: 'OCR 接口 · 解析参数',
+                onTap: () => context.push(AppRoutes.settingsExtract),
               ),
               _SettingsTile(
                 icon: Symbols.palette,

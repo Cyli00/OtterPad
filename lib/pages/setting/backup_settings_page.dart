@@ -841,7 +841,7 @@ class _RemoteDialogScaffold extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 540),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -849,11 +849,11 @@ class _RemoteDialogScaffold extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 ...children,
                 const SizedBox(height: 12),
                 Row(
@@ -886,7 +886,7 @@ class _RemoteDialogScaffold extends StatelessWidget {
 class _ConfigField extends StatelessWidget {
   final TextEditingController controller;
   final IconData icon;
-  final String hint;
+  final String label;
   final String? helperText;
   final bool obscureText;
   final Widget? suffixIcon;
@@ -894,7 +894,7 @@ class _ConfigField extends StatelessWidget {
   const _ConfigField({
     required this.controller,
     required this.icon,
-    required this.hint,
+    required this.label,
     this.helperText,
     this.obscureText = false,
     this.suffixIcon,
@@ -909,13 +909,17 @@ class _ConfigField extends StatelessWidget {
       child: TextField(
         controller: controller,
         obscureText: obscureText,
+        style: theme.textTheme.bodyMedium,
         decoration: InputDecoration(
-          hintText: hint,
+          labelText: label,
+          labelStyle: theme.textTheme.bodyMedium?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
           helperText: helperText,
           helperStyle: theme.textTheme.bodySmall?.copyWith(
             color: cs.onSurfaceVariant,
           ),
-          prefixIcon: Icon(icon, color: cs.onSurfaceVariant),
+          prefixIcon: Icon(icon, size: 20, color: cs.onSurfaceVariant),
           suffixIcon: suffixIcon,
           filled: true,
           fillColor: cs.surfaceContainerLow,
@@ -931,8 +935,8 @@ class _ConfigField extends StatelessWidget {
             borderSide: BorderSide(color: cs.primary, width: 1.5),
           ),
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 18,
+            horizontal: 16,
+            vertical: 14,
           ),
         ),
       ),
@@ -974,7 +978,7 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return _RemoteDialogScaffold(
-      title: 'WebDAV配置',
+      title: 'WebDAV 配置',
       onClear: widget.initial.isConfigured
           ? () => Navigator.of(context).pop(const BackupWebDavState())
           : null,
@@ -991,18 +995,18 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
         _ConfigField(
           controller: _serverController,
           icon: Symbols.link_rounded,
-          hint: '地址',
+          label: '地址',
           helperText: 'WebDAV服务器地址',
         ),
         _ConfigField(
           controller: _userController,
           icon: Symbols.account_circle_rounded,
-          hint: '账号',
+          label: '账号',
         ),
         _ConfigField(
           controller: _passwordController,
           icon: Symbols.password_rounded,
-          hint: '密码',
+          label: '密码',
           obscureText: _obscurePassword,
           suffixIcon: IconButton(
             onPressed: () {
@@ -1070,7 +1074,7 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return _RemoteDialogScaffold(
-      title: 'S3配置',
+      title: 'S3 配置',
       onClear: widget.initial.isConfigured
           ? () => Navigator.of(context).pop(const BackupS3State())
           : null,
@@ -1091,28 +1095,28 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
         _ConfigField(
           controller: _endpointController,
           icon: Symbols.link_rounded,
-          hint: '地址',
+          label: '地址',
           helperText: 'S3 / R2 / MinIO Endpoint',
         ),
         _ConfigField(
           controller: _regionController,
           icon: Symbols.public_rounded,
-          hint: '区域',
+          label: '区域',
         ),
         _ConfigField(
           controller: _bucketController,
           icon: Symbols.inventory_2_rounded,
-          hint: 'Bucket',
+          label: 'Bucket',
         ),
         _ConfigField(
           controller: _accessKeyController,
           icon: Symbols.vpn_key_rounded,
-          hint: 'Access Key',
+          label: 'Access Key',
         ),
         _ConfigField(
           controller: _secretKeyController,
           icon: Symbols.key_rounded,
-          hint: 'Secret Key',
+          label: 'Secret Key',
           obscureText: _obscureSecretKey,
           suffixIcon: IconButton(
             onPressed: () {
@@ -1130,7 +1134,7 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
         _ConfigField(
           controller: _objectKeyController,
           icon: Symbols.description,
-          hint: '对象路径',
+          label: '对象路径',
           helperText: '默认可用 night-reader/night_reader_backup.zip',
         ),
         SwitchListTile(

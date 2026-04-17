@@ -155,8 +155,6 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       initialParams: s.paramsFor(modelId),
       onSave: (p) =>
           ref.read(agentApiProvider.notifier).setModelParams(modelId, p),
-      onReset: () =>
-          ref.read(agentApiProvider.notifier).resetModelParams(modelId),
     );
   }
 

@@ -90,7 +90,25 @@
 
 ## Slider 统一范式
 
-所有设置项的数值滑块参照 [api_settings_extract.dart](lib/pages/setting/api_settings_extract.dart) 里的 `_sliderTile` 实现。禁止各页面自造视觉。
+所有设置项的数值滑块参照 [agent_model_params_sheet.dart](lib/pages/setting/agent_model_params_sheet.dart) 里的 `_sliderRow` 实现。禁止各页面自造视觉。
+
+- 标题行右侧的数值胶囊**始终显示格式化后的数值**（`formatter(displayValue)`），禁止显示"默认"文字——已设置/默认状态通过胶囊颜色区分（`primaryContainer` vs 灰底+边框）。
+- 重置按钮在 `value == null` 时置灰（`onPressed: null`），不隐藏。
+
+## TextField 统一范式
+
+判断是否使用 `labelText`（浮动标签）代替独立标题 + `hintText`：
+
+- **用 `labelText`**：TextField 上级没有独立标题，或有标题但同级元素全是 TextField（如表单/配置对话框）。参照 `_ConfigField`（[backup_settings_page.dart](lib/pages/setting/backup_settings_page.dart)）和网络代理字段（[network_settings_page.dart](lib/pages/setting/network_settings_page.dart)）。
+- **不用 `labelText`**：TextField 上方有独立标题行且同级存在非 TextField 元素（slider、switch 等），此时保持标题 + `hintText` 模式。参照 [translation_settings_section.dart](lib/pages/setting/translation_settings_section.dart) 的提示词输入框。
+
+## Dialog 统一范式
+
+弹窗内的字号和尺寸须与所在设置页对齐，禁止"放大感"。参照 `_RemoteDialogScaffold` + `_ConfigField`（[backup_settings_page.dart](lib/pages/setting/backup_settings_page.dart)）：
+
+- 对话框标题：`titleLarge` + `FontWeight.bold`。禁止使用 `headlineMedium` 等更大级别。
+- 对话框内 TextField：`style: bodyMedium`（14sp），`prefixIcon` size 20，`contentPadding` 16×14。
+- 对话框内边距：`EdgeInsets.fromLTRB(24, 24, 24, 20)`。
 
 ## Dependency 更新
 
