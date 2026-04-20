@@ -89,9 +89,14 @@ class NRLatexSpanNode extends SpanNode {
 
     if (content.isEmpty) return TextSpan(style: style, text: textContent);
 
+    // 视觉妥协：把 0.85 alpha 放进字形颜色（不包 Opacity widget，避免 saveLayer
+    // 触发 GPU 层切换），让底下 RenderParagraph 的选区矩形从 glyph 缝隙透出来。
+    final mathStyle = style.color == null
+        ? style
+        : style.copyWith(color: style.color!.withValues(alpha: 0.85));
     final mathWidget = Math.tex(
       content,
-      textStyle: style,
+      textStyle: mathStyle,
       mathStyle: isDisplay ? MathStyle.display : MathStyle.text,
       textScaleFactor: 1,
       onErrorFallback: (e) => Text(
@@ -104,7 +109,7 @@ class NRLatexSpanNode extends SpanNode {
     );
 
     if (isDisplay) {
-      return WidgetSpan(
+      final mathSpan = WidgetSpan(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -118,12 +123,16 @@ class NRLatexSpanNode extends SpanNode {
           },
         ),
       );
+      return TextSpan(children: [
+        mathSpan,
+        _invisibleSourceSpan('\$\$$content\$\$', style),
+      ]);
     }
 
-    // inline 模式：将公式与尾随标点合并到同一个 InlineSpan 中
+    // inline 模式：将公式与尾随标点合并到同一个 WidgetSpan 中
     final trailingText = attributes['TrailingText'];
     if (trailingText != null && trailingText.isNotEmpty) {
-      return WidgetSpan(
+      final mathSpan = WidgetSpan(
         alignment: PlaceholderAlignment.middle,
         child: FittedBox(
           fit: BoxFit.scaleDown,
@@ -137,11 +146,39 @@ class NRLatexSpanNode extends SpanNode {
           ),
         ),
       );
+      return TextSpan(children: [
+        mathSpan,
+        _invisibleSourceSpan('\$$content\$$trailingText', style),
+      ]);
     }
 
-    return WidgetSpan(
-      alignment: PlaceholderAlignment.middle,
-      child: mathWidget,
+    return TextSpan(children: [
+      WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: mathWidget,
+      ),
+      _invisibleSourceSpan('\$$content\$', style),
+    ]);
+  }
+
+  /// 与 `WidgetSpan` 平级的透明源码 TextSpan——
+  /// 让该公式在外层 `RichText` 的同一段 `RenderParagraph` 里拥有真实的
+  /// 可选 fragment：选区能跨越公式、复制时得到 LaTeX 源码。
+  ///
+  /// 不用 `fontSize: 0`（Flutter 会限制最小渲染尺寸），改用极小字号 + 透明色
+  /// + 行高倍率为 0 + 无字距，让这段文字在视觉和布局上都接近于零。
+  TextSpan _invisibleSourceSpan(String source, TextStyle baseStyle) {
+    return TextSpan(
+      text: source,
+      style: baseStyle.copyWith(
+        fontSize: 0.01,
+        color: const Color(0x00000000),
+        height: 0,
+        letterSpacing: 0,
+        wordSpacing: 0,
+        shadows: const <Shadow>[],
+        decoration: TextDecoration.none,
+      ),
     );
   }
 }

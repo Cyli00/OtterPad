@@ -349,7 +349,7 @@ class _TranslationSettingsSectionState
               child: Text(
                 current,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
