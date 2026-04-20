@@ -11,6 +11,7 @@ const _figPrefix = 'fig:';
 /// NightReader 图片配置：支持 file:// 本地图片和 http(s) 网络图片。
 ///
 /// 当 alt text 以 `fig:` 开头时，在图片下方渲染 caption 文字。
+/// [onTap] 非空时，图片区域可点击（caption 不参与），点击回调携带原始 url。
 class NRImgConfig extends ImgConfig {
   NRImgConfig({
     super.errorBuilder,
@@ -18,6 +19,7 @@ class NRImgConfig extends ImgConfig {
     String? highlightQuery,
     Color? highlightBg,
     Color? highlightFg,
+    void Function(String url)? onTap,
   }) : super(
           builder: (url, attrs) {
             final alt = attrs['alt'] ?? '';
@@ -45,17 +47,28 @@ class NRImgConfig extends ImgConfig {
               );
             }
 
+            // 仅在 onTap 非空时让图片响应点击；caption 区保持纯文本（可选中）
+            Widget imageArea = ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: image,
+            );
+            if (onTap != null) {
+              imageArea = MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onTap(url),
+                  child: imageArea,
+                ),
+              );
+            }
+
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: image,
-                    ),
-                  ),
+                  Center(child: imageArea),
                   if (isFigure && caption.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(

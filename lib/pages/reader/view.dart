@@ -18,8 +18,10 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/doc_extract_service.dart';
+import '../../services/figure_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
+import 'widgets/figure_viewer.dart';
 import 'widgets/markdown_reader.dart';
 import 'widgets/outline_panel.dart';
 import 'widgets/reader_background.dart';
@@ -96,6 +98,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool? _fileExists;
   bool _markdownLoading = false;
   Object? _markdownLoadError;
+
+  // Figure manifest 懒加载：首次点击图片时触发，Future 复用避免重复 IO
+  Future<List<FigureManifestEntry>?>? _figuresFuture;
 
   @override
   void initState() {
@@ -1364,7 +1369,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             _bottomButton(
               cs,
               icon: Symbols.palette_rounded,
-              tooltip: '颜色 / 背景',
+              tooltip: '外观',
               onTap: _openThemeSheet,
             ),
             _bottomButton(
@@ -1518,9 +1523,42 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           highlightQuery: _highlightQuery,
           topInset: topPad,
           bottomInset: bottomPad,
+          onImageTap: _handleMarkdownImageTap,
         ),
       ),
     );
+  }
+
+  /// 点击 markdown 中的图片 → 加载 figure manifest 后跳转 FigureViewer。
+  ///
+  /// 匹配策略：从 url 提取 basename（`Figure_N.png`）与 manifest entry
+  /// 的 `imagePath` basename 比对，和 outline_panel 保持一致。
+  Future<void> _handleMarkdownImageTap(String url) async {
+    final pdfPath = widget.document.filePath;
+    if (pdfPath.isEmpty) return;
+
+    // 从 url 提取文件名：file:// URI 走 Uri 解析，否则直接取最后一段
+    String fileName;
+    try {
+      fileName = url.startsWith('file://')
+          ? p.basename(Uri.parse(url).toFilePath())
+          : url.split(RegExp(r'[/\\]')).last;
+    } catch (_) {
+      fileName = url.split(RegExp(r'[/\\]')).last;
+    }
+    if (fileName.isEmpty) return;
+
+    _figuresFuture ??= FigureExtractService.loadManifest(pdfPath);
+    final figures = await _figuresFuture;
+    if (!mounted) return;
+    if (figures == null || figures.isEmpty) return;
+
+    final index = figures.indexWhere(
+      (e) => p.basename(e.imagePath) == fileName,
+    );
+    if (index < 0) return;
+
+    await showFigureViewer(context, figures, initialIndex: index);
   }
 
   /// 用 SelectionArea + Listener 包裹 Markdown 内容。

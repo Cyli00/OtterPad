@@ -15,6 +15,7 @@ MarkdownConfig buildReaderMarkdownConfig({
   required ReaderSettingsState settings,
   required ColorScheme colorScheme,
   String? highlightQuery,
+  void Function(String url)? onImageTap,
 }) {
   final theme = settings.theme;
   final textColor = resolveReaderTextColor(theme, colorScheme);
@@ -131,6 +132,7 @@ MarkdownConfig buildReaderMarkdownConfig({
       highlightQuery: highlightQuery,
       highlightBg: colorScheme.primaryContainer,
       highlightFg: colorScheme.onPrimaryContainer,
+      onTap: onImageTap,
     ),
   ]);
 }

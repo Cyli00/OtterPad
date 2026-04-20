@@ -24,6 +24,10 @@ class ReaderMarkdownBody extends StatefulWidget {
   final double topInset;
   final double bottomInset;
 
+  /// 点击图片回调（传入原始 url），用于跳转到 FigureViewer 等行为。
+  /// 回调身份变化不会触发已构建 widget 的重建——State 用闭包包一层稳定引用。
+  final void Function(String url)? onImageTap;
+
   const ReaderMarkdownBody({
     super.key,
     required this.data,
@@ -32,6 +36,7 @@ class ReaderMarkdownBody extends StatefulWidget {
     this.highlightQuery,
     this.topInset = 0,
     this.bottomInset = 0,
+    this.onImageTap,
   });
 
   @override
@@ -57,6 +62,10 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
 
   bool get _hasHighlight =>
       widget.highlightQuery != null && widget.highlightQuery!.isNotEmpty;
+
+  /// 稳定的图片点击入口：始终调用最新的 [widget.onImageTap]，
+  /// 避免父层闭包重建时 widget 列表被迫重新构建。
+  void _handleImageTap(String url) => widget.onImageTap?.call(url);
 
   List<Widget> _getWidgets(_RenderResources resources) {
     if (_cachedWidgets != null) return _cachedWidgets!;
@@ -111,6 +120,7 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       settings: widget.settings,
       colorScheme: colorScheme,
       highlightQuery: _hasHighlight ? widget.highlightQuery : null,
+      onImageTap: _handleImageTap,
     );
     _renderResources = next;
     return next;
@@ -144,6 +154,7 @@ class _RenderResources {
     required ReaderSettingsState settings,
     required ColorScheme colorScheme,
     required String? highlightQuery,
+    void Function(String url)? onImageTap,
   }) {
     SearchHighlightBuilder? searchBuilder;
     if (highlightQuery != null && highlightQuery.isNotEmpty) {
@@ -157,6 +168,7 @@ class _RenderResources {
       settings: settings,
       colorScheme: colorScheme,
       highlightQuery: highlightQuery,
+      onImageTap: onImageTap,
     );
 
     final generator = buildReaderMarkdownGenerator(

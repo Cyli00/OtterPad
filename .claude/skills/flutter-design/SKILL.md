@@ -72,6 +72,7 @@ maxWidth：540（配置型）/ `(w * 0.85).clamp(320, 480)`（创建型）
 `backgroundColor: transparent` + `BackdropFilter(blur: 4, 4)`
 容器 `surfaceContainerHigh` · 顶部圆角 **28**
 Grabber **32×4** `onSurfaceVariant.withAlpha(80)` 圆角 2 · 底部 `padding.bottom + 16`
+例外：阅读器面板（reader_text_sheet / reader_theme_sheet）不加 blur，需实时预览
 SheetItem：44×44 图标盒（圆角 12 · `primaryContainer` · 22px `primary`）· `bodyLarge` w600 · `bodySmall` `onSurfaceVariant` · chevron `.withAlpha(120)`
 
 ## Card

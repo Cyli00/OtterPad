@@ -103,7 +103,7 @@ class HomeHeader extends ConsumerWidget {
           const SizedBox(width: 8.0),
           _HeaderButton(
             icon: isGrid ? Symbols.view_list_rounded : Symbols.grid_view_rounded,
-            tooltip: isGrid ? '切换列表视图' : '切换网格视图',
+            tooltip: isGrid ? '列表视图' : '网格视图',
             size: isMobile ? 36 : 40,
             onPressed: () {
               ref.read(viewModeProvider.notifier).state = !isGrid;
