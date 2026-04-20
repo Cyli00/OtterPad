@@ -20,12 +20,18 @@ class ReaderMarkdownBody extends StatefulWidget {
   /// 需要高亮的搜索词（仅控制渲染高亮，不触发跳转）
   final String? highlightQuery;
 
+  /// 工具栏占位：合并到 ListView padding，使首尾内容不被 overlay 遮挡
+  final double topInset;
+  final double bottomInset;
+
   const ReaderMarkdownBody({
     super.key,
     required this.data,
     required this.settings,
     this.scrollController,
     this.highlightQuery,
+    this.topInset = 0,
+    this.bottomInset = 0,
   });
 
   @override
@@ -75,7 +81,9 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
 
     return ListView.builder(
       controller: controller,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+      padding: EdgeInsets.fromLTRB(
+        20, 8 + widget.topInset, 20, 40 + widget.bottomInset,
+      ),
       itemCount: widgets.length,
       itemBuilder: (ctx, index) {
         final child = widgets[index];

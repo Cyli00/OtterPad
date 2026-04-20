@@ -88,6 +88,17 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
 
   bool get _isGallery => widget.figures.length > 1;
 
+  static const _kCaptionStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 15,
+    height: 1.55,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.1,
+  );
+  static const _kMinCaptionH = 60.0;
+
+  double _captionHeight = 120.0;
+
   // ── 翻译状态（per-figure）──
   /// figureIndex → 翻译结果
   final Map<int, String> _translations = {};
@@ -142,8 +153,6 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final fig = widget.figures[_currentIndex];
-
     return ExtendedImageSlidePage(
       slideAxis: SlideAxis.vertical,
       slideType: SlideType.onlyImage,
@@ -184,7 +193,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _buildCaptionPanel(fig, bottomPadding),
+                  _buildCaptionPanel(bottomPadding),
                 ],
               ),
             ),
@@ -373,77 +382,108 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     );
   }
 
-  Widget _buildCaptionPanel(FigureManifestEntry fig, double bottomPadding) {
+  Widget _buildCaptionPanel(double bottomPadding) {
     final idx = _currentIndex;
-    final isTranslating = _translating[idx] == true;
-    final hasTranslation = _translations.containsKey(idx);
-    final showingTranslation = _showTranslation[idx] == true;
+    final fig = widget.figures[idx];
+    final isTranslated = _showTranslation[idx] == true &&
+        _translations.containsKey(idx);
     final displayText =
-        showingTranslation && hasTranslation ? _translations[idx]! : fig.captionText;
+        isTranslated ? _translations[idx]! : fig.captionText;
+    final maxH = MediaQuery.sizeOf(context).height / 4;
 
     return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 140),
-      padding: EdgeInsets.fromLTRB(20, 16, 16, bottomPadding + 16),
       decoration: const BoxDecoration(
         color: Color(0xFF1C1C1E),
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Text(
-                displayText,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  height: 1.55,
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: 0.1,
+          // ── 拖拽指示条 ──
+          GestureDetector(
+            onVerticalDragUpdate: (d) {
+              setState(() {
+                _captionHeight =
+                    (_captionHeight - d.delta.dy).clamp(_kMinCaptionH, maxH);
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color(0x50FFFFFF),
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  ),
+                  child: SizedBox(width: 32, height: 4),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: SizedBox(
-              width: 36,
-              height: 36,
-              child: isTranslating
-                  ? const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white60,
+          // ── 文本 + 翻译按钮 ──
+          SizedBox(
+            height: _captionHeight.clamp(_kMinCaptionH, maxH),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 16, bottomPadding + 16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: SelectionArea(
+                      child: SingleChildScrollView(
+                        child: Text(displayText, style: _kCaptionStyle),
                       ),
-                    )
-                  : IconButton(
-                      icon: Icon(
-                        hasTranslation && showingTranslation
-                            ? Symbols.title_rounded
-                            : Symbols.translate_rounded,
-                        size: 18,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: hasTranslation && showingTranslation
-                            ? const Color(0x33FFFFFF)
-                            : const Color(0x1AFFFFFF),
-                        foregroundColor: Colors.white60,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        padding: EdgeInsets.zero,
-                      ),
-                      tooltip: hasTranslation
-                          ? (showingTranslation ? '显示原文' : '显示翻译')
-                          : '翻译',
-                      onPressed: () => _handleTranslate(idx, fig),
                     ),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildTranslateButton(idx, fig, isTranslated),
+                ],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTranslateButton(
+      int idx, FigureManifestEntry fig, bool isTranslated) {
+    final isLoading = _translating[idx] == true;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: isLoading
+            ? const Padding(
+                padding: EdgeInsets.all(8),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white60,
+                ),
+              )
+            : IconButton(
+                icon: Icon(
+                  isTranslated
+                      ? Symbols.title_rounded
+                      : Symbols.translate_rounded,
+                  size: 18,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: isTranslated
+                      ? const Color(0x33FFFFFF)
+                      : const Color(0x1AFFFFFF),
+                  foregroundColor: Colors.white60,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: EdgeInsets.zero,
+                ),
+                tooltip: _translations.containsKey(idx)
+                    ? (isTranslated ? '显示原文' : '显示翻译')
+                    : '翻译',
+                onPressed: () => _handleTranslate(idx, fig),
+              ),
       ),
     );
   }

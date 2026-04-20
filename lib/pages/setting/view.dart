@@ -44,8 +44,8 @@ class SettingPage extends StatelessWidget {
                 ),
               _SettingsTile(
                 icon: Symbols.memory,
-                title: '模型服务',
-                subtitle: '模型接口 · ',
+                title: 'AI 设置',
+                subtitle: '模型接口 · 翻译设置',
                 onTap: () => context.push(AppRoutes.settingsApi),
               ),
               _SettingsTile(

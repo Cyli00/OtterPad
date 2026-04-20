@@ -837,7 +837,7 @@ class _RemoteDialogScaffold extends StatelessWidget {
     return Dialog(
       backgroundColor: cs.surfaceContainerLow,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 540),
         child: Padding(
@@ -932,7 +932,7 @@ class _ConfigField extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: cs.primary, width: 1.5),
+            borderSide: BorderSide(color: cs.primary, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,

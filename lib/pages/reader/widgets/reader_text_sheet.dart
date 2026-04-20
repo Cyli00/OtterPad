@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -13,7 +15,10 @@ Future<void> showReaderTextSheet(BuildContext context) {
     context: context,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.25),
-    builder: (_) => const _ReaderTextSheet(),
+    builder: (_) => BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+      child: const _ReaderTextSheet(),
+    ),
   );
 }
 
@@ -44,7 +49,7 @@ class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
       child: Column(
@@ -58,15 +63,12 @@ class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
           _sectionLabel(theme, cs, '字号', '${_localFontSize.round()}px'),
           const SizedBox(height: 8),
           SliderTheme(
-            data: SliderThemeData(
+            data: SliderTheme.of(context).copyWith(
               trackHeight: 3,
               thumbShape:
                   const RoundSliderThumbShape(enabledThumbRadius: 8),
               overlayShape:
                   const RoundSliderOverlayShape(overlayRadius: 16),
-              activeTrackColor: cs.primary,
-              inactiveTrackColor: cs.surfaceContainerHighest,
-              thumbColor: cs.primary,
             ),
             child: Slider(
               value: _localFontSize,
@@ -94,7 +96,7 @@ class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
   Widget _grabber(ColorScheme cs) {
     return Center(
       child: Container(
-        width: 40,
+        width: 32,
         height: 4,
         decoration: BoxDecoration(
           color: cs.onSurfaceVariant.withAlpha(80),
@@ -123,11 +125,18 @@ class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
         ),
         const Spacer(),
         if (trailing != null)
-          Text(
-            trailing,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              trailing,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: cs.onPrimaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
       ],

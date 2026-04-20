@@ -16,7 +16,7 @@ class ApiSettingsPage extends StatelessWidget {
       backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(
-          '模型服务',
+          'AI 设置',
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),

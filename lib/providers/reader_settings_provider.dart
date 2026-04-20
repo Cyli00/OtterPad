@@ -73,17 +73,31 @@ enum ReaderFont {
       };
 }
 
+/// 工具栏透明度预设
+enum ToolbarOpacity {
+  opaque(1.0, '不透明'),
+  slight(0.85, '微透明'),
+  glass(0.7, '毛玻璃'),
+  half(0.5, '半透明');
+
+  final double value;
+  final String label;
+  const ToolbarOpacity(this.value, this.label);
+}
+
 class ReaderSettingsState {
   final ReaderTheme theme;
   final ReaderFont font;
   final double fontSize;
   final DefaultReadingMode defaultReadingMode;
+  final ToolbarOpacity toolbarOpacity;
 
   const ReaderSettingsState({
     this.theme = ReaderTheme.themed,
     this.font = ReaderFont.serif,
     this.fontSize = 16.0,
     this.defaultReadingMode = DefaultReadingMode.markdown,
+    this.toolbarOpacity = ToolbarOpacity.glass,
   });
 
   ReaderSettingsState copyWith({
@@ -91,12 +105,14 @@ class ReaderSettingsState {
     ReaderFont? font,
     double? fontSize,
     DefaultReadingMode? defaultReadingMode,
+    ToolbarOpacity? toolbarOpacity,
   }) {
     return ReaderSettingsState(
       theme: theme ?? this.theme,
       font: font ?? this.font,
       fontSize: fontSize ?? this.fontSize,
       defaultReadingMode: defaultReadingMode ?? this.defaultReadingMode,
+      toolbarOpacity: toolbarOpacity ?? this.toolbarOpacity,
     );
   }
 
@@ -161,6 +177,7 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   static const _kFont = 'reader_font';
   static const _kFontSize = 'reader_font_size';
   static const _kDefaultMode = 'reader_default_mode';
+  static const _kToolbarOpacity = 'reader_toolbar_opacity';
 
   ReaderSettingsNotifier() : super(_load());
 
@@ -170,6 +187,7 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     final fontIndex = box.get(_kFont, defaultValue: 0) as int;
     final fontSize = box.get(_kFontSize, defaultValue: 16.0) as double;
     final modeIndex = box.get(_kDefaultMode, defaultValue: 0) as int;
+    final opacityIndex = box.get(_kToolbarOpacity, defaultValue: 2) as int;
     return ReaderSettingsState(
       theme: ReaderTheme
           .values[themeIndex.clamp(0, ReaderTheme.values.length - 1)],
@@ -180,6 +198,8 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
       ),
       defaultReadingMode:
           DefaultReadingMode.values[modeIndex.clamp(0, 1)],
+      toolbarOpacity: ToolbarOpacity
+          .values[opacityIndex.clamp(0, ToolbarOpacity.values.length - 1)],
     );
   }
 
@@ -205,6 +225,11 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   void setDefaultReadingMode(DefaultReadingMode mode) {
     state = state.copyWith(defaultReadingMode: mode);
     GStorage.setting.put(_kDefaultMode, mode.index);
+  }
+
+  void setToolbarOpacity(ToolbarOpacity opacity) {
+    state = state.copyWith(toolbarOpacity: opacity);
+    GStorage.setting.put(_kToolbarOpacity, opacity.index);
   }
 
   void reload() {

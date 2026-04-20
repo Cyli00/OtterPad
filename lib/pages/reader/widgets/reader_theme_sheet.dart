@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -16,7 +18,10 @@ Future<void> showReaderThemeSheet(BuildContext context) {
     context: context,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.25),
-    builder: (_) => const _ReaderThemeSheet(),
+    builder: (_) => BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+      child: const _ReaderThemeSheet(),
+    ),
   );
 }
 
@@ -34,7 +39,7 @@ class _ReaderThemeSheet extends ConsumerWidget {
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
       child: Column(
@@ -66,6 +71,17 @@ class _ReaderThemeSheet extends ConsumerWidget {
             onChanged: (t) =>
                 ref.read(readerSettingsProvider.notifier).setTheme(t),
           ),
+
+          const SizedBox(height: 20),
+
+          // ── 工具栏透明度 ──
+          _sectionLabel(theme, cs, Symbols.blur_on_rounded, '工具栏透明度'),
+          const SizedBox(height: 12),
+          _OpacityRow(
+            current: readerSettings.toolbarOpacity,
+            onChanged: (o) =>
+                ref.read(readerSettingsProvider.notifier).setToolbarOpacity(o),
+          ),
         ],
       ),
     );
@@ -74,7 +90,7 @@ class _ReaderThemeSheet extends ConsumerWidget {
   Widget _grabber(ColorScheme cs) {
     return Center(
       child: Container(
-        width: 40,
+        width: 32,
         height: 4,
         decoration: BoxDecoration(
           color: cs.onSurfaceVariant.withAlpha(80),
@@ -211,6 +227,97 @@ class _ColorDot extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── 工具栏透明度选择行：4 档预设，视觉对齐背景选择行 ──
+
+class _OpacityRow extends StatelessWidget {
+  final ToolbarOpacity current;
+  final ValueChanged<ToolbarOpacity> onChanged;
+
+  const _OpacityRow({required this.current, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Row(
+      children: ToolbarOpacity.values.map((o) {
+        final selected = o == current;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: o != ToolbarOpacity.values.last ? 10 : 0,
+            ),
+            child: GestureDetector(
+              onTap: () => onChanged(o),
+              child: Column(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: selected ? cs.primary : cs.outlineVariant,
+                        width: selected ? 2.5 : 1,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(13.5),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CustomPaint(painter: _CheckerPainter(cs: cs)),
+                          ColoredBox(
+                            color: cs.surface.withValues(alpha: o.value),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    o.label,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: selected ? cs.primary : cs.onSurfaceVariant,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// 棋盘格底纹，用来直观展示透明度差异
+class _CheckerPainter extends CustomPainter {
+  final ColorScheme cs;
+  _CheckerPainter({required this.cs});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const step = 8.0;
+    final light = Paint()..color = cs.surfaceContainerHighest;
+    final dark = Paint()..color = cs.outlineVariant.withAlpha(60);
+    for (var y = 0.0; y < size.height; y += step) {
+      for (var x = 0.0; x < size.width; x += step) {
+        final isEven = ((x ~/ step) + (y ~/ step)) % 2 == 0;
+        canvas.drawRect(
+          Rect.fromLTWH(x, y, step, step),
+          isEven ? light : dark,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CheckerPainter old) => cs != old.cs;
 }
 
 // ── 背景选择行：4 个圆形色块对应 ReaderTheme ──

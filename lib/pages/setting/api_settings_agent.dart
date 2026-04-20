@@ -173,24 +173,23 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             color: cs.onSurfaceVariant.withAlpha(120),
           ),
           filled: true,
-          fillColor: cs.surface,
+          fillColor: cs.surfaceContainerLow,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: cs.outlineVariant.withAlpha(100)),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: cs.outline),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: cs.primary, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
-            vertical: 16,
+            vertical: 14,
           ),
-          isDense: true,
           suffixIcon: suffix,
         );
 

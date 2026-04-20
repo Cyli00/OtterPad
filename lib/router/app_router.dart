@@ -18,7 +18,6 @@ import '../pages/setting/view.dart';
 import '../pages/shelf/favorite_detail_page.dart';
 import '../pages/shelf/no_file_entries_page.dart';
 import '../pages/shelf/reading_history_page.dart';
-import '../pages/shelf/starred_items_page.dart';
 import '../pages/shelf/view.dart';
 import 'app_routes.dart';
 
@@ -99,14 +98,6 @@ final routerProvider = Provider<GoRouter>((ref) {
                       child: FavoriteDetailPage(
                         favorite: state.extra! as Favorite,
                       ),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'starred',
-                    parentNavigatorKey: _rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
-                      state: state,
-                      child: const StarredItemsPage(),
                     ),
                   ),
                   GoRoute(

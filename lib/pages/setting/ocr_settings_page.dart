@@ -200,11 +200,13 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     required double max,
     required int divisions,
     required double defaultValue,
+    required String Function(double) formatter,
     required ValueChanged<double> onChanged,
-    VoidCallback? onReset,
+    required VoidCallback onReset,
   }) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final isSet = value != defaultValue;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Column(
@@ -231,13 +233,18 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: cs.primaryContainer,
+                  color: isSet
+                      ? cs.primaryContainer
+                      : cs.surfaceContainerHighest.withAlpha(160),
                   borderRadius: BorderRadius.circular(12),
+                  border: isSet
+                      ? null
+                      : Border.all(color: cs.outlineVariant.withAlpha(80)),
                 ),
                 child: Text(
-                  value.toStringAsFixed(2),
+                  formatter(value),
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: cs.onPrimaryContainer,
+                    color: isSet ? cs.onPrimaryContainer : cs.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -263,13 +270,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                   ),
                 ),
               ),
-              if (onReset != null)
-                IconButton(
-                  onPressed: onReset,
-                  icon: const Icon(Symbols.refresh_rounded, size: 20),
-                  tooltip: '恢复默认',
-                  color: cs.onSurfaceVariant,
-                ),
+              IconButton(
+                onPressed: isSet ? onReset : null,
+                icon: const Icon(Symbols.refresh_rounded, size: 20),
+                tooltip: '恢复默认',
+                color: cs.onSurfaceVariant,
+              ),
             ],
           ),
         ],
@@ -331,24 +337,21 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             color: cs.onSurfaceVariant.withAlpha(120),
           ),
           filled: true,
-          fillColor: cs.surface,
+          fillColor: cs.surfaceContainerLow,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(
-              color: cs.outlineVariant.withAlpha(100),
-            ),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: cs.outline),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: cs.primary, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 16),
-          isDense: true,
+              horizontal: 16, vertical: 14),
           suffixIcon: suffix,
         );
 
@@ -568,6 +571,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     subtitle: '区域过滤的阈值，值越高保留的区域越少',
                     value: docState.layoutThreshold,
                     min: 0.0, max: 1.0, divisions: 20, defaultValue: 0.5,
+                    formatter: (v) => v.toStringAsFixed(2),
                     onChanged: (v) => ref
                         .read(docExtractApiProvider.notifier)
                         .setDouble('layoutThreshold', v),
@@ -593,6 +597,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     subtitle: '出现重复文字或表格内容时适当调高',
                     value: docState.repetitionPenalty,
                     min: 1.0, max: 2.0, divisions: 20, defaultValue: 1.0,
+                    formatter: (v) => v.toStringAsFixed(2),
                     onChanged: (v) => ref
                         .read(docExtractApiProvider.notifier)
                         .setDouble('repetitionPenalty', v),
