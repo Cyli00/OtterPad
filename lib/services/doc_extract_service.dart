@@ -450,10 +450,13 @@ class DocExtractService {
       replacements.add((start, end, '\n![fig:${fig.captionText}]($uri)\n'));
     }
 
-    // 从后往前替换，保持行号不偏移
+    // 从后往前替换，保持行号不偏移；跳过与已应用区间重叠的替换
     replacements.sort((a, b) => b.$1.compareTo(a.$1));
+    var appliedCeiling = lines.length;
     for (final r in replacements) {
+      if (r.$2 > appliedCeiling) continue;
       lines.replaceRange(r.$1, r.$2, [r.$3]);
+      appliedCeiling = r.$1;
     }
 
     return lines.join('\n');
@@ -498,6 +501,14 @@ class DocExtractService {
           usedLines,
         );
       } else if (label == 'table' && content.isNotEmpty) {
+        idx = _findLine(
+          lines,
+          content.substring(0, min(30, content.length)),
+          usedLines,
+        );
+      } else if (content.isNotEmpty) {
+        // 被 _recoverMissingAnchors 升格的 text/paragraph_title 等 block，
+        // JSON 中仍保留原始标签，需按内容搜索以将其纳入替换区域。
         idx = _findLine(
           lines,
           content.substring(0, min(30, content.length)),
@@ -565,14 +576,18 @@ class DocExtractService {
     for (var i = scanStart; i < scanEnd; i++) {
       if (lines[i].contains('<table')) {
         s = min(s, i);
-        // 向下找对应的 </table>
-        var tableEnd = i + 1;
-        while (tableEnd < lines.length &&
-            !lines[tableEnd].contains('</table>')) {
-          tableEnd++;
-        }
-        if (tableEnd < lines.length) {
-          e = max(e, tableEnd + 1);
+        // <table> 和 </table> 可能在同一行（API 单行 HTML table）
+        if (lines[i].contains('</table>')) {
+          e = max(e, i + 1);
+        } else {
+          var tableEnd = i + 1;
+          while (tableEnd < lines.length &&
+              !lines[tableEnd].contains('</table>')) {
+            tableEnd++;
+          }
+          if (tableEnd < lines.length) {
+            e = max(e, tableEnd + 1);
+          }
         }
       }
     }
@@ -663,13 +678,17 @@ class DocExtractService {
     return result;
   }
 
-  /// 将居中文本 div 转为斜体（含 img 的 div 直接移除）
+  static final _figureSubLabelRe =
+      RegExp(r'^\(?[a-zA-Z](?:\s*,\s*[a-zA-Z])*\)?$');
+
+  /// 将居中文本 div 转为斜体（含 img / figure 子标签的 div 直接移除）
   static String _convertCenteredDivs(String markdown) {
     return markdown.replaceAllMapped(
       RegExp(r'<div\s+style="text-align:\s*center;\s*">\s*(.+?)\s*</div>'),
       (match) {
         final content = match.group(1)!;
         if (content.contains('<img')) return '';
+        if (_figureSubLabelRe.hasMatch(content.trim())) return '';
         return '*$content*';
       },
     );
