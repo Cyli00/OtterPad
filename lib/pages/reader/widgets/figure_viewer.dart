@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:pasteboard/pasteboard.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../providers/api_provider.dart';
@@ -304,6 +305,18 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       ),
       items: const [
         PopupMenuItem<String>(
+          value: 'copy',
+          height: 40,
+          child: Row(
+            children: [
+              Icon(Symbols.content_copy_rounded, size: 18, color: Colors.white70),
+              SizedBox(width: 12),
+              Text('复制图片',
+                  style: TextStyle(color: Colors.white, fontSize: 14)),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
           value: 'save',
           height: 40,
           child: Row(
@@ -317,7 +330,24 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         ),
       ],
     );
+    if (selected == 'copy') await _copyFigure(fig);
     if (selected == 'save') await _saveFigure(fig);
+  }
+
+  Future<void> _copyFigure(FigureManifestEntry fig) async {
+    final snackBar = ref.read(snackBarServiceProvider);
+    final source = File(fig.imagePath);
+    if (!await source.exists()) {
+      snackBar.showResult(message: '图片文件不存在');
+      return;
+    }
+    try {
+      final bytes = await source.readAsBytes();
+      await Pasteboard.writeImage(bytes);
+      snackBar.showResult(message: '已复制到剪贴板');
+    } catch (e) {
+      snackBar.showResult(message: '复制失败：$e');
+    }
   }
 
   Future<void> _saveFigure(FigureManifestEntry fig) async {
