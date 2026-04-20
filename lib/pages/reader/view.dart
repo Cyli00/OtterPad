@@ -14,6 +14,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/models/book/document.dart';
 import '../../providers/api_provider.dart';
+import '../../providers/favorites_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/doc_extract_service.dart';
@@ -80,6 +81,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // 沉浸式：点击 markdown 内容区切换上下工具栏可见性
   bool _toolbarsVisible = true;
+  bool _sheetOpen = false;
 
   // 桌面端工具栏自动隐藏
   Timer? _toolbarHideTimer;
@@ -381,13 +383,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // ─── 底部面板（字体 / 主题 / 大纲） ───
 
-  void _openTextSheet() {
+  Future<void> _openTextSheet() async {
     if (_mdContent == null) return;
-    showReaderTextSheet(context);
+    _sheetOpen = true;
+    _toolbarHideTimer?.cancel();
+    await showReaderTextSheet(context);
+    _sheetOpen = false;
+    if (_isDesktop && _toolbarsVisible) _scheduleToolbarHide();
   }
 
-  void _openThemeSheet() {
-    showReaderThemeSheet(context);
+  Future<void> _openThemeSheet() async {
+    _sheetOpen = true;
+    _toolbarHideTimer?.cancel();
+    await showReaderThemeSheet(context);
+    _sheetOpen = false;
+    if (_isDesktop && _toolbarsVisible) _scheduleToolbarHide();
   }
 
   void _openNotesSheet() {
@@ -404,8 +414,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   /// Markdown 区域单击 → 切换上下工具栏显隐。
   /// 拖拽选择不会触发 onTap（GestureDetector 默认行为）。
   void _toggleToolbars() {
+    if (_sheetOpen) return;
     setState(() => _toolbarsVisible = !_toolbarsVisible);
-    // 桌面端：显示后自动倒计时隐藏
     if (_isDesktop && _toolbarsVisible) _scheduleToolbarHide();
   }
 
@@ -426,9 +436,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _scheduleToolbarHide() {
+    if (_sheetOpen) return;
     _toolbarHideTimer?.cancel();
     _toolbarHideTimer = Timer(_kToolbarAutoHideDelay, () {
-      if (mounted && _showPreview) {
+      if (mounted && _showPreview && !_sheetOpen) {
         setState(() => _toolbarsVisible = false);
       }
     });
@@ -450,6 +461,149 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _scrollController.scrollToIndex(
       (widgetIndex - 1).clamp(0, widgetIndex),
       preferPosition: AutoScrollPosition.begin,
+    );
+  }
+
+  // ── 更多操作 ────────────────────────────────────────────────────────
+
+  static PopupMenuItem<String> _popupItem(
+      String value, IconData icon, String title, ColorScheme cs) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 44,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: cs.onSurfaceVariant),
+          const SizedBox(width: 14),
+          Text(title,
+              style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  bool _isInAnyFavorite() {
+    final docPath = widget.document.filePath;
+    if (docPath.isEmpty) return false;
+    return ref
+        .read(favoritesProvider)
+        .any((fav) => fav.docPaths.contains(docPath));
+  }
+
+  void _removeFromAllFavorites() {
+    final docPath = widget.document.filePath;
+    if (docPath.isEmpty) return;
+    ref.read(favoritesProvider.notifier).removeDocFromAll(docPath);
+    ref.read(snackBarServiceProvider).showResult(message: '已从所有收藏夹移出');
+  }
+
+  void _showFavoritePicker() {
+    final docPath = widget.document.filePath;
+    if (docPath.isEmpty) {
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: '此文献无本地文件，无法添加到收藏夹');
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        final favorites = ref.read(favoritesProvider);
+        final maxH = MediaQuery.sizeOf(ctx).height * 0.5;
+        return Container(
+          constraints: BoxConstraints(maxHeight: maxH),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 32,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.onSurfaceVariant.withAlpha(80),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '移入收藏夹',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(ctx).padding.bottom + 16),
+                  itemCount: favorites.length,
+                  itemBuilder: (_, i) {
+                    final fav = favorites[i];
+                    final alreadyIn = fav.docPaths.contains(docPath);
+                    return InkWell(
+                      onTap: alreadyIn
+                          ? null
+                          : () {
+                              ref
+                                  .read(favoritesProvider.notifier)
+                                  .addDoc(fav.id, docPath);
+                              Navigator.pop(ctx);
+                              ref
+                                  .read(snackBarServiceProvider)
+                                  .showResult(
+                                      message: '已添加到「${fav.name}」');
+                            },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
+                        child: Row(
+                          children: [
+                            Text(fav.emoji,
+                                style: const TextStyle(fontSize: 20)),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                fav.name,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: alreadyIn
+                                      ? cs.onSurfaceVariant
+                                      : cs.onSurface,
+                                ),
+                              ),
+                            ),
+                            if (alreadyIn)
+                              Icon(Symbols.check_rounded,
+                                  color: cs.primary, size: 22),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -733,7 +887,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 offset:
                     _toolbarsVisible ? Offset.zero : const Offset(0, -1),
                 child: Container(
-                  color: cs.surface.withValues(alpha: 0.92),
+                  color: cs.surface.withValues(
+                      alpha: readerSettings.toolbarOpacity.value),
                   child: isMarkdownHighlightMode
                       ? _buildHighlightSearchBar(cs)
                       : (_searchActive && !_showPreview
@@ -754,7 +909,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   curve: Curves.easeOut,
                   offset:
                       _toolbarsVisible ? Offset.zero : const Offset(0, 1),
-                  child: _buildBottomBar(theme, cs),
+                  child: _buildBottomBar(theme, cs, readerSettings),
                 ),
               ),
             // ── 浮动搜索结果导航器 ──
@@ -844,39 +999,38 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 color: cs.onSurfaceVariant,
               ),
               tooltip: '更多',
-              onSelected: (value) {
-                switch (value) {
+              color: cs.surfaceContainerHigh,
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              position: PopupMenuPosition.under,
+              onSelected: (v) {
+                switch (v) {
                   case 'info':
                     _showDocumentInfo(context);
+                  case 'favorite_add':
+                    _showFavoritePicker();
+                  case 'favorite_remove':
+                    _removeFromAllFavorites();
                   case 'reprocess':
                     _onReprocessPressed();
                 }
               },
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'info',
-                  child: Row(
-                    children: [
-                      Icon(Symbols.info_rounded, size: 20, fill: 1,
-                          color: cs.onSurface),
-                      const SizedBox(width: 12),
-                      const Text('文献信息'),
-                    ],
-                  ),
-                ),
-                if (_hasResult)
-                  PopupMenuItem(
-                    value: 'reprocess',
-                    child: Row(
-                      children: [
-                        Icon(Symbols.refresh_rounded, size: 20, fill: 1,
-                            color: cs.onSurface),
-                        const SizedBox(width: 12),
-                        const Text('重新排版'),
-                      ],
-                    ),
-                  ),
-              ],
+              itemBuilder: (_) {
+                final inFav = _isInAnyFavorite();
+                return [
+                  _popupItem('info', Symbols.info_rounded, '文献信息', cs),
+                  if (inFav)
+                    _popupItem('favorite_remove',
+                        Symbols.bookmark_remove_rounded, '移出收藏夹', cs)
+                  else
+                    _popupItem('favorite_add',
+                        Symbols.bookmark_add_rounded, '移入收藏夹', cs),
+                  if (_hasResult)
+                    _popupItem(
+                        'reprocess', Symbols.refresh_rounded, '重新排版', cs),
+                ];
+              },
             ),
             const SizedBox(width: 4),
           ],
@@ -1174,10 +1328,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ///
   /// 仅在 Markdown 模式显示。工具栏背景用 surface 的半透明色，视觉上浮在
   /// 阅读内容之上；沉浸式状态切换由 [AnimatedSlide] 在 build 里处理。
-  Widget _buildBottomBar(ThemeData theme, ColorScheme cs) {
+  Widget _buildBottomBar(
+    ThemeData theme,
+    ColorScheme cs,
+    ReaderSettingsState readerSettings,
+  ) {
     return Container(
       decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.92),
+        color: cs.surface.withValues(
+            alpha: readerSettings.toolbarOpacity.value),
         border: Border(
           top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
         ),
@@ -1342,24 +1501,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return const Center(child: CircularProgressIndicator());
     }
 
-    // 顶/底工具栏高度 + 安全区：给 markdown 内容加 padding，
-    // 避免第一行/最后一行被工具栏 overlay 挡住。
-    final topPad = 48.0 + MediaQuery.of(context).padding.top * 0;
+    // 工具栏高度通过 topInset/bottomInset 传入 ListView padding，
+    // 使内容全屏渲染、可滚动到半透明工具栏背后，消除工具栏隐藏后的空白。
+    final topPad = 48.0;
     final bottomPad = 56.0 + MediaQuery.of(context).padding.bottom;
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: _toggleToolbars,
-      child: Padding(
-        padding: EdgeInsets.only(top: topPad, bottom: bottomPad),
-        child: _wrapWithSelection(
-          ReaderMarkdownBody(
-            key: ValueKey('reader_md_${_mdContent.hashCode}'),
-            data: _mdContent!,
-            settings: settings,
-            scrollController: _scrollController,
-            highlightQuery: _highlightQuery,
-          ),
+      child: _wrapWithSelection(
+        ReaderMarkdownBody(
+          key: ValueKey('reader_md_${_mdContent.hashCode}'),
+          data: _mdContent!,
+          settings: settings,
+          scrollController: _scrollController,
+          highlightQuery: _highlightQuery,
+          topInset: topPad,
+          bottomInset: bottomPad,
         ),
       ),
     );

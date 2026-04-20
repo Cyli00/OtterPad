@@ -5,7 +5,6 @@ import '../../providers/api_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
-import '../../providers/starred_provider.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
 import 'widgets/batch_progress_sheet.dart';
@@ -13,7 +12,7 @@ import 'widgets/bookshelf_grid.dart';
 import 'widgets/bookshelf_list.dart';
 import 'widgets/doc_card_actions.dart';
 import 'widgets/home_header.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'widgets/selection_app_bar.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -150,10 +149,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     final allSelected =
         allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isMobile = screenWidth < 600;
-    final buttonSize = isMobile ? 36.0 : 40.0;
-
     return PopScope(
       canPop: !isSelectionMode,
       onPopInvokedWithResult: (didPop, _) {
@@ -174,14 +169,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                 transitionBuilder: (child, animation) =>
                     FadeTransition(opacity: animation, child: child),
                 child: isSelectionMode
-                    ? _buildSelectionRow(
-                        theme: theme,
-                        cs: cs,
-                        isMobile: isMobile,
-                        buttonSize: buttonSize,
-                        selection: selection,
-                        allIds: allIds,
+                    ? SelectionAppBar(
+                        key: const ValueKey('selection'),
+                        onClose: () =>
+                            ref.read(selectionProvider.notifier).exit(),
+                        selectedCount: selection.selectedIds.length,
                         allSelected: allSelected,
+                        onSelectAll: () => ref
+                            .read(selectionProvider.notifier)
+                            .toggleAll(allIds),
+                        onExtract: _extractSelected,
+                        onDelete: _deleteSelected,
                       )
                     : const HomeHeader(key: ValueKey('normal')),
               ),
@@ -251,125 +249,4 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     );
   }
 
-  /// 选择模式顶栏 — 与 HomeHeader 等高，按钮尺寸一致
-  Widget _buildSelectionRow({
-    required ThemeData theme,
-    required ColorScheme cs,
-    required bool isMobile,
-    required double buttonSize,
-    required SelectionState selection,
-    required Set<String> allIds,
-    required bool allSelected,
-  }) {
-    final iconSize = buttonSize * 0.5;
-    final hasSelection = selection.selectedIds.isNotEmpty;
-
-    return Padding(
-      key: const ValueKey('selection'),
-      padding: EdgeInsets.only(
-        left: 16.0,
-        right: 16.0,
-        top: isMobile ? 4.0 : 8.0,
-        bottom: 16.0,
-      ),
-      child: SizedBox(
-        height: isMobile ? 44 : 48,
-        child: Row(
-          children: [
-            SizedBox(
-              width: buttonSize,
-              height: buttonSize,
-              child: IconButton(
-                onPressed: () =>
-                    ref.read(selectionProvider.notifier).exit(),
-                icon: Icon(Symbols.close_rounded, size: iconSize),
-                padding: EdgeInsets.zero,
-                tooltip: '退出多选',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              '已选 ${selection.selectedIds.length}',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const Spacer(),
-            _actionButton(
-              icon: allSelected
-                  ? Symbols.deselect_rounded
-                  : Symbols.select_all_rounded,
-              size: buttonSize,
-              iconSize: iconSize,
-              onPressed: () =>
-                  ref.read(selectionProvider.notifier).toggleAll(allIds),
-              tooltip: allSelected ? '取消全选' : '全选',
-              backgroundColor: cs.primaryContainer,
-              foregroundColor: cs.primary,
-            ),
-            const SizedBox(width: 8),
-            _actionButton(
-              icon: Symbols.auto_awesome_rounded,
-              size: buttonSize,
-              iconSize: iconSize,
-              onPressed: hasSelection ? _extractSelected : null,
-              tooltip: '文本提取',
-              backgroundColor: cs.primaryContainer,
-              foregroundColor: cs.primary,
-            ),
-            const SizedBox(width: 8),
-            _actionButton(
-              icon: Symbols.star_rounded,
-              size: buttonSize,
-              iconSize: iconSize,
-              onPressed: hasSelection
-                  ? () => ref
-                      .read(starredProvider.notifier)
-                      .toggleMany(selection.selectedIds)
-                  : null,
-              tooltip: '星标',
-              backgroundColor: cs.tertiaryContainer,
-              foregroundColor: cs.tertiary,
-            ),
-            const SizedBox(width: 8),
-            _actionButton(
-              icon: Symbols.delete_rounded,
-              size: buttonSize,
-              iconSize: iconSize,
-              onPressed: hasSelection ? _deleteSelected : null,
-              tooltip: '删除',
-              backgroundColor: cs.errorContainer,
-              foregroundColor: cs.error,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _actionButton({
-    required IconData icon,
-    required double size,
-    required double iconSize,
-    required VoidCallback? onPressed,
-    required String tooltip,
-    required Color backgroundColor,
-    required Color foregroundColor,
-  }) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: IconButton.filled(
-        onPressed: onPressed,
-        icon: Icon(icon, size: iconSize),
-        tooltip: tooltip,
-        style: IconButton.styleFrom(
-          backgroundColor: backgroundColor,
-          foregroundColor: foregroundColor,
-          shape: const CircleBorder(),
-          padding: EdgeInsets.zero,
-        ),
-      ),
-    );
-  }
 }

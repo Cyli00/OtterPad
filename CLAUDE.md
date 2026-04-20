@@ -88,27 +88,9 @@
 - 不要使用 `flutter_animate` 的 `.slideY()` / `.fade()` 做路由级转场——那些适合微交互，不适合页面级运动
 - 动画时长统一 300ms，曲线统一 `Curves.easeOut`
 
-## Slider 统一范式
+## UI 组件范式
 
-所有设置项的数值滑块参照 [agent_model_params_sheet.dart](lib/pages/setting/agent_model_params_sheet.dart) 里的 `_sliderRow` 实现。禁止各页面自造视觉。
-
-- 标题行右侧的数值胶囊**始终显示格式化后的数值**（`formatter(displayValue)`），禁止显示"默认"文字——已设置/默认状态通过胶囊颜色区分（`primaryContainer` vs 灰底+边框）。
-- 重置按钮在 `value == null` 时置灰（`onPressed: null`），不隐藏。
-
-## TextField 统一范式
-
-判断是否使用 `labelText`（浮动标签）代替独立标题 + `hintText`：
-
-- **用 `labelText`**：TextField 上级没有独立标题，或有标题但同级元素全是 TextField（如表单/配置对话框）。参照 `_ConfigField`（[backup_settings_page.dart](lib/pages/setting/backup_settings_page.dart)）和网络代理字段（[network_settings_page.dart](lib/pages/setting/network_settings_page.dart)）。
-- **不用 `labelText`**：TextField 上方有独立标题行且同级存在非 TextField 元素（slider、switch 等），此时保持标题 + `hintText` 模式。参照 [translation_settings_section.dart](lib/pages/setting/translation_settings_section.dart) 的提示词输入框。
-
-## Dialog 统一范式
-
-弹窗内的字号和尺寸须与所在设置页对齐，禁止"放大感"。参照 `_RemoteDialogScaffold` + `_ConfigField`（[backup_settings_page.dart](lib/pages/setting/backup_settings_page.dart)）：
-
-- 对话框标题：`titleLarge` + `FontWeight.bold`。禁止使用 `headlineMedium` 等更大级别。
-- 对话框内 TextField：`style: bodyMedium`（14sp），`prefixIcon` size 20，`contentPadding` 16×14。
-- 对话框内边距：`EdgeInsets.fromLTRB(24, 24, 24, 20)`。
+Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数定义在 [flutter-design](.claude/skills/flutter-design/SKILL.md) skill 中，编码前必须查阅。
 
 ## Dependency 更新
 
@@ -134,7 +116,6 @@
 
 - Document 模型与文件导入 (`lib/data/models/book/document.dart`, `lib/providers/documents_provider.dart`) — 含 `keywords: List<String>` 字段，PubMed 路径填充 MeSH + 作者 Keyword，其他路径暂为空
 - 收藏夹系统 (`lib/data/models/collection/favorite.dart`, `lib/providers/favorites_provider.dart`)
-- 星标文献 (`lib/providers/starred_provider.dart`)
 - 备份与恢复 (`lib/services/backup_restore_service.dart`, `lib/services/backup_s3_service.dart`, `lib/providers/backup_provider.dart`)
 
 ### 用户界面
@@ -172,13 +153,14 @@
 
 ## Todolist
 
+- 包含所有文献的文献库没有必要占据收藏夹，改成默认收藏夹就行
 - 后续raw.md的保存可以删去，目前只是用于测试
 - 段落内提及的figure应该能被检出和点击高亮
 - markdown搜索内容的上下标、公式等内容也没有被正常地渲染出来
 - 删除物理文件 `lib/pages/reader/widgets/appearance_panel.dart`（已在 refactor 中清空为占位，受工具限制无法 rm）
 - 阅读器字体/排版扩展：边距 slider、行距 slider、阅读模式（上下滚动 vs 左右翻页）
   - 需要扩展 `ReaderSettingsState` 加 `margin` / `lineHeight` / `scrollDirection` 字段（参照现有 `fontSize` 的 Hive 存储范式）
-  - UI 按 [reader_text_sheet.dart](lib/pages/reader/widgets/reader_text_sheet.dart) 现有的 `_sliderTile` 风格补控件
+  - UI 按 Slider 统一范式（`_sliderRow` 胶囊 + nullable 签名）补控件
   - 左右翻页需要 markdown_reader 结构性改造（ListView → PageView），比单纯加 slider 代价大一个数量级，单独作为一个阶段
 - 基于元数据的文献推荐算法，分阶段推进：
   1. **Jaccard 基线**（零成本）：PubMed 文献用 `Document.keywords`（MeSH + 作者 KeywordList）直接算集合相似度 `|A∩B|/|A∪B|`

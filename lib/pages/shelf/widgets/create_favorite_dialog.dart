@@ -27,7 +27,12 @@ const List<String> _emojis = [
 ///
 /// 返回一个 Map，包含 'emoji' 和 'name' 字段；
 /// 用户取消则返回 null。
-Future<Map<String, String>?> showCreateFavoriteDialog(BuildContext context) {
+Future<Map<String, String>?> showCreateFavoriteDialog(
+  BuildContext context, {
+  String? initialEmoji,
+  String? initialName,
+}) {
+  final isEditing = initialName != null;
   return showGeneralDialog<Map<String, String>>(
     context: context,
     barrierDismissible: true,
@@ -55,29 +60,38 @@ Future<Map<String, String>?> showCreateFavoriteDialog(BuildContext context) {
       );
     },
     pageBuilder: (context, animation, secondaryAnimation) {
-      return const Center(
-        child: _CreateFavoriteContent(),
+      return Center(
+        child: _CreateFavoriteContent(
+          initialEmoji: initialEmoji,
+          initialName: isEditing ? initialName : null,
+        ),
       );
     },
   );
 }
 
 class _CreateFavoriteContent extends StatefulWidget {
-  const _CreateFavoriteContent();
+  final String? initialEmoji;
+  final String? initialName;
+
+  const _CreateFavoriteContent({this.initialEmoji, this.initialName});
 
   @override
   State<_CreateFavoriteContent> createState() => _CreateFavoriteContentState();
 }
 
 class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
-  String _selectedEmoji = _emojis[0];
-  final _nameController = TextEditingController();
+  late String _selectedEmoji;
+  late final TextEditingController _nameController;
   final _focusNode = FocusNode();
+
+  bool get _isEditing => widget.initialName != null;
 
   @override
   void initState() {
     super.initState();
-    // 自动聚焦到输入框
+    _selectedEmoji = widget.initialEmoji ?? _emojis[0];
+    _nameController = TextEditingController(text: widget.initialName ?? '');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
@@ -112,7 +126,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
         width: dialogWidth,
         constraints: const BoxConstraints(maxHeight: 420),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
+          color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
@@ -131,7 +145,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
               child: Row(
                 children: [
                   Text(
-                    '新建收藏夹',
+                    _isEditing ? '编辑收藏夹' : '新建收藏夹',
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
@@ -395,7 +409,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text('创建'),
+                      child: Text(_isEditing ? '保存' : '创建'),
                     ),
                   ),
                 ],

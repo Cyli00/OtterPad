@@ -16,18 +16,33 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     _load();
   }
 
-  /// 从 Hive 加载收藏夹列表
+  /// 从 Hive 加载收藏夹列表，确保默认"我的收藏"始终存在且置顶
   void _load() {
     final raw = _box.get('favorites') as List<dynamic>?;
-    if (raw == null) {
-      state = [];
-      return;
+    if (raw != null) {
+      state = raw
+          .map((e) => Favorite.fromJson(
+              Map<String, dynamic>.from(jsonDecode(e as String))))
+          .toList();
     }
-    state = raw
-        .map((e) => Favorite.fromJson(
-            Map<String, dynamic>.from(jsonDecode(e as String))))
-        .toList();
+    // 首次启动或数据迁移：确保默认收藏夹存在
+    if (!state.any((f) => f.isDefault)) {
+      state = [_createDefault(), ...state];
+      _save();
+    } else if (!state.first.isDefault) {
+      final def = state.firstWhere((f) => f.isDefault);
+      state = [def, ...state.where((f) => !f.isDefault)];
+      _save();
+    }
   }
+
+  static Favorite _createDefault() => Favorite(
+        id: Favorite.defaultId,
+        emoji: '📖',
+        name: '我的收藏',
+        docPaths: [],
+        createdAt: DateTime.now(),
+      );
 
   void reload() {
     _load();
@@ -65,8 +80,9 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     await _save();
   }
 
-  /// 删除收藏夹
+  /// 删除收藏夹（默认收藏夹不可删除）
   Future<void> delete(String id) async {
+    if (id == Favorite.defaultId) return;
     state = state.where((f) => f.id != id).toList();
     await _save();
   }

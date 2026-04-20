@@ -5,7 +5,6 @@ import '../../../data/models/book/document.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/favorites_provider.dart';
 import '../../../providers/history_provider.dart';
-import '../../../providers/starred_provider.dart';
 import '../../../router/app_routes.dart';
 
 /// 文献卡片统一交互入口
@@ -27,7 +26,6 @@ class DocCardActions {
     if (doc.id == docId && doc.filePath.isNotEmpty) {
       ref.read(favoritesProvider.notifier).removeDocFromAll(doc.filePath);
     }
-    ref.read(starredProvider.notifier).remove(docId);
     ref.read(documentsProvider.notifier).delete(docId);
   }
 }

@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/documents_provider.dart';
 import '../../providers/selection_provider.dart';
-import '../../providers/starred_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/snackbar_service.dart';
 import '../library/widgets/doc_card_actions.dart';
@@ -49,9 +48,6 @@ class NoFileEntriesPage extends ConsumerWidget {
                 allSelected: allSelected,
                 onSelectAll: () =>
                     ref.read(selectionProvider.notifier).toggleAll(allIds),
-                onStar: () => ref
-                    .read(starredProvider.notifier)
-                    .toggleMany(selection.selectedIds),
                 // 无文件条目没有 PDF，不提供文本提取
                 onDelete: () => _deleteSelected(context, ref, selection),
               )

@@ -53,12 +53,18 @@ class DocumentCard extends StatelessWidget {
           width: isSelected ? 2 : 1,
         ),
       ),
-      child: Card(
+      child: Container(
         clipBehavior: Clip.antiAlias,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(13),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: GestureDetector(
           onTap: isSelectionMode ? onSelectionTap : onTap,
@@ -130,7 +136,7 @@ class DocumentCard extends StatelessWidget {
                   children: [
                     Text(
                       name,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         height: 1.25,
                       ),

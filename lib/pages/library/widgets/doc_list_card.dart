@@ -48,6 +48,13 @@ class DocListCard extends StatelessWidget {
               : Colors.transparent,
           width: isSelected ? 2 : 0,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(13),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Material(

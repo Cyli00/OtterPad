@@ -6,7 +6,7 @@ class Favorite {
   final List<String> docPaths;
   final DateTime createdAt;
 
-  /// 默认文库的固定 ID
+  /// "我的收藏"默认收藏夹的固定 ID
   static const String defaultId = '_default_';
 
   const Favorite({

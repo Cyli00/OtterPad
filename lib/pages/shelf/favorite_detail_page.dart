@@ -9,7 +9,6 @@ import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
-import '../../providers/starred_provider.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
 import '../library/widgets/batch_progress_sheet.dart';
@@ -69,9 +68,6 @@ class FavoriteDetailPage extends ConsumerWidget {
                 allSelected: allSelected,
                 onSelectAll: () =>
                     ref.read(selectionProvider.notifier).toggleAll(allIds),
-                onStar: () => ref
-                    .read(starredProvider.notifier)
-                    .toggleMany(selection.selectedIds),
                 onRemoveFromFavorite: () =>
                     _removeFromFavorite(context, ref, selection, favDocs),
                 onExtract: () =>

@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-/// 多选模式顶部操作栏（普通 AppBar 版）
+/// 多选模式操作栏
 ///
-/// 用于 FavoriteDetailPage、NoFileEntriesPage 等使用 Scaffold.appBar 的页面。
+/// 兼用于 Scaffold.appBar（shelf 页面）和 Column 内嵌（LibraryPage）。
+/// 内部处理 SafeArea，外部无需额外包裹。
 class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onClose;
   final int selectedCount;
   final VoidCallback onSelectAll;
   final bool allSelected;
   final VoidCallback? onExtract;
-  final VoidCallback? onStar;
   final VoidCallback? onRemoveFromFavorite;
   final VoidCallback onDelete;
 
@@ -21,7 +21,6 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onSelectAll,
     required this.allSelected,
     this.onExtract,
-    this.onStar,
     this.onRemoveFromFavorite,
     required this.onDelete,
   });
@@ -32,147 +31,114 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final sz = isMobile ? 36.0 : 40.0;
+    final iconSz = sz * 0.5;
+    final enabled = selectedCount > 0;
 
-    return AppBar(
-      backgroundColor: colorScheme.surface,
-      leading: IconButton(
-        onPressed: onClose,
-        icon: const Icon(Symbols.close_rounded),
-        tooltip: '退出多选',
-      ),
-      title: Text(
-        '已选 $selectedCount',
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      actions: [
-        IconButton(
-          onPressed: onSelectAll,
-          icon: Icon(
-            allSelected
-                ? Symbols.deselect_rounded
-                : Symbols.select_all_rounded,
-          ),
-          tooltip: allSelected ? '取消全选' : '全选',
-        ),
-        if (onStar != null)
-          IconButton(
-            onPressed: selectedCount > 0 ? onStar : null,
-            icon: const Icon(Symbols.star_rounded),
-            tooltip: '星标',
-          ),
-        if (onRemoveFromFavorite != null)
-          IconButton(
-            onPressed: selectedCount > 0 ? onRemoveFromFavorite : null,
-            icon: const Icon(Symbols.bookmark_remove),
-            tooltip: '移出收藏夹',
-          ),
-        if (onExtract != null)
-          IconButton(
-            onPressed: selectedCount > 0 ? onExtract : null,
-            icon: const Icon(Symbols.auto_awesome_rounded),
-            tooltip: '文本提取',
-          ),
-        IconButton(
-          onPressed: selectedCount > 0 ? onDelete : null,
-          icon: Icon(
-            Symbols.delete_rounded,
-            color: selectedCount > 0 ? colorScheme.error : null,
-          ),
-          tooltip: '删除',
-        ),
-        const SizedBox(width: 4),
-      ],
-    );
-  }
-}
-
-/// 多选模式顶部操作栏（Sliver 版）
-///
-/// 用于 LibraryPage 的 NestedScrollView，替换 HomeHeader + TabBar。
-class SliverSelectionBar extends StatelessWidget {
-  final VoidCallback onClose;
-  final int selectedCount;
-  final VoidCallback onSelectAll;
-  final bool allSelected;
-  final VoidCallback? onExtract;
-  final VoidCallback? onStar;
-  final VoidCallback onDelete;
-
-  const SliverSelectionBar({
-    super.key,
-    required this.onClose,
-    required this.selectedCount,
-    required this.onSelectAll,
-    required this.allSelected,
-    this.onExtract,
-    this.onStar,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return SliverToBoxAdapter(
-      child: Container(
-        color: colorScheme.surface,
-        padding: EdgeInsets.only(
-          top: MediaQuery.of(context).padding.top,
-        ),
+    return ColoredBox(
+      color: cs.surface,
+      child: SafeArea(
+        bottom: false,
         child: SizedBox(
           height: kToolbarHeight,
-          child: Row(
-            children: [
-              const SizedBox(width: 4),
-              IconButton(
-                onPressed: onClose,
-                icon: const Icon(Symbols.close_rounded),
-                tooltip: '退出多选',
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '已选 $selectedCount',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: sz,
+                  height: sz,
+                  child: IconButton(
+                    onPressed: onClose,
+                    icon: Icon(Symbols.close_rounded, size: iconSz),
+                    padding: EdgeInsets.zero,
+                    tooltip: '退出多选',
+                  ),
                 ),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: onSelectAll,
-                icon: Icon(
-                  allSelected
+                const SizedBox(width: 12),
+                Text(
+                  '已选 $selectedCount',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                _button(
+                  icon: allSelected
                       ? Symbols.deselect_rounded
                       : Symbols.select_all_rounded,
+                  sz: sz,
+                  iconSz: iconSz,
+                  onPressed: onSelectAll,
+                  tooltip: allSelected ? '取消全选' : '全选',
+                  bg: cs.primaryContainer,
+                  fg: cs.primary,
                 ),
-                tooltip: allSelected ? '取消全选' : '全选',
-              ),
-              if (onStar != null)
-                IconButton(
-                  onPressed: selectedCount > 0 ? onStar : null,
-                  icon: const Icon(Symbols.star_rounded),
-                  tooltip: '星标',
+                if (onExtract != null) ...[
+                  const SizedBox(width: 8),
+                  _button(
+                    icon: Symbols.auto_awesome_rounded,
+                    sz: sz,
+                    iconSz: iconSz,
+                    onPressed: enabled ? onExtract : null,
+                    tooltip: '文本提取',
+                    bg: cs.primaryContainer,
+                    fg: cs.primary,
+                  ),
+                ],
+                if (onRemoveFromFavorite != null) ...[
+                  const SizedBox(width: 8),
+                  _button(
+                    icon: Symbols.bookmark_remove_rounded,
+                    sz: sz,
+                    iconSz: iconSz,
+                    onPressed: enabled ? onRemoveFromFavorite : null,
+                    tooltip: '移出收藏夹',
+                    bg: cs.tertiaryContainer,
+                    fg: cs.tertiary,
+                  ),
+                ],
+                const SizedBox(width: 8),
+                _button(
+                  icon: Symbols.delete_rounded,
+                  sz: sz,
+                  iconSz: iconSz,
+                  onPressed: enabled ? onDelete : null,
+                  tooltip: '删除',
+                  bg: cs.errorContainer,
+                  fg: cs.error,
                 ),
-              if (onExtract != null)
-                IconButton(
-                  onPressed: selectedCount > 0 ? onExtract : null,
-                  icon: const Icon(Symbols.auto_awesome_rounded),
-                  tooltip: '文本提取',
-                ),
-              IconButton(
-                onPressed: selectedCount > 0 ? onDelete : null,
-                icon: Icon(
-                  Symbols.delete_rounded,
-                  color: selectedCount > 0 ? colorScheme.error : null,
-                ),
-                tooltip: '删除',
-              ),
-              const SizedBox(width: 8),
-            ],
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _button({
+    required IconData icon,
+    required double sz,
+    required double iconSz,
+    required VoidCallback? onPressed,
+    required String tooltip,
+    required Color bg,
+    required Color fg,
+  }) {
+    return SizedBox(
+      width: sz,
+      height: sz,
+      child: IconButton.filled(
+        onPressed: onPressed,
+        icon: Icon(icon, size: iconSz),
+        tooltip: tooltip,
+        style: IconButton.styleFrom(
+          backgroundColor: bg,
+          foregroundColor: fg,
+          shape: const CircleBorder(),
+          padding: EdgeInsets.zero,
         ),
       ),
     );
