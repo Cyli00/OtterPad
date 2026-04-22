@@ -49,7 +49,7 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
       height: WindowChrome.height,
       child: DragToMoveArea(
         child: Container(
-          color: cs.surface,
+          color: cs.surfaceContainerHighest,
           child: Row(
             children: [
               const Spacer(),

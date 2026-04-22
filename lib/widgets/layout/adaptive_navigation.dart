@@ -43,47 +43,50 @@ class AdaptiveNavigationRail extends StatelessWidget {
     final topDestinations = destinations.sublist(0, splitIndex);
     final bottomDestinations = destinations.sublist(splitIndex);
 
-    return SafeArea(
-      child: SizedBox(
-        width: extended ? 180 : 72,
-        child: Column(
-          children: [
-            if (leading != null) ...[
-              leading!,
-              const SizedBox(height: 8),
+    return ColoredBox(
+      color: colorScheme.surfaceContainer,
+      child: SafeArea(
+        child: SizedBox(
+          width: extended ? 180 : 72,
+          child: Column(
+            children: [
+              if (leading != null) ...[
+                leading!,
+                const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 16),
+              ...topDestinations.asMap().entries.map((entry) {
+                final index = entry.key;
+                final dest = entry.value;
+                final selected = index == selectedIndex;
+
+                return _NavigationRailItem(
+                  icon: selected ? dest.selectedIcon : dest.icon,
+                  label: dest.label,
+                  selected: selected,
+                  extended: extended,
+                  colorScheme: colorScheme,
+                  onTap: () => onDestinationSelected(index),
+                );
+              }),
+              const Spacer(),
+              ...bottomDestinations.asMap().entries.map((entry) {
+                final index = entry.key + splitIndex;
+                final dest = entry.value;
+                final selected = index == selectedIndex;
+
+                return _NavigationRailItem(
+                  icon: selected ? dest.selectedIcon : dest.icon,
+                  label: dest.label,
+                  selected: selected,
+                  extended: extended,
+                  colorScheme: colorScheme,
+                  onTap: () => onDestinationSelected(index),
+                );
+              }),
+              const SizedBox(height: 16),
             ],
-            const SizedBox(height: 16),
-            ...topDestinations.asMap().entries.map((entry) {
-              final index = entry.key;
-              final dest = entry.value;
-              final selected = index == selectedIndex;
-
-              return _NavigationRailItem(
-                icon: selected ? dest.selectedIcon : dest.icon,
-                label: dest.label,
-                selected: selected,
-                extended: extended,
-                colorScheme: colorScheme,
-                onTap: () => onDestinationSelected(index),
-              );
-            }),
-            const Spacer(),
-            ...bottomDestinations.asMap().entries.map((entry) {
-              final index = entry.key + splitIndex;
-              final dest = entry.value;
-              final selected = index == selectedIndex;
-
-              return _NavigationRailItem(
-                icon: selected ? dest.selectedIcon : dest.icon,
-                label: dest.label,
-                selected: selected,
-                extended: extended,
-                colorScheme: colorScheme,
-                onTap: () => onDestinationSelected(index),
-              );
-            }),
-            const SizedBox(height: 16),
-          ],
+          ),
         ),
       ),
     );
