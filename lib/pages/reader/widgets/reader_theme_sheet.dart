@@ -10,7 +10,9 @@ import 'reader_background.dart';
 ///
 /// 结构：
 /// - **颜色**：复用 [themeProvider] 的 seed color（与设置页的色板对齐）；
-/// - **背景**：4 个固定选项 — 主题色 / 白 / 羊皮纸 / 黑，落到 [ReaderTheme] 枚举上。
+/// - **背景**：5 个固定选项 — 白天 / 羊皮 / 护眼 / 夜间 / 纯黑，落到
+///   [ReaderTheme] 枚举上。选择时会同步切换 app 的 [ThemeMode]，工具栏
+///   `cs.surface` 随之变暗/变亮。
 Future<void> showReaderThemeSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -37,47 +39,61 @@ class _ReaderThemeSheet extends ConsumerWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _grabber(cs),
-          const SizedBox(height: 4),
+      // 包一层 ScrollView：窗口高度被 showModalBottomSheet 的 9/16 上限
+      // 压到小于内容自然高度时，允许内部滚动而不是报 RenderFlex overflow。
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _grabber(cs),
+            const SizedBox(height: 4),
 
-          // ── 颜色（主题色） ──
-          _sectionLabel(theme, cs, Symbols.palette_rounded, '颜色'),
-          const SizedBox(height: 12),
-          _SeedColorRow(
-            selected: themeState.useDynamicColor ? null : themeState.seedColor,
-            isDynamic: themeState.useDynamicColor,
-            onDynamic: () =>
-                ref.read(themeProvider.notifier).setUseDynamicColor(true),
-            onSelect: (c) =>
-                ref.read(themeProvider.notifier).setSeedColor(c),
-          ),
+            // ── 颜色（主题色） ──
+            _sectionLabel(theme, cs, Symbols.palette_rounded, '颜色'),
+            const SizedBox(height: 12),
+            _SeedColorRow(
+              selected:
+                  themeState.useDynamicColor ? null : themeState.seedColor,
+              isDynamic: themeState.useDynamicColor,
+              onDynamic: () =>
+                  ref.read(themeProvider.notifier).setUseDynamicColor(true),
+              onSelect: (c) =>
+                  ref.read(themeProvider.notifier).setSeedColor(c),
+            ),
 
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          // ── 背景 ──
-          _sectionLabel(theme, cs, Symbols.wallpaper_rounded, '背景'),
-          const SizedBox(height: 12),
-          _BackgroundRow(
-            current: readerSettings.theme,
-            onChanged: (t) =>
-                ref.read(readerSettingsProvider.notifier).setTheme(t),
-          ),
+            // ── 背景 ──
+            _sectionLabel(theme, cs, Symbols.wallpaper_rounded, '背景'),
+            const SizedBox(height: 12),
+            _BackgroundRow(
+              current: readerSettings.theme,
+              onChanged: (t) {
+                ref.read(readerSettingsProvider.notifier).setTheme(t);
+                // 同步 app 亮度：浅色背景（主题/羊皮/护眼）用 light，
+                // 暗色背景（夜间/纯黑）用 dark，工具栏 cs.surface 自然跟随。
+                ref.read(themeProvider.notifier).setThemeMode(
+                      t.brightness == Brightness.dark
+                          ? ThemeMode.dark
+                          : ThemeMode.light,
+                    );
+              },
+            ),
 
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          // ── 工具栏透明度 ──
-          _sectionLabel(theme, cs, Symbols.blur_on_rounded, '工具栏透明度'),
-          const SizedBox(height: 12),
-          _OpacityRow(
-            current: readerSettings.toolbarOpacity,
-            onChanged: (o) =>
-                ref.read(readerSettingsProvider.notifier).setToolbarOpacity(o),
-          ),
-        ],
+            // ── 工具栏透明度 ──
+            _sectionLabel(theme, cs, Symbols.blur_on_rounded, '工具栏透明度'),
+            const SizedBox(height: 12),
+            _OpacityRow(
+              current: readerSettings.toolbarOpacity,
+              onChanged: (o) => ref
+                  .read(readerSettingsProvider.notifier)
+                  .setToolbarOpacity(o),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -315,7 +331,7 @@ class _CheckerPainter extends CustomPainter {
   bool shouldRepaint(covariant _CheckerPainter old) => cs != old.cs;
 }
 
-// ── 背景选择行：4 个圆形色块对应 ReaderTheme ──
+// ── 背景选择行：5 个圆形色块对应 ReaderTheme ──
 
 class _BackgroundRow extends StatelessWidget {
   final ReaderTheme current;
@@ -323,74 +339,96 @@ class _BackgroundRow extends StatelessWidget {
 
   const _BackgroundRow({required this.current, required this.onChanged});
 
-  static const _labels = {
-    ReaderTheme.themed: '主题',
-    ReaderTheme.sepia: '羊皮',
-    ReaderTheme.night: '夜间',
-    ReaderTheme.dark: '纯黑',
-  };
+  /// 视觉展示顺序：浅色先、深色后；独立于 `ReaderTheme.values` 的声明顺序
+  /// （后者被 Hive 的 `.index` 锁定，不能随意调整）。
+  static const _displayOrder = <ReaderTheme>[
+    ReaderTheme.themed,
+    ReaderTheme.sepia,
+    ReaderTheme.green,
+    ReaderTheme.night,
+    ReaderTheme.dark,
+  ];
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Row(
-      children: ReaderTheme.values.map((t) {
-        final bg = resolveReaderBackground(t, cs);
-        final selected = t == current;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              right: t != ReaderTheme.values.last ? 10 : 0,
-            ),
-            child: GestureDetector(
-              onTap: () => onChanged(t),
-              child: Column(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: bg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: selected ? cs.primary : cs.outlineVariant,
-                        width: selected ? 2.5 : 1,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: t == ReaderTheme.themed
-                        ? Icon(
-                            Symbols.auto_awesome,
-                            size: 18,
-                            color: cs.onPrimaryContainer,
-                          )
-                        : Container(
-                            width: 28,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: resolveReaderTextColor(t, cs)
-                                  .withAlpha(120),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _labels[t] ?? t.label,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: selected ? cs.primary : cs.onSurfaceVariant,
-                          fontWeight:
-                              selected ? FontWeight.w600 : FontWeight.w400,
-                        ),
-                  ),
-                ],
+      children: [
+        for (var i = 0; i < _displayOrder.length; i++)
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: i == _displayOrder.length - 1 ? 0 : 10,
+              ),
+              child: _BackgroundCard(
+                theme: _displayOrder[i],
+                selected: _displayOrder[i] == current,
+                cs: cs,
+                onTap: () => onChanged(_displayOrder[i]),
               ),
             ),
           ),
-        );
-      }).toList(),
+      ],
     );
   }
 }
 
+/// 单个背景选择卡片：大色块 + 横条指示 + 短标签。
+///
+/// 抽成独立 widget 后，card 的 build 只依赖 4 个参数（theme/selected/cs/onTap），
+/// 外层 sheet rebuild 时若参数未变 Flutter 能复用 Element 树。
+class _BackgroundCard extends StatelessWidget {
+  final ReaderTheme theme;
+  final bool selected;
+  final ColorScheme cs;
+  final VoidCallback onTap;
+
+  const _BackgroundCard({
+    required this.theme,
+    required this.selected,
+    required this.cs,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = resolveReaderPalette(theme, cs);
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            height: 56,
+            decoration: BoxDecoration(
+              color: palette.background,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected ? cs.primary : cs.outlineVariant,
+                width: selected ? 2.5 : 1,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Container(
+              width: 28,
+              height: 3,
+              decoration: BoxDecoration(
+                color: palette.text.withAlpha(120),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            theme.shortLabel,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: selected ? cs.primary : cs.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}

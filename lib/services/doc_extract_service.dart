@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show min, max;
+import 'dart:math' show min;
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -415,7 +415,12 @@ class DocExtractService {
     return mdPages.join('\n\n');
   }
 
-  /// 在单页 raw markdown 中替换 figure 区域为本地图片引用
+  /// 在单页 raw markdown 中替换 figure 区域为本地图片引用。
+  ///
+  /// 用**行集合**（而非连续 (start, end) 区间）精确表达每个 figure 占用的行——
+  /// 天生支持"双栏排版两个 figure 行段交错"的场景（见 `_planFigureLines` 注释）。
+  /// 替换时：figure 的 anchor 行（figure_title 所在行）插入 `![fig:...](path)`，
+  /// 其余 owned 行从输出里抹掉。锚点在原始行号位置，不同 figure 的图片自然保持阅读顺序。
   static String _replaceInPageMd(
     String mdText,
     List<FigureManifestEntry> pageFigures,
@@ -423,7 +428,6 @@ class DocExtractService {
     String mdDir,
   ) {
     final lines = mdText.split('\n');
-    final usedLines = <int>{};
 
     final blockMap = <String, Map<String, dynamic>>{};
     for (final b in rawBlocks) {
@@ -432,46 +436,69 @@ class DocExtractService {
       if (id.isNotEmpty) blockMap[id] = block;
     }
 
-    final replacements = <(int, int, String)>[];
+    // Phase 1：按 figure 顺序收集每个 plan 的行集合。`claimed` 累积——
+    // 后到的 figure 不会把先到 figure 已占的行（或空行）抢走。
+    final claimed = <int>{};
+    final plans = <_FigurePlan>[];
     for (final fig in pageFigures) {
-      final region =
-          _findFigureRegion(lines, blockMap, fig.blockIds, usedLines);
-      if (region == null) {
+      final plan = _planFigureLines(lines, blockMap, fig, claimed);
+      if (plan == null) {
         debugPrint(
           '[DocExtract] 未定位到 '
           '"${fig.captionText.substring(0, min(30, fig.captionText.length))}…"',
         );
         continue;
       }
-      final (start, end) = region;
-      usedLines.addAll(List.generate(end - start, (i) => start + i));
-
-      final uri = Uri.file(fig.imagePath);
-      replacements.add((start, end, '\n![fig:${fig.captionText}]($uri)\n'));
+      claimed.addAll(plan.ownedLines);
+      plans.add(plan);
     }
 
-    // 从后往前替换，保持行号不偏移；跳过与已应用区间重叠的替换
-    replacements.sort((a, b) => b.$1.compareTo(a.$1));
-    var appliedCeiling = lines.length;
-    for (final r in replacements) {
-      if (r.$2 > appliedCeiling) continue;
-      lines.replaceRange(r.$1, r.$2, [r.$3]);
-      appliedCeiling = r.$1;
+    if (plans.isEmpty) return mdText;
+
+    // Phase 2：锚点与占用映射
+    final anchorTag = <int, String>{};
+    final ownedByAny = <int>{};
+    for (final p in plans) {
+      anchorTag[p.anchorLine] = p.imgTag;
+      ownedByAny.addAll(p.ownedLines);
     }
 
-    return lines.join('\n');
+    // Phase 3：扫 lines——锚点行输出 img_tag，其它 owned 行跳过，其余原样保留
+    final out = <String>[];
+    for (var i = 0; i < lines.length; i++) {
+      final tag = anchorTag[i];
+      if (tag != null) {
+        out.add(tag);
+      } else if (!ownedByAny.contains(i)) {
+        out.add(lines[i]);
+      }
+      // owned but not anchor：deliberately skip (delete)
+    }
+    return out.join('\n');
   }
 
-  /// 通过 block 内容/bbox 在 markdown 行中定位 figure 所占的行范围
-  static (int, int)? _findFigureRegion(
+  /// 为单个 figure 规划其占用的行集合 + 锚点。
+  ///
+  /// 返回 `null` 表示所有 block 都没匹配到——通常说明 API 的 block_ids 与
+  /// raw markdown 行结构对不上（版本/模型差异），caller 应降级。
+  ///
+  /// 设计要点：**不做 min/max 连续区间扩张**。旧实现假设"一个 figure 的 blocks
+  /// 在 md 里行号连续"，在双栏期刊"同页两个 figure 行号交错"时会把一个区间
+  /// 误套到另一个上（如 FIGURE 2 block 行段 `[5..50]` 被 TABLE 1 的 `[2..53]`
+  /// 包围），最终 appliedCeiling 保护把外层整体砍掉。集合方式没这个问题。
+  static _FigurePlan? _planFigureLines(
     List<String> lines,
     Map<String, Map<String, dynamic>> blockMap,
-    List<String> blockIds,
-    Set<int> usedLines,
+    FigureManifestEntry fig,
+    Set<int> claimed,
   ) {
-    final matched = <int>{};
+    final owned = <int>{};
+    int? anchor;
+    // 本 figure 查找过程中累积的"禁用"行号——既含其他 figure 的占用，
+    // 也含本 figure 已匹配的行（避免不同 block 命中同一行）。
+    final skip = Set<int>.from(claimed);
 
-    for (final bid in blockIds) {
+    for (final bid in fig.blockIds) {
       final block = blockMap[bid];
       if (block == null) continue;
 
@@ -479,68 +506,65 @@ class DocExtractService {
       final content = (block['block_content'] as String? ?? '').trim();
 
       int? idx;
-      if (label == 'figure_title' && content.isNotEmpty) {
-        idx = _findLine(
-          lines,
-          content.substring(0, min(30, content.length)),
-          usedLines,
-        );
-      } else if (label == 'image' || label == 'chart') {
+      if (label == 'image' || label == 'chart') {
         final bbox = block['block_bbox'] as List<dynamic>?;
         if (bbox != null && bbox.length >= 4) {
           idx = _findLine(
             lines,
             '_${bbox[0]}_${bbox[1]}_${bbox[2]}_${bbox[3]}',
-            usedLines,
+            skip,
           );
         }
-      } else if (label == 'vision_footnote' && content.isNotEmpty) {
-        idx = _findLine(
-          lines,
-          content.substring(0, min(20, content.length)),
-          usedLines,
-        );
-      } else if (label == 'table' && content.isNotEmpty) {
-        idx = _findLine(
-          lines,
-          content.substring(0, min(30, content.length)),
-          usedLines,
-        );
+      } else if (label == 'table') {
+        // 表格 HTML：block_content 常是 `<table><tr>...` 但 md 里带属性
+        // `<table border=1 ...>`，前缀匹配不上。改用通用 `<table` 起始标签定位。
+        idx = _findLine(lines, '<table', skip);
       } else if (content.isNotEmpty) {
-        // 被 _recoverMissingAnchors 升格的 text/paragraph_title 等 block，
-        // JSON 中仍保留原始标签，需按内容搜索以将其纳入替换区域。
+        // figure_title / vision_footnote / 被 _recoverMissingAnchors
+        // 升格的 text/paragraph_title 等，按内容前缀搜索。
+        final probeLen = label == 'vision_footnote' ? 20 : 30;
         idx = _findLine(
           lines,
-          content.substring(0, min(30, content.length)),
-          usedLines,
+          content.substring(0, min(probeLen, content.length)),
+          skip,
         );
       }
 
-      if (idx != null) matched.add(idx);
+      if (idx == null) continue;
+      owned.add(idx);
+      skip.add(idx);
+
+      // 首个 figure_title 作 anchor——img_tag 落在 caption 原位置，
+      // 不同 figure 的图片在最终 md 里保持阅读顺序。
+      if (anchor == null && label == 'figure_title') {
+        anchor = idx;
+      }
+
+      // `<table>...</table>` 是跨多行 HTML，把整个区间吞入 owned。
+      if (label == 'table') {
+        final tableEnd = _scanTableEnd(lines, idx);
+        for (var i = idx + 1; i < tableEnd; i++) {
+          if (!claimed.contains(i)) {
+            owned.add(i);
+            skip.add(i);
+          }
+        }
+      }
     }
 
-    if (matched.isEmpty) return null;
+    if (owned.isEmpty) return null;
+    anchor ??= owned.reduce(min);
 
-    var start = matched.reduce(min);
-    var end = matched.reduce(max) + 1;
+    // 吸收紧邻空行——避免替换后留下连续空行堆。
+    // blockedByOthers=claimed，不越过其他 figure 的行；不触碰自身 owned 行。
+    _absorbBlankNeighbors(lines, owned, claimed);
 
-    // 扩展到完整 <table>...</table> 块（API 表格是跨行 HTML）
-    (start, end) = _expandToTableBounds(lines, start, end);
-
-    // 向上收纳紧邻空行
-    while (start > 0 &&
-        lines[start - 1].trim().isEmpty &&
-        !usedLines.contains(start - 1)) {
-      start--;
-    }
-    // 向下收纳紧邻空行
-    while (end < lines.length &&
-        lines[end].trim().isEmpty &&
-        !usedLines.contains(end)) {
-      end++;
-    }
-
-    return (start, end);
+    final uri = Uri.file(fig.imagePath);
+    return _FigurePlan(
+      ownedLines: owned,
+      anchorLine: anchor,
+      imgTag: '\n![fig:${fig.captionText}]($uri)\n',
+    );
   }
 
   /// 在行列表中找到包含 [text] 的第一行（跳过已使用的行）
@@ -555,44 +579,44 @@ class DocExtractService {
     return null;
   }
 
-  /// 扩展行范围以覆盖完整的 `<table>...</table>` HTML 块。
-  ///
-  /// API 输出的 table 是跨多行 HTML，而 block_content 是纯文本，
-  /// 导致 `_findLine()` 只能匹配到中间某一行或完全匹配不到。
-  /// 此方法在已有区间及其邻近范围内扫描 `<table` 标签，
-  /// 找到后向上/向下扩展到完整的 `<table>...</table>` 边界。
-  static (int, int) _expandToTableBounds(
+  /// 以 [openLine] 为起点（含 `<table`）扫描到闭合 `</table>` 行，返回 end（exclusive）。
+  /// 同行闭合或到达 EOF 均正确处理。
+  static int _scanTableEnd(List<String> lines, int openLine) {
+    if (lines[openLine].contains('</table>')) return openLine + 1;
+    var j = openLine + 1;
+    while (j < lines.length && !lines[j].contains('</table>')) {
+      j++;
+    }
+    return j < lines.length ? j + 1 : j;
+  }
+
+  /// 把 [owned] 行集合两端的紧邻空行也纳入（仅当空行不在 [blockedByOthers] 内）。
+  /// 空行被纳入后会在替换阶段被丢弃，避免最终 md 里堆积连续空行。
+  static void _absorbBlankNeighbors(
     List<String> lines,
-    int start,
-    int end,
+    Set<int> owned,
+    Set<int> blockedByOthers,
   ) {
-    var s = start;
-    var e = end;
-
-    // 在区间及上下各 3 行的缓冲区内扫描 <table 标签
-    final scanStart = (start - 3).clamp(0, lines.length);
-    final scanEnd = (end + 3).clamp(0, lines.length);
-
-    for (var i = scanStart; i < scanEnd; i++) {
-      if (lines[i].contains('<table')) {
-        s = min(s, i);
-        // <table> 和 </table> 可能在同一行（API 单行 HTML table）
-        if (lines[i].contains('</table>')) {
-          e = max(e, i + 1);
-        } else {
-          var tableEnd = i + 1;
-          while (tableEnd < lines.length &&
-              !lines[tableEnd].contains('</table>')) {
-            tableEnd++;
-          }
-          if (tableEnd < lines.length) {
-            e = max(e, tableEnd + 1);
-          }
-        }
+    // 在集合迭代前快照，避免一边扩展一边遍历
+    final snapshot = owned.toList();
+    for (final i in snapshot) {
+      var j = i - 1;
+      while (j >= 0 &&
+          lines[j].trim().isEmpty &&
+          !owned.contains(j) &&
+          !blockedByOthers.contains(j)) {
+        owned.add(j);
+        j--;
+      }
+      j = i + 1;
+      while (j < lines.length &&
+          lines[j].trim().isEmpty &&
+          !owned.contains(j) &&
+          !blockedByOthers.contains(j)) {
+        owned.add(j);
+        j++;
       }
     }
-
-    return (s, e);
   }
 
   /// 将 JSON paragraph_title 对应的 ATX heading 统一为 ##（二级标题）。
@@ -717,4 +741,27 @@ class DocExtractService {
       'temperature': 0,
     };
   }
+}
+
+/// 单个 figure 的替换计划——在 `_replaceInPageMd` 流水线中传递。
+///
+/// 行集合表达（而非连续区间）让"同页两 figure 行号交错"的双栏排版也能正确替换：
+/// 两个 figure 的 [ownedLines] 互不相交，各自的 [anchorLine] 独立定位插入点。
+class _FigurePlan {
+  /// 该 figure 占用的原始行号集合（可以不连续）。替换阶段除了 [anchorLine]
+  /// 外的行全部从输出里抹掉。
+  final Set<int> ownedLines;
+
+  /// img_tag 插入的原始行号位置——优先选 figure_title 所在行，使 caption
+  /// 保持在阅读序中的自然位置。无 figure_title 时退化为 [ownedLines] 的最小值。
+  final int anchorLine;
+
+  /// 生成的 markdown 图片标记，形如 `\n![fig:CAPTION](file:///.../FIGURE_N_.png)\n`。
+  final String imgTag;
+
+  const _FigurePlan({
+    required this.ownedLines,
+    required this.anchorLine,
+    required this.imgTag,
+  });
 }

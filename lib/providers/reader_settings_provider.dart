@@ -7,20 +7,48 @@ import '../core/storage/storage.dart';
 /// 阅读器背景模式
 ///
 /// [themed] 表示采用当前应用主题色（由 `themeProvider` 管理的 seed color），
-/// 其他三项为固定背景：羊皮纸 / 夜间 / 纯黑。解析到具体 [Color] 时统一走
-/// `reader_background.dart` 的 `resolveReaderBackground()`，因为 [themed]
-/// 需要 [BuildContext] 才能拿到 `ColorScheme.primaryContainer`。
+/// 其他几项为固定背景：羊皮纸 / 夜间 / 纯黑 / 护眼绿。具体颜色统一走
+/// `reader_background.dart` 的 `resolveReaderPalette()`。
+///
+/// 枚举顺序即 Hive 持久化 `.index` 的序号 API——**只能尾追**，不能插入中间，
+/// 否则老用户保存的 theme 会错位加载。如需改变"视觉顺序"，在 UI 层用
+/// 显式展示列表替代 `values` 迭代即可。
 enum ReaderTheme {
   themed,
   sepia,
   night,
-  dark;
+  dark,
+  green;
 
+  /// 详细中文名（设置页等需要完整描述的场景）。
   String get label => switch (this) {
         ReaderTheme.themed => '主题色',
         ReaderTheme.sepia => '羊皮纸',
+        ReaderTheme.green => '护眼绿',
         ReaderTheme.night => '夜间',
         ReaderTheme.dark => '纯黑',
+      };
+
+  /// 阅读器底部面板用的短名（空间紧张、视觉整齐）。
+  String get shortLabel => switch (this) {
+        ReaderTheme.themed => '白天',
+        ReaderTheme.sepia => '羊皮',
+        ReaderTheme.green => '护眼',
+        ReaderTheme.night => '夜间',
+        ReaderTheme.dark => '纯黑',
+      };
+
+  /// 该阅读器主题适配的 app 亮度模式。
+  ///
+  /// UI 切换 reader theme 时，同时把 [themeProvider] 的 `ThemeMode` 刷成
+  /// 对应亮度——这样工具栏的 `cs.surface`、文字色、分割线都自然跟着变，
+  /// 无需为每个 widget 单独派生 ColorScheme。
+  Brightness get brightness => switch (this) {
+        ReaderTheme.themed ||
+        ReaderTheme.sepia ||
+        ReaderTheme.green =>
+          Brightness.light,
+        ReaderTheme.night || ReaderTheme.dark => Brightness.dark,
       };
 }
 
@@ -115,58 +143,6 @@ class ReaderSettingsState {
       toolbarOpacity: toolbarOpacity ?? this.toolbarOpacity,
     );
   }
-
-  /// 根据阅读器主题返回内容区域背景色（无 [BuildContext] 时的回退值）。
-  ///
-  /// `themed` 在此处按中性白回退，实际需要主题色的调用方（如阅读器正文渲染）
-  /// 应使用 `widgets/reader_background.dart` 的 `resolveReaderBackground()`
-  /// 来拿到 `ColorScheme.primaryContainer`。
-  Color get backgroundColor => switch (theme) {
-        ReaderTheme.themed => const Color(0xFFFFFFFF),
-        ReaderTheme.sepia => const Color(0xFFF5F0E8),
-        ReaderTheme.night => const Color(0xFF1C1B1F),
-        ReaderTheme.dark => const Color(0xFF0D0D0D),
-      };
-
-  /// 根据阅读器主题返回正文文字颜色
-  Color get textColor => switch (theme) {
-        ReaderTheme.themed => const Color(0xFF1C1B1F),
-        ReaderTheme.sepia => const Color(0xFF3B3530),
-        ReaderTheme.night => const Color(0xFFE6E1E5),
-        ReaderTheme.dark => const Color(0xFFE6E1E5),
-      };
-
-  /// 次要文字颜色（作者、注释等）
-  Color get secondaryTextColor => switch (theme) {
-        ReaderTheme.themed => const Color(0xFF49454F),
-        ReaderTheme.sepia => const Color(0xFF5D5549),
-        ReaderTheme.night => const Color(0xFFCAC4D0),
-        ReaderTheme.dark => const Color(0xFFB0ABB5),
-      };
-
-  /// 链接颜色
-  Color get linkColor => switch (theme) {
-        ReaderTheme.themed => const Color(0xFF1A73E8),
-        ReaderTheme.sepia => const Color(0xFF8B6914),
-        ReaderTheme.night => const Color(0xFF93B4FF),
-        ReaderTheme.dark => const Color(0xFF93B4FF),
-      };
-
-  /// 工具栏/面板背景色
-  Color get surfaceColor => switch (theme) {
-        ReaderTheme.themed => const Color(0xFFF7F2FA),
-        ReaderTheme.sepia => const Color(0xFFEDE8DF),
-        ReaderTheme.night => const Color(0xFF2B2930),
-        ReaderTheme.dark => const Color(0xFF1A1A1A),
-      };
-
-  /// 分割线颜色
-  Color get dividerColor => switch (theme) {
-        ReaderTheme.themed => const Color(0xFFE0E0E0),
-        ReaderTheme.sepia => const Color(0xFFD5CEBC),
-        ReaderTheme.night => const Color(0xFF49454F),
-        ReaderTheme.dark => const Color(0xFF2A2A2A),
-      };
 
   static const double minFontSize = 12.0;
   static const double maxFontSize = 28.0;

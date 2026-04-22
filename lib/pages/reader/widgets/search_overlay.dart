@@ -130,7 +130,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
     final safePadding = MediaQuery.of(context).padding;
 
     return Container(
-      color: resolveReaderBackground(settings.theme, cs),
+      color: resolveReaderPalette(settings.theme, cs).background,
       padding: EdgeInsets.only(top: safePadding.top),
       child: Column(
         children: [

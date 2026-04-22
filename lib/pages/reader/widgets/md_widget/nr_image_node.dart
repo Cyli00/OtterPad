@@ -8,6 +8,10 @@ import 'package:material_symbols_icons/symbols.dart';
 /// figure caption 的 alt text 前缀约定
 const _figPrefix = 'fig:';
 
+/// 正文图片的最大高度占窗口高度的比例。
+/// 避免超高图把整屏占满、阅读节奏被单张图截断。
+const double _kMaxImageHeightRatio = 0.33;
+
 /// NightReader 图片配置：支持 file:// 本地图片和 http(s) 网络图片。
 ///
 /// 当 alt text 以 `fig:` 开头时，在图片下方渲染 caption 文字。
@@ -47,10 +51,25 @@ class NRImgConfig extends ImgConfig {
               );
             }
 
+            // 高度上限：窗口高度 * [_kMaxImageHeightRatio]。`Builder` 只为
+            // 取到 `MediaQuery` 用的 BuildContext——ImgConfig.builder 回调
+            // 签名里本身没有 context。`MediaQuery.sizeOf` 比 `.of().size`
+            // 精准订阅，window metrics 其他字段变动不会触发图片重建。
+            final constrainedImage = Builder(
+              builder: (context) {
+                final maxH = MediaQuery.sizeOf(context).height *
+                    _kMaxImageHeightRatio;
+                return ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxH),
+                  child: image,
+                );
+              },
+            );
+
             // 仅在 onTap 非空时让图片响应点击；caption 区保持纯文本（可选中）
             Widget imageArea = ClipRRect(
               borderRadius: BorderRadius.circular(4),
-              child: image,
+              child: constrainedImage,
             );
             if (onTap != null) {
               imageArea = MouseRegion(

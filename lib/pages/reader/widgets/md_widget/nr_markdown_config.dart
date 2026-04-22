@@ -17,12 +17,12 @@ MarkdownConfig buildReaderMarkdownConfig({
   String? highlightQuery,
   void Function(String url)? onImageTap,
 }) {
-  final theme = settings.theme;
-  final textColor = resolveReaderTextColor(theme, colorScheme);
-  final secondaryColor = resolveReaderSecondaryTextColor(theme, colorScheme);
-  final linkColor = resolveReaderLinkColor(theme, colorScheme);
-  final dividerColor = resolveReaderDividerColor(theme, colorScheme);
-  final codeBlockBg = resolveReaderCodeBlockColor(theme, colorScheme);
+  final palette = resolveReaderPalette(settings.theme, colorScheme);
+  final textColor = palette.text;
+  final secondaryColor = palette.secondaryText;
+  final linkColor = palette.link;
+  final dividerColor = palette.divider;
+  final codeBlockBg = palette.codeBlock;
 
   final baseStyle = TextStyle(
     color: textColor,

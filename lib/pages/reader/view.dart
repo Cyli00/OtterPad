@@ -840,7 +840,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final fileExists = _fileExists ?? false;
 
     final contentBg = (_showPreview && _hasResult)
-        ? resolveReaderBackground(readerSettings.theme, cs)
+        ? resolveReaderPalette(readerSettings.theme, cs).background
         : cs.surface;
 
     final isMarkdownHighlightMode = _showPreview && _highlightQuery != null;
