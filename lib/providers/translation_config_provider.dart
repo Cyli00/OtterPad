@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/storage.dart';
+import '../services/translation_skip_sections.dart';
+import '../services/translation_style.dart';
 
 // ── 默认提示词模板（参考 Read-Frog prompt.ts，适配 Markdown 场景）────────
 
@@ -11,7 +13,9 @@ You are a professional {{targetLanguage}} native translator who needs to fluentl
 1. Output only the translated content, without explanations or additional content.
 2. The returned translation must maintain exactly the same number of paragraphs and format as the original text.
 3. For content that should not be translated (such as proper nouns, code, formulas, etc.), keep the original text.
-4. Preserve all Markdown formatting including headings, lists, emphasis, and LaTeX expressions.''';
+4. Preserve all Markdown formatting including headings, lists, emphasis, and LaTeX expressions.
+5. If the input contains "%%%%" separators on their own lines, the output MUST preserve the exact same separators in the exact same positions, with each segment translated independently. Never merge segments, never drop separators, never add extra ones.
+6. When multiple segments appear together, they are usually from the same document. Use surrounding segments as context to resolve pronouns, keep terminology consistent, and match tone—but preserve each segment's own boundaries. Translate each segment in place; do NOT move content across segment boundaries.''';
 
 const kDefaultTranslationUserPrompt = '''
 Translate to {{targetLanguage}}:
@@ -55,6 +59,8 @@ const _kSystemPrompt = 'translation_config_system_prompt';
 const _kUserPrompt = 'translation_config_user_prompt';
 const _kTargetLang = 'translation_config_target_language';
 const _kTemperature = 'translation_config_temperature';
+const _kDisplayStyle = 'translation_config_display_style';
+const _kIgnoreSections = 'translation_config_ignore_sections';
 
 // ── 数据模型 ───────────────────────────────────────────────────────────
 
@@ -64,26 +70,45 @@ class TranslationConfig {
   final String targetLanguage;
   final double? temperature;
 
+  /// 译文视觉样式 id（对应 [kTranslationStyles] 中一个策略）。
+  final String displayStyleId;
+
+  /// 翻译时忽略的区域 ID 列表。列表内的区域整段跳过；
+  /// 未列入的已知区域合并为单个段落送入 LLM。
+  final List<String> ignoreSections;
+
   const TranslationConfig({
     this.systemPrompt = kDefaultTranslationSystemPrompt,
     this.userPrompt = kDefaultTranslationUserPrompt,
     this.targetLanguage = kDefaultTargetLanguage,
     this.temperature,
+    this.displayStyleId = kDefaultTranslationStyleId,
+    this.ignoreSections = kDefaultTranslationIgnoreSections,
   });
 
-  bool get isSystemPromptDefault => systemPrompt == kDefaultTranslationSystemPrompt;
-  bool get isUserPromptDefault => userPrompt == kDefaultTranslationUserPrompt;
+  bool get isSystemPromptDefault =>
+      systemPrompt == kDefaultTranslationSystemPrompt;
+  bool get isUserPromptDefault =>
+      userPrompt == kDefaultTranslationUserPrompt;
+
+  /// 解析后的样式策略对象（便于 UI / weaver 直接用）。
+  TranslationStyleStrategy get displayStyle =>
+      resolveTranslationStyle(displayStyleId);
 
   TranslationConfig copyWith({
     String? systemPrompt,
     String? userPrompt,
     String? targetLanguage,
+    String? displayStyleId,
+    List<String>? ignoreSections,
   }) =>
       TranslationConfig(
         systemPrompt: systemPrompt ?? this.systemPrompt,
         userPrompt: userPrompt ?? this.userPrompt,
         targetLanguage: targetLanguage ?? this.targetLanguage,
         temperature: temperature,
+        displayStyleId: displayStyleId ?? this.displayStyleId,
+        ignoreSections: ignoreSections ?? this.ignoreSections,
       );
 }
 
@@ -94,11 +119,20 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
 
   static TranslationConfig _load() {
     final box = GStorage.setting;
+    final rawSections = box.get(_kIgnoreSections) as List?;
     return TranslationConfig(
-      systemPrompt: box.get(_kSystemPrompt, defaultValue: kDefaultTranslationSystemPrompt) as String,
-      userPrompt: box.get(_kUserPrompt, defaultValue: kDefaultTranslationUserPrompt) as String,
-      targetLanguage: box.get(_kTargetLang, defaultValue: kDefaultTargetLanguage) as String,
+      systemPrompt: box.get(_kSystemPrompt,
+          defaultValue: kDefaultTranslationSystemPrompt) as String,
+      userPrompt: box.get(_kUserPrompt,
+          defaultValue: kDefaultTranslationUserPrompt) as String,
+      targetLanguage:
+          box.get(_kTargetLang, defaultValue: kDefaultTargetLanguage) as String,
       temperature: box.get(_kTemperature) as double?,
+      displayStyleId: box.get(_kDisplayStyle,
+          defaultValue: kDefaultTranslationStyleId) as String,
+      ignoreSections: rawSections != null
+          ? rawSections.cast<String>().toList()
+          : List<String>.from(kDefaultTranslationIgnoreSections),
     );
   }
 
@@ -133,12 +167,24 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
       userPrompt: state.userPrompt,
       targetLanguage: state.targetLanguage,
       temperature: value,
+      displayStyleId: state.displayStyleId,
+      ignoreSections: state.ignoreSections,
     );
     if (value != null) {
       await GStorage.setting.put(_kTemperature, value);
     } else {
       await GStorage.setting.delete(_kTemperature);
     }
+  }
+
+  Future<void> setDisplayStyleId(String value) async {
+    state = state.copyWith(displayStyleId: value);
+    await GStorage.setting.put(_kDisplayStyle, value);
+  }
+
+  Future<void> setIgnoreSections(List<String> value) async {
+    state = state.copyWith(ignoreSections: value);
+    await GStorage.setting.put(_kIgnoreSections, value);
   }
 
   Future<void> resetAll() async {
@@ -148,6 +194,8 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
     await box.delete(_kUserPrompt);
     await box.delete(_kTargetLang);
     await box.delete(_kTemperature);
+    await box.delete(_kDisplayStyle);
+    await box.delete(_kIgnoreSections);
   }
 }
 

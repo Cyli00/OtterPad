@@ -46,13 +46,16 @@ class TranslationService {
     required String text,
     required AgentApiState agentState,
     required TranslationConfig translationConfig,
+    bool useCache = true,
   }) async {
     if (text.trim().isEmpty) return '';
 
     // ── 查缓存 ──
     final cacheKey = _buildCacheKey(text, translationConfig.targetLanguage);
-    final cached = _getCache(cacheKey);
-    if (cached != null) return cached;
+    if (useCache) {
+      final cached = _getCache(cacheKey);
+      if (cached != null) return cached;
+    }
 
     // ── 选模型 ──
     final modelId = agentState.fastModelId ?? agentState.defaultModelId;
@@ -86,6 +89,322 @@ class TranslationService {
     _putCache(cacheKey, result);
 
     return result;
+  }
+
+  /// 流式翻译：按 token 增量累加返回完整译文。
+  ///
+  /// 每个 emit 是"从开始到当前的完整文本"——消费者直接显示 snapshot.data
+  /// 即可，无需自己累加。流结束后写入缓存；流式 API 失败时 fallback 到
+  /// 非流式 [translate] 一次性 emit。
+  static Stream<String> translateStream({
+    required String text,
+    required AgentApiState agentState,
+    required TranslationConfig translationConfig,
+  }) async* {
+    if (text.trim().isEmpty) {
+      yield '';
+      return;
+    }
+
+    final cacheKey = _buildCacheKey(text, translationConfig.targetLanguage);
+    final cached = _getCache(cacheKey);
+    if (cached != null) {
+      yield cached;
+      return;
+    }
+
+    final modelId = agentState.fastModelId ?? agentState.defaultModelId;
+    if (modelId == null || modelId.isEmpty) {
+      throw Exception('请先在"AI 设置"中添加并设置默认模型或快速模型');
+    }
+    if (agentState.apiKey.isEmpty) {
+      throw Exception('请先在"AI 设置"中填写 API Key');
+    }
+
+    final targetLang = translationConfig.targetLanguage;
+    final systemPrompt = translationConfig.systemPrompt
+        .replaceAll('{{targetLanguage}}', targetLang);
+    final userPrompt = translationConfig.userPrompt
+        .replaceAll('{{targetLanguage}}', targetLang)
+        .replaceAll('{{input}}', text);
+
+    Object? streamErr;
+    String accumulated = '';
+    try {
+      await for (final delta in _callApiStream(
+        provider: agentState.provider,
+        baseUrl: agentState.effectiveBaseUrl,
+        apiKey: agentState.apiKey,
+        modelId: modelId,
+        systemPrompt: systemPrompt,
+        userPrompt: userPrompt,
+        temperature: translationConfig.temperature,
+      )) {
+        accumulated += delta;
+        yield accumulated;
+      }
+    } catch (e) {
+      streamErr = e;
+    }
+
+    // 流式完全失败（无任何增量）→ fallback 非流式一次性返回
+    if (streamErr != null && accumulated.isEmpty) {
+      try {
+        final result = await _callApi(
+          provider: agentState.provider,
+          baseUrl: agentState.effectiveBaseUrl,
+          apiKey: agentState.apiKey,
+          modelId: modelId,
+          systemPrompt: systemPrompt,
+          userPrompt: userPrompt,
+          temperature: translationConfig.temperature,
+        );
+        accumulated = result;
+        yield result;
+      } catch (_) {
+        throw streamErr;
+      }
+    }
+
+    if (accumulated.isNotEmpty) {
+      _putCache(cacheKey, accumulated);
+    }
+  }
+
+  // ── 流式 API 分派 ─────────────────────────────────────────────────────────
+
+  static Stream<String> _callApiStream({
+    required AgentApiProvider provider,
+    required String baseUrl,
+    required String apiKey,
+    required String modelId,
+    required String systemPrompt,
+    required String userPrompt,
+    double? temperature,
+  }) async* {
+    final url = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
+
+    final dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      // 流式整体可能持续几十秒到几分钟，给足余量
+      receiveTimeout: const Duration(minutes: 3),
+    ));
+
+    switch (provider) {
+      case AgentApiProvider.openai:
+        yield* _streamOpenAI(dio, '$url${provider.chatPath}', apiKey,
+            modelId, systemPrompt, userPrompt, temperature);
+      case AgentApiProvider.anthropic:
+        yield* _streamAnthropic(dio, '$url${provider.chatPath}', apiKey,
+            modelId, systemPrompt, userPrompt, temperature);
+      case AgentApiProvider.gemini:
+        yield* _streamGemini(dio, '$url${provider.chatPath}', apiKey,
+            modelId, systemPrompt, userPrompt, temperature);
+    }
+  }
+
+  /// OpenAI Responses API 流式，兼容 Chat Completions fallback 格式：
+  /// - Responses: `{"type":"response.output_text.delta","delta":"hi"}`
+  /// - Chat:      `{"choices":[{"delta":{"content":"hi"}}]}`
+  static Stream<String> _streamOpenAI(
+    Dio dio,
+    String url,
+    String apiKey,
+    String modelId,
+    String systemPrompt,
+    String userPrompt,
+    double? temperature,
+  ) async* {
+    final resp = await dio.post<ResponseBody>(
+      url,
+      data: {
+        'model': modelId,
+        'instructions': systemPrompt,
+        'input': userPrompt,
+        'stream': true,
+        if (temperature != null) 'temperature': temperature,
+      },
+      options: Options(
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        responseType: ResponseType.stream,
+      ),
+    );
+
+    await for (final event in _sseEventStream(resp.data!.stream)) {
+      final data = _extractSseData(event);
+      if (data == null || data == '[DONE]') continue;
+      try {
+        final json = jsonDecode(data) as Map<String, dynamic>;
+        if (json['type'] == 'response.output_text.delta') {
+          final d = json['delta'];
+          if (d is String && d.isNotEmpty) yield d;
+          continue;
+        }
+        final choices = json['choices'] as List<dynamic>?;
+        if (choices != null && choices.isNotEmpty) {
+          final delta = (choices[0] as Map<String, dynamic>)['delta'];
+          if (delta is Map<String, dynamic>) {
+            final content = delta['content'];
+            if (content is String && content.isNotEmpty) yield content;
+          }
+        }
+      } catch (_) {
+        // 单 event 解析失败 → 跳过，其他 event 继续
+      }
+    }
+  }
+
+  /// Anthropic Messages API 流式：`content_block_delta.delta.text`
+  static Stream<String> _streamAnthropic(
+    Dio dio,
+    String url,
+    String apiKey,
+    String modelId,
+    String systemPrompt,
+    String userPrompt,
+    double? temperature,
+  ) async* {
+    final resp = await dio.post<ResponseBody>(
+      url,
+      data: {
+        'model': modelId,
+        'system': systemPrompt,
+        'max_tokens': 4096,
+        'messages': [
+          {'role': 'user', 'content': userPrompt},
+        ],
+        'stream': true,
+        if (temperature != null) 'temperature': temperature,
+      },
+      options: Options(
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        responseType: ResponseType.stream,
+      ),
+    );
+
+    await for (final event in _sseEventStream(resp.data!.stream)) {
+      final data = _extractSseData(event);
+      if (data == null) continue;
+      try {
+        final json = jsonDecode(data) as Map<String, dynamic>;
+        if (json['type'] == 'content_block_delta') {
+          final delta = json['delta'] as Map<String, dynamic>?;
+          if (delta?['type'] == 'text_delta') {
+            final text = delta!['text'];
+            if (text is String && text.isNotEmpty) yield text;
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Gemini 流式：`:streamGenerateContent?alt=sse`，累加 parts[*].text
+  static Stream<String> _streamGemini(
+    Dio dio,
+    String baseChatUrl,
+    String apiKey,
+    String modelId,
+    String systemPrompt,
+    String userPrompt,
+    double? temperature,
+  ) async* {
+    final resp = await dio.post<ResponseBody>(
+      '$baseChatUrl/models/$modelId:streamGenerateContent',
+      queryParameters: {'key': apiKey, 'alt': 'sse'},
+      data: {
+        'systemInstruction': {
+          'parts': [
+            {'text': systemPrompt}
+          ]
+        },
+        'contents': [
+          {
+            'parts': [
+              {'text': userPrompt}
+            ]
+          }
+        ],
+        'generationConfig': {
+          if (temperature != null) 'temperature': temperature,
+        },
+      },
+      options: Options(
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        responseType: ResponseType.stream,
+      ),
+    );
+
+    await for (final event in _sseEventStream(resp.data!.stream)) {
+      final data = _extractSseData(event);
+      if (data == null) continue;
+      try {
+        final json = jsonDecode(data) as Map<String, dynamic>;
+        final candidates = json['candidates'] as List<dynamic>?;
+        if (candidates == null || candidates.isEmpty) continue;
+        final content = (candidates[0] as Map<String, dynamic>)['content'];
+        if (content is! Map<String, dynamic>) continue;
+        final parts = content['parts'] as List<dynamic>?;
+        if (parts == null) continue;
+        for (final part in parts) {
+          if (part is Map<String, dynamic>) {
+            final t = part['text'];
+            if (t is String && t.isNotEmpty) yield t;
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  // ── SSE 通用解析 ──────────────────────────────────────────────────────────
+
+  /// 把字节流切成 SSE 事件（以 `\n\n` 或 `\r\n\r\n` 分隔）。
+  /// UTF-8 边界可能跨 chunk，用 `allowMalformed` 容忍截断的 code unit。
+  static Stream<String> _sseEventStream(Stream<List<int>> source) async* {
+    String buffer = '';
+    const decoder = Utf8Decoder(allowMalformed: true);
+    await for (final chunk in source) {
+      buffer += decoder.convert(chunk);
+      while (true) {
+        int delim = buffer.indexOf('\n\n');
+        int delimLen = 2;
+        if (delim < 0) {
+          final alt = buffer.indexOf('\r\n\r\n');
+          if (alt < 0) break;
+          delim = alt;
+          delimLen = 4;
+        }
+        final event = buffer.substring(0, delim);
+        buffer = buffer.substring(delim + delimLen);
+        if (event.isNotEmpty) yield event;
+      }
+    }
+    if (buffer.trim().isNotEmpty) yield buffer;
+  }
+
+  /// 从单个 SSE event 抽取 `data:` 负载，多行按 SSE 规范用 `\n` 拼接。
+  static String? _extractSseData(String event) {
+    final dataLines = <String>[];
+    for (final line in event.split(RegExp(r'\r?\n'))) {
+      if (line.startsWith('data:')) {
+        dataLines.add(line.substring(5).trimLeft());
+      }
+    }
+    if (dataLines.isEmpty) return null;
+    return dataLines.join('\n');
   }
 
   // ── API 调用 ──────────────────────────────────────────────────────────────

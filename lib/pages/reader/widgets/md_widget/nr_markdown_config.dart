@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../../providers/reader_settings_provider.dart';
@@ -6,6 +7,7 @@ import '../reader_background.dart';
 import 'nr_custom_text_node.dart';
 import 'nr_image_node.dart';
 import 'nr_latex_node.dart';
+import 'nr_translated_node.dart';
 
 /// 将 [ReaderSettingsState] + [ColorScheme] 映射到 [MarkdownConfig]。
 ///
@@ -137,14 +139,26 @@ MarkdownConfig buildReaderMarkdownConfig({
   ]);
 }
 
-/// 组装 [MarkdownGenerator]，整合 LaTeX / HTML 表格等自定义节点。
+/// 组装 [MarkdownGenerator]，整合 LaTeX / 主题色译文 / HTML 表格等自定义节点。
+///
+/// [translatedColor] 非空时注册主题色译文节点；为空时不注册，`[[tr]]...[[/tr]]`
+/// 将作为普通文本渲染（相当于不可见的 noop，不会破坏阅读）。
 MarkdownGenerator buildReaderMarkdownGenerator({
   required ReaderSettingsState settings,
   Widget Function(InlineSpan span)? searchRichTextBuilder,
+  Color? translatedColor,
 }) {
+  final generators = <SpanNodeGeneratorWithTag>[nrLatexGenerator];
+  final inlineSyntaxes = <md.InlineSyntax>[NRLatexInlineSyntax()];
+
+  if (translatedColor != null) {
+    generators.add(nrTranslatedGenerator(color: translatedColor));
+    inlineSyntaxes.add(NRTranslatedInlineSyntax());
+  }
+
   return MarkdownGenerator(
-    generators: [nrLatexGenerator],
-    inlineSyntaxList: [NRLatexInlineSyntax()],
+    generators: generators,
+    inlineSyntaxList: inlineSyntaxes,
     blockSyntaxList: [NRLatexBlockSyntax()],
     textGenerator: (node, config, visitor) =>
         NRCustomTextNode(node.textContent, config, visitor),

@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../providers/translation_config_provider.dart';
+import '../../services/translation_skip_sections.dart';
+import '../../services/translation_style.dart';
 
 /// 翻译设置区块——嵌入 api_settings_page 的 _buildGroup 内。
 class TranslationSettingsSection extends ConsumerStatefulWidget {
@@ -220,6 +222,20 @@ class _TranslationSettingsSectionState
 
           const SizedBox(height: 24),
 
+          // ── 译文样式 ──
+          _buildTitleRow('译文样式', '文档全文翻译时译文的视觉区分方式'),
+          const SizedBox(height: 12),
+          _buildStylePicker(theme, cs, cfg.displayStyleId),
+
+          const SizedBox(height: 24),
+
+          // ── 翻译忽略内容 ──
+          _buildTitleRow('翻译忽略内容', '勾选的区域翻译时跳过，取消勾选则合并为整段翻译'),
+          const SizedBox(height: 12),
+          _buildIgnoreSectionChips(cs, cfg.ignoreSections),
+
+          const SizedBox(height: 24),
+
           // ── 温度 ──
           _sliderRow(
             theme: theme,
@@ -326,6 +342,78 @@ class _TranslationSettingsSectionState
       icon: Icon(Symbols.refresh_rounded, size: 18, color: cs.onSurfaceVariant),
       tooltip: '恢复默认',
       visualDensity: VisualDensity.compact,
+    );
+  }
+
+  /// 翻译忽略区域：FilterChip 镜像 OCR 忽略标签视觉。
+  Widget _buildIgnoreSectionChips(ColorScheme cs, List<String> selected) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: kAllTranslationSkipSections.map((section) {
+        final isSelected = selected.contains(section.id);
+        return FilterChip(
+          label: Text(section.label),
+          selected: isSelected,
+          showCheckmark: false,
+          color: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return cs.primaryContainer;
+            }
+            return cs.surface;
+          }),
+          side: BorderSide(
+            color: isSelected
+                ? Colors.transparent
+                : cs.outlineVariant.withAlpha(100),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          onSelected: (v) {
+            final updated = List<String>.from(selected);
+            if (v) {
+              if (!updated.contains(section.id)) updated.add(section.id);
+            } else {
+              updated.remove(section.id);
+            }
+            ref
+                .read(translationConfigProvider.notifier)
+                .setIgnoreSections(updated);
+          },
+        );
+      }).toList(),
+    );
+  }
+
+  /// 译文样式选择：SegmentedButton 映射到 [kTranslationStyles] 注册表。
+  /// 新增样式只需 append 到注册表，UI 自动拾取——无需改这里。
+  Widget _buildStylePicker(ThemeData theme, ColorScheme cs, String currentId) {
+    return SegmentedButton<String>(
+      segments: kTranslationStyles
+          .map((s) => ButtonSegment<String>(
+                value: s.id,
+                label: Text(s.label),
+              ))
+          .toList(),
+      selected: {currentId},
+      onSelectionChanged: (set) {
+        final next = set.first;
+        ref.read(translationConfigProvider.notifier).setDisplayStyleId(next);
+      },
+      showSelectedIcon: false,
+      style: SegmentedButton.styleFrom(
+        backgroundColor: cs.surface,
+        selectedBackgroundColor: cs.primaryContainer,
+        foregroundColor: cs.onSurfaceVariant,
+        selectedForegroundColor: cs.onPrimaryContainer,
+        side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        textStyle:
+            theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+      ),
     );
   }
 

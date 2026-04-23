@@ -1,4 +1,17 @@
 class MarkdownPreprocessor {
+  /// 译文专用预处理：跳过块级公式提升和 $$...$$ 换行（会破坏 [[tr]] 标记）。
+  static String processTranslation(String markdown) {
+    var result = markdown;
+    result = _sanitizeLatex(result);
+    result = result.replaceAllMapped(_inlineDollarRe, (match) {
+      final trimmed = match.group(1)!.trim();
+      return '\$$trimmed\$';
+    });
+    result = _simplifyInlineLatex(result);
+    result = _normalizeInlineSpacing(result);
+    return result;
+  }
+
   static String process(String markdown) {
     var result = markdown;
     result = _sanitizeLatex(result);

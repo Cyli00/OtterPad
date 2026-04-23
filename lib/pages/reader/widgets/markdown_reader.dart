@@ -214,6 +214,7 @@ class _RenderResources {
       settings: settings,
       searchRichTextBuilder:
           searchBuilder?.hasHighlights == true ? searchBuilder!.call : null,
+      translatedColor: colorScheme.primary,
     );
 
     return _RenderResources(
