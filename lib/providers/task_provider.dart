@@ -14,305 +14,215 @@ import '../services/identifier_resolver.dart';
 import '../services/snackbar_service.dart';
 import 'api_provider.dart';
 import 'documents_provider.dart';
+import 'task_runner.dart';
+import 'task_types.dart';
 
-enum TaskType { addFiles, addByIdentifier, rebuild, redownloadPdf, extractDocument }
+// 对外 re-export：外部只 import 'task_provider.dart' 即可拿到 TaskType/TaskStatus
+export 'task_types.dart' show TaskType, TaskStatus, TaskInfo;
 
-enum TaskStatus { running, completed, cancelled, failed }
-
-class TaskInfo {
-  final TaskType type;
-  final TaskStatus status;
-  final CancelToken cancelToken;
-
-  const TaskInfo({
-    required this.type,
-    required this.status,
-    required this.cancelToken,
-  });
-
-  TaskInfo copyWith({TaskStatus? status}) => TaskInfo(
-        type: type,
-        status: status ?? this.status,
-        cancelToken: cancelToken,
-      );
-}
-
-class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
+class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
+    with TaskRunner<Map<TaskType, TaskInfo>> {
   final Ref _ref;
 
   TaskNotifier(this._ref) : super({});
 
-  SnackBarService get _snackBar => _ref.read(snackBarServiceProvider);
-  DocumentsNotifier get _docs => _ref.read(documentsProvider.notifier);
-  GoRouter get _router => _ref.read(routerProvider);
+  // ── TaskRunner hooks ──
 
-  bool isRunning(TaskType type) =>
+  @override
+  SnackBarService get snackBar => _ref.read(snackBarServiceProvider);
+
+  @override
+  bool isTaskRunning(TaskType type) =>
       state[type]?.status == TaskStatus.running;
 
-  void cancelTask(TaskType type) {
-    final task = state[type];
-    if (task == null || task.status != TaskStatus.running) return;
-    task.cancelToken.cancel();
-    state = {...state, type: task.copyWith(status: TaskStatus.cancelled)};
-    _snackBar.hide();
-  }
-
-  void _startTask(TaskType type, CancelToken token) {
+  @override
+  void markTaskStarted(TaskType type, CancelToken token) {
     state = {
       ...state,
-      type: TaskInfo(type: type, status: TaskStatus.running, cancelToken: token),
+      type: TaskInfo(
+          type: type, status: TaskStatus.running, cancelToken: token),
     };
   }
 
-  void _finishTask(TaskType type, TaskStatus status) {
-    state = {...state, type: state[type]!.copyWith(status: status)};
+  @override
+  void markTaskFinished(TaskType type, TaskStatus status) {
+    final current = state[type];
+    if (current == null) return;
+    state = {...state, type: current.copyWith(status: status)};
+  }
+
+  // 兼容旧 API 名（外部调用方沿用）
+  bool isRunning(TaskType type) => isTaskRunning(type);
+
+  DocumentsNotifier get _docs => _ref.read(documentsProvider.notifier);
+  GoRouter get _router => _ref.read(routerProvider);
+
+  /// 外部主动取消任务。只负责触发 token.cancel()，
+  /// 状态和 SnackBar 清理由 runTask 的 catch 分支统一完成。
+  void cancelTask(TaskType type) {
+    final task = state[type];
+    if (task?.status != TaskStatus.running) return;
+    if (!task!.cancelToken.isCancelled) task.cancelToken.cancel();
   }
 
   // ── 添加文件 ──
 
   Future<void> addFiles(List<String> paths) async {
-    if (isRunning(TaskType.addFiles)) {
-      _snackBar.showResult(message: '正在导入文件，请稍候');
-      return;
-    }
-
-    final token = CancelToken();
-    _startTask(TaskType.addFiles, token);
-
+    // 这些计数器在 body 内累加，在 onSuccess 内被 _buildAddFileMessage 消费
     var importedCount = 0;
     var duplicateCount = 0;
     var completeMetadataCount = 0;
     var partialMetadataCount = 0;
     AddFileResult? lastResult;
 
-    try {
-      for (int i = 0; i < paths.length; i++) {
-        if (token.isCancelled) break;
+    await runTask<void>(
+      type: TaskType.addFiles,
+      initialStatus: '准备导入文件...',
+      busyMessage: '正在导入文件，请稍候',
+      cancelledMessage: null, // 取消时用 _buildAddFileMessage 出更完整的摘要
+      body: (token, progress) async {
+        for (int i = 0; i < paths.length; i++) {
+          if (token.isCancelled) break;
 
-        _snackBar.showProgress(
-          current: i + 1,
-          total: paths.length,
-          fileName: p.basename(paths[i]),
-          status: '正在提取 PDF 元数据...',
-          onCancel: () => cancelTask(TaskType.addFiles),
-        );
+          progress(ListenableProgress(
+            current: i + 1,
+            total: paths.length,
+            status: '正在提取元数据: ${p.basename(paths[i])}',
+          ));
 
-        lastResult = await _docs.addFile(paths[i], cancelToken: token);
+          lastResult = await _docs.addFile(paths[i], cancelToken: token);
 
-        if (lastResult.type == AddFileResultType.duplicate) {
-          duplicateCount++;
-          continue;
+          if (lastResult!.type == AddFileResultType.duplicate) {
+            duplicateCount++;
+            continue;
+          }
+          importedCount++;
+          if (lastResult!.metadataStatus == MetadataStatus.complete) {
+            completeMetadataCount++;
+          } else if (lastResult!.metadataStatus == MetadataStatus.partial) {
+            partialMetadataCount++;
+          }
         }
-
-        importedCount++;
-        if (lastResult.metadataStatus == MetadataStatus.complete) {
-          completeMetadataCount++;
-        } else if (lastResult.metadataStatus == MetadataStatus.partial) {
-          partialMetadataCount++;
-        }
-      }
-
-      _snackBar.hide();
-
-      if (token.isCancelled) {
-        _finishTask(TaskType.addFiles, TaskStatus.cancelled);
-        return;
-      }
-
-      _finishTask(TaskType.addFiles, TaskStatus.completed);
-
-      final unresolvedMetadataCount =
-          importedCount - completeMetadataCount - partialMetadataCount;
-      final message = _buildAddFileMessage(
-        cancelled: token.isCancelled,
-        totalFiles: paths.length,
-        importedCount: importedCount,
-        duplicateCount: duplicateCount,
-        completeMetadataCount: completeMetadataCount,
-        partialMetadataCount: partialMetadataCount,
-        unresolvedMetadataCount: unresolvedMetadataCount,
-        lastResult: lastResult,
-      );
-      _snackBar.showResult(message: message);
-    } catch (_) {
-      _snackBar.hide();
-      _finishTask(TaskType.addFiles, TaskStatus.failed);
-    }
+      },
+      onSuccess: (_) {
+        final unresolvedMetadataCount =
+            importedCount - completeMetadataCount - partialMetadataCount;
+        return TaskFinish.text(_buildAddFileMessage(
+          cancelled: false,
+          totalFiles: paths.length,
+          importedCount: importedCount,
+          duplicateCount: duplicateCount,
+          completeMetadataCount: completeMetadataCount,
+          partialMetadataCount: partialMetadataCount,
+          unresolvedMetadataCount: unresolvedMetadataCount,
+          lastResult: lastResult,
+        ));
+      },
+    );
   }
 
   // ── 通过标识符添加 ──
 
   Future<void> addByIdentifier(String identifier) async {
-    if (isRunning(TaskType.addByIdentifier)) {
-      _snackBar.showResult(message: '正在解析标识符，请稍候');
-      return;
-    }
-
-    final token = CancelToken();
-    _startTask(TaskType.addByIdentifier, token);
-
-    _snackBar.showProgress(
-      current: 1,
-      total: 1,
-      fileName: identifier,
-      status: '正在解析标识符...',
-      onCancel: () => cancelTask(TaskType.addByIdentifier),
-      duration: const Duration(seconds: 30),
+    await runTask<(dynamic, AddByIdentifierResult)>(
+      type: TaskType.addByIdentifier,
+      initialStatus: '正在解析标识符: $identifier',
+      busyMessage: '正在解析标识符，请稍候',
+      body: (token, _) async =>
+          await _docs.addByIdentifier(identifier, cancelToken: token),
+      onSuccess: (r) {
+        final (doc, addResult) = r;
+        if (addResult == AddByIdentifierResult.duplicate) {
+          return const TaskFinish.text('该文献已存在于文库中');
+        }
+        if (doc.filePath.isEmpty) {
+          return TaskFinish(
+            message: '已添加「${doc.title}」，但未获取到关联 PDF',
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: '去添加',
+              onPressed: () => _router.push(AppRoutes.shelfNoFileEntries),
+            ),
+          );
+        }
+        return TaskFinish.text('已添加: ${doc.title}');
+      },
+      onError: (e) {
+        if (e is IdentifierResolveException) return TaskFinish.text(e.message);
+        if (e is DioException) return const TaskFinish.text('网络请求失败，请稍后重试');
+        return TaskFinish.text('添加失败: $e');
+      },
     );
-
-    try {
-      final (doc, addResult) =
-          await _docs.addByIdentifier(identifier, cancelToken: token);
-
-      _snackBar.hide();
-
-      if (token.isCancelled) {
-        _finishTask(TaskType.addByIdentifier, TaskStatus.cancelled);
-        return;
-      }
-
-      _finishTask(TaskType.addByIdentifier, TaskStatus.completed);
-
-      if (addResult == AddByIdentifierResult.duplicate) {
-        _snackBar.showResult(message: '该文献已存在于文库中');
-      } else if (doc.filePath.isEmpty) {
-        _snackBar.showResult(
-          message: '已添加「${doc.title}」，但未获取到关联 PDF',
-          duration: const Duration(seconds: 6),
-          action: SnackBarAction(
-            label: '去添加',
-            onPressed: () => _router.push(AppRoutes.shelfNoFileEntries),
-          ),
-        );
-      } else {
-        _snackBar.showResult(message: '已添加: ${doc.title}');
-      }
-    } on IdentifierResolveException catch (error) {
-      _snackBar.hide();
-      if (token.isCancelled) {
-        _finishTask(TaskType.addByIdentifier, TaskStatus.cancelled);
-        return;
-      }
-      _finishTask(TaskType.addByIdentifier, TaskStatus.failed);
-      _snackBar.showResult(message: error.message);
-    } on DioException {
-      _snackBar.hide();
-      if (token.isCancelled) {
-        _finishTask(TaskType.addByIdentifier, TaskStatus.cancelled);
-        return;
-      }
-      _finishTask(TaskType.addByIdentifier, TaskStatus.failed);
-      _snackBar.showResult(message: '网络请求失败，请稍后重试');
-    }
   }
 
   // ── 重构文库 ──
 
   Future<void> rebuildLibrary() async {
-    if (isRunning(TaskType.rebuild)) {
-      _snackBar.showResult(message: '文库重构正在进行中');
-      return;
-    }
-
-    final token = CancelToken();
-    _startTask(TaskType.rebuild, token);
-
-    _snackBar.showProgress(
-      fileName: 'NightReader 文库',
-      status: '准备重构文库...',
-      onCancel: () => cancelTask(TaskType.rebuild),
-    );
-
-    RebuildResult? result;
-    try {
-      result = await _docs.rebuild(
-        cancelToken: token,
-        onProgress: (progress) {
-          if (token.isCancelled) return;
-          _snackBar.showProgress(
-            current: progress.current,
-            total: progress.total,
-            fileName: progress.fileName,
-            status: progress.status,
-            onCancel: () => cancelTask(TaskType.rebuild),
+    await runTask<RebuildResult?>(
+      type: TaskType.rebuild,
+      initialStatus: '准备重构文库...',
+      busyMessage: '文库重构正在进行中',
+      cancelledMessage: '已取消重构文库',
+      body: (token, progress) async {
+        try {
+          return await _docs.rebuild(
+            cancelToken: token,
+            onProgress: (rp) {
+              if (token.isCancelled) return;
+              progress(ListenableProgress(
+                current: rp.current ?? 0,
+                total: rp.total ?? 0,
+                status: '${rp.status} · ${rp.fileName}',
+              ));
+            },
           );
-        },
-      );
-    } on DioException {
-      // CancelToken 取消时 Dio 会抛异常，静默处理
-    }
-
-    _snackBar.hide();
-
-    if (token.isCancelled) {
-      _finishTask(TaskType.rebuild, TaskStatus.cancelled);
-    } else {
-      _finishTask(TaskType.rebuild, TaskStatus.completed);
-    }
-
-    var message = token.isCancelled ? '已取消重构文库' : '文库重构完成';
-    if (result != null) {
-      final parts = <String>[];
-      if (result.addedCount > 0) parts.add('新增 ${result.addedCount} 篇');
-      if (result.removedCount > 0) parts.add('清理 ${result.removedCount} 篇');
-      if (result.downloadedCount > 0) {
-        parts.add('补回 PDF ${result.downloadedCount} 篇');
-      }
-      if (result.repairedCount > 0) {
-        parts.add('修复元数据 ${result.repairedCount} 篇');
-      }
-      if (result.unresolvedCount > 0) {
-        parts.add('仍有 ${result.unresolvedCount} 篇待补全元数据');
-      }
-      if (result.noFileCount > 0) {
-        parts.add('${result.noFileCount} 个无文件条目');
-      }
-      if (parts.isEmpty) {
-        message += '，文库状态正常';
-      } else {
-        message += '：${parts.join('，')}';
-      }
-    }
-
-    _snackBar.showResult(message: message);
+        } on DioException {
+          // CancelToken 取消时 Dio 会抛异常，取消情况下静默返回 null
+          if (token.isCancelled) return null;
+          rethrow;
+        }
+      },
+      onSuccess: (result) {
+        var message = '文库重构完成';
+        if (result != null) {
+          final parts = <String>[];
+          if (result.addedCount > 0) parts.add('新增 ${result.addedCount} 篇');
+          if (result.removedCount > 0) parts.add('清理 ${result.removedCount} 篇');
+          if (result.downloadedCount > 0) {
+            parts.add('补回 PDF ${result.downloadedCount} 篇');
+          }
+          if (result.repairedCount > 0) {
+            parts.add('修复元数据 ${result.repairedCount} 篇');
+          }
+          if (result.unresolvedCount > 0) {
+            parts.add('仍有 ${result.unresolvedCount} 篇待补全元数据');
+          }
+          if (result.noFileCount > 0) {
+            parts.add('${result.noFileCount} 个无文件条目');
+          }
+          if (parts.isEmpty) {
+            message += '，文库状态正常';
+          } else {
+            message += '：${parts.join('，')}';
+          }
+        }
+        return TaskFinish.text(message);
+      },
+    );
   }
 
   // ── 重新下载 PDF ──
 
   Future<void> redownloadPdf(String docId, String docTitle) async {
-    if (isRunning(TaskType.redownloadPdf)) {
-      _snackBar.showResult(message: '正在下载中，请稍候');
-      return;
-    }
-
-    final token = CancelToken();
-    _startTask(TaskType.redownloadPdf, token);
-
-    _snackBar.showProgress(
-      current: 1,
-      total: 1,
-      fileName: docTitle,
-      status: '正在重新下载...',
-      onCancel: () => cancelTask(TaskType.redownloadPdf),
-      duration: const Duration(seconds: 30),
-    );
-
-    final success =
-        await _docs.redownloadPdf(docId, cancelToken: token);
-
-    _snackBar.hide();
-
-    if (token.isCancelled) {
-      _finishTask(TaskType.redownloadPdf, TaskStatus.cancelled);
-      return;
-    }
-
-    _finishTask(
-      TaskType.redownloadPdf,
-      success ? TaskStatus.completed : TaskStatus.failed,
-    );
-    _snackBar.showResult(
-      message: success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源',
+    await runTask<bool>(
+      type: TaskType.redownloadPdf,
+      initialStatus: '正在重新下载: $docTitle',
+      busyMessage: '正在下载中，请稍候',
+      body: (token, _) async =>
+          await _docs.redownloadPdf(docId, cancelToken: token),
+      onSuccess: (success) => TaskFinish.text(
+        success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源',
+      ),
     );
   }
 
@@ -324,13 +234,9 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
     required DocExtractApiState apiState,
     required void Function(String mdPath, String markdownContent) onSuccess,
   }) async {
-    if (isRunning(TaskType.extractDocument)) {
-      _snackBar.showResult(message: '正在提取文档，请稍候');
-      return;
-    }
-
+    // 前置条件检查（不走 runTask，因为是"没开始就失败"的直接提示）
     if (!apiState.isConfigured) {
-      _snackBar.showResult(
+      snackBar.showResult(
         message: '请先在设置中配置文档提取 Access Token',
         action: SnackBarAction(
           label: '前往设置',
@@ -340,61 +246,48 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
       return;
     }
 
-    final token = CancelToken();
-    _startTask(TaskType.extractDocument, token);
-
-    _snackBar.showProgress(
-      fileName: title,
-      status: '正在提交任务…',
-      onCancel: () => cancelTask(TaskType.extractDocument),
-      duration: const Duration(minutes: 10),
-    );
-
-    try {
-      final result = await _extractAsync(
-        filePath: filePath,
-        title: title,
-        apiState: apiState,
-        cancelToken: token,
-      );
-
-      if (token.isCancelled) return;
-
-      // saveResult 通常 1-2 秒内完成，无需中间 snackbar；
-      // 30 秒超时兜底，防止异常阻塞
-      final savedMdPath = await DocExtractService.instance
-          .saveResult(filePath, result, token: apiState.apiKey, title: title)
-          .timeout(const Duration(seconds: 30));
-
-      if (token.isCancelled) return;
-
-      _finishTask(TaskType.extractDocument, TaskStatus.completed);
-      _snackBar.showResult(
-        message: '文档提取完成：$title',
-        duration: const Duration(seconds: 6),
-      );
-      onSuccess(savedMdPath, result.processedMarkdown ?? '');
-    } on DioException catch (e) {
-      if (e.type == DioExceptionType.cancel || token.isCancelled) {
-        _snackBar.showResult(message: '已取消提取');
-      } else {
-        _snackBar.showResult(message: '网络错误: ${e.message}');
-      }
-    } on DocExtractException catch (e) {
-      _snackBar.showResult(message: e.message);
-    } on BatchExtractException catch (e) {
-      _snackBar.showResult(message: e.message);
-    } catch (e) {
-      _snackBar.showResult(message: '提取失败: $e');
-    } finally {
-      final task = state[TaskType.extractDocument];
-      if (task?.status == TaskStatus.running) {
-        _finishTask(
-          TaskType.extractDocument,
-          token.isCancelled ? TaskStatus.cancelled : TaskStatus.failed,
+    await runTask<({String mdPath, String markdown})>(
+      type: TaskType.extractDocument,
+      initialStatus: '正在提交任务: $title',
+      busyMessage: '正在提取文档，请稍候',
+      cancelledMessage: '已取消提取',
+      body: (token, progress) async {
+        final result = await _extractAsync(
+          filePath: filePath,
+          title: title,
+          apiState: apiState,
+          cancelToken: token,
+          progress: progress,
         );
-      }
-    }
+        if (token.isCancelled) {
+          throw DioException(
+            requestOptions: RequestOptions(path: ''),
+            type: DioExceptionType.cancel,
+          );
+        }
+        // saveResult 通常 1-2 秒；30 秒超时兜底防止异常阻塞
+        final savedMdPath = await DocExtractService.instance
+            .saveResult(filePath, result,
+                token: apiState.apiKey, title: title)
+            .timeout(const Duration(seconds: 30));
+        return (mdPath: savedMdPath, markdown: result.processedMarkdown ?? '');
+      },
+      onSuccess: (r) {
+        onSuccess(r.mdPath, r.markdown);
+        return TaskFinish(
+          message: '文档提取完成：$title',
+          duration: const Duration(seconds: 6),
+        );
+      },
+      onError: (e) {
+        if (e is DocExtractException) return TaskFinish.text(e.message);
+        if (e is BatchExtractException) return TaskFinish.text(e.message);
+        if (e is DioException) {
+          return TaskFinish.text('网络错误: ${e.message}');
+        }
+        return TaskFinish.text('提取失败: $e');
+      },
+    );
   }
 
   /// 异步 Job API 优先，失败时 fallback 到同步 API（若已配置）。
@@ -403,6 +296,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
     required String title,
     required DocExtractApiState apiState,
     required CancelToken cancelToken,
+    required void Function(ListenableProgress) progress,
   }) async {
     try {
       return await BatchExtractService.instance.extractSingle(
@@ -411,35 +305,30 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>> {
         state: apiState,
         onProgress: (status, extracted, total) {
           if (cancelToken.isCancelled) return;
-          final pageInfo = total > 0 ? ' ($extracted/$total 页)' : '';
-          _snackBar.showProgress(
-            fileName: title,
-            status: '$status$pageInfo',
-            onCancel: () => cancelTask(TaskType.extractDocument),
-            duration: const Duration(minutes: 10),
-          );
+          progress(ListenableProgress(
+            current: extracted,
+            total: total,
+            status: total > 0 ? '$status · $title' : '$status · $title',
+          ));
         },
         cancelToken: cancelToken,
       );
     } catch (asyncError) {
-      // 用户取消时直接抛出，不 fallback
+      // 用户取消直接抛出，不 fallback
       if (cancelToken.isCancelled ||
           (asyncError is DioException &&
               asyncError.type == DioExceptionType.cancel)) {
         rethrow;
       }
-
-      // 无同步 fallback 配置，直接抛出原始错误
+      // 无同步 fallback 配置，直接抛原始错误
       if (!apiState.hasSyncFallback) rethrow;
 
-      // fallback 到同步 API
       debugPrint('[TaskProvider] 异步提取失败，回退到同步 API: $asyncError');
-      _snackBar.showProgress(
-        fileName: title,
-        status: '异步失败，尝试同步提取…',
-        onCancel: () => cancelTask(TaskType.extractDocument),
-        duration: const Duration(minutes: 10),
-      );
+      progress(ListenableProgress(
+        current: 0,
+        total: 0,
+        status: '异步失败，尝试同步提取 · $title',
+      ));
 
       return DocExtractService.instance.extract(
         filePath: filePath,
