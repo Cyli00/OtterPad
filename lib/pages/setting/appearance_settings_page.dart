@@ -74,6 +74,9 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     side: BorderSide(
                       color: cs.outlineVariant.withAlpha(100),
                     ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),

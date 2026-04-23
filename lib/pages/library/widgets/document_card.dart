@@ -66,17 +66,20 @@ class DocumentCard extends StatelessWidget {
             ),
           ],
         ),
-        child: GestureDetector(
-          onTap: isSelectionMode ? onSelectionTap : onTap,
-          onLongPressStart: isSelectionMode
-              ? null
-              : onLongPress != null
-                  ? (_) {
-                      HapticFeedback.mediumImpact();
-                      onLongPress!();
-                    }
-                  : null,
-          child: Column(
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(15),
+            onTap: isSelectionMode ? onSelectionTap : onTap,
+            onLongPress: isSelectionMode
+                ? null
+                : onLongPress != null
+                    ? () {
+                        HapticFeedback.mediumImpact();
+                        onLongPress!();
+                      }
+                    : null,
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 封面缩略图 + 选中蒙版
@@ -182,6 +185,7 @@ class DocumentCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),

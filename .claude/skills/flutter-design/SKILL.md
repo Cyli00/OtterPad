@@ -14,9 +14,21 @@ description: 构建符合项目设计规范的 Flutter UI 组件。在创建新�
 - 字体：`TextTheme` only，禁止硬编码 `fontSize`
 - 禁止 `isDense: true`、`headlineMedium` 及以上
 
-### 颜色层级
+### 表面分层（MD3 surface tones）
 
-`surface`（Scaffold）→ `surfaceContainerLow`（Card / 输入框）→ `surfaceContainerHigh`（Sheet / 菜单 / 设置区块）→ `primaryContainer`（Badge / 图标盒）
+三个维度，从浅到深：
+
+| 维度 | token | 用途 |
+|---|---|---|
+| **内容区** | `surface` | Scaffold body、阅读器主内容 |
+| **组件表面** | `surfaceContainerLow` | Card / 输入框 |
+|  | `surfaceContainerHigh` | Sheet / 菜单 / Dialog / 设置区块 |
+|  | `surfaceContainerHighest` | 输入框 fillColor 备选、棋盘格底 |
+| **框架壳（app-level chrome）** | `surfaceContainer` | 侧栏 `AdaptiveNavigationRail` / 底栏 `NavigationBar` |
+|  | `surfaceContainerHighest` | 桌面窗口标题栏 `WindowChrome` |
+| **高亮组件** | `primaryContainer` | Badge / 图标盒 / 选中态 Rail item 走 `secondaryContainer` |
+
+原则：**框架壳比内容区深一到两阶**，利用 MD3 seed-染色阶梯自然呈现层次；禁止手写 HSL/alphaBlend 叠色仿阶梯。
 
 文字：`onSurface` → `onSurfaceVariant` → `onSurfaceVariant.withAlpha(N)`
 
@@ -82,6 +94,67 @@ SheetItem：44×44 图标盒（圆角 12 · `primaryContainer` · 22px `primary`
 圆角 **16** · 背景 `surfaceContainerLow` · 标题 `titleMedium` bold
 阴影 `BoxShadow(black.withAlpha(13), blur: 10, offset: (0, 4))`
 选中边框 `primary.withAlpha(160)` width 2 · `AnimatedContainer` 150ms + 勾选缩放 200ms `easeOutBack`
+
+### 交互反馈（强制）
+
+所有可点击卡片 / Tile 必须用 `Material(type: transparency) + InkWell`，禁止裸 `GestureDetector`。InkWell 同时提供桌面 hover overlay 和移动 ripple，单路径覆盖两端。
+
+InkWell 的 hover/splash 画在 Material 的 ink 层、位于 child 之下——图片区域被缩略图盖住无反馈是正常的，文字/padding 空隙可见即符合预期（见 `DocListCard`）。
+
+**需要 `onLongPressStart(details)` 位置信息时**（如 `FavoriteCard` 用 `globalPosition` 定位弹出菜单）：外层 `GestureDetector` 只注册 longPress、内层 InkWell 管 hover/tap。两者手势类型不同，不会抢 gesture arena。
+
+容器结构：`Container(clipBehavior: antiAlias, decoration: ...) > Material > InkWell > Padding > child`。padding 放在 InkWell 内部（确保 ripple 覆盖整卡），`clipBehavior` 放在外层 Container（裁剪 ripple 到圆角范围内）。
+
+### 选择器预览：预览色 vs 实际色解耦
+
+预览卡（如 `ReaderTheme` 的 `_BackgroundCard`）应展示**选中后的效果**，而不是"当前主题下的运行时色"。当某个主题定义为"跟随应用 brightness"（如 `ReaderTheme.themed`）时，其预览卡必须锁定到该主题语义对应的固定色调（"白天"锁浅色），否则在 dark 模式下预览卡会被染黑、失去选项语义。
+
+实现：在 card build 里单独为"跟随型"arm 返回固定 palette，其他 arm 继续走 `resolvePalette(theme, cs)`。
+
+## SegmentedButton
+
+> 全局统一风格：`appearance_settings_page` · `api_settings_agent` · `ocr_settings_page` · `backup_settings_page` · `agent_model_params_sheet` · `translation_settings_section`
+
+```dart
+SegmentedButton.styleFrom(
+  backgroundColor: cs.surface,
+  selectedBackgroundColor: cs.primaryContainer,
+  side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+)
+```
+
+- 圆角 **12**（与输入框 / 胶囊 / 图标盒统一）
+- 外层 `SizedBox(width: double.infinity)` 撑满
+- `showSelectedIcon: false`（无勾选图标）
+- 可选：`foregroundColor` `cs.onSurfaceVariant` · `selectedForegroundColor` `cs.onPrimaryContainer`
+- 可选：`textStyle` `bodyMedium` w600
+
+## FilterChip 忽略标签
+
+> `_ignoreLabelChips`（ocr_settings_page.dart）· `_buildIgnoreSectionChips`（translation_settings_section.dart）
+
+选中 = 忽略/启用该标签。视觉参数：
+
+- 布局：`Wrap(spacing: 8, runSpacing: 8)`
+- 组件：`FilterChip` · `showCheckmark: false`
+- 选中态：`primaryContainer` 背景 · `Colors.transparent` 边框
+- 未选中态：`surface` 背景 · `outlineVariant.withAlpha(100)` 边框
+- 圆角 **12** · `RoundedRectangleBorder`
+- 标题行复用 `_buildTitleRow(title, tooltip)` 或 `titleSmall` w600 + `_helpIcon`
+
+### 翻译忽略模块（translation_skip_sections.dart）
+
+可跳过区域的模块化注册表。新增区域两步完成：
+
+1. 在 `kAllTranslationSkipSections` 追加 `TranslationSkipSectionDef(id, label)`
+2. 在 `detectSkipSections()` 添加对应的标题正则检测分支
+
+- 配置存储：`TranslationConfig.ignoreSections: List<String>`（Hive key `translation_config_ignore_sections`）
+- 提取器接口：`MarkdownParagraphExtractor.extract(md, ignoreSections: [...])`
+  - 列表内 ID → 整段跳过
+  - 不在列表的已知区域 → 合并为单个 `TranslatableParagraph` 送入 LLM
+- UI 自动拾取 `kAllTranslationSkipSections` 生成 FilterChip，无需改设置页
 
 ## 动画
 

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:animations/animations.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -14,13 +15,16 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/models/book/document.dart';
 import '../../providers/api_provider.dart';
+import '../../providers/document_translation_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
+import '../../providers/translation_config_provider.dart';
 import '../../services/doc_extract_service.dart';
 import '../../services/figure_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
+import '../../utils/markdown_translation_weaver.dart';
 import 'widgets/figure_viewer.dart';
 import 'widgets/markdown_reader.dart';
 import 'widgets/outline_panel.dart';
@@ -29,6 +33,7 @@ import 'widgets/reader_text_sheet.dart';
 import 'widgets/reader_theme_sheet.dart';
 import 'widgets/search_overlay.dart';
 import 'widgets/selection_toolbar.dart';
+import 'widgets/translation_popup.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
@@ -101,6 +106,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // Figure manifest 懒加载：首次点击图片时触发，Future 复用避免重复 IO
   Future<List<FigureManifestEntry>?>? _figuresFuture;
+
+  // 翻译进度 SnackBar 句柄——点按"翻译"时 show，翻译结束 finish/dismiss。
+  SnackBarProgressHandle? _translationProgressHandle;
 
   @override
   void initState() {
@@ -788,6 +796,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             }
           },
         ),
+        ReadingToolbarAction(
+          icon: Symbols.translate_rounded,
+          label: '翻译',
+          onTap: () {
+            final text = _selectedText;
+            if (text != null && text.trim().isNotEmpty) {
+              showTranslationPopup(context, sourceText: text.trim());
+            }
+          },
+        ),
       ],
     );
   }
@@ -1019,10 +1037,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     _removeFromAllFavorites();
                   case 'reprocess':
                     _onReprocessPressed();
+                  case 'retranslate':
+                    _handleRetranslate();
                 }
               },
               itemBuilder: (_) {
                 final inFav = _isInAnyFavorite();
+                final canRetranslate = ref
+                        .read(documentTranslationProvider(
+                            widget.document.filePath))
+                        .hasResult &&
+                    _mdContent != null;
                 return [
                   _popupItem('info', Symbols.info_rounded, '文献信息', cs),
                   if (inFav)
@@ -1034,6 +1059,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   if (_hasResult)
                     _popupItem(
                         'reprocess', Symbols.refresh_rounded, '重新排版', cs),
+                  if (canRetranslate)
+                    _popupItem('retranslate', Symbols.translate_rounded,
+                        '重新翻译', cs),
                 ];
               },
             ),
@@ -1360,6 +1388,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               tooltip: '大纲',
               onTap: _openOutlineSheet,
             ),
+            _buildTranslationBottomButton(cs),
             _bottomButton(
               cs,
               icon: Symbols.stylus_note_rounded,
@@ -1374,14 +1403,170 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ),
             _bottomButton(
               cs,
-              icon: Symbols.text_fields_rounded,
+              icon: Symbols.custom_typography_rounded,
               tooltip: '字体',
-              onTap: _openTextSheet,
+              onTap: _openTextSheet
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// 翻译底部按钮——三态：
+  /// - idle / failed → 图标 `translate_rounded`，点击触发翻译
+  /// - loading → 圆圈进度（SnackBar 已在顶部提示），点击无响应
+  /// - done → 文本按钮，显示当前 mode（双语 / 原文 / 译文），点击循环切换
+  Widget _buildTranslationBottomButton(ColorScheme cs) {
+    final translation =
+        ref.watch(documentTranslationProvider(widget.document.filePath));
+
+    if (translation.status == DocTranslationStatus.loading) {
+      return const SizedBox(
+        width: 48,
+        height: 48,
+        child: Padding(
+          padding: EdgeInsets.all(14),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    if (translation.hasResult) {
+      final next = _nextMode(translation.mode);
+      return _bottomButton(
+        cs,
+        icon: _modeIcon(next),
+        tooltip: _modeLabel(next),
+        onTap: _handleCycleTranslationMode,
+      );
+    }
+
+    return _bottomButton(
+      cs,
+      icon: translation.status == DocTranslationStatus.failed
+          ? Symbols.translate_rounded
+          : Symbols.translate_rounded,
+      tooltip: translation.status == DocTranslationStatus.failed ? '重试翻译' : '翻译',
+      onTap: _handleTranslate,
+    );
+  }
+
+  DocTranslationMode _nextMode(DocTranslationMode mode) => switch (mode) {
+        DocTranslationMode.bilingual => DocTranslationMode.off,
+        DocTranslationMode.off => DocTranslationMode.translated,
+        DocTranslationMode.translated => DocTranslationMode.bilingual,
+      };
+
+  IconData _modeIcon(DocTranslationMode mode) => switch (mode) {
+        DocTranslationMode.bilingual => Symbols.text_compare_rounded,
+        DocTranslationMode.off => Symbols.raw_on_rounded,
+        DocTranslationMode.translated => Symbols.language_rounded,
+      };
+
+  String _modeLabel(DocTranslationMode mode) => switch (mode) {
+        DocTranslationMode.bilingual => '双语',
+        DocTranslationMode.off => '原文',
+        DocTranslationMode.translated => '译文',
+      };
+
+  /// 启动全文翻译：show 一个长驻 SnackBar 订阅 provider 的进度 ValueListenable，
+  /// 翻译结束（成功/失败/取消）后 finish 关闭。
+  Future<void> _handleTranslate() async {
+    if (_mdContent == null || _mdContent!.isEmpty) return;
+
+    final pdfPath = widget.document.filePath;
+    final notifier =
+        ref.read(documentTranslationProvider(pdfPath).notifier);
+
+    // 先显示 SnackBar 让用户立即看到反馈——translate 内部异步开始后才有第一次
+    // onProgress，避免短暂的"点了没反应"观感。
+    _translationProgressHandle?.dismiss();
+    _translationProgressHandle =
+        ref.read(snackBarServiceProvider).showListenableProgress(
+              listenable: _adaptProgress(notifier.progress),
+              onCancel: () {
+                notifier.cancel();
+                _translationProgressHandle?.dismiss();
+                _translationProgressHandle = null;
+              },
+            );
+
+    await notifier.translate(_mdContent!);
+    if (!mounted) return;
+
+    final state = ref.read(documentTranslationProvider(pdfPath));
+    final handle = _translationProgressHandle;
+    _translationProgressHandle = null;
+    if (state.status == DocTranslationStatus.done) {
+      handle?.finish(message: '翻译完成');
+    } else {
+      handle?.dismiss();
+    }
+  }
+
+  /// 把 `TranslationProgress` 的 ValueListenable 适配到 SnackBar 需要的
+  /// `ListenableProgress` 类型——让 snackbar_service 不必依赖业务类型。
+  ValueListenable<ListenableProgress> _adaptProgress(
+      ValueListenable<TranslationProgress> source) {
+    final adapter = ValueNotifier<ListenableProgress>(
+      ListenableProgress(
+        current: source.value.current,
+        total: source.value.total,
+        status: source.value.status,
+      ),
+    );
+    void listener() {
+      final v = source.value;
+      adapter.value = ListenableProgress(
+        current: v.current,
+        total: v.total,
+        status: v.status,
+      );
+    }
+    source.addListener(listener);
+    // 适配器随翻译结束一起被 GC——SnackBar 关闭后 ValueListenableBuilder 不再
+    // 调用 build，listener 也不再被唤醒，无泄漏风险。
+    return adapter;
+  }
+
+  /// 三态循环：双语 → 原文 → 译文 → 双语。
+  void _handleCycleTranslationMode() {
+    ref
+        .read(documentTranslationProvider(widget.document.filePath).notifier)
+        .cycleMode();
+  }
+
+  /// "更多"菜单里的"重新翻译"——清空缓存重新发起。
+  Future<void> _handleRetranslate() async {
+    if (_mdContent == null || _mdContent!.isEmpty) return;
+
+    final pdfPath = widget.document.filePath;
+    final notifier =
+        ref.read(documentTranslationProvider(pdfPath).notifier);
+
+    _translationProgressHandle?.dismiss();
+    _translationProgressHandle =
+        ref.read(snackBarServiceProvider).showListenableProgress(
+              listenable: _adaptProgress(notifier.progress),
+              onCancel: () {
+                notifier.cancel();
+                _translationProgressHandle?.dismiss();
+                _translationProgressHandle = null;
+              },
+            );
+
+    await notifier.retranslate(_mdContent!);
+    if (!mounted) return;
+
+    final state = ref.read(documentTranslationProvider(pdfPath));
+    final handle = _translationProgressHandle;
+    _translationProgressHandle = null;
+    if (state.status == DocTranslationStatus.done) {
+      handle?.finish(message: '翻译完成');
+    } else {
+      handle?.dismiss();
+    }
   }
 
   Widget _bottomButton(
@@ -1511,13 +1696,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final topPad = 48.0;
     final bottomPad = 56.0 + MediaQuery.of(context).padding.bottom;
 
+    // 翻译完成后按当前模式织入译文；未翻译或进行中保持原文，避免长文档
+    // 在翻译过程中反复重建 widget 列表（完成时一次性切换即可）。
+    final translation =
+        ref.watch(documentTranslationProvider(widget.document.filePath));
+    final displayStyle = ref.watch(
+      translationConfigProvider.select((c) => c.displayStyle),
+    );
+    final effectiveMd = translation.hasResult
+        ? applyTranslationToMarkdown(
+            markdown: _mdContent!,
+            paragraphs: translation.paragraphs,
+            translations: translation.translations,
+            mode: translation.mode,
+            style: displayStyle,
+          )
+        : _mdContent!;
+
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: _toggleToolbars,
       child: _wrapWithSelection(
         ReaderMarkdownBody(
-          key: ValueKey('reader_md_${_mdContent.hashCode}'),
-          data: _mdContent!,
+          key: ValueKey('reader_md_${effectiveMd.hashCode}'),
+          data: effectiveMd,
           settings: settings,
           scrollController: _scrollController,
           highlightQuery: _highlightQuery,

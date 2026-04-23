@@ -38,7 +38,7 @@ class FavoriteCard extends StatelessWidget {
             : null,
         child: Container(
           width: _getDynamicWidth(),
-          padding: const EdgeInsets.all(20),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
             borderRadius: BorderRadius.circular(16),
@@ -50,7 +50,13 @@ class FavoriteCard extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -105,7 +111,10 @@ class FavoriteCard extends StatelessWidget {
                   ),
                 ),
               ),
-            ],
+                ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

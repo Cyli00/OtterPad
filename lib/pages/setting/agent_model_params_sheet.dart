@@ -595,6 +595,9 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
                 backgroundColor: cs.surface,
                 selectedBackgroundColor: cs.primaryContainer,
                 side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),

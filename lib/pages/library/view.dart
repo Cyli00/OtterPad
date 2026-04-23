@@ -31,7 +31,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    // length 2：推荐（左）/ 文献库（右）；initialIndex 1 → 默认打开文献库
+    _tabController = TabController(length: 2, initialIndex: 1, vsync: this);
   }
 
   @override
@@ -219,9 +220,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
       unselectedLabelColor: cs.onSurfaceVariant,
       dividerColor: Colors.transparent,
       tabs: const [
-        Tab(text: '文献库'),
         Tab(text: '推荐'),
-        Tab(text: '会议日程'),
+        Tab(text: '文献库'),
       ],
     );
   }
@@ -230,13 +230,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     return TabBarView(
       controller: _tabController,
       children: [
+        const Center(child: Text('推荐内容')),
         CustomScrollView(
           slivers: [
             if (isGrid) const BookshelfGrid() else const BookshelfList(),
           ],
         ),
-        const Center(child: Text('推荐内容')),
-        const Center(child: Text('会议日程')),
       ],
     );
   }
