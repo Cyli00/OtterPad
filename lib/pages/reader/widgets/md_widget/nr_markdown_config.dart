@@ -147,12 +147,16 @@ MarkdownGenerator buildReaderMarkdownGenerator({
   required ReaderSettingsState settings,
   Widget Function(InlineSpan span)? searchRichTextBuilder,
   Color? translatedColor,
+  String? translatedStyleId,
 }) {
   final generators = <SpanNodeGeneratorWithTag>[nrLatexGenerator];
   final inlineSyntaxes = <md.InlineSyntax>[NRLatexInlineSyntax()];
 
   if (translatedColor != null) {
-    generators.add(nrTranslatedGenerator(color: translatedColor));
+    generators.add(nrTranslatedGenerator(
+      color: translatedColor,
+      styleId: translatedStyleId ?? 'themed',
+    ));
     inlineSyntaxes.add(NRTranslatedInlineSyntax());
   }
 

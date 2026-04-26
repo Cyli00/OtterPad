@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -5,17 +7,14 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../../services/translation_style.dart';
 
-/// 主题色样式产出的标记 `[[tr]]...[[/tr]]` 在此被识别为 inline span，
-/// 整段上 `ColorScheme.primary` 色。
-///
-/// 选用 inline 而非 block：译文段落本来就是独立的 P，inline 语法
-/// 天然被上层 PConfig 的段落结构所包含，不会破坏列表 / 引用等嵌套场景。
+/// `[[tr]]...[[/tr]]` 标记的 inline syntax 识别器。
+/// 被 themed / weakened / dashed / highlight / blur 五种自定义渲染样式共用。
 class NRTranslatedInlineSyntax extends md.InlineSyntax {
   NRTranslatedInlineSyntax()
       : super(
-          '${RegExp.escape(ThemedTranslationStyle.markerOpen)}'
+          '${RegExp.escape(kTranslationMarkerOpen)}'
           r'([\s\S]*?)'
-          '${RegExp.escape(ThemedTranslationStyle.markerClose)}',
+          '${RegExp.escape(kTranslationMarkerClose)}',
         );
 
   @override
@@ -28,18 +27,88 @@ class NRTranslatedInlineSyntax extends md.InlineSyntax {
   }
 }
 
+/// 根据当前 [styleId] 分派到不同的渲染策略：
+/// - `themed`：primary 色文本
+/// - `weakened`：降低文本透明度
+/// - `dashed`：primary 色 + 虚线下划线
+/// - `highlight`：背景高亮
+/// - `blur`：模糊遮罩，点击后显示
 class NRTranslatedSpanNode extends SpanNode {
   final String content;
   final Color color;
   final MarkdownConfig config;
+  final String styleId;
 
-  NRTranslatedSpanNode(this.content, this.color, this.config);
+  NRTranslatedSpanNode(
+    this.content,
+    this.color,
+    this.config, {
+    this.styleId = 'themed',
+  });
 
   @override
   InlineSpan build() {
+    return switch (styleId) {
+      'weakened' => _buildWeakened(),
+      'dashed' => _buildDashed(),
+      'highlight' => _buildHighlight(),
+      'blur' => _buildBlur(),
+      _ => _buildThemed(),
+    };
+  }
+
+  // ── Themed: primary 色文本 ──
+
+  InlineSpan _buildThemed() {
     final base = parentStyle ?? config.p.textStyle;
     final styled = base.copyWith(color: color);
+    return _buildWithLatex(styled, color);
+  }
 
+  // ── Weakened: 降低文本透明度 ──
+
+  InlineSpan _buildWeakened() {
+    final base = parentStyle ?? config.p.textStyle;
+    final baseColor = base.color ?? const Color(0xFF000000);
+    final styled = base.copyWith(color: baseColor.withAlpha(120));
+    return _buildWithLatex(styled, baseColor.withAlpha(120));
+  }
+
+  // ── Dashed: primary 色 + 虚线下划线 ──
+
+  InlineSpan _buildDashed() {
+    final base = parentStyle ?? config.p.textStyle;
+    final styled = base.copyWith(
+      color: color,
+      decoration: TextDecoration.underline,
+      decorationStyle: TextDecorationStyle.dashed,
+      decorationColor: color.withAlpha(140),
+    );
+    return _buildWithLatex(styled, color);
+  }
+
+  // ── Highlight: 背景高亮 ──
+
+  InlineSpan _buildHighlight() {
+    final base = parentStyle ?? config.p.textStyle;
+    final styled = base.copyWith(backgroundColor: color.withAlpha(36));
+    return _buildWithLatex(styled, color.withAlpha(180));
+  }
+
+  // ── Blur: 模糊遮罩 + 点击切换 ──
+
+  InlineSpan _buildBlur() {
+    final base = parentStyle ?? config.p.textStyle;
+    final styled = base.copyWith(color: color);
+    final span = _buildWithLatex(styled, color);
+    return WidgetSpan(
+      child: _BlurRevealText(child: Text.rich(span)),
+    );
+  }
+
+  // ── LaTeX 感知的文本构建器 ──
+
+  InlineSpan _buildWithLatex(TextStyle styled, Color mathColor) {
     final matches = _inlineLatexRe.allMatches(content).toList();
     if (matches.isEmpty) {
       return TextSpan(text: content, style: styled);
@@ -59,7 +128,7 @@ class NRTranslatedSpanNode extends SpanNode {
       final equation = match.group(1)!.trim();
       final trailingPunct = match.group(2);
       final mathStyle =
-          styled.copyWith(color: color.withValues(alpha: 0.85));
+          styled.copyWith(color: mathColor.withValues(alpha: 0.85));
 
       final mathWidget = Math.tex(
         equation,
@@ -107,12 +176,42 @@ class NRTranslatedSpanNode extends SpanNode {
   static final _inlineLatexRe = RegExp(r'\$([^\$\n]+?)\$([.,;:!?])?');
 }
 
-/// 构造带指定主题色的 generator。颜色从 [ColorScheme.primary] 取，
-/// 随主题切换需要在 `nr_markdown_config` 里每次重建 generator。
-SpanNodeGeneratorWithTag nrTranslatedGenerator({required Color color}) {
+/// 模糊译文：初始模糊，点击切换显示/隐藏。
+class _BlurRevealText extends StatefulWidget {
+  final Widget child;
+  const _BlurRevealText({required this.child});
+
+  @override
+  State<_BlurRevealText> createState() => _BlurRevealTextState();
+}
+
+class _BlurRevealTextState extends State<_BlurRevealText> {
+  bool _revealed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => setState(() => _revealed = !_revealed),
+      child: _revealed
+          ? widget.child
+          : ClipRect(
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                child: widget.child,
+              ),
+            ),
+    );
+  }
+}
+
+/// 构造带指定样式的 generator。
+SpanNodeGeneratorWithTag nrTranslatedGenerator({
+  required Color color,
+  String styleId = 'themed',
+}) {
   return SpanNodeGeneratorWithTag(
     tag: 'translated',
     generator: (e, config, _) =>
-        NRTranslatedSpanNode(e.textContent, color, config),
+        NRTranslatedSpanNode(e.textContent, color, config, styleId: styleId),
   );
 }

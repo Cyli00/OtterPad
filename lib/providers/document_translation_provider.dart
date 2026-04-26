@@ -105,7 +105,7 @@ class DocumentTranslationNotifier
   Future<void> translate(String markdown, {bool useCache = true}) async {
     if (state.status == DocTranslationStatus.loading) return;
 
-    final agentState = _ref.read(agentApiProvider);
+    final agentState = _ref.read(effectiveAgentApiProvider);
     final config = _ref.read(translationConfigProvider);
     final snackBar = _ref.read(snackBarServiceProvider);
 
@@ -146,6 +146,7 @@ class DocumentTranslationNotifier
 
     try {
       await DocumentTranslationService.translate(
+        pdfPath: pdfPath,
         paragraphs: paragraphs,
         agentState: agentState,
         config: config,
@@ -215,21 +216,13 @@ class DocumentTranslationNotifier
     }
   }
 
-  /// 重新翻译：清 Hive 缓存 + reset state + 以 `useCache: false` 重新请求。
-  ///
-  /// 双保险策略：
-  /// 1. [DocumentTranslationService.clearCacheFor] 清除所有段对应的 Hive 条目；
-  /// 2. translate 传 `useCache: false`，即便清理有遗漏也不会命中。
+  /// 重新翻译：清文件缓存 + reset state + 以 `useCache: false` 重新请求。
   Future<void> retranslate(String markdown) async {
     cancel();
 
     final config = _ref.read(translationConfigProvider);
-    final paragraphs = MarkdownParagraphExtractor.extract(
-      markdown,
-      ignoreSections: config.ignoreSections,
-    );
-    DocumentTranslationService.clearCacheFor(
-      paragraphs,
+    await DocumentTranslationService.clearTranslations(
+      pdfPath,
       config.targetLanguage,
     );
 

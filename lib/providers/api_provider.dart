@@ -1,15 +1,17 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/storage.dart';
 
-enum AgentApiProvider { openai, anthropic, gemini }
+enum AgentApiProvider { openai, anthropic, gemini, openAICompatible }
 
 extension AgentApiProviderExt on AgentApiProvider {
   String get label => switch (this) {
     AgentApiProvider.openai => 'OpenAI',
     AgentApiProvider.anthropic => 'Anthropic',
     AgentApiProvider.gemini => 'Gemini',
+    AgentApiProvider.openAICompatible => 'Other',
   };
 
   /// 纯域名，不含版本路径
@@ -17,19 +19,22 @@ extension AgentApiProviderExt on AgentApiProvider {
     AgentApiProvider.openai => 'https://api.openai.com',
     AgentApiProvider.anthropic => 'https://api.anthropic.com',
     AgentApiProvider.gemini => 'https://generativelanguage.googleapis.com',
+    AgentApiProvider.openAICompatible => 'https://api.deepseek.com',
   };
 
   String get apiKeyHint => switch (this) {
     AgentApiProvider.openai => 'sk-...',
     AgentApiProvider.anthropic => 'sk-ant-...',
     AgentApiProvider.gemini => 'AI...',
+    AgentApiProvider.openAICompatible => 'sk-...',
   };
 
   /// 模型列表端点路径
   String get modelsPath => switch (this) {
     AgentApiProvider.openai => '/v1/models',
-    AgentApiProvider.anthropic => '',
+    AgentApiProvider.anthropic => '/v1/models',
     AgentApiProvider.gemini => '/v1beta/models',
+    AgentApiProvider.openAICompatible => '/v1/models',
   };
 
   /// Chat / 消息端点路径（用于预览和模型检测）
@@ -37,6 +42,7 @@ extension AgentApiProviderExt on AgentApiProvider {
     AgentApiProvider.openai => '/v1/responses',
     AgentApiProvider.anthropic => '/v1/messages',
     AgentApiProvider.gemini => '/v1beta',
+    AgentApiProvider.openAICompatible => '/v1/chat/completions',
   };
 }
 
@@ -587,6 +593,68 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
   Future<void> resetModelParams(String modelId) =>
       setModelParams(modelId, const AgentModelParams());
 
+  /// 全局默认模型角色（跨服务商），供 UI 展示。
+  static ({AgentApiProvider? provider, String? modelId}) get globalDefaultRole {
+    final (prov, id) =
+        _parseRole(GStorage.setting.get(_globalDefaultKey) as String?);
+    return (provider: prov, modelId: id);
+  }
+
+  /// 全局快速模型角色（跨服务商），供 UI 展示。
+  static ({AgentApiProvider? provider, String? modelId}) get globalFastRole {
+    final (prov, id) =
+        _parseRole(GStorage.setting.get(_globalFastKey) as String?);
+    return (provider: prov, modelId: id);
+  }
+
+  /// 返回所有服务商下已添加的模型，按服务商分组。
+  static Map<AgentApiProvider, List<String>> getAllConfiguredModels() {
+    final result = <AgentApiProvider, List<String>>{};
+    for (final prov in AgentApiProvider.values) {
+      final rawModels = GStorage.setting.get(_modelsKey(prov.name)) as List?;
+      if (rawModels == null) continue;
+      final models =
+          rawModels.cast<String>().where((m) => m.isNotEmpty).toList();
+      if (models.isNotEmpty) result[prov] = models;
+    }
+    return result;
+  }
+
+  /// 跨服务商设置全局默认模型。传 null 清除。
+  Future<void> setGlobalDefaultModel(
+      AgentApiProvider? provider, String? modelId) async {
+    if (provider != null && modelId != null) {
+      await GStorage.setting
+          .put(_globalDefaultKey, _serializeRole(provider, modelId));
+    } else {
+      await GStorage.setting.delete(_globalDefaultKey);
+    }
+    state = _loadForProvider(state.provider);
+  }
+
+  /// 跨服务商设置全局快速模型。传 null 清除。
+  Future<void> setGlobalFastModel(
+      AgentApiProvider? provider, String? modelId) async {
+    if (provider != null && modelId != null) {
+      await GStorage.setting
+          .put(_globalFastKey, _serializeRole(provider, modelId));
+    } else {
+      await GStorage.setting.delete(_globalFastKey);
+    }
+    state = _loadForProvider(state.provider);
+  }
+
+  /// 解析全局默认/快速模型角色，加载其所属服务商的完整状态。
+  /// 用于当前 UI 服务商没有配置模型角色时回退。
+  static AgentApiState? resolveEffectiveState() {
+    final box = GStorage.setting;
+    final (fastProv, _) = _parseRole(box.get(_globalFastKey) as String?);
+    final (defaultProv, _) = _parseRole(box.get(_globalDefaultKey) as String?);
+    final targetProv = fastProv ?? defaultProv;
+    if (targetProv == null) return null;
+    return _loadForProvider(targetProv);
+  }
+
   void reload() {
     state = _load();
   }
@@ -595,6 +663,19 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
 final agentApiProvider = StateNotifierProvider<AgentApiNotifier, AgentApiState>(
   (ref) => AgentApiNotifier(),
 );
+
+/// 用于 API 调用的有效状态。
+///
+/// 当前服务商若有默认或快速模型，直接使用当前状态；
+/// 否则回退到全局模型角色所属的服务商配置。
+/// 设置页应继续使用 [agentApiProvider]（仅管理当前服务商）。
+final effectiveAgentApiProvider = Provider<AgentApiState>((ref) {
+  final current = ref.watch(agentApiProvider);
+  if (current.fastModelId != null || current.defaultModelId != null) {
+    return current;
+  }
+  return AgentApiNotifier.resolveEffectiveState() ?? current;
+});
 
 // ─── 文档提取 API（百度 AI Studio Layout Parsing）─────────────────────────────
 

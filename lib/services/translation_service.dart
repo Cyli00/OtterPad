@@ -75,6 +75,7 @@ class TranslationService {
         .replaceAll('{{input}}', text);
 
     // ── 调用 API ──
+    final modelParams = agentState.paramsFor(modelId);
     final result = await _callApi(
       provider: agentState.provider,
       baseUrl: agentState.effectiveBaseUrl,
@@ -83,6 +84,7 @@ class TranslationService {
       systemPrompt: systemPrompt,
       userPrompt: userPrompt,
       temperature: translationConfig.temperature,
+      modelParams: modelParams,
     );
 
     // ── 写缓存 ──
@@ -100,6 +102,7 @@ class TranslationService {
     required String text,
     required AgentApiState agentState,
     required TranslationConfig translationConfig,
+    String? extraSystemInstruction,
   }) async* {
     if (text.trim().isEmpty) {
       yield '';
@@ -122,12 +125,16 @@ class TranslationService {
     }
 
     final targetLang = translationConfig.targetLanguage;
-    final systemPrompt = translationConfig.systemPrompt
+    final baseSystemPrompt = translationConfig.systemPrompt
         .replaceAll('{{targetLanguage}}', targetLang);
+    final systemPrompt = extraSystemInstruction != null
+        ? '$baseSystemPrompt\n$extraSystemInstruction'
+        : baseSystemPrompt;
     final userPrompt = translationConfig.userPrompt
         .replaceAll('{{targetLanguage}}', targetLang)
         .replaceAll('{{input}}', text);
 
+    final modelParams = agentState.paramsFor(modelId);
     Object? streamErr;
     String accumulated = '';
     try {
@@ -139,6 +146,7 @@ class TranslationService {
         systemPrompt: systemPrompt,
         userPrompt: userPrompt,
         temperature: translationConfig.temperature,
+        modelParams: modelParams,
       )) {
         accumulated += delta;
         yield accumulated;
@@ -158,6 +166,7 @@ class TranslationService {
           systemPrompt: systemPrompt,
           userPrompt: userPrompt,
           temperature: translationConfig.temperature,
+          modelParams: modelParams,
         );
         accumulated = result;
         yield result;
@@ -181,6 +190,7 @@ class TranslationService {
     required String systemPrompt,
     required String userPrompt,
     double? temperature,
+    AgentModelParams modelParams = const AgentModelParams(),
   }) async* {
     final url = baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)
@@ -188,7 +198,6 @@ class TranslationService {
 
     final dio = Dio(BaseOptions(
       connectTimeout: const Duration(seconds: 30),
-      // 流式整体可能持续几十秒到几分钟，给足余量
       receiveTimeout: const Duration(minutes: 3),
     ));
 
@@ -202,6 +211,9 @@ class TranslationService {
       case AgentApiProvider.gemini:
         yield* _streamGemini(dio, '$url${provider.chatPath}', apiKey,
             modelId, systemPrompt, userPrompt, temperature);
+      case AgentApiProvider.openAICompatible:
+        yield* _streamOpenAICompatible(dio, '$url${provider.chatPath}', apiKey,
+            modelId, systemPrompt, userPrompt, temperature, modelParams);
     }
   }
 
@@ -369,6 +381,103 @@ class TranslationService {
     }
   }
 
+  /// OpenAI Compatible (Chat Completions) 流式：标准 `choices[].delta.content`
+  ///
+  /// 兼容 DeepSeek 等第三方服务。过滤 `reasoning_content`，仅提取 `content`。
+  static Stream<String> _streamOpenAICompatible(
+    Dio dio,
+    String url,
+    String apiKey,
+    String modelId,
+    String systemPrompt,
+    String userPrompt,
+    double? temperature,
+    AgentModelParams modelParams,
+  ) async* {
+    final body = _buildOpenAICompatibleBody(
+      modelId: modelId,
+      systemPrompt: systemPrompt,
+      userPrompt: userPrompt,
+      temperature: temperature,
+      modelParams: modelParams,
+      stream: true,
+    );
+
+    final resp = await dio.post<ResponseBody>(
+      url,
+      data: body,
+      options: Options(
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        responseType: ResponseType.stream,
+      ),
+    );
+
+    await for (final event in _sseEventStream(resp.data!.stream)) {
+      final data = _extractSseData(event);
+      if (data == null || data == '[DONE]') continue;
+      try {
+        final json = jsonDecode(data) as Map<String, dynamic>;
+        final choices = json['choices'] as List<dynamic>?;
+        if (choices == null || choices.isEmpty) continue;
+        final choice = choices[0] as Map<String, dynamic>;
+        final finishReason = choice['finish_reason'] as String?;
+        if (finishReason == 'insufficient_system_resource') {
+          throw Exception('服务器资源不足，请稍后重试');
+        }
+        final delta = choice['delta'];
+        if (delta is Map<String, dynamic>) {
+          final content = delta['content'];
+          if (content is String && content.isNotEmpty) yield content;
+        }
+      } catch (e) {
+        if (e is Exception && e.toString().contains('服务器资源不足')) {
+          rethrow;
+        }
+      }
+    }
+  }
+
+  /// 构建 OpenAI Compatible (Chat Completions) 请求体
+  static Map<String, dynamic> _buildOpenAICompatibleBody({
+    required String modelId,
+    required String systemPrompt,
+    required String userPrompt,
+    double? temperature,
+    required AgentModelParams modelParams,
+    bool stream = false,
+  }) {
+    final body = <String, dynamic>{
+      'model': modelId,
+      'messages': [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': userPrompt},
+      ],
+      if (stream) 'stream': true,
+      if (temperature != null) 'temperature': temperature,
+      if (modelParams.maxTokens != null) 'max_tokens': modelParams.maxTokens,
+      if (modelParams.topP != null) 'top_p': modelParams.topP,
+      if (modelParams.frequencyPenalty != null)
+        'frequency_penalty': modelParams.frequencyPenalty,
+      if (modelParams.presencePenalty != null)
+        'presence_penalty': modelParams.presencePenalty,
+    };
+
+    if (modelParams.thinkingMode != null) {
+      body['thinking'] = {
+        'type': modelParams.thinkingMode,
+        if (modelParams.thinkingMode == 'enabled' &&
+            modelParams.reasoningEffort != null)
+          'reasoning_effort': modelParams.reasoningEffort,
+      };
+    }
+
+    return body;
+  }
+
   // ── SSE 通用解析 ──────────────────────────────────────────────────────────
 
   /// 把字节流切成 SSE 事件（以 `\n\n` 或 `\r\n\r\n` 分隔）。
@@ -417,6 +526,7 @@ class TranslationService {
     required String systemPrompt,
     required String userPrompt,
     double? temperature,
+    AgentModelParams modelParams = const AgentModelParams(),
   }) async {
     final url =
         baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
@@ -489,6 +599,23 @@ class TranslationService {
             },
           );
           return _extractGemini(resp.data!);
+
+        case AgentApiProvider.openAICompatible:
+          resp = await dio.post(
+            '$url${provider.chatPath}',
+            data: _buildOpenAICompatibleBody(
+              modelId: modelId,
+              systemPrompt: systemPrompt,
+              userPrompt: userPrompt,
+              temperature: temperature,
+              modelParams: modelParams,
+            ),
+            options: Options(headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+            }),
+          );
+          return _extractOpenAICompatible(resp.data!);
       }
     } on DioException catch (e) {
       final body = e.response?.data;
@@ -553,6 +680,22 @@ class TranslationService {
       }
     }
     throw Exception('无法从 Gemini 响应中提取翻译结果');
+  }
+
+  /// Chat Completions 标准格式，兼容 DeepSeek `insufficient_system_resource`
+  static String _extractOpenAICompatible(Map<String, dynamic> data) {
+    final choices = data['choices'] as List<dynamic>?;
+    if (choices != null && choices.isNotEmpty) {
+      final choice = choices[0] as Map<String, dynamic>;
+      if (choice['finish_reason'] == 'insufficient_system_resource') {
+        throw Exception('服务器资源不足，请稍后重试');
+      }
+      final msg = choice['message'];
+      if (msg is Map<String, dynamic>) {
+        return (msg['content'] as String? ?? '').trim();
+      }
+    }
+    throw Exception('无法从 API 响应中提取翻译结果');
   }
 
   // ── 缓存 ──────────────────────────────────────────────────────────────────
