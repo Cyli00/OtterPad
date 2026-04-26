@@ -294,9 +294,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             padding: const EdgeInsets.only(left: 4, top: 6),
             child: Text(
               '预览: ${agentState.effectiveBaseUrl}${agentState.provider.chatPath}',
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: theme.textTheme.labelSmall?.copyWith(
                 color: cs.onSurfaceVariant.withAlpha(120),
-                fontSize: 11,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -313,8 +312,6 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               final errorMsg = _modelTestResults[modelId];
               return AgentModelListTile(
                 modelId: modelId,
-                isDefault: agentState.defaultModelId == modelId,
-                isFast: agentState.fastModelId == modelId,
                 isTesting: _modelTesting.contains(modelId),
                 hasTested: hasTested,
                 errorMsg: errorMsg,
@@ -329,8 +326,322 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               );
             }),
           ],
+
+          // ── 全局模型角色 ──
+          const SizedBox(height: 24),
+          _sectionLabel(theme, cs, '全局模型角色'),
+          const SizedBox(height: 12),
+          _buildGlobalRoles(theme, cs),
         ],
       ),
+    );
+  }
+
+  Widget _buildGlobalRoles(ThemeData theme, ColorScheme cs) {
+    final defaultRole = AgentApiNotifier.globalDefaultRole;
+    final fastRole = AgentApiNotifier.globalFastRole;
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withAlpha(60)),
+      ),
+      child: Column(
+        children: [
+          _roleRow(
+            theme,
+            cs,
+            icon: Symbols.gavel_rounded,
+            iconBg: cs.primaryContainer,
+            iconFg: cs.onPrimaryContainer,
+            label: '默认模型',
+            provider: defaultRole.provider,
+            modelId: defaultRole.modelId,
+            onTap: () => _showRolePickerDialog(
+              roleLabel: '默认模型',
+              currentProvider: defaultRole.provider,
+              currentModelId: defaultRole.modelId,
+              onSelect: (prov, id) => ref
+                  .read(agentApiProvider.notifier)
+                  .setGlobalDefaultModel(prov, id),
+              onClear: () => ref
+                  .read(agentApiProvider.notifier)
+                  .setGlobalDefaultModel(null, null),
+            ),
+          ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            indent: 14,
+            endIndent: 14,
+            color: cs.outlineVariant.withAlpha(40),
+          ),
+          _roleRow(
+            theme,
+            cs,
+            icon: Symbols.bolt_rounded,
+            iconBg: cs.tertiaryContainer,
+            iconFg: cs.onTertiaryContainer,
+            label: '快速模型',
+            provider: fastRole.provider,
+            modelId: fastRole.modelId,
+            onTap: () => _showRolePickerDialog(
+              roleLabel: '快速模型',
+              currentProvider: fastRole.provider,
+              currentModelId: fastRole.modelId,
+              onSelect: (prov, id) => ref
+                  .read(agentApiProvider.notifier)
+                  .setGlobalFastModel(prov, id),
+              onClear: () => ref
+                  .read(agentApiProvider.notifier)
+                  .setGlobalFastModel(null, null),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _roleRow(
+    ThemeData theme,
+    ColorScheme cs, {
+    required IconData icon,
+    required Color iconBg,
+    required Color iconFg,
+    required String label,
+    required AgentApiProvider? provider,
+    required String? modelId,
+    required VoidCallback onTap,
+  }) {
+    final isSet = provider != null && modelId != null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isSet
+                      ? iconBg
+                      : cs.surfaceContainerHighest.withAlpha(120),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: isSet ? iconFg : cs.onSurfaceVariant.withAlpha(120),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    if (isSet)
+                      Text(
+                        '$modelId · ${provider!.label}',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    else
+                      Text(
+                        '未设置',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant.withAlpha(120),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Symbols.swap_horiz_rounded, size: 18),
+                color: cs.onSurfaceVariant,
+                tooltip: '更换',
+                visualDensity: VisualDensity.compact,
+                onPressed: onTap,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showRolePickerDialog({
+    required String roleLabel,
+    required AgentApiProvider? currentProvider,
+    required String? currentModelId,
+    required void Function(AgentApiProvider provider, String modelId) onSelect,
+    required VoidCallback onClear,
+  }) async {
+    final allModels = AgentApiNotifier.getAllConfiguredModels();
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        final isSet = currentProvider != null && currentModelId != null;
+
+        return Dialog(
+          backgroundColor: cs.surfaceContainerLow,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 540, maxHeight: 480),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '选择$roleLabel',
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 20),
+                  if (allModels.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          '请先在各服务商下添加模型',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant.withAlpha(160),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: Scrollbar(
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final entry in allModels.entries) ...[
+                              Padding(
+                                padding:
+                                    const EdgeInsets.only(left: 2, bottom: 8),
+                                child: Text(
+                                  entry.key.label,
+                                  style:
+                                      theme.textTheme.titleSmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              ...entry.value.map((modelId) {
+                                final selected =
+                                    entry.key == currentProvider &&
+                                        modelId == currentModelId;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Material(
+                                    color: selected
+                                        ? cs.primaryContainer
+                                        : cs.surfaceContainerHighest
+                                            .withAlpha(80),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () {
+                                        Navigator.pop(ctx);
+                                        onSelect(entry.key, modelId);
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14, vertical: 12),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                modelId,
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
+                                                  fontWeight: selected
+                                                      ? FontWeight.w600
+                                                      : null,
+                                                  color: selected
+                                                      ? cs.onPrimaryContainer
+                                                      : cs.onSurface,
+                                                ),
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (selected)
+                                              Icon(
+                                                Symbols.check_rounded,
+                                                size: 18,
+                                                color:
+                                                    cs.onPrimaryContainer,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                              const SizedBox(height: 8),
+                            ],
+                          ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (isSet)
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            onClear();
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: cs.error,
+                          ),
+                          child: const Text('清除'),
+                        ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('取消'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

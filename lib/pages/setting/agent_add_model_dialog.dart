@@ -101,27 +101,15 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                       children: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
-                          style: TextButton.styleFrom(
-                            foregroundColor: cs.onSurfaceVariant,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 18, vertical: 10),
-                          ),
                           child: const Text('取消'),
                         ),
-                        const SizedBox(width: 6),
-                        FilledButton(
+                        const SizedBox(width: 8),
+                        TextButton(
                           onPressed: () => Navigator.pop(
                             ctx,
                             AddModelChoice(
                               setAsDefault: setAsDefault,
                               setAsFast: setAsFast,
-                            ),
-                          ),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 22, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
                           child: const Text('添加'),

@@ -69,6 +69,21 @@ Future<String?> testAgentModel({
             'generationConfig': {'maxOutputTokens': 1},
           },
         );
+      case AgentApiProvider.openAICompatible:
+        await dio.post(
+          '$url${provider.chatPath}',
+          data: {
+            'model': modelId,
+            'messages': [
+              {'role': 'user', 'content': 'hi'}
+            ],
+            'max_tokens': 16,
+          },
+          options: Options(headers: {
+            'Authorization': 'Bearer $apiKey',
+            'Content-Type': 'application/json',
+          }),
+        );
     }
     return null;
   } on DioException catch (e) {
@@ -98,13 +113,6 @@ String _extractErrorMessage(DioException e) {
       : (e.message ?? e.type.name);
 }
 
-/// anthropic 不提供 /models 端点，使用硬编码白名单
-const _anthropicStaticModels = <String>[
-  'claude-opus-4-20250514',
-  'claude-sonnet-4-20250514',
-  'claude-3-5-haiku-20241022',
-];
-
 /// 从 provider 的 /models 端点拉取可选模型 ID（已排序）。
 ///
 /// 失败时抛出异常，由调用方决定如何展示错误。
@@ -113,10 +121,6 @@ Future<List<String>> fetchAvailableModels({
   required String baseUrl,
   required String apiKey,
 }) async {
-  if (provider == AgentApiProvider.anthropic) {
-    return List<String>.from(_anthropicStaticModels);
-  }
-
   final dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 30),
@@ -124,10 +128,30 @@ Future<List<String>> fetchAvailableModels({
 
   switch (provider) {
     case AgentApiProvider.openai:
+    case AgentApiProvider.openAICompatible:
       final response = await dio.get<Map<String, dynamic>>(
         '$baseUrl${provider.modelsPath}',
         options: Options(
           headers: {'Authorization': 'Bearer $apiKey'},
+        ),
+      );
+      final data = response.data?['data'] as List<dynamic>?;
+      if (data == null) return const <String>[];
+      return data
+          .map((m) => (m as Map<String, dynamic>)['id'] as String? ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList()
+        ..sort();
+
+    case AgentApiProvider.anthropic:
+      final response = await dio.get<Map<String, dynamic>>(
+        '$baseUrl${provider.modelsPath}',
+        queryParameters: {'limit': 100},
+        options: Options(
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
         ),
       );
       final data = response.data?['data'] as List<dynamic>?;
@@ -152,8 +176,5 @@ Future<List<String>> fetchAvailableModels({
           .where((id) => id.isNotEmpty)
           .toList()
         ..sort();
-
-    case AgentApiProvider.anthropic:
-      return const <String>[]; // 已被提前返回，此处只为穷举
   }
 }

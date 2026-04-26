@@ -2,16 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import 'agent_role_widgets.dart';
-
 /// 模型列表中单条记录的渲染——含左滑"移除"动作。
 ///
 /// 组件只负责视觉呈现；所有状态（检测结果、角色）和动作都通过入参传入，
 /// 父组件持有 _modelTestResults/_modelTesting 等状态。
 class AgentModelListTile extends StatelessWidget {
   final String modelId;
-  final bool isDefault;
-  final bool isFast;
   final bool isTesting;
   final bool hasTested;
 
@@ -29,8 +25,6 @@ class AgentModelListTile extends StatelessWidget {
   const AgentModelListTile({
     super.key,
     required this.modelId,
-    required this.isDefault,
-    required this.isFast,
     required this.isTesting,
     required this.hasTested,
     required this.errorMsg,
@@ -76,7 +70,7 @@ class AgentModelListTile extends StatelessWidget {
                     child: Container(
                       decoration: BoxDecoration(
                         color: cs.errorContainer,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       alignment: Alignment.center,
                       child: FittedBox(
@@ -126,7 +120,7 @@ class AgentModelListTile extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isOk
               ? cs.primary.withAlpha(100)
@@ -162,22 +156,6 @@ class AgentModelListTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (isDefault) ...[
-              const SizedBox(width: 6),
-              RoleBadge(
-                label: '默认',
-                bg: cs.primaryContainer,
-                fg: cs.onPrimaryContainer,
-              ),
-            ],
-            if (isFast) ...[
-              const SizedBox(width: 4),
-              RoleBadge(
-                label: '快速',
-                bg: cs.tertiaryContainer,
-                fg: cs.onTertiaryContainer,
-              ),
-            ],
             const SizedBox(width: 8),
             SizedBox(
               width: 32,

@@ -204,7 +204,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
     return [
       _subHeader('通用参数'),
       _intFieldRow(
-        title: '最大输出长度',
+        title: 'Max Tokens',
         subtitle: '单次回复的长度上限，留空跟随服务商默认',
         controller: _maxTokensCtrl,
         hint: '如 4096',
@@ -216,6 +216,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
         AgentApiProvider.openai => _openaiRows(),
         AgentApiProvider.anthropic => _anthropicRows(),
         AgentApiProvider.gemini => _geminiRows(),
+        AgentApiProvider.openAICompatible => _openAICompatibleRows(),
       },
       const SizedBox(height: 12),
     ];
@@ -225,7 +226,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
 
   List<Widget> _openaiRows() => [
     _segmentedRow<String?>(
-      title: '推理强度',
+      title: 'Reasoning Effort',
       subtitle: '推理模型专用，控制思考深度',
       options: const [
         (null, '默认'),
@@ -301,7 +302,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
     final showBudget = mode == 'enabled' || mode == 'adaptive';
     return [
       _sliderRow(
-        title: '候选词数',
+        title: 'Top K',
         subtitle: '每步从多少个候选词里挑选，0 表示不限',
         value: _draft.topK?.toDouble(),
         fallback: 40,
@@ -337,7 +338,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
         curve: Curves.easeOut,
         child: showBudget
             ? _intFieldRow(
-                title: '思考预算',
+                title: 'Thinking Budget',
                 subtitle: '思考环节能花多少 token，最少 1024',
                 controller: _thinkingBudgetCtrl,
                 hint: '如 4096',
@@ -358,7 +359,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
 
   List<Widget> _geminiRows() => [
     _sliderRow(
-      title: '候选词数',
+      title: 'Top K',
       subtitle: '每步从多少个候选词里挑选，上限随模型',
       value: _draft.topK?.toDouble(),
       fallback: 40,
@@ -370,7 +371,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onReset: () => _patch(_draft.copyWith(topK: null)),
     ),
     _sliderRow(
-      title: '话题新鲜度',
+      title: 'Presence Penalty',
       subtitle: '正值鼓励换新话题，负值偏好重复',
       value: _draft.presencePenalty,
       fallback: 0,
@@ -382,7 +383,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onReset: () => _patch(_draft.copyWith(presencePenalty: null)),
     ),
     _sliderRow(
-      title: '用词多样度',
+      title: 'Frequency Penalty',
       subtitle: '正值鼓励词汇丰富，负值允许重复用词',
       value: _draft.frequencyPenalty,
       fallback: 0,
@@ -394,7 +395,7 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onReset: () => _patch(_draft.copyWith(frequencyPenalty: null)),
     ),
     _intFieldRow(
-      title: '思考预算',
+      title: 'Thinking Budget',
       subtitle: '思考能花多少 token，0 表示关闭',
       controller: _thinkingBudgetCtrl,
       hint: '如 4096',
@@ -403,6 +404,70 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       ),
     ),
   ];
+
+  List<Widget> _openAICompatibleRows() {
+    final thinkingOn = _draft.thinkingMode == 'enabled';
+    return [
+      _sliderRow(
+        title: 'Presence Penalty',
+        subtitle: '正值鼓励换新话题，负值偏好重复',
+        value: _draft.presencePenalty,
+        fallback: 0,
+        min: -2,
+        max: 2,
+        divisions: 40,
+        formatter: (v) => v.toStringAsFixed(2),
+        onChanged: (v) => _patch(_draft.copyWith(presencePenalty: v)),
+        onReset: () => _patch(_draft.copyWith(presencePenalty: null)),
+      ),
+      _sliderRow(
+        title: 'Frequency Penalty',
+        subtitle: '正值鼓励词汇丰富，负值允许重复用词',
+        value: _draft.frequencyPenalty,
+        fallback: 0,
+        min: -2,
+        max: 2,
+        divisions: 40,
+        formatter: (v) => v.toStringAsFixed(2),
+        onChanged: (v) => _patch(_draft.copyWith(frequencyPenalty: v)),
+        onReset: () => _patch(_draft.copyWith(frequencyPenalty: null)),
+      ),
+      _segmentedRow<String?>(
+        title: '思考模式',
+        subtitle: 'DeepSeek 默认开启，翻译时建议关闭以节省成本',
+        options: const [
+          (null, '默认'),
+          ('disabled', '关闭'),
+          ('enabled', '开启'),
+        ],
+        selected: _draft.thinkingMode,
+        onChanged: (v) => _patch(
+          _draft.copyWith(
+            thinkingMode: v,
+            reasoningEffort: v == 'enabled' ? _draft.reasoningEffort : null,
+          ),
+        ),
+      ),
+      AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        child: thinkingOn
+            ? _segmentedRow<String?>(
+                title: 'Reasoning Effort',
+                subtitle: '控制思考环节的深度',
+                options: const [
+                  (null, '默认'),
+                  ('high', '高'),
+                  ('max', '最高'),
+                ],
+                selected: _draft.reasoningEffort,
+                onChanged: (v) =>
+                    _patch(_draft.copyWith(reasoningEffort: v)),
+              )
+            : const SizedBox.shrink(),
+      ),
+    ];
+  }
 
   // ── Reusable row helpers (镜像 api_settings_extract.dart) ─────────────
 
