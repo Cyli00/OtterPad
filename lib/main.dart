@@ -51,6 +51,6 @@ Future<void> main() async {
 
   runApp(UncontrolledProviderScope(
     container: container,
-    child: const NightReaderApp(),
+    child: const OtterPadApp(),
   ));
 }

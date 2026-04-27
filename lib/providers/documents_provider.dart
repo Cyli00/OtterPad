@@ -122,7 +122,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
   static Future<Directory> getDocsDir() async {
     final appDir = await getApplicationDocumentsDirectory();
-    final docsDir = Directory(p.join(appDir.path, 'NightReader', 'docs'));
+    final docsDir = Directory(p.join(appDir.path, 'OtterPad', 'docs'));
     if (!await docsDir.exists()) {
       await docsDir.create(recursive: true);
     }
@@ -235,7 +235,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
     onProgress?.call(
       const RebuildProgress(
-        fileName: 'NightReader 文库',
+        fileName: 'OtterPad 文库',
         status: '正在扫描 PDF 文件...',
       ),
     );
@@ -277,7 +277,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     }
 
     onProgress?.call(
-      const RebuildProgress(fileName: 'NightReader 文库', status: '正在检查文件完整性...'),
+      const RebuildProgress(fileName: 'OtterPad 文库', status: '正在检查文件完整性...'),
     );
 
     final validDocs = <Document>[];

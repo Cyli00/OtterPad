@@ -547,7 +547,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       final tempDir = await getTemporaryDirectory();
       final archivePath = p.join(
         tempDir.path,
-        'NightReader',
+        'OtterPad',
         'restore',
         BackupRestoreService.buildBackupFileName(),
       );
@@ -657,7 +657,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('取消'),
                 ),
-                FilledButton(
+                TextButton(
                   onPressed: () => Navigator.of(context).pop(current),
                   child: const Text('开始恢复'),
                 ),
@@ -865,12 +865,16 @@ class _RemoteDialogScaffold extends StatelessWidget {
                     if (onClear != null)
                       TextButton(
                         onPressed: onClear,
+                        style: TextButton.styleFrom(
+                          foregroundColor: cs.error,
+                        ),
                         child: const Text('清空'),
                       ),
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
                       child: const Text('取消'),
                     ),
+                    const SizedBox(width: 8),
                     TextButton(
                       onPressed: onSave,
                       child: const Text('保存'),
@@ -1138,7 +1142,7 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
           controller: _objectKeyController,
           icon: Symbols.description,
           label: '对象路径',
-          helperText: '默认可用 night-reader/night_reader_backup.zip',
+          helperText: '默认可用 otter-pad/otter_pad_backup.zip',
         ),
         SwitchListTile(
           value: _usePathStyle,

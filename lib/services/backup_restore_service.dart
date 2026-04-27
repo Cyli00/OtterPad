@@ -22,7 +22,7 @@ enum BackupRestoreScope {
 }
 
 class BackupRestoreService {
-  static const _archiveRoot = 'night_reader_backup';
+  static const _archiveRoot = 'otter_pad_backup';
   static const _manifestPath = '$_archiveRoot/manifest.json';
   static const _docsDir = '$_archiveRoot/docs';
   static const _dataDir = '$_archiveRoot/data';
@@ -34,7 +34,7 @@ class BackupRestoreService {
   static String buildBackupFileName([DateTime? time]) {
     final value = time ?? DateTime.now();
     String two(int input) => input.toString().padLeft(2, '0');
-    return 'night_reader_backup_'
+    return 'otter_pad_backup_'
         '${value.year}${two(value.month)}${two(value.day)}_'
         '${two(value.hour)}${two(value.minute)}${two(value.second)}.zip';
   }
@@ -49,7 +49,7 @@ class BackupRestoreService {
     await GStorage.flush();
 
     final manifest = <String, dynamic>{
-      'app': 'NightReader',
+      'app': 'OtterPad',
       'formatVersion': _formatVersion,
       'createdAt': createdAt.toIso8601String(),
       'docsRoot': docsDir.path,
@@ -385,7 +385,7 @@ class BackupRestoreService {
       }
     }
 
-    final marker = '/nightreader/docs/';
+    final marker = '/otterpad/docs/';
     final index = normalizedPath.toLowerCase().indexOf(marker);
     if (index >= 0) {
       return normalizedPath.substring(index + marker.length);
@@ -437,7 +437,7 @@ class BackupRestoreService {
 
   static Future<Directory> _getAppRootDir() async {
     final appDir = await getApplicationDocumentsDirectory();
-    final root = Directory(p.join(appDir.path, 'NightReader'));
+    final root = Directory(p.join(appDir.path, 'OtterPad'));
     if (!await root.exists()) {
       await root.create(recursive: true);
     }
@@ -446,7 +446,7 @@ class BackupRestoreService {
 
   static Future<Directory> _getBackupTempDir() async {
     final tempDir = await getTemporaryDirectory();
-    final backupDir = Directory(p.join(tempDir.path, 'NightReader', 'backup'));
+    final backupDir = Directory(p.join(tempDir.path, 'OtterPad', 'backup'));
     if (!await backupDir.exists()) {
       await backupDir.create(recursive: true);
     }
@@ -458,7 +458,7 @@ class BackupRestoreService {
     final restoreDir = Directory(
       p.join(
         tempDir.path,
-        'NightReader',
+        'OtterPad',
         'restore_${DateTime.now().microsecondsSinceEpoch}',
       ),
     );

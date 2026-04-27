@@ -12,7 +12,7 @@ const _figPrefix = 'fig:';
 /// 避免超高图把整屏占满、阅读节奏被单张图截断。
 const double _kMaxImageHeightRatio = 0.33;
 
-/// NightReader 图片配置：支持 file:// 本地图片和 http(s) 网络图片。
+/// OtterPad 图片配置：支持 file:// 本地图片和 http(s) 网络图片。
 ///
 /// 当 alt text 以 `fig:` 开头时，在图片下方渲染 caption 文字。
 /// [onTap] 非空时，图片区域可点击（caption 不参与），点击回调携带原始 url。

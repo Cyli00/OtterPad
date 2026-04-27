@@ -29,7 +29,7 @@ class IdentifierResolver {
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
       headers: {
-        'User-Agent': 'NightReader/0.1 (Flutter; mailto:dev@nightreader.app)',
+        'User-Agent': 'OtterPad/0.1 (Flutter; mailto:dev@otterpad.app)',
       },
     ),
   );
@@ -144,7 +144,7 @@ class IdentifierResolver {
           try {
             final unpaywallResponse = await _dio.get(
               'https://api.unpaywall.org/v2/$doi',
-              queryParameters: {'email': 'dev@nightreader.app'},
+              queryParameters: {'email': 'dev@otterpad.app'},
               cancelToken: cancelToken,
             );
             final bestOa =
@@ -368,7 +368,7 @@ class IdentifierResolver {
           try {
             final unpaywallResponse = await _dio.get(
               'https://api.unpaywall.org/v2/$normalizedDoi',
-              queryParameters: {'email': 'dev@nightreader.app'},
+              queryParameters: {'email': 'dev@otterpad.app'},
               cancelToken: cancelToken,
             );
             final bestOa =
@@ -588,7 +588,7 @@ class IdentifierResolver {
     try {
       final uResp = await _dio.get(
         'https://api.unpaywall.org/v2/$doi',
-        queryParameters: {'email': 'dev@nightreader.app'},
+        queryParameters: {'email': 'dev@otterpad.app'},
         cancelToken: cancelToken,
       );
       final bestOa = (uResp.data as Map<String, dynamic>)['best_oa_location'];

@@ -18,8 +18,8 @@ String? get _systemFontFamily {
   return null;
 }
 
-class NightReaderApp extends ConsumerWidget {
-  const NightReaderApp({super.key});
+class OtterPadApp extends ConsumerWidget {
+  const OtterPadApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -14,8 +14,8 @@ enum BackupRemoteType {
 }
 
 class BackupWebDavState {
-  static const defaultRemoteDir = '/NightReader';
-  static const defaultFileName = 'night_reader_backup.zip';
+  static const defaultRemoteDir = '/OtterPad';
+  static const defaultFileName = 'otter_pad_backup.zip';
 
   final String serverUrl;
   final String username;
@@ -70,7 +70,7 @@ class BackupWebDavState {
 class BackupS3State {
   static const defaultEndpoint = 'https://s3.amazonaws.com';
   static const defaultRegion = 'us-east-1';
-  static const defaultObjectKey = 'night-reader/night_reader_backup.zip';
+  static const defaultObjectKey = 'otter-pad/otter_pad_backup.zip';
 
   final String endpoint;
   final String region;
