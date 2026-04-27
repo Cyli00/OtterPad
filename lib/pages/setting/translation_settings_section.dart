@@ -386,35 +386,99 @@ class _TranslationSettingsSectionState
     );
   }
 
-  /// 译文样式选择：SegmentedButton 映射到 [kTranslationStyles] 注册表。
-  /// 新增样式只需 append 到注册表，UI 自动拾取——无需改这里。
+  /// 译文样式选择：自描述 chip，label 即预览——文本用自身样式渲染。
   Widget _buildStylePicker(ThemeData theme, ColorScheme cs, String currentId) {
-    return SegmentedButton<String>(
-      segments: kTranslationStyles
-          .map((s) => ButtonSegment<String>(
-                value: s.id,
-                label: Text(s.label),
-              ))
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: kTranslationStyles
+          .map((s) => _buildStyleChip(s, theme, cs, currentId))
           .toList(),
-      selected: {currentId},
-      onSelectionChanged: (set) {
-        final next = set.first;
-        ref.read(translationConfigProvider.notifier).setDisplayStyleId(next);
-      },
-      showSelectedIcon: false,
-      style: SegmentedButton.styleFrom(
-        backgroundColor: cs.surface,
-        selectedBackgroundColor: cs.primaryContainer,
-        foregroundColor: cs.onSurfaceVariant,
-        selectedForegroundColor: cs.onPrimaryContainer,
-        side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+    );
+  }
+
+  Widget _buildStyleChip(
+    TranslationStyleStrategy style,
+    ThemeData theme,
+    ColorScheme cs,
+    String currentId,
+  ) {
+    final isSelected = style.id == currentId;
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: isSelected ? cs.primaryContainer : cs.surfaceContainerLow,
+        border: Border.all(
+          color: isSelected
+              ? Colors.transparent
+              : cs.outlineVariant.withAlpha(100),
         ),
-        textStyle:
-            theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => ref
+              .read(translationConfigProvider.notifier)
+              .setDisplayStyleId(style.id),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: _buildStyledLabel(style.id, style.label, cs, theme),
+          ),
+        ),
       ),
     );
+  }
+
+  Widget _buildStyledLabel(
+    String styleId,
+    String label,
+    ColorScheme cs,
+    ThemeData theme,
+  ) {
+    final base = theme.textTheme.bodyMedium!;
+
+    return switch (styleId) {
+      'themed' => Text(label, style: base.copyWith(color: cs.primary)),
+      'bold' => Text(label,
+          style: base.copyWith(fontWeight: FontWeight.bold)),
+      'italic' => Text(label,
+          style: base.copyWith(fontStyle: FontStyle.italic)),
+      'weakened' => Text(label,
+          style: base.copyWith(color: cs.onSurface.withAlpha(120))),
+      'dashed' => Text(label,
+          style: base.copyWith(
+            color: cs.primary,
+            decoration: TextDecoration.underline,
+            decorationStyle: TextDecorationStyle.dashed,
+            decorationColor: cs.primary.withAlpha(140),
+          )),
+      'highlight' => Text(label,
+          style: base.copyWith(backgroundColor: cs.primaryContainer)),
+      'blur' => ClipRect(
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+            child: Text(label, style: base),
+          ),
+        ),
+      'quote' => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 3,
+              height: 16,
+              decoration: BoxDecoration(
+                color: cs.outlineVariant,
+                borderRadius: BorderRadius.circular(1.5),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(label, style: base.copyWith(color: cs.onSurfaceVariant)),
+          ],
+        ),
+      _ => Text(label, style: base),
+    };
   }
 
   /// 点击后弹出底部语言选择面板（视觉参照 toolbar_bottom_sheet）

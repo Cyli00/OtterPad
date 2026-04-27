@@ -531,19 +531,31 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
             ..remove(modelId))
         : state.modelParams;
 
+    // Hive 的 in-memory 更新是同步的（返回的 Future 仅代表磁盘刷写）。
+    // 先触发所有 in-memory 更新，再更新 Riverpod state，确保重建时读到
+    // 一致的 Hive 快照——避免 state 更新触发重建、而 box.delete 尚未执行
+    // 导致 _buildGlobalRoles 读到旧的全局角色。
+    final raw = hadParams
+        ? updatedParams.map((k, v) => MapEntry(k, v.toJson()))
+        : null;
+    final f1 = box.put(_modelsKey(p), updated);
+    final f2 = clearedDefault ? box.delete(_globalDefaultKey) : null;
+    final f3 = clearedFast ? box.delete(_globalFastKey) : null;
+    final f4 = raw != null ? box.put(_modelParamsKey(p), raw) : null;
+
+    // in-memory 已更新，此时触发重建是安全的
     state = state.copyWith(
       models: updated,
       defaultModelId: clearedDefault ? null : _sentinel,
       fastModelId: clearedFast ? null : _sentinel,
       modelParams: updatedParams,
     );
-    await box.put(_modelsKey(p), updated);
-    if (clearedDefault) await box.delete(_globalDefaultKey);
-    if (clearedFast) await box.delete(_globalFastKey);
-    if (hadParams) {
-      final raw = updatedParams.map((k, v) => MapEntry(k, v.toJson()));
-      await box.put(_modelParamsKey(p), raw);
-    }
+
+    // 等待磁盘持久化完成
+    await f1;
+    if (f2 != null) await f2;
+    if (f3 != null) await f3;
+    if (f4 != null) await f4;
   }
 
   /// 显式切换默认模型；传 null 清空。**全局唯一**——写入时会覆盖任何
