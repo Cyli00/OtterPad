@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-/// 模型列表中单条记录的渲染——含左滑"移除"动作。
+import '../../widgets/spring_dismissible.dart';
+
+/// 模型列表中单条记录的渲染——左滑可移除。
 ///
 /// 组件只负责视觉呈现；所有状态（检测结果、角色）和动作都通过入参传入，
 /// 父组件持有 _modelTestResults/_modelTesting 等状态。
@@ -42,77 +43,35 @@ class AgentModelListTile extends StatelessWidget {
     final isOk = hasTested && errorMsg == null;
     final isErr = hasTested && !isOk;
 
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        // 目标像素宽度 96 → 反算 extentRatio，让移除按钮在任何窗口下
-        // 都稳定在 ~88–110 px；ratio clamp 防极端宽度出现过度拉伸
-        final cardWidth = constraints.maxWidth;
-        const targetPx = 96.0;
-        final ratio = (targetPx / cardWidth).clamp(0.06, 0.30).toDouble();
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Slidable(
-            key: ValueKey('agent-model-$modelId'),
-            groupTag: 'agent-models',
-            endActionPane: ActionPane(
-              motion: const StretchMotion(),
-              extentRatio: ratio,
-              children: [
-                CustomSlidableAction(
-                  onPressed: (_) => onRemove(),
-                  // 透明背景让内层 Container 自己控制圆角和填色
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: cs.onErrorContainer,
-                  padding: EdgeInsets.zero,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: cs.errorContainer,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      alignment: Alignment.center,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Symbols.delete_rounded,
-                                size: 22,
-                                color: cs.onErrorContainer,
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                '移除',
-                                maxLines: 1,
-                                softWrap: false,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: cs.onErrorContainer,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            child: _buildCard(theme, cs, isOk, isErr),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SpringDismissible(
+        onDismissed: onRemove,
+        background: Container(
+          decoration: BoxDecoration(
+            color: cs.errorContainer,
+            borderRadius: BorderRadius.circular(16),
           ),
-        );
-      },
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Symbols.delete_rounded, size: 22, color: cs.onErrorContainer),
+              const SizedBox(height: 3),
+              Text(
+                '移除',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: cs.onErrorContainer,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        child: _buildCard(theme, cs, isOk, isErr),
+      ),
     );
   }
 
@@ -220,3 +179,4 @@ class AgentModelListTile extends StatelessWidget {
     );
   }
 }
+

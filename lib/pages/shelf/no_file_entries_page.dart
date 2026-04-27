@@ -8,6 +8,7 @@ import '../../providers/documents_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/snackbar_service.dart';
+import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
@@ -99,7 +100,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                     final hasDoi =
                         doc.doi != null && doc.doi!.isNotEmpty;
 
-                    return Stack(
+                    final card = Stack(
                       children: [
                         DocListCard(
                           doc: doc,
@@ -113,7 +114,6 @@ class NoFileEntriesPage extends ConsumerWidget {
                               .read(selectionProvider.notifier)
                               .toggle(doc.id),
                         ),
-                        // 选择模式下隐藏操作按钮
                         if (!isSelectionMode)
                           Positioned(
                             right: 8,
@@ -166,6 +166,47 @@ class NoFileEntriesPage extends ConsumerWidget {
                           ),
                       ],
                     );
+
+                    if (isSelectionMode) return card;
+
+                    final cs = Theme.of(context).colorScheme;
+                    return SpringDismissible(
+                      key: ValueKey(doc.id),
+                      onDismissed: () {
+                        DocCardActions.delete(ref, doc.id);
+                        ref
+                            .read(snackBarServiceProvider)
+                            .showResult(message: '已删除条目');
+                      },
+                      background: Container(
+                        decoration: BoxDecoration(
+                          color: cs.errorContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Symbols.delete_rounded,
+                                size: 22, color: cs.onErrorContainer),
+                            const SizedBox(height: 3),
+                            Text(
+                              '删除',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: cs.onErrorContainer,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      child: card,
+                    );
                   },
                 ),
               ),
@@ -194,11 +235,10 @@ class NoFileEntriesPage extends ConsumerWidget {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('取消'),
           ),
-          FilledButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: cs.error,
-              foregroundColor: cs.onError,
+            style: TextButton.styleFrom(
+              foregroundColor: cs.error,
             ),
             child: const Text('删除'),
           ),

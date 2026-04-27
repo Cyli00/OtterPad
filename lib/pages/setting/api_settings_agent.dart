@@ -311,6 +311,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               final hasTested = _modelTestResults.containsKey(modelId);
               final errorMsg = _modelTestResults[modelId];
               return AgentModelListTile(
+                key: ValueKey(modelId),
                 modelId: modelId,
                 isTesting: _modelTesting.contains(modelId),
                 hasTested: hasTested,

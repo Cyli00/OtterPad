@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../providers/history_provider.dart';
 import '../../services/snackbar_service.dart';
+import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 
@@ -120,47 +121,52 @@ class ReadingHistoryPage extends ConsumerWidget {
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final doc = section.docs[index];
-            return DocListCard(
-              doc: doc,
-              isSelectionMode: false,
-              isSelected: false,
-              onTap: () => DocCardActions.openReader(context, ref, doc),
-              onLongPress: () => _confirmRemoveOne(context, ref, doc.id, doc.title),
+            final theme = Theme.of(context);
+            final cs = theme.colorScheme;
+            return SpringDismissible(
+              key: ValueKey(doc.id),
+              onDismissed: () {
+                ref.read(historyProvider.notifier).removeDoc(doc.id);
+                ref
+                    .read(snackBarServiceProvider)
+                    .showResult(message: '已从历史移除');
+              },
+              background: Container(
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Symbols.delete_rounded,
+                        size: 22, color: cs.onErrorContainer),
+                    const SizedBox(height: 3),
+                    Text(
+                      '移除',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: cs.onErrorContainer,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              child: DocListCard(
+                doc: doc,
+                compact: true,
+                isSelectionMode: false,
+                isSelected: false,
+                onTap: () => DocCardActions.openReader(context, ref, doc),
+              ),
             );
           },
         ),
       ),
     ];
-  }
-
-  // ─── 长按单项：从历史中移除（不删除文档本身）───────────
-
-  Future<void> _confirmRemoveOne(
-    BuildContext context,
-    WidgetRef ref,
-    String docId,
-    String title,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('从历史移除'),
-        content: Text('确定要将「$title」从阅读历史中移除吗？\n（不会删除文献本身）'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('移除'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    ref.read(historyProvider.notifier).removeDoc(docId);
-    ref.read(snackBarServiceProvider).showResult(message: '已从历史移除');
   }
 
   // ─── 清空全部历史 ───────────────────────────────────────
@@ -177,11 +183,10 @@ class ReadingHistoryPage extends ConsumerWidget {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('取消'),
           ),
-          FilledButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: cs.error,
-              foregroundColor: cs.onError,
+            style: TextButton.styleFrom(
+              foregroundColor: cs.error,
             ),
             child: const Text('清空'),
           ),
