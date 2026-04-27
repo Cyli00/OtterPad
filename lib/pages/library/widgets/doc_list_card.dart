@@ -18,6 +18,7 @@ class DocListCard extends StatelessWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback? onSelectionTap;
+  final bool compact;
 
   const DocListCard({
     super.key,
@@ -28,6 +29,7 @@ class DocListCard extends StatelessWidget {
     this.isSelectionMode = false,
     this.isSelected = false,
     this.onSelectionTap,
+    this.compact = false,
   });
 
   @override
@@ -71,7 +73,7 @@ class DocListCard extends StatelessWidget {
                     }
                   : null,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(compact ? 12 : 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -83,8 +85,8 @@ class DocListCard extends StatelessWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
-                          width: 120,
-                          height: 168,
+                          width: compact ? 80 : 120,
+                          height: compact ? 112 : 168,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -135,7 +137,7 @@ class DocListCard extends StatelessWidget {
                               color: colorScheme.onSurface,
                               height: 1.3,
                             ),
-                            maxLines: 3,
+                            maxLines: compact ? 2 : 3,
                             overflow: TextOverflow.ellipsis,
                           ),
                           if (doc.authors.isNotEmpty) ...[

@@ -58,11 +58,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
             onPressed: () => Navigator.pop(context, false),
             child: const Text('取消'),
           ),
-          FilledButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: cs.error,
-              foregroundColor: cs.onError,
+            style: TextButton.styleFrom(
+              foregroundColor: cs.error,
             ),
             child: const Text('删除'),
           ),

@@ -194,7 +194,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                           Flexible(
                             child: Container(
                               decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerLow,
+                                color: colorScheme.surfaceContainer,
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: ClipRRect(
@@ -213,49 +213,48 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                     final emoji = _emojis[index];
                                     final isSelected =
                                         emoji == _selectedEmoji;
-                                    return GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedEmoji = emoji;
-                                        });
-                                      },
-                                      child: AnimatedContainer(
-                                        duration: 200.ms,
-                                        curve: Curves.easeOutCubic,
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? colorScheme.primaryContainer
-                                              : Colors.transparent,
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                          border: isSelected
-                                              ? Border.all(
-                                                  color: colorScheme
-                                                      .primary
-                                                      .withAlpha(128),
-                                                  width: 1.5,
-                                                )
-                                              : null,
+                                    return AnimatedContainer(
+                                      duration: 200.ms,
+                                      curve: Curves.easeOutCubic,
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? colorScheme.primaryContainer
+                                            : Colors.transparent,
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: Material(
+                                        type: MaterialType.transparency,
+                                        child: InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              _selectedEmoji = emoji;
+                                            });
+                                          },
+                                          child: Center(
+                                            child: Text(
+                                              emoji,
+                                              style: const TextStyle(
+                                                fontSize: 20,
+                                                height: 1.0,
+                                              ),
+                                              strutStyle: const StrutStyle(
+                                                forceStrutHeight: true,
+                                                height: 1.0,
+                                              ),
+                                            )
+                                                .animate(
+                                                    target:
+                                                        isSelected ? 1 : 0)
+                                                .scaleXY(
+                                                  begin: 1,
+                                                  end: 1.15,
+                                                  duration: 150.ms,
+                                                  curve: Curves.easeOutBack,
+                                                ),
+                                          ),
                                         ),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          emoji,
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            height: 1.0,
-                                          ),
-                                          strutStyle: const StrutStyle(
-                                            forceStrutHeight: true,
-                                            height: 1.0,
-                                          ),
-                                        )
-                                            .animate(target: isSelected ? 1 : 0)
-                                            .scaleXY(
-                                              begin: 1,
-                                              end: 1.15,
-                                              duration: 150.ms,
-                                              curve: Curves.easeOutBack,
-                                            ),
                                       ),
                                     );
                                   },
@@ -304,7 +303,10 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                   alignment: Alignment.center,
                                   child: Text(
                                     _selectedEmoji,
-                                    style: const TextStyle(fontSize: 28),
+                                    style: const TextStyle(
+                                      fontSize: 28,
+                                      height: 1.2,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
@@ -373,44 +375,19 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        side: BorderSide(
-                          color: colorScheme.outline,
-                        ),
-                      ),
-                      child: Text(
-                        '取消',
-                        style: TextStyle(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed:
-                          _nameController.text.trim().isEmpty
-                              ? null
-                              : _onConfirm,
-                      style: FilledButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(_isEditing ? '保存' : '创建'),
-                    ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed:
+                        _nameController.text.trim().isEmpty
+                            ? null
+                            : _onConfirm,
+                    child: Text(_isEditing ? '保存' : '创建'),
                   ),
                 ],
               ),

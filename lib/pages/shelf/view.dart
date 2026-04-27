@@ -53,11 +53,10 @@ class ShelfPage extends ConsumerWidget {
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('取消'),
           ),
-          FilledButton(
+          TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: theme.colorScheme.error,
-              foregroundColor: theme.colorScheme.onError,
+            style: TextButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
             ),
             child: const Text('删除'),
           ),

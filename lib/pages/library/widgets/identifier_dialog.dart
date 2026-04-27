@@ -166,40 +166,18 @@ class _IdentifierContentState extends State<_IdentifierContent> {
             const SizedBox(height: 20),
             // 按钮
             Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      side: BorderSide(color: colorScheme.outline),
-                    ),
-                    child: Text(
-                      '取消',
-                      style: TextStyle(
-                          color: colorScheme.onSurfaceVariant),
-                    ),
-                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _controller.text.trim().isEmpty
-                        ? null
-                        : _onConfirm,
-                    style: FilledButton.styleFrom(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('添加'),
-                  ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _controller.text.trim().isEmpty
+                      ? null
+                      : _onConfirm,
+                  child: const Text('添加'),
                 ),
               ],
             ),

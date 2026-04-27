@@ -529,7 +529,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     setState(() => _translating[idx] = true);
 
     try {
-      final agentState = ref.read(agentApiProvider);
+      final agentState = ref.read(effectiveAgentApiProvider);
       final translationConfig = ref.read(translationConfigProvider);
       final result = await TranslationService.translate(
         text: fig.captionText,
