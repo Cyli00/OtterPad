@@ -1,6 +1,6 @@
 {
-    "name": "night_reader",
-    "short_name": "night_reader",
+    "name": "OtterPad",
+    "short_name": "OtterPad",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

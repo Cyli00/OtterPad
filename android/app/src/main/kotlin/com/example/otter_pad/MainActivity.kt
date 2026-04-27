@@ -1,4 +1,4 @@
-package com.example.night_reader
+package com.example.otter_pad
 
 import io.flutter.embedding.android.FlutterActivity
 

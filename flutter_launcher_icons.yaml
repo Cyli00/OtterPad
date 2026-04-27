@@ -1,0 +1,25 @@
+flutter_launcher_icons:
+  # ── 移动端 ──────────────────────────────────────
+  android: true
+  ios: true
+
+  # 源图：1024×1024 PNG，无透明背景
+  image_path: "assets/icons/app_icon.png"
+
+  # Android 自适应图标（API 26+，前景层 + 纯色背景）
+  adaptive_icon_foreground: "assets/icons/app_icon.png"
+  adaptive_icon_background: "#1A1A2E"   # 改成你想要的背景色
+
+  # ── 桌面端 ──────────────────────────────────────
+  windows:
+    generate: true
+    image_path: "assets/icons/app_icon.png"
+    icon_size: 48   # 主尺寸；工具会同时生成 16/32/48/256
+
+  macos:
+    generate: true
+    image_path: "assets/icons/app_icon.png"
+
+  linux:
+    generate: true
+    image_path: "assets/icons/app_icon.png"

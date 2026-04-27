@@ -153,6 +153,7 @@ Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数
 
 ## Todolist
 
+- **发布前**：将所有平台包名前缀从 `com.example` 改为真实域名（Android `build.gradle.kts` + `MainActivity.kt` 目录、iOS/macOS `project.pbxproj` + `AppInfo.xcconfig`、Linux `CMakeLists.txt`）
 - 包含所有文献的文献库没有必要占据收藏夹，改成默认收藏夹就行
 - 后续raw.md的保存可以删去，目前只是用于测试
 - 段落内提及的figure应该能被检出和点击高亮
