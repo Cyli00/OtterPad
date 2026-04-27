@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import 'nr_selectable_math.dart';
 
 /// figure caption 的 alt text 前缀约定
 const _figPrefix = 'fig:';
@@ -24,97 +27,98 @@ class NRImgConfig extends ImgConfig {
     Color? highlightBg,
     Color? highlightFg,
     void Function(String url)? onTap,
+    ValueListenable<String?>? selectedTextListenable,
   }) : super(
-          builder: (url, attrs) {
-            final alt = attrs['alt'] ?? '';
-            final isFigure = alt.startsWith(_figPrefix);
-            final caption = isFigure ? alt.substring(_figPrefix.length) : '';
+         builder: (url, attrs) {
+           final alt = attrs['alt'] ?? '';
+           final isFigure = alt.startsWith(_figPrefix);
+           final caption = isFigure ? alt.substring(_figPrefix.length) : '';
 
-            Widget image;
-            if (url.startsWith('file://') || url.startsWith('/')) {
-              final path =
-                  url.startsWith('file://') ? Uri.parse(url).toFilePath() : url;
-              image = Image.file(
-                File(path),
-                fit: BoxFit.contain,
-                errorBuilder: (_, error, _) =>
-                    errorBuilder?.call(url, alt, error) ??
-                    const _BrokenImage(),
-              );
-            } else {
-              image = Image.network(
-                url,
-                fit: BoxFit.contain,
-                errorBuilder: (_, error, _) =>
-                    errorBuilder?.call(url, alt, error) ??
-                    const _BrokenImage(),
-              );
-            }
+           Widget image;
+           if (url.startsWith('file://') || url.startsWith('/')) {
+             final path = url.startsWith('file://')
+                 ? Uri.parse(url).toFilePath()
+                 : url;
+             image = Image.file(
+               File(path),
+               fit: BoxFit.contain,
+               errorBuilder: (_, error, _) =>
+                   errorBuilder?.call(url, alt, error) ?? const _BrokenImage(),
+             );
+           } else {
+             image = Image.network(
+               url,
+               fit: BoxFit.contain,
+               errorBuilder: (_, error, _) =>
+                   errorBuilder?.call(url, alt, error) ?? const _BrokenImage(),
+             );
+           }
 
-            // 高度上限：窗口高度 * [_kMaxImageHeightRatio]。`Builder` 只为
-            // 取到 `MediaQuery` 用的 BuildContext——ImgConfig.builder 回调
-            // 签名里本身没有 context。`MediaQuery.sizeOf` 比 `.of().size`
-            // 精准订阅，window metrics 其他字段变动不会触发图片重建。
-            final constrainedImage = Builder(
-              builder: (context) {
-                final maxH = MediaQuery.sizeOf(context).height *
-                    _kMaxImageHeightRatio;
-                return ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: maxH),
-                  child: image,
-                );
-              },
-            );
+           // 高度上限：窗口高度 * [_kMaxImageHeightRatio]。`Builder` 只为
+           // 取到 `MediaQuery` 用的 BuildContext——ImgConfig.builder 回调
+           // 签名里本身没有 context。`MediaQuery.sizeOf` 比 `.of().size`
+           // 精准订阅，window metrics 其他字段变动不会触发图片重建。
+           final constrainedImage = Builder(
+             builder: (context) {
+               final maxH =
+                   MediaQuery.sizeOf(context).height * _kMaxImageHeightRatio;
+               return ConstrainedBox(
+                 constraints: BoxConstraints(maxHeight: maxH),
+                 child: image,
+               );
+             },
+           );
 
-            // 仅在 onTap 非空时让图片响应点击；caption 区保持纯文本（可选中）
-            Widget imageArea = ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: constrainedImage,
-            );
-            if (onTap != null) {
-              imageArea = MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onTap(url),
-                  child: imageArea,
-                ),
-              );
-            }
+           // 仅在 onTap 非空时让图片响应点击；caption 区保持纯文本（可选中）
+           Widget imageArea = ClipRRect(
+             borderRadius: BorderRadius.circular(4),
+             child: constrainedImage,
+           );
+           if (onTap != null) {
+             imageArea = MouseRegion(
+               cursor: SystemMouseCursors.click,
+               child: GestureDetector(
+                 behavior: HitTestBehavior.opaque,
+                 onTap: () => onTap(url),
+                 child: imageArea,
+               ),
+             );
+           }
 
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(child: imageArea),
-                  if (isFigure && caption.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        top: 6,
-                        left: 16,
-                        right: 16,
-                      ),
-                      child: Text.rich(
-                        TextSpan(
-                          children: _highlightSpans(
-                            _parseCaptionSpans(
-                              caption,
-                              captionStyle ?? const TextStyle(),
-                            ),
-                            highlightQuery,
-                            highlightBg,
-                            highlightFg,
-                          ),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
+           return Padding(
+             padding: const EdgeInsets.symmetric(vertical: 8),
+             child: Column(
+               mainAxisSize: MainAxisSize.min,
+               children: [
+                 Center(child: imageArea),
+                 if (isFigure && caption.isNotEmpty)
+                   Padding(
+                     padding: const EdgeInsets.only(
+                       top: 6,
+                       left: 16,
+                       right: 16,
+                     ),
+                     child: Text.rich(
+                       TextSpan(
+                         children: _highlightSpans(
+                           _parseCaptionSpans(
+                             caption,
+                             captionStyle ?? const TextStyle(),
+                             selectedTextListenable,
+                           ),
+                           highlightQuery,
+                           highlightBg,
+                           highlightFg,
+                         ),
+                       ),
+                       textAlign: TextAlign.center,
+                     ),
+                   ),
+               ],
+             ),
+           );
+         },
+       );
 }
 
 /// 在已解析的 span 列表中高亮搜索词。
@@ -146,16 +150,20 @@ List<InlineSpan> _highlightSpans(
         break;
       }
       if (idx > start) {
-        result.add(TextSpan(text: text.substring(start, idx), style: span.style));
+        result.add(
+          TextSpan(text: text.substring(start, idx), style: span.style),
+        );
       }
-      result.add(TextSpan(
-        text: text.substring(idx, idx + query.length),
-        style: span.style?.copyWith(
-          backgroundColor: bg,
-          color: fg,
-          fontWeight: FontWeight.w600,
+      result.add(
+        TextSpan(
+          text: text.substring(idx, idx + query.length),
+          style: span.style?.copyWith(
+            backgroundColor: bg,
+            color: fg,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      ));
+      );
       start = idx + query.length;
     }
   }
@@ -167,7 +175,11 @@ List<InlineSpan> _highlightSpans(
 ///
 /// API 的 figure_title 常包含不带 $...$ 的裸 LaTeX 命令，
 /// 先用 [_wrapBareLatex] 添加定界符，再解析 $...$。
-List<InlineSpan> _parseCaptionSpans(String text, TextStyle style) {
+List<InlineSpan> _parseCaptionSpans(
+  String text,
+  TextStyle style,
+  ValueListenable<String?>? selectedTextListenable,
+) {
   final processed = _wrapBareLatex(text);
   final spans = <InlineSpan>[];
   final regex = RegExp(r'\$([^\$\n]+?)\$');
@@ -175,26 +187,21 @@ List<InlineSpan> _parseCaptionSpans(String text, TextStyle style) {
 
   for (final match in regex.allMatches(processed)) {
     if (match.start > lastEnd) {
-      spans.add(TextSpan(
-        text: processed.substring(lastEnd, match.start),
-        style: style,
-      ));
+      spans.add(
+        TextSpan(text: processed.substring(lastEnd, match.start), style: style),
+      );
     }
 
     final equation = match.group(1)!.trim();
-    spans.add(WidgetSpan(
-      alignment: PlaceholderAlignment.middle,
-      child: Math.tex(
-        equation,
-        textStyle: style,
+    spans.add(
+      buildNrSelectableMathSpan(
+        source: '\$$equation\$',
+        equation: equation,
+        style: style,
         mathStyle: MathStyle.text,
-        textScaleFactor: 1,
-        onErrorFallback: (e) => Text(
-          '\$$equation\$',
-          style: style.copyWith(fontStyle: FontStyle.italic),
-        ),
+        selectedTextListenable: selectedTextListenable,
       ),
-    ));
+    );
 
     lastEnd = match.end;
   }
@@ -280,12 +287,35 @@ int _scanMath(String text, int i) {
       continue;
     }
     // { }
-    if (c == 0x7B) { braceDepth++; i++; continue; }
-    if (c == 0x7D && braceDepth > 0) { braceDepth--; i++; continue; }
-    if (braceDepth > 0) { i++; continue; }
+    if (c == 0x7B) {
+      braceDepth++;
+      i++;
+      continue;
+    }
+    if (c == 0x7D && braceDepth > 0) {
+      braceDepth--;
+      i++;
+      continue;
+    }
+    if (braceDepth > 0) {
+      i++;
+      continue;
+    }
     // 数学字符: _ ^ = < > + - . , : ; / 0-9
-    if (const {0x5F, 0x5E, 0x3D, 0x3C, 0x3E, 0x2B, 0x2D, 0x2E, 0x2C, 0x3A, 0x3B, 0x2F}
-            .contains(c) ||
+    if (const {
+          0x5F,
+          0x5E,
+          0x3D,
+          0x3C,
+          0x3E,
+          0x2B,
+          0x2D,
+          0x2E,
+          0x2C,
+          0x3A,
+          0x3B,
+          0x2F,
+        }.contains(c) ||
         (c >= 0x30 && c <= 0x39)) {
       i++;
       continue;
@@ -296,18 +326,29 @@ int _scanMath(String text, int i) {
       while (j < len && text.codeUnitAt(j) == 0x20) {
         j++;
       }
-      if (j < len && _mathAhead(text, j)) { parenDepth++; i++; continue; }
+      if (j < len && _mathAhead(text, j)) {
+        parenDepth++;
+        i++;
+        continue;
+      }
       break;
     }
     // ) — 有配对 ( 时才纳入
-    if (c == 0x29 && parenDepth > 0) { parenDepth--; i++; continue; }
+    if (c == 0x29 && parenDepth > 0) {
+      parenDepth--;
+      i++;
+      continue;
+    }
     // 空格 — 仅当后续还有数学时才跳过
     if (c == 0x20) {
       var j = i + 1;
       while (j < len && text.codeUnitAt(j) == 0x20) {
         j++;
       }
-      if (j < len && _mathAhead(text, j)) { i = j; continue; }
+      if (j < len && _mathAhead(text, j)) {
+        i = j;
+        continue;
+      }
       break;
     }
     // 单字母（变量），多字母（单词）则结束
@@ -327,8 +368,17 @@ bool _mathAhead(String t, int j) {
   if (j >= t.length) return false;
   final c = t.codeUnitAt(j);
   if (_isCmd(t, j)) return true;
-  if (const {0x5F, 0x5E, 0x7B, 0x3D, 0x3C, 0x3E, 0x2B, 0x2D, 0x2E}
-          .contains(c) ||
+  if (const {
+        0x5F,
+        0x5E,
+        0x7B,
+        0x3D,
+        0x3C,
+        0x3E,
+        0x2B,
+        0x2D,
+        0x2E,
+      }.contains(c) ||
       (c >= 0x30 && c <= 0x39)) {
     return true;
   }

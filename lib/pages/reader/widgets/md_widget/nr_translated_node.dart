@@ -1,21 +1,23 @@
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../../services/translation_style.dart';
+import 'nr_selectable_math.dart';
 
 /// `[[tr]]...[[/tr]]` 标记的 inline syntax 识别器。
 /// 被 themed / weakened / dashed / highlight / blur 五种自定义渲染样式共用。
 class NRTranslatedInlineSyntax extends md.InlineSyntax {
   NRTranslatedInlineSyntax()
-      : super(
-          '${RegExp.escape(kTranslationMarkerOpen)}'
-          r'([\s\S]*?)'
-          '${RegExp.escape(kTranslationMarkerClose)}',
-        );
+    : super(
+        '${RegExp.escape(kTranslationMarkerOpen)}'
+        r'([\s\S]*?)'
+        '${RegExp.escape(kTranslationMarkerClose)}',
+      );
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -38,12 +40,14 @@ class NRTranslatedSpanNode extends SpanNode {
   final Color color;
   final MarkdownConfig config;
   final String styleId;
+  final ValueListenable<String?>? selectedTextListenable;
 
   NRTranslatedSpanNode(
     this.content,
     this.color,
     this.config, {
     this.styleId = 'themed',
+    this.selectedTextListenable,
   });
 
   @override
@@ -101,9 +105,7 @@ class NRTranslatedSpanNode extends SpanNode {
     final base = parentStyle ?? config.p.textStyle;
     final styled = base.copyWith(color: color);
     final span = _buildWithLatex(styled, color);
-    return WidgetSpan(
-      child: _BlurRevealText(child: Text.rich(span)),
-    );
+    return WidgetSpan(child: _BlurRevealText(child: Text.rich(span)));
   }
 
   // ── LaTeX 感知的文本构建器 ──
@@ -119,55 +121,35 @@ class NRTranslatedSpanNode extends SpanNode {
 
     for (final match in matches) {
       if (match.start > cursor) {
-        children.add(TextSpan(
-          text: content.substring(cursor, match.start),
-          style: styled,
-        ));
+        children.add(
+          TextSpan(text: content.substring(cursor, match.start), style: styled),
+        );
       }
 
       final equation = match.group(1)!.trim();
       final trailingPunct = match.group(2);
-      final mathStyle =
-          styled.copyWith(color: mathColor.withValues(alpha: 0.85));
-
-      final mathWidget = Math.tex(
-        equation,
-        textStyle: mathStyle,
-        mathStyle: MathStyle.text,
-        textScaleFactor: 1,
-        onErrorFallback: (e) => Text('\$$equation\$', style: styled),
+      final mathStyle = styled.copyWith(
+        color: mathColor.withValues(alpha: 0.85),
       );
 
-      if (trailingPunct != null && trailingPunct.isNotEmpty) {
-        children.add(WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                mathWidget,
-                Text(trailingPunct, style: styled),
-              ],
-            ),
-          ),
-        ));
-      } else {
-        children.add(WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: mathWidget,
-        ));
-      }
+      children.add(
+        buildNrSelectableMathSpan(
+          source: trailingPunct != null && trailingPunct.isNotEmpty
+              ? '\$$equation\$$trailingPunct'
+              : '\$$equation\$',
+          equation: equation,
+          style: mathStyle,
+          mathStyle: MathStyle.text,
+          selectedTextListenable: selectedTextListenable,
+          trailingText: trailingPunct,
+        ),
+      );
 
       cursor = match.end;
     }
 
     if (cursor < content.length) {
-      children.add(TextSpan(
-        text: content.substring(cursor),
-        style: styled,
-      ));
+      children.add(TextSpan(text: content.substring(cursor), style: styled));
     }
 
     return TextSpan(children: children);
@@ -208,10 +190,16 @@ class _BlurRevealTextState extends State<_BlurRevealText> {
 SpanNodeGeneratorWithTag nrTranslatedGenerator({
   required Color color,
   String styleId = 'themed',
+  ValueListenable<String?>? selectedTextListenable,
 }) {
   return SpanNodeGeneratorWithTag(
     tag: 'translated',
-    generator: (e, config, _) =>
-        NRTranslatedSpanNode(e.textContent, color, config, styleId: styleId),
+    generator: (e, config, _) => NRTranslatedSpanNode(
+      e.textContent,
+      color,
+      config,
+      styleId: styleId,
+      selectedTextListenable: selectedTextListenable,
+    ),
   );
 }

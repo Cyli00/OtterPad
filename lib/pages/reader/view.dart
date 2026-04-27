@@ -45,8 +45,7 @@ class ReaderPage extends ConsumerStatefulWidget {
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
 }
 
-class _ReaderPageState extends ConsumerState<ReaderPage>
-    {
+class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   bool _showPreview = false;
@@ -79,6 +78,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   // 文本选择
   String? _selectedText;
+  final _selectedTextNotifier = ValueNotifier<String?>(null);
   String? _textOnPointerDown;
   Offset? _pointerDownPosition;
 
@@ -160,34 +160,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    ref.read(taskProvider.notifier).extractDocument(
-      filePath: filePath,
-      title: widget.document.title,
-      apiState: ref.read(docExtractApiProvider),
-      onSuccess: (mdPath, markdownContent) {
-        if (!mounted) return;
-        final cacheService = MarkdownDocumentCacheService.instance;
-        final cacheKey = cacheService.buildMemoryCacheKey(
-          mdPath: mdPath,
+    ref
+        .read(taskProvider.notifier)
+        .extractDocument(
+          filePath: filePath,
           title: widget.document.title,
-          markdownContent: markdownContent,
+          apiState: ref.read(docExtractApiProvider),
+          onSuccess: (mdPath, markdownContent) {
+            if (!mounted) return;
+            final cacheService = MarkdownDocumentCacheService.instance;
+            final cacheKey = cacheService.buildMemoryCacheKey(
+              mdPath: mdPath,
+              title: widget.document.title,
+              markdownContent: markdownContent,
+            );
+            cacheService.primeResolvedContent(
+              cacheKey: cacheKey,
+              content: markdownContent,
+            );
+            setState(() {
+              _mdPath = mdPath;
+              _mdContent = markdownContent;
+              _markdownCacheKey = cacheKey;
+              _searchSnapshot = cacheService.getSearchSnapshot(
+                cacheKey: cacheKey,
+                markdownContent: markdownContent,
+              );
+              _showPreview = true;
+            });
+          },
         );
-        cacheService.primeResolvedContent(
-          cacheKey: cacheKey,
-          content: markdownContent,
-        );
-        setState(() {
-          _mdPath = mdPath;
-          _mdContent = markdownContent;
-          _markdownCacheKey = cacheKey;
-          _searchSnapshot = cacheService.getSearchSnapshot(
-            cacheKey: cacheKey,
-            markdownContent: markdownContent,
-          );
-          _showPreview = true;
-        });
-      },
-    );
   }
 
   Future<void> _onReprocessPressed() async {
@@ -199,10 +201,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     ref.read(snackBarServiceProvider).showResult(message: '正在重新排版…');
     try {
-      final (mdPath, content) = await DocExtractService.instance.reprocessMarkdown(
-        pdfPath: filePath,
-        title: widget.document.title,
-      );
+      final (mdPath, content) = await DocExtractService.instance
+          .reprocessMarkdown(pdfPath: filePath, title: widget.document.title);
       if (!mounted) return;
 
       // 刷新缓存和界面
@@ -366,7 +366,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(() {
       _currentResultIndex =
           (_currentResultIndex - 1 + _searchResults.length) %
-              _searchResults.length;
+          _searchResults.length;
     });
     _scrollToCharOffset(_searchResults[_currentResultIndex].charOffset);
   }
@@ -374,8 +374,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void _goToNextResult() {
     if (_searchResults.isEmpty) return;
     setState(() {
-      _currentResultIndex =
-          (_currentResultIndex + 1) % _searchResults.length;
+      _currentResultIndex = (_currentResultIndex + 1) % _searchResults.length;
     });
     _scrollToCharOffset(_searchResults[_currentResultIndex].charOffset);
   }
@@ -402,7 +401,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _toolbarHideTimer?.cancel();
     await showReaderTextSheet(context);
     _sheetOpen = false;
-    if (_isDesktop && _toolbarsVisible) _scheduleToolbarHide();
   }
 
   Future<void> _openThemeSheet() async {
@@ -410,7 +408,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _toolbarHideTimer?.cancel();
     await showReaderThemeSheet(context);
     _sheetOpen = false;
-    if (_isDesktop && _toolbarsVisible) _scheduleToolbarHide();
   }
 
   void _openNotesSheet() {
@@ -429,7 +426,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void _toggleToolbars() {
     if (_sheetOpen) return;
     setState(() => _toolbarsVisible = !_toolbarsVisible);
-    if (_isDesktop && _toolbarsVisible) _scheduleToolbarHide();
+  }
+
+  /// Markdown 滚动方向 → 自动隐藏/显示工具栏。
+  ///
+  /// 向下阅读（reverse）隐藏，向上回翻（forward）显示。
+  /// [UserScrollNotification] 只在用户主动拖拽时触发，惯性阶段不会触发，
+  /// 避免 fling 结束时的方向抖动。
+  bool _handleMarkdownScrollNotification(UserScrollNotification notification) {
+    if (_sheetOpen || _searchActive || _highlightQuery != null) return false;
+
+    switch (notification.direction) {
+      case ScrollDirection.reverse:
+        if (_toolbarsVisible) setState(() => _toolbarsVisible = false);
+      case ScrollDirection.forward:
+        if (!_toolbarsVisible) setState(() => _toolbarsVisible = true);
+      case ScrollDirection.idle:
+        break;
+    }
+    return false;
   }
 
   /// 桌面端：鼠标悬停时根据位置决定工具栏显隐。
@@ -458,6 +473,82 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
   }
 
+  // ─── 段落上下文扩展（翻译用）───
+
+  String? _expandToParagraphContext(String selectedText) {
+    final md = _mdContent;
+    if (md == null || md.isEmpty) return null;
+
+    final plainText = _stripBasicMarkdown(md);
+
+    final paragraphs = plainText
+        .split(RegExp(r'\n\s*\n'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (paragraphs.isEmpty) return null;
+
+    // 跨段落选择时 SelectionArea 会丢失 \n\n，需要用空白规范化匹配
+    String norm(String s) => s.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final normSelected = norm(selectedText);
+    final normParagraphs = paragraphs.map(norm).toList();
+
+    int startIdx = -1;
+    int endIdx = -1;
+
+    for (final chunkLen in [60, 30, 15]) {
+      if (startIdx >= 0 && endIdx >= 0) break;
+      final len = normSelected.length.clamp(1, chunkLen);
+
+      if (startIdx < 0) {
+        final chunk = normSelected.substring(0, len);
+        for (int i = 0; i < normParagraphs.length; i++) {
+          if (normParagraphs[i].contains(chunk)) {
+            startIdx = i;
+            break;
+          }
+        }
+      }
+
+      if (endIdx < 0) {
+        final chunk = normSelected.substring(normSelected.length - len);
+        for (int i = normParagraphs.length - 1; i >= 0; i--) {
+          if (normParagraphs[i].contains(chunk)) {
+            endIdx = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (startIdx < 0 && endIdx < 0) return null;
+    if (startIdx < 0) startIdx = endIdx;
+    if (endIdx < 0) endIdx = startIdx;
+    if (endIdx < startIdx) endIdx = startIdx;
+
+    final expanded = paragraphs.sublist(startIdx, endIdx + 1).join('\n\n');
+    return norm(expanded) == normSelected ? null : expanded;
+  }
+
+  static String _stripBasicMarkdown(String md) {
+    return md
+        .replaceAll(RegExp(r'!\[([^\]]*)\]\([^)]*\)'), r'$1')
+        .replaceAll(RegExp(r'\[([^\]]*)\]\([^)]*\)'), r'$1')
+        .replaceAll(RegExp(r'\*{2}(.+?)\*{2}'), r'$1')
+        .replaceAll(RegExp(r'_{2}(.+?)_{2}'), r'$1')
+        .replaceAll(
+          RegExp(r'(?<![a-zA-Z0-9])\*(?!\s)(.+?)(?<!\s)\*(?![a-zA-Z0-9])'),
+          r'$1',
+        )
+        .replaceAll(
+          RegExp(r'(?<![a-zA-Z0-9])_(?!\s)(.+?)(?<!\s)_(?![a-zA-Z0-9])'),
+          r'$1',
+        )
+        .replaceAll(RegExp(r'`([^`]+)`'), r'$1')
+        .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
+        .replaceAll(RegExp(r'^>\s?', multiLine: true), '');
+  }
+
   // ─── 大纲导航 ───
 
   /// 统一跳转：charOffset → widget index → scrollToIndex。
@@ -480,7 +571,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   // ── 更多操作 ────────────────────────────────────────────────────────
 
   static PopupMenuItem<String> _popupItem(
-      String value, IconData icon, String title, ColorScheme cs) {
+    String value,
+    IconData icon,
+    String title,
+    ColorScheme cs,
+  ) {
     return PopupMenuItem<String>(
       value: value,
       height: 44,
@@ -488,11 +583,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         children: [
           Icon(icon, size: 20, color: cs.onSurfaceVariant),
           const SizedBox(width: 14),
-          Text(title,
-              style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500)),
+          Text(
+            title,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -534,8 +632,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           constraints: BoxConstraints(maxHeight: maxH),
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -551,7 +648,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 24, vertical: 12),
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -567,7 +666,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 child: ListView.builder(
                   shrinkWrap: true,
                   padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(ctx).padding.bottom + 16),
+                    bottom: MediaQuery.of(ctx).padding.bottom + 16,
+                  ),
                   itemCount: favorites.length,
                   itemBuilder: (_, i) {
                     final fav = favorites[i];
@@ -582,16 +682,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               Navigator.pop(ctx);
                               ref
                                   .read(snackBarServiceProvider)
-                                  .showResult(
-                                      message: '已添加到「${fav.name}」');
+                                  .showResult(message: '已添加到「${fav.name}」');
                             },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
-                            Text(fav.emoji,
-                                style: const TextStyle(fontSize: 20)),
+                            Text(
+                              fav.emoji,
+                              style: const TextStyle(fontSize: 20),
+                            ),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Text(
@@ -604,8 +707,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                             ),
                             if (alreadyIn)
-                              Icon(Symbols.check_rounded,
-                                  color: cs.primary, size: 22),
+                              Icon(
+                                Symbols.check_rounded,
+                                color: cs.primary,
+                                size: 22,
+                              ),
                           ],
                         ),
                       ),
@@ -770,7 +876,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           onTap: () {
             if (_selectedText != null) {
               Clipboard.setData(ClipboardData(text: _selectedText!));
-              ref.read(snackBarServiceProvider).showResult(
+              ref
+                  .read(snackBarServiceProvider)
+                  .showResult(
                     message: '已复制到剪贴板',
                     duration: const Duration(seconds: 1),
                   );
@@ -802,7 +910,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           onTap: () {
             final text = _selectedText;
             if (text != null && text.trim().isNotEmpty) {
-              showTranslationPopup(context, sourceText: text.trim());
+              final trimmed = text.trim();
+              final fullText = _expandToParagraphContext(trimmed);
+              showTranslationPopup(
+                context,
+                sourceText: trimmed,
+                fullText: fullText,
+              );
             }
           },
         ),
@@ -817,6 +931,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _pdfSearcher?.dispose();
     _pdfSearchController.dispose();
     _pdfSearchFocusNode.dispose();
+    _selectedTextNotifier.dispose();
     _scrollController.dispose();
     _selectionToolbarEntry?.remove();
     super.dispose();
@@ -829,9 +944,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final readerSettings = ref.watch(readerSettingsProvider);
-    final extracting = ref.watch(taskProvider.select(
-      (tasks) => tasks[TaskType.extractDocument]?.status == TaskStatus.running,
-    ));
+    final extracting = ref.watch(
+      taskProvider.select(
+        (tasks) =>
+            tasks[TaskType.extractDocument]?.status == TaskStatus.running,
+      ),
+    );
 
     // 异步初始化完成前显示骨架加载状态
     if (!_initialized) {
@@ -887,80 +1005,82 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         child: Listener(
           onPointerHover: _isDesktop ? _onDesktopPointerHover : null,
           child: Stack(
-          children: [
-            // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
-            Positioned.fill(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-                color: contentBg,
-                child: fileExists
-                    ? _buildBody(theme, cs, readerSettings)
-                    : _buildFileNotFound(theme, cs),
-              ),
-            ),
-            // ── 顶部工具栏（沉浸式时向上滑出） ──
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedSlide(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                offset:
-                    _toolbarsVisible ? Offset.zero : const Offset(0, -1),
-                child: Container(
-                  color: cs.surface.withValues(
-                      alpha: readerSettings.toolbarOpacity.value),
-                  child: isMarkdownHighlightMode
-                      ? _buildHighlightSearchBar(cs)
-                      : (_searchActive && !_showPreview
-                          ? _buildPdfSearchBar(cs)
-                          : _buildToolbar(theme, cs,
-                              extracting: extracting)),
+            children: [
+              // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
+              Positioned.fill(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  color: contentBg,
+                  child: fileExists
+                      ? _buildBody(theme, cs, readerSettings)
+                      : _buildFileNotFound(theme, cs),
                 ),
               ),
-            ),
-            // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
-            if (_showPreview && _hasResult && _mdContent != null)
+              // ── 顶部工具栏（沉浸式时向上滑出） ──
               Positioned(
-                bottom: 0,
+                top: 0,
                 left: 0,
                 right: 0,
                 child: AnimatedSlide(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOut,
-                  offset:
-                      _toolbarsVisible ? Offset.zero : const Offset(0, 1),
-                  child: _buildBottomBar(theme, cs, readerSettings),
+                  offset: _toolbarsVisible ? Offset.zero : const Offset(0, -1),
+                  child: Container(
+                    color: cs.surface.withValues(
+                      alpha: readerSettings.toolbarOpacity.value,
+                    ),
+                    child: isMarkdownHighlightMode
+                        ? _buildHighlightSearchBar(cs)
+                        : (_searchActive && !_showPreview
+                              ? _buildPdfSearchBar(cs)
+                              : _buildToolbar(
+                                  theme,
+                                  cs,
+                                  extracting: extracting,
+                                )),
+                  ),
                 ),
               ),
-            // ── 浮动搜索结果导航器 ──
-            if (isMarkdownHighlightMode && _searchResults.isNotEmpty)
-              Positioned(
-                right: 16,
-                bottom: 32,
-                child: _buildResultNavigator(cs),
-              ),
-            if (showPdfNavigator)
-              Positioned(
-                right: 16,
-                bottom: 32,
-                child: _buildPdfResultNavigator(cs, pdfMatchCount),
-              ),
-            // ── 搜索遮罩层 ──
-            if (_searchActive && _showPreview && _searchSnapshot != null)
-              Positioned.fill(
-                child: SearchOverlay(
-                  readerSettings: readerSettings,
-                  searchSnapshot: _searchSnapshot!,
-                  onResultTap: _onSearchResultTap,
-                  onDismiss: _closeSearch,
-                  initialQuery: _highlightQuery,
+              // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
+              if (_showPreview && _hasResult && _mdContent != null)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    offset: _toolbarsVisible ? Offset.zero : const Offset(0, 1),
+                    child: _buildBottomBar(theme, cs, readerSettings),
+                  ),
                 ),
-              ),
-          ],
-        ),
+              // ── 浮动搜索结果导航器 ──
+              if (isMarkdownHighlightMode && _searchResults.isNotEmpty)
+                Positioned(
+                  right: 16,
+                  bottom: 32,
+                  child: _buildResultNavigator(cs),
+                ),
+              if (showPdfNavigator)
+                Positioned(
+                  right: 16,
+                  bottom: 32,
+                  child: _buildPdfResultNavigator(cs, pdfMatchCount),
+                ),
+              // ── 搜索遮罩层 ──
+              if (_searchActive && _showPreview && _searchSnapshot != null)
+                Positioned.fill(
+                  child: SearchOverlay(
+                    readerSettings: readerSettings,
+                    searchSnapshot: _searchSnapshot!,
+                    onResultTap: _onSearchResultTap,
+                    onDismiss: _closeSearch,
+                    initialQuery: _highlightQuery,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -969,7 +1089,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   /// 顶部工具栏：返回 / 搜索 / PDF↔MD 切换 / 重新提取 / 信息
   ///
   /// 大纲、外观（颜色/背景）、字体面板 3 个按钮已挪到 [_buildBottomBar]。
-  Widget _buildToolbar(ThemeData theme, ColorScheme cs, {bool extracting = false}) {
+  Widget _buildToolbar(
+    ThemeData theme,
+    ColorScheme cs, {
+    bool extracting = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: SizedBox(
@@ -988,7 +1112,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ),
             const Spacer(),
             // 搜索
-            if ((_showPreview && _hasResult) || (!_showPreview && (_fileExists ?? false)))
+            if ((_showPreview && _hasResult) ||
+                (!_showPreview && (_fileExists ?? false)))
               IconButton(
                 icon: Icon(
                   Symbols.search_rounded,
@@ -1025,7 +1150,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               color: cs.surfaceContainerHigh,
               elevation: 3,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(16),
+              ),
               position: PopupMenuPosition.under,
               onSelected: (v) {
                 switch (v) {
@@ -1043,25 +1169,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               },
               itemBuilder: (_) {
                 final inFav = _isInAnyFavorite();
-                final canRetranslate = ref
-                        .read(documentTranslationProvider(
-                            widget.document.filePath))
+                final canRetranslate =
+                    ref
+                        .read(
+                          documentTranslationProvider(widget.document.filePath),
+                        )
                         .hasResult &&
                     _mdContent != null;
                 return [
                   _popupItem('info', Symbols.info_rounded, '文献信息', cs),
                   if (inFav)
-                    _popupItem('favorite_remove',
-                        Symbols.bookmark_remove_rounded, '移出收藏夹', cs)
+                    _popupItem(
+                      'favorite_remove',
+                      Symbols.bookmark_remove_rounded,
+                      '移出收藏夹',
+                      cs,
+                    )
                   else
-                    _popupItem('favorite_add',
-                        Symbols.bookmark_add_rounded, '移入收藏夹', cs),
+                    _popupItem(
+                      'favorite_add',
+                      Symbols.bookmark_add_rounded,
+                      '移入收藏夹',
+                      cs,
+                    ),
                   if (_hasResult)
                     _popupItem(
-                        'reprocess', Symbols.refresh_rounded, '重新排版', cs),
+                      'reprocess',
+                      Symbols.refresh_rounded,
+                      '重新排版',
+                      cs,
+                    ),
                   if (canRetranslate)
-                    _popupItem('retranslate', Symbols.translate_rounded,
-                        '重新翻译', cs),
+                    _popupItem(
+                      'retranslate',
+                      Symbols.translate_rounded,
+                      '重新翻译',
+                      cs,
+                    ),
                 ];
               },
             ),
@@ -1197,10 +1341,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       Expanded(
                         child: Text(
                           _highlightQuery ?? '',
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: 15,
-                          ),
+                          style: TextStyle(color: cs.onSurface, fontSize: 15),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1369,14 +1510,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return Container(
       decoration: BoxDecoration(
         color: cs.surface.withValues(
-            alpha: readerSettings.toolbarOpacity.value),
+          alpha: readerSettings.toolbarOpacity.value,
+        ),
         border: Border(
           top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
         ),
       ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       child: SizedBox(
         height: 56,
         child: Row(
@@ -1405,7 +1545,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               cs,
               icon: Symbols.custom_typography_rounded,
               tooltip: '字体',
-              onTap: _openTextSheet
+              onTap: _openTextSheet,
             ),
           ],
         ),
@@ -1418,8 +1558,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   /// - loading → 圆圈进度（SnackBar 已在顶部提示），点击无响应
   /// - done → 文本按钮，显示当前 mode（双语 / 原文 / 译文），点击循环切换
   Widget _buildTranslationBottomButton(ColorScheme cs) {
-    final translation =
-        ref.watch(documentTranslationProvider(widget.document.filePath));
+    final translation = ref.watch(
+      documentTranslationProvider(widget.document.filePath),
+    );
 
     if (translation.status == DocTranslationStatus.loading) {
       return const SizedBox(
@@ -1447,28 +1588,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       icon: translation.status == DocTranslationStatus.failed
           ? Symbols.translate_rounded
           : Symbols.translate_rounded,
-      tooltip: translation.status == DocTranslationStatus.failed ? '重试翻译' : '翻译',
+      tooltip: translation.status == DocTranslationStatus.failed
+          ? '重试翻译'
+          : '翻译',
       onTap: _handleTranslate,
     );
   }
 
   DocTranslationMode _nextMode(DocTranslationMode mode) => switch (mode) {
-        DocTranslationMode.bilingual => DocTranslationMode.off,
-        DocTranslationMode.off => DocTranslationMode.translated,
-        DocTranslationMode.translated => DocTranslationMode.bilingual,
-      };
+    DocTranslationMode.bilingual => DocTranslationMode.off,
+    DocTranslationMode.off => DocTranslationMode.translated,
+    DocTranslationMode.translated => DocTranslationMode.bilingual,
+  };
 
   IconData _modeIcon(DocTranslationMode mode) => switch (mode) {
-        DocTranslationMode.bilingual => Symbols.text_compare_rounded,
-        DocTranslationMode.off => Symbols.raw_on_rounded,
-        DocTranslationMode.translated => Symbols.language_rounded,
-      };
+    DocTranslationMode.bilingual => Symbols.text_compare_rounded,
+    DocTranslationMode.off => Symbols.raw_on_rounded,
+    DocTranslationMode.translated => Symbols.language_rounded,
+  };
 
   String _modeLabel(DocTranslationMode mode) => switch (mode) {
-        DocTranslationMode.bilingual => '双语',
-        DocTranslationMode.off => '原文',
-        DocTranslationMode.translated => '译文',
-      };
+    DocTranslationMode.bilingual => '双语',
+    DocTranslationMode.off => '原文',
+    DocTranslationMode.translated => '译文',
+  };
 
   /// 启动全文翻译：show 一个长驻 SnackBar 订阅 provider 的进度 ValueListenable，
   /// 翻译结束（成功/失败/取消）后 finish 关闭。
@@ -1476,21 +1619,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mdContent == null || _mdContent!.isEmpty) return;
 
     final pdfPath = widget.document.filePath;
-    final notifier =
-        ref.read(documentTranslationProvider(pdfPath).notifier);
+    final notifier = ref.read(documentTranslationProvider(pdfPath).notifier);
 
     // 先显示 SnackBar 让用户立即看到反馈——translate 内部异步开始后才有第一次
     // onProgress，避免短暂的"点了没反应"观感。
     _translationProgressHandle?.dismiss();
-    _translationProgressHandle =
-        ref.read(snackBarServiceProvider).showListenableProgress(
-              listenable: _adaptProgress(notifier.progress),
-              onCancel: () {
-                notifier.cancel();
-                _translationProgressHandle?.dismiss();
-                _translationProgressHandle = null;
-              },
-            );
+    _translationProgressHandle = ref
+        .read(snackBarServiceProvider)
+        .showListenableProgress(
+          listenable: _adaptProgress(notifier.progress),
+          onCancel: () {
+            notifier.cancel();
+            _translationProgressHandle?.dismiss();
+            _translationProgressHandle = null;
+          },
+        );
 
     await notifier.translate(_mdContent!);
     if (!mounted) return;
@@ -1508,7 +1651,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   /// 把 `TranslationProgress` 的 ValueListenable 适配到 SnackBar 需要的
   /// `ListenableProgress` 类型——让 snackbar_service 不必依赖业务类型。
   ValueListenable<ListenableProgress> _adaptProgress(
-      ValueListenable<TranslationProgress> source) {
+    ValueListenable<TranslationProgress> source,
+  ) {
     final adapter = ValueNotifier<ListenableProgress>(
       ListenableProgress(
         current: source.value.current,
@@ -1524,6 +1668,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         status: v.status,
       );
     }
+
     source.addListener(listener);
     // 适配器随翻译结束一起被 GC——SnackBar 关闭后 ValueListenableBuilder 不再
     // 调用 build，listener 也不再被唤醒，无泄漏风险。
@@ -1542,19 +1687,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mdContent == null || _mdContent!.isEmpty) return;
 
     final pdfPath = widget.document.filePath;
-    final notifier =
-        ref.read(documentTranslationProvider(pdfPath).notifier);
+    final notifier = ref.read(documentTranslationProvider(pdfPath).notifier);
 
     _translationProgressHandle?.dismiss();
-    _translationProgressHandle =
-        ref.read(snackBarServiceProvider).showListenableProgress(
-              listenable: _adaptProgress(notifier.progress),
-              onCancel: () {
-                notifier.cancel();
-                _translationProgressHandle?.dismiss();
-                _translationProgressHandle = null;
-              },
-            );
+    _translationProgressHandle = ref
+        .read(snackBarServiceProvider)
+        .showListenableProgress(
+          listenable: _adaptProgress(notifier.progress),
+          onCancel: () {
+            notifier.cancel();
+            _translationProgressHandle?.dismiss();
+            _translationProgressHandle = null;
+          },
+        );
 
     await notifier.retranslate(_mdContent!);
     if (!mounted) return;
@@ -1597,7 +1742,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_hasResult) {
       return IconButton(
         icon: Icon(
-          _showPreview ? Symbols.picture_as_pdf_rounded : Symbols.article_rounded,
+          _showPreview
+              ? Symbols.picture_as_pdf_rounded
+              : Symbols.article_rounded,
           size: 22,
           fill: 1,
           color: cs.onSurfaceVariant,
@@ -1661,8 +1808,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     orientation: ScrollbarOrientation.right,
                     thumbSize: const Size(8, 48),
                     margin: 2,
-                    thumbBuilder:
-                        (context, thumbSize, pageNumber, controller) {
+                    thumbBuilder: (context, thumbSize, pageNumber, controller) {
                       return _PdfScrollThumb(size: thumbSize);
                     },
                   ),
@@ -1672,10 +1818,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Widget _buildMarkdownPreview(
-    ThemeData theme,
-    ReaderSettingsState settings,
-  ) {
+  Widget _buildMarkdownPreview(ThemeData theme, ReaderSettingsState settings) {
     if (_markdownLoadError != null) {
       return Center(
         child: Text(
@@ -1698,8 +1841,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     // 翻译完成后按当前模式织入译文；未翻译或进行中保持原文，避免长文档
     // 在翻译过程中反复重建 widget 列表（完成时一次性切换即可）。
-    final translation =
-        ref.watch(documentTranslationProvider(widget.document.filePath));
+    final translation = ref.watch(
+      documentTranslationProvider(widget.document.filePath),
+    );
     final displayStyle = ref.watch(
       translationConfigProvider.select((c) => c.displayStyle),
     );
@@ -1713,19 +1857,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           )
         : _mdContent!;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: _toggleToolbars,
-      child: _wrapWithSelection(
-        ReaderMarkdownBody(
-          key: ValueKey('reader_md_${effectiveMd.hashCode}'),
-          data: effectiveMd,
-          settings: settings,
-          scrollController: _scrollController,
-          highlightQuery: _highlightQuery,
-          topInset: topPad,
-          bottomInset: bottomPad,
-          onImageTap: _handleMarkdownImageTap,
+    return NotificationListener<UserScrollNotification>(
+      onNotification: _handleMarkdownScrollNotification,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _toggleToolbars,
+        child: _wrapWithSelection(
+          ReaderMarkdownBody(
+            key: ValueKey('reader_md_${effectiveMd.hashCode}'),
+            data: effectiveMd,
+            settings: settings,
+            translationStyleId: displayStyle.id,
+            scrollController: _scrollController,
+            selectedTextListenable: _selectedTextNotifier,
+            highlightQuery: _highlightQuery,
+            topInset: topPad,
+            bottomInset: bottomPad,
+            onImageTap: _handleMarkdownImageTap,
+          ),
         ),
       ),
     );
@@ -1791,6 +1940,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         contextMenuBuilder: (_, _) => const SizedBox.shrink(),
         onSelectionChanged: (content) {
           _selectedText = content?.plainText;
+          _selectedTextNotifier.value = _selectedText;
           if (content == null || content.plainText.isEmpty) {
             _dismissSelectionToolbar();
           }
@@ -1799,7 +1949,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ),
     );
   }
-
 
   Widget _buildFileNotFound(ThemeData theme, ColorScheme cs) {
     return Center(
@@ -1924,8 +2073,7 @@ class _DocumentInfoSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _buildInfoRow(
-                        context, '作者', document.authors.join(', ')),
+                    _buildInfoRow(context, '作者', document.authors.join(', ')),
                     _buildInfoRow(context, '期刊', document.journal ?? ''),
                     _buildInfoRow(context, '年份', document.year ?? ''),
                     _buildInfoRow(context, 'DOI', document.doi ?? ''),

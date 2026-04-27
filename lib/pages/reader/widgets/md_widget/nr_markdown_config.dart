@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:markdown_widget/markdown_widget.dart';
@@ -18,6 +19,7 @@ MarkdownConfig buildReaderMarkdownConfig({
   required ColorScheme colorScheme,
   String? highlightQuery,
   void Function(String url)? onImageTap,
+  ValueListenable<String?>? selectedTextListenable,
 }) {
   final palette = resolveReaderPalette(settings.theme, colorScheme);
   final textColor = palette.text;
@@ -34,109 +36,112 @@ MarkdownConfig buildReaderMarkdownConfig({
     height: 1.7,
   );
 
-  return MarkdownConfig(configs: [
-    PConfig(textStyle: baseStyle),
-    H1Config(
-      style: baseStyle.copyWith(
-        fontSize: settings.fontSize * 1.6,
-        fontWeight: FontWeight.w700,
-        height: 1.3,
+  return MarkdownConfig(
+    configs: [
+      PConfig(textStyle: baseStyle),
+      H1Config(
+        style: baseStyle.copyWith(
+          fontSize: settings.fontSize * 1.6,
+          fontWeight: FontWeight.w700,
+          height: 1.3,
+        ),
       ),
-    ),
-    H2Config(
-      style: baseStyle.copyWith(
-        fontSize: settings.fontSize * 1.35,
-        fontWeight: FontWeight.w700,
-        height: 1.35,
+      H2Config(
+        style: baseStyle.copyWith(
+          fontSize: settings.fontSize * 1.35,
+          fontWeight: FontWeight.w700,
+          height: 1.35,
+        ),
       ),
-    ),
-    H3Config(
-      style: baseStyle.copyWith(
-        fontSize: settings.fontSize * 1.15,
-        fontWeight: FontWeight.w600,
-        height: 1.4,
+      H3Config(
+        style: baseStyle.copyWith(
+          fontSize: settings.fontSize * 1.15,
+          fontWeight: FontWeight.w600,
+          height: 1.4,
+        ),
       ),
-    ),
-    H4Config(
-      style: baseStyle.copyWith(
-        fontSize: settings.fontSize * 1.05,
-        fontWeight: FontWeight.w600,
-        height: 1.4,
+      H4Config(
+        style: baseStyle.copyWith(
+          fontSize: settings.fontSize * 1.05,
+          fontWeight: FontWeight.w600,
+          height: 1.4,
+        ),
       ),
-    ),
-    H5Config(
-      style: baseStyle.copyWith(fontWeight: FontWeight.w600, height: 1.4),
-    ),
-    H6Config(
-      style: baseStyle.copyWith(
-        fontWeight: FontWeight.w500,
-        color: secondaryColor,
-        height: 1.4,
+      H5Config(
+        style: baseStyle.copyWith(fontWeight: FontWeight.w600, height: 1.4),
       ),
-    ),
-    BlockquoteConfig(
-      sideColor: dividerColor,
-      textColor: secondaryColor,
-      sideWith: 3.0,
-      padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
-    ),
-    PreConfig(
-      textStyle: TextStyle(
-        fontFamily: 'Consolas',
-        fontFamilyFallback: const [
-          'Cascadia Mono',
-          'Courier New',
-          'Menlo',
-          'Noto Sans Mono',
-        ],
-        fontSize: settings.fontSize * 0.88,
-        color: textColor,
+      H6Config(
+        style: baseStyle.copyWith(
+          fontWeight: FontWeight.w500,
+          color: secondaryColor,
+          height: 1.4,
+        ),
       ),
-      decoration: BoxDecoration(
-        color: codeBlockBg,
-        borderRadius: const BorderRadius.all(Radius.circular(8)),
+      BlockquoteConfig(
+        sideColor: dividerColor,
+        textColor: secondaryColor,
+        sideWith: 3.0,
+        padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
       ),
-      padding: const EdgeInsets.all(12),
-    ),
-    CodeConfig(
-      style: TextStyle(
-        fontFamily: 'Consolas',
-        fontFamilyFallback: const [
-          'Cascadia Mono',
-          'Courier New',
-          'Menlo',
-          'Noto Sans Mono',
-        ],
-        fontSize: settings.fontSize * 0.88,
-        color: textColor,
-        backgroundColor: codeBlockBg,
+      PreConfig(
+        textStyle: TextStyle(
+          fontFamily: 'Consolas',
+          fontFamilyFallback: const [
+            'Cascadia Mono',
+            'Courier New',
+            'Menlo',
+            'Noto Sans Mono',
+          ],
+          fontSize: settings.fontSize * 0.88,
+          color: textColor,
+        ),
+        decoration: BoxDecoration(
+          color: codeBlockBg,
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
+        ),
+        padding: const EdgeInsets.all(12),
       ),
-    ),
-    LinkConfig(
-      style: baseStyle.copyWith(
-        color: linkColor,
-        decoration: TextDecoration.none,
+      CodeConfig(
+        style: TextStyle(
+          fontFamily: 'Consolas',
+          fontFamilyFallback: const [
+            'Cascadia Mono',
+            'Courier New',
+            'Menlo',
+            'Noto Sans Mono',
+          ],
+          fontSize: settings.fontSize * 0.88,
+          color: textColor,
+          backgroundColor: codeBlockBg,
+        ),
       ),
-    ),
-    TableConfig(
-      headerStyle: baseStyle.copyWith(fontWeight: FontWeight.w600),
-      bodyStyle: baseStyle,
-      border: TableBorder.all(color: dividerColor, width: 0.5),
-      headPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      bodyPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    ),
-    HrConfig(height: 1, color: dividerColor),
-    NRImgConfig(
-      captionStyle: baseStyle.copyWith(
-        fontSize: settings.fontSize * 0.85,
-        color: secondaryColor,
+      LinkConfig(
+        style: baseStyle.copyWith(
+          color: linkColor,
+          decoration: TextDecoration.none,
+        ),
       ),
-      highlightQuery: highlightQuery,
-      highlightBg: colorScheme.primaryContainer,
-      highlightFg: colorScheme.onPrimaryContainer,
-      onTap: onImageTap,
-    ),
-  ]);
+      TableConfig(
+        headerStyle: baseStyle.copyWith(fontWeight: FontWeight.w600),
+        bodyStyle: baseStyle,
+        border: TableBorder.all(color: dividerColor, width: 0.5),
+        headPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        bodyPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      HrConfig(height: 1, color: dividerColor),
+      NRImgConfig(
+        captionStyle: baseStyle.copyWith(
+          fontSize: settings.fontSize * 0.85,
+          color: secondaryColor,
+        ),
+        highlightQuery: highlightQuery,
+        highlightBg: colorScheme.primaryContainer,
+        highlightFg: colorScheme.onPrimaryContainer,
+        onTap: onImageTap,
+        selectedTextListenable: selectedTextListenable,
+      ),
+    ],
+  );
 }
 
 /// 组装 [MarkdownGenerator]，整合 LaTeX / 主题色译文 / HTML 表格等自定义节点。
@@ -148,15 +153,21 @@ MarkdownGenerator buildReaderMarkdownGenerator({
   Widget Function(InlineSpan span)? searchRichTextBuilder,
   Color? translatedColor,
   String? translatedStyleId,
+  ValueListenable<String?>? selectedTextListenable,
 }) {
-  final generators = <SpanNodeGeneratorWithTag>[nrLatexGenerator];
+  final generators = <SpanNodeGeneratorWithTag>[
+    nrLatexGenerator(selectedTextListenable: selectedTextListenable),
+  ];
   final inlineSyntaxes = <md.InlineSyntax>[NRLatexInlineSyntax()];
 
   if (translatedColor != null) {
-    generators.add(nrTranslatedGenerator(
-      color: translatedColor,
-      styleId: translatedStyleId ?? 'themed',
-    ));
+    generators.add(
+      nrTranslatedGenerator(
+        color: translatedColor,
+        styleId: translatedStyleId ?? 'themed',
+        selectedTextListenable: selectedTextListenable,
+      ),
+    );
     inlineSyntaxes.add(NRTranslatedInlineSyntax());
   }
 

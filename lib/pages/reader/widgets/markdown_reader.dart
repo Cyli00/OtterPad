@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
@@ -18,6 +19,7 @@ class ReaderMarkdownBody extends StatefulWidget {
   final String data;
   final ReaderSettingsState settings;
   final AutoScrollController? scrollController;
+  final ValueListenable<String?>? selectedTextListenable;
 
   /// 需要高亮的搜索词（仅控制渲染高亮，不触发跳转）
   final String? highlightQuery;
@@ -30,15 +32,20 @@ class ReaderMarkdownBody extends StatefulWidget {
   /// 回调身份变化不会触发已构建 widget 的重建——State 用闭包包一层稳定引用。
   final void Function(String url)? onImageTap;
 
+  /// 当前译文渲染样式 ID（themed / weakened / blur 等）。
+  final String? translationStyleId;
+
   const ReaderMarkdownBody({
     super.key,
     required this.data,
     required this.settings,
     this.scrollController,
+    this.selectedTextListenable,
     this.highlightQuery,
     this.topInset = 0,
     this.bottomInset = 0,
     this.onImageTap,
+    this.translationStyleId,
   });
 
   @override
@@ -65,7 +72,8 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       _cachedWidgets = null;
     }
     if (widget.settings != oldWidget.settings ||
-        widget.highlightQuery != oldWidget.highlightQuery) {
+        widget.highlightQuery != oldWidget.highlightQuery ||
+        widget.translationStyleId != oldWidget.translationStyleId) {
       _disposeRenderResources();
       _cachedWidgets = null;
     }
@@ -119,8 +127,7 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
     // 保证视觉上先跟上（用 AnimatedTheme 当前的中途插值重建），再安排一次
     // 动画结束后的二次失效，用稳定的最终 cs 重建一次——这是 ReaderTheme.themed
     // 从夜间切到白天时不再"发灰发亮"的关键。
-    if (_lastBrightness != null &&
-        _lastBrightness != colorScheme.brightness) {
+    if (_lastBrightness != null && _lastBrightness != colorScheme.brightness) {
       _renderResources = null;
       _cachedWidgets = null;
       _scheduleThemeSettleRebuild();
@@ -134,7 +141,10 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
     return ListView.builder(
       controller: controller,
       padding: EdgeInsets.fromLTRB(
-        20, 8 + widget.topInset, 20, 40 + widget.bottomInset,
+        20,
+        8 + widget.topInset,
+        20,
+        40 + widget.bottomInset,
       ),
       itemCount: widgets.length,
       itemBuilder: (ctx, index) {
@@ -164,6 +174,8 @@ class _ReaderMarkdownBodyState extends State<ReaderMarkdownBody> {
       colorScheme: colorScheme,
       highlightQuery: _hasHighlight ? widget.highlightQuery : null,
       onImageTap: _handleImageTap,
+      selectedTextListenable: widget.selectedTextListenable,
+      translationStyleId: widget.translationStyleId,
     );
     _renderResources = next;
     return next;
@@ -194,6 +206,8 @@ class _RenderResources {
     required ColorScheme colorScheme,
     required String? highlightQuery,
     void Function(String url)? onImageTap,
+    ValueListenable<String?>? selectedTextListenable,
+    String? translationStyleId,
   }) {
     SearchHighlightBuilder? searchBuilder;
     if (highlightQuery != null && highlightQuery.isNotEmpty) {
@@ -208,13 +222,17 @@ class _RenderResources {
       colorScheme: colorScheme,
       highlightQuery: highlightQuery,
       onImageTap: onImageTap,
+      selectedTextListenable: selectedTextListenable,
     );
 
     final generator = buildReaderMarkdownGenerator(
       settings: settings,
-      searchRichTextBuilder:
-          searchBuilder?.hasHighlights == true ? searchBuilder!.call : null,
+      searchRichTextBuilder: searchBuilder?.hasHighlights == true
+          ? searchBuilder!.call
+          : null,
       translatedColor: colorScheme.primary,
+      translatedStyleId: translationStyleId,
+      selectedTextListenable: selectedTextListenable,
     );
 
     return _RenderResources(
