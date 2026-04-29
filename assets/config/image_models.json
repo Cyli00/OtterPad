@@ -1,0 +1,5 @@
+{
+  "openai": ["gpt-image-2"],
+  "gemini": ["-image"],
+  "openAICompatible": ["gpt-image-2"]
+}

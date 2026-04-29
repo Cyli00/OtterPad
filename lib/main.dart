@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'core/storage/storage.dart';
 import 'providers/proxy_provider.dart';
+import 'services/agent_model_capability.dart';
 
 bool get _isDesktop =>
     !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
@@ -30,7 +31,7 @@ Future<void> main() async {
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.hidden,
-      title: '晚读 Otero',
+      title: '獭祭鱼 OtterPad',
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
@@ -42,7 +43,10 @@ Future<void> main() async {
   await pdfrxFlutterInitialize();
 
   // 并行初始化
-  await GStorage.init();
+  await Future.wait([
+    GStorage.init(),
+    AgentModelCapability.init(),
+  ]);
 
   final container = ProviderContainer();
 

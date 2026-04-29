@@ -55,7 +55,7 @@ class OtterPadApp extends ConsumerWidget {
 
         return MaterialApp.router(
           scaffoldMessengerKey: scaffoldMessengerKey,
-          title: '晚读 Otero',
+          title: '獭祭鱼 OtterPad',
           debugShowCheckedModeBanner: false,
           themeMode: themeState.mode,
           theme: ThemeData(
