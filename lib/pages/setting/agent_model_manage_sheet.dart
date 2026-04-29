@@ -157,7 +157,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       modelId: id,
       currentDefault: _localDefault,
       currentFast: _localFast,
-      currentImage: _localImage,
     );
     if (choice == null) return;
 
@@ -165,13 +164,11 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       id,
       setAsDefault: choice.setAsDefault,
       setAsFast: choice.setAsFast,
-      setAsImage: choice.setAsImage,
     );
     setState(() {
       _localAdded.add(id);
       if (choice.setAsDefault) _localDefault = id;
       if (choice.setAsFast) _localFast = id;
-      if (choice.setAsImage) _localImage = id;
     });
   }
 

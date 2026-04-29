@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../providers/api_provider.dart';
+import '../utils/doc_paths.dart';
 import '../utils/markdown_preprocessor.dart';
 import 'figure_extract_service.dart';
 
@@ -200,10 +201,9 @@ class DocExtractService {
     String? title,
   }) async {
     final dir = p.dirname(pdfPath);
-    final baseName = p.basenameWithoutExtension(pdfPath);
-    final rawMdPath = p.join(dir, '$baseName.raw.md');
-    final mdPath = p.join(dir, '$baseName.md');
-    final jsonPath = p.join(dir, '$baseName.json');
+    final rawMdPath = DocPaths.rawMd(pdfPath);
+    final mdPath = DocPaths.md(pdfPath);
+    final jsonPath = DocPaths.json(pdfPath);
 
     // 1. 保存原始文件
     await File(rawMdPath).writeAsString(result.rawMarkdown, flush: true);
@@ -251,7 +251,7 @@ class DocExtractService {
     await File(mdPath).writeAsString(processedMarkdown, flush: true);
     result.processedMarkdown = processedMarkdown;
     result.savedPath = mdPath;
-    result.imageDir = p.join(dir, '${baseName}_figures');
+    result.imageDir = DocPaths.figuresDir(pdfPath);
     return mdPath;
   }
 
@@ -264,10 +264,9 @@ class DocExtractService {
     String? title,
   }) async {
     final dir = p.dirname(pdfPath);
-    final baseName = p.basenameWithoutExtension(pdfPath);
-    final rawMdPath = p.join(dir, '$baseName.raw.md');
-    final jsonPath = p.join(dir, '$baseName.json');
-    final mdPath = p.join(dir, '$baseName.md');
+    final rawMdPath = DocPaths.rawMd(pdfPath);
+    final jsonPath = DocPaths.json(pdfPath);
+    final mdPath = DocPaths.md(pdfPath);
 
     final rawMdFile = File(rawMdPath);
     if (!rawMdFile.existsSync()) {

@@ -17,6 +17,7 @@ import '../services/identifier_resolver.dart';
 import '../services/pdf_identifier_extractor.dart';
 import '../services/pdf_metadata_extractor.dart';
 import '../services/pdf_thumbnail_service.dart';
+import '../utils/doc_paths.dart';
 
 enum AddByIdentifierResult { success, duplicate }
 
@@ -138,10 +139,10 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       return const AddFileResult(type: AddFileResultType.duplicate);
     }
 
-    final docsDir = await getDocsDir();
-    final normalizedSourcePath = p.normalize(sourcePath);
+    final hash = await DocPaths.computeHash(sourceFile);
+
     final existingDoc = state.cast<Document?>().firstWhere(
-      (doc) => doc != null && p.normalize(doc.filePath) == normalizedSourcePath,
+      (doc) => doc != null && doc.id == hash,
       orElse: () => null,
     );
     if (existingDoc != null) {
@@ -151,27 +152,19 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       );
     }
 
-    final destPath = await _buildUniqueDestinationPath(
-      docsDir.path,
-      p.basename(sourcePath),
-    );
-    if (p.normalize(sourcePath) == p.normalize(destPath)) {
-      return AddFileResult(
-        type: AddFileResultType.duplicate,
-        document: state.cast<Document?>().firstWhere(
-          (doc) =>
-              doc != null && p.normalize(doc.filePath) == p.normalize(destPath),
-          orElse: () => null,
-        ),
-      );
+    final docsDir = await getDocsDir();
+    final docDir = Directory(p.join(docsDir.path, hash));
+    if (await docDir.exists()) {
+      return const AddFileResult(type: AddFileResultType.duplicate);
     }
-
+    await docDir.create();
+    final destPath = p.join(docDir.path, DocPaths.pdfName);
     await sourceFile.copy(destPath);
 
-    final initialMetadata = DocumentMetadataParser.parseFilePath(destPath);
+    final initialMetadata = DocumentMetadataParser.parseFilePath(sourcePath);
     var doc = Document(
-      id: _newId(destPath),
-      title: initialMetadata.title ?? p.basenameWithoutExtension(destPath),
+      id: hash,
+      title: initialMetadata.title ?? p.basenameWithoutExtension(sourcePath),
       authors: initialMetadata.authors,
       journal: initialMetadata.journal,
       year: initialMetadata.year,
@@ -240,36 +233,30 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     final pdfFiles = <File>[];
     await for (final entity in docsDir.list()) {
       if (cancelToken?.isCancelled == true) break;
-      if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
-        pdfFiles.add(entity);
+      if (entity is Directory) {
+        final pdf = File(p.join(entity.path, DocPaths.pdfName));
+        if (await pdf.exists()) pdfFiles.add(pdf);
       }
     }
 
-    final knownPaths = state
-        .where((doc) => doc.filePath.isNotEmpty)
-        .map((doc) => p.normalize(doc.filePath))
-        .toSet();
+    final knownIds = state.map((doc) => doc.id).toSet();
 
     for (final file in pdfFiles) {
       if (cancelToken?.isCancelled == true) break;
-      final normalizedPath = p.normalize(file.path);
-      if (knownPaths.contains(normalizedPath)) continue;
+      final hash = p.basename(p.dirname(file.path));
+      if (knownIds.contains(hash)) continue;
 
-      final initialMetadata = DocumentMetadataParser.parseFilePath(file.path);
       state = [
         ...state,
         Document(
-          id: _newId(file.path),
-          title: initialMetadata.title ?? p.basenameWithoutExtension(file.path),
-          authors: initialMetadata.authors,
-          journal: initialMetadata.journal,
-          year: initialMetadata.year,
-          doi: initialMetadata.doi,
+          id: hash,
+          title: hash,
+          authors: const [],
           filePath: file.path,
           addedAt: DateTime.now(),
         ),
       ];
-      knownPaths.add(normalizedPath);
+      knownIds.add(hash);
       addedCount++;
     }
 
@@ -409,35 +396,27 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     );
     if (existing == null) return;
 
-    final docsDir = await getDocsDir();
-    final preferredName = IdentifierResolver.buildPdfFileName(
-      year: existing.year,
-      authors: existing.authors,
-      title: existing.title,
-      fallbackId: p.basenameWithoutExtension(sourcePath),
-    );
-    final destPath = await _buildUniqueDestinationPath(
-      docsDir.path,
-      preferredName,
-    );
-
     final sourceFile = File(sourcePath);
-    if (p.normalize(sourcePath) == p.normalize(destPath)) {
-      state = [
-        for (final doc in state)
-          if (doc.id == docId) doc.copyWith(filePath: destPath) else doc,
-      ];
-      await _save();
-      return;
-    }
+    if (!await sourceFile.exists()) return;
 
-    if (p.normalize(p.dirname(sourcePath)) == p.normalize(docsDir.path)) {
-      await sourceFile.rename(destPath);
-    } else {
-      await sourceFile.copy(destPath);
-    }
+    final hash = await DocPaths.computeHash(sourceFile);
+    final docsDir = await getDocsDir();
+    final docDir = Directory(p.join(docsDir.path, hash));
+    if (!await docDir.exists()) await docDir.create();
+    final destPath = p.join(docDir.path, DocPaths.pdfName);
+    await sourceFile.copy(destPath);
 
-    var updated = existing.copyWith(filePath: destPath);
+    var updated = Document(
+      id: hash,
+      title: existing.title,
+      authors: existing.authors,
+      journal: existing.journal,
+      year: existing.year,
+      doi: existing.doi,
+      keywords: existing.keywords,
+      filePath: destPath,
+      addedAt: existing.addedAt,
+    );
     if (_needsMetadataRepair(updated)) {
       updated = (await _repairDocument(updated)).document;
     }
@@ -458,7 +437,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     if (doc == null || _isBlank(doc.doi)) return false;
 
     try {
-      final downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
+      final tempPath = await IdentifierResolver.instance.downloadPdfByDoi(
         doi: doc.doi!,
         year: doc.year,
         authors: doc.authors,
@@ -466,17 +445,36 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         fallbackId: doc.id,
         cancelToken: cancelToken,
       );
-      if (downloadedPath.isEmpty) return false;
+      if (tempPath.isEmpty) return false;
+
+      final tempFile = File(tempPath);
+      final hash = await DocPaths.computeHash(tempFile);
+      final docsDir = await getDocsDir();
+      final docDir = Directory(p.join(docsDir.path, hash));
+      if (!await docDir.exists()) await docDir.create();
+      final destPath = p.join(docDir.path, DocPaths.pdfName);
+      await tempFile.copy(destPath);
+      await tempFile.delete();
 
       state = [
         for (final entry in state)
           if (entry.id == docId)
-            entry.copyWith(filePath: downloadedPath)
+            Document(
+              id: hash,
+              title: entry.title,
+              authors: entry.authors,
+              journal: entry.journal,
+              year: entry.year,
+              doi: entry.doi,
+              keywords: entry.keywords,
+              filePath: destPath,
+              addedAt: entry.addedAt,
+            )
           else
             entry,
       ];
       await _save();
-      unawaited(PdfThumbnailService.instance.getThumbnailPath(downloadedPath));
+      unawaited(PdfThumbnailService.instance.getThumbnailPath(destPath));
       return true;
     } catch (error) {
       debugPrint('重新下载 PDF 失败: $error');
@@ -490,30 +488,12 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       orElse: () => null,
     );
     if (doc != null && doc.filePath.isNotEmpty) {
-      final filePath = doc.filePath;
       try {
-        final file = File(filePath);
-        if (await file.exists()) await file.delete();
-
-        final basePath = p.withoutExtension(filePath);
-        for (final suffix in ['.raw.md', '.md', '.json']) {
-          final artifact = File('$basePath$suffix');
-          if (await artifact.exists()) await artifact.delete();
+        final docDir = Directory(DocPaths.docDir(doc.filePath));
+        if (await docDir.exists()) {
+          await docDir.delete(recursive: true);
         }
-        final imagesDir = Directory('${basePath}_images');
-        if (await imagesDir.exists()) {
-          await imagesDir.delete(recursive: true);
-        }
-        final figuresDir = Directory('${basePath}_figures');
-        if (await figuresDir.exists()) {
-          await figuresDir.delete(recursive: true);
-        }
-        final summaryDir = Directory('${basePath}_summary');
-        if (await summaryDir.exists()) {
-          await summaryDir.delete(recursive: true);
-        }
-
-        await PdfThumbnailService.instance.deleteCacheEntry(filePath);
+        await PdfThumbnailService.instance.deleteCacheEntry(doc.filePath);
       } catch (error) {
         debugPrint('删除文件失败: $error');
       }
@@ -553,7 +533,6 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         doc = _applyResolvedDocument(doc, resolved);
       }
 
-      doc = await _renameFileFromMetadata(doc);
     } catch (error) {
       debugPrint('元数据修复失败: $error');
       doc = _applyMetadata(
@@ -678,65 +657,9 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   bool _looksLikePlaceholderTitle(Document doc) {
     if (doc.filePath.isEmpty) return false;
     final normalizedTitle = _normalizeComparisonKey(doc.title);
-    final fileNameTitle = _normalizeComparisonKey(
-      p.basenameWithoutExtension(doc.filePath),
-    );
-    return normalizedTitle.isEmpty || normalizedTitle == fileNameTitle;
-  }
-
-  Future<Document> _renameFileFromMetadata(Document doc) async {
-    if (doc.filePath.isEmpty) return doc;
-
-    final currentPath = p.normalize(doc.filePath);
-    final currentName = p.basename(currentPath);
-    final targetName = IdentifierResolver.buildPdfFileName(
-      year: doc.year,
-      authors: doc.authors,
-      title: doc.title,
-      fallbackId: p.basenameWithoutExtension(currentName),
-    );
-    if (currentName == targetName) return doc;
-
-    final directory = p.dirname(currentPath);
-    var targetPath = p.join(directory, targetName);
-    if (p.normalize(targetPath) == currentPath) return doc;
-
-    if (await File(targetPath).exists()) {
-      final baseName = p.basenameWithoutExtension(targetName);
-      var counter = 2;
-      while (await File(targetPath).exists()) {
-        targetPath = p.join(directory, '$baseName ($counter).pdf');
-        counter++;
-      }
-    }
-
-    await File(doc.filePath).rename(targetPath);
-    await PdfThumbnailService.instance.migrateCacheEntry(
-      doc.filePath,
-      targetPath,
-    );
-    return doc.copyWith(filePath: targetPath);
-  }
-
-  Future<String> _buildUniqueDestinationPath(
-    String directory,
-    String preferredName,
-  ) async {
-    final extension = p.extension(preferredName).isEmpty
-        ? '.pdf'
-        : p.extension(preferredName);
-    final baseName = p.basenameWithoutExtension(preferredName);
-    var candidate = p.join(directory, '$baseName$extension');
-    var counter = 2;
-    while (await File(candidate).exists()) {
-      candidate = p.join(directory, '$baseName ($counter)$extension');
-      counter++;
-    }
-    return candidate;
-  }
-
-  String _newId(String seed) {
-    return '${DateTime.now().microsecondsSinceEpoch}_${seed.hashCode.abs()}';
+    if (normalizedTitle.isEmpty) return true;
+    // 哈希目录方案：标题等于哈希值（rebuild 恢复时的临时标题）说明缺乏元数据
+    return normalizedTitle == _normalizeComparisonKey(doc.id);
   }
 
   String _normalizeComparisonKey(String? value) {
@@ -786,7 +709,6 @@ final validDocsProvider = Provider<List<Document>>((ref) {
 final unextractedDocsProvider = Provider<List<Document>>((ref) {
   return ref.watch(validDocsProvider).where((doc) {
     if (doc.filePath.isEmpty) return false;
-    final mdPath = '${p.withoutExtension(doc.filePath)}.md';
-    return !File(mdPath).existsSync();
+    return !File(DocPaths.md(doc.filePath)).existsSync();
   }).toList();
 });

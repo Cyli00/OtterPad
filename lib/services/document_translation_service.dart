@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../providers/api_provider.dart';
 import '../providers/translation_config_provider.dart';
+import '../utils/doc_paths.dart';
 import 'markdown_paragraph_extractor.dart';
 import 'translation_service.dart';
 
@@ -30,11 +31,8 @@ class DocumentTranslationService {
   /// 翻译产物文件路径，与 .md / .json / _figures/ 同级。
   ///
   /// 例：`path/to/paper.pdf` → `path/to/paper.translations.json`
-  static String translationFilePath(String pdfPath) {
-    final dotIdx = pdfPath.lastIndexOf('.');
-    final stem = dotIdx > 0 ? pdfPath.substring(0, dotIdx) : pdfPath;
-    return '$stem.translations.json';
-  }
+  static String translationFilePath(String pdfPath) =>
+      DocPaths.translations(pdfPath);
 
   /// 从文件加载指定语言的翻译结果；文件不存在或格式异常返回空 map。
   static Map<String, String> loadTranslations(

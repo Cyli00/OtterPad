@@ -36,7 +36,7 @@ class ApiSettingsPage extends StatelessWidget {
           children: [
             _buildGroup(
               context,
-              title: 'API 设置',
+              title: '模型接口',
               child: const AgentApiSection(),
             ),
             _buildGroup(

@@ -17,6 +17,7 @@ import '../../providers/theme_provider.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
 import '../../services/snackbar_service.dart';
+import '../../services/storage_cleanup_service.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
@@ -31,6 +32,31 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   String _busyText = '';
   String _pingCacheKey = '';
   Future<bool>? _pingFuture;
+  String? _cacheSizeText;
+  String? _dataSizeText;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSizeLabels();
+  }
+
+  void _refreshSizeLabels() {
+    StorageCleanupService.cacheSize().then((bytes) {
+      if (mounted) {
+        setState(
+          () => _cacheSizeText = '占用 ${StorageCleanupService.formatSize(bytes)}',
+        );
+      }
+    });
+    StorageCleanupService.dataSize().then((bytes) {
+      if (mounted) {
+        setState(
+          () => _dataSizeText = '占用 ${StorageCleanupService.formatSize(bytes)}',
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +71,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(
-          '备份设置',
+          '数据管理',
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -165,6 +191,33 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       enabled: !_busy,
                       onTap: _restoreFromLocal,
                     ),
+                  ],
+                ),
+              ),
+              _buildGroup(
+                context,
+                title: '存储',
+                child: Column(
+                  children: [
+                    _ActionTile(
+                      icon: Symbols.mop_rounded,
+                      title: '清除缓存',
+                      subtitle: _cacheSizeText ?? '缩略图、临时文件等',
+                      enabled: !_busy,
+                      onTap: _clearCache,
+                    ),
+                    if (Platform.isWindows ||
+                        Platform.isMacOS ||
+                        Platform.isLinux) ...[
+                      _buildDivider(context),
+                      _ActionTile(
+                        icon: Symbols.delete_forever_rounded,
+                        title: '清除所有数据',
+                        subtitle: _dataSizeText ?? '文献库、数据库将全部删除',
+                        enabled: !_busy,
+                        onTap: _clearData,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -450,6 +503,58 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _pingFuture = null;
       _pingCacheKey = '';
     });
+  }
+
+  Future<void> _clearCache() async {
+    await _runBusy('正在清除缓存...', StorageCleanupService.clearCache);
+    if (!mounted) return;
+    _refreshSizeLabels();
+    ref.read(snackBarServiceProvider).showResult(message: '缓存已清除');
+  }
+
+  Future<void> _clearData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        return AlertDialog(
+          backgroundColor: cs.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          title: Text(
+            '清除所有数据',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            '此操作将删除所有文献文件和数据库，且无法恢复。确定继续吗？',
+            style: theme.textTheme.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              child: const Text('清除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) return;
+
+    await _runBusy('正在清除数据...', StorageCleanupService.clearData);
+    if (!mounted) return;
+    ref.read(documentsProvider.notifier).reload();
+    ref.read(favoritesProvider.notifier).reload();
+    _refreshSizeLabels();
+    ref.read(snackBarServiceProvider).showResult(message: '所有数据已清除');
   }
 
   Future<void> _exportBackupToLocal() async {

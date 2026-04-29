@@ -4,12 +4,15 @@ import 'dart:ui';
 
 import 'package:animations/animations.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../router/app_routes.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
@@ -23,6 +26,7 @@ import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../services/doc_extract_service.dart';
+import '../../utils/doc_paths.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
@@ -447,7 +451,40 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _handleMarkdownScrollNotification(UserScrollNotification notification) {
     if (_sheetOpen || _searchActive || _highlightQuery != null) return false;
 
-    switch (notification.direction) {
+    _handleReaderScrollDirection(notification.direction);
+    return false;
+  }
+
+  bool _handlePdfScrollNotification(UserScrollNotification notification) {
+    if (_showPreview || _sheetOpen || _searchActive) return false;
+
+    _handleReaderScrollDirection(notification.direction);
+    return false;
+  }
+
+  void _handlePdfPointerSignal(PointerSignalEvent event) {
+    if (_showPreview || _sheetOpen || _searchActive) return;
+    if (event is! PointerScrollEvent) return;
+
+    if (event.scrollDelta.dy > 0) {
+      _handleReaderScrollDirection(ScrollDirection.reverse);
+    } else if (event.scrollDelta.dy < 0) {
+      _handleReaderScrollDirection(ScrollDirection.forward);
+    }
+  }
+
+  void _handlePdfPointerMove(PointerMoveEvent event) {
+    if (_showPreview || _sheetOpen || _searchActive) return;
+
+    if (event.delta.dy < -1) {
+      _handleReaderScrollDirection(ScrollDirection.reverse);
+    } else if (event.delta.dy > 1) {
+      _handleReaderScrollDirection(ScrollDirection.forward);
+    }
+  }
+
+  void _handleReaderScrollDirection(ScrollDirection direction) {
+    switch (direction) {
       case ScrollDirection.reverse:
         if (_toolbarsVisible) setState(() => _toolbarsVisible = false);
       case ScrollDirection.forward:
@@ -455,14 +492,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       case ScrollDirection.idle:
         break;
     }
-    return false;
   }
 
   /// 桌面端：鼠标靠近上下边缘时显示工具栏。
   ///
   /// 隐藏仍由滚动方向或点击内容区触发，不再按无交互时长自动隐藏。
   void _onDesktopPointerHover(PointerHoverEvent event) {
-    if (!_showPreview || !_hasResult || _mdContent == null) return;
+    final canShowToolbars =
+        (_showPreview && _hasResult && _mdContent != null) ||
+        (!_showPreview && (_fileExists ?? false));
+    if (!canShowToolbars || _sheetOpen) return;
     final height = context.size?.height ?? 0;
     final y = event.localPosition.dy;
     if (y < _kEdgeTriggerZone || y > height - _kEdgeTriggerZone) {
@@ -734,10 +773,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<String?> _findMarkdownPath(String filePath) async {
     if (filePath.isEmpty) return null;
-    final mdPath = p.join(
-      p.dirname(filePath),
-      '${p.basenameWithoutExtension(filePath)}.md',
-    );
+    final mdPath = DocPaths.md(filePath);
     return await File(mdPath).exists() ? mdPath : null;
   }
 
@@ -1774,6 +1810,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   static const _kSummaryImageCostDismissed = 'summary_image_cost_dismissed';
 
   Future<void> _handleGenerateSummaryImage({bool openOutline = true}) async {
+    final imageRole = AgentApiNotifier.globalImageRole;
+    if (imageRole.provider == null || imageRole.modelId == null) {
+      _scaffoldKey.currentState?.closeEndDrawer();
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(
+            message: '请先在「AI 设置」中选择生图模型',
+            action: SnackBarAction(
+              label: '前往设置',
+              onPressed: () => context.push(AppRoutes.settingsApi),
+            ),
+          );
+      return;
+    }
+
     final dismissed =
         GStorage.setting.get(_kSummaryImageCostDismissed, defaultValue: false)
             as bool;
@@ -1839,7 +1890,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             fidelity: cfg.fidelity,
           )
         : null;
-    final costLine = cost != null ? '当前设置预估费用约 \$${cost.toStringAsFixed(3)} / 张' : '';
+    final costLine = cost != null
+        ? '当前设置预估费用约 \$${cost.toStringAsFixed(3)} / 张'
+        : '';
 
     return showDialog<bool>(
       context: context,
@@ -1881,9 +1934,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   ],
                   const SizedBox(height: 16),
                   GestureDetector(
-                    onTap: () => setDialogState(
-                      () => dontAskAgain = !dontAskAgain,
-                    ),
+                    onTap: () =>
+                        setDialogState(() => dontAskAgain = !dontAskAgain),
                     child: Row(
                       children: [
                         SizedBox(
@@ -1891,9 +1943,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                           height: 20,
                           child: Checkbox(
                             value: dontAskAgain,
-                            onChanged: (v) => setDialogState(
-                              () => dontAskAgain = v ?? false,
-                            ),
+                            onChanged: (v) =>
+                                setDialogState(() => dontAskAgain = v ?? false),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -2007,48 +2058,56 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ) {
     final showMarkdown = _showPreview && _hasResult;
 
-    return PageTransitionSwitcher(
-      duration: const Duration(milliseconds: 300),
-      reverse: !showMarkdown,
-      transitionBuilder: (child, animation, secondaryAnimation) {
-        return SharedAxisTransition(
-          animation: animation,
-          secondaryAnimation: secondaryAnimation,
-          transitionType: SharedAxisTransitionType.horizontal,
-          fillColor: Colors.transparent,
-          child: child,
-        );
-      },
-      child: showMarkdown
-          ? KeyedSubtree(
-              key: const ValueKey('markdown'),
-              child: _buildMarkdownPreview(theme, readerSettings),
-            )
-          : PdfViewer.file(
-              key: const ValueKey('pdf'),
-              widget.document.filePath,
-              controller: _pdfController,
-              params: PdfViewerParams(
-                backgroundColor: Colors.transparent,
-                matchTextColor: cs.primaryContainer.withAlpha(150),
-                activeMatchTextColor: cs.primary.withAlpha(72),
-                onViewerReady: _bindPdfSearcher,
-                pagePaintCallbacks: _pdfSearcher == null
-                    ? null
-                    : [_pdfSearcher!.pageTextMatchPaintCallback],
-                viewerOverlayBuilder: (context, size, handleLinkTap) => [
-                  PdfViewerScrollThumb(
-                    controller: _pdfController,
-                    orientation: ScrollbarOrientation.right,
-                    thumbSize: const Size(8, 48),
-                    margin: 2,
-                    thumbBuilder: (context, thumbSize, pageNumber, controller) {
-                      return _PdfScrollThumb(size: thumbSize);
-                    },
+    return NotificationListener<UserScrollNotification>(
+      onNotification: _handlePdfScrollNotification,
+      child: Listener(
+        onPointerSignal: _handlePdfPointerSignal,
+        onPointerMove: _handlePdfPointerMove,
+        child: PageTransitionSwitcher(
+          duration: const Duration(milliseconds: 300),
+          reverse: !showMarkdown,
+          transitionBuilder: (child, animation, secondaryAnimation) {
+            return SharedAxisTransition(
+              animation: animation,
+              secondaryAnimation: secondaryAnimation,
+              transitionType: SharedAxisTransitionType.horizontal,
+              fillColor: Colors.transparent,
+              child: child,
+            );
+          },
+          child: showMarkdown
+              ? KeyedSubtree(
+                  key: const ValueKey('markdown'),
+                  child: _buildMarkdownPreview(theme, readerSettings),
+                )
+              : PdfViewer.file(
+                  key: const ValueKey('pdf'),
+                  widget.document.filePath,
+                  controller: _pdfController,
+                  params: PdfViewerParams(
+                    backgroundColor: Colors.transparent,
+                    matchTextColor: cs.primaryContainer.withAlpha(150),
+                    activeMatchTextColor: cs.primary.withAlpha(72),
+                    onViewerReady: _bindPdfSearcher,
+                    pagePaintCallbacks: _pdfSearcher == null
+                        ? null
+                        : [_pdfSearcher!.pageTextMatchPaintCallback],
+                    viewerOverlayBuilder: (context, size, handleLinkTap) => [
+                      PdfViewerScrollThumb(
+                        controller: _pdfController,
+                        orientation: ScrollbarOrientation.right,
+                        thumbSize: const Size(8, 48),
+                        margin: 2,
+                        thumbBuilder:
+                            (context, thumbSize, pageNumber, controller) {
+                              return _PdfScrollThumb(size: thumbSize);
+                            },
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+        ),
+      ),
     );
   }
 

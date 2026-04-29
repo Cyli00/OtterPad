@@ -374,9 +374,9 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
               .copyWith(bottom: 40),
           children: [
-            // ── 秘钥设置 ──
+            // ── OCR 接口设置 ──
             _buildGroup(
-              title: '秘钥设置',
+              title: 'OCR 接口',
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(

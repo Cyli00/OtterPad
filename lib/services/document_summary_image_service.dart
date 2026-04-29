@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../data/models/book/document.dart';
 import '../providers/api_provider.dart';
 import '../providers/image_generation_config_provider.dart';
+import '../utils/doc_paths.dart';
 import 'figure_extract_service.dart';
 import 'image_generation_service.dart';
 
@@ -35,15 +36,9 @@ class DocumentSummaryImageService {
   static final DocumentSummaryImageService instance =
       DocumentSummaryImageService._();
 
-  static String outputDirFor(String pdfPath) {
-    final dir = p.dirname(pdfPath);
-    final baseName = p.basenameWithoutExtension(pdfPath);
-    return p.join(dir, '${baseName}_summary');
-  }
+  static String outputDirFor(String pdfPath) => DocPaths.summaryDir(pdfPath);
 
-  static String imagePathFor(String pdfPath) {
-    return p.join(outputDirFor(pdfPath), 'summary.png');
-  }
+  static String imagePathFor(String pdfPath) => DocPaths.summaryImage(pdfPath);
 
   Future<DocumentSummaryImageResult> generate({
     required Document document,
@@ -63,7 +58,7 @@ class DocumentSummaryImageService {
       throw const DocumentSummaryImageException('当前文献没有关联 PDF 文件');
     }
 
-    final mdPath = '${p.withoutExtension(document.filePath)}.md';
+    final mdPath = DocPaths.md(document.filePath);
     final mdFile = File(mdPath);
     if (!await mdFile.exists()) {
       throw const DocumentSummaryImageException('请先完成文档提取，再生成总结图');
@@ -148,9 +143,7 @@ class DocumentSummaryImageService {
     }
     if (paths.isNotEmpty) return paths;
 
-    final dir = p.dirname(pdfPath);
-    final baseName = p.basenameWithoutExtension(pdfPath);
-    final figuresDir = Directory(p.join(dir, '${baseName}_figures'));
+    final figuresDir = Directory(DocPaths.figuresDir(pdfPath));
     if (!await figuresDir.exists()) return const [];
 
     final files = <File>[];

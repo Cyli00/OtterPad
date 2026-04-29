@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
+import '../utils/doc_paths.dart';
 import 'pdf_process_lock.dart';
 
 // ─── 数据模型 ───────────────────────────────────────────────
@@ -710,9 +711,7 @@ class FigureExtractService {
     onProgress?.call(0, totalSegments);
 
     // 准备输出目录（重新提取时清理旧文件）
-    final dir = p.dirname(pdfPath);
-    final baseName = p.basenameWithoutExtension(pdfPath);
-    final outputDir = p.join(dir, '${baseName}_figures');
+    final outputDir = DocPaths.figuresDir(pdfPath);
     final outputDirObj = Directory(outputDir);
     if (outputDirObj.existsSync()) {
       await outputDirObj.delete(recursive: true);
@@ -815,9 +814,7 @@ class FigureExtractService {
   /// 加载已有的 manifest（若存在）
   static Future<List<FigureManifestEntry>?> loadManifest(
       String pdfPath) async {
-    final dir = p.dirname(pdfPath);
-    final baseName = p.basenameWithoutExtension(pdfPath);
-    final manifestPath = p.join(dir, '${baseName}_figures', 'figures.json');
+    final manifestPath = DocPaths.figuresManifest(pdfPath);
     final file = File(manifestPath);
     if (!file.existsSync()) return null;
 
