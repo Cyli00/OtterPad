@@ -4,15 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../providers/api_provider.dart';
+import '../../services/agent_model_capability.dart';
 import 'agent_add_model_dialog.dart';
 import 'agent_model_tester.dart';
 import 'agent_role_widgets.dart';
 
-typedef AgentAddModelCallback = void Function(
-  String id, {
-  bool setAsDefault,
-  bool setAsFast,
-});
+typedef AgentAddModelCallback =
+    void Function(String id, {bool setAsDefault, bool setAsFast, bool setAsImage});
 
 /// 打开"管理模型"底部弹窗。
 ///
@@ -26,6 +24,7 @@ Future<void> showAgentModelManageSheet({
   required List<String> addedModels,
   required String? currentDefaultModel,
   required String? currentFastModel,
+  required String? currentImageModel,
   required AgentAddModelCallback onAdd,
   required ValueChanged<String> onRemove,
 }) {
@@ -41,6 +40,7 @@ Future<void> showAgentModelManageSheet({
       addedModels: addedModels,
       currentDefaultModel: currentDefaultModel,
       currentFastModel: currentFastModel,
+      currentImageModel: currentImageModel,
       onAdd: onAdd,
       onRemove: onRemove,
     ),
@@ -55,6 +55,7 @@ class _ModelManageSheet extends StatefulWidget {
   final List<String> addedModels;
   final String? currentDefaultModel;
   final String? currentFastModel;
+  final String? currentImageModel;
   final AgentAddModelCallback onAdd;
   final ValueChanged<String> onRemove;
 
@@ -66,6 +67,7 @@ class _ModelManageSheet extends StatefulWidget {
     required this.addedModels,
     required this.currentDefaultModel,
     required this.currentFastModel,
+    required this.currentImageModel,
     required this.onAdd,
     required this.onRemove,
   });
@@ -79,10 +81,12 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   bool _loading = true;
   String? _error;
   String _query = '';
+  bool _imageOnly = false;
   late final Set<String> _localAdded;
   // 跟随用户在本 sheet 内的连续操作更新，避免重复开关时读到过期值
   String? _localDefault;
   String? _localFast;
+  String? _localImage;
 
   @override
   void initState() {
@@ -90,6 +94,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     _localAdded = Set<String>.from(widget.addedModels);
     _localDefault = widget.currentDefaultModel;
     _localFast = widget.currentFastModel;
+    _localImage = widget.currentImageModel;
     _fetchModels();
   }
 
@@ -114,19 +119,45 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
 
   List<String> get _filtered {
     if (_models == null) return [];
-    if (_query.isEmpty) return _models!;
+    var result = _models!;
+    if (_imageOnly) {
+      result = result
+          .where(
+            (m) => AgentModelCapability.isImageGenerationModel(
+              provider: widget.providerType,
+              modelId: m,
+            ),
+          )
+          .toList();
+    }
+    if (_query.isEmpty) return result;
     final q = _query.toLowerCase();
-    return _models!.where((m) => m.toLowerCase().contains(q)).toList();
+    return result.where((m) => m.toLowerCase().contains(q)).toList();
   }
 
   bool _isAdded(String id) => _localAdded.contains(id);
 
   Future<void> _showAddConfirm(String id) async {
+    final isImageModel = AgentModelCapability.isImageGenerationModel(
+      provider: widget.providerType,
+      modelId: id,
+    );
+
+    if (isImageModel) {
+      widget.onAdd(id, setAsImage: true);
+      setState(() {
+        _localAdded.add(id);
+        _localImage = id;
+      });
+      return;
+    }
+
     final choice = await showAgentAddModelDialog(
       context: context,
       modelId: id,
       currentDefault: _localDefault,
       currentFast: _localFast,
+      currentImage: _localImage,
     );
     if (choice == null) return;
 
@@ -134,11 +165,13 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       id,
       setAsDefault: choice.setAsDefault,
       setAsFast: choice.setAsFast,
+      setAsImage: choice.setAsImage,
     );
     setState(() {
       _localAdded.add(id);
       if (choice.setAsDefault) _localDefault = id;
       if (choice.setAsFast) _localFast = id;
+      if (choice.setAsImage) _localImage = id;
     });
   }
 
@@ -148,6 +181,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       _localAdded.remove(id);
       if (_localDefault == id) _localDefault = null;
       if (_localFast == id) _localFast = null;
+      if (_localImage == id) _localImage = null;
     });
   }
 
@@ -161,10 +195,12 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     // 主题色在色盘上的互补色（hue + 180°），保留 primaryContainer 的明度/饱和度特征
     final containerHsl = HSLColor.fromColor(cs.primaryContainer);
     final onContainerHsl = HSLColor.fromColor(cs.onPrimaryContainer);
-    final compContainer =
-        containerHsl.withHue((containerHsl.hue + 180) % 360).toColor();
-    final onCompContainer =
-        onContainerHsl.withHue((onContainerHsl.hue + 180) % 360).toColor();
+    final compContainer = containerHsl
+        .withHue((containerHsl.hue + 180) % 360)
+        .toColor();
+    final onCompContainer = onContainerHsl
+        .withHue((onContainerHsl.hue + 180) % 360)
+        .toColor();
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
@@ -172,8 +208,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         constraints: BoxConstraints(maxHeight: maxH),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -193,9 +228,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             const SizedBox(height: 12),
             _buildSearchField(theme, cs),
             const SizedBox(height: 8),
-            Flexible(
-              child: _buildListArea(theme, cs, filtered),
-            ),
+            Flexible(child: _buildListArea(theme, cs, filtered)),
           ],
         ),
       ),
@@ -238,14 +271,29 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
           ],
           const Spacer(),
           IconButton(
-            icon: Icon(Symbols.refresh_rounded,
-                size: 20, color: cs.onSurfaceVariant),
+            icon: Icon(
+              Symbols.refresh_rounded,
+              size: 20,
+              color: cs.onSurfaceVariant,
+            ),
             tooltip: '刷新',
             onPressed: _fetchModels,
           ),
           IconButton(
-            icon: Icon(Symbols.close_rounded,
-                size: 20, color: cs.onSurfaceVariant),
+            icon: Icon(
+              _imageOnly ? Symbols.image_rounded : Symbols.image_search_rounded,
+              size: 20,
+              color: _imageOnly ? cs.primary : cs.onSurfaceVariant,
+            ),
+            tooltip: _imageOnly ? '显示全部模型' : '仅显示生图模型',
+            onPressed: () => setState(() => _imageOnly = !_imageOnly),
+          ),
+          IconButton(
+            icon: Icon(
+              Symbols.close_rounded,
+              size: 20,
+              color: cs.onSurfaceVariant,
+            ),
             tooltip: '关闭',
             onPressed: () => Navigator.pop(context),
           ),
@@ -266,16 +314,21 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
           hintStyle: theme.textTheme.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant.withAlpha(120),
           ),
-          prefixIcon: Icon(Symbols.search_rounded,
-              size: 20, color: cs.onSurfaceVariant),
+          prefixIcon: Icon(
+            Symbols.search_rounded,
+            size: 20,
+            color: cs.onSurfaceVariant,
+          ),
           filled: true,
           fillColor: cs.surface,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(28),
             borderSide: BorderSide.none,
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 12,
+          ),
           isDense: true,
         ),
       ),
@@ -283,7 +336,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   }
 
   Widget _buildListArea(
-      ThemeData theme, ColorScheme cs, List<String> filtered) {
+    ThemeData theme,
+    ColorScheme cs,
+    List<String> filtered,
+  ) {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(48),
@@ -296,11 +352,16 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Symbols.cloud_off_rounded,
-                size: 40, color: cs.error.withAlpha(160)),
+            Icon(
+              Symbols.cloud_off_rounded,
+              size: 40,
+              color: cs.error.withAlpha(160),
+            ),
             const SizedBox(height: 12),
-            Text(_error!,
-                style: theme.textTheme.bodyMedium?.copyWith(color: cs.error)),
+            Text(
+              _error!,
+              style: theme.textTheme.bodyMedium?.copyWith(color: cs.error),
+            ),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: _fetchModels,
@@ -313,9 +374,12 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     if (filtered.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(48),
-        child: Text('无匹配结果',
-            style:
-                theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+        child: Text(
+          _imageOnly ? '未检测到支持图片输出的模型' : '无匹配结果',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
+        ),
       );
     }
     return ListView.separated(
@@ -327,7 +391,8 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       ),
       itemCount: filtered.length,
       separatorBuilder: (_, _) => const SizedBox(height: 4),
-      itemBuilder: (context, index) => _buildCandidateRow(theme, cs, filtered[index]),
+      itemBuilder: (context, index) =>
+          _buildCandidateRow(theme, cs, filtered[index]),
     );
   }
 
@@ -335,6 +400,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     final added = _isAdded(id);
     final isDefault = _localDefault == id;
     final isFast = _localFast == id;
+    final isImageModel = AgentModelCapability.isImageGenerationModel(
+      provider: widget.providerType,
+      modelId: id,
+    );
 
     return Material(
       color: added ? cs.primaryContainer.withAlpha(60) : Colors.transparent,
@@ -357,7 +426,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             if (isDefault) ...[
               const SizedBox(width: 6),
               RoleBadge(
-                label: '默认',
+                label: '专家',
                 bg: cs.primaryContainer,
                 fg: cs.onPrimaryContainer,
               ),
@@ -368,6 +437,14 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                 label: '快速',
                 bg: cs.tertiaryContainer,
                 fg: cs.onTertiaryContainer,
+              ),
+            ],
+            if (isImageModel) ...[
+              const SizedBox(width: 4),
+              RoleBadge(
+                label: '生图',
+                bg: cs.secondaryContainer,
+                fg: cs.onSecondaryContainer,
               ),
             ],
             const SizedBox(width: 8),

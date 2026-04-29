@@ -35,16 +35,21 @@ mixin TaskRunner<S> on StateNotifier<S> {
     required TaskType type,
     required String initialStatus,
     String busyMessage = '任务正在进行中',
+    bool showBusySnackBar = true,
+    bool showProgressSnackBar = true,
     required Future<T> Function(
       CancelToken token,
       void Function(ListenableProgress) progress,
-    ) body,
+    )
+    body,
     required TaskFinish Function(T result) onSuccess,
     TaskFinish Function(Object error)? onError,
     String? cancelledMessage = '已取消',
   }) async {
     if (isTaskRunning(type)) {
-      snackBar.showResult(message: busyMessage);
+      if (showBusySnackBar) {
+        snackBar.showResult(message: busyMessage);
+      }
       return null;
     }
 
@@ -55,12 +60,14 @@ mixin TaskRunner<S> on StateNotifier<S> {
       ListenableProgress(current: 0, total: 0, status: initialStatus),
     );
 
-    final handle = snackBar.showListenableProgress(
-      listenable: notifier,
-      onCancel: () {
-        if (!token.isCancelled) token.cancel();
-      },
-    );
+    final handle = showProgressSnackBar
+        ? snackBar.showListenableProgress(
+            listenable: notifier,
+            onCancel: () {
+              if (!token.isCancelled) token.cancel();
+            },
+          )
+        : null;
 
     try {
       final result = await body(token, (p) {
@@ -70,29 +77,37 @@ mixin TaskRunner<S> on StateNotifier<S> {
 
       if (token.isCancelled) {
         markTaskFinished(type, TaskStatus.cancelled);
-        handle.finish(message: cancelledMessage);
+        _finishSnackBar(
+          handle,
+          TaskFinish.text(cancelledMessage ?? '已取消'),
+          showResultDirectly: !showProgressSnackBar,
+        );
         return null;
       }
 
       markTaskFinished(type, TaskStatus.completed);
       final finish = onSuccess(result);
-      handle.finish(
-        message: finish.message,
-        action: finish.action,
-        duration: finish.duration,
+      _finishSnackBar(
+        handle,
+        finish,
+        showResultDirectly: !showProgressSnackBar,
       );
       return result;
     } catch (e, st) {
       if (_isCancellation(e, token)) {
         markTaskFinished(type, TaskStatus.cancelled);
-        handle.finish(message: cancelledMessage);
+        _finishSnackBar(
+          handle,
+          TaskFinish.text(cancelledMessage ?? '已取消'),
+          showResultDirectly: !showProgressSnackBar,
+        );
       } else {
         markTaskFinished(type, TaskStatus.failed);
         final finish = onError?.call(e) ?? TaskFinish(message: '任务失败: $e');
-        handle.finish(
-          message: finish.message,
-          action: finish.action,
-          duration: finish.duration,
+        _finishSnackBar(
+          handle,
+          finish,
+          showResultDirectly: !showProgressSnackBar,
         );
         debugPrint('[TaskRunner] $type failed: $e\n$st');
       }
@@ -100,6 +115,27 @@ mixin TaskRunner<S> on StateNotifier<S> {
     } finally {
       notifier.dispose();
     }
+  }
+
+  void _finishSnackBar(
+    SnackBarProgressHandle? handle,
+    TaskFinish finish, {
+    required bool showResultDirectly,
+  }) {
+    if (handle != null) {
+      handle.finish(
+        message: finish.message,
+        action: finish.action,
+        duration: finish.duration,
+      );
+      return;
+    }
+    if (!showResultDirectly || finish.message == null) return;
+    snackBar.showResult(
+      message: finish.message!,
+      action: finish.action,
+      duration: finish.duration ?? const Duration(seconds: 4),
+    );
   }
 
   bool _isCancellation(Object e, CancelToken token) {
@@ -122,7 +158,7 @@ class TaskFinish {
 
   /// 纯文本结果。
   const TaskFinish.text(String msg)
-      : message = msg,
-        action = null,
-        duration = null;
+    : message = msg,
+      action = null,
+      duration = null;
 }

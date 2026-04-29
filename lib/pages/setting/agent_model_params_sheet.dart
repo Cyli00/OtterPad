@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../providers/api_provider.dart';
+import '../../services/agent_model_capability.dart';
 import 'agent_role_widgets.dart';
 
 /// 打开"模型参数调节"底部弹窗。
@@ -201,6 +202,11 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
   }
 
   List<Widget> _buildBody(ThemeData theme, ColorScheme cs) {
+    final isImage = AgentModelCapability.isImageGenerationModel(
+      provider: widget.provider,
+      modelId: widget.modelId,
+    );
+
     return [
       _subHeader('通用参数'),
       _intFieldRow(
@@ -211,13 +217,15 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
         onChanged: (v) =>
             _patch(_draft.copyWith(maxTokens: v == null || v <= 0 ? null : v)),
       ),
-      _subHeader('${widget.providerLabel} 专属'),
-      ...switch (widget.provider) {
-        AgentApiProvider.openai => _openaiRows(),
-        AgentApiProvider.anthropic => _anthropicRows(),
-        AgentApiProvider.gemini => _geminiRows(),
-        AgentApiProvider.openAICompatible => _openAICompatibleRows(),
-      },
+      if (!isImage) ...[
+        _subHeader('${widget.providerLabel} 专属'),
+        ...switch (widget.provider) {
+          AgentApiProvider.openai => _openaiRows(),
+          AgentApiProvider.anthropic => _anthropicRows(),
+          AgentApiProvider.gemini => _geminiRows(),
+          AgentApiProvider.openAICompatible => _openAICompatibleRows(),
+        },
+      ],
       const SizedBox(height: 12),
     ];
   }

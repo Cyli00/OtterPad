@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../providers/api_provider.dart';
+import '../../services/agent_model_capability.dart';
 import 'agent_model_list_tile.dart';
 import 'agent_model_manage_sheet.dart';
 import 'agent_model_params_sheet.dart';
@@ -135,9 +136,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       addedModels: s.models,
       currentDefaultModel: s.defaultModelId,
       currentFastModel: s.fastModelId,
-      onAdd: (id, {bool setAsDefault = false, bool setAsFast = false}) => ref
+      currentImageModel: s.imageModelId,
+      onAdd: (id, {bool setAsDefault = false, bool setAsFast = false, bool setAsImage = false}) => ref
           .read(agentApiProvider.notifier)
-          .addModel(id, setAsDefault: setAsDefault, setAsFast: setAsFast),
+          .addModel(id, setAsDefault: setAsDefault, setAsFast: setAsFast, setAsImage: setAsImage),
       onRemove: (id) {
         ref.read(agentApiProvider.notifier).removeModel(id);
         _modelTestResults.remove(id);
@@ -310,6 +312,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             ...agentState.models.map((modelId) {
               final hasTested = _modelTestResults.containsKey(modelId);
               final errorMsg = _modelTestResults[modelId];
+              final isImage = AgentModelCapability.isImageGenerationModel(
+                provider: agentState.provider,
+                modelId: modelId,
+              );
               return AgentModelListTile(
                 key: ValueKey(modelId),
                 modelId: modelId,
@@ -317,13 +323,14 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 hasTested: hasTested,
                 errorMsg: errorMsg,
                 hasCustomParams: !agentState.paramsFor(modelId).isDefault,
+                isImageModel: isImage,
                 onRemove: () {
                   ref.read(agentApiProvider.notifier).removeModel(modelId);
                   _modelTestResults.remove(modelId);
                 },
                 onTest: () => _testModel(modelId),
                 onShowError: () => _showTestError(modelId, errorMsg!),
-                onTune: () => _openModelParamsSheet(modelId),
+                onTune: isImage ? null : () => _openModelParamsSheet(modelId),
               );
             }),
           ],
@@ -341,6 +348,15 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   Widget _buildGlobalRoles(ThemeData theme, ColorScheme cs) {
     final defaultRole = AgentApiNotifier.globalDefaultRole;
     final fastRole = AgentApiNotifier.globalFastRole;
+    final imageRole = AgentApiNotifier.globalImageRole;
+
+    final divider = Divider(
+      height: 1,
+      thickness: 1,
+      indent: 14,
+      endIndent: 14,
+      color: cs.outlineVariant.withAlpha(40),
+    );
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -357,11 +373,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             icon: Symbols.gavel_rounded,
             iconBg: cs.primaryContainer,
             iconFg: cs.onPrimaryContainer,
-            label: '默认模型',
+            label: '专家模型',
             provider: defaultRole.provider,
             modelId: defaultRole.modelId,
             onTap: () => _showRolePickerDialog(
-              roleLabel: '默认模型',
+              roleLabel: '专家模型',
               currentProvider: defaultRole.provider,
               currentModelId: defaultRole.modelId,
               onSelect: (prov, id) => ref
@@ -372,13 +388,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                   .setGlobalDefaultModel(null, null),
             ),
           ),
-          Divider(
-            height: 1,
-            thickness: 1,
-            indent: 14,
-            endIndent: 14,
-            color: cs.outlineVariant.withAlpha(40),
-          ),
+          divider,
           _roleRow(
             theme,
             cs,
@@ -398,6 +408,29 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               onClear: () => ref
                   .read(agentApiProvider.notifier)
                   .setGlobalFastModel(null, null),
+            ),
+          ),
+          divider,
+          _roleRow(
+            theme,
+            cs,
+            icon: Symbols.palette_rounded,
+            iconBg: cs.secondaryContainer,
+            iconFg: cs.onSecondaryContainer,
+            label: '生图模型',
+            provider: imageRole.provider,
+            modelId: imageRole.modelId,
+            onTap: () => _showRolePickerDialog(
+              roleLabel: '生图模型',
+              currentProvider: imageRole.provider,
+              currentModelId: imageRole.modelId,
+              imageOnly: true,
+              onSelect: (prov, id) => ref
+                  .read(agentApiProvider.notifier)
+                  .setGlobalImageModel(prov, id),
+              onClear: () => ref
+                  .read(agentApiProvider.notifier)
+                  .setGlobalImageModel(null, null),
             ),
           ),
         ],
@@ -449,15 +482,17 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                   children: [
                     Text(
                       label,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     if (isSet)
                       Text(
-                        '$modelId · ${provider!.label}',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
+                        '$modelId · ${provider.label}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       )
@@ -471,13 +506,6 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Symbols.swap_horiz_rounded, size: 18),
-                color: cs.onSurfaceVariant,
-                tooltip: '更换',
-                visualDensity: VisualDensity.compact,
-                onPressed: onTap,
-              ),
             ],
           ),
         ),
@@ -489,10 +517,24 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     required String roleLabel,
     required AgentApiProvider? currentProvider,
     required String? currentModelId,
+    bool imageOnly = false,
     required void Function(AgentApiProvider provider, String modelId) onSelect,
     required VoidCallback onClear,
   }) async {
     final allModels = AgentApiNotifier.getAllConfiguredModels();
+    final displayModels = allModels.map(
+      (provider, models) => MapEntry(
+        provider,
+        models.where((modelId) {
+          final isImage = AgentModelCapability.isImageGenerationModel(
+            provider: provider,
+            modelId: modelId,
+          );
+          return imageOnly ? isImage : !isImage;
+        }).toList(),
+      ),
+    );
+    displayModels.removeWhere((_, models) => models.isEmpty);
 
     if (!mounted) return;
     await showDialog<void>(
@@ -504,8 +546,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
 
         return Dialog(
           backgroundColor: cs.surfaceContainerLow,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540, maxHeight: 480),
             child: Padding(
@@ -516,16 +559,17 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 children: [
                   Text(
                     '选择$roleLabel',
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  if (allModels.isEmpty)
+                  if (displayModels.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(
                         child: Text(
-                          '请先在各服务商下添加模型',
+                          imageOnly ? '请先添加支持图片输出的模型' : '请先在各服务商下添加模型',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: cs.onSurfaceVariant.withAlpha(160),
                           ),
@@ -539,79 +583,82 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.only(right: 8),
                           child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (final entry in allModels.entries) ...[
-                              Padding(
-                                padding:
-                                    const EdgeInsets.only(left: 2, bottom: 8),
-                                child: Text(
-                                  entry.key.label,
-                                  style:
-                                      theme.textTheme.titleSmall?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final entry in displayModels.entries) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 2,
+                                    bottom: 8,
+                                  ),
+                                  child: Text(
+                                    entry.key.label,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              ...entry.value.map((modelId) {
-                                final selected =
-                                    entry.key == currentProvider &&
-                                        modelId == currentModelId;
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Material(
-                                    color: selected
-                                        ? cs.primaryContainer
-                                        : cs.surfaceContainerHighest
-                                            .withAlpha(80),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: InkWell(
+                                ...entry.value.map((modelId) {
+                                  final selected =
+                                      entry.key == currentProvider &&
+                                      modelId == currentModelId;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Material(
+                                      color: selected
+                                          ? cs.primaryContainer
+                                          : cs.surfaceContainerHighest
+                                                .withAlpha(80),
                                       borderRadius: BorderRadius.circular(12),
-                                      onTap: () {
-                                        Navigator.pop(ctx);
-                                        onSelect(entry.key, modelId);
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14, vertical: 12),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                modelId,
-                                                style: theme
-                                                    .textTheme.bodyMedium
-                                                    ?.copyWith(
-                                                  fontWeight: selected
-                                                      ? FontWeight.w600
-                                                      : null,
-                                                  color: selected
-                                                      ? cs.onPrimaryContainer
-                                                      : cs.onSurface,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: () {
+                                          Navigator.pop(ctx);
+                                          onSelect(entry.key, modelId);
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 12,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  modelId,
+                                                  style: theme
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.copyWith(
+                                                        fontWeight: selected
+                                                            ? FontWeight.w600
+                                                            : null,
+                                                        color: selected
+                                                            ? cs.onPrimaryContainer
+                                                            : cs.onSurface,
+                                                      ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
-                                                maxLines: 1,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
                                               ),
-                                            ),
-                                            if (selected)
-                                              Icon(
-                                                Symbols.check_rounded,
-                                                size: 18,
-                                                color:
-                                                    cs.onPrimaryContainer,
-                                              ),
-                                          ],
+                                              if (selected)
+                                                Icon(
+                                                  Symbols.check_rounded,
+                                                  size: 18,
+                                                  color: cs.onPrimaryContainer,
+                                                ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              }),
-                              const SizedBox(height: 8),
+                                  );
+                                }),
+                                const SizedBox(height: 8),
+                              ],
                             ],
-                          ],
                           ),
                         ),
                       ),

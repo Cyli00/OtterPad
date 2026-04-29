@@ -234,10 +234,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     var repairedCount = 0;
 
     onProgress?.call(
-      const RebuildProgress(
-        fileName: 'OtterPad 文库',
-        status: '正在扫描 PDF 文件...',
-      ),
+      const RebuildProgress(fileName: 'OtterPad 文库', status: '正在扫描 PDF 文件...'),
     );
 
     final pdfFiles = <File>[];
@@ -506,6 +503,14 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         final imagesDir = Directory('${basePath}_images');
         if (await imagesDir.exists()) {
           await imagesDir.delete(recursive: true);
+        }
+        final figuresDir = Directory('${basePath}_figures');
+        if (await figuresDir.exists()) {
+          await figuresDir.delete(recursive: true);
+        }
+        final summaryDir = Directory('${basePath}_summary');
+        if (await summaryDir.exists()) {
+          await summaryDir.delete(recursive: true);
         }
 
         await PdfThumbnailService.instance.deleteCacheEntry(filePath);

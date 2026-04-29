@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../widgets/spring_dismissible.dart';
+import 'agent_role_widgets.dart';
 
 /// 模型列表中单条记录的渲染——左滑可移除。
 ///
@@ -18,10 +19,13 @@ class AgentModelListTile extends StatelessWidget {
   /// 该模型是否已设置过自定义参数（非全部默认）。
   final bool hasCustomParams;
 
+  /// 是否为生图模型——生图模型显示 badge，隐藏调参按钮。
+  final bool isImageModel;
+
   final VoidCallback onRemove;
   final VoidCallback onTest;
   final VoidCallback onShowError;
-  final VoidCallback onTune;
+  final VoidCallback? onTune;
 
   const AgentModelListTile({
     super.key,
@@ -30,10 +34,11 @@ class AgentModelListTile extends StatelessWidget {
     required this.hasTested,
     required this.errorMsg,
     required this.hasCustomParams,
+    this.isImageModel = false,
     required this.onRemove,
     required this.onTest,
     required this.onShowError,
-    required this.onTune,
+    this.onTune,
   });
 
   @override
@@ -115,40 +120,49 @@ class AgentModelListTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (isImageModel) ...[
+              const SizedBox(width: 6),
+              RoleBadge(
+                label: '生图',
+                bg: cs.secondaryContainer,
+                fg: cs.onSecondaryContainer,
+              ),
+            ],
             const SizedBox(width: 8),
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Symbols.tune_rounded,
-                      size: 20,
-                      color: hasCustomParams ? cs.primary : cs.onSurfaceVariant,
+            if (onTune != null)
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Symbols.tune_rounded,
+                        size: 20,
+                        color: hasCustomParams ? cs.primary : cs.onSurfaceVariant,
+                      ),
+                      padding: EdgeInsets.zero,
+                      tooltip: '调节参数',
+                      onPressed: onTune,
                     ),
-                    padding: EdgeInsets.zero,
-                    tooltip: '调节参数',
-                    onPressed: onTune,
-                  ),
-                  if (hasCustomParams)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: cs.primary,
-                          border: Border.all(color: cs.surface, width: 1),
+                    if (hasCustomParams)
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: cs.primary,
+                            border: Border.all(color: cs.surface, width: 1),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
             const SizedBox(width: 4),
             SizedBox(
               width: 32,

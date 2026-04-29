@@ -7,10 +7,12 @@ import 'agent_role_widgets.dart';
 class AddModelChoice {
   final bool setAsDefault;
   final bool setAsFast;
+  final bool setAsImage;
 
   const AddModelChoice({
     required this.setAsDefault,
     required this.setAsFast,
+    required this.setAsImage,
   });
 }
 
@@ -24,9 +26,11 @@ Future<AddModelChoice?> showAgentAddModelDialog({
   required String modelId,
   required String? currentDefault,
   required String? currentFast,
+  required String? currentImage,
 }) {
   bool setAsDefault = false;
   bool setAsFast = false;
+  bool setAsImage = false;
 
   return showDialog<AddModelChoice>(
     context: context,
@@ -41,6 +45,8 @@ Future<AddModelChoice?> showAgentAddModelDialog({
               currentDefault != modelId;
           final fastReplaces =
               setAsFast && currentFast != null && currentFast != modelId;
+          final imageReplaces =
+              setAsImage && currentImage != null && currentImage != modelId;
 
           return Dialog(
             backgroundColor: cs.surfaceContainerHigh,
@@ -76,7 +82,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                     const SizedBox(height: 22),
                     RoleToggleTile(
                       icon: Symbols.gavel_rounded,
-                      label: '默认模型',
+                      label: '专家模型',
                       containerColor: cs.primaryContainer,
                       onContainerColor: cs.onPrimaryContainer,
                       value: setAsDefault,
@@ -95,6 +101,17 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                       replacingText:
                           fastReplaces ? '将替换 $currentFast' : null,
                     ),
+                    const SizedBox(height: 10),
+                    RoleToggleTile(
+                      icon: Symbols.palette_rounded,
+                      label: '生图模型',
+                      containerColor: cs.secondaryContainer,
+                      onContainerColor: cs.onSecondaryContainer,
+                      value: setAsImage,
+                      onChanged: (v) => setLocal(() => setAsImage = v),
+                      replacingText:
+                          imageReplaces ? '将替换 $currentImage' : null,
+                    ),
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -110,6 +127,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                             AddModelChoice(
                               setAsDefault: setAsDefault,
                               setAsFast: setAsFast,
+                              setAsImage: setAsImage,
                             ),
                           ),
                           child: const Text('添加'),

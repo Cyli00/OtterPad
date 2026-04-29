@@ -14,13 +14,16 @@ import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/models/book/document.dart';
+import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
+import '../../providers/image_generation_config_provider.dart';
 import '../../providers/document_translation_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../services/doc_extract_service.dart';
+import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
@@ -91,8 +94,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _sheetOpen = false;
 
   // 桌面端工具栏自动隐藏
-  Timer? _toolbarHideTimer;
-  static const _kToolbarAutoHideDelay = Duration(seconds: 3);
   static const _kEdgeTriggerZone = 16.0;
 
   bool get _isDesktop =>
@@ -106,6 +107,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // Figure manifest 懒加载：首次点击图片时触发，Future 复用避免重复 IO
   Future<List<FigureManifestEntry>?>? _figuresFuture;
+
+  final _summaryImageState = ValueNotifier<SummaryImagePanelState>(
+    const SummaryImagePanelState(),
+  );
 
   // 翻译进度 SnackBar 句柄——点按"翻译"时 show，翻译结束 finish/dismiss。
   SnackBarProgressHandle? _translationProgressHandle;
@@ -123,9 +128,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ? File(filePath).exists()
         : Future.value(false);
     final mdPathFuture = _findMarkdownPath(filePath);
+    final summaryPathFuture = filePath.isNotEmpty
+        ? () async {
+            final sp = DocumentSummaryImageService.imagePathFor(filePath);
+            return await File(sp).exists() ? sp : null;
+          }()
+        : Future<String?>.value();
 
     final fileExists = await fileExistsFuture;
     final mdPath = await mdPathFuture;
+    final summaryPath = await summaryPathFuture;
     if (mdPath != null) {
       _mdPath = mdPath;
     }
@@ -143,6 +155,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _markdownLoading = wantMarkdown && _mdContent == null && _mdPath != null;
       _markdownLoadError = null;
     });
+    _summaryImageState.value = SummaryImagePanelState(imagePath: summaryPath);
 
     if (wantMarkdown) {
       unawaited(_ensureMarkdownReady());
@@ -398,14 +411,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _openTextSheet() async {
     if (_mdContent == null) return;
     _sheetOpen = true;
-    _toolbarHideTimer?.cancel();
     await showReaderTextSheet(context);
     _sheetOpen = false;
   }
 
   Future<void> _openThemeSheet() async {
     _sheetOpen = true;
-    _toolbarHideTimer?.cancel();
     await showReaderThemeSheet(context);
     _sheetOpen = false;
   }
@@ -447,30 +458,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return false;
   }
 
-  /// 桌面端：鼠标悬停时根据位置决定工具栏显隐。
+  /// 桌面端：鼠标靠近上下边缘时显示工具栏。
   ///
-  /// 鼠标靠近上/下边缘 → 显示工具栏并取消隐藏计时；
-  /// 鼠标在内容区 → 启动延迟隐藏。
+  /// 隐藏仍由滚动方向或点击内容区触发，不再按无交互时长自动隐藏。
   void _onDesktopPointerHover(PointerHoverEvent event) {
     if (!_showPreview || !_hasResult || _mdContent == null) return;
     final height = context.size?.height ?? 0;
     final y = event.localPosition.dy;
     if (y < _kEdgeTriggerZone || y > height - _kEdgeTriggerZone) {
-      _toolbarHideTimer?.cancel();
       if (!_toolbarsVisible) setState(() => _toolbarsVisible = true);
-    } else if (_toolbarsVisible) {
-      _scheduleToolbarHide();
     }
-  }
-
-  void _scheduleToolbarHide() {
-    if (_sheetOpen) return;
-    _toolbarHideTimer?.cancel();
-    _toolbarHideTimer = Timer(_kToolbarAutoHideDelay, () {
-      if (mounted && _showPreview && !_sheetOpen) {
-        setState(() => _toolbarsVisible = false);
-      }
-    });
   }
 
   // ─── 段落上下文扩展（翻译用）───
@@ -581,7 +578,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       height: 44,
       child: Row(
         children: [
-          Icon(icon, size: 20, color: cs.onSurfaceVariant),
+          Icon(icon, size: 20, fill: 1, color: cs.onSurfaceVariant),
           const SizedBox(width: 14),
           Text(
             title,
@@ -926,12 +923,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   void dispose() {
-    _toolbarHideTimer?.cancel();
     _disposePdfSearchListener?.call();
     _pdfSearcher?.dispose();
     _pdfSearchController.dispose();
     _pdfSearchFocusNode.dispose();
     _selectedTextNotifier.dispose();
+    _summaryImageState.dispose();
     _scrollController.dispose();
     _selectionToolbarEntry?.remove();
     super.dispose();
@@ -994,9 +991,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 key: ValueKey(_mdContent.hashCode),
                 markdownContent: _mdContent!,
                 pdfPath: widget.document.filePath,
+                summaryImageState: _summaryImageState,
                 onNavigate: (offset) {
                   _scaffoldKey.currentState?.closeEndDrawer();
                   _scrollToCharOffset(offset);
+                },
+                onRegenerateSummary: () {
+                  _handleGenerateSummaryImage(openOutline: false);
                 },
               ),
             )
@@ -1126,6 +1127,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               ),
             // 提取/切换按钮
             _buildExtractButton(cs, extracting),
+            // 生成总结图（仅 Markdown 视图，切换按钮右侧）
+            if (_showPreview && _hasResult && _mdContent != null)
+              IconButton(
+                icon: Icon(
+                  Symbols.mindfulness,
+                  size: 22,
+                  fill: 1,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: '生成总结图',
+                onPressed: _handleGenerateSummaryImage,
+              ),
+            // 收藏夹快捷按钮（仅 PDF 视图）
+            if (!_showPreview && (_fileExists ?? false))
+              IconButton(
+                icon: Icon(
+                  _isInAnyFavorite()
+                      ? Symbols.bookmark_remove_rounded
+                      : Symbols.bookmark_add_rounded,
+                  size: 22,
+                  fill: 1,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: _isInAnyFavorite() ? '移出收藏夹' : '移入收藏夹',
+                onPressed: _isInAnyFavorite()
+                    ? _removeFromAllFavorites
+                    : _showFavoritePicker,
+              ),
             // 重新提取
             if (_hasResult && !extracting)
               IconButton(
@@ -1138,77 +1167,105 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 tooltip: '重新提取',
                 onPressed: _onExtractPressed,
               ),
-            // 更多操作
-            PopupMenuButton<String>(
-              icon: Icon(
-                Symbols.more_vert_rounded,
-                size: 22,
-                fill: 1,
-                color: cs.onSurfaceVariant,
+            // PDF 视图：文献信息按钮；Markdown 视图：更多菜单
+            if (!_showPreview)
+              IconButton(
+                icon: Icon(
+                  Symbols.info_rounded,
+                  size: 22,
+                  fill: 1,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: '文献信息',
+                onPressed: () => _showDocumentInfo(context),
+              )
+            else
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Symbols.more_vert_rounded,
+                  size: 22,
+                  fill: 1,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: '更多',
+                color: cs.surfaceContainerHigh,
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                position: PopupMenuPosition.under,
+                onSelected: (v) {
+                  switch (v) {
+                    case 'info':
+                      _showDocumentInfo(context);
+                    case 'favorite_add':
+                      _showFavoritePicker();
+                    case 'favorite_remove':
+                      _removeFromAllFavorites();
+                    case 'reprocess':
+                      _onReprocessPressed();
+                    case 'retranslate':
+                      _handleRetranslate();
+                    case 'view_summary_image':
+                      _openSummaryImage();
+                  }
+                },
+                itemBuilder: (_) {
+                  final inFav = _isInAnyFavorite();
+                  final canRetranslate =
+                      ref
+                          .read(
+                            documentTranslationProvider(
+                              widget.document.filePath,
+                            ),
+                          )
+                          .hasResult &&
+                      _mdContent != null;
+                  final summaryImagePath =
+                      DocumentSummaryImageService.imagePathFor(
+                        widget.document.filePath,
+                      );
+                  final hasSummaryImage = File(summaryImagePath).existsSync();
+                  return [
+                    if (hasSummaryImage)
+                      _popupItem(
+                        'view_summary_image',
+                        Symbols.image_rounded,
+                        '查看总结图',
+                        cs,
+                      ),
+                    _popupItem('info', Symbols.info_rounded, '文献信息', cs),
+                    if (inFav)
+                      _popupItem(
+                        'favorite_remove',
+                        Symbols.bookmark_remove_rounded,
+                        '移出收藏夹',
+                        cs,
+                      )
+                    else
+                      _popupItem(
+                        'favorite_add',
+                        Symbols.bookmark_add_rounded,
+                        '移入收藏夹',
+                        cs,
+                      ),
+                    if (_hasResult)
+                      _popupItem(
+                        'reprocess',
+                        Symbols.refresh_rounded,
+                        '重新排版',
+                        cs,
+                      ),
+                    if (canRetranslate)
+                      _popupItem(
+                        'retranslate',
+                        Symbols.translate_rounded,
+                        '重新翻译',
+                        cs,
+                      ),
+                  ];
+                },
               ),
-              tooltip: '更多',
-              color: cs.surfaceContainerHigh,
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              position: PopupMenuPosition.under,
-              onSelected: (v) {
-                switch (v) {
-                  case 'info':
-                    _showDocumentInfo(context);
-                  case 'favorite_add':
-                    _showFavoritePicker();
-                  case 'favorite_remove':
-                    _removeFromAllFavorites();
-                  case 'reprocess':
-                    _onReprocessPressed();
-                  case 'retranslate':
-                    _handleRetranslate();
-                }
-              },
-              itemBuilder: (_) {
-                final inFav = _isInAnyFavorite();
-                final canRetranslate =
-                    ref
-                        .read(
-                          documentTranslationProvider(widget.document.filePath),
-                        )
-                        .hasResult &&
-                    _mdContent != null;
-                return [
-                  _popupItem('info', Symbols.info_rounded, '文献信息', cs),
-                  if (inFav)
-                    _popupItem(
-                      'favorite_remove',
-                      Symbols.bookmark_remove_rounded,
-                      '移出收藏夹',
-                      cs,
-                    )
-                  else
-                    _popupItem(
-                      'favorite_add',
-                      Symbols.bookmark_add_rounded,
-                      '移入收藏夹',
-                      cs,
-                    ),
-                  if (_hasResult)
-                    _popupItem(
-                      'reprocess',
-                      Symbols.refresh_rounded,
-                      '重新排版',
-                      cs,
-                    ),
-                  if (canRetranslate)
-                    _popupItem(
-                      'retranslate',
-                      Symbols.translate_rounded,
-                      '重新翻译',
-                      cs,
-                    ),
-                ];
-              },
-            ),
             const SizedBox(width: 4),
           ],
         ),
@@ -1712,6 +1769,183 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     } else {
       handle?.dismiss();
     }
+  }
+
+  static const _kSummaryImageCostDismissed = 'summary_image_cost_dismissed';
+
+  Future<void> _handleGenerateSummaryImage({bool openOutline = true}) async {
+    final dismissed =
+        GStorage.setting.get(_kSummaryImageCostDismissed, defaultValue: false)
+            as bool;
+    if (!dismissed) {
+      final confirmed = await _showSummaryImageCostDialog();
+      if (confirmed != true) return;
+    }
+
+    if (openOutline) _openOutlineSheet();
+
+    final alreadyRunning =
+        ref.read(taskProvider)[TaskType.generateSummaryImage]?.status ==
+        TaskStatus.running;
+    final current = _summaryImageState.value;
+    if (alreadyRunning) {
+      if (!current.generating) {
+        _summaryImageState.value = SummaryImagePanelState(
+          imagePath: current.imagePath,
+          revision: current.revision,
+          generating: true,
+        );
+      }
+      return;
+    }
+
+    _summaryImageState.value = SummaryImagePanelState(
+      imagePath: current.imagePath,
+      revision: current.revision,
+      generating: true,
+    );
+
+    await ref
+        .read(taskProvider.notifier)
+        .generateSummaryImage(
+          document: widget.document,
+          onSuccess: (imagePath) {
+            unawaited(FileImage(File(imagePath)).evict());
+            if (!mounted) return;
+            final revision = _summaryImageState.value.revision + 1;
+            setState(() {});
+            _summaryImageState.value = SummaryImagePanelState(
+              imagePath: imagePath,
+              revision: revision,
+            );
+          },
+        );
+
+    if (!mounted || !_summaryImageState.value.generating) return;
+    final latest = _summaryImageState.value;
+    _summaryImageState.value = SummaryImagePanelState(
+      imagePath: latest.imagePath,
+      revision: latest.revision,
+    );
+  }
+
+  Future<bool?> _showSummaryImageCostDialog() async {
+    var dontAskAgain = false;
+    final cfg = ref.read(imageGenerationConfigProvider);
+    final role = AgentApiNotifier.globalImageRole;
+    final cost = role.provider == AgentApiProvider.openai
+        ? estimateOpenAICost(
+            aspectRatio: cfg.aspectRatio,
+            fidelity: cfg.fidelity,
+          )
+        : null;
+    final costLine = cost != null ? '当前设置预估费用约 \$${cost.toStringAsFixed(3)} / 张' : '';
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final theme = Theme.of(ctx);
+            final cs = theme.colorScheme;
+            return AlertDialog(
+              backgroundColor: cs.surfaceContainerLow,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              title: Text(
+                '生成总结图',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '总结图由第三方生图模型生成，可能产生 API 调用费用。',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  if (costLine.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      costLine,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () => setDialogState(
+                      () => dontAskAgain = !dontAskAgain,
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Checkbox(
+                            value: dontAskAgain,
+                            onChanged: (v) => setDialogState(
+                              () => dontAskAgain = v ?? false,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '不再提醒',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    if (dontAskAgain) {
+                      GStorage.setting.put(_kSummaryImageCostDismissed, true);
+                    }
+                    Navigator.of(ctx).pop(true);
+                  },
+                  child: const Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openSummaryImage([String? imagePath]) async {
+    final path =
+        imagePath ??
+        DocumentSummaryImageService.imagePathFor(widget.document.filePath);
+    if (!await File(path).exists()) {
+      ref.read(snackBarServiceProvider).showResult(message: '总结图文件不存在');
+      return;
+    }
+    if (!mounted) return;
+    final entry = FigureManifestEntry(
+      imagePath: path,
+      captionText: 'Graphical Summary',
+      pageIndex: 0,
+      blockIds: const [],
+    );
+    await showFigureViewer(context, [entry]);
   }
 
   Widget _bottomButton(

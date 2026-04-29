@@ -6,16 +6,21 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
+import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
 import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
+import '../services/document_summary_image_service.dart';
+import '../services/image_generation_service.dart';
 import '../services/identifier_resolver.dart';
 import '../services/snackbar_service.dart';
 import 'api_provider.dart';
 import 'documents_provider.dart';
+import 'image_generation_config_provider.dart';
 import 'task_runner.dart';
 import 'task_types.dart';
+import 'translation_config_provider.dart';
 
 // 对外 re-export：外部只 import 'task_provider.dart' 即可拿到 TaskType/TaskStatus
 export 'task_types.dart' show TaskType, TaskStatus, TaskInfo;
@@ -40,7 +45,10 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
     state = {
       ...state,
       type: TaskInfo(
-          type: type, status: TaskStatus.running, cancelToken: token),
+        type: type,
+        status: TaskStatus.running,
+        cancelToken: token,
+      ),
     };
   }
 
@@ -84,11 +92,13 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         for (int i = 0; i < paths.length; i++) {
           if (token.isCancelled) break;
 
-          progress(ListenableProgress(
-            current: i + 1,
-            total: paths.length,
-            status: '正在提取元数据: ${p.basename(paths[i])}',
-          ));
+          progress(
+            ListenableProgress(
+              current: i + 1,
+              total: paths.length,
+              status: '正在提取元数据: ${p.basename(paths[i])}',
+            ),
+          );
 
           lastResult = await _docs.addFile(paths[i], cancelToken: token);
 
@@ -107,16 +117,18 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       onSuccess: (_) {
         final unresolvedMetadataCount =
             importedCount - completeMetadataCount - partialMetadataCount;
-        return TaskFinish.text(_buildAddFileMessage(
-          cancelled: false,
-          totalFiles: paths.length,
-          importedCount: importedCount,
-          duplicateCount: duplicateCount,
-          completeMetadataCount: completeMetadataCount,
-          partialMetadataCount: partialMetadataCount,
-          unresolvedMetadataCount: unresolvedMetadataCount,
-          lastResult: lastResult,
-        ));
+        return TaskFinish.text(
+          _buildAddFileMessage(
+            cancelled: false,
+            totalFiles: paths.length,
+            importedCount: importedCount,
+            duplicateCount: duplicateCount,
+            completeMetadataCount: completeMetadataCount,
+            partialMetadataCount: partialMetadataCount,
+            unresolvedMetadataCount: unresolvedMetadataCount,
+            lastResult: lastResult,
+          ),
+        );
       },
     );
   }
@@ -169,11 +181,13 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             cancelToken: token,
             onProgress: (rp) {
               if (token.isCancelled) return;
-              progress(ListenableProgress(
-                current: rp.current ?? 0,
-                total: rp.total ?? 0,
-                status: '${rp.status} · ${rp.fileName}',
-              ));
+              progress(
+                ListenableProgress(
+                  current: rp.current ?? 0,
+                  total: rp.total ?? 0,
+                  status: '${rp.status} · ${rp.fileName}',
+                ),
+              );
             },
           );
         } on DioException {
@@ -220,13 +234,74 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       busyMessage: '正在下载中，请稍候',
       body: (token, _) async =>
           await _docs.redownloadPdf(docId, cancelToken: token),
-      onSuccess: (success) => TaskFinish.text(
-        success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源',
-      ),
+      onSuccess: (success) =>
+          TaskFinish.text(success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源'),
     );
   }
 
   // ── 文档提取 ──
+
+  Future<void> generateSummaryImage({
+    required Document document,
+    required void Function(String imagePath) onSuccess,
+  }) async {
+    final imageRole = AgentApiNotifier.globalImageRole;
+    if (imageRole.provider == null || imageRole.modelId == null) {
+      snackBar.showResult(
+        message: '请先在「AI 设置」中选择生图模型',
+        action: SnackBarAction(
+          label: '前往设置',
+          onPressed: () => _router.push(AppRoutes.settingsApi),
+        ),
+      );
+      return;
+    }
+
+    await runTask<DocumentSummaryImageResult>(
+      type: TaskType.generateSummaryImage,
+      initialStatus: '正在生成总结图: ${document.title}',
+      busyMessage: '总结图生成正在进行中，请稍候',
+      showBusySnackBar: false,
+      showProgressSnackBar: false,
+      cancelledMessage: '已取消总结图生成',
+      body: (token, progress) async {
+        progress(
+          const ListenableProgress(current: 0, total: 0, status: '正在整理文献内容'),
+        );
+        final agentState = AgentApiNotifier.loadForProvider(
+          imageRole.provider!,
+        );
+        final config = _ref.read(imageGenerationConfigProvider);
+        progress(
+          const ListenableProgress(current: 0, total: 0, status: '正在请求生图模型'),
+        );
+        final language = _ref.read(translationConfigProvider).targetLanguage;
+        return DocumentSummaryImageService.instance.generate(
+          document: document,
+          agentState: agentState,
+          config: config,
+          language: language,
+          cancelToken: token,
+        );
+      },
+      onSuccess: (result) {
+        onSuccess(result.imagePath);
+        return TaskFinish.text('总结图已生成');
+      },
+      onError: (e) {
+        if (e is DocumentSummaryImageException) {
+          return TaskFinish.text(e.message);
+        }
+        if (e is ImageGenerationException) {
+          return TaskFinish.text(e.message);
+        }
+        if (e is DioException) {
+          return TaskFinish.text('网络错误: ${e.message}');
+        }
+        return TaskFinish.text('总结图生成失败: $e');
+      },
+    );
+  }
 
   Future<void> extractDocument({
     required String filePath,
@@ -267,8 +342,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         }
         // saveResult 通常 1-2 秒；30 秒超时兜底防止异常阻塞
         final savedMdPath = await DocExtractService.instance
-            .saveResult(filePath, result,
-                token: apiState.apiKey, title: title)
+            .saveResult(filePath, result, token: apiState.apiKey, title: title)
             .timeout(const Duration(seconds: 30));
         return (mdPath: savedMdPath, markdown: result.processedMarkdown ?? '');
       },
@@ -305,11 +379,13 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         state: apiState,
         onProgress: (status, extracted, total) {
           if (cancelToken.isCancelled) return;
-          progress(ListenableProgress(
-            current: extracted,
-            total: total,
-            status: total > 0 ? '$status · $title' : '$status · $title',
-          ));
+          progress(
+            ListenableProgress(
+              current: extracted,
+              total: total,
+              status: total > 0 ? '$status · $title' : '$status · $title',
+            ),
+          );
         },
         cancelToken: cancelToken,
       );
@@ -324,11 +400,13 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       if (!apiState.hasSyncFallback) rethrow;
 
       debugPrint('[TaskProvider] 异步提取失败，回退到同步 API: $asyncError');
-      progress(ListenableProgress(
-        current: 0,
-        total: 0,
-        status: '异步失败，尝试同步提取 · $title',
-      ));
+      progress(
+        ListenableProgress(
+          current: 0,
+          total: 0,
+          status: '异步失败，尝试同步提取 · $title',
+        ),
+      );
 
       return DocExtractService.instance.extract(
         filePath: filePath,
@@ -389,5 +467,5 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
 
 final taskProvider =
     StateNotifierProvider<TaskNotifier, Map<TaskType, TaskInfo>>((ref) {
-  return TaskNotifier(ref);
-});
+      return TaskNotifier(ref);
+    });

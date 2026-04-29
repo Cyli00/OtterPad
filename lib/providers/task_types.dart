@@ -7,6 +7,7 @@ enum TaskType {
   rebuild,
   redownloadPdf,
   extractDocument,
+  generateSummaryImage,
 }
 
 /// 任务运行状态。
@@ -25,8 +26,8 @@ class TaskInfo {
   });
 
   TaskInfo copyWith({TaskStatus? status}) => TaskInfo(
-        type: type,
-        status: status ?? this.status,
-        cancelToken: cancelToken,
-      );
+    type: type,
+    status: status ?? this.status,
+    cancelToken: cancelToken,
+  );
 }

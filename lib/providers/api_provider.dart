@@ -253,12 +253,15 @@ class AgentApiState {
   final String apiKey;
   final List<String> models;
 
-  /// 默认模型 id；**全局唯一**——跨服务商共享；若全局默认属于其他服务商，
+  /// 专家模型 id；**全局唯一**——跨服务商共享；若全局默认属于其他服务商，
   /// 当前加载的 state 此字段为 null。
   final String? defaultModelId;
 
   /// 快速模型 id；**全局唯一**——跨服务商共享；语义与 [defaultModelId] 相同。
   final String? fastModelId;
+
+  /// 生图模型 id；**全局唯一**——跨服务商共享；语义与 [defaultModelId] 相同。
+  final String? imageModelId;
 
   /// 每个模型独立的可调参数；缺失的 modelId 视为全部使用服务商默认值
   final Map<String, AgentModelParams> modelParams;
@@ -270,6 +273,7 @@ class AgentApiState {
     this.models = const [],
     this.defaultModelId,
     this.fastModelId,
+    this.imageModelId,
     this.modelParams = const {},
   });
 
@@ -289,6 +293,7 @@ class AgentApiState {
     // 使用 Object sentinel 以便传 null 清空字段
     Object? defaultModelId = _sentinel,
     Object? fastModelId = _sentinel,
+    Object? imageModelId = _sentinel,
     Map<String, AgentModelParams>? modelParams,
   }) => AgentApiState(
     provider: provider ?? this.provider,
@@ -301,6 +306,9 @@ class AgentApiState {
     fastModelId: identical(fastModelId, _sentinel)
         ? this.fastModelId
         : fastModelId as String?,
+    imageModelId: identical(imageModelId, _sentinel)
+        ? this.imageModelId
+        : imageModelId as String?,
     modelParams: modelParams ?? this.modelParams,
   );
 }
@@ -316,10 +324,11 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
   static String _modelsKey(String p) => 'agent_api_models_$p';
   static String _modelParamsKey(String p) => 'agent_api_model_params_$p';
 
-  // 默认 / 快速模型角色**全局唯一**；存储为 "providerName:modelId" 字符串。
+  // 专家 / 快速 / 生图模型角色**全局唯一**；存储为 "providerName:modelId" 字符串。
   // 例："openai:gpt-4o-mini"。空字符串或缺失均视为未设置。
   static const _globalDefaultKey = 'agent_api_default_model_global';
   static const _globalFastKey = 'agent_api_fast_model_global';
+  static const _globalImageKey = 'agent_api_image_model_global';
 
   // 旧版每服务商独立的角色 key —— 仅用于一次性迁移，之后会被删除。
   static String _legacyDefaultKey(String p) => 'agent_api_default_model_$p';
@@ -428,8 +437,12 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
       box.get(_globalDefaultKey) as String?,
     );
     final (fastProv, fastId) = _parseRole(box.get(_globalFastKey) as String?);
+    final (imageProv, imageId) = _parseRole(
+      box.get(_globalImageKey) as String?,
+    );
     String? defaultModelId;
     String? fastModelId;
+    String? imageModelId;
     if (defaultProv == provider &&
         defaultId != null &&
         models.contains(defaultId)) {
@@ -437,6 +450,9 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     }
     if (fastProv == provider && fastId != null && models.contains(fastId)) {
       fastModelId = fastId;
+    }
+    if (imageProv == provider && imageId != null && models.contains(imageId)) {
+      imageModelId = imageId;
     }
 
     // 读取每模型参数；同时丢弃指向已删除模型的孤儿条目
@@ -462,6 +478,7 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
       models: models,
       defaultModelId: defaultModelId,
       fastModelId: fastModelId,
+      imageModelId: imageModelId,
       modelParams: modelParams,
     );
   }
@@ -482,12 +499,16 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     await GStorage.setting.put(_apiKeyKey(state.provider.name), key);
   }
 
-  /// 添加一个模型；可同时将其设为默认 / 快速模型（**全局唯一**——替换任何
+  /// 添加一个模型；可同时将其设为专家 / 快速 / 生图模型（**全局唯一**——替换任何
   /// 服务商下的旧值）。
+  ///
+  /// Hive in-memory 更新是同步的，先写 Hive 再更新 state，确保重建时
+  /// 静态 getter（globalXxxRole）读到一致的快照。
   Future<void> addModel(
     String modelId, {
     bool setAsDefault = false,
     bool setAsFast = false,
+    bool setAsImage = false,
   }) async {
     final box = GStorage.setting;
     final p = state.provider.name;
@@ -495,18 +516,28 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
         ? state.models
         : [...state.models, modelId];
 
+    final f1 = box.put(_modelsKey(p), updated);
+    final f2 = setAsDefault
+        ? box.put(_globalDefaultKey, _serializeRole(state.provider, modelId))
+        : null;
+    final f3 = setAsFast
+        ? box.put(_globalFastKey, _serializeRole(state.provider, modelId))
+        : null;
+    final f4 = setAsImage
+        ? box.put(_globalImageKey, _serializeRole(state.provider, modelId))
+        : null;
+
     state = state.copyWith(
       models: updated,
       defaultModelId: setAsDefault ? modelId : _sentinel,
       fastModelId: setAsFast ? modelId : _sentinel,
+      imageModelId: setAsImage ? modelId : _sentinel,
     );
-    await box.put(_modelsKey(p), updated);
-    if (setAsDefault) {
-      await box.put(_globalDefaultKey, _serializeRole(state.provider, modelId));
-    }
-    if (setAsFast) {
-      await box.put(_globalFastKey, _serializeRole(state.provider, modelId));
-    }
+
+    await f1;
+    if (f2 != null) await f2;
+    if (f3 != null) await f3;
+    if (f4 != null) await f4;
   }
 
   Future<void> removeModel(String modelId) async {
@@ -520,9 +551,13 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
       box.get(_globalDefaultKey) as String?,
     );
     final (fastProv, fastId) = _parseRole(box.get(_globalFastKey) as String?);
+    final (imageProv, imageId) = _parseRole(
+      box.get(_globalImageKey) as String?,
+    );
     final clearedDefault =
         defaultProv == state.provider && defaultId == modelId;
     final clearedFast = fastProv == state.provider && fastId == modelId;
+    final clearedImage = imageProv == state.provider && imageId == modelId;
 
     // 级联清理：被删模型若有自定义参数，一并丢弃，避免孤儿条目长期残留
     final hadParams = state.modelParams.containsKey(modelId);
@@ -541,13 +576,15 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     final f1 = box.put(_modelsKey(p), updated);
     final f2 = clearedDefault ? box.delete(_globalDefaultKey) : null;
     final f3 = clearedFast ? box.delete(_globalFastKey) : null;
-    final f4 = raw != null ? box.put(_modelParamsKey(p), raw) : null;
+    final f4 = clearedImage ? box.delete(_globalImageKey) : null;
+    final f5 = raw != null ? box.put(_modelParamsKey(p), raw) : null;
 
     // in-memory 已更新，此时触发重建是安全的
     state = state.copyWith(
       models: updated,
       defaultModelId: clearedDefault ? null : _sentinel,
       fastModelId: clearedFast ? null : _sentinel,
+      imageModelId: clearedImage ? null : _sentinel,
       modelParams: updatedParams,
     );
 
@@ -556,6 +593,7 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     if (f2 != null) await f2;
     if (f3 != null) await f3;
     if (f4 != null) await f4;
+    if (f5 != null) await f5;
   }
 
   /// 显式切换默认模型；传 null 清空。**全局唯一**——写入时会覆盖任何
@@ -607,15 +645,25 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
 
   /// 全局默认模型角色（跨服务商），供 UI 展示。
   static ({AgentApiProvider? provider, String? modelId}) get globalDefaultRole {
-    final (prov, id) =
-        _parseRole(GStorage.setting.get(_globalDefaultKey) as String?);
+    final (prov, id) = _parseRole(
+      GStorage.setting.get(_globalDefaultKey) as String?,
+    );
     return (provider: prov, modelId: id);
   }
 
   /// 全局快速模型角色（跨服务商），供 UI 展示。
   static ({AgentApiProvider? provider, String? modelId}) get globalFastRole {
-    final (prov, id) =
-        _parseRole(GStorage.setting.get(_globalFastKey) as String?);
+    final (prov, id) = _parseRole(
+      GStorage.setting.get(_globalFastKey) as String?,
+    );
+    return (provider: prov, modelId: id);
+  }
+
+  /// 全局生图模型角色（跨服务商），供 UI 展示。
+  static ({AgentApiProvider? provider, String? modelId}) get globalImageRole {
+    final (prov, id) = _parseRole(
+      GStorage.setting.get(_globalImageKey) as String?,
+    );
     return (provider: prov, modelId: id);
   }
 
@@ -625,8 +673,10 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     for (final prov in AgentApiProvider.values) {
       final rawModels = GStorage.setting.get(_modelsKey(prov.name)) as List?;
       if (rawModels == null) continue;
-      final models =
-          rawModels.cast<String>().where((m) => m.isNotEmpty).toList();
+      final models = rawModels
+          .cast<String>()
+          .where((m) => m.isNotEmpty)
+          .toList();
       if (models.isNotEmpty) result[prov] = models;
     }
     return result;
@@ -634,10 +684,14 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
 
   /// 跨服务商设置全局默认模型。传 null 清除。
   Future<void> setGlobalDefaultModel(
-      AgentApiProvider? provider, String? modelId) async {
+    AgentApiProvider? provider,
+    String? modelId,
+  ) async {
     if (provider != null && modelId != null) {
-      await GStorage.setting
-          .put(_globalDefaultKey, _serializeRole(provider, modelId));
+      await GStorage.setting.put(
+        _globalDefaultKey,
+        _serializeRole(provider, modelId),
+      );
     } else {
       await GStorage.setting.delete(_globalDefaultKey);
     }
@@ -646,12 +700,32 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
 
   /// 跨服务商设置全局快速模型。传 null 清除。
   Future<void> setGlobalFastModel(
-      AgentApiProvider? provider, String? modelId) async {
+    AgentApiProvider? provider,
+    String? modelId,
+  ) async {
     if (provider != null && modelId != null) {
-      await GStorage.setting
-          .put(_globalFastKey, _serializeRole(provider, modelId));
+      await GStorage.setting.put(
+        _globalFastKey,
+        _serializeRole(provider, modelId),
+      );
     } else {
       await GStorage.setting.delete(_globalFastKey);
+    }
+    state = _loadForProvider(state.provider);
+  }
+
+  /// 跨服务商设置全局生图模型。传 null 清除。
+  Future<void> setGlobalImageModel(
+    AgentApiProvider? provider,
+    String? modelId,
+  ) async {
+    if (provider != null && modelId != null) {
+      await GStorage.setting.put(
+        _globalImageKey,
+        _serializeRole(provider, modelId),
+      );
+    } else {
+      await GStorage.setting.delete(_globalImageKey);
     }
     state = _loadForProvider(state.provider);
   }
@@ -662,9 +736,15 @@ class AgentApiNotifier extends StateNotifier<AgentApiState> {
     final box = GStorage.setting;
     final (fastProv, _) = _parseRole(box.get(_globalFastKey) as String?);
     final (defaultProv, _) = _parseRole(box.get(_globalDefaultKey) as String?);
-    final targetProv = fastProv ?? defaultProv;
+    final (imageProv, _) = _parseRole(box.get(_globalImageKey) as String?);
+    final targetProv = fastProv ?? defaultProv ?? imageProv;
     if (targetProv == null) return null;
     return _loadForProvider(targetProv);
+  }
+
+  /// 加载指定服务商的完整状态，供跨服务商角色调用层使用。
+  static AgentApiState loadForProvider(AgentApiProvider provider) {
+    return _loadForProvider(provider);
   }
 
   void reload() {
@@ -683,7 +763,9 @@ final agentApiProvider = StateNotifierProvider<AgentApiNotifier, AgentApiState>(
 /// 设置页应继续使用 [agentApiProvider]（仅管理当前服务商）。
 final effectiveAgentApiProvider = Provider<AgentApiState>((ref) {
   final current = ref.watch(agentApiProvider);
-  if (current.fastModelId != null || current.defaultModelId != null) {
+  if (current.fastModelId != null ||
+      current.defaultModelId != null ||
+      current.imageModelId != null) {
     return current;
   }
   return AgentApiNotifier.resolveEffectiveState() ?? current;

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,6 +23,19 @@ class ReferenceItem {
   });
 }
 
+@immutable
+class SummaryImagePanelState {
+  final String? imagePath;
+  final int revision;
+  final bool generating;
+
+  const SummaryImagePanelState({
+    this.imagePath,
+    this.revision = 0,
+    this.generating = false,
+  });
+}
+
 // ─── 解析工具 ───
 
 /// 从 Markdown 中提取参考文献列表。
@@ -38,10 +52,13 @@ List<ReferenceItem> parseReferences(String markdown) {
   if (refMatch == null) return [];
 
   final afterRef = markdown.substring(refMatch.end);
-  final nextHeading =
-      RegExp(r'^#{1,3}\s+\S', multiLine: true).firstMatch(afterRef);
-  final refSection =
-      nextHeading != null ? afterRef.substring(0, nextHeading.start) : afterRef;
+  final nextHeading = RegExp(
+    r'^#{1,3}\s+\S',
+    multiLine: true,
+  ).firstMatch(afterRef);
+  final refSection = nextHeading != null
+      ? afterRef.substring(0, nextHeading.start)
+      : afterRef;
 
   final numbered = _parseNumberedRefs(refSection, refMatch.end);
   if (numbered.isNotEmpty) return numbered;
@@ -52,10 +69,7 @@ List<ReferenceItem> parseReferences(String markdown) {
 List<ReferenceItem> _parseNumberedRefs(String refSection, int baseOffset) {
   final items = <ReferenceItem>[];
   // 同时支持 "1. "、"1) " 与 "[1] " 三种前缀
-  final refItemRe = RegExp(
-    r'^\s*(?:\[(\d+)\]|(\d+)[.\)])\s+',
-    multiLine: true,
-  );
+  final refItemRe = RegExp(r'^\s*(?:\[(\d+)\]|(\d+)[.\)])\s+', multiLine: true);
   final matches = refItemRe.allMatches(refSection).toList();
 
   for (var i = 0; i < matches.length; i++) {
@@ -63,19 +77,22 @@ List<ReferenceItem> _parseNumberedRefs(String refSection, int baseOffset) {
     final numStr = match.group(1) ?? match.group(2)!;
     final num = int.tryParse(numStr) ?? (i + 1);
     final textStart = match.end;
-    final textEnd =
-        i + 1 < matches.length ? matches[i + 1].start : refSection.length;
+    final textEnd = i + 1 < matches.length
+        ? matches[i + 1].start
+        : refSection.length;
     final text = refSection
         .substring(textStart, textEnd)
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
     if (text.isNotEmpty) {
-      items.add(ReferenceItem(
-        number: num,
-        text: text,
-        charOffset: baseOffset + match.start,
-      ));
+      items.add(
+        ReferenceItem(
+          number: num,
+          text: text,
+          charOffset: baseOffset + match.start,
+        ),
+      );
     }
   }
   return items;
@@ -99,18 +116,19 @@ List<ReferenceItem> _parseParagraphRefs(String refSection, int baseOffset) {
   for (final chunk in chunks) {
     final raw = refSection.substring(chunk.start, chunk.end);
     final leadingWs = raw.length - raw.trimLeft().length;
-    final normalized =
-        raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final normalized = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
 
     if (normalized.length < 20) continue;
     if (!_looksLikeReference(normalized)) continue;
 
-    items.add(ReferenceItem(
-      number: num++,
-      text: normalized,
-      charOffset: baseOffset + chunk.start + leadingWs,
-      isNumbered: false,
-    ));
+    items.add(
+      ReferenceItem(
+        number: num++,
+        text: normalized,
+        charOffset: baseOffset + chunk.start + leadingWs,
+        isNumbered: false,
+      ),
+    );
   }
   return items;
 }
@@ -128,13 +146,17 @@ bool _looksLikeReference(String text) {
 class OutlinePanel extends StatefulWidget {
   final String markdownContent;
   final String? pdfPath;
+  final ValueListenable<SummaryImagePanelState> summaryImageState;
   final void Function(int charOffset) onNavigate;
+  final VoidCallback? onRegenerateSummary;
 
   const OutlinePanel({
     super.key,
     required this.markdownContent,
     this.pdfPath,
+    required this.summaryImageState,
     required this.onNavigate,
+    this.onRegenerateSummary,
   });
 
   @override
@@ -206,11 +228,16 @@ class _OutlinePanelState extends State<OutlinePanel>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _FiguresTab(
-                  figures: _figures,
-                  loaded: _figuresLoaded,
-                  markdownContent: widget.markdownContent,
-                  onNavigate: widget.onNavigate,
+                ValueListenableBuilder<SummaryImagePanelState>(
+                  valueListenable: widget.summaryImageState,
+                  builder: (context, summaryState, _) => _FiguresTab(
+                    figures: _figures,
+                    loaded: _figuresLoaded,
+                    markdownContent: widget.markdownContent,
+                    onNavigate: widget.onNavigate,
+                    summaryState: summaryState,
+                    onRegenerateSummary: widget.onRegenerateSummary,
+                  ),
                 ),
                 _ReferencesTab(references: _references),
               ],
@@ -229,12 +256,16 @@ class _FiguresTab extends StatelessWidget {
   final bool loaded;
   final String markdownContent;
   final void Function(int charOffset) onNavigate;
+  final SummaryImagePanelState summaryState;
+  final VoidCallback? onRegenerateSummary;
 
   const _FiguresTab({
     required this.figures,
     required this.loaded,
     required this.markdownContent,
     required this.onNavigate,
+    required this.summaryState,
+    this.onRegenerateSummary,
   });
 
   @override
@@ -247,7 +278,13 @@ class _FiguresTab extends StatelessWidget {
         ),
       );
     }
-    if (figures == null || figures!.isEmpty) {
+
+    final summaryImagePath = summaryState.imagePath;
+    final hasSummary =
+        summaryImagePath != null && File(summaryImagePath).existsSync();
+    final hasFigures = figures != null && figures!.isNotEmpty;
+
+    if (!summaryState.generating && !hasSummary && !hasFigures) {
       return const _EmptyState(
         icon: Symbols.image_not_supported,
         message: '未找到图表\n请先提取文档',
@@ -256,23 +293,26 @@ class _FiguresTab extends StatelessWidget {
 
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final summaryOffset = (summaryState.generating || hasSummary) ? 1 : 0;
+    final totalCount = summaryOffset + (hasFigures ? figures!.length : 0);
 
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: figures!.length,
-      separatorBuilder: (_, __) => Divider(
-        color: cs.outlineVariant.withAlpha(60),
-        height: 32,
-      ),
+      itemCount: totalCount,
+      separatorBuilder: (_, _) =>
+          Divider(color: cs.outlineVariant.withAlpha(60), height: 32),
       itemBuilder: (context, index) {
-        final fig = figures![index];
+        if (index == 0 && summaryOffset == 1) {
+          return _buildSummaryBlock(context, theme, cs, hasSummary: hasSummary);
+        }
+        final figIndex = index - summaryOffset;
+        final fig = figures![figIndex];
         final imageFile = File(fig.imagePath);
         final imageExists = imageFile.existsSync();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 标题（最多1行）
             Text(
               fig.captionText,
               style: theme.textTheme.titleSmall?.copyWith(
@@ -284,10 +324,10 @@ class _FiguresTab extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 10),
-            // 图片
             if (imageExists)
               GestureDetector(
-                onTap: () => showFigureViewer(context, figures!, initialIndex: index),
+                onTap: () =>
+                    showFigureViewer(context, figures!, initialIndex: figIndex),
                 child: Hero(
                   tag: 'figure_${fig.imagePath}',
                   child: ClipRRect(
@@ -317,7 +357,6 @@ class _FiguresTab extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 8),
-            // 操作按钮
             Row(
               children: [
                 _ActionLink(
@@ -330,7 +369,11 @@ class _FiguresTab extends StatelessWidget {
                   _ActionLink(
                     icon: Symbols.open_in_full_rounded,
                     label: '查看原图',
-                    onTap: () => showFigureViewer(context, figures!, initialIndex: index),
+                    onTap: () => showFigureViewer(
+                      context,
+                      figures!,
+                      initialIndex: figIndex,
+                    ),
                   ),
               ],
             ),
@@ -340,12 +383,106 @@ class _FiguresTab extends StatelessWidget {
     );
   }
 
+  Widget _buildSummaryBlock(
+    BuildContext context,
+    ThemeData theme,
+    ColorScheme cs, {
+    required bool hasSummary,
+  }) {
+    final imagePath = summaryState.imagePath;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Symbols.auto_awesome_rounded, size: 18, color: cs.primary),
+            const SizedBox(width: 6),
+            Text(
+              'Graphical Summary',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+                height: 1.4,
+              ),
+            ),
+            const Spacer(),
+            if (summaryState.generating) ...[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (onRegenerateSummary != null)
+              GestureDetector(
+                onTap: summaryState.generating ? null : onRegenerateSummary,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Symbols.refresh_rounded,
+                    size: 18,
+                    color: summaryState.generating
+                        ? cs.onSurfaceVariant.withAlpha(90)
+                        : cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (hasSummary && imagePath != null)
+          GestureDetector(
+            onTap: () {
+              final entry = FigureManifestEntry(
+                imagePath: imagePath,
+                captionText: 'Graphical Summary',
+                pageIndex: 0,
+                blockIds: const [],
+              );
+              showFigureViewer(context, [entry]);
+            },
+            child: Hero(
+              tag: 'figure_$imagePath',
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  File(imagePath),
+                  key: ValueKey('${imagePath}_${summaryState.revision}'),
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  cacheWidth: 600,
+                ),
+              ),
+            ),
+          )
+        else
+          Container(
+            height: 160,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              summaryState.generating ? '正在生成总结图…' : '暂无总结图',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   void _navigateToFigure(FigureManifestEntry fig) {
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
     final idx = markdownContent.indexOf(fileName);
     if (idx >= 0) onNavigate(idx);
   }
-
 }
 
 // ─── References Tab ───
@@ -370,10 +507,8 @@ class _ReferencesTab extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       itemCount: references.length,
-      separatorBuilder: (_, __) => Divider(
-        color: cs.outlineVariant.withAlpha(40),
-        height: 1,
-      ),
+      separatorBuilder: (_, _) =>
+          Divider(color: cs.outlineVariant.withAlpha(40), height: 1),
       itemBuilder: (context, index) {
         final item = references[index];
 
@@ -385,19 +520,24 @@ class _ReferencesTab extends StatelessWidget {
             Clipboard.setData(ClipboardData(text: text));
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
-                elevation: 6,
-                duration: const Duration(seconds: 2),
-                content: Text(
-                  '已复制参考文献 ${item.number}',
-                  style: const TextStyle(fontSize: 14),
+              ..showSnackBar(
+                SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  elevation: 6,
+                  duration: const Duration(seconds: 2),
+                  content: Text(
+                    '已复制参考文献 ${item.number}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
                 ),
-              ));
+              );
           },
           borderRadius: BorderRadius.circular(8),
           child: Padding(
@@ -500,4 +640,3 @@ class _ActionLink extends StatelessWidget {
     );
   }
 }
-
