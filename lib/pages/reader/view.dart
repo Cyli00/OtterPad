@@ -17,6 +17,7 @@ import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../data/models/book/document.dart';
+import '../../data/models/collection/favorite.dart';
 import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/image_generation_config_provider.dart';
@@ -41,6 +42,7 @@ import 'widgets/reader_theme_sheet.dart';
 import 'widgets/search_overlay.dart';
 import 'widgets/selection_toolbar.dart';
 import 'widgets/translation_popup.dart';
+import '../shelf/widgets/create_favorite_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
@@ -632,22 +634,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  bool _isInAnyFavorite() {
+  bool _isInAnyFavorite(List<Favorite> favorites) {
     final docPath = widget.document.filePath;
     if (docPath.isEmpty) return false;
-    return ref
-        .read(favoritesProvider)
-        .any((fav) => fav.docPaths.contains(docPath));
+    return favorites.any((fav) => fav.docPaths.contains(docPath));
   }
 
-  void _removeFromAllFavorites() {
+  List<Favorite> _favoritesContainingDoc(List<Favorite> favorites) {
     final docPath = widget.document.filePath;
-    if (docPath.isEmpty) return;
-    ref.read(favoritesProvider.notifier).removeDocFromAll(docPath);
-    ref.read(snackBarServiceProvider).showResult(message: '已从所有收藏夹移出');
+    if (docPath.isEmpty) return const [];
+    return favorites.where((fav) => fav.docPaths.contains(docPath)).toList();
   }
 
-  void _showFavoritePicker() {
+  Future<void> _showFavoritePicker() async {
     final docPath = widget.document.filePath;
     if (docPath.isEmpty) {
       ref
@@ -655,107 +654,159 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           .showResult(message: '此文献无本地文件，无法添加到收藏夹');
       return;
     }
-    showModalBottomSheet(
+
+    final result = await _showFavoritePickerSheet(
+      title: '移入收藏夹',
+      favorites: ref.read(favoritesProvider),
+      docPath: docPath,
+      mode: _FavoritePickerMode.add,
+    );
+    if (!mounted || result == null) return;
+
+    switch (result) {
+      case _CreateFavoritePickerResult():
+        final created = await showCreateFavoriteDialog(context);
+        if (!mounted || created == null) return;
+        final favorite = await ref
+            .read(favoritesProvider.notifier)
+            .create(emoji: created['emoji']!, name: created['name']!);
+        await ref.read(favoritesProvider.notifier).addDoc(favorite.id, docPath);
+        if (!mounted) return;
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(message: '已新建并添加到「${favorite.name}」');
+      case _SelectFavoritePickerResult(:final favorite):
+        if (favorite.docPaths.contains(docPath)) return;
+        await ref.read(favoritesProvider.notifier).addDoc(favorite.id, docPath);
+        if (!mounted) return;
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(message: '已添加到「${favorite.name}」');
+    }
+  }
+
+  Future<void> _showFavoriteRemovalPicker() async {
+    final docPath = widget.document.filePath;
+    if (docPath.isEmpty) return;
+
+    final favorites = _favoritesContainingDoc(ref.read(favoritesProvider));
+    if (favorites.isEmpty) {
+      ref.read(snackBarServiceProvider).showResult(message: '此文献不在收藏夹中');
+      return;
+    }
+
+    final result = await _showFavoritePickerSheet(
+      title: '移出收藏夹',
+      favorites: favorites,
+      docPath: docPath,
+      mode: _FavoritePickerMode.remove,
+    );
+    if (!mounted) return;
+    if (result case _SelectFavoritePickerResult(:final favorite)) {
+      await ref
+          .read(favoritesProvider.notifier)
+          .removeDoc(favorite.id, docPath);
+      if (!mounted) return;
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: '已从「${favorite.name}」移出');
+      return;
+    }
+  }
+
+  Future<_FavoritePickerResult?> _showFavoritePickerSheet({
+    required String title,
+    required List<Favorite> favorites,
+    required String docPath,
+    required _FavoritePickerMode mode,
+  }) {
+    return showModalBottomSheet<_FavoritePickerResult>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
         final theme = Theme.of(ctx);
         final cs = theme.colorScheme;
-        final favorites = ref.read(favoritesProvider);
-        final maxH = MediaQuery.sizeOf(ctx).height * 0.5;
-        return Container(
-          constraints: BoxConstraints(maxHeight: maxH),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 32,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withAlpha(80),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        final maxH = MediaQuery.sizeOf(ctx).height * 0.65;
+        final bottomPadding = MediaQuery.of(ctx).padding.bottom + 16;
+
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+          child: Container(
+            constraints: BoxConstraints(maxHeight: maxH),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.onSurfaceVariant.withAlpha(80),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '移入收藏夹',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: cs.onSurface,
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(ctx).padding.bottom + 16,
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.only(bottom: bottomPadding),
+                    children: [
+                      if (mode == _FavoritePickerMode.add)
+                        _FavoritePickerSheetItem(
+                          icon: Symbols.add_rounded,
+                          title: '新建收藏夹',
+                          subtitle: '创建后自动加入当前文献',
+                          onTap: () => Navigator.pop(
+                            ctx,
+                            const _CreateFavoritePickerResult(),
+                          ),
+                        ),
+                      for (final fav in favorites)
+                        _FavoritePickerSheetItem.favorite(
+                          favorite: fav,
+                          subtitle:
+                              mode == _FavoritePickerMode.add &&
+                                  fav.docPaths.contains(docPath)
+                              ? '已包含当前文献'
+                              : '${fav.docPaths.length} 篇文献',
+                          selected:
+                              mode == _FavoritePickerMode.add &&
+                              fav.docPaths.contains(docPath),
+                          enabled:
+                              mode == _FavoritePickerMode.remove ||
+                              !fav.docPaths.contains(docPath),
+                          onTap: () => Navigator.pop(
+                            ctx,
+                            _SelectFavoritePickerResult(fav),
+                          ),
+                        ),
+                    ],
                   ),
-                  itemCount: favorites.length,
-                  itemBuilder: (_, i) {
-                    final fav = favorites[i];
-                    final alreadyIn = fav.docPaths.contains(docPath);
-                    return InkWell(
-                      onTap: alreadyIn
-                          ? null
-                          : () {
-                              ref
-                                  .read(favoritesProvider.notifier)
-                                  .addDoc(fav.id, docPath);
-                              Navigator.pop(ctx);
-                              ref
-                                  .read(snackBarServiceProvider)
-                                  .showResult(message: '已添加到「${fav.name}」');
-                            },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              fav.emoji,
-                              style: const TextStyle(fontSize: 20),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Text(
-                                fav.name,
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: alreadyIn
-                                      ? cs.onSurfaceVariant
-                                      : cs.onSurface,
-                                ),
-                              ),
-                            ),
-                            if (alreadyIn)
-                              Icon(
-                                Symbols.check_rounded,
-                                color: cs.primary,
-                                size: 22,
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -1131,6 +1182,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ColorScheme cs, {
     bool extracting = false,
   }) {
+    final favorites = ref.watch(favoritesProvider);
+    final inFavorite = _isInAnyFavorite(favorites);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: SizedBox(
@@ -1179,16 +1233,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             if (!_showPreview && (_fileExists ?? false))
               IconButton(
                 icon: Icon(
-                  _isInAnyFavorite()
+                  inFavorite
                       ? Symbols.bookmark_remove_rounded
                       : Symbols.bookmark_add_rounded,
                   size: 22,
                   fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
-                tooltip: _isInAnyFavorite() ? '移出收藏夹' : '移入收藏夹',
-                onPressed: _isInAnyFavorite()
-                    ? _removeFromAllFavorites
+                tooltip: inFavorite ? '移出收藏夹' : '移入收藏夹',
+                onPressed: inFavorite
+                    ? _showFavoriteRemovalPicker
                     : _showFavoritePicker,
               ),
             // 重新提取
@@ -1237,7 +1291,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     case 'favorite_add':
                       _showFavoritePicker();
                     case 'favorite_remove':
-                      _removeFromAllFavorites();
+                      _showFavoriteRemovalPicker();
                     case 'reprocess':
                       _onReprocessPressed();
                     case 'retranslate':
@@ -1247,7 +1301,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   }
                 },
                 itemBuilder: (_) {
-                  final inFav = _isInAnyFavorite();
                   final canRetranslate =
                       ref
                           .read(
@@ -1271,7 +1324,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                         cs,
                       ),
                     _popupItem('info', Symbols.info_rounded, '文献信息', cs),
-                    if (inFav)
+                    if (inFavorite)
                       _popupItem(
                         'favorite_remove',
                         Symbols.bookmark_remove_rounded,
@@ -2263,6 +2316,126 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+enum _FavoritePickerMode { add, remove }
+
+sealed class _FavoritePickerResult {
+  const _FavoritePickerResult();
+}
+
+final class _CreateFavoritePickerResult extends _FavoritePickerResult {
+  const _CreateFavoritePickerResult();
+}
+
+final class _SelectFavoritePickerResult extends _FavoritePickerResult {
+  final Favorite favorite;
+
+  const _SelectFavoritePickerResult(this.favorite);
+}
+
+class _FavoritePickerSheetItem extends StatelessWidget {
+  final IconData? icon;
+  final Favorite? favorite;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _FavoritePickerSheetItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.favorite,
+    this.selected = false,
+    this.enabled = true,
+  });
+
+  factory _FavoritePickerSheetItem.favorite({
+    required Favorite favorite,
+    required String subtitle,
+    required bool selected,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return _FavoritePickerSheetItem(
+      icon: null,
+      favorite: favorite,
+      title: favorite.name,
+      subtitle: subtitle,
+      selected: selected,
+      enabled: enabled,
+      onTap: onTap,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final activeColor = enabled ? cs.onSurface : cs.onSurfaceVariant;
+    final trailingColor = cs.onSurfaceVariant.withAlpha(120);
+
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: favorite != null
+                  ? Text(
+                      favorite!.emoji,
+                      style: const TextStyle(fontSize: 22, height: 1.0),
+                    )
+                  : Icon(icon, color: cs.primary, size: 22, fill: 1),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: activeColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              selected ? Symbols.check_rounded : Symbols.chevron_right_rounded,
+              color: selected ? cs.primary : trailingColor,
+              size: 22,
+              fill: selected ? 1 : 0,
+            ),
+          ],
+        ),
       ),
     );
   }
