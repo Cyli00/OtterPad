@@ -109,6 +109,66 @@ class _CaptionSeries {
   int get maxNumber => present.reduce((a, b) => a > b ? a : b);
 }
 
+/// 内部 bbox 表示，避免到处手写 `[0] [1] [2] [3]`。
+class _Bbox {
+  const _Bbox(this.left, this.top, this.right, this.bottom);
+
+  final double left;
+  final double top;
+  final double right;
+  final double bottom;
+
+  factory _Bbox.fromList(List<double> bbox) =>
+      _Bbox(bbox[0], bbox[1], bbox[2], bbox[3]);
+
+  factory _Bbox.fromBlock(LayoutBlock block) => _Bbox.fromList(block.blockBbox);
+
+  factory _Bbox.fromBlocks(Iterable<LayoutBlock> blocks) {
+    double left = double.infinity;
+    double top = double.infinity;
+    double right = double.negativeInfinity;
+    double bottom = double.negativeInfinity;
+    var hasAny = false;
+
+    for (final block in blocks) {
+      hasAny = true;
+      final bbox = _Bbox.fromBlock(block);
+      if (bbox.left < left) left = bbox.left;
+      if (bbox.top < top) top = bbox.top;
+      if (bbox.right > right) right = bbox.right;
+      if (bbox.bottom > bottom) bottom = bbox.bottom;
+    }
+
+    if (!hasAny) return const _Bbox(0, 0, 0, 0);
+    return _Bbox(left, top, right, bottom);
+  }
+
+  double gapTo(_Bbox other) {
+    final dx = (left > other.right)
+        ? left - other.right
+        : (other.left > right ? other.left - right : 0.0);
+    final dy = (top > other.bottom)
+        ? top - other.bottom
+        : (other.top > bottom ? other.top - bottom : 0.0);
+    return math.sqrt(dx * dx + dy * dy);
+  }
+
+  double get diagonal {
+    final width = right - left;
+    final height = bottom - top;
+    return math.sqrt(width * width + height * height);
+  }
+
+  List<double> toList() => [left, top, right, bottom];
+}
+
+class _ContentCluster {
+  _ContentCluster(this.blocks) : bbox = _Bbox.fromBlocks(blocks);
+
+  final List<LayoutBlock> blocks;
+  final _Bbox bbox;
+}
+
 /// figure 提取的完整结果
 class FigureExtractResult {
   final String outputDir;
@@ -459,11 +519,16 @@ class FigureExtractService {
   /// 视为噪声，从 figure 聚类中剔除。
   static const _maxSubLabelLength = 30;
 
+  static const _anchorAssignThresholdRatio = 0.5;
+  static const _contentClusterGapRatio = 0.025;
+  static const _minContentClusterGap = 24.0;
+  static const _maxContentClusterGap = 56.0;
+
   /// 在单页 block 列表中找到所有 figure segment。
   ///
-  /// 每个主标题（Figure N. / Table N.）是一个 segment 锚点，
+  /// 每个主标题（Figure N. / Table N.）是一个 segment 锚点。
   /// 其它 figure-label block（image/chart/table/sub-caption/vision_footnote）
-  /// 按 bbox 最短边距归属到最近的锚点。
+  /// 先按空间相邻关系聚成内容簇，再按内容簇 bbox 归属到最近锚点。
   ///
   /// 这种做法对"标题在上/下/左/右"四种排版一视同仁，
   /// 并且不依赖 API 的阅读顺序——当双栏版面把 caption 和 image
@@ -484,86 +549,109 @@ class FigureExtractService {
         anchors.where((a) => !_isTableAnchor(a)).toList();
 
     final segments = {
-      for (final a in anchors) identityHashCode(a): <LayoutBlock>[a],
+      for (final anchor in anchors) anchor: <LayoutBlock>[anchor],
     };
 
-    // 超出阈值的 block 视为与任何锚点都不相关，丢弃。
+    final pageDiagonal = _pageDiagonal(blocks);
+
+    // 超出阈值的内容簇视为与任何锚点都不相关，丢弃。
     // 0.5 留出余量，使侧向排版中位于另一列的子标题也能配对。
-    final threshold = _pageDiagonal(blocks) * 0.5;
+    final threshold = pageDiagonal * _anchorAssignThresholdRatio;
+    final contentClusterGap = (pageDiagonal * _contentClusterGapRatio)
+        .clamp(_minContentClusterGap, _maxContentClusterGap)
+        .toDouble();
 
-    for (final block in figureBlocks) {
-      if (isMainCaption(block)) continue;
-
-      // 同类优先：table / vision_footnote 偏向 table anchor，
-      // 其它 figure 内容偏向 figure anchor。
-      final preferTable = block.blockLabel == 'table' ||
-          block.blockLabel == 'vision_footnote';
-      final preferred = preferTable ? tableAnchors : figureAnchors;
-
-      final (nearest, gap) = _nearestAnchor(block, preferred);
-      if (nearest != null && gap <= threshold) {
-        segments[identityHashCode(nearest)]!.add(block);
-        continue;
-      }
-
-      // Fallback：同类 anchor 不存在或超距时，退回到所有 anchor 里最近的一个
-      final (fallback, fbGap) = _nearestAnchor(block, anchors);
-      if (fallback != null && fbGap <= threshold) {
-        segments[identityHashCode(fallback)]!.add(block);
-      }
+    for (final cluster in _buildContentClusters(
+      figureBlocks,
+      contentClusterGap,
+    )) {
+      final preferred = _prefersTableAnchor(cluster)
+          ? tableAnchors
+          : figureAnchors;
+      final anchor =
+          _nearestAnchor(cluster.bbox, preferred, threshold) ??
+          _nearestAnchor(cluster.bbox, anchors, threshold);
+      if (anchor == null) continue;
+      segments[anchor]!.addAll(cluster.blocks);
     }
 
     return segments.values.toList();
   }
 
-  /// 在给定 anchor 列表里返回距离 [block] 最近的那个及其 rect-gap。
-  /// 列表为空时返回 `(null, double.infinity)`。
-  (LayoutBlock?, double) _nearestAnchor(
-    LayoutBlock block,
+  /// 将相邻的 figure 内容先聚成簇，再整体分配给标题。
+  ///
+  /// 连续底部图注容易出现 `Figure -> Figure_title -> Figure -> Figure_title`
+  /// 的版面顺序。若逐块按距离分配，后一张图顶部的子标签可能被前一个图注抢走；
+  /// 内容簇能用整组 bbox 重新判断归属。
+  List<_ContentCluster> _buildContentClusters(
+    List<LayoutBlock> figureBlocks,
+    double maxGap,
+  ) {
+    final contentBlocks = figureBlocks.where((b) => !isMainCaption(b)).toList();
+    final blockOrder = {
+      for (var i = 0; i < figureBlocks.length; i++) figureBlocks[i]: i,
+    };
+    final remaining = List<LayoutBlock>.from(contentBlocks);
+    final clusters = <_ContentCluster>[];
+
+    while (remaining.isNotEmpty) {
+      final cluster = <LayoutBlock>[remaining.removeAt(0)];
+      var expanded = true;
+
+      while (expanded) {
+        expanded = false;
+        for (var i = remaining.length - 1; i >= 0; i--) {
+          final candidate = remaining[i];
+          final touchesCluster = cluster.any(
+            (b) =>
+                _Bbox.fromBlock(b).gapTo(_Bbox.fromBlock(candidate)) <= maxGap,
+          );
+          if (!touchesCluster) continue;
+
+          cluster.add(candidate);
+          remaining.removeAt(i);
+          expanded = true;
+        }
+      }
+
+      cluster.sort((a, b) => blockOrder[a]!.compareTo(blockOrder[b]!));
+      clusters.add(_ContentCluster(cluster));
+    }
+
+    return clusters;
+  }
+
+  bool _prefersTableAnchor(_ContentCluster cluster) {
+    final hasFigureVisual = cluster.blocks.any(
+      (b) => b.blockLabel == 'image' || b.blockLabel == 'chart',
+    );
+    if (hasFigureVisual) return false;
+    return cluster.blocks.any(
+      (b) => b.blockLabel == 'table' || b.blockLabel == 'vision_footnote',
+    );
+  }
+
+  LayoutBlock? _nearestAnchor(
+    _Bbox bbox,
     List<LayoutBlock> anchors,
+    double maxGap,
   ) {
     LayoutBlock? best;
     var bestGap = double.infinity;
     for (final anchor in anchors) {
-      final gap = _rectGap(block.blockBbox, anchor.blockBbox);
+      final gap = bbox.gapTo(_Bbox.fromBlock(anchor));
       if (gap < bestGap) {
         bestGap = gap;
         best = anchor;
       }
     }
-    return (best, bestGap);
-  }
-
-  /// 两个 `[l, t, r, b]` 矩形的最短边距（重叠时返回 0）。
-  ///
-  /// 相比中心距，边距在侧排场景下更准确：caption 与 image 的宽度
-  /// 跨度大时，中心距会被拉远，造成漏配。
-  static double _rectGap(List<double> a, List<double> b) {
-    final dx = (a[0] > b[2])
-        ? a[0] - b[2]
-        : (b[0] > a[2] ? b[0] - a[2] : 0.0);
-    final dy = (a[1] > b[3])
-        ? a[1] - b[3]
-        : (b[1] > a[3] ? b[1] - a[3] : 0.0);
-    return math.sqrt(dx * dx + dy * dy);
+    return bestGap <= maxGap ? best : null;
   }
 
   /// 当页所有 block 外接矩形的对角线长度，用作距离阈值的基准。
   static double _pageDiagonal(List<LayoutBlock> blocks) {
     if (blocks.isEmpty) return 0;
-    double left = double.infinity;
-    double top = double.infinity;
-    double right = double.negativeInfinity;
-    double bottom = double.negativeInfinity;
-    for (final b in blocks) {
-      if (b.blockBbox[0] < left) left = b.blockBbox[0];
-      if (b.blockBbox[1] < top) top = b.blockBbox[1];
-      if (b.blockBbox[2] > right) right = b.blockBbox[2];
-      if (b.blockBbox[3] > bottom) bottom = b.blockBbox[3];
-    }
-    final w = right - left;
-    final h = bottom - top;
-    return math.sqrt(w * w + h * h);
+    return _Bbox.fromBlocks(blocks).diagonal;
   }
 
   // ─── BBox 计算 ────────────────────────────────────────
@@ -575,19 +663,12 @@ class FigureExtractService {
     final contentBlocks =
         segment.where((b) => !isMainCaption(b)).toList();
     final effective = contentBlocks.isNotEmpty ? contentBlocks : segment;
+    return _mergeBbox(effective);
+  }
 
-    double left = double.infinity;
-    double top = double.infinity;
-    double right = double.negativeInfinity;
-    double bottom = double.negativeInfinity;
-
-    for (final b in effective) {
-      if (b.blockBbox[0] < left) left = b.blockBbox[0];
-      if (b.blockBbox[1] < top) top = b.blockBbox[1];
-      if (b.blockBbox[2] > right) right = b.blockBbox[2];
-      if (b.blockBbox[3] > bottom) bottom = b.blockBbox[3];
-    }
-    return [left, top, right, bottom];
+  /// 合并 block bbox，保留主标题与否由调用方决定。
+  static List<double> _mergeBbox(List<LayoutBlock> blocks) {
+    return _Bbox.fromBlocks(blocks).toList();
   }
 
   /// 将 API 坐标从 [apiZoom] 缩放到 [renderZoom]
