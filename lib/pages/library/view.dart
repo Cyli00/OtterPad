@@ -60,9 +60,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: cs.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('删除'),
           ),
         ],
@@ -71,12 +69,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     if (confirmed != true) return;
 
     for (final id in selection.selectedIds.toList()) {
-      DocCardActions.delete(ref, id);
+      await DocCardActions.delete(ref, id);
     }
 
-    ref.read(snackBarServiceProvider).showResult(
-          message: '已删除 $count 篇文献',
-        );
+    ref.read(snackBarServiceProvider).showResult(message: '已删除 $count 篇文献');
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -87,37 +83,43 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
     final apiState = ref.read(docExtractApiProvider);
     if (!apiState.isConfigured) {
-      ref.read(snackBarServiceProvider).showResult(
-            message: '请先在设置中配置文档提取 Access Token',
-          );
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: '请先在设置中配置文档提取 Access Token');
       return;
     }
 
     final docs = ref.read(validDocsProvider);
     final selectedDocs = docs
-        .where((d) =>
-            selection.selectedIds.contains(d.id) && d.filePath.isNotEmpty)
+        .where(
+          (d) => selection.selectedIds.contains(d.id) && d.filePath.isNotEmpty,
+        )
         .toList();
 
     if (selectedDocs.isEmpty) {
-      ref.read(snackBarServiceProvider).showResult(
-            message: '所选文献中无本地 PDF 文件，无法提取',
-          );
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: '所选文献中无本地 PDF 文件，无法提取');
       return;
     }
 
     final items = selectedDocs
-        .map((d) => BatchExtractItem(
-              documentId: d.id,
-              filePath: d.filePath,
-              title: d.title,
-            ))
+        .map(
+          (d) => BatchExtractItem(
+            documentId: d.id,
+            filePath: d.filePath,
+            title: d.title,
+          ),
+        )
         .toList();
 
     // 提取前应用当前代理配置
     final proxyState = ref.read(proxyProvider);
-    BatchExtractService.instance
-        .applyProxy(proxyState.mode, proxyState.host, proxyState.port);
+    BatchExtractService.instance.applyProxy(
+      proxyState.mode,
+      proxyState.host,
+      proxyState.port,
+    );
 
     ref.read(selectionProvider.notifier).exit();
 
@@ -128,10 +130,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
       enableDrag: false,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => BatchProgressSheet(
-        items: items,
-        apiState: apiState,
-      ),
+      builder: (ctx) => BatchProgressSheet(items: items, apiState: apiState),
     );
   }
 
@@ -241,10 +240,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
   Widget _buildSelectionContent(bool isGrid) {
     return CustomScrollView(
-      slivers: [
-        if (isGrid) const BookshelfGrid() else const BookshelfList(),
-      ],
+      slivers: [if (isGrid) const BookshelfGrid() else const BookshelfList()],
     );
   }
-
 }

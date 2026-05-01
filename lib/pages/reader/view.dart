@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:animations/animations.dart';
 import 'package:flutter/foundation.dart';
@@ -36,9 +35,15 @@ import '../../utils/markdown_translation_weaver.dart';
 import 'widgets/figure_viewer.dart';
 import 'widgets/markdown_reader.dart';
 import 'widgets/outline_panel.dart';
+import 'widgets/reader_bottom_bar.dart';
 import 'widgets/reader_background.dart';
+import 'widgets/reader_document_info_sheet.dart';
+import 'widgets/reader_favorite_sheet.dart';
+import 'widgets/reader_search_bars.dart';
+import 'widgets/reader_search_navigator.dart';
 import 'widgets/reader_text_sheet.dart';
 import 'widgets/reader_theme_sheet.dart';
+import 'widgets/reader_top_toolbar.dart';
 import 'widgets/search_overlay.dart';
 import 'widgets/selection_toolbar.dart';
 import 'widgets/translation_popup.dart';
@@ -606,34 +611,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  // ── 更多操作 ────────────────────────────────────────────────────────
-
-  static PopupMenuItem<String> _popupItem(
-    String value,
-    IconData icon,
-    String title,
-    ColorScheme cs,
-  ) {
-    return PopupMenuItem<String>(
-      value: value,
-      height: 44,
-      child: Row(
-        children: [
-          Icon(icon, size: 20, fill: 1, color: cs.onSurfaceVariant),
-          const SizedBox(width: 14),
-          Text(
-            title,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   bool _isInAnyFavorite(List<Favorite> favorites) {
     final docPath = widget.document.filePath;
     if (docPath.isEmpty) return false;
@@ -659,30 +636,32 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       title: '移入收藏夹',
       favorites: ref.read(favoritesProvider),
       docPath: docPath,
-      mode: _FavoritePickerMode.add,
+      mode: ReaderFavoritePickerMode.add,
     );
     if (!mounted || result == null) return;
 
-    switch (result) {
-      case _CreateFavoritePickerResult():
-        final created = await showCreateFavoriteDialog(context);
-        if (!mounted || created == null) return;
-        final favorite = await ref
-            .read(favoritesProvider.notifier)
-            .create(emoji: created['emoji']!, name: created['name']!);
-        await ref.read(favoritesProvider.notifier).addDoc(favorite.id, docPath);
-        if (!mounted) return;
-        ref
-            .read(snackBarServiceProvider)
-            .showResult(message: '已新建并添加到「${favorite.name}」');
-      case _SelectFavoritePickerResult(:final favorite):
-        if (favorite.docPaths.contains(docPath)) return;
-        await ref.read(favoritesProvider.notifier).addDoc(favorite.id, docPath);
-        if (!mounted) return;
-        ref
-            .read(snackBarServiceProvider)
-            .showResult(message: '已添加到「${favorite.name}」');
+    final selected = result.favorites
+        .where((favorite) => !favorite.docPaths.contains(docPath))
+        .toList();
+    if (selected.isEmpty) return;
+
+    for (final favorite in selected) {
+      await ref.read(favoritesProvider.notifier).addDoc(favorite.id, docPath);
     }
+    if (!mounted) return;
+    final message = selected.length == 1
+        ? '已添加到「${selected.single.name}」'
+        : '已添加到 ${selected.length} 个收藏夹';
+    ref.read(snackBarServiceProvider).showResult(message: message);
+  }
+
+  Future<Favorite?> _createFavoriteFromPicker() async {
+    final created = await showCreateFavoriteDialog(context);
+    if (!mounted || created == null) return null;
+
+    return ref
+        .read(favoritesProvider.notifier)
+        .create(emoji: created['emoji']!, name: created['name']!);
   }
 
   Future<void> _showFavoriteRemovalPicker() async {
@@ -699,117 +678,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       title: '移出收藏夹',
       favorites: favorites,
       docPath: docPath,
-      mode: _FavoritePickerMode.remove,
+      mode: ReaderFavoritePickerMode.remove,
     );
     if (!mounted) return;
-    if (result case _SelectFavoritePickerResult(:final favorite)) {
+    final selected = result?.favorites ?? const <Favorite>[];
+    if (selected.isEmpty) return;
+
+    for (final favorite in selected) {
       await ref
           .read(favoritesProvider.notifier)
           .removeDoc(favorite.id, docPath);
-      if (!mounted) return;
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: '已从「${favorite.name}」移出');
-      return;
     }
+    if (!mounted) return;
+    final message = selected.length == 1
+        ? '已从「${selected.single.name}」移出'
+        : '已从 ${selected.length} 个收藏夹移出';
+    ref.read(snackBarServiceProvider).showResult(message: message);
   }
 
-  Future<_FavoritePickerResult?> _showFavoritePickerSheet({
+  Future<ReaderFavoriteSelectionResult?> _showFavoritePickerSheet({
     required String title,
     required List<Favorite> favorites,
     required String docPath,
-    required _FavoritePickerMode mode,
+    required ReaderFavoritePickerMode mode,
   }) {
-    return showModalBottomSheet<_FavoritePickerResult>(
+    return showReaderFavoritePickerSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        final cs = theme.colorScheme;
-        final maxH = MediaQuery.sizeOf(ctx).height * 0.65;
-        final bottomPadding = MediaQuery.of(ctx).padding.bottom + 16;
-
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-          child: Container(
-            constraints: BoxConstraints(maxHeight: maxH),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  width: 32,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withAlpha(80),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                  ),
-                ),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.only(bottom: bottomPadding),
-                    children: [
-                      if (mode == _FavoritePickerMode.add)
-                        _FavoritePickerSheetItem(
-                          icon: Symbols.add_rounded,
-                          title: '新建收藏夹',
-                          subtitle: '创建后自动加入当前文献',
-                          onTap: () => Navigator.pop(
-                            ctx,
-                            const _CreateFavoritePickerResult(),
-                          ),
-                        ),
-                      for (final fav in favorites)
-                        _FavoritePickerSheetItem.favorite(
-                          favorite: fav,
-                          subtitle:
-                              mode == _FavoritePickerMode.add &&
-                                  fav.docPaths.contains(docPath)
-                              ? '已包含当前文献'
-                              : '${fav.docPaths.length} 篇文献',
-                          selected:
-                              mode == _FavoritePickerMode.add &&
-                              fav.docPaths.contains(docPath),
-                          enabled:
-                              mode == _FavoritePickerMode.remove ||
-                              !fav.docPaths.contains(docPath),
-                          onTap: () => Navigator.pop(
-                            ctx,
-                            _SelectFavoritePickerResult(fav),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      title: title,
+      favorites: favorites,
+      docPath: docPath,
+      mode: mode,
+      onCreateFavorite: mode == ReaderFavoritePickerMode.add
+          ? _createFavoriteFromPicker
+          : null,
     );
   }
 
@@ -818,7 +719,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _DocumentInfoSheet(document: widget.document),
+      builder: (context) => ReaderDocumentInfoSheet(document: widget.document),
     );
   }
 
@@ -1042,7 +943,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         body: SafeArea(
           child: Column(
             children: [
-              _buildToolbar(theme, cs),
+              _buildToolbar(cs),
               Expanded(
                 child: Center(
                   child: CircularProgressIndicator(
@@ -1119,14 +1020,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       alpha: readerSettings.toolbarOpacity.value,
                     ),
                     child: isMarkdownHighlightMode
-                        ? _buildHighlightSearchBar(cs)
+                        ? _buildHighlightSearchBar()
                         : (_searchActive && !_showPreview
-                              ? _buildPdfSearchBar(cs)
-                              : _buildToolbar(
-                                  theme,
-                                  cs,
-                                  extracting: extracting,
-                                )),
+                              ? _buildPdfSearchBar()
+                              : _buildToolbar(cs, extracting: extracting)),
                   ),
                 ),
               ),
@@ -1140,7 +1037,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOut,
                     offset: _toolbarsVisible ? Offset.zero : const Offset(0, 1),
-                    child: _buildBottomBar(theme, cs, readerSettings),
+                    child: _buildBottomBar(readerSettings),
                   ),
                 ),
               // ── 浮动搜索结果导航器 ──
@@ -1148,13 +1045,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 Positioned(
                   right: 16,
                   bottom: 32,
-                  child: _buildResultNavigator(cs),
+                  child: _buildResultNavigator(),
                 ),
               if (showPdfNavigator)
                 Positioned(
                   right: 16,
                   bottom: 32,
-                  child: _buildPdfResultNavigator(cs, pdfMatchCount),
+                  child: _buildPdfResultNavigator(pdfMatchCount),
                 ),
               // ── 搜索遮罩层 ──
               if (_searchActive && _showPreview && _searchSnapshot != null)
@@ -1177,470 +1074,81 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 顶部工具栏：返回 / 搜索 / PDF↔MD 切换 / 重新提取 / 信息
   ///
   /// 大纲、外观（颜色/背景）、字体面板 3 个按钮已挪到 [_buildBottomBar]。
-  Widget _buildToolbar(
-    ThemeData theme,
-    ColorScheme cs, {
-    bool extracting = false,
-  }) {
+  Widget _buildToolbar(ColorScheme cs, {bool extracting = false}) {
     final favorites = ref.watch(favoritesProvider);
     final inFavorite = _isInAnyFavorite(favorites);
+    final translation = ref.watch(
+      documentTranslationProvider(widget.document.filePath),
+    );
+    final summaryImagePath = DocumentSummaryImageService.imagePathFor(
+      widget.document.filePath,
+    );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: SizedBox(
-        height: 48,
-        child: Row(
-          children: [
-            IconButton(
-              icon: Icon(
-                Symbols.chevron_left_rounded,
-                size: 28,
-                fill: 1,
-                color: cs.onSurface,
-              ),
-              tooltip: '返回',
-              onPressed: () => context.pop(),
-            ),
-            const Spacer(),
-            // 搜索
-            if ((_showPreview && _hasResult) ||
-                (!_showPreview && (_fileExists ?? false)))
-              IconButton(
-                icon: Icon(
-                  Symbols.search_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: '搜索',
-                onPressed: _openSearch,
-              ),
-            // 提取/切换按钮
-            _buildExtractButton(cs, extracting),
-            // 生成总结图（仅 Markdown 视图，切换按钮右侧）
-            if (_showPreview && _hasResult && _mdContent != null)
-              IconButton(
-                icon: Icon(
-                  Symbols.mindfulness,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: '生成总结图',
-                onPressed: _handleGenerateSummaryImage,
-              ),
-            // 收藏夹快捷按钮（仅 PDF 视图）
-            if (!_showPreview && (_fileExists ?? false))
-              IconButton(
-                icon: Icon(
-                  inFavorite
-                      ? Symbols.bookmark_remove_rounded
-                      : Symbols.bookmark_add_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: inFavorite ? '移出收藏夹' : '移入收藏夹',
-                onPressed: inFavorite
-                    ? _showFavoriteRemovalPicker
-                    : _showFavoritePicker,
-              ),
-            // 重新提取
-            if (_hasResult && !extracting)
-              IconButton(
-                icon: Icon(
-                  Symbols.sync_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: '重新提取',
-                onPressed: _onExtractPressed,
-              ),
-            // PDF 视图：文献信息按钮；Markdown 视图：更多菜单
-            if (!_showPreview)
-              IconButton(
-                icon: Icon(
-                  Symbols.info_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: '文献信息',
-                onPressed: () => _showDocumentInfo(context),
-              )
-            else
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Symbols.more_vert_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: '更多',
-                color: cs.surfaceContainerHigh,
-                elevation: 3,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                position: PopupMenuPosition.under,
-                onSelected: (v) {
-                  switch (v) {
-                    case 'info':
-                      _showDocumentInfo(context);
-                    case 'favorite_add':
-                      _showFavoritePicker();
-                    case 'favorite_remove':
-                      _showFavoriteRemovalPicker();
-                    case 'reprocess':
-                      _onReprocessPressed();
-                    case 'retranslate':
-                      _handleRetranslate();
-                    case 'view_summary_image':
-                      _openSummaryImage();
-                  }
-                },
-                itemBuilder: (_) {
-                  final canRetranslate =
-                      ref
-                          .read(
-                            documentTranslationProvider(
-                              widget.document.filePath,
-                            ),
-                          )
-                          .hasResult &&
-                      _mdContent != null;
-                  final summaryImagePath =
-                      DocumentSummaryImageService.imagePathFor(
-                        widget.document.filePath,
-                      );
-                  final hasSummaryImage = File(summaryImagePath).existsSync();
-                  return [
-                    if (hasSummaryImage)
-                      _popupItem(
-                        'view_summary_image',
-                        Symbols.image_rounded,
-                        '查看总结图',
-                        cs,
-                      ),
-                    _popupItem('info', Symbols.info_rounded, '文献信息', cs),
-                    if (inFavorite)
-                      _popupItem(
-                        'favorite_remove',
-                        Symbols.bookmark_remove_rounded,
-                        '移出收藏夹',
-                        cs,
-                      )
-                    else
-                      _popupItem(
-                        'favorite_add',
-                        Symbols.bookmark_add_rounded,
-                        '移入收藏夹',
-                        cs,
-                      ),
-                    if (_hasResult)
-                      _popupItem(
-                        'reprocess',
-                        Symbols.refresh_rounded,
-                        '重新排版',
-                        cs,
-                      ),
-                    if (canRetranslate)
-                      _popupItem(
-                        'retranslate',
-                        Symbols.translate_rounded,
-                        '重新翻译',
-                        cs,
-                      ),
-                  ];
-                },
-              ),
-            const SizedBox(width: 4),
-          ],
-        ),
-      ),
+    return ReaderTopToolbar(
+      showPreview: _showPreview,
+      hasResult: _hasResult,
+      hasMarkdownContent: _mdContent != null,
+      fileExists: _fileExists ?? false,
+      inFavorite: inFavorite,
+      extracting: extracting,
+      canRetranslate: translation.hasResult && _mdContent != null,
+      hasSummaryImage: File(summaryImagePath).existsSync(),
+      extractButton: _buildExtractButton(cs, extracting),
+      onBack: () => context.pop(),
+      onSearch: _openSearch,
+      onGenerateSummaryImage: _handleGenerateSummaryImage,
+      onAddFavorite: _showFavoritePicker,
+      onRemoveFavorite: _showFavoriteRemovalPicker,
+      onExtract: _onExtractPressed,
+      onShowInfo: () => _showDocumentInfo(context),
+      onReprocess: _onReprocessPressed,
+      onRetranslate: _handleRetranslate,
+      onOpenSummaryImage: _openSummaryImage,
     );
   }
 
-  Widget _buildPdfSearchBar(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: SizedBox(
-        height: 48,
-        child: Row(
-          children: [
-            IconButton(
-              icon: Icon(
-                Symbols.chevron_left_rounded,
-                size: 28,
-                fill: 1,
-                color: cs.onSurface,
-              ),
-              tooltip: '返回',
-              onPressed: () => context.pop(),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: SizedBox(
-                height: 40,
-                child: TextField(
-                  controller: _pdfSearchController,
-                  focusNode: _pdfSearchFocusNode,
-                  textAlignVertical: TextAlignVertical.center,
-                  style: TextStyle(color: cs.onSurface, fontSize: 15),
-                  decoration: InputDecoration(
-                    hintText: '搜索 PDF 内容',
-                    hintStyle: TextStyle(
-                      color: cs.onSurfaceVariant.withAlpha(160),
-                      fontSize: 15,
-                    ),
-                    prefixIcon: Icon(
-                      Symbols.search_rounded,
-                      size: 20,
-                      fill: 1,
-                      color: cs.onSurfaceVariant,
-                    ),
-                    suffixIcon: _pdfSearchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Symbols.cancel_rounded,
-                              size: 18,
-                              fill: 1,
-                              color: cs.onSurfaceVariant,
-                            ),
-                            onPressed: _clearPdfSearch,
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: cs.surfaceContainerHigh,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(28),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (value) =>
-                      _performPdfSearch(value, searchImmediately: true),
-                  onChanged: (value) {
-                    setState(() {});
-                    _performPdfSearch(value);
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: Icon(
-                Symbols.close_rounded,
-                size: 22,
-                fill: 1,
-                color: cs.onSurfaceVariant,
-              ),
-              tooltip: '退出搜索',
-              onPressed: _clearPdfSearch,
-            ),
-          ],
-        ),
-      ),
+  Widget _buildPdfSearchBar() {
+    return ReaderPdfSearchBar(
+      controller: _pdfSearchController,
+      focusNode: _pdfSearchFocusNode,
+      onBack: () => context.pop(),
+      onClear: _clearPdfSearch,
+      onSubmitted: (value) => _performPdfSearch(value, searchImmediately: true),
+      onChanged: (value) {
+        setState(() {});
+        _performPdfSearch(value);
+      },
     );
   }
 
   /// 高亮浏览模式下的顶部搜索栏：显示当前查询词，点击可重新搜索，✕ 退出搜索
-  Widget _buildHighlightSearchBar(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: SizedBox(
-        height: 48,
-        child: Row(
-          children: [
-            IconButton(
-              icon: Icon(
-                Symbols.chevron_left_rounded,
-                size: 28,
-                fill: 1,
-                color: cs.onSurface,
-              ),
-              tooltip: '返回',
-              onPressed: () => context.pop(),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: GestureDetector(
-                onTap: _openSearch,
-                child: Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Symbols.search_rounded,
-                        size: 18,
-                        fill: 1,
-                        color: cs.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _highlightQuery ?? '',
-                          style: TextStyle(color: cs.onSurface, fontSize: 15),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: Icon(
-                Symbols.close_rounded,
-                size: 22,
-                fill: 1,
-                color: cs.onSurfaceVariant,
-              ),
-              tooltip: '退出搜索',
-              onPressed: _clearHighlight,
-            ),
-          ],
-        ),
-      ),
+  Widget _buildHighlightSearchBar() {
+    return ReaderHighlightSearchBar(
+      query: _highlightQuery ?? '',
+      onBack: () => context.pop(),
+      onOpenSearch: _openSearch,
+      onClear: _clearHighlight,
     );
   }
 
-  Widget _buildPdfResultNavigator(ColorScheme cs, int total) {
-    final current = (_pdfSearcher?.currentIndex ?? -1) + 1;
-    final progress = _pdfSearcher?.searchProgress;
-    final searching = _pdfSearcher?.isSearching ?? false;
-
-    return Material(
-      elevation: 2,
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton(
-              icon: Icon(
-                Symbols.expand_less_rounded,
-                size: 24,
-                fill: 1,
-                color: cs.onSurface,
-              ),
-              tooltip: '上一个结果',
-              onPressed: total > 0 ? _goToPrevPdfResult : null,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Column(
-              children: [
-                Text(
-                  total > 0 ? '$current/$total' : '0/0',
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (searching && progress != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: SizedBox(
-                      width: 28,
-                      child: LinearProgressIndicator(
-                        value: progress.clamp(0.0, 1.0),
-                        minHeight: 2,
-                        backgroundColor: cs.surfaceContainerHighest,
-                        color: cs.primary,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton(
-              icon: Icon(
-                Symbols.expand_more_rounded,
-                size: 24,
-                fill: 1,
-                color: cs.onSurface,
-              ),
-              tooltip: '下一个结果',
-              onPressed: total > 0 ? _goToNextPdfResult : null,
-            ),
-          ),
-        ],
-      ),
+  Widget _buildPdfResultNavigator(int total) {
+    return ReaderPdfResultNavigator(
+      currentIndex: _pdfSearcher?.currentIndex ?? -1,
+      total: total,
+      progress: _pdfSearcher?.searchProgress,
+      searching: _pdfSearcher?.isSearching ?? false,
+      onPrevious: _goToPrevPdfResult,
+      onNext: _goToNextPdfResult,
     );
   }
 
   /// 右下角浮动导航器：上/下雪佛龙 + 当前/总数 计数器
-  Widget _buildResultNavigator(ColorScheme cs) {
-    final current = _currentResultIndex + 1;
-    final total = _searchResults.length;
-
-    return Material(
-      elevation: 2,
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton(
-              icon: Icon(
-                Symbols.expand_less_rounded,
-                size: 24,
-                fill: 1,
-                color: cs.onSurface,
-              ),
-              tooltip: '上一个结果',
-              onPressed: _goToPrevResult,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              '$current/$total',
-              style: TextStyle(
-                color: cs.onSurfaceVariant,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: IconButton(
-              icon: Icon(
-                Symbols.expand_more_rounded,
-                size: 24,
-                fill: 1,
-                color: cs.onSurface,
-              ),
-              tooltip: '下一个结果',
-              onPressed: _goToNextResult,
-            ),
-          ),
-        ],
-      ),
+  Widget _buildResultNavigator() {
+    return ReaderTextResultNavigator(
+      currentIndex: _currentResultIndex,
+      total: _searchResults.length,
+      onPrevious: _goToPrevResult,
+      onNext: _goToNextResult,
     );
   }
 
@@ -1648,116 +1156,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ///
   /// 仅在 Markdown 模式显示。工具栏背景用 surface 的半透明色，视觉上浮在
   /// 阅读内容之上；沉浸式状态切换由 [AnimatedSlide] 在 build 里处理。
-  Widget _buildBottomBar(
-    ThemeData theme,
-    ColorScheme cs,
-    ReaderSettingsState readerSettings,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface.withValues(
-          alpha: readerSettings.toolbarOpacity.value,
-        ),
-        border: Border(
-          top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
-        ),
-      ),
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      child: SizedBox(
-        height: 56,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _bottomButton(
-              cs,
-              icon: Symbols.menu_rounded,
-              tooltip: '大纲',
-              onTap: _openOutlineSheet,
-            ),
-            _buildTranslationBottomButton(cs),
-            _bottomButton(
-              cs,
-              icon: Symbols.stylus_note_rounded,
-              tooltip: '笔记',
-              onTap: _openNotesSheet,
-            ),
-            _bottomButton(
-              cs,
-              icon: Symbols.palette_rounded,
-              tooltip: '外观',
-              onTap: _openThemeSheet,
-            ),
-            _bottomButton(
-              cs,
-              icon: Symbols.custom_typography_rounded,
-              tooltip: '字体',
-              onTap: _openTextSheet,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 翻译底部按钮——三态：
-  /// - idle / failed → 图标 `translate_rounded`，点击触发翻译
-  /// - loading → 圆圈进度（SnackBar 已在顶部提示），点击无响应
-  /// - done → 文本按钮，显示当前 mode（双语 / 原文 / 译文），点击循环切换
-  Widget _buildTranslationBottomButton(ColorScheme cs) {
+  Widget _buildBottomBar(ReaderSettingsState readerSettings) {
     final translation = ref.watch(
       documentTranslationProvider(widget.document.filePath),
     );
 
-    if (translation.status == DocTranslationStatus.loading) {
-      return const SizedBox(
-        width: 48,
-        height: 48,
-        child: Padding(
-          padding: EdgeInsets.all(14),
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
-    }
-
-    if (translation.hasResult) {
-      final next = _nextMode(translation.mode);
-      return _bottomButton(
-        cs,
-        icon: _modeIcon(next),
-        tooltip: _modeLabel(next),
-        onTap: _handleCycleTranslationMode,
-      );
-    }
-
-    return _bottomButton(
-      cs,
-      icon: translation.status == DocTranslationStatus.failed
-          ? Symbols.translate_rounded
-          : Symbols.translate_rounded,
-      tooltip: translation.status == DocTranslationStatus.failed
-          ? '重试翻译'
-          : '翻译',
-      onTap: _handleTranslate,
+    return ReaderBottomBar(
+      readerSettings: readerSettings,
+      translation: translation,
+      onOpenOutline: _openOutlineSheet,
+      onTranslate: _handleTranslate,
+      onCycleTranslationMode: _handleCycleTranslationMode,
+      onOpenNotes: _openNotesSheet,
+      onOpenTheme: _openThemeSheet,
+      onOpenText: _openTextSheet,
     );
   }
-
-  DocTranslationMode _nextMode(DocTranslationMode mode) => switch (mode) {
-    DocTranslationMode.bilingual => DocTranslationMode.off,
-    DocTranslationMode.off => DocTranslationMode.translated,
-    DocTranslationMode.translated => DocTranslationMode.bilingual,
-  };
-
-  IconData _modeIcon(DocTranslationMode mode) => switch (mode) {
-    DocTranslationMode.bilingual => Symbols.text_compare_rounded,
-    DocTranslationMode.off => Symbols.raw_on_rounded,
-    DocTranslationMode.translated => Symbols.language_rounded,
-  };
-
-  String _modeLabel(DocTranslationMode mode) => switch (mode) {
-    DocTranslationMode.bilingual => '双语',
-    DocTranslationMode.off => '原文',
-    DocTranslationMode.translated => '译文',
-  };
 
   /// 启动全文翻译：show 一个长驻 SnackBar 订阅 provider 的进度 ValueListenable，
   /// 翻译结束（成功/失败/取消）后 finish 关闭。
@@ -2052,19 +1466,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     await showFigureViewer(context, [entry]);
   }
 
-  Widget _bottomButton(
-    ColorScheme cs, {
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return IconButton(
-      icon: Icon(icon, size: 24, fill: 1, color: cs.onSurfaceVariant),
-      tooltip: tooltip,
-      onPressed: onTap,
-    );
-  }
-
   Widget _buildExtractButton(ColorScheme cs, bool extracting) {
     if (extracting) {
       return const Padding(
@@ -2316,242 +1717,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-enum _FavoritePickerMode { add, remove }
-
-sealed class _FavoritePickerResult {
-  const _FavoritePickerResult();
-}
-
-final class _CreateFavoritePickerResult extends _FavoritePickerResult {
-  const _CreateFavoritePickerResult();
-}
-
-final class _SelectFavoritePickerResult extends _FavoritePickerResult {
-  final Favorite favorite;
-
-  const _SelectFavoritePickerResult(this.favorite);
-}
-
-class _FavoritePickerSheetItem extends StatelessWidget {
-  final IconData? icon;
-  final Favorite? favorite;
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _FavoritePickerSheetItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.favorite,
-    this.selected = false,
-    this.enabled = true,
-  });
-
-  factory _FavoritePickerSheetItem.favorite({
-    required Favorite favorite,
-    required String subtitle,
-    required bool selected,
-    required bool enabled,
-    required VoidCallback onTap,
-  }) {
-    return _FavoritePickerSheetItem(
-      icon: null,
-      favorite: favorite,
-      title: favorite.name,
-      subtitle: subtitle,
-      selected: selected,
-      enabled: enabled,
-      onTap: onTap,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final activeColor = enabled ? cs.onSurface : cs.onSurfaceVariant;
-    final trailingColor = cs.onSurfaceVariant.withAlpha(120);
-
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: favorite != null
-                  ? Text(
-                      favorite!.emoji,
-                      style: const TextStyle(fontSize: 22, height: 1.0),
-                    )
-                  : Icon(icon, color: cs.primary, size: 22, fill: 1),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: activeColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              selected ? Symbols.check_rounded : Symbols.chevron_right_rounded,
-              color: selected ? cs.primary : trailingColor,
-              size: 22,
-              fill: selected ? 1 : 0,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── 文献信息底部弹窗 ───
-
-class _DocumentInfoSheet extends StatelessWidget {
-  final Document document;
-
-  const _DocumentInfoSheet({required this.document});
-
-  Widget _buildInfoRow(BuildContext context, String label, String value) {
-    if (value.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurface,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.85;
-
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-      child: Container(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 32,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withAlpha(80),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '文献信息',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      document.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildInfoRow(context, '作者', document.authors.join(', ')),
-                    _buildInfoRow(context, '期刊', document.journal ?? ''),
-                    _buildInfoRow(context, '年份', document.year ?? ''),
-                    _buildInfoRow(context, 'DOI', document.doi ?? ''),
-                    SizedBox(
-                      height: MediaQuery.of(context).padding.bottom + 16,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

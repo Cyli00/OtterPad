@@ -19,13 +19,16 @@ class DocCardActions {
   }
 
   /// 删除文献（级联：文库条目 + 磁盘文件 + 提取产物 + 缩略图 + 收藏夹引用）
-  static void delete(WidgetRef ref, String docId) {
+  static Future<void> delete(WidgetRef ref, String docId) async {
     // 在删除前获取文件路径，用于清理收藏夹中的引用
     final docs = ref.read(documentsProvider);
-    final doc = docs.firstWhere((d) => d.id == docId, orElse: () => docs.first);
-    if (doc.id == docId && doc.filePath.isNotEmpty) {
-      ref.read(favoritesProvider.notifier).removeDocFromAll(doc.filePath);
+    final doc = docs.cast<Document?>().firstWhere(
+      (d) => d != null && d.id == docId,
+      orElse: () => null,
+    );
+    if (doc != null && doc.filePath.isNotEmpty) {
+      await ref.read(favoritesProvider.notifier).removeDocFromAll(doc.filePath);
     }
-    ref.read(documentsProvider.notifier).delete(docId);
+    await ref.read(documentsProvider.notifier).delete(docId);
   }
 }

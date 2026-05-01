@@ -97,16 +97,14 @@ class NoFileEntriesPage extends ConsumerWidget {
                   separatorBuilder: (_, index) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final doc = noFileDocs[index];
-                    final hasDoi =
-                        doc.doi != null && doc.doi!.isNotEmpty;
+                    final hasDoi = doc.doi != null && doc.doi!.isNotEmpty;
 
                     final card = Stack(
                       children: [
                         DocListCard(
                           doc: doc,
                           isSelectionMode: isSelectionMode,
-                          isSelected:
-                              selection.selectedIds.contains(doc.id),
+                          isSelected: selection.selectedIds.contains(doc.id),
                           onLongPress: () => ref
                               .read(selectionProvider.notifier)
                               .enter(doc.id, _sourceContext),
@@ -122,10 +120,9 @@ class NoFileEntriesPage extends ConsumerWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton.filledTonal(
-                                  onPressed: () => _handleAttachFile(
-                                      context, ref, doc.id),
-                                  icon: const Icon(
-                                      Symbols.attach_file_rounded),
+                                  onPressed: () =>
+                                      _handleAttachFile(context, ref, doc.id),
+                                  icon: const Icon(Symbols.attach_file_rounded),
                                   iconSize: 18,
                                   tooltip: '附加文件',
                                   style: IconButton.styleFrom(
@@ -136,10 +133,8 @@ class NoFileEntriesPage extends ConsumerWidget {
                                 if (hasDoi) ...[
                                   const SizedBox(width: 4),
                                   IconButton.filledTonal(
-                                    onPressed: () =>
-                                        _handleOpenDoi(doc.doi!),
-                                    icon: const Icon(
-                                        Symbols.language_rounded),
+                                    onPressed: () => _handleOpenDoi(doc.doi!),
+                                    icon: const Icon(Symbols.language_rounded),
                                     iconSize: 18,
                                     tooltip: '在浏览器中查看',
                                     style: IconButton.styleFrom(
@@ -150,9 +145,11 @@ class NoFileEntriesPage extends ConsumerWidget {
                                   const SizedBox(width: 4),
                                   IconButton.filledTonal(
                                     onPressed: () => _handleRedownload(
-                                        ref, doc.id, doc.title),
-                                    icon: const Icon(
-                                        Symbols.download_rounded),
+                                      ref,
+                                      doc.id,
+                                      doc.title,
+                                    ),
+                                    icon: const Icon(Symbols.download_rounded),
                                     iconSize: 18,
                                     tooltip: '重新下载',
                                     style: IconButton.styleFrom(
@@ -172,8 +169,8 @@ class NoFileEntriesPage extends ConsumerWidget {
                     final cs = Theme.of(context).colorScheme;
                     return SpringDismissible(
                       key: ValueKey(doc.id),
-                      onDismissed: () {
-                        DocCardActions.delete(ref, doc.id);
+                      onDismissed: () async {
+                        await DocCardActions.delete(ref, doc.id);
                         ref
                             .read(snackBarServiceProvider)
                             .showResult(message: '已删除条目');
@@ -188,14 +185,15 @@ class NoFileEntriesPage extends ConsumerWidget {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Symbols.delete_rounded,
-                                size: 22, color: cs.onErrorContainer),
+                            Icon(
+                              Symbols.delete_rounded,
+                              size: 22,
+                              color: cs.onErrorContainer,
+                            ),
                             const SizedBox(height: 3),
                             Text(
                               '删除',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
+                              style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
                                     color: cs.onErrorContainer,
                                     fontWeight: FontWeight.w700,
@@ -237,9 +235,7 @@ class NoFileEntriesPage extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: cs.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('删除'),
           ),
         ],
@@ -248,11 +244,9 @@ class NoFileEntriesPage extends ConsumerWidget {
     if (confirmed != true) return;
 
     for (final id in selection.selectedIds.toList()) {
-      DocCardActions.delete(ref, id);
+      await DocCardActions.delete(ref, id);
     }
-    ref
-        .read(snackBarServiceProvider)
-        .showResult(message: '已删除 $count 个条目');
+    ref.read(snackBarServiceProvider).showResult(message: '已删除 $count 个条目');
     ref.read(selectionProvider.notifier).exit();
   }
 

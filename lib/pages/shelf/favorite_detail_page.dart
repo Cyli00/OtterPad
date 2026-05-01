@@ -30,14 +30,20 @@ class FavoriteDetailPage extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final docs = ref.watch(documentsProvider);
+    final favorites = ref.watch(favoritesProvider);
+    final currentFavorite = favorites.firstWhere(
+      (f) => f.id == favorite.id,
+      orElse: () => favorite,
+    );
     final selection = ref.watch(selectionProvider);
     final isSelectionMode =
         selection.isActive && selection.sourceContext == _sourceContext;
 
     // 解析收藏夹内的文献列表
     final favDocs = <Document>[];
-    for (final docPath in favorite.docPaths) {
-      final doc = docs.where((d) => d.filePath == docPath).firstOrNull ??
+    for (final docPath in currentFavorite.docPaths) {
+      final doc =
+          docs.where((d) => d.filePath == docPath).firstOrNull ??
           Document(
             id: '',
             title: p.basenameWithoutExtension(docPath),
@@ -48,7 +54,10 @@ class FavoriteDetailPage extends ConsumerWidget {
       favDocs.add(doc);
     }
 
-    final allIds = favDocs.where((d) => d.id.isNotEmpty).map((d) => d.id).toSet();
+    final allIds = favDocs
+        .where((d) => d.id.isNotEmpty)
+        .map((d) => d.id)
+        .toSet();
     final allSelected =
         allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
@@ -72,13 +81,12 @@ class FavoriteDetailPage extends ConsumerWidget {
                     _removeFromFavorite(context, ref, selection, favDocs),
                 onExtract: () =>
                     _extractSelected(context, ref, selection, favDocs),
-                onDelete: () =>
-                    _deleteSelected(context, ref, selection),
+                onDelete: () => _deleteSelected(context, ref, selection),
               )
             : AppBar(
                 backgroundColor: colorScheme.surface,
                 title: Text(
-                  favorite.name,
+                  currentFavorite.name,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -90,7 +98,7 @@ class FavoriteDetailPage extends ConsumerWidget {
               ),
         body: CustomScrollView(
           slivers: [
-            if (favorite.docPaths.isEmpty)
+            if (currentFavorite.docPaths.isEmpty)
               SliverFillRemaining(
                 child: Center(
                   child: Column(
@@ -128,13 +136,13 @@ class FavoriteDetailPage extends ConsumerWidget {
                       onTap: () => DocCardActions.openReader(context, ref, doc),
                       onLongPress: doc.id.isNotEmpty
                           ? () => ref
-                              .read(selectionProvider.notifier)
-                              .enter(doc.id, _sourceContext)
+                                .read(selectionProvider.notifier)
+                                .enter(doc.id, _sourceContext)
                           : null,
                       onSelectionTap: doc.id.isNotEmpty
                           ? () => ref
-                              .read(selectionProvider.notifier)
-                              .toggle(doc.id)
+                                .read(selectionProvider.notifier)
+                                .toggle(doc.id)
                           : null,
                     );
                   },
@@ -149,23 +157,22 @@ class FavoriteDetailPage extends ConsumerWidget {
   }
 
   /// 从收藏夹中移除选中文献（不删除文献本身）
-  void _removeFromFavorite(
+  Future<void> _removeFromFavorite(
     BuildContext context,
     WidgetRef ref,
     SelectionState selection,
     List<Document> favDocs,
-  ) {
-    final count = selection.selectedIds.length;
+  ) async {
+    var count = 0;
     for (final doc in favDocs) {
       if (selection.selectedIds.contains(doc.id) && doc.filePath.isNotEmpty) {
-        ref
+        await ref
             .read(favoritesProvider.notifier)
             .removeDoc(favorite.id, doc.filePath);
+        count++;
       }
     }
-    ref
-        .read(snackBarServiceProvider)
-        .showResult(message: '已从收藏夹移除 $count 篇文献');
+    ref.read(snackBarServiceProvider).showResult(message: '已从收藏夹移除 $count 篇文献');
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -189,9 +196,7 @@ class FavoriteDetailPage extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: cs.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('删除'),
           ),
         ],
@@ -200,11 +205,9 @@ class FavoriteDetailPage extends ConsumerWidget {
     if (confirmed != true) return;
 
     for (final id in selection.selectedIds.toList()) {
-      DocCardActions.delete(ref, id);
+      await DocCardActions.delete(ref, id);
     }
-    ref
-        .read(snackBarServiceProvider)
-        .showResult(message: '已删除 $count 篇文献');
+    ref.read(snackBarServiceProvider).showResult(message: '已删除 $count 篇文献');
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -217,35 +220,41 @@ class FavoriteDetailPage extends ConsumerWidget {
   ) async {
     final apiState = ref.read(docExtractApiProvider);
     if (!apiState.isConfigured) {
-      ref.read(snackBarServiceProvider).showResult(
-            message: '请先在设置中配置文档提取 Access Token',
-          );
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: '请先在设置中配置文档提取 Access Token');
       return;
     }
 
     final selectedDocs = favDocs
-        .where((d) =>
-            selection.selectedIds.contains(d.id) && d.filePath.isNotEmpty)
+        .where(
+          (d) => selection.selectedIds.contains(d.id) && d.filePath.isNotEmpty,
+        )
         .toList();
 
     if (selectedDocs.isEmpty) {
-      ref.read(snackBarServiceProvider).showResult(
-            message: '所选文献中无本地 PDF 文件，无法提取',
-          );
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: '所选文献中无本地 PDF 文件，无法提取');
       return;
     }
 
     final items = selectedDocs
-        .map((d) => BatchExtractItem(
-              documentId: d.id,
-              filePath: d.filePath,
-              title: d.title,
-            ))
+        .map(
+          (d) => BatchExtractItem(
+            documentId: d.id,
+            filePath: d.filePath,
+            title: d.title,
+          ),
+        )
         .toList();
 
     final proxyState = ref.read(proxyProvider);
-    BatchExtractService.instance
-        .applyProxy(proxyState.mode, proxyState.host, proxyState.port);
+    BatchExtractService.instance.applyProxy(
+      proxyState.mode,
+      proxyState.host,
+      proxyState.port,
+    );
 
     ref.read(selectionProvider.notifier).exit();
 
@@ -256,10 +265,7 @@ class FavoriteDetailPage extends ConsumerWidget {
       enableDrag: false,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => BatchProgressSheet(
-        items: items,
-        apiState: apiState,
-      ),
+      builder: (ctx) => BatchProgressSheet(items: items, apiState: apiState),
     );
   }
 }
