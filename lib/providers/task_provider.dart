@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +12,7 @@ import 'package:path/path.dart' as p;
 import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
+import '../services/ai_settings_prompt.dart';
 import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
 import '../services/document_summary_image_service.dart';
@@ -18,6 +22,7 @@ import '../services/snackbar_service.dart';
 import 'api_provider.dart';
 import 'documents_provider.dart';
 import 'image_generation_config_provider.dart';
+import 'summary_image_provider.dart';
 import 'task_runner.dart';
 import 'task_types.dart';
 import 'translation_config_provider.dart';
@@ -246,18 +251,30 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
     required void Function(String imagePath) onSuccess,
   }) async {
     final imageRole = AgentApiNotifier.globalImageRole;
-    if (imageRole.provider == null || imageRole.modelId == null) {
-      snackBar.showResult(
-        message: '请先在「AI 设置」中选择生图模型',
-        action: SnackBarAction(
-          label: '前往设置',
-          onPressed: () => _router.push(AppRoutes.settingsApi),
-        ),
-      );
+    if (!AiSettingsPrompt.ensureImageModelSelected(
+      imageRole: imageRole,
+      snackBar: snackBar,
+      onOpenSettings: () => _router.push(AppRoutes.settingsApi),
+    )) {
+      return;
+    }
+    final agentState = AgentApiNotifier.loadForProvider(imageRole.provider!);
+    if (!AiSettingsPrompt.ensureImageModelConfigured(
+      agentState: agentState,
+      snackBar: snackBar,
+      onOpenSettings: () => _router.push(AppRoutes.settingsApi),
+    )) {
       return;
     }
 
-    await runTask<DocumentSummaryImageResult>(
+    if (isTaskRunning(TaskType.generateSummaryImage)) return;
+
+    final summaryNotifier = _ref.read(
+      summaryImageProvider(document.filePath).notifier,
+    );
+    summaryNotifier.start();
+
+    final result = await runTask<DocumentSummaryImageResult>(
       type: TaskType.generateSummaryImage,
       initialStatus: '正在生成总结图: ${document.title}',
       busyMessage: '总结图生成正在进行中，请稍候',
@@ -267,9 +284,6 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       body: (token, progress) async {
         progress(
           const ListenableProgress(current: 0, total: 0, status: '正在整理文献内容'),
-        );
-        final agentState = AgentApiNotifier.loadForProvider(
-          imageRole.provider!,
         );
         final config = _ref.read(imageGenerationConfigProvider);
         progress(
@@ -285,10 +299,13 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         );
       },
       onSuccess: (result) {
+        unawaited(FileImage(File(result.imagePath)).evict());
+        summaryNotifier.generated(result.imagePath);
         onSuccess(result.imagePath);
         return TaskFinish.text('总结图已生成');
       },
       onError: (e) {
+        summaryNotifier.finishWithoutImage();
         if (e is DocumentSummaryImageException) {
           return TaskFinish.text(e.message);
         }
@@ -301,6 +318,10 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         return TaskFinish.text('总结图生成失败: $e');
       },
     );
+    if (result == null &&
+        _ref.read(summaryImageProvider(document.filePath)).generating) {
+      summaryNotifier.finishWithoutImage();
+    }
   }
 
   Future<void> extractDocument({

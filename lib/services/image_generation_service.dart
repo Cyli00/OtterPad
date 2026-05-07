@@ -67,7 +67,7 @@ class ImageGenerationService {
 
   Future<ImageGenerationResult> generate(ImageGenerationRequest request) async {
     if (request.apiKey.trim().isEmpty) {
-      throw const ImageGenerationException('请先在 AI 设置中填写 API Key');
+      throw const ImageGenerationException('请先在「AI 设置」中填写生图模型 API Key');
     }
     if (!AgentModelCapability.isImageGenerationModel(
       provider: request.provider,

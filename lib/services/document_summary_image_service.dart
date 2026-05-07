@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../data/models/book/document.dart';
@@ -40,6 +41,26 @@ class DocumentSummaryImageService {
 
   static String imagePathFor(String pdfPath) => DocPaths.summaryImage(pdfPath);
 
+  // ── 后置材料模式缓存 ──────────────────────────────────────────────────────
+
+  static Map<String, List<String>>? _cachedPatterns;
+
+  static Future<Map<String, List<String>>> _loadBackMatterPatterns() async {
+    if (_cachedPatterns != null) return _cachedPatterns!;
+    final raw = await rootBundle.loadString(
+      'assets/config/back_matter_sections.json',
+    );
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    _cachedPatterns = {
+      'l1': (data['l1']['patterns'] as List).cast<String>(),
+      'l2': (data['l2']['patterns'] as List).cast<String>(),
+      'l3': (data['l3']['patterns'] as List).cast<String>(),
+    };
+    return _cachedPatterns!;
+  }
+
+  // ── 生成入口 ──────────────────────────────────────────────────────────────
+
   Future<DocumentSummaryImageResult> generate({
     required Document document,
     required AgentApiState agentState,
@@ -49,10 +70,10 @@ class DocumentSummaryImageService {
   }) async {
     final modelId = agentState.imageModelId;
     if (modelId == null || modelId.isEmpty) {
-      throw const DocumentSummaryImageException('请先在 AI 设置中选择生图模型');
+      throw const DocumentSummaryImageException('请先在「AI 设置」中选择生图模型');
     }
     if (agentState.apiKey.trim().isEmpty) {
-      throw const DocumentSummaryImageException('请先在 AI 设置中填写生图模型 API Key');
+      throw const DocumentSummaryImageException('请先在「AI 设置」中填写生图模型 API Key');
     }
     if (document.filePath.isEmpty) {
       throw const DocumentSummaryImageException('当前文献没有关联 PDF 文件');
@@ -76,9 +97,10 @@ class DocumentSummaryImageService {
     ]);
     final markdown = results[0] as String;
     final references = results[1] as List<String>;
+    final compactResult = await _compactMarkdown(markdown);
     final prompt = _buildPrompt(
       document: document,
-      markdown: _compactMarkdown(markdown),
+      markdown: compactResult.markdown,
       config: config,
       provider: agentState.provider,
       language: language,
@@ -117,6 +139,8 @@ class DocumentSummaryImageService {
           'requestId': result.requestId,
           'providerText': result.providerText,
           'createdAt': DateTime.now().toIso8601String(),
+          if (compactResult.backMatterOffset != null)
+            'backMatterOffset': compactResult.backMatterOffset,
         }),
         flush: true,
       ),
@@ -189,7 +213,8 @@ class DocumentSummaryImageService {
         'All visible text labels, titles, and annotations in the infographic must be in $language.',
       );
     }
-    final hasNativeFidelity = provider == AgentApiProvider.openai ||
+    final hasNativeFidelity =
+        provider == AgentApiProvider.openai ||
         provider == AgentApiProvider.gemini;
     if (!hasNativeFidelity && config.fidelity != 'auto') {
       constraints.writeln(
@@ -222,21 +247,84 @@ The attached images are extracted figures from the paper. Use them as scientific
 ''';
   }
 
-  String _compactMarkdown(String markdown) {
-    final withoutRefs = markdown
-        .split(
-          RegExp(
-            r'\n#{1,6}\s*(references|bibliography)\b',
-            caseSensitive: false,
-          ),
-        )
-        .first;
-    final normalized = withoutRefs
+  // ── Markdown 压缩 ─────────────────────────────────────────────────────────
+
+  Future<({String markdown, int? backMatterOffset})> _compactMarkdown(
+    String markdown,
+  ) async {
+    final patterns = await _loadBackMatterPatterns();
+
+    int? backMatterOffset = _detectBackMatterViaRegex(markdown, patterns);
+    backMatterOffset ??= _detectBackMatterViaPosition(markdown);
+
+    final bodyMarkdown = backMatterOffset != null
+        ? markdown.substring(0, backMatterOffset)
+        : markdown;
+
+    final normalized = bodyMarkdown
         .replaceAll(RegExp(r'!\[[^\]]*\]\([^)]+\)'), '')
         .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
     const maxChars = 24000;
-    if (normalized.length <= maxChars) return normalized;
-    return '${normalized.substring(0, maxChars)}\n\n[Content truncated for image generation.]';
+    final truncated = normalized.length <= maxChars
+        ? normalized
+        : '${normalized.substring(0, maxChars)}\n\n[Content truncated for image generation.]';
+    return (markdown: truncated, backMatterOffset: backMatterOffset);
+  }
+
+  // ── Regex 检测 ────────────────────────────────────────────────────────────
+
+  int? _detectBackMatterViaRegex(
+    String markdown,
+    Map<String, List<String>> patterns,
+  ) {
+    final l1 = patterns['l1']!.join('|');
+    final l2 = patterns['l2']!.join('|');
+    final l3 = patterns['l3']!.join('|');
+
+    final regex = RegExp(
+      [
+        r'^\s*#{1,6}\s*',
+        r'(?:\d+(?:\.\d+)*[\.)]?\s*)?',
+        r'(?:(?<l1>',
+        l1,
+        r')|(?<l2>',
+        l2,
+        r')|(?<l3>',
+        l3,
+        r'))',
+        r'\s*(?:[:：\-–—].*)?$',
+      ].join(),
+      multiLine: true,
+      caseSensitive: false,
+      unicode: true,
+    );
+
+    final halfPoint = (markdown.length * 0.5).floor();
+    final latePoint = (markdown.length * 0.6).floor();
+
+    for (final match in regex.allMatches(markdown)) {
+      if (match.namedGroup('l1') != null) return match.start;
+      if (match.namedGroup('l2') != null && match.start >= halfPoint) {
+        return match.start;
+      }
+      if (match.namedGroup('l3') != null && match.start >= latePoint) {
+        return match.start;
+      }
+    }
+    return null;
+  }
+
+  // ── 位置比例兜底 ─────────────────────────────────────────────────────────
+
+  int? _detectBackMatterViaPosition(String markdown) {
+    if (markdown.length <= 8000) return null;
+
+    final tailStart = (markdown.length * 0.8).floor();
+    final headingRegex = RegExp(r'^#{1,2}\s+.+$', multiLine: true);
+    for (final match in headingRegex.allMatches(markdown)) {
+      if (match.start >= tailStart) return match.start;
+    }
+    return null;
   }
 }

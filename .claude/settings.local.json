@@ -68,7 +68,10 @@
       "Bash(curl -s -L \"https://api-docs.deepseek.com/api/deepseek-reasoner\")",
       "Bash(curl -s -L \"https://api-docs.deepseek.com/guides/reasoning_model\")",
       "Bash(curl -s -L \"https://api-docs.deepseek.com/quick_start/pricing\")",
-      "WebFetch(domain:api-docs.deepseek.com)"
+      "WebFetch(domain:api-docs.deepseek.com)",
+      "Bash(dart run *)",
+      "Bash(dart -e \"import 'dart:convert';import 'dart:io';main\\(\\){var d=jsonDecode\\(File\\('assets/config/back_matter_sections.json'\\).readAsStringSync\\(\\)\\);print\\('L1:'+\\(\\(d['l1']['patterns'] as List\\).length.toString\\(\\)\\)\\);print\\('L2:'+\\(\\(d['l2']['patterns'] as List\\).length.toString\\(\\)\\)\\);print\\('L3:'+\\(\\(d['l3']['patterns'] as List\\).length.toString\\(\\)\\)\\);}\")",
+      "Bash(node -e \"var f=require\\('fs'\\).readFileSync\\('assets/config/back_matter_sections.json','utf8'\\);var d=JSON.parse\\(f\\);console.log\\('L1:'+d.l1.patterns.length\\);console.log\\('L2:'+d.l2.patterns.length\\);console.log\\('L3:'+d.l3.patterns.length\\);\")"
     ]
   },
   "outputStyle": "Explanatory",

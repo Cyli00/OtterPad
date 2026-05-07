@@ -60,10 +60,10 @@ class TranslationService {
     // ── 选模型 ──
     final modelId = agentState.fastModelId ?? agentState.defaultModelId;
     if (modelId == null || modelId.isEmpty) {
-      throw Exception('请先在"AI 设置"中添加并设置默认模型或快速模型');
+      throw Exception('请先在「AI 设置」中选择快速模型或专家模型');
     }
     if (agentState.apiKey.isEmpty) {
-      throw Exception('请先在"AI 设置"中填写 API Key');
+      throw Exception('请先在「AI 设置」中填写 API Key');
     }
 
     // ── 构建 prompt ──
@@ -118,10 +118,10 @@ class TranslationService {
 
     final modelId = agentState.fastModelId ?? agentState.defaultModelId;
     if (modelId == null || modelId.isEmpty) {
-      throw Exception('请先在"AI 设置"中添加并设置默认模型或快速模型');
+      throw Exception('请先在「AI 设置」中选择快速模型或专家模型');
     }
     if (agentState.apiKey.isEmpty) {
-      throw Exception('请先在"AI 设置"中填写 API Key');
+      throw Exception('请先在「AI 设置」中填写 API Key');
     }
 
     final targetLang = translationConfig.targetLanguage;
