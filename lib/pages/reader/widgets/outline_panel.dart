@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../providers/summary_image_provider.dart';
 import '../../../services/figure_extract_service.dart';
 import 'figure_viewer.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -20,19 +21,6 @@ class ReferenceItem {
     required this.text,
     required this.charOffset,
     this.isNumbered = true,
-  });
-}
-
-@immutable
-class SummaryImagePanelState {
-  final String? imagePath;
-  final int revision;
-  final bool generating;
-
-  const SummaryImagePanelState({
-    this.imagePath,
-    this.revision = 0,
-    this.generating = false,
   });
 }
 
@@ -146,7 +134,7 @@ bool _looksLikeReference(String text) {
 class OutlinePanel extends StatefulWidget {
   final String markdownContent;
   final String? pdfPath;
-  final ValueListenable<SummaryImagePanelState> summaryImageState;
+  final ValueListenable<SummaryImageState> summaryImageState;
   final void Function(int charOffset) onNavigate;
   final VoidCallback? onRegenerateSummary;
 
@@ -228,16 +216,18 @@ class _OutlinePanelState extends State<OutlinePanel>
             child: TabBarView(
               controller: _tabController,
               children: [
-                ValueListenableBuilder<SummaryImagePanelState>(
+                ValueListenableBuilder<SummaryImageState>(
                   valueListenable: widget.summaryImageState,
-                  builder: (context, summaryState, _) => _FiguresTab(
-                    figures: _figures,
-                    loaded: _figuresLoaded,
-                    markdownContent: widget.markdownContent,
-                    onNavigate: widget.onNavigate,
-                    summaryState: summaryState,
-                    onRegenerateSummary: widget.onRegenerateSummary,
-                  ),
+                  builder: (context, summaryState, _) {
+                    return _FiguresTab(
+                      figures: _figures,
+                      loaded: _figuresLoaded,
+                      markdownContent: widget.markdownContent,
+                      onNavigate: widget.onNavigate,
+                      summaryState: summaryState,
+                      onRegenerateSummary: widget.onRegenerateSummary,
+                    );
+                  },
                 ),
                 _ReferencesTab(references: _references),
               ],
@@ -256,7 +246,7 @@ class _FiguresTab extends StatelessWidget {
   final bool loaded;
   final String markdownContent;
   final void Function(int charOffset) onNavigate;
-  final SummaryImagePanelState summaryState;
+  final SummaryImageState summaryState;
   final VoidCallback? onRegenerateSummary;
 
   const _FiguresTab({

@@ -9,6 +9,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
+import '../../../router/app_router.dart';
+import '../../../router/app_routes.dart';
+import '../../../services/ai_settings_prompt.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../services/translation_service.dart';
 
@@ -21,6 +24,21 @@ Future<void> showTranslationPopup(
   required String sourceText,
   String? fullText,
 }) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final agentState = container.read(effectiveAgentApiProvider);
+  final snackBar = container.read(snackBarServiceProvider);
+  void openSettings() {
+    container.read(routerProvider).push(AppRoutes.settingsApi);
+  }
+
+  if (!AiSettingsPrompt.ensureTextModelConfigured(
+    agentState: agentState,
+    snackBar: snackBar,
+    onOpenSettings: openSettings,
+  )) {
+    return;
+  }
+
   await showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.3),
@@ -57,10 +75,12 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final ctx = _sourceAnchorKey.currentContext;
         if (ctx != null && mounted) {
-          Scrollable.ensureVisible(ctx,
-              alignment: 0.3,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut);
+          Scrollable.ensureVisible(
+            ctx,
+            alignment: 0.3,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
         }
       });
     }
@@ -73,6 +93,8 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
       widget.fullText != null && widget.fullText != widget.sourceText;
 
   String get _effectiveFullText => widget.fullText ?? widget.sourceText;
+
+  String get _errorText => '$_error'.replaceFirst('Exception: ', '');
 
   /// 在 [haystack] 中定位 [needle]，返回原始坐标 (start, end)。
   /// 先尝试直接匹配，失败后完全剥离空白再匹配——处理跨段落选择
@@ -109,11 +131,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
 
     final e = raw.indexOf(_hlClose);
     final clean = raw.replaceAll(_hlOpen, '').replaceAll(_hlClose, '');
-    return (
-      text: clean,
-      hlStart: s,
-      hlEnd: e >= 0 ? e - 1 : clean.length,
-    );
+    return (text: clean, hlStart: s, hlEnd: e >= 0 ? e - 1 : clean.length);
   }
 
   void _start() {
@@ -148,6 +166,16 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
       },
       onError: (e) {
         if (!mounted) return;
+        final handled = AiSettingsPrompt.showForConfigError(
+          error: e,
+          snackBar: ref.read(snackBarServiceProvider),
+          onOpenSettings: () =>
+              ref.read(routerProvider).push(AppRoutes.settingsApi),
+        );
+        if (handled) {
+          Navigator.of(context, rootNavigator: true).pop();
+          return;
+        }
         setState(() {
           _error = e;
           _done = true;
@@ -160,10 +188,12 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final ctx = _bodyAnchorKey.currentContext;
             if (ctx != null && mounted) {
-              Scrollable.ensureVisible(ctx,
-                  alignment: 0.3,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOut);
+              Scrollable.ensureVisible(
+                ctx,
+                alignment: 0.3,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
             }
           });
         }
@@ -210,13 +240,18 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
   Widget _buildHeader(ThemeData theme, ColorScheme cs) {
     return Row(
       children: [
-        Icon(Symbols.translate_rounded,
-            color: cs.primary, size: 22, weight: 600),
+        Icon(
+          Symbols.translate_rounded,
+          color: cs.primary,
+          size: 22,
+          weight: 600,
+        ),
         const SizedBox(width: 8),
         Text(
           '翻译',
-          style: theme.textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const Spacer(),
         IconButton(
@@ -245,15 +280,18 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
       final range = _findInFullText(fullText, widget.sourceText);
       if (range != null) {
         final (s, e) = range;
-        sourceSpan = TextSpan(style: baseStyle, children: [
-          if (s > 0) TextSpan(text: fullText.substring(0, s)),
-          WidgetSpan(child: SizedBox.shrink(key: _sourceAnchorKey)),
-          TextSpan(
-            text: fullText.substring(s, e),
-            style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
-          ),
-          if (e < fullText.length) TextSpan(text: fullText.substring(e)),
-        ]);
+        sourceSpan = TextSpan(
+          style: baseStyle,
+          children: [
+            if (s > 0) TextSpan(text: fullText.substring(0, s)),
+            WidgetSpan(child: SizedBox.shrink(key: _sourceAnchorKey)),
+            TextSpan(
+              text: fullText.substring(s, e),
+              style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+            ),
+            if (e < fullText.length) TextSpan(text: fullText.substring(e)),
+          ],
+        );
       } else {
         sourceSpan = TextSpan(text: fullText, style: baseStyle);
       }
@@ -288,16 +326,23 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     if (_error != null && parsed.text.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Symbols.error_rounded, color: cs.error, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '翻译失败：${'$_error'.replaceFirst('Exception: ', '')}',
-                style: theme.textTheme.bodyMedium?.copyWith(color: cs.error),
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Symbols.error_rounded, color: cs.error, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '翻译失败：$_errorText',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.error,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -331,8 +376,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
           text: displayText.substring(s, e),
           style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
         ),
-        if (e < displayText.length)
-          TextSpan(text: displayText.substring(e)),
+        if (e < displayText.length) TextSpan(text: displayText.substring(e)),
         if (!_done)
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
@@ -428,7 +472,9 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
                 _ => copyTranslation,
               };
               Clipboard.setData(ClipboardData(text: text));
-              ref.read(snackBarServiceProvider).showResult(
+              ref
+                  .read(snackBarServiceProvider)
+                  .showResult(
                     message: '已复制',
                     duration: const Duration(seconds: 1),
                   );
@@ -436,18 +482,15 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
             itemBuilder: (_) => [
               PopupMenuItem(
                 value: 'translation',
-                child: Text('复制译文',
-                    style: theme.textTheme.bodyMedium),
+                child: Text('复制译文', style: theme.textTheme.bodyMedium),
               ),
               PopupMenuItem(
                 value: 'source',
-                child: Text('复制原文',
-                    style: theme.textTheme.bodyMedium),
+                child: Text('复制原文', style: theme.textTheme.bodyMedium),
               ),
               PopupMenuItem(
                 value: 'all',
-                child: Text('全部复制',
-                    style: theme.textTheme.bodyMedium),
+                child: Text('全部复制', style: theme.textTheme.bodyMedium),
               ),
             ],
           ),

@@ -13,6 +13,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../providers/api_provider.dart';
 import '../../../providers/translation_config_provider.dart';
+import '../../../router/app_router.dart';
+import '../../../router/app_routes.dart';
+import '../../../services/ai_settings_prompt.dart';
 import '../../../services/figure_extract_service.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../services/translation_service.dart';
@@ -525,11 +528,20 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       return;
     }
 
-    // 首次翻译：调用 API
+    final agentState = ref.read(effectiveAgentApiProvider);
+    final snackBar = ref.read(snackBarServiceProvider);
+    if (!AiSettingsPrompt.ensureTextModelConfigured(
+      agentState: agentState,
+      snackBar: snackBar,
+      onOpenSettings: () =>
+          ref.read(routerProvider).push(AppRoutes.settingsApi),
+    )) {
+      return;
+    }
+
     setState(() => _translating[idx] = true);
 
     try {
-      final agentState = ref.read(effectiveAgentApiProvider);
       final translationConfig = ref.read(translationConfigProvider);
       final result = await TranslationService.translate(
         text: fig.captionText,
@@ -546,6 +558,14 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     } catch (e) {
       if (!mounted) return;
       setState(() => _translating[idx] = false);
+      if (AiSettingsPrompt.showForConfigError(
+        error: e,
+        snackBar: ref.read(snackBarServiceProvider),
+        onOpenSettings: () =>
+            ref.read(routerProvider).push(AppRoutes.settingsApi),
+      )) {
+        return;
+      }
       ref.read(snackBarServiceProvider).showResult(
             message: '$e'.replaceFirst('Exception: ', ''),
           );

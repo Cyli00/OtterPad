@@ -23,6 +23,7 @@ import '../../providers/image_generation_config_provider.dart';
 import '../../providers/document_translation_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/reader_settings_provider.dart';
+import '../../providers/summary_image_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../services/doc_extract_service.dart';
@@ -119,8 +120,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // Figure manifest 懒加载：首次点击图片时触发，Future 复用避免重复 IO
   Future<List<FigureManifestEntry>?>? _figuresFuture;
 
-  final _summaryImageState = ValueNotifier<SummaryImagePanelState>(
-    const SummaryImagePanelState(),
+  final _summaryImageState = ValueNotifier<SummaryImageState>(
+    const SummaryImageState(),
   );
 
   // 翻译进度 SnackBar 句柄——点按"翻译"时 show，翻译结束 finish/dismiss。
@@ -166,7 +167,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _markdownLoading = wantMarkdown && _mdContent == null && _mdPath != null;
       _markdownLoadError = null;
     });
-    _summaryImageState.value = SummaryImagePanelState(imagePath: summaryPath);
+    _summaryImageState.value = SummaryImageState(imagePath: summaryPath);
 
     if (wantMarkdown) {
       unawaited(_ensureMarkdownReady());
@@ -1308,7 +1309,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final current = _summaryImageState.value;
     if (alreadyRunning) {
       if (!current.generating) {
-        _summaryImageState.value = SummaryImagePanelState(
+        _summaryImageState.value = SummaryImageState(
           imagePath: current.imagePath,
           revision: current.revision,
           generating: true,
@@ -1317,7 +1318,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
 
-    _summaryImageState.value = SummaryImagePanelState(
+    _summaryImageState.value = SummaryImageState(
       imagePath: current.imagePath,
       revision: current.revision,
       generating: true,
@@ -1332,7 +1333,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             if (!mounted) return;
             final revision = _summaryImageState.value.revision + 1;
             setState(() {});
-            _summaryImageState.value = SummaryImagePanelState(
+            _summaryImageState.value = SummaryImageState(
               imagePath: imagePath,
               revision: revision,
             );
@@ -1341,7 +1342,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     if (!mounted || !_summaryImageState.value.generating) return;
     final latest = _summaryImageState.value;
-    _summaryImageState.value = SummaryImagePanelState(
+    _summaryImageState.value = SummaryImageState(
       imagePath: latest.imagePath,
       revision: latest.revision,
     );

@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../router/app_router.dart';
+import '../router/app_routes.dart';
+import '../services/ai_settings_prompt.dart';
 import '../services/document_translation_service.dart';
 import '../services/markdown_paragraph_extractor.dart';
 import '../services/snackbar_service.dart';
@@ -109,11 +112,12 @@ class DocumentTranslationNotifier
     final config = _ref.read(translationConfigProvider);
     final snackBar = _ref.read(snackBarServiceProvider);
 
-    // 前置校验：API / 模型必须配置
-    final hasModel = (agentState.fastModelId?.isNotEmpty ?? false) ||
-        (agentState.defaultModelId?.isNotEmpty ?? false);
-    if (agentState.apiKey.isEmpty || !hasModel) {
-      snackBar.showResult(message: '请先在「AI 设置」中配置模型与 API Key');
+    if (!AiSettingsPrompt.ensureTextModelConfigured(
+      agentState: agentState,
+      snackBar: snackBar,
+      onOpenSettings: () =>
+          _ref.read(routerProvider).push(AppRoutes.settingsApi),
+    )) {
       return;
     }
 
