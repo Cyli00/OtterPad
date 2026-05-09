@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/storage/storage.dart';
 import '../../../data/models/book/document.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/favorites_provider.dart';
@@ -18,9 +19,8 @@ class DocCardActions {
     context.push(AppRoutes.reader, extra: doc);
   }
 
-  /// 删除文献（级联：文库条目 + 磁盘文件 + 提取产物 + 缩略图 + 收藏夹引用）
+  /// 删除文献（级联：文库条目 + 磁盘文件 + 提取产物 + 缩略图 + 收藏夹 + 高亮 + 历史）
   static Future<void> delete(WidgetRef ref, String docId) async {
-    // 在删除前获取文件路径，用于清理收藏夹中的引用
     final docs = ref.read(documentsProvider);
     final doc = docs.cast<Document?>().firstWhere(
       (d) => d != null && d.id == docId,
@@ -28,7 +28,9 @@ class DocCardActions {
     );
     if (doc != null && doc.filePath.isNotEmpty) {
       await ref.read(favoritesProvider.notifier).removeDocFromAll(doc.filePath);
+      GStorage.highlights.delete(doc.filePath);
     }
+    ref.read(historyProvider.notifier).removeDoc(docId);
     await ref.read(documentsProvider.notifier).delete(docId);
   }
 }

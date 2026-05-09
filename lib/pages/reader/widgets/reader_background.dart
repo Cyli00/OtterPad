@@ -23,6 +23,21 @@ class ReaderPalette {
     required this.divider,
     required this.codeBlock,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ReaderPalette &&
+          background == other.background &&
+          text == other.text &&
+          secondaryText == other.secondaryText &&
+          link == other.link &&
+          divider == other.divider &&
+          codeBlock == other.codeBlock;
+
+  @override
+  int get hashCode =>
+      Object.hash(background, text, secondaryText, link, divider, codeBlock);
 }
 
 /// 按 [theme] 解析 [ReaderPalette]。

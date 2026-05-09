@@ -73,13 +73,20 @@
 
 ### 阅读器
 
+- **WebViewMarkdownReader** (`lib/pages/reader/widgets/webview_markdown_reader.dart`) — **主渲染路径**。用 `flutter_inappwebview`（Windows WebView2）渲染 Markdown，提供浏览器原生多段落选择 + SVG 高亮覆盖层。Dart 侧将 Markdown 转 HTML（`webview_reader_html.dart`，内含 CSS + JS）→ 写入文档目录临时文件 → `loadUrl(file://...)` 加载。公开 `WebViewMarkdownReaderState`，通过 `GlobalKey` 暴露 `scrollToBlockIndex()` / `highlightSearch()` / `flashImage()` / `activateNearestSearchResult()` 等方法。KaTeX CDN 渲染 LaTeX。JS → Flutter 通信走 `callHandler`（选择、高亮点击、图片点击、滚动方向），Flutter → JS 走 `evaluateJavascript`。
+- **webview_reader_html** (`lib/pages/reader/widgets/webview_reader_html.dart`) — HTML 模板生成器：`buildReaderHtml()` 组装完整 HTML 文档（CSS 主题变量 + JS Overlayer/Selection/Bridge）。`_LatexInlinePreserve` / `_LatexBlockPreserve` 保护 `$...$` / `$$...$$` 免被 markdown emphasis 破坏。`_TranslationInlineSyntax` 将 `[[tr]]...[/tr]]` 转为 `<span class="translated">`。`_convertFigCaptions()` 将 `<img alt="fig:...">` 转为 `<figure><img><figcaption>` 结构。JS 层 Overlayer 参照 anx-reader 实现：存储 Range 对象 + `ResizeObserver` 防抖 150ms + `redraw()` 全量重算解决 KaTeX/图片 reflow 漂移。CSS 性能优化：`contain: content` 布局隔离、`content-visibility: auto` 图片延迟渲染、`passive` 滚动事件。
+- **SelectionToolbar** (`lib/pages/reader/widgets/selection_toolbar.dart`) — `showReaderContextMenu()` 弹出 StatefulWidget OverlayEntry：5 色高亮圆点 + 复制/笔记/翻译/删除图标按钮 + **可展开笔记面板**（暗色 TextField + 保存按钮，关闭时自动保存）。新建高亮的笔记走 `onCreateForNote` 回调先创建高亮再展开面板。
+- **ReaderNotesSheet** (`lib/pages/reader/widgets/reader_notes_sheet.dart`) — `showReaderNotesSheet()` 底部面板，列出当前文献所有高亮与笔记。卡片可展开（`AnimatedSize`）：折叠态标注文本单行 + 笔记 `titleSmall` w600 最多 2 行；展开态显示全部。支持编辑笔记（Dialog）和删除。底部栏"笔记"按钮入口。
+- **Highlight** (`lib/data/models/book/highlight.dart`) — 高亮标记模型，含 `id` / `documentId` / `text` / `color`（hex String）/ `note` / `groupId`。`kHighlightColors` 定义 5 个预设色（Amber/Green/Blue/Red/Purple）。
+- **HighlightProvider** (`lib/providers/highlight_provider.dart`) — 按文献 ID（filePath）管理高亮的 Riverpod `StateNotifier.family`，Hive 持久化。`add(text, color:)` / `remove(id)` / `updateColor(id, color)` / `updateNote(id, note)`。删除文献时由 `DocCardActions.delete()` 级联清理 `GStorage.highlights.delete(filePath)`。
+- **双路径高亮策略**：新建高亮走 `addHighlightFromSelection()`（精确 Range，支持含 KaTeX 公式的文本），持久化恢复走 `addByText()`（TreeWalker 文本搜索，跳过 `.katex-mathml` 保留 `.katex-html`）。`_selectionHighlightIds` 集合防止 `_syncHighlights` 二次添加。
 - **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 加载 + 内存缓存 + 搜索快照。标题检测优先读取提取 `.json` 中 `block_label: "paragraph_title"`，无 JSON 时回退 ATX heading。
 - **MarkdownPreprocessor** (`lib/utils/markdown_preprocessor.dart`) — Markdown 预处理：LaTeX 修复、标题过滤、空表格移除。
-- **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 自定义 SpanNode 集合：LaTeX (`nr_latex_node`)、图片 (`nr_image_node`)、标记 (`nr_mark_node`)、搜索高亮 (`nr_search_highlight_builder`)、主题配置 (`nr_markdown_config`)、翻译段落 (`nr_translated_node`，渲染 `[[tr]]...[[/tr]]` 标记，5 种视觉风格)、可选 LaTeX (`nr_selectable_math`，支持选区高亮)。
+- **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 原生 Flutter 渲染组件集（LaTeX / 图片 / 标记 / 搜索高亮 / 翻译段落等）。**仅用于提取结果预览**（`extract_result_page.dart`），阅读器主路径已迁移到 WebView。
 - **TranslationPopup** (`lib/pages/reader/widgets/translation_popup.dart`) — 选中文本后弹出的流式翻译对话框（毛玻璃背景 + 高亮源文 + 增量渲染 + 复制菜单），通过 `showTranslationPopup()` 打开。
 - **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — Figure 全屏查看器（宽度优先适配 + Ctrl+滚轮/手势缩放 + 下滑退出 + 长按/右键菜单含保存/复制），通过 `showFigureViewer()` 打开。保存：桌面走 `FilePicker.saveFile` + `File.copy`，移动走 `Share.shareXFiles` 借系统菜单"保存到相册"；复制图片到剪贴板：桌面用 `Pasteboard.writeImage(bytes)`（`package:pasteboard`），禁止自行拼 `Clipboard.setData`（只支持文本）。
-- **阅读器底部面板** (`lib/pages/reader/widgets/reader_text_sheet.dart`, `reader_theme_sheet.dart`, `reader_background.dart`) — 两个 `showModalBottomSheet` 入口：`showReaderTextSheet` 管字号/字体族；`showReaderThemeSheet` 管颜色（复用 `themeProvider` 的 seed color）+ 背景（`ReaderTheme` 的 4 个值：`themed` / `light` / `sepia` / `dark`）。`themed` 需通过 `resolveReaderBackground(ReaderTheme, ColorScheme)` / `resolveReaderTextColor(...)` 解析到具体颜色。禁止在 widgets 里直接访问 `settings.backgroundColor` 来拿背景色——用 resolver。
-- **阅读器沉浸式模式** (`lib/pages/reader/view.dart`) — Markdown 模式下点击内容区或向下滚动自动隐藏工具栏（`_toolbarsVisible`），顶/底工具栏用 `AnimatedSlide`（220ms `Curves.easeOut`）上下滑出。内容区用 `Positioned.fill` 占满全屏，工具栏 overlay 在上下方；markdown body 外层包 `GestureDetector(onTap: _toggleToolbars, behavior: HitTestBehavior.translucent)`，拖拽选择不会误触发 onTap。底部工具栏含翻译模式切换（双语/原文/译文循环）和摘要图生成入口。
+- **阅读器底部面板** (`lib/pages/reader/widgets/reader_text_sheet.dart`, `reader_theme_sheet.dart`, `reader_background.dart`) — 两个 `showModalBottomSheet` 入口：`showReaderTextSheet` 管字号/字体族；`showReaderThemeSheet` 管颜色（复用 `themeProvider` 的 seed color）+ 背景（`ReaderTheme` 的 5 个值：`themed` / `sepia` / `green` / `night` / `dark`）。`ReaderPalette` 覆写了 `==` / `hashCode`，保证 `themed` 模式下相同颜色不会触发 WebView 虚假重载。禁止在 widgets 里直接访问 `settings.backgroundColor` 来拿背景色——用 `resolveReaderPalette()`。
+- **阅读器沉浸式模式** (`lib/pages/reader/view.dart`) — Markdown 模式下向下滚动自动隐藏工具栏（`_toolbarsVisible`），顶/底工具栏用 `AnimatedSlide`（220ms `Curves.easeOut`）上下滑出。滚动方向由 WebView JS 检测（throttled scroll 事件）通过 `onScrollDirection` 回调到 Flutter 层。底部工具栏含翻译模式切换（双语/原文/译文循环）和摘要图生成入口。
 
 ### 图标
 
@@ -154,6 +161,10 @@ Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数
 - 书架与收藏夹 (`lib/pages/shelf/`)
 - 设置页面 (`lib/pages/setting/`) — API、外观、网络、OCR、Agent 模型管理、翻译设置、摘要图生成设置
 - 大纲参考文献解析 (`lib/pages/reader/widgets/outline_panel.dart`) — 支持编号格式（`1.`/`1)`/`[1]`）和 Author-Year 段落格式，二级回退
+- WebView 阅读器 (`lib/pages/reader/widgets/webview_markdown_reader.dart`, `webview_reader_html.dart`) — 替换原生 `markdown_widget` + `SelectionArea` 为 `flutter_inappwebview` WebView 渲染。Dart 侧 markdown→HTML（`markdown ^7.3.0` + LaTeX 保护语法）→ KaTeX CDN 数学渲染 → SVG Overlayer 高亮覆盖层 → JS↔Flutter 双向桥接（选择/高亮点击/图片/滚动方向）。搜索高亮走 JS DOM 操作（TreeWalker + `<mark>` 包裹）。图片定位走 `flashImage()` 脉冲光晕动画。
+- 高亮标注系统 (`lib/data/models/book/highlight.dart`, `lib/providers/highlight_provider.dart`, `selection_toolbar.dart`) — 5 色预设（Amber/Green/Blue/Red/Purple），Hive 持久化，SVG 覆盖层渲染（anx-reader Overlayer 模式：存储 Range + ResizeObserver redraw），点击编辑/删除/换色，内嵌笔记面板，双路径高亮（新建走精确 Range，恢复走文本搜索）
+- 笔记管理面板 (`lib/pages/reader/widgets/reader_notes_sheet.dart`) — 底部栏"笔记"入口，展示当前文献所有标注与笔记，可展开卡片交互（AnimatedSize），编辑笔记 / 删除
+- 文献删除级联清理 (`lib/pages/library/widgets/doc_card_actions.dart`) — 删除文献时级联清理高亮（`GStorage.highlights.delete`）+ 阅读历史（`historyProvider.removeDoc`），原有清理包括磁盘文件 / 缩略图 / 收藏夹引用
 
 ### 文档提取
 
@@ -179,12 +190,12 @@ Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数
 - **发布前**：将所有平台包名前缀从 `com.example` 改为真实域名（Android `build.gradle.kts` + `MainActivity.kt` 目录、iOS/macOS `project.pbxproj` + `AppInfo.xcconfig`、Linux `CMakeLists.txt`）
 - 后续raw.md的保存可以删去，目前只是用于测试
 - 段落内提及的figure应该能被检出和点击高亮
-- markdown搜索内容的上下标、公式等内容也没有被正常地渲染出来
 - 删除物理文件 `lib/pages/reader/widgets/appearance_panel.dart`（已在 refactor 中清空为占位，受工具限制无法 rm）
-- 阅读器字体/排版扩展：边距 slider、行距 slider、阅读模式（上下滚动 vs 左右翻页）
-  - 需要扩展 `ReaderSettingsState` 加 `margin` / `lineHeight` / `scrollDirection` 字段（参照现有 `fontSize` 的 Hive 存储范式）
+- WebView 阅读器 Phase 2：本地 KaTeX 打包（离线支持）、翻译样式多风格 CSS（当前仅 themed）、笔记对话框
+- 阅读器字体/排版扩展：边距 slider、行距 slider
+  - 需要扩展 `ReaderSettingsState` 加 `margin` / `lineHeight` 字段（参照现有 `fontSize` 的 Hive 存储范式），WebView 侧通过 CSS 变量 `--margin` / `--line-height` 传递
   - UI 按 Slider 统一范式（`_sliderRow` 胶囊 + nullable 签名）补控件
-  - 左右翻页需要 markdown_reader 结构性改造（ListView → PageView），比单纯加 slider 代价大一个数量级，单独作为一个阶段
+- 多文档并发任务管理入口：翻译 / 摘要图生成等后台任务统一面板，查看进度、可取消、与文献一一对应。需重构 `TaskProvider` 从全局单任务模型改为按文档分组的任务队列，新增 UI 面板（类 IDE 后台任务面板）
 - 基于元数据的文献推荐算法，分阶段推进：
   1. **Jaccard 基线**（零成本）：PubMed 文献用 `Document.keywords`（MeSH + 作者 KeywordList）直接算集合相似度 `|A∩B|/|A∪B|`
   2. **Major Topic 过滤**：给 `Document` 补 `primaryKeywords` 或把 keywords 结构升级为 `{name, isPrimary}`，efetch XML 里解析 `MeshHeading/DescriptorName[@MajorTopicYN="Y"]`，只用核心主题算相似度（过滤 `Humans`/`Animals`/`Male` 等背景噪声词）

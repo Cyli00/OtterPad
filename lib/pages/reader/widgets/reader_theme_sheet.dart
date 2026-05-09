@@ -393,6 +393,13 @@ class _BackgroundCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = resolveReaderPalette(theme, cs);
+    // 「白天」卡片的预览语义是"切回浅色阅读模式"——固定为白底深线，
+    // 不让它跟随当前 app 的 dark surface 变成深色（实际阅读颜色仍由
+    // resolveReaderPalette 在运行时按系统亮度解出，不受影响）。
+    final isThemed = theme == ReaderTheme.themed;
+    final previewBg = isThemed ? const Color(0xFFFFFFFF) : palette.background;
+    final previewLine =
+        isThemed ? const Color(0xFF1C1B1F).withAlpha(120) : palette.text.withAlpha(120);
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -402,7 +409,7 @@ class _BackgroundCard extends StatelessWidget {
             curve: Curves.easeOut,
             height: 56,
             decoration: BoxDecoration(
-              color: palette.background,
+              color: previewBg,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: selected ? cs.primary : cs.outlineVariant,
@@ -414,7 +421,7 @@ class _BackgroundCard extends StatelessWidget {
               width: 28,
               height: 3,
               decoration: BoxDecoration(
-                color: palette.text.withAlpha(120),
+                color: previewLine,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

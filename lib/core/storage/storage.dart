@@ -28,8 +28,7 @@ class GStorage {
     }
     await _openBoxes();
     await _migrateLegacyAppPaths(appDir.path, appRoot.path);
-    // 清空旧版标记数据（功能已移除，待重新设计）
-    if (_highlightsBox.isNotEmpty) await _highlightsBox.clear();
+    // 高亮数据保留（Phase 1 WebView 标注系统已启用）
   }
 
   static Future<void> reopen() async {

@@ -75,27 +75,47 @@ enum ReaderFont {
         ReaderFont.mono => 'Mono',
       };
 
-  /// 映射到实际字体族名（首选字体）
+  /// 映射到实际字体族名（首选字体）。
+  ///
+  /// 这三个首选字体（思源宋体 / 思源黑体 / Ubuntu Mono）在 Windows/macOS
+  /// 默认**不预装**——未安装时会按下面的 [fontFamilyFallback] 退化到平台
+  /// 原生 CJK / 等宽字体。如需保证跨平台一致渲染，应把字体文件放进
+  /// `assets/fonts/` 并在 pubspec 注册。
   String? get fontFamily => switch (this) {
-        ReaderFont.serif => 'Georgia',
-        ReaderFont.sans => null, // 使用系统默认
-        ReaderFont.mono => 'Consolas',
+        ReaderFont.serif => 'Source Han Serif',
+        ReaderFont.sans => 'Source Han Sans',
+        ReaderFont.mono => 'Ubuntu Mono',
       };
 
-  /// 跨平台备选字体列表
+  /// 跨平台备选字体列表。
+  ///
+  /// Source Han Serif/Sans 在不同发行版下命名不同（Adobe `Source Han ...`、
+  /// Google `Noto ... CJK SC`、`-SC` 子集等），全列以提高命中率。
   List<String>? get fontFamilyFallback => switch (this) {
         ReaderFont.serif => const [
+            'Source Han Serif SC',
             'Noto Serif CJK SC',
-            'SimSun',
+            'Songti SC',
             'STSong',
+            'SimSun',
             'Times New Roman',
             'Noto Serif',
           ],
-        ReaderFont.sans => null,
+        ReaderFont.sans => const [
+            'Source Han Sans SC',
+            'Noto Sans CJK SC',
+            'PingFang SC',
+            'Heiti SC',
+            'Microsoft YaHei',
+            'Helvetica',
+            'Arial',
+          ],
         ReaderFont.mono => const [
+            'UbuntuMono Nerd Font',
             'Cascadia Mono',
-            'Courier New',
+            'Consolas',
             'Menlo',
+            'Courier New',
             'Noto Sans Mono',
           ],
       };

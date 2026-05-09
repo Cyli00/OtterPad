@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../router/app_routes.dart';
@@ -31,14 +30,17 @@ import '../../utils/doc_paths.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
+import '../../data/models/book/highlight.dart';
+import '../../providers/highlight_provider.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/markdown_translation_weaver.dart';
 import 'widgets/figure_viewer.dart';
-import 'widgets/markdown_reader.dart';
+import 'widgets/webview_markdown_reader.dart';
 import 'widgets/outline_panel.dart';
 import 'widgets/reader_bottom_bar.dart';
 import 'widgets/reader_background.dart';
 import 'widgets/reader_document_info_sheet.dart';
+import 'widgets/reader_notes_sheet.dart';
 import 'widgets/reader_favorite_sheet.dart';
 import 'widgets/reader_search_bars.dart';
 import 'widgets/reader_search_navigator.dart';
@@ -75,8 +77,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   List<SearchResult> _searchResults = [];
   int _currentResultIndex = 0;
 
-  // Markdown 滚动控制
-  final _scrollController = AutoScrollController();
+  // WebView 阅读器引用（通过 GlobalKey 暴露方法）
+  final _webViewReaderKey = GlobalKey<WebViewMarkdownReaderState>();
 
   // PDF 控制器（用于滚动滑条）
   final _pdfController = PdfViewerController();
@@ -91,14 +93,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   MarkdownSearchSnapshot? _searchSnapshot;
   String? _markdownCacheKey;
 
-  // 文本选择
-  String? _selectedText;
-  final _selectedTextNotifier = ValueNotifier<String?>(null);
-  String? _textOnPointerDown;
-  Offset? _pointerDownPosition;
-
-  // 选择工具栏 Overlay
-  final _selectionAreaKey = GlobalKey();
+  // 选择工具栏 Overlay（WebView 选择走 JS 桥接）
   OverlayEntry? _selectionToolbarEntry;
 
   // 沉浸式：点击 markdown 内容区切换上下工具栏可见性
@@ -370,9 +365,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _currentResultIndex = tappedIndex;
       _highlightQuery = query;
     });
-    // 等 highlightQuery 触发 widget 重建后再跳转
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scrollToCharOffset(offset);
+      if (!mounted) return;
+      _scrollToCharOffset(offset);
+      Future.delayed(const Duration(milliseconds: 350), () {
+        if (mounted) {
+          _webViewReaderKey.currentState?.activateNearestSearchResult();
+        }
+      });
     });
   }
 
@@ -394,6 +394,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _searchResults.length;
     });
     _scrollToCharOffset(_searchResults[_currentResultIndex].charOffset);
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        _webViewReaderKey.currentState?.activateNearestSearchResult();
+      }
+    });
   }
 
   void _goToNextResult() {
@@ -402,6 +407,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _currentResultIndex = (_currentResultIndex + 1) % _searchResults.length;
     });
     _scrollToCharOffset(_searchResults[_currentResultIndex].charOffset);
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        _webViewReaderKey.currentState?.activateNearestSearchResult();
+      }
+    });
   }
 
   Future<void> _goToPrevPdfResult() async {
@@ -434,7 +444,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _openNotesSheet() {
-    // TODO: 笔记查看功能待实现
+    if (widget.document.filePath.isEmpty) return;
+    showReaderNotesSheet(context, documentId: widget.document.filePath);
   }
 
   void _openOutlineSheet() {
@@ -444,24 +455,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // ─── 沉浸式 ───
 
-  /// Markdown 区域单击 → 切换上下工具栏显隐。
-  /// 拖拽选择不会触发 onTap（GestureDetector 默认行为）。
-  void _toggleToolbars() {
-    if (_sheetOpen) return;
-    setState(() => _toolbarsVisible = !_toolbarsVisible);
-  }
-
-  /// Markdown 滚动方向 → 自动隐藏/显示工具栏。
-  ///
-  /// 向下阅读（reverse）隐藏，向上回翻（forward）显示。
-  /// [UserScrollNotification] 只在用户主动拖拽时触发，惯性阶段不会触发，
-  /// 避免 fling 结束时的方向抖动。
-  bool _handleMarkdownScrollNotification(UserScrollNotification notification) {
-    if (_sheetOpen || _searchActive || _highlightQuery != null) return false;
-
-    _handleReaderScrollDirection(notification.direction);
-    return false;
-  }
+  // _toggleToolbars / _handleMarkdownScrollNotification 已移除，
+  // WebView 内部 JS 检测滚动方向并通过 onScrollDirection 回调。
 
   bool _handlePdfScrollNotification(UserScrollNotification notification) {
     if (_showPreview || _sheetOpen || _searchActive) return false;
@@ -595,21 +590,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // ─── 大纲导航 ───
 
-  /// 统一跳转：charOffset → widget index → scrollToIndex。
+  void _tryFlashImageAtOffset(int charOffset) {
+    final md = _mdContent;
+    if (md == null) return;
+    final around = md.substring(
+      charOffset,
+      (charOffset + 200).clamp(0, md.length),
+    );
+    final imgMatch = RegExp(r'!\[.*?\]\(.*?([^/\\)]+\.(?:png|jpg|jpeg|gif|webp))')
+        .firstMatch(around);
+    if (imgMatch == null) return;
+    final filename = imgMatch.group(1)!;
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) _webViewReaderKey.currentState?.flashImage(filename);
+    });
+  }
+
+  /// 统一跳转：charOffset → block index → WebView scrollToBlock。
   ///
-  /// outline "在文中查看"、搜索结果导航、prev/next 全部走这条路径。
+  /// `\n\n+` 分割数 = `#content > *` 直接子元素数（顶层块 1:1 对应）。
   void _scrollToCharOffset(int charOffset) {
     if (_mdContent == null || _mdContent!.isEmpty) return;
     final breaks = RegExp(r'\n\n+').allMatches(_mdContent!);
-    var widgetIndex = 0;
+    var blockIndex = 0;
     for (final brk in breaks) {
       if (brk.start >= charOffset) break;
-      widgetIndex++;
+      blockIndex++;
     }
-    _scrollController.scrollToIndex(
-      (widgetIndex - 1).clamp(0, widgetIndex),
-      preferPosition: AutoScrollPosition.begin,
-    );
+    _webViewReaderKey.currentState?.scrollToBlockIndex(blockIndex);
   }
 
   bool _isInAnyFavorite(List<Favorite> favorites) {
@@ -788,14 +796,112 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return resolved.content;
   }
 
-  // ─── 标记（功能待重新设计） ───
+  // ─── 高亮标记 ───
 
-  void _addHighlight(String text) {
-    // TODO: 重新设计标记功能
+  String get _documentId => widget.document.filePath;
+
+  void _addHighlight(String text, String color) {
+    if (text.trim().isEmpty) return;
+    ref.read(highlightProvider(_documentId).notifier).add(
+          text.trim(),
+          color: color,
+        );
+    final created = ref.read(highlightProvider(_documentId)).lastOrNull;
+    if (created != null) {
+      _webViewReaderKey.currentState
+          ?.addHighlightFromSelection(created.id, color);
+    }
   }
 
-  void _showNoteDialog({required String text}) {
-    // TODO: 重新设计做笔记功能
+  void _removeHighlight(String highlightId) {
+    ref.read(highlightProvider(_documentId).notifier).remove(highlightId);
+  }
+
+  void _updateHighlightColor(String highlightId, String color) {
+    ref.read(highlightProvider(_documentId).notifier).updateColor(
+          highlightId,
+          color,
+        );
+  }
+
+  void _handleHighlightTap(Highlight highlight, Offset position) {
+    _dismissSelectionToolbar();
+    final rect = Rect.fromCenter(center: position, width: 4, height: 4);
+    _selectionToolbarEntry = showReaderContextMenu(
+      context: context,
+      selectionRect: rect,
+      selectedText: highlight.text,
+      existingHighlight: highlight,
+      onHighlight: (color) => _updateHighlightColor(highlight.id, color),
+      onCopy: () {
+        Clipboard.setData(ClipboardData(text: highlight.text));
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(
+              message: '已复制到剪贴板',
+              duration: const Duration(seconds: 1),
+            );
+      },
+      onTranslate: () {
+        final fullText = _expandToParagraphContext(highlight.text.trim());
+        showTranslationPopup(
+          context,
+          sourceText: highlight.text.trim(),
+          fullText: fullText,
+        );
+      },
+      onNoteChanged: (id, note) => ref
+          .read(highlightProvider(_documentId).notifier)
+          .updateNote(id, note),
+      onDelete: () => _removeHighlight(highlight.id),
+      onDismiss: () => _selectionToolbarEntry = null,
+    );
+  }
+
+  void _handleWebViewSelectionEnd(String text, Rect rect) {
+    _dismissSelectionToolbar();
+    if (text.trim().isEmpty) return;
+    _selectionToolbarEntry = showReaderContextMenu(
+      context: context,
+      selectionRect: rect,
+      selectedText: text,
+      onHighlight: (color) => _addHighlight(text, color),
+      onCopy: () {
+        Clipboard.setData(ClipboardData(text: text));
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(
+              message: '已复制到剪贴板',
+              duration: const Duration(seconds: 1),
+            );
+      },
+      onTranslate: () {
+        final trimmed = text.trim();
+        final fullText = _expandToParagraphContext(trimmed);
+        showTranslationPopup(
+          context,
+          sourceText: trimmed,
+          fullText: fullText,
+        );
+      },
+      onCreateForNote: () {
+        _addHighlight(text, kDefaultHighlightColor);
+        return ref.read(highlightProvider(_documentId)).lastOrNull;
+      },
+      onNoteChanged: (id, note) => ref
+          .read(highlightProvider(_documentId).notifier)
+          .updateNote(id, note),
+      onDismiss: () => _selectionToolbarEntry = null,
+    );
+  }
+
+  void _handleWebViewSelectionCleared() {
+    _dismissSelectionToolbar();
+  }
+
+  void _handleWebViewScrollDirection(ScrollDirection direction) {
+    if (_sheetOpen || _searchActive || _highlightQuery != null) return;
+    _handleReaderScrollDirection(direction);
   }
 
   // ─── 选择/标记工具栏 ───
@@ -805,110 +911,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _selectionToolbarEntry = null;
   }
 
-  static const _kToolbarGap = 8.0;
-
-  double get _lineHeight => ref.read(readerSettingsProvider).fontSize * 1.7;
-
-  /// 通过 hit test 定位给定全局坐标处最外层的 [RenderParagraph]。
-  RenderBox? _findParagraphAt(Offset globalPos) {
-    final ro = _selectionAreaKey.currentContext?.findRenderObject();
-    if (ro is! RenderBox) return null;
-    final local = ro.globalToLocal(globalPos);
-    final result = BoxHitTestResult();
-    if (!ro.hitTest(result, position: local)) return null;
-    // result.path 从 innermost → outermost；取最外层段落级别的 RenderParagraph
-    RenderBox? found;
-    for (final entry in result.path) {
-      if (entry.target is RenderParagraph) found = entry.target as RenderBox;
-    }
-    return found;
-  }
-
-  /// 选择完成后在选中段落正下方弹出工具栏
-  void _showSelectionToolbarOverlay(Offset downPos, Offset upPos) {
-    _dismissSelectionToolbar();
-
-    // 通过 hit test 定位选区起止处的段落 RenderBox，取其渲染边界
-    final startBox = _findParagraphAt(downPos);
-    final endBox = _findParagraphAt(upPos);
-
-    Rect? bounds;
-    for (final box in [startBox, endBox]) {
-      if (box == null) continue;
-      final topLeft = box.localToGlobal(Offset.zero);
-      final rect = topLeft & box.size;
-      bounds = bounds?.expandToInclude(rect) ?? rect;
-    }
-
-    // 兜底：无法定位段落时使用指针位置估算
-    if (bounds == null) {
-      final lh = _lineHeight;
-      final topY = (downPos.dy < upPos.dy ? downPos.dy : upPos.dy) - lh * 0.3;
-      final bottomY =
-          (downPos.dy > upPos.dy ? downPos.dy : upPos.dy) + lh * 0.7;
-      final cx = (downPos.dx + upPos.dx) / 2;
-      bounds = Rect.fromLTRB(cx - 50, topY, cx + 50, bottomY);
-    }
-
-    _selectionToolbarEntry = showReadingToolbar(
-      context: context,
-      anchorAbove: Offset(bounds.center.dx, bounds.top - _kToolbarGap),
-      anchorBelow: Offset(bounds.center.dx, bounds.bottom + _kToolbarGap),
-      onDismiss: () => _selectionToolbarEntry = null,
-      actions: [
-        ReadingToolbarAction(
-          icon: Symbols.content_copy_rounded,
-          label: '复制',
-          onTap: () {
-            if (_selectedText != null) {
-              Clipboard.setData(ClipboardData(text: _selectedText!));
-              ref
-                  .read(snackBarServiceProvider)
-                  .showResult(
-                    message: '已复制到剪贴板',
-                    duration: const Duration(seconds: 1),
-                  );
-            }
-          },
-        ),
-        ReadingToolbarAction(
-          icon: Symbols.highlight_rounded,
-          label: '标记',
-          onTap: () {
-            if (_selectedText != null && _selectedText!.trim().isNotEmpty) {
-              _addHighlight(_selectedText!);
-            }
-          },
-        ),
-        ReadingToolbarAction(
-          icon: Symbols.edit_note_rounded,
-          label: '做笔记',
-          onTap: () {
-            final text = _selectedText;
-            if (text != null && text.trim().isNotEmpty) {
-              _showNoteDialog(text: text.trim());
-            }
-          },
-        ),
-        ReadingToolbarAction(
-          icon: Symbols.translate_rounded,
-          label: '翻译',
-          onTap: () {
-            final text = _selectedText;
-            if (text != null && text.trim().isNotEmpty) {
-              final trimmed = text.trim();
-              final fullText = _expandToParagraphContext(trimmed);
-              showTranslationPopup(
-                context,
-                sourceText: trimmed,
-                fullText: fullText,
-              );
-            }
-          },
-        ),
-      ],
-    );
-  }
+  // 旧原生选择基础设施已移除，由 WebView 选择处理替代
 
   @override
   void dispose() {
@@ -916,9 +919,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _pdfSearcher?.dispose();
     _pdfSearchController.dispose();
     _pdfSearchFocusNode.dispose();
-    _selectedTextNotifier.dispose();
     _summaryImageState.dispose();
-    _scrollController.dispose();
     _selectionToolbarEntry?.remove();
     super.dispose();
   }
@@ -984,6 +985,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 onNavigate: (offset) {
                   _scaffoldKey.currentState?.closeEndDrawer();
                   _scrollToCharOffset(offset);
+                  _tryFlashImageAtOffset(offset);
                 },
                 onRegenerateSummary: () {
                   _handleGenerateSummaryImage(openOutline: false);
@@ -1605,26 +1607,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           )
         : _mdContent!;
 
-    return NotificationListener<UserScrollNotification>(
-      onNotification: _handleMarkdownScrollNotification,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: _toggleToolbars,
-        child: _wrapWithSelection(
-          ReaderMarkdownBody(
-            key: ValueKey('reader_md_${effectiveMd.hashCode}'),
-            data: effectiveMd,
-            settings: settings,
-            translationStyleId: displayStyle.id,
-            scrollController: _scrollController,
-            selectedTextListenable: _selectedTextNotifier,
-            highlightQuery: _highlightQuery,
-            topInset: topPad,
-            bottomInset: bottomPad,
-            onImageTap: _handleMarkdownImageTap,
-          ),
-        ),
-      ),
+    final cs = Theme.of(context).colorScheme;
+    final palette = resolveReaderPalette(settings.theme, cs);
+    final highlights = ref.watch(highlightProvider(widget.document.filePath));
+    final documentDir = p.dirname(widget.document.filePath);
+
+    return WebViewMarkdownReader(
+      key: _webViewReaderKey,
+      markdownData: effectiveMd,
+      settings: settings,
+      palette: palette,
+      highlights: highlights,
+      documentDir: documentDir,
+      topInset: topPad,
+      bottomInset: bottomPad,
+      highlightQuery: _highlightQuery,
+      onSelectionEnd: _handleWebViewSelectionEnd,
+      onSelectionCleared: _handleWebViewSelectionCleared,
+      onHighlightClick: _handleHighlightTap,
+      onImageClick: _handleMarkdownImageTap,
+      onScrollDirection: _handleWebViewScrollDirection,
     );
   }
 
@@ -1660,43 +1662,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     await showFigureViewer(context, figures, initialIndex: index);
   }
 
-  /// 用 SelectionArea + Listener 包裹 Markdown 内容。
-  ///
-  /// 选择完成后（pointer up + 新文本被选中）自动在选中文本下方弹出工具栏，
-  /// 无需右键。contextMenuBuilder 返回空以禁用系统默认菜单。
-  Widget _wrapWithSelection(Widget child) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (event) {
-        _pointerDownPosition = event.position;
-        _textOnPointerDown = _selectedText;
-        _dismissSelectionToolbar();
-      },
-      onPointerUp: (event) {
-        final downPos = _pointerDownPosition ?? event.position;
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (!mounted) return;
-          if (_selectedText != null &&
-              _selectedText!.isNotEmpty &&
-              _selectedText != _textOnPointerDown) {
-            _showSelectionToolbarOverlay(downPos, event.position);
-          }
-        });
-      },
-      child: SelectionArea(
-        key: _selectionAreaKey,
-        contextMenuBuilder: (_, _) => const SizedBox.shrink(),
-        onSelectionChanged: (content) {
-          _selectedText = content?.plainText;
-          _selectedTextNotifier.value = _selectedText;
-          if (content == null || content.plainText.isEmpty) {
-            _dismissSelectionToolbar();
-          }
-        },
-        child: child,
-      ),
-    );
-  }
+  // _wrapWithSelection 已移除，由 WebView 内部选择处理替代
 
   Widget _buildFileNotFound(ThemeData theme, ColorScheme cs) {
     return Center(

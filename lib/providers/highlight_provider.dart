@@ -35,21 +35,20 @@ class HighlightNotifier extends StateNotifier<List<Highlight>> {
     GStorage.highlights.put(documentId, json);
   }
 
-  /// 添加标记，直接存储完整选区文本。
-  void add(String text) {
+  void add(String text, {String color = kDefaultHighlightColor}) {
     if (state.any((h) => h.text == text)) return;
 
     final highlight = Highlight(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       documentId: documentId,
       text: text,
+      color: color,
       createdAt: DateTime.now(),
     );
     state = [...state, highlight];
     _save();
   }
 
-  /// 删除标记（有 groupId 时联动删除同组所有标记）
   void remove(String highlightId) {
     final idx = state.indexWhere((h) => h.id == highlightId);
     if (idx < 0) return;
@@ -63,7 +62,14 @@ class HighlightNotifier extends StateNotifier<List<Highlight>> {
     _save();
   }
 
-  /// 更新笔记
+  void updateColor(String highlightId, String color) {
+    state = [
+      for (final h in state)
+        if (h.id == highlightId) h.withColor(color) else h,
+    ];
+    _save();
+  }
+
   void updateNote(String highlightId, String note) {
     state = [
       for (final h in state)
