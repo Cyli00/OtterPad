@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../data/models/book/document.dart';
 import '../providers/api_provider.dart';
 import '../providers/image_generation_config_provider.dart';
 import '../utils/doc_paths.dart';
+import 'back_matter_detector.dart';
 import 'figure_extract_service.dart';
 import 'image_generation_service.dart';
 
@@ -40,24 +40,6 @@ class DocumentSummaryImageService {
   static String outputDirFor(String pdfPath) => DocPaths.summaryDir(pdfPath);
 
   static String imagePathFor(String pdfPath) => DocPaths.summaryImage(pdfPath);
-
-  // ── 后置材料模式缓存 ──────────────────────────────────────────────────────
-
-  static Map<String, List<String>>? _cachedPatterns;
-
-  static Future<Map<String, List<String>>> _loadBackMatterPatterns() async {
-    if (_cachedPatterns != null) return _cachedPatterns!;
-    final raw = await rootBundle.loadString(
-      'assets/config/back_matter_sections.json',
-    );
-    final data = jsonDecode(raw) as Map<String, dynamic>;
-    _cachedPatterns = {
-      'l1': (data['l1']['patterns'] as List).cast<String>(),
-      'l2': (data['l2']['patterns'] as List).cast<String>(),
-      'l3': (data['l3']['patterns'] as List).cast<String>(),
-    };
-    return _cachedPatterns!;
-  }
 
   // ── 生成入口 ──────────────────────────────────────────────────────────────
 
@@ -252,9 +234,10 @@ The attached images are extracted figures from the paper. Use them as scientific
   Future<({String markdown, int? backMatterOffset})> _compactMarkdown(
     String markdown,
   ) async {
-    final patterns = await _loadBackMatterPatterns();
-
-    int? backMatterOffset = _detectBackMatterViaRegex(markdown, patterns);
+    // back-matter 检测统一走 [BackMatterDetector]，与翻译跳过共享数据源。
+    // detector 已封装 L1/L2/L3 + 位置约束逻辑，这里只取首个命中 offset。
+    int? backMatterOffset =
+        BackMatterDetector.instance.detectFirstOffset(markdown);
     backMatterOffset ??= _detectBackMatterViaPosition(markdown);
 
     final bodyMarkdown = backMatterOffset != null
@@ -270,49 +253,6 @@ The attached images are extracted figures from the paper. Use them as scientific
         ? normalized
         : '${normalized.substring(0, maxChars)}\n\n[Content truncated for image generation.]';
     return (markdown: truncated, backMatterOffset: backMatterOffset);
-  }
-
-  // ── Regex 检测 ────────────────────────────────────────────────────────────
-
-  int? _detectBackMatterViaRegex(
-    String markdown,
-    Map<String, List<String>> patterns,
-  ) {
-    final l1 = patterns['l1']!.join('|');
-    final l2 = patterns['l2']!.join('|');
-    final l3 = patterns['l3']!.join('|');
-
-    final regex = RegExp(
-      [
-        r'^\s*#{1,6}\s*',
-        r'(?:\d+(?:\.\d+)*[\.)]?\s*)?',
-        r'(?:(?<l1>',
-        l1,
-        r')|(?<l2>',
-        l2,
-        r')|(?<l3>',
-        l3,
-        r'))',
-        r'\s*(?:[:：\-–—].*)?$',
-      ].join(),
-      multiLine: true,
-      caseSensitive: false,
-      unicode: true,
-    );
-
-    final halfPoint = (markdown.length * 0.5).floor();
-    final latePoint = (markdown.length * 0.6).floor();
-
-    for (final match in regex.allMatches(markdown)) {
-      if (match.namedGroup('l1') != null) return match.start;
-      if (match.namedGroup('l2') != null && match.start >= halfPoint) {
-        return match.start;
-      }
-      if (match.namedGroup('l3') != null && match.start >= latePoint) {
-        return match.start;
-      }
-    }
-    return null;
   }
 
   // ── 位置比例兜底 ─────────────────────────────────────────────────────────

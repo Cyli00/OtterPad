@@ -24,6 +24,10 @@ enum BackupRestoreScope {
 class BackupRestoreService {
   static const _archiveRoot = 'otter_pad_backup';
   static const _manifestPath = '$_archiveRoot/manifest.json';
+  // 归档内子目录名**故意保持旧名 `docs` / `data`**——磁盘上虽改成
+  // `library/` / `db/`，但归档是文件交换格式，新版本要能恢复旧版本备份
+  // 必须保留兼容键名。新备份与旧备份内部结构一致，restore 时统一映射到
+  // 磁盘新位置（library/ / db/）。
   static const _docsDir = '$_archiveRoot/docs';
   static const _dataDir = '$_archiveRoot/data';
   static const _formatVersion = 2;
@@ -42,9 +46,8 @@ class BackupRestoreService {
   static Future<String> createBackupArchive() async {
     final archive = Archive();
     final createdAt = DateTime.now();
-    final appRoot = await _getAppRootDir();
-    final docsDir = Directory(p.join(appRoot.path, 'docs'));
-    final dataDir = Directory(p.join(appRoot.path, 'data'));
+    final docsDir = Directory(GStorage.libraryDirPath);
+    final dataDir = Directory(GStorage.dbDirPath);
 
     await GStorage.flush();
 
@@ -94,9 +97,8 @@ class BackupRestoreService {
     );
     final sourceDocsRoot = manifest['docsRoot']?.toString() ?? '';
 
-    final appRoot = await _getAppRootDir();
-    final docsDir = Directory(p.join(appRoot.path, 'docs'));
-    final dataDir = Directory(p.join(appRoot.path, 'data'));
+    final docsDir = Directory(GStorage.libraryDirPath);
+    final dataDir = Directory(GStorage.dbDirPath);
     final tempRoot = await _createRestoreTempRoot();
     final extractedDocsDir = Directory(p.join(tempRoot.path, 'docs'));
     final extractedDataDir = Directory(p.join(tempRoot.path, 'data'));
@@ -433,15 +435,6 @@ class BackupRestoreService {
         await entity.copy(targetPath);
       }
     }
-  }
-
-  static Future<Directory> _getAppRootDir() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final root = Directory(p.join(appDir.path, 'OtterPad'));
-    if (!await root.exists()) {
-      await root.create(recursive: true);
-    }
-    return root;
   }
 
   static Future<Directory> _getBackupTempDir() async {

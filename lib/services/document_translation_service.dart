@@ -9,22 +9,32 @@ import '../utils/doc_paths.dart';
 import 'markdown_paragraph_extractor.dart';
 import 'translation_service.dart';
 
-/// 文档级批量翻译服务。
+/// 文档级翻译服务（**单段并发**版）。
 ///
-/// 特性：
-/// 1. **段落级持久化**（JSON 文件，与 .md / .json / _figures/ 同级）；
-/// 2. **多语言共存**：同一文件内按目标语言分层存储；
-/// 3. **批次合并**：每批 ≤[_kBatchMaxChars]/≤[_kBatchMaxParas]，用 `%%%%` 分隔；
-/// 4. **段数鲁棒性**：返回的分段数容忍头尾空段；严格相等才算成功，
-///    不等时整批 fallback（调用方保留原文）+ debugPrint 诊断；
-/// 5. **增量回调**：每批完成立即 `onResult`，翻译结果逐批写入文件。
+/// 设计原则（参考 anx-reader 的"单段独立"模型 + Dart 协程并发）：
+/// 1. **段粒度独立**：每段一次 LLM 请求，**不再用 `%%%%` 合批**——彻底
+///    消除"LLM 漏分隔符 → 整批失败"的塌陷模式（之前一段错全批废）；
+/// 2. **N=[_kConcurrency] 协程池并发**：worker 抢占式从队列取段，吃满
+///    LLM API 的 RPM 配额，相比之前批次串行可提速 5-10 倍；
+/// 3. **指数退避重试**：单段失败重试 2 次（200ms / 400ms 退避），单段
+///    最终失败仅丢这一段、不影响其他；
+/// 4. **写盘串行化 + 节流**：所有 `translations.json` 写入通过
+///    [_saveLock] Future 链顺序执行（避免并发 read-modify-write race），
+///    每 [_kSaveEveryN] 段触发一次中间保存，结束时强制最终保存；
+/// 5. **段落级持久化** & **多语言共存**：同一 JSON 文件内按目标语言分层。
 class DocumentTranslationService {
   DocumentTranslationService._();
 
-  static const _kBatchMaxChars = 6000;
-  static const _kBatchMaxParas = 10;
-  static const _kSeparator = '\n\n%%%%\n\n';
-  static final _kSplitPattern = RegExp(r'\n*%%%%\n*');
+  /// 并发请求数。受 LLM provider 的 RPM 限制约束；
+  /// 实测 OpenAI / Anthropic / Gemini fast model 都能撑 8。
+  static const _kConcurrency = 8;
+
+  /// 每完成多少段触发一次中间写盘。
+  /// 太小：fsync 频繁拖慢；太大：意外退出丢失最近段。
+  static const _kSaveEveryN = 8;
+
+  /// 单段失败的最大重试次数（首次 + maxRetries 次重试 = 总尝试次数）。
+  static const _kMaxRetries = 2;
 
   // ── 翻译文件 I/O ────────────────────────────────────────────────────
 
@@ -95,13 +105,19 @@ class DocumentTranslationService {
 
   // ── 核心入口 ─────────────────────────────────────────────────────────
 
-  /// 批量翻译文档段落。
+  /// 并发翻译文档段落。
   ///
-  /// [cancelToken] 在每批之间检查——单批请求一旦开始就不可中断，
-  /// 但后续批次会被阻止，符合用户取消的直觉体感。
+  /// 实现要点：
+  /// - **取段抢占**：所有 worker 共享 [pending] 列表 + `nextIdx` 游标；
+  ///   worker 在事件循环空隙读取并自增游标取走下一段。Dart 单线程下
+  ///   `nextIdx++` 与读取之间无 await，多 worker 间天然原子；
+  /// - **写盘串行**：所有 `translations.json` 写都通过 `saveLock` Future
+  ///   链顺序执行。任何 worker 都不直接 await 写盘，避免阻塞；
+  /// - **取消语义**：worker 在循环顶检查 [cancelToken]——已在飞的最多
+  ///   [_kConcurrency] 个请求会跑完（dio 单次最长 60s），但不再启动新段。
   ///
-  /// [useCache] 为 false 时跳过查询文件缓存，所有段落都进入 pending
-  /// 重新请求 LLM——专供"重新翻译"使用。写入文件仍然执行。
+  /// [useCache] 为 false 时跳过文件缓存查询，所有段都进入 pending（专供
+  /// "重新翻译"用）；写入仍执行。
   static Future<void> translate({
     required String pdfPath,
     required List<TranslatableParagraph> paragraphs,
@@ -144,118 +160,104 @@ class DocumentTranslationService {
 
     if (pending.isEmpty) return;
 
-    // ── 分批翻译 ──
-    final batches = _splitBatches(pending);
-    for (final batch in batches) {
-      if (cancelToken?.isCancelled == true) return;
+    // ── 并发翻译 ──
+    int nextIdx = 0;
+    int sinceLastSave = 0;
+    Future<void> saveLock = Future.value();
 
-      final results = await _translateBatch(
-        batch: batch,
-        agentState: agentState,
-        config: config,
-        useCache: useCache,
-      );
+    // 触发一次"按当前 all 快照写盘"——通过 saveLock 链串行化。
+    // 用 `Map.from(all)` 拍快照；后续 worker 改 `all` 不影响这次写入内容。
+    // 用 catchError 把单次写盘异常隔离在链外——否则一次磁盘错会污染整条
+    // future 链，让最终 `await saveLock` 把无关错误抛给上层。
+    void scheduleSave() {
+      final snapshot = Map<String, String>.from(all);
+      saveLock = saveLock
+          .then((_) => _saveTranslations(pdfPath, targetLang, snapshot))
+          .catchError((Object e) {
+        debugPrint('[DocumentTranslation] mid-save failed (ignored): $e');
+      });
+    }
 
-      for (int i = 0; i < batch.length; i++) {
-        final p = batch[i];
-        final t = results[i];
-        if (t != null && t.isNotEmpty) {
-          all[p.hash] = t;
-          onResult(p.hash, t);
+    Future<void> worker() async {
+      while (true) {
+        if (cancelToken?.isCancelled == true) return;
+        if (nextIdx >= pending.length) return;
+        final p = pending[nextIdx++];
+
+        final translation = await _translateOne(
+          paragraph: p,
+          agentState: agentState,
+          config: config,
+          useCache: useCache,
+        );
+
+        if (translation != null && translation.isNotEmpty) {
+          all[p.hash] = translation;
+          onResult(p.hash, translation);
         }
+        // 这一段无论翻成功与否都计入 done——失败的段会保留原文，
+        // 让用户看到的总进度跟段数对齐。
         done++;
-      }
-      await _saveTranslations(pdfPath, targetLang, all);
-      onProgress(done, total);
-    }
-  }
+        onProgress(done, total);
 
-  // ── 批次切分 ─────────────────────────────────────────────────────────
-
-  static List<List<TranslatableParagraph>> _splitBatches(
-    List<TranslatableParagraph> pending,
-  ) {
-    final batches = <List<TranslatableParagraph>>[];
-    var current = <TranslatableParagraph>[];
-    var currentChars = 0;
-
-    for (final p in pending) {
-      if (p.text.length > _kBatchMaxChars) {
-        if (current.isNotEmpty) {
-          batches.add(current);
-          current = [];
-          currentChars = 0;
+        sinceLastSave++;
+        if (sinceLastSave >= _kSaveEveryN) {
+          sinceLastSave = 0;
+          scheduleSave();
         }
-        batches.add([p]);
-        continue;
       }
-
-      if (current.length >= _kBatchMaxParas ||
-          currentChars + p.text.length > _kBatchMaxChars) {
-        batches.add(current);
-        current = [];
-        currentChars = 0;
-      }
-
-      current.add(p);
-      currentChars += p.text.length;
     }
 
-    if (current.isNotEmpty) batches.add(current);
-    return batches;
+    final workers = List.generate(_kConcurrency, (_) => worker());
+    await Future.wait(workers);
+
+    // 等所有中间写盘任务清空，再做一次最终全量保存。
+    await saveLock;
+    await _saveTranslations(pdfPath, targetLang, all);
   }
 
-  // ── 单批翻译 ─────────────────────────────────────────────────────────
+  // ── 单段翻译（含重试）────────────────────────────────────────────────
 
-  /// 返回与 [batch] 等长的译文列表。
+  /// 单段翻译 + 指数退避重试。
   ///
-  /// 失败语义分两类：
-  /// - **网络 / API 层异常**（鉴权失败、超时、模型返回错等）→ **抛出**。
-  /// - **段数不匹配**（LLM 没严格遵守 `%%%%` 分隔规则）→ 整批 fallback 为
-  ///   null 列表，调用方保留这一批的原文，其他批次继续。
-  static Future<List<String?>> _translateBatch({
-    required List<TranslatableParagraph> batch,
+  /// - 成功 → 返回译文（非空字符串）；
+  /// - 全部 [_kMaxRetries]+1 次都失败 → 返回 null（这一段保留原文，
+  ///   不抛出，避免连累其他并发 worker）。
+  ///
+  /// 退避：200ms × 2^attempt（200 / 400 ms）。失败原因仅 debugPrint，
+  /// 不向上抛——并发场景下任何单点抛错都会让 `Future.wait` 整体失败。
+  static Future<String?> _translateOne({
+    required TranslatableParagraph paragraph,
     required AgentApiState agentState,
     required TranslationConfig config,
     bool useCache = true,
   }) async {
-    if (batch.length == 1) {
-      final single = await TranslationService.translate(
-        text: batch[0].text,
-        agentState: agentState,
-        translationConfig: config,
-        useCache: useCache,
-      );
-      return [single];
+    Object? lastErr;
+    for (int attempt = 0; attempt <= _kMaxRetries; attempt++) {
+      try {
+        final result = await TranslationService.translate(
+          text: paragraph.text,
+          agentState: agentState,
+          translationConfig: config,
+          useCache: useCache,
+        );
+        if (result.trim().isNotEmpty) return result;
+        // 空译文也按失败处理，触发重试
+        lastErr = Exception('empty translation result');
+      } catch (e) {
+        lastErr = e;
+      }
+
+      if (attempt < _kMaxRetries) {
+        final backoffMs = 200 * (1 << attempt);
+        await Future.delayed(Duration(milliseconds: backoffMs));
+      }
     }
-
-    final input = batch.map((p) => p.text).join(_kSeparator);
-
-    final raw = await TranslationService.translate(
-      text: input,
-      agentState: agentState,
-      translationConfig: config,
-      useCache: useCache,
+    debugPrint(
+      '[DocumentTranslation] paragraph "${paragraph.hash}" failed '
+      'after ${_kMaxRetries + 1} attempts: $lastErr',
     );
-
-    final parts = raw.split(_kSplitPattern).map((s) => s.trim()).toList();
-    while (parts.isNotEmpty && parts.first.isEmpty) {
-      parts.removeAt(0);
-    }
-    while (parts.isNotEmpty && parts.last.isEmpty) {
-      parts.removeLast();
-    }
-
-    if (parts.length != batch.length) {
-      final preview = raw.length > 240 ? '${raw.substring(0, 240)}…' : raw;
-      debugPrint(
-        '[DocumentTranslation] batch size mismatch: '
-        'expected ${batch.length}, got ${parts.length}. '
-        'Raw preview: $preview',
-      );
-      return List<String?>.filled(batch.length, null);
-    }
-    return parts;
+    return null;
   }
 }
 

@@ -64,60 +64,43 @@ enum DefaultReadingMode {
 }
 
 /// 阅读器字体族
+///
+/// 阅读器只渲染长文，不展示代码段，所以仅保留衬线 / 无衬线两套；
+/// 之前的 `mono` 已删除。
+///
+/// 历史遗留：旧版本里 `mono` 占据 `.index = 2`。删除后 `_load()` 用
+/// `fontIndex.clamp(0, ReaderFont.values.length - 1)` 把老用户的 2 自动
+/// 兜底回 sans（index 1），无需迁移脚本。
 enum ReaderFont {
   serif,
-  sans,
-  mono;
+  sans;
 
   String get label => switch (this) {
         ReaderFont.serif => 'Serif',
         ReaderFont.sans => 'Sans',
-        ReaderFont.mono => 'Mono',
       };
 
   /// 映射到实际字体族名（首选字体）。
   ///
-  /// 这三个首选字体（思源宋体 / 思源黑体 / Ubuntu Mono）在 Windows/macOS
-  /// 默认**不预装**——未安装时会按下面的 [fontFamilyFallback] 退化到平台
-  /// 原生 CJK / 等宽字体。如需保证跨平台一致渲染，应把字体文件放进
-  /// `assets/fonts/` 并在 pubspec 注册。
+  /// `serif` 用 Times New Roman（Windows/macOS 都预装）；`sans` 留 null
+  /// 让平台用系统默认无衬线（Windows = Segoe UI、macOS = San Francisco、
+  /// Android = Roboto、iOS = San Francisco）。中文回退依赖
+  /// [fontFamilyFallback]，以及更上层 CSS（webview_reader_html）的回退链。
   String? get fontFamily => switch (this) {
-        ReaderFont.serif => 'Source Han Serif',
-        ReaderFont.sans => 'Source Han Sans',
-        ReaderFont.mono => 'Ubuntu Mono',
+        ReaderFont.serif => 'Times New Roman',
+        ReaderFont.sans => null,
       };
 
-  /// 跨平台备选字体列表。
-  ///
-  /// Source Han Serif/Sans 在不同发行版下命名不同（Adobe `Source Han ...`、
-  /// Google `Noto ... CJK SC`、`-SC` 子集等），全列以提高命中率。
+  /// 跨平台备选字体列表（CJK 兜底）。
   List<String>? get fontFamilyFallback => switch (this) {
         ReaderFont.serif => const [
-            'Source Han Serif SC',
-            'Noto Serif CJK SC',
             'Songti SC',
             'STSong',
             'SimSun',
-            'Times New Roman',
+            'Noto Serif CJK SC',
             'Noto Serif',
           ],
-        ReaderFont.sans => const [
-            'Source Han Sans SC',
-            'Noto Sans CJK SC',
-            'PingFang SC',
-            'Heiti SC',
-            'Microsoft YaHei',
-            'Helvetica',
-            'Arial',
-          ],
-        ReaderFont.mono => const [
-            'UbuntuMono Nerd Font',
-            'Cascadia Mono',
-            'Consolas',
-            'Menlo',
-            'Courier New',
-            'Noto Sans Mono',
-          ],
+        ReaderFont.sans => null,
       };
 }
 
@@ -187,7 +170,8 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     return ReaderSettingsState(
       theme: ReaderTheme
           .values[themeIndex.clamp(0, ReaderTheme.values.length - 1)],
-      font: ReaderFont.values[fontIndex.clamp(0, 2)],
+      font: ReaderFont
+          .values[fontIndex.clamp(0, ReaderFont.values.length - 1)],
       fontSize: fontSize.clamp(
         ReaderSettingsState.minFontSize,
         ReaderSettingsState.maxFontSize,

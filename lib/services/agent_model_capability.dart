@@ -113,4 +113,41 @@ class AgentModelCapability {
       caseSensitive: false,
     ).hasMatch(id);
   }
+
+  // ─── Thinking / reasoning 版本识别 ───────────────────────────────────
+  // 这些方法服务于请求构造层把统一的 ThinkingLevel 翻译成各家具体字段。
+  // 集中维护识别规则——后续模型升级（Gemini 3.5 / Claude Opus 5）只改这里。
+
+  /// Gemini 3 系列（用 `thinkingLevel` 字段，3.1 Pro 不支持 minimal）。
+  static bool isGemini3(String modelId) {
+    final id = modelId.toLowerCase();
+    return RegExp(r'(?:^|[/-])gemini-3(?:[.-]|$)').hasMatch(id);
+  }
+
+  /// Gemini 2.5 系列（用 `thinkingBudget` 数字，由 ThinkingLevel 映射）。
+  static bool isGemini25(String modelId) {
+    final id = modelId.toLowerCase();
+    return RegExp(r'(?:^|[/-])gemini-2\.5(?:[.-]|$)').hasMatch(id);
+  }
+
+  /// Gemini 2.5 Pro：**不可关闭思考**，最小 budget=128，上限 32768。
+  /// Flash / Flash Lite / Robotics-ER / Live Audio 上限 24576 且可设 0 关闭。
+  static bool isGemini25Pro(String modelId) {
+    final id = modelId.toLowerCase();
+    return RegExp(r'(?:^|[/-])gemini-2\.5-pro(?:[.-]|$)').hasMatch(id);
+  }
+
+  /// Gemini 2.5 系列的 thinkingBudget 上限（xhigh 档用）。
+  static int gemini25MaxBudget(String modelId) =>
+      isGemini25Pro(modelId) ? 32768 : 24576;
+
+  /// Claude 是否走 adaptive thinking 模型（Opus 4.7+）。
+  /// 其余 Claude 模型用旧 `thinking.type:disabled/enabled` + budget。
+  ///
+  /// 识别策略：opus-4-7+ 全部归为 adaptive；后续 Sonnet/Haiku 4.7 / Opus 5 等
+  /// 上来后在此处追加正则。Anthropic 的 model id 形如 `claude-opus-4-7`。
+  static bool isClaudeAdaptive(String modelId) {
+    final id = modelId.toLowerCase();
+    return RegExp(r'claude-opus-4-7(?:\b|-)').hasMatch(id);
+  }
 }

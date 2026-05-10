@@ -18,6 +18,20 @@ OverlayEntry showReaderContextMenu({
   VoidCallback? onDismiss,
 }) {
   late OverlayEntry entry;
+  // **幂等 close**：6 个 action callback + 全屏 tap-to-dismiss + 调用方
+  // (`view.dart` 的 `_dismissSelectionToolbar`) 都会调 entry.remove()。
+  // 任意两条路径在同一帧/相邻事件中触发——比如双击、按钮 onTap 与背景
+  // GestureDetector 同帧命中、dispose 中 `_saveNoteIfDirty` 引发外部
+  // setState 触发 listener 链——都会触发"OverlayEntry should be removed
+  // only once" assertion。这里用 closure-local bool 守门，多次调用静默忽略。
+  bool removed = false;
+  void close() {
+    if (removed) return;
+    removed = true;
+    entry.remove();
+    onDismiss?.call();
+  }
+
   entry = OverlayEntry(
     builder: (ctx) {
       return _ContextMenuOverlay(
@@ -25,32 +39,25 @@ OverlayEntry showReaderContextMenu({
         existingHighlight: existingHighlight,
         onHighlight: (color) {
           onHighlight(color);
-          entry.remove();
-          onDismiss?.call();
+          close();
         },
         onCopy: () {
           onCopy();
-          entry.remove();
-          onDismiss?.call();
+          close();
         },
         onTranslate: () {
           onTranslate();
-          entry.remove();
-          onDismiss?.call();
+          close();
         },
         onCreateForNote: onCreateForNote,
         onNoteChanged: onNoteChanged,
         onDelete: onDelete != null
             ? () {
                 onDelete();
-                entry.remove();
-                onDismiss?.call();
+                close();
               }
             : null,
-        onClose: () {
-          entry.remove();
-          onDismiss?.call();
-        },
+        onClose: close,
       );
     },
   );

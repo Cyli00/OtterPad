@@ -1,21 +1,29 @@
 import 'dart:ui' show Color;
 
 import 'package:markdown/markdown.dart' as md;
-import 'package:path/path.dart' as p;
 
 import '../../../providers/reader_settings_provider.dart';
+import '../../../services/reader_localhost_server.dart';
 import '../../../services/translation_style.dart';
 import 'reader_background.dart';
 
 // ─── Public API ───
 
+/// 构建完整 HTML 文档。
+///
+/// [baseHref] 是 docDir 相对 server root 的子路径（如 `/docs/abc123/`），
+/// 注入 `<base>` 标签后浏览器解析所有相对 URL 时都以此为基准——HTML 文件
+/// 实际放在 `<dataDir>/_readers/<hash>.html` 仍能正确加载图片。
+///
+/// KaTeX 走本地打包，由 [ReaderLocalhostServer] 的 `/_assets/*` 路由从
+/// `assets/katex/` rootBundle 服务，零网络依赖、彻底离线可用。
 String buildReaderHtml({
   required String markdownContent,
   required ReaderPalette palette,
   required ReaderSettingsState settings,
-  required String documentDir,
+  required String baseHref,
 }) {
-  final htmlBody = _markdownToHtml(markdownContent, documentDir);
+  final htmlBody = _markdownToHtml(markdownContent);
   final css = _buildCss(palette, settings);
   final js = _buildJs();
 
@@ -27,16 +35,14 @@ String buildReaderHtml({
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
-      crossorigin="anonymous">
+<base href="$baseHref">
+<link rel="stylesheet" href="/_assets/katex/katex.min.css">
 <style>$css</style>
 </head>
 <body>
 <article id="content">$htmlBody</article>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
-        crossorigin="anonymous"></script>
+<script src="/_assets/katex/katex.min.js"></script>
+<script src="/_assets/katex/contrib/auto-render.min.js"></script>
 <script>$js</script>
 </body>
 </html>''';
@@ -57,7 +63,7 @@ String buildThemeCssVars(ReaderPalette palette, ReaderSettingsState settings) {
 
 // ─── Markdown → HTML ───
 
-String _markdownToHtml(String markdown, String documentDir) {
+String _markdownToHtml(String markdown) {
   var html = md.markdownToHtml(
     markdown,
     extensionSet: md.ExtensionSet.gitHubWeb,
@@ -70,7 +76,7 @@ String _markdownToHtml(String markdown, String documentDir) {
     ],
   );
 
-  html = _resolveImagePaths(html, documentDir);
+  html = _injectImageAttrs(html);
   html = _convertFigCaptions(html);
   return html;
 }
@@ -156,21 +162,35 @@ class _LatexBlockPreserve extends md.BlockSyntax {
   }
 }
 
-String _resolveImagePaths(String html, String documentDir) {
+/// 给 `<img>` 注入 `loading="lazy"` + `decoding="async"` 并把 `file://`
+/// 绝对 URL 重写为 server URL：
+/// - lazy：屏外图片**不发起下载**，配合 CSS 的 `content-visibility: auto`
+///   实现真正的延迟加载（CSS 那个只跳过 layout/paint，不阻止下载）；
+/// - async：图片解码不阻塞主线程，避免大图加载瞬间冻屏；
+/// - **file:// 转换**：figure 提取管线写入 markdown 的 src 是绝对 file:// URL
+///   （`doc_extract_service.dart` 里 `Uri.file(fig.imagePath)`），在 localhost
+///   HTTP origin 下浏览器拒绝跨协议加载。把 `file:///<dataDir>/docs/<hash>/...`
+///   转成 server URL `http://localhost:PORT/docs/<hash>/...` 后同 origin 加载
+///   正常。相对路径与 http(s)/data URI 保留原样。
+String _injectImageAttrs(String html) {
+  const lazyAttrs = 'loading="lazy" decoding="async" ';
   return html.replaceAllMapped(
     RegExp(r'<img\s+([^>]*?)src="([^"]*?)"', caseSensitive: false),
     (match) {
       final attrs = match[1]!;
       final src = match[2]!;
-      if (src.startsWith('http://') ||
-          src.startsWith('https://') ||
-          src.startsWith('file://') ||
-          src.startsWith('data:')) {
-        return match[0]!;
+      String resolved = src;
+      if (src.startsWith('file://')) {
+        try {
+          final filePath = Uri.parse(src).toFilePath();
+          final mapped =
+              ReaderLocalhostServer.instance.urlForPath(filePath);
+          if (mapped != null) resolved = mapped;
+        } catch (_) {
+          // Uri.parse / toFilePath 失败 → 保留原 src，浏览器按原状处理
+        }
       }
-      final abs = p.join(documentDir, src);
-      final uri = Uri.file(abs).toString();
-      return '<img ${attrs}src="$uri"';
+      return '<img $lazyAttrs${attrs}src="$resolved"';
     },
   );
 }
@@ -309,6 +329,12 @@ figcaption {
 
 .translated { color: var(--link); }
 
+/* KaTeX 默认行内公式 1.21em，在 OtterPad 长文献正文里偏大——撑大行高、
+   破坏段落节奏。压回 1.0em 让公式与正文同字号；display 数学维持稍大
+   1.1em 强调块级。如果觉得仍偏大可以再降到 0.95em。 */
+.katex { font-size: 1.0em; }
+.katex-display > .katex { font-size: 1.1em; }
+
 .math-display {
   text-align: center;
   overflow-x: auto;
@@ -351,24 +377,19 @@ String _cssColor(Color c) {
   return 'rgba($r,$g,$b,${a.toStringAsFixed(2)})';
 }
 
-/// 阅读器三套字体族的 CSS 表达。
+/// 阅读器两套字体族的 CSS 表达（与 [ReaderFont.fontFamily] 对齐）。
 ///
-/// 首选 思源宋体 / 思源黑体 / Ubuntu Mono（与 [ReaderFont.fontFamily] 对齐）。
-/// 这些字体在 Windows/macOS 默认不预装，通过 Adobe `Source Han ...`、
-/// Google `Noto ... CJK SC` 等发行别名和平台原生 CJK 字体兜底，
-/// 未安装首选字体时仍能正确渲染中文。
+/// `serif` 首选 Times New Roman；`sans` 完全交给浏览器/系统默认
+/// （`system-ui`、`-apple-system`、`Segoe UI`），CJK 通过列表里
+/// `Noto Serif CJK SC` / `PingFang SC` / `Microsoft YaHei` 等兜底。
 String _cssFontFamily(ReaderFont font) {
   return switch (font) {
     ReaderFont.serif =>
-      "'Source Han Serif', 'Source Han Serif SC', 'Noto Serif CJK SC', "
-          "'Songti SC', STSong, SimSun, Georgia, 'Times New Roman', serif",
+      "'Times New Roman', 'Songti SC', STSong, SimSun, "
+          "'Noto Serif CJK SC', Georgia, 'Noto Serif', serif",
     ReaderFont.sans =>
-      "'Source Han Sans', 'Source Han Sans SC', 'Noto Sans CJK SC', "
-          "'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, "
-          "'Segoe UI', sans-serif",
-    ReaderFont.mono =>
-      "'Ubuntu Mono', 'UbuntuMono Nerd Font', 'Cascadia Mono', Consolas, "
-          "Menlo, 'Courier New', 'Noto Sans Mono', monospace",
+      "system-ui, -apple-system, 'Segoe UI', 'PingFang SC', "
+          "'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
   };
 }
 
@@ -397,6 +418,16 @@ window.addEventListener('load', function() {
   }
   // KaTeX 渲染完后重绘已有高亮（如果有的话），再通知 Flutter 可以恢复高亮
   if (window._overlayer) window._overlayer.redraw();
+
+  // **关键**：触发一次 scroll 事件让浏览器重新评估所有 loading="lazy"
+  // 图片的可见性。HTML 解析时 KaTeX 还没渲染，浏览器评估视口时 layout
+  // 还很短（公式区都是 raw `$x$` 字面量），把首屏外图片误标记为屏外
+  // 永不加载；KaTeX 渲染完后 layout 大幅变长，但浏览器**不会自动**
+  // 重新评估 lazy 状态——必须人工触发 scroll 事件让 IntersectionObserver
+  // 重新跑一遍。否则用户看到的现象是"首次打开图片不显示，切换字号/字体
+  // 触发 layout 变化才出现"。
+  window.dispatchEvent(new Event('scroll'));
+
   if (window.flutter_inappwebview) {
     window.flutter_inappwebview.callHandler('onContentReady');
   }
@@ -507,6 +538,17 @@ class Overlayer {
     return true;
   }
 
+  // 批量从文本添加多个高亮——共享一次 TreeWalker 扫描 + fullText 索引，
+  // 避免每条 highlight 都从头遍历整个 DOM。N=50 高亮在长文献上 N 倍提速。
+  addByTextBatch(items) {
+    if (!items || !items.length) return;
+    const idx = this._buildTextIndex();
+    for (const item of items) {
+      const range = this._findTextRangeWithIndex(idx, item.text);
+      if (range) this.add(item.id, range, item.color);
+    }
+  }
+
   remove(id) {
     const obj = this.map.get(id);
     if (!obj) return;
@@ -568,10 +610,13 @@ class Overlayer {
   }
 
   _findTextRange(searchText) {
-    const content = this.container;
-    const normalized = searchText.replace(/\s+/g, ' ').trim();
-    if (!normalized) return null;
+    return this._findTextRangeWithIndex(this._buildTextIndex(), searchText);
+  }
 
+  // 一次性扫描 DOM，构建 {nodes, fullText, normFull, normToOrig} 索引。
+  // 重型操作 (~O(总文本字符数))；批量定位时调一次后多次复用。
+  _buildTextIndex() {
+    const content = this.container;
     const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => {
         let el = node.parentElement;
@@ -582,20 +627,15 @@ class Overlayer {
         return NodeFilter.FILTER_ACCEPT;
       }
     });
-
     const nodes = [];
     let fullText = '';
     while (walker.nextNode()) {
       nodes.push({ node: walker.currentNode, start: fullText.length });
       fullText += walker.currentNode.textContent;
     }
-
-    const normFull = fullText.replace(/\s+/g, ' ');
-    const idx = normFull.indexOf(normalized);
-    if (idx < 0) return null;
-
-    let origIdx = 0;
+    // normalized → orig 映射：把多空白合并后的 normFull 反查回 fullText 偏移
     const normToOrig = [];
+    let origIdx = 0;
     while (origIdx < fullText.length) {
       if (/\s/.test(fullText[origIdx])) {
         while (origIdx < fullText.length && /\s/.test(fullText[origIdx])) origIdx++;
@@ -605,14 +645,25 @@ class Overlayer {
         origIdx++;
       }
     }
+    const normFull = fullText.replace(/\s+/g, ' ');
+    return { nodes, fullText, normFull, normToOrig };
+  }
 
-    const origStart = normToOrig[idx] || 0;
-    const origEnd = (normToOrig[idx + normalized.length - 1] || origStart) + 1;
+  // 用预建索引定位 searchText 对应的 Range——轻量操作 (indexOf + 偏移映射)。
+  _findTextRangeWithIndex(idx, searchText) {
+    const normalized = searchText.replace(/\s+/g, ' ').trim();
+    if (!normalized) return null;
+    const findIdx = idx.normFull.indexOf(normalized);
+    if (findIdx < 0) return null;
+
+    const origStart = idx.normToOrig[findIdx] || 0;
+    const origEnd =
+        (idx.normToOrig[findIdx + normalized.length - 1] || origStart) + 1;
 
     let startNode = null, startOffset = 0;
     let endNode = null, endOffset = 0;
 
-    for (const entry of nodes) {
+    for (const entry of idx.nodes) {
       const entryEnd = entry.start + entry.node.textContent.length;
       if (!startNode && origStart < entryEnd) {
         startNode = entry.node;
@@ -642,6 +693,11 @@ let _suppressNextClear = false;
 let _isScrolling = false;
 let _scrollIdleTimer = null;
 
+// 上次上报给 Flutter 的 selection 签名 (text|left|top|right|bottom)，
+// 用于跨"终止信号"去重——防止"鼠标抬起 + 键盘 keyup + 后续微调"
+// 触发的多次 emit 都让 Flutter 端 dismiss/insert 工具栏导致闪烁。
+let _lastEmittedSig = '';
+
 function _handleSelection() {
   clearTimeout(_selectionTimeout);
   _selectionTimeout = setTimeout(() => {
@@ -649,6 +705,7 @@ function _handleSelection() {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) {
       _currentSelectionRange = null;
+      _lastEmittedSig = '';
       if (_suppressNextClear) {
         _suppressNextClear = false;
         return;
@@ -658,9 +715,18 @@ function _handleSelection() {
       return;
     }
     const text = sel.toString();
-    _currentSelectionRange = sel.getRangeAt(0).cloneRange();
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     const vw = window.innerWidth, vh = window.innerHeight;
+
+    // 签名相同 → 同一选区被多次终止信号触发，已经显示过工具栏，跳过 IPC
+    // 节省 Flutter 端 OverlayEntry remove/insert 的开销与视觉闪烁。
+    const sig = text + '|' +
+        rect.left.toFixed(1) + '|' + rect.top.toFixed(1) + '|' +
+        rect.right.toFixed(1) + '|' + rect.bottom.toFixed(1);
+    if (sig === _lastEmittedSig) return;
+    _lastEmittedSig = sig;
+
+    _currentSelectionRange = sel.getRangeAt(0).cloneRange();
     if (window.flutter_inappwebview) {
       window.flutter_inappwebview.callHandler('onSelectionEnd', {
         text: text,
@@ -673,15 +739,30 @@ function _handleSelection() {
   }, 200);
 }
 
+// **只听"选择终止"事件**，不再听 selectionchange——后者拖选过程中
+// 每像素都 fire，与 pointerup 终止信号双触发是闪烁根因。
+// - pointerup：鼠标/触控笔抬起，桌面端拖选的标准终止信号
+// - keyup：键盘选择（Shift+Arrow / Ctrl+A 等）的终止信号，覆盖原来
+//   依赖 selectionchange 的键盘场景
+// 触摸端的选择仍走系统原生 UI，OtterPad 不拦截（disableContextMenu=true
+// 仅拦右键菜单，系统选择 handle 不受影响）。
 document.addEventListener('pointerup', (e) => {
   if (e.pointerType !== 'touch') _handleSelection();
 });
-document.addEventListener('selectionchange', () => {
-  if (!_isScrolling) _handleSelection();
+document.addEventListener('keyup', (e) => {
+  // 仅在"可能改变选区的键"上响应，避免输入框/快捷键噪音
+  if (e.shiftKey || e.key === 'Shift' ||
+      e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
+      e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+      e.key === 'Home' || e.key === 'End' ||
+      (e.ctrlKey && (e.key === 'a' || e.key === 'A'))) {
+    _handleSelection();
+  }
 });
 
-// ─── 滚动方向检测（passive + rAF，不阻塞滚动线程）───
+// ─── 滚动方向检测（passive + rAF + 方向去重，不阻塞滚动线程）───
 let _lastScrollY = 0;
+let _lastScrollDir = '';
 let _scrollRAF = null;
 window.addEventListener('scroll', () => {
   // 标记滚动状态，抑制 selectionchange 噪音
@@ -693,11 +774,18 @@ window.addEventListener('scroll', () => {
   _scrollRAF = requestAnimationFrame(() => {
     _scrollRAF = null;
     const y = window.scrollY;
-    const dir = y > _lastScrollY ? 'down' : 'up';
-    if (Math.abs(y - _lastScrollY) > 8 && window.flutter_inappwebview) {
+    const delta = y - _lastScrollY;
+    if (Math.abs(delta) <= 8) return;
+    const dir = delta > 0 ? 'down' : 'up';
+    _lastScrollY = y;
+    // 方向真实变化才上报——同向连续滚动只上报第一次。
+    // Flutter 端 AnimatedSlide 是状态机（down=隐藏/up=显示），同向重复事件
+    // 只浪费 IPC + 触发无意义 setState。
+    if (dir === _lastScrollDir) return;
+    _lastScrollDir = dir;
+    if (window.flutter_inappwebview) {
       window.flutter_inappwebview.callHandler('onScrollDirection', { direction: dir });
     }
-    _lastScrollY = y;
   });
 }, { passive: true });
 
@@ -714,6 +802,20 @@ document.addEventListener('click', (e) => {
 window.addHighlight = function(id, text, color) {
   if (!window._overlayer) return false;
   return window._overlayer.addByText(id, text, color);
+};
+
+// 批量恢复高亮——payload 是 base64(utf8(JSON([{id, text, color}, ...])))。
+// base64 是 [A-Za-z0-9+/=] 子集，能安全嵌入 JS 单引号字符串字面量，
+// 不需要逐字符 escape highlight.text 中的换行/反斜杠/引号。
+window.addHighlightsBatch = function(b64Payload) {
+  if (!window._overlayer) return;
+  try {
+    const json = decodeURIComponent(escape(atob(b64Payload)));
+    const items = JSON.parse(json);
+    window._overlayer.addByTextBatch(items);
+  } catch(e) {
+    console.error('addHighlightsBatch failed', e);
+  }
 };
 
 window.addHighlightFromSelection = function(id, color) {

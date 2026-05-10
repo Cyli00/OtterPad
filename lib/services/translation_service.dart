@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../core/storage/storage.dart';
 import '../providers/api_provider.dart';
 import '../providers/translation_config_provider.dart';
+import 'agent_model_capability.dart';
 
 /// 翻译缓存条目
 class _CacheEntry {
@@ -204,13 +205,13 @@ class TranslationService {
     switch (provider) {
       case AgentApiProvider.openai:
         yield* _streamOpenAI(dio, '$url${provider.chatPath}', apiKey,
-            modelId, systemPrompt, userPrompt, temperature);
+            modelId, systemPrompt, userPrompt, temperature, modelParams);
       case AgentApiProvider.anthropic:
         yield* _streamAnthropic(dio, '$url${provider.chatPath}', apiKey,
-            modelId, systemPrompt, userPrompt, temperature);
+            modelId, systemPrompt, userPrompt, temperature, modelParams);
       case AgentApiProvider.gemini:
         yield* _streamGemini(dio, '$url${provider.chatPath}', apiKey,
-            modelId, systemPrompt, userPrompt, temperature);
+            modelId, systemPrompt, userPrompt, temperature, modelParams);
       case AgentApiProvider.openAICompatible:
         yield* _streamOpenAICompatible(dio, '$url${provider.chatPath}', apiKey,
             modelId, systemPrompt, userPrompt, temperature, modelParams);
@@ -228,6 +229,7 @@ class TranslationService {
     String systemPrompt,
     String userPrompt,
     double? temperature,
+    AgentModelParams modelParams,
   ) async* {
     final resp = await dio.post<ResponseBody>(
       url,
@@ -237,6 +239,7 @@ class TranslationService {
         'input': userPrompt,
         'stream': true,
         if (temperature != null) 'temperature': temperature,
+        ..._buildThinkingForOpenAI(modelParams.thinkingLevel),
       },
       options: Options(
         headers: {
@@ -281,6 +284,7 @@ class TranslationService {
     String systemPrompt,
     String userPrompt,
     double? temperature,
+    AgentModelParams modelParams,
   ) async* {
     final resp = await dio.post<ResponseBody>(
       url,
@@ -293,6 +297,7 @@ class TranslationService {
         ],
         'stream': true,
         if (temperature != null) 'temperature': temperature,
+        ..._buildThinkingForAnthropic(modelId, modelParams.thinkingLevel),
       },
       options: Options(
         headers: {
@@ -330,7 +335,10 @@ class TranslationService {
     String systemPrompt,
     String userPrompt,
     double? temperature,
+    AgentModelParams modelParams,
   ) async* {
+    final thinkingCfg =
+        _buildThinkingForGemini(modelId, modelParams.thinkingLevel);
     final resp = await dio.post<ResponseBody>(
       '$baseChatUrl/models/$modelId:streamGenerateContent',
       queryParameters: {'key': apiKey, 'alt': 'sse'},
@@ -349,6 +357,7 @@ class TranslationService {
         ],
         'generationConfig': {
           if (temperature != null) 'temperature': temperature,
+          if (thinkingCfg.isNotEmpty) 'thinkingConfig': thinkingCfg,
         },
       },
       options: Options(
@@ -466,16 +475,153 @@ class TranslationService {
         'presence_penalty': modelParams.presencePenalty,
     };
 
-    if (modelParams.thinkingMode != null) {
-      body['thinking'] = {
-        'type': modelParams.thinkingMode,
-        if (modelParams.thinkingMode == 'enabled' &&
-            modelParams.reasoningEffort != null)
-          'reasoning_effort': modelParams.reasoningEffort,
+    body.addAll(_buildThinkingForOpenAICompat(modelParams.thinkingLevel));
+    return body;
+  }
+
+  // ─── Thinking payload 构造（按 provider+capability 把统一 ThinkingLevel 翻译） ───
+  //
+  // 设计：每个函数返回**要直接 merge 进对应 body 的 fragment**。
+  // - OpenAI / Anthropic / OpenAI Compat 返回顶层 fragment，调用方 `body.addAll(...)`。
+  // - Gemini 返回 `thinkingConfig` 内层 fragment，调用方放入 `generationConfig.thinkingConfig`。
+  //
+  // `level == null` 时统一返回 `{}`——保留服务商默认（不发送任何 thinking 字段）。
+
+  /// OpenAI Responses API：`reasoning.effort` ∈ none/low/medium/high/xhigh。
+  static Map<String, dynamic> _buildThinkingForOpenAI(ThinkingLevel? level) {
+    if (level == null) return const {};
+    final effort = switch (level) {
+      ThinkingLevel.off => 'none',
+      ThinkingLevel.low => 'low',
+      ThinkingLevel.medium => 'medium',
+      ThinkingLevel.high => 'high',
+      ThinkingLevel.xhigh => 'xhigh',
+    };
+    return {
+      'reasoning': {'effort': effort},
+    };
+  }
+
+  /// Anthropic Messages：分 adaptive 模型（Opus 4.7+）vs 旧模型两条路径。
+  ///
+  /// **Adaptive**：`thinking.type='adaptive'` + `output_config.effort` 控制力度。
+  /// medium 不带 `output_config`——按 Anthropic 推荐，让 adaptive 自决。
+  /// off 映射到 `effort='low'`（adaptive 不能真正关闭）。
+  ///
+  /// **旧模型**：`thinking.type='disabled'|'enabled'` + `budget_tokens` 数字。
+  static Map<String, dynamic> _buildThinkingForAnthropic(
+    String modelId,
+    ThinkingLevel? level,
+  ) {
+    if (level == null) return const {};
+
+    if (AgentModelCapability.isClaudeAdaptive(modelId)) {
+      final effort = switch (level) {
+        ThinkingLevel.off => 'low',
+        ThinkingLevel.low => 'low',
+        ThinkingLevel.medium => null, // 不带 effort，adaptive 自决
+        ThinkingLevel.high => 'high',
+        ThinkingLevel.xhigh => 'max',
+      };
+      return {
+        'thinking': {'type': 'adaptive'},
+        if (effort != null)
+          'output_config': {'effort': effort},
       };
     }
 
-    return body;
+    if (level == ThinkingLevel.off) {
+      return {
+        'thinking': {'type': 'disabled'},
+      };
+    }
+    final budget = switch (level) {
+      ThinkingLevel.low => 1024,
+      ThinkingLevel.medium => 4096,
+      ThinkingLevel.high => 16384,
+      ThinkingLevel.xhigh => 32000,
+      ThinkingLevel.off => 0, // unreachable
+    };
+    return {
+      'thinking': {'type': 'enabled', 'budget_tokens': budget},
+    };
+  }
+
+  /// Gemini：返回放在 `generationConfig.thinkingConfig` 下的 fragment。
+  ///
+  /// **3 系列**：用 `thinkingLevel: minimal/low/medium/high`，xhigh 也 fallback
+  /// 到 high（3 系列上限即 high）。3.x Pro 不支持 minimal，off 改用 'low'。
+  ///
+  /// **2.5 系列**：用 `thinkingBudget` 数字。映射 [off=0, low=512, medium=4096,
+  /// high=16384, xhigh=模型上限]；2.5 Pro 不能完全关，off clamp 到 128。
+  static Map<String, dynamic> _buildThinkingForGemini(
+    String modelId,
+    ThinkingLevel? level,
+  ) {
+    if (level == null) return const {};
+
+    if (AgentModelCapability.isGemini3(modelId)) {
+      final isPro = modelId.toLowerCase().contains('pro');
+      final lv = switch (level) {
+        ThinkingLevel.off => isPro ? 'low' : 'minimal',
+        ThinkingLevel.low => 'low',
+        ThinkingLevel.medium => 'medium',
+        ThinkingLevel.high || ThinkingLevel.xhigh => 'high',
+      };
+      return {'thinkingLevel': lv};
+    }
+
+    if (AgentModelCapability.isGemini25(modelId)) {
+      final maxB = AgentModelCapability.gemini25MaxBudget(modelId);
+      final isPro = AgentModelCapability.isGemini25Pro(modelId);
+      final budget = switch (level) {
+        ThinkingLevel.off => isPro ? 128 : 0,
+        ThinkingLevel.low => 512,
+        ThinkingLevel.medium => 4096,
+        ThinkingLevel.high => 16384,
+        ThinkingLevel.xhigh => maxB,
+      };
+      return {'thinkingBudget': budget};
+    }
+
+    // 既非 2.5 也非 3——可能是更老的 Gemini（1.5 Pro 等），不发 thinking 字段
+    return const {};
+  }
+
+  /// OpenAI Compatible (DeepSeek 等)：`thinking.type` + 顶层 `reasoning_effort`。
+  ///
+  /// **Schema 来源**：DeepSeek 官方文档（OpenAI Format 路径）。两个字段独立：
+  /// - `{thinking:{type:enabled/disabled}}` 控制是否思考（默认 enabled）
+  /// - 顶层 `reasoning_effort` 控制思考力度（low/medium/high/xhigh）
+  ///
+  /// 5 档 → `reasoning_effort` 直接传原字符串，**不在 client 提前归并**：
+  /// - off → 仅 `{thinking:{type:disabled}}`，不发 reasoning_effort
+  /// - low / medium / high / xhigh → `{thinking:{type:enabled}}` + 原值
+  ///
+  /// 字符串选择理由：xhigh 既被 OpenAI Reasoning API 识别，也被 DeepSeek 接受
+  /// （服务端自动映射到 max）；low/medium 在 DeepSeek 上会被归类到 high，但
+  /// 让 server 端做归类，client 保留用户原意。其他 OpenAI 兼容服务（OpenRouter
+  /// /Together/Groq 等）若不识别某档会忽略，行为退化为 thinking-on 默认深度。
+  static Map<String, dynamic> _buildThinkingForOpenAICompat(
+    ThinkingLevel? level,
+  ) {
+    if (level == null) return const {};
+    if (level == ThinkingLevel.off) {
+      return {
+        'thinking': {'type': 'disabled'},
+      };
+    }
+    final effort = switch (level) {
+      ThinkingLevel.low => 'low',
+      ThinkingLevel.medium => 'medium',
+      ThinkingLevel.high => 'high',
+      ThinkingLevel.xhigh => 'xhigh',
+      ThinkingLevel.off => 'low', // unreachable
+    };
+    return {
+      'thinking': {'type': 'enabled'},
+      'reasoning_effort': effort,
+    };
   }
 
   // ── SSE 通用解析 ──────────────────────────────────────────────────────────
@@ -548,6 +694,7 @@ class TranslationService {
               'instructions': systemPrompt,
               'input': userPrompt,
               if (temperature != null) 'temperature': temperature,
+              ..._buildThinkingForOpenAI(modelParams.thinkingLevel),
             },
             options: Options(headers: {
               'Authorization': 'Bearer $apiKey',
@@ -567,6 +714,7 @@ class TranslationService {
                 {'role': 'user', 'content': userPrompt},
               ],
               if (temperature != null) 'temperature': temperature,
+              ..._buildThinkingForAnthropic(modelId, modelParams.thinkingLevel),
             },
             options: Options(headers: {
               'x-api-key': apiKey,
@@ -577,6 +725,8 @@ class TranslationService {
           return _extractAnthropic(resp.data!);
 
         case AgentApiProvider.gemini:
+          final thinkingCfg =
+              _buildThinkingForGemini(modelId, modelParams.thinkingLevel);
           resp = await dio.post(
             '$url${provider.chatPath}/models/$modelId:generateContent',
             queryParameters: {'key': apiKey},
@@ -595,6 +745,7 @@ class TranslationService {
               ],
               'generationConfig': {
                 if (temperature != null) 'temperature': temperature,
+                if (thinkingCfg.isNotEmpty) 'thinkingConfig': thinkingCfg,
               },
             },
           );

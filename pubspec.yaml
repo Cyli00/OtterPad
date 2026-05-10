@@ -121,6 +121,11 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/config/
+    # KaTeX 离线资源（CSS/JS/字体），由 ReaderLocalhostServer 的
+    # /_assets/* 路由从 rootBundle 服务，零网络依赖。
+    - assets/katex/
+    - assets/katex/contrib/
+    - assets/katex/fonts/
 
   # fonts:
   #   - family: CustomFont

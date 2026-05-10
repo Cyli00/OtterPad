@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
@@ -121,13 +120,17 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     await _box.put('documents', encoded);
   }
 
+  /// 文献库根目录——所有 PDF 与抽取产物的祖先目录。
+  ///
+  /// 现在统一委托给 [GStorage.libraryDirPath]（`<AppSupport>/OtterPad/library/`）。
+  /// 不再各处 `getApplicationDocumentsDirectory()` + 拼路径，避免 storage.dart
+  /// 与本文件路径策略不一致（之前 docs/ 与 data/ 兄弟目录的尴尬就是这么来的）。
   static Future<Directory> getDocsDir() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final docsDir = Directory(p.join(appDir.path, 'OtterPad', 'docs'));
-    if (!await docsDir.exists()) {
-      await docsDir.create(recursive: true);
+    final dir = Directory(GStorage.libraryDirPath);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
     }
-    return docsDir;
+    return dir;
   }
 
   Future<AddFileResult> addFile(

@@ -20,7 +20,186 @@ class MarkdownPreprocessor {
     result = _simplifyInlineLatex(result);
     result = _normalizeInlineSpacing(result);
     result = result.replaceAll(_emptyTableRe, '');
+    result = _reflowParagraphs(result);
     return result;
+  }
+
+  /// 修复 OCR/版面解析残留的"异常段落切断"——PDF 多列、跨页、列内换行常被
+  /// 错切成独立段落，破坏阅读连贯性。
+  ///
+  /// **合并策略**（保守优先）：
+  /// - **跨双空行（真段落边界）合并**：仅当上段末**不是句末符** (`.!?。！？:;`)
+  ///   时合并到下段；句末符是 OCR 文档中"真正段落结束"的最强信号，对它无条件
+  ///   尊重——即使空行数异常也不动。
+  /// - **段内多行（单 \n）合并**：默认 markdown 渲染会把单 \n 当软换行（CSS
+  ///   `white-space: normal` 折叠为空格），但保留显式空格让翻译/搜索/复制更
+  ///   干净；连字符断词（`evolu-\ntion` → `evolution`）特殊处理。
+  /// - **中文无空格拼接**：CJK 字符之间不插空格，避免污染中文文本。
+  /// - **跳过受保护行**：标题（`#`）、列表（`-`/`*`/`\d.`）、表格（`|`）、
+  ///   figure（`![...](...)`）、blockquote（`>`）、HTML 块（`<`）、水平线，
+  ///   以及代码块/数学块 fence 内全部内容——这些是结构性标记，不参与合并。
+  ///
+  /// **设计权衡**：宁可合并保守留下少量碎段，也不要错合并破坏真正段落。OCR
+  /// 文档中"句末忘加句号"的场景极罕见，所以"非句末符 → 合并"的激进规则在
+  /// 这个数据特征上几乎无误判风险。
+  static String _reflowParagraphs(String text) {
+    final lines = text.split('\n');
+    final out = <String>[];
+    final pending = StringBuffer();
+    bool inCodeFence = false;
+    bool inMathFence = false;
+
+    void emit() {
+      if (pending.isEmpty) return;
+      final paragraph = pending.toString();
+      pending.clear();
+
+      // 尝试与已 emit 的最后一段合并（跨空行场景）
+      final lastIdx = _lastNonBlankIdx(out);
+      if (lastIdx >= 0) {
+        final merged = _tryMergeAcrossBlank(out[lastIdx], paragraph);
+        if (merged != null) {
+          out[lastIdx] = merged;
+          // 移除中间所有空行（合并后空行不再有意义）
+          while (out.length > lastIdx + 1) {
+            out.removeLast();
+          }
+          return;
+        }
+      }
+      out.add(paragraph);
+    }
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+
+      // ─── Fence 边界与内部：原样保留 ───
+      if (trimmed.startsWith('```')) {
+        emit();
+        out.add(line);
+        inCodeFence = !inCodeFence;
+        continue;
+      }
+      if (trimmed == r'$$') {
+        emit();
+        out.add(line);
+        inMathFence = !inMathFence;
+        continue;
+      }
+      if (inCodeFence || inMathFence) {
+        emit();
+        out.add(line);
+        continue;
+      }
+
+      // ─── 空行：触发段落 emit，保留单空行作为段间分隔 ───
+      if (trimmed.isEmpty) {
+        if (pending.isNotEmpty) emit();
+        out.add('');
+        continue;
+      }
+
+      // ─── 受保护行：标题/列表/表格/figure/HTML 等独占段 ───
+      if (_isProtectedLine(trimmed)) {
+        emit();
+        out.add(line);
+        continue;
+      }
+
+      // ─── 普通文本行：拼到 pending（同段硬换行处理） ───
+      if (pending.isEmpty) {
+        pending.write(line);
+      } else {
+        final prev = pending.toString().trimRight();
+        final curr = line.trimLeft();
+        pending.clear();
+        // 连字符断词（行末 `-` + 下行首小写英文）→ 直接拼
+        if (prev.endsWith('-') &&
+            curr.isNotEmpty &&
+            RegExp(r'[a-z]').hasMatch(curr[0])) {
+          pending.write(prev.substring(0, prev.length - 1));
+          pending.write(curr);
+        } else if (_endsWithChinese(prev) || _startsWithChinese(curr)) {
+          // 中文场景：不插空格
+          pending.write(prev);
+          pending.write(curr);
+        } else {
+          pending.write(prev);
+          pending.write(' ');
+          pending.write(curr);
+        }
+      }
+    }
+    emit();
+
+    // 多连空行 collapse 成单空行（合并后留下的孤立空行清理）
+    return out.join('\n').replaceAll(_multiBlankRe, '\n\n');
+  }
+
+  /// 判断一行是否是"独占段"——markdown 结构性标记，不参与文本合并。
+  static bool _isProtectedLine(String trimmed) {
+    if (trimmed.isEmpty) return false;
+    if (trimmed.startsWith('#')) return true;
+    if (_listItemRe.hasMatch(trimmed)) return true;
+    if (trimmed.startsWith('|')) return true;
+    if (_figureLineRe.hasMatch(trimmed)) return true;
+    if (trimmed.startsWith('>')) return true;
+    if (trimmed.startsWith('<')) return true;
+    if (_horizontalRuleRe.hasMatch(trimmed)) return true;
+    return false;
+  }
+
+  /// 跨空行段落合并判断：返回合并后字符串，null 表示保持分段。
+  ///
+  /// 核心规则：上段末是句末符（`.!?。！？:;`）→ 段落真的结束，不合并；
+  /// 否则视为 OCR 错切，合并到下段。
+  static String? _tryMergeAcrossBlank(String prev, String curr) {
+    final prevEnd = prev.trimRight();
+    final currStart = curr.trimLeft();
+    if (prevEnd.isEmpty || currStart.isEmpty) return null;
+    if (_isProtectedLine(prevEnd) || _isProtectedLine(currStart)) return null;
+
+    final endChar = prevEnd[prevEnd.length - 1];
+    final firstChar = currStart[0];
+
+    // 连字符断词跨空行（罕见但保险）
+    if (endChar == '-' && RegExp(r'[a-z]').hasMatch(firstChar)) {
+      return prevEnd.substring(0, prevEnd.length - 1) + currStart;
+    }
+
+    // 中文：前末或后首是 CJK → 直接拼
+    if (_isChineseChar(endChar) || _isChineseChar(firstChar)) {
+      return prevEnd + currStart;
+    }
+
+    // 句末符 → 真段落边界，不合并
+    if (_sentenceEndCharRe.hasMatch(endChar)) return null;
+
+    // 其他情况（逗号末/字母末/数字末/各种符号）→ 合并加空格
+    return '$prevEnd $currStart';
+  }
+
+  static bool _isChineseChar(String ch) {
+    if (ch.isEmpty) return false;
+    final code = ch.codeUnitAt(0);
+    // CJK Unified Ideographs + Extension A + CJK Symbols and Punctuation
+    return (code >= 0x4E00 && code <= 0x9FFF) ||
+        (code >= 0x3400 && code <= 0x4DBF) ||
+        (code >= 0x3000 && code <= 0x303F) ||
+        (code >= 0xFF00 && code <= 0xFFEF); // 全角符号/标点
+  }
+
+  static bool _endsWithChinese(String s) =>
+      s.isNotEmpty && _isChineseChar(s[s.length - 1]);
+
+  static bool _startsWithChinese(String s) =>
+      s.isNotEmpty && _isChineseChar(s[0]);
+
+  static int _lastNonBlankIdx(List<String> lines) {
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].trim().isNotEmpty) return i;
+    }
+    return -1;
   }
 
   /// 通过元数据标题匹配，过滤 Markdown 中标题行之前的冗余内容（如期刊名）。
@@ -232,6 +411,13 @@ class MarkdownPreprocessor {
 final RegExp _emptyTableRe = RegExp(r'<table[^>]*>\s*</table>');
 final RegExp _headingPrefixRe = RegExp(r'^#+\s*');
 final RegExp _wsRunRe = RegExp(r'\s+');
+
+// _reflowParagraphs 辅助
+final RegExp _multiBlankRe = RegExp(r'\n{3,}');
+final RegExp _listItemRe = RegExp(r'^([-*+]|\d+[.)])\s');
+final RegExp _figureLineRe = RegExp(r'^!\[[^\]]*\]\([^)]*\)\s*$');
+final RegExp _horizontalRuleRe = RegExp(r'^[-*_]{3,}\s*$');
+final RegExp _sentenceEndCharRe = RegExp(r'[.!?。！？:;]');
 
 final RegExp _loneInlineEqRe =
     RegExp(r'^[ \t]*\$([^\$\n]+)\$[ \t]*$', multiLine: true);

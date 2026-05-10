@@ -33,8 +33,37 @@ abstract class TranslationStyleStrategy {
 
 // ── helper ──────────────────────────────────────────────────────────────
 
-String _wrapMarker(String t) =>
-    '$kTranslationMarkerOpen$t$kTranslationMarkerClose';
+/// 把译文用 `[[tr]]...[[/tr]]` 标记包起来。
+///
+/// **必须按段切分独立 wrap**：[_TranslationInlineSyntax] 是 InlineSyntax，
+/// markdown 解析器在 block 阶段见到 `\n\n` 就 close 段落开始新段，inline
+/// 解析在每段内独立运行——若整段译文用一对 marker 包裹，跨段后头/尾 marker
+/// 都会变成字面残留（用户截图里看到的 `[[tr]]` `[[/tr]]` 字面残留就是这个）。
+///
+/// **标题段特判**：markdown ATX heading（`#+ `）必须行首，包在 `[[tr]]` 里
+/// 会让整段降级为普通段落（heading 文本含字面 `##`）。修法是反过来包：
+/// `## [[tr]]内容[[/tr]]`——block parser 先识别 H2，inline parser 再处理
+/// 内部 marker，渲染为 `<h2><span class="translated">...</span></h2>`。
+String _wrapMarker(String t) {
+  final segs = t.split(_paragraphBoundaryRe);
+  return segs
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .map(_wrapSegment)
+      .join('\n\n');
+}
+
+String _wrapSegment(String segment) {
+  final headingMatch = _atxHeadingRe.firstMatch(segment);
+  if (headingMatch != null) {
+    return '${headingMatch[1]}'
+        '$kTranslationMarkerOpen${headingMatch[2]!.trim()}$kTranslationMarkerClose';
+  }
+  return '$kTranslationMarkerOpen$segment$kTranslationMarkerClose';
+}
+
+final _paragraphBoundaryRe = RegExp(r'\n{2,}');
+final _atxHeadingRe = RegExp(r'^(#{1,6}\s+)(.+)$');
 
 // ── 主题色（需要自定义 markdown 节点）──────────────────────────────────
 

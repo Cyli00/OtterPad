@@ -42,17 +42,11 @@ class StorageCleanupService {
   static final dataEntries = <CacheEntry>[
     CacheEntry(
       label: '文献库文件',
-      resolver: () async {
-        final appDir = await getApplicationDocumentsDirectory();
-        return Directory(p.join(appDir.path, 'OtterPad', 'docs'));
-      },
+      resolver: () async => Directory(GStorage.libraryDirPath),
     ),
     CacheEntry(
       label: '数据库',
-      resolver: () async {
-        final appDir = await getApplicationDocumentsDirectory();
-        return Directory(p.join(appDir.path, 'OtterPad', 'data'));
-      },
+      resolver: () async => Directory(GStorage.dbDirPath),
     ),
   ];
 

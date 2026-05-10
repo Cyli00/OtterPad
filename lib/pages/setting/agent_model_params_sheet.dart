@@ -64,7 +64,6 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
   Timer? _saveTimer;
 
   late final TextEditingController _maxTokensCtrl;
-  late final TextEditingController _thinkingBudgetCtrl;
 
   // ── 生命周期 ──────────────────────────────────────────────────────────
 
@@ -74,9 +73,6 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
     _draft = widget.initialParams;
     _maxTokensCtrl = TextEditingController(
       text: _draft.maxTokens?.toString() ?? '',
-    );
-    _thinkingBudgetCtrl = TextEditingController(
-      text: _draft.thinkingBudget?.toString() ?? '',
     );
   }
 
@@ -88,7 +84,6 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       widget.onSave(_draft);
     }
     _maxTokensCtrl.dispose();
-    _thinkingBudgetCtrl.dispose();
     super.dispose();
   }
 
@@ -233,18 +228,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
   // ── Provider-specific rows ────────────────────────────────────────────
 
   List<Widget> _openaiRows() => [
-    _segmentedRow<String?>(
-      title: 'Reasoning Effort',
-      subtitle: '推理模型专用，控制思考深度',
-      options: const [
-        (null, '默认'),
-        ('minimal', '最低'),
-        ('low', '低'),
-        ('medium', '中'),
-        ('high', '高'),
-      ],
-      selected: _draft.reasoningEffort,
-      onChanged: (v) => _patch(_draft.copyWith(reasoningEffort: v)),
+    _thinkingLevelRow(
+      subtitle: '推理模型的思考深度，关闭可显著提速并降本',
     ),
     _segmentedRow<String?>(
       title: '详略程度',
@@ -306,8 +291,8 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
   ];
 
   List<Widget> _anthropicRows() {
-    final mode = _draft.thinkingMode;
-    final showBudget = mode == 'enabled' || mode == 'adaptive';
+    final isAdaptive =
+        AgentModelCapability.isClaudeAdaptive(widget.modelId);
     return [
       _sliderRow(
         title: 'Top K',
@@ -321,46 +306,10 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
         onChanged: (v) => _patch(_draft.copyWith(topK: v.round())),
         onReset: () => _patch(_draft.copyWith(topK: null)),
       ),
-      _segmentedRow<String?>(
-        title: '深度思考',
-        subtitle: '自适应让模型自行决定是否思考',
-        options: const [
-          (null, '默认'),
-          ('disabled', '关闭'),
-          ('enabled', '开启'),
-          ('adaptive', '自适应'),
-        ],
-        selected: _draft.thinkingMode,
-        onChanged: (v) => _patch(
-          _draft.copyWith(
-            thinkingMode: v,
-            // disabled / default 时同步清除 budget
-            thinkingBudget: (v == 'enabled' || v == 'adaptive')
-                ? _draft.thinkingBudget
-                : null,
-          ),
-        ),
-      ),
-      AnimatedSize(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        child: showBudget
-            ? _intFieldRow(
-                title: 'Thinking Budget',
-                subtitle: '思考环节能花多少 token，最少 1024',
-                controller: _thinkingBudgetCtrl,
-                hint: '如 4096',
-                onChanged: (v) {
-                  if (v == null || v <= 0) {
-                    _patch(_draft.copyWith(thinkingBudget: null));
-                  } else {
-                    _patch(
-                      _draft.copyWith(thinkingBudget: v.clamp(1024, 65536)),
-                    );
-                  }
-                },
-              )
-            : const SizedBox.shrink(),
+      _thinkingLevelRow(
+        subtitle: isAdaptive
+            ? 'Opus 4.7 走 adaptive thinking，"中等" 表示让模型自决思考深度'
+            : '思考预算映射：低=1024 / 中=4096 / 高=16384 / 超高=32K tokens',
       ),
     ];
   }
@@ -402,19 +351,27 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
       onChanged: (v) => _patch(_draft.copyWith(frequencyPenalty: v)),
       onReset: () => _patch(_draft.copyWith(frequencyPenalty: null)),
     ),
-    _intFieldRow(
-      title: 'Thinking Budget',
-      subtitle: '思考能花多少 token，0 表示关闭',
-      controller: _thinkingBudgetCtrl,
-      hint: '如 4096',
-      onChanged: (v) => _patch(
-        _draft.copyWith(thinkingBudget: v == null || v < 0 ? null : v),
-      ),
+    _thinkingLevelRow(
+      subtitle: _geminiThinkingSubtitle(),
     ),
   ];
 
+  /// Gemini 思考行的副标题——按模型版本说清楚映射规则。
+  String _geminiThinkingSubtitle() {
+    if (AgentModelCapability.isGemini3(widget.modelId)) {
+      return 'Gemini 3 用 thinkingLevel 字段；超高档与高档等价';
+    }
+    if (AgentModelCapability.isGemini25(widget.modelId)) {
+      final isPro = AgentModelCapability.isGemini25Pro(widget.modelId);
+      final maxB = AgentModelCapability.gemini25MaxBudget(widget.modelId);
+      return isPro
+          ? '2.5 Pro 不能完全关，关闭=128 tokens；超高=$maxB'
+          : '思考预算映射：低=512 / 中=4096 / 高=16384 / 超高=$maxB';
+    }
+    return '老 Gemini（1.5 等）不发 thinking 字段，此设置无效';
+  }
+
   List<Widget> _openAICompatibleRows() {
-    final thinkingOn = _draft.thinkingMode == 'enabled';
     return [
       _sliderRow(
         title: 'Presence Penalty',
@@ -440,41 +397,37 @@ class _AgentModelParamsSheetState extends State<_AgentModelParamsSheet> {
         onChanged: (v) => _patch(_draft.copyWith(frequencyPenalty: v)),
         onReset: () => _patch(_draft.copyWith(frequencyPenalty: null)),
       ),
-      _segmentedRow<String?>(
-        title: '思考模式',
-        subtitle: 'DeepSeek 默认开启，翻译时建议关闭以节省成本',
-        options: const [
-          (null, '默认'),
-          ('disabled', '关闭'),
-          ('enabled', '开启'),
-        ],
-        selected: _draft.thinkingMode,
-        onChanged: (v) => _patch(
-          _draft.copyWith(
-            thinkingMode: v,
-            reasoningEffort: v == 'enabled' ? _draft.reasoningEffort : null,
-          ),
-        ),
-      ),
-      AnimatedSize(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        child: thinkingOn
-            ? _segmentedRow<String?>(
-                title: 'Reasoning Effort',
-                subtitle: '控制思考环节的深度',
-                options: const [
-                  (null, '默认'),
-                  ('high', '高'),
-                  ('max', '最高'),
-                ],
-                selected: _draft.reasoningEffort,
-                onChanged: (v) =>
-                    _patch(_draft.copyWith(reasoningEffort: v)),
-              )
-            : const SizedBox.shrink(),
+      _thinkingLevelRow(
+        subtitle: 'DeepSeek 自动归类为 关/high/max；翻译任务建议关闭以省钱',
       ),
     ];
+  }
+
+  /// 跨 provider 共享的"思考力度"选择器。
+  ///
+  /// 6 段（默认 / 关 / 低 / 中 / 高 / 超高）：null 表示"不发送任何 thinking
+  /// 字段，沿用服务商默认行为"，与 `off`（显式关闭思考）语义不同——例如
+  /// OpenAI Responses 默认是 medium，Gemini 2.5 Flash 默认 dynamic thinking，
+  /// 选"默认"时这些行为都被保留。
+  ///
+  /// 实际请求构造层会按 [AgentModelCapability] 把 [ThinkingLevel] 翻成对应
+  /// provider 的 schema（reasoning.effort / thinking.type / thinkingBudget /
+  /// thinkingLevel 等）。
+  Widget _thinkingLevelRow({required String subtitle}) {
+    return _segmentedRow<ThinkingLevel?>(
+      title: '思考力度',
+      subtitle: subtitle,
+      options: const [
+        (null, '默认'),
+        (ThinkingLevel.off, '关'),
+        (ThinkingLevel.low, '低'),
+        (ThinkingLevel.medium, '中'),
+        (ThinkingLevel.high, '高'),
+        (ThinkingLevel.xhigh, '超高'),
+      ],
+      selected: _draft.thinkingLevel,
+      onChanged: (v) => _patch(_draft.copyWith(thinkingLevel: v)),
+    );
   }
 
   // ── Reusable row helpers (镜像 api_settings_extract.dart) ─────────────

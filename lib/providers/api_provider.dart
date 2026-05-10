@@ -48,15 +48,50 @@ extension AgentApiProviderExt on AgentApiProvider {
 
 // ─── Agent API ───────────────────────────────────────────────────────────────
 
+/// 跨 provider 统一的"思考力度"分级。
+///
+/// **5 档语义**（由请求构造层按 provider+model capability 翻译为各家具体字段）：
+/// - `off`：完全不思考。OpenAI=`reasoning.effort:none`、Gemini 2.5=`thinkingBudget:0`、
+///   Claude 旧=`thinking.type:disabled`、Claude Opus 4.7=映射到 `output_config.effort:low`
+///   （adaptive 模型不能真正关闭，最低档即低思考）。
+/// - `low`：低思考预算/最小开销，适合简单指令跟随、聊天。
+/// - `medium`（默认）：平衡思考与成本，多数任务的合理选择。Claude Opus 4.7
+///   下不向请求体写 `output_config`，让 adaptive 自决。
+/// - `high`：高深度推理，适合复杂代码/分析。
+/// - `xhigh`：模型上限。Claude=`output_config.effort:max`、Gemini=模型 max budget、
+///   OpenAI=`xhigh`、DeepSeek=`reasoning_effort:max`。
+///
+/// 持久化用 string id（`'off'/'low'/'medium'/'high'/'xhigh'`），保证未来插入
+/// 新档时旧数据不被破坏（不要换成 enum.index）。
+enum ThinkingLevel {
+  off('off', '关闭'),
+  low('low', '低'),
+  medium('medium', '中等'),
+  high('high', '高'),
+  xhigh('xhigh', '超高');
+
+  final String id;
+  final String label;
+  const ThinkingLevel(this.id, this.label);
+
+  static ThinkingLevel? fromId(String? id) {
+    if (id == null) return null;
+    for (final l in ThinkingLevel.values) {
+      if (l.id == id) return l;
+    }
+    return null;
+  }
+}
+
 /// 单个模型的可调参数。所有字段可空——`null` 表示"不发送，使用服务商默认"。
 ///
 /// 字段按服务商归类：
 /// * 通用：`temperature` / `topP` / `maxTokens` / `systemPrompt`
-/// * OpenAI Responses API：`reasoningEffort` / `verbosity` / `parallelToolCalls` /
+/// * 跨 provider 统一思考力度：`thinkingLevel`（请求构造层按 capability 翻译）
+/// * OpenAI Responses API：`verbosity` / `parallelToolCalls` /
 ///   `truncation` / `webSearchEnabled` / `webSearchContextSize`
-/// * Anthropic Messages API：`thinkingMode` / `thinkingBudget`（+ 共享 `topK`）
-/// * Gemini GenerateContent：`presencePenalty` / `frequencyPenalty` /
-///   `thinkingBudget`（+ 共享 `topK`）
+/// * Anthropic / Gemini 共享：`topK`
+/// * Gemini GenerateContent：`presencePenalty` / `frequencyPenalty`
 ///
 /// 真正发往各服务商的请求体序列化（参数名差异、嵌套结构差异）在请求构造层做，
 /// 这里只负责存储用户意图。
@@ -70,10 +105,12 @@ class AgentModelParams {
   // ── Anthropic / Gemini 共享 ────────────────────────
   final int? topK;
 
-  // ── OpenAI 专属 ────────────────────────────────────
-  /// OpenAI reasoning models：'minimal' | 'low' | 'medium' | 'high'
-  final String? reasoningEffort;
+  // ── 跨 provider 统一思考力度 ───────────────────────
+  /// 跨 provider 统一思考分级；null 表示"不发送，服务商默认"。
+  /// 请求构造层按 [AgentModelCapability] 把它翻译成各家具体字段。
+  final ThinkingLevel? thinkingLevel;
 
+  // ── OpenAI 专属 ────────────────────────────────────
   /// OpenAI Responses API `text.verbosity`：'low' | 'medium' | 'high'
   final String? verbosity;
 
@@ -89,14 +126,6 @@ class AgentModelParams {
   /// 搜索上下文大小：'low' | 'medium' | 'high'
   final String? webSearchContextSize;
 
-  // ── Anthropic 专属 ─────────────────────────────────
-  /// Anthropic `thinking.type`：'disabled' | 'enabled' | 'adaptive'
-  final String? thinkingMode;
-
-  // ── Anthropic + Gemini 共享 ────────────────────────
-  /// Anthropic：`thinking.budget_tokens`；Gemini：`thinkingConfig.thinkingBudget`
-  final int? thinkingBudget;
-
   // ── Gemini 专属 ────────────────────────────────────
   /// Gemini `generationConfig.presencePenalty`：-2.0 ~ 2.0
   final double? presencePenalty;
@@ -110,14 +139,12 @@ class AgentModelParams {
     this.maxTokens,
     this.systemPrompt,
     this.topK,
-    this.reasoningEffort,
+    this.thinkingLevel,
     this.verbosity,
     this.parallelToolCalls,
     this.truncation,
     this.webSearchEnabled,
     this.webSearchContextSize,
-    this.thinkingMode,
-    this.thinkingBudget,
     this.presencePenalty,
     this.frequencyPenalty,
   });
@@ -129,14 +156,12 @@ class AgentModelParams {
       maxTokens == null &&
       (systemPrompt == null || systemPrompt!.isEmpty) &&
       topK == null &&
-      reasoningEffort == null &&
+      thinkingLevel == null &&
       verbosity == null &&
       parallelToolCalls == null &&
       truncation == null &&
       webSearchEnabled == null &&
       webSearchContextSize == null &&
-      thinkingMode == null &&
-      thinkingBudget == null &&
       presencePenalty == null &&
       frequencyPenalty == null;
 
@@ -146,14 +171,12 @@ class AgentModelParams {
     Object? maxTokens = _sentinel,
     Object? systemPrompt = _sentinel,
     Object? topK = _sentinel,
-    Object? reasoningEffort = _sentinel,
+    Object? thinkingLevel = _sentinel,
     Object? verbosity = _sentinel,
     Object? parallelToolCalls = _sentinel,
     Object? truncation = _sentinel,
     Object? webSearchEnabled = _sentinel,
     Object? webSearchContextSize = _sentinel,
-    Object? thinkingMode = _sentinel,
-    Object? thinkingBudget = _sentinel,
     Object? presencePenalty = _sentinel,
     Object? frequencyPenalty = _sentinel,
   }) => AgentModelParams(
@@ -168,9 +191,9 @@ class AgentModelParams {
         ? this.systemPrompt
         : systemPrompt as String?,
     topK: identical(topK, _sentinel) ? this.topK : topK as int?,
-    reasoningEffort: identical(reasoningEffort, _sentinel)
-        ? this.reasoningEffort
-        : reasoningEffort as String?,
+    thinkingLevel: identical(thinkingLevel, _sentinel)
+        ? this.thinkingLevel
+        : thinkingLevel as ThinkingLevel?,
     verbosity: identical(verbosity, _sentinel)
         ? this.verbosity
         : verbosity as String?,
@@ -186,12 +209,6 @@ class AgentModelParams {
     webSearchContextSize: identical(webSearchContextSize, _sentinel)
         ? this.webSearchContextSize
         : webSearchContextSize as String?,
-    thinkingMode: identical(thinkingMode, _sentinel)
-        ? this.thinkingMode
-        : thinkingMode as String?,
-    thinkingBudget: identical(thinkingBudget, _sentinel)
-        ? this.thinkingBudget
-        : thinkingBudget as int?,
     presencePenalty: identical(presencePenalty, _sentinel)
         ? this.presencePenalty
         : presencePenalty as double?,
@@ -207,15 +224,13 @@ class AgentModelParams {
     if (systemPrompt != null && systemPrompt!.isNotEmpty)
       'systemPrompt': systemPrompt,
     if (topK != null) 'topK': topK,
-    if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
+    if (thinkingLevel != null) 'thinkingLevel': thinkingLevel!.id,
     if (verbosity != null) 'verbosity': verbosity,
     if (parallelToolCalls != null) 'parallelToolCalls': parallelToolCalls,
     if (truncation != null) 'truncation': truncation,
     if (webSearchEnabled != null) 'webSearchEnabled': webSearchEnabled,
     if (webSearchContextSize != null)
       'webSearchContextSize': webSearchContextSize,
-    if (thinkingMode != null) 'thinkingMode': thinkingMode,
-    if (thinkingBudget != null) 'thinkingBudget': thinkingBudget,
     if (presencePenalty != null) 'presencePenalty': presencePenalty,
     if (frequencyPenalty != null) 'frequencyPenalty': frequencyPenalty,
   };
@@ -227,24 +242,60 @@ class AgentModelParams {
         maxTokens: (json['maxTokens'] as num?)?.toInt(),
         systemPrompt: json['systemPrompt'] as String?,
         topK: (json['topK'] as num?)?.toInt(),
-        reasoningEffort: json['reasoningEffort'] as String?,
+        thinkingLevel: _migrateThinkingLevel(json),
         verbosity: json['verbosity'] as String?,
         parallelToolCalls: json['parallelToolCalls'] as bool?,
         truncation: json['truncation'] as String?,
         webSearchEnabled: json['webSearchEnabled'] as bool?,
         webSearchContextSize: json['webSearchContextSize'] as String?,
-        // 向后兼容：老字段 thinkingEnabled 自动升级为 thinkingMode
-        thinkingMode:
-            json['thinkingMode'] as String? ??
-            (json['thinkingEnabled'] == true
-                ? 'enabled'
-                : json['thinkingEnabled'] == false
-                ? 'disabled'
-                : null),
-        thinkingBudget: (json['thinkingBudget'] as num?)?.toInt(),
         presencePenalty: (json['presencePenalty'] as num?)?.toDouble(),
         frequencyPenalty: (json['frequencyPenalty'] as num?)?.toDouble(),
       );
+
+  /// 反序列化时把旧字段自动迁移到 [thinkingLevel]。
+  ///
+  /// **优先级**：新字段 `thinkingLevel` > 旧 `thinkingMode='disabled'` 直接 off >
+  /// 旧 `reasoningEffort` 字符串映射 > 旧 `thinkingBudget` 数字按区间反推 >
+  /// 仅有 `thinkingMode='enabled'/'adaptive'` 但无具体值 → 用 medium 兜底。
+  ///
+  /// 数字反推阈值参考各 provider 默认 budget 取整：1024（low 上限）/ 8192
+  /// （medium 上限）/ 16384（high 上限）；阈值不严格对应"原始 budget 的最佳
+  /// 还原"，只保证旧高 budget 用户升级后仍落在 high/xhigh 档。
+  static ThinkingLevel? _migrateThinkingLevel(Map<String, dynamic> json) {
+    final fresh = ThinkingLevel.fromId(json['thinkingLevel'] as String?);
+    if (fresh != null) return fresh;
+
+    final mode = json['thinkingMode'] as String? ??
+        (json['thinkingEnabled'] == true
+            ? 'enabled'
+            : json['thinkingEnabled'] == false
+                ? 'disabled'
+                : null);
+    if (mode == 'disabled') return ThinkingLevel.off;
+
+    final effort = json['reasoningEffort'] as String?;
+    if (effort != null) {
+      return switch (effort) {
+        'minimal' || 'low' => ThinkingLevel.low,
+        'medium' => ThinkingLevel.medium,
+        'high' => ThinkingLevel.high,
+        'max' || 'xhigh' => ThinkingLevel.xhigh,
+        _ => null,
+      };
+    }
+
+    final budget = (json['thinkingBudget'] as num?)?.toInt();
+    if (budget != null) {
+      if (budget == 0) return ThinkingLevel.off;
+      if (budget < 1024) return ThinkingLevel.low;
+      if (budget < 8192) return ThinkingLevel.medium;
+      if (budget < 16384) return ThinkingLevel.high;
+      return ThinkingLevel.xhigh;
+    }
+
+    if (mode == 'enabled' || mode == 'adaptive') return ThinkingLevel.medium;
+    return null;
+  }
 }
 
 class AgentApiState {

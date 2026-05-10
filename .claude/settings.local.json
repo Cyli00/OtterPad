@@ -71,7 +71,9 @@
       "WebFetch(domain:api-docs.deepseek.com)",
       "Bash(dart run *)",
       "Bash(dart -e \"import 'dart:convert';import 'dart:io';main\\(\\){var d=jsonDecode\\(File\\('assets/config/back_matter_sections.json'\\).readAsStringSync\\(\\)\\);print\\('L1:'+\\(\\(d['l1']['patterns'] as List\\).length.toString\\(\\)\\)\\);print\\('L2:'+\\(\\(d['l2']['patterns'] as List\\).length.toString\\(\\)\\)\\);print\\('L3:'+\\(\\(d['l3']['patterns'] as List\\).length.toString\\(\\)\\)\\);}\")",
-      "Bash(node -e \"var f=require\\('fs'\\).readFileSync\\('assets/config/back_matter_sections.json','utf8'\\);var d=JSON.parse\\(f\\);console.log\\('L1:'+d.l1.patterns.length\\);console.log\\('L2:'+d.l2.patterns.length\\);console.log\\('L3:'+d.l3.patterns.length\\);\")"
+      "Bash(node -e \"var f=require\\('fs'\\).readFileSync\\('assets/config/back_matter_sections.json','utf8'\\);var d=JSON.parse\\(f\\);console.log\\('L1:'+d.l1.patterns.length\\);console.log\\('L2:'+d.l2.patterns.length\\);console.log\\('L3:'+d.l3.patterns.length\\);\")",
+      "Read(//e/gitProjects/**)",
+      "Read(//e/gitProjects/anx-reader/**)"
     ]
   },
   "outputStyle": "Explanatory",
