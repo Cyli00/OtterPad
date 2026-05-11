@@ -67,13 +67,8 @@ String _markdownToHtml(String markdown) {
   var html = md.markdownToHtml(
     markdown,
     extensionSet: md.ExtensionSet.gitHubWeb,
-    inlineSyntaxes: [
-      _LatexInlinePreserve(),
-      _TranslationInlineSyntax(),
-    ],
-    blockSyntaxes: [
-      _LatexBlockPreserve(),
-    ],
+    inlineSyntaxes: [_LatexInlinePreserve(), _TranslationInlineSyntax()],
+    blockSyntaxes: [_LatexBlockPreserve()],
   );
 
   html = _injectImageAttrs(html);
@@ -110,11 +105,11 @@ class _LatexInlinePreserve extends md.InlineSyntax {
 
 class _TranslationInlineSyntax extends md.InlineSyntax {
   _TranslationInlineSyntax()
-      : super(
-          '${RegExp.escape(kTranslationMarkerOpen)}'
-          r'([\s\S]*?)'
-          '${RegExp.escape(kTranslationMarkerClose)}',
-        );
+    : super(
+        '${RegExp.escape(kTranslationMarkerOpen)}'
+        r'([\s\S]*?)'
+        '${RegExp.escape(kTranslationMarkerClose)}',
+      );
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -183,8 +178,7 @@ String _injectImageAttrs(String html) {
       if (src.startsWith('file://')) {
         try {
           final filePath = Uri.parse(src).toFilePath();
-          final mapped =
-              ReaderLocalhostServer.instance.urlForPath(filePath);
+          final mapped = ReaderLocalhostServer.instance.urlForPath(filePath);
           if (mapped != null) resolved = mapped;
         } catch (_) {
           // Uri.parse / toFilePath 失败 → 保留原 src，浏览器按原状处理

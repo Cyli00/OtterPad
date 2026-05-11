@@ -169,6 +169,20 @@ class _ContentCluster {
   final _Bbox bbox;
 }
 
+/// 跨页配对中间表示：本页有 caption 但无任何 figure-label content。
+class _OrphanCaption {
+  const _OrphanCaption(this.pageIndex, this.anchor);
+  final int pageIndex;
+  final LayoutBlock anchor;
+}
+
+/// 跨页配对中间表示：本页有 figure-label content 但无 anchor。
+class _OrphanContentCluster {
+  _OrphanContentCluster(this.pageIndex, this.blocks);
+  final int pageIndex;
+  final List<LayoutBlock> blocks;
+}
+
 /// figure 提取的完整结果
 class FigureExtractResult {
   final String outputDir;
@@ -319,7 +333,25 @@ class FigureExtractService {
   // ─── 主标题连续性恢复（OCR 误标 fallback） ────────────
 
   /// 允许被"升格"为主标题的原始 block label。
-  static const _promotableLabels = {'text', 'footer', 'paragraph_title'};
+  ///
+  /// 实测 PaddleOCR-VL 把符合 `Fig. N | ...` 模式的 caption 块经常错标为
+  /// `abstract`（独立栏开头被误判为摘要风格）或 `vision_footnote`
+  /// （图周围短文本块统一打 vision_footnote 没看内容）。`_tryPromote` 内部
+  /// 用主标题正则二次验证，扩大白名单不会误升格内容不像 caption 的真块。
+  static const _promotableLabels = {
+    'text',
+    'footer',
+    'paragraph_title',
+    'abstract',
+    'vision_footnote',
+  };
+
+  /// 测试入口：暴露 [_recoverMissingAnchors] 给单测验证升格行为。
+  @visibleForTesting
+  List<List<LayoutBlock>> recoverMissingAnchors(
+    List<List<LayoutBlock>> pages,
+  ) =>
+      _recoverMissingAnchors(pages);
 
   /// 在 segmentation 之前扫描所有页面，把被 OCR 误标为正文的 Figure/Table
   /// 标题升格回 `figure_title`，使后续 [findFigureSegments] 能正确识别。
@@ -654,6 +686,140 @@ class FigureExtractService {
     return _Bbox.fromBlocks(blocks).diagonal;
   }
 
+  // ─── 跨页 orphan 配对 ────────────────────────────────
+
+  /// 扫描所有页 → 返回 figure segment（含跨页 orphan 配对）。
+  ///
+  /// 1. 每页调用 [findFigureSegments] 收集完整 segment 与孤儿 caption
+  ///    （有 caption 但 segment 内无 content）
+  /// 2. 同时扫每页 anchors 为空的 figureBlocks 聚成孤儿 cluster
+  /// 3. 跨页配对孤儿（仅 ±1 页 + 双向唯一约束）
+  @visibleForTesting
+  List<FigureSegment> collectFigureSegments(List<List<LayoutBlock>> pages) {
+    final segments = <FigureSegment>[];
+    final orphanCaptions = <_OrphanCaption>[];
+    final orphanClusters = <_OrphanContentCluster>[];
+
+    for (var pageIdx = 0; pageIdx < pages.length; pageIdx++) {
+      final pageBlocks = pages[pageIdx];
+      final pageSegments = findFigureSegments(pageBlocks);
+
+      for (final seg in pageSegments) {
+        LayoutBlock? captionBlock;
+        for (final b in seg) {
+          if (isMainCaption(b)) {
+            captionBlock = b;
+            break;
+          }
+        }
+        if (captionBlock == null) continue;
+
+        final caption = captionBlock.blockContent.trim();
+        if (caption.isEmpty) continue;
+
+        final hasContent = seg.any((b) => !isMainCaption(b));
+        if (!hasContent) {
+          orphanCaptions.add(_OrphanCaption(pageIdx, captionBlock));
+          continue;
+        }
+
+        segments.add(FigureSegment(
+          pageIndex: pageIdx,
+          blocks: seg,
+          captionText: caption,
+          captionName: _extractCaptionName(caption),
+        ));
+      }
+
+      orphanClusters.addAll(_findOrphanContentClusters(pageBlocks, pageIdx));
+    }
+
+    segments.addAll(_pairCrossPageOrphans(
+      captions: orphanCaptions,
+      clusters: orphanClusters,
+    ));
+
+    // 跨页配对的 segment 先 append 末尾，按 pageIndex stable sort 修正顺序；
+    // 同页 tie 保留原插入顺序（per-page findFigureSegments 输出顺序即页内
+    // 主标题出现顺序，已是合理的页内自然阅读顺序）。
+    final tagged = [
+      for (var i = 0; i < segments.length; i++) (i, segments[i]),
+    ];
+    tagged.sort((a, b) {
+      final cmp = a.$2.pageIndex.compareTo(b.$2.pageIndex);
+      if (cmp != 0) return cmp;
+      return a.$1.compareTo(b.$1);
+    });
+    return [for (final t in tagged) t.$2];
+  }
+
+  /// 单页 figure-label content 聚类，仅在本页 anchors 为空时返回 cluster。
+  /// 与 [findFigureSegments] 共享 [_buildContentClusters] 的距离逻辑。
+  List<_OrphanContentCluster> _findOrphanContentClusters(
+    List<LayoutBlock> pageBlocks,
+    int pageIndex,
+  ) {
+    final figureBlocks = pageBlocks
+        .where((b) => figureLabels.contains(b.blockLabel))
+        .where(_isValidFigureBlock)
+        .toList();
+    if (figureBlocks.isEmpty) return const [];
+
+    final hasAnchor = figureBlocks.any(isMainCaption);
+    if (hasAnchor) return const [];
+
+    final pageDiagonal = _pageDiagonal(pageBlocks);
+    final contentClusterGap = (pageDiagonal * _contentClusterGapRatio)
+        .clamp(_minContentClusterGap, _maxContentClusterGap)
+        .toDouble();
+
+    return _buildContentClusters(figureBlocks, contentClusterGap)
+        .map((c) => _OrphanContentCluster(pageIndex, c.blocks))
+        .toList();
+  }
+
+  /// 配对相邻页（±1）的孤儿 caption ↔ 孤儿 content cluster。
+  ///
+  /// 严格双向唯一：仅当 caption 的 ±1 页上恰好有 1 个候选 cluster，
+  /// **且** 该 cluster 的 ±1 页上恰好有 1 个候选 caption 时才配对——
+  /// 多候选直接放弃，宁可漏掉也不误配。
+  List<FigureSegment> _pairCrossPageOrphans({
+    required List<_OrphanCaption> captions,
+    required List<_OrphanContentCluster> clusters,
+  }) {
+    final used = <_OrphanContentCluster>{};
+    final result = <FigureSegment>[];
+
+    for (final caption in captions) {
+      final candidates = clusters
+          .where((c) => !used.contains(c))
+          .where((c) => (c.pageIndex - caption.pageIndex).abs() == 1)
+          .toList();
+      if (candidates.length != 1) continue;
+      final cluster = candidates.single;
+
+      final reverseHits = captions
+          .where((c) => (c.pageIndex - cluster.pageIndex).abs() == 1)
+          .length;
+      if (reverseHits != 1) continue;
+
+      used.add(cluster);
+      final captionText = caption.anchor.blockContent.trim();
+      result.add(FigureSegment(
+        pageIndex: cluster.pageIndex,
+        blocks: [...cluster.blocks, caption.anchor],
+        captionText: captionText,
+        captionName: _extractCaptionName(captionText),
+      ));
+      debugPrint(
+        '[FigureExtract] cross-page paired: caption "$captionText" '
+        'on page ${caption.pageIndex} ← cluster on page ${cluster.pageIndex}',
+      );
+    }
+
+    return result;
+  }
+
   // ─── BBox 计算 ────────────────────────────────────────
 
   /// 计算 segment 内非主标题 block 的外接矩形（裁图时排除图注文字）。
@@ -761,32 +927,7 @@ class FigureExtractService {
       _recoverMissingAnchors(parseLayoutBlocks(content)),
     );
 
-    // 收集所有 segment（带页码）
-    final segments = <FigureSegment>[];
-    for (var pageIdx = 0; pageIdx < allPages.length; pageIdx++) {
-      final pageBlocks = allPages[pageIdx];
-      final pageSegments = findFigureSegments(pageBlocks);
-      for (final seg in pageSegments) {
-        // 提取主标题
-        String caption = '';
-        for (final b in seg) {
-          if (isMainCaption(b)) {
-            caption = b.blockContent.trim();
-            break;
-          }
-        }
-        // 跳过无标题或无内容 block 的 segment
-        final hasContent = seg.any((b) => !isMainCaption(b));
-        if (caption.isEmpty || !hasContent) continue;
-
-        segments.add(FigureSegment(
-          pageIndex: pageIdx,
-          blocks: seg,
-          captionText: caption,
-          captionName: _extractCaptionName(caption),
-        ));
-      }
-    }
+    final segments = collectFigureSegments(allPages);
 
     final totalSegments = segments.length;
     onProgress?.call(0, totalSegments);

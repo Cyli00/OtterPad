@@ -175,6 +175,9 @@ class MarkdownPreprocessor {
     // 句末符 → 真段落边界，不合并
     if (_sentenceEndCharRe.hasMatch(endChar)) return null;
 
+    // Unicode 上标结尾（作者行 affiliation / 脚注 / citation 编号）→ 段落结束，不合并
+    if (_supCharRe.hasMatch(endChar)) return null;
+
     // 其他情况（逗号末/字母末/数字末/各种符号）→ 合并加空格
     return '$prevEnd $currStart';
   }
@@ -418,6 +421,13 @@ final RegExp _listItemRe = RegExp(r'^([-*+]|\d+[.)])\s');
 final RegExp _figureLineRe = RegExp(r'^!\[[^\]]*\]\([^)]*\)\s*$');
 final RegExp _horizontalRuleRe = RegExp(r'^[-*_]{3,}\s*$');
 final RegExp _sentenceEndCharRe = RegExp(r'[.!?。！？:;]');
+
+/// 末字符是否为 Unicode 上标（字符集与 [_supBeforeRe] 保持同步）。
+/// 命中即视为段落终止信号——作者行末 affiliation 数字、脚注 / citation 引用都属此类。
+final RegExp _supCharRe = RegExp(
+  r'^[⁰-⁹¹²³⁺-ⁿⁱ'
+  r'ᴬ-ᵪᵸᶛ-ᶿʰ-ʸˠ-ˤⱽ]$',
+);
 
 final RegExp _loneInlineEqRe =
     RegExp(r'^[ \t]*\$([^\$\n]+)\$[ \t]*$', multiLine: true);

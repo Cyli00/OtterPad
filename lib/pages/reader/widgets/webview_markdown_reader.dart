@@ -25,8 +25,7 @@ class WebViewMarkdownReader extends StatefulWidget {
 
   final void Function(String text, Rect selectionRect)? onSelectionEnd;
   final VoidCallback? onSelectionCleared;
-  final void Function(Highlight highlight, Offset position)?
-      onHighlightClick;
+  final void Function(Highlight highlight, Offset position)? onHighlightClick;
   final void Function(String imageSource)? onImageClick;
   final void Function(ScrollDirection direction)? onScrollDirection;
 
@@ -64,8 +63,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   /// - server root 在 OtterPad/ 下，URL 形如
   ///   `http://localhost:PORT/library/<hash>/.reader.html`，与同目录内的
   ///   `figures/Figure_*.png` 共 origin、共 base href，相对路径解析自然。
-  String get _htmlFilePath =>
-      p.join(widget.documentDir, '.reader.html');
+  String get _htmlFilePath => p.join(widget.documentDir, '.reader.html');
 
   /// docDir 相对 server root 的子路径（如 `docs/abc123`），写入 HTML 的
   /// `base href` 标签后，相对图片路径仍能解析到 `docs/{hash}/figures/...`。
@@ -73,8 +71,10 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   String get _docBaseHref {
     final root = ReaderLocalhostServer.instance.root;
     final rel = p.relative(widget.documentDir, from: root);
-    final segments =
-        rel.split(RegExp(r'[/\\]')).map(Uri.encodeComponent).join('/');
+    final segments = rel
+        .split(RegExp(r'[/\\]'))
+        .map(Uri.encodeComponent)
+        .join('/');
     return '/$segments/';
   }
 
@@ -101,7 +101,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     super.didUpdateWidget(oldWidget);
 
     final dataChanged = widget.markdownData != oldWidget.markdownData;
-    final themeChanged = widget.palette != oldWidget.palette ||
+    final themeChanged =
+        widget.palette != oldWidget.palette ||
         widget.settings.fontSize != oldWidget.settings.fontSize ||
         widget.settings.font != oldWidget.settings.font ||
         widget.settings.theme != oldWidget.settings.theme;
@@ -170,21 +171,19 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     if (!_contentReady || _controller == null) return;
     final q = widget.highlightQuery;
     if (q == null || q.isEmpty) {
-      _controller!.evaluateJavascript(
-          source: 'window.clearSearchHighlight()');
+      _controller!.evaluateJavascript(source: 'window.clearSearchHighlight()');
     } else {
       final escaped = q.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
       _controller!.evaluateJavascript(
-          source: "window.highlightSearch('$escaped')");
+        source: "window.highlightSearch('$escaped')",
+      );
     }
   }
 
   // ─── 对外暴露的方法（通过 GlobalKey 调用） ───
 
   void scrollToBlockIndex(int index) {
-    _controller?.evaluateJavascript(
-      source: 'window.scrollToBlock($index)',
-    );
+    _controller?.evaluateJavascript(source: 'window.scrollToBlock($index)');
   }
 
   void scrollToSearchResult(int index) {
@@ -201,9 +200,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
 
   void flashImage(String filename) {
     final escaped = filename.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
-    _controller?.evaluateJavascript(
-      source: "window.flashImage('$escaped')",
-    );
+    _controller?.evaluateJavascript(source: "window.flashImage('$escaped')");
   }
 
   // ─── 高亮同步 ───
@@ -215,9 +212,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     final newIds = newList.map((h) => h.id).toSet();
 
     for (final id in oldIds.difference(newIds)) {
-      _controller!.evaluateJavascript(
-        source: "window.removeHighlight('$id')",
-      );
+      _controller!.evaluateJavascript(source: "window.removeHighlight('$id')");
     }
 
     for (final hl in newList) {
@@ -228,8 +223,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         final old = oldList.firstWhere((h) => h.id == hl.id);
         if (old.color != hl.color) {
           _controller!.evaluateJavascript(
-            source:
-                "window.updateHighlightColor('${hl.id}','${hl.color}')",
+            source: "window.updateHighlightColor('${hl.id}','${hl.color}')",
           );
         }
       }
@@ -243,8 +237,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         .replaceAll('\n', '\\n')
         .replaceAll('\r', '');
     _controller?.evaluateJavascript(
-      source:
-          "window.addHighlight('${hl.id}','$escapedText','${hl.color}')",
+      source: "window.addHighlight('${hl.id}','$escapedText','${hl.color}')",
     );
   }
 
@@ -277,8 +270,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   // ─── 坐标转换 ───
 
   Rect _normalizedToScreen(Map<String, dynamic> data) {
-    final box =
-        _webViewKey.currentContext?.findRenderObject() as RenderBox?;
+    final box = _webViewKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return Rect.zero;
 
     final size = box.size;
@@ -293,8 +285,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   }
 
   Offset _normalizedToOffset(Map<String, dynamic> data) {
-    final box =
-        _webViewKey.currentContext?.findRenderObject() as RenderBox?;
+    final box = _webViewKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return Offset.zero;
 
     final size = box.size;
@@ -369,9 +360,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
             final data = args[0] as Map<String, dynamic>;
             final id = data['id'] as String? ?? '';
             if (id.isEmpty) return;
-            final hl = widget.highlights
-                .where((h) => h.id == id)
-                .firstOrNull;
+            final hl = widget.highlights.where((h) => h.id == id).firstOrNull;
             if (hl == null) return;
             final pos = _normalizedToOffset(data);
             widget.onHighlightClick?.call(hl, pos);

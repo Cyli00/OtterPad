@@ -597,8 +597,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       charOffset,
       (charOffset + 200).clamp(0, md.length),
     );
-    final imgMatch = RegExp(r'!\[.*?\]\(.*?([^/\\)]+\.(?:png|jpg|jpeg|gif|webp))')
-        .firstMatch(around);
+    final imgMatch = RegExp(
+      r'!\[.*?\]\(.*?([^/\\)]+\.(?:png|jpg|jpeg|gif|webp))',
+    ).firstMatch(around);
     if (imgMatch == null) return;
     final filename = imgMatch.group(1)!;
     Future.delayed(const Duration(milliseconds: 400), () {
@@ -802,14 +803,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _addHighlight(String text, String color) {
     if (text.trim().isEmpty) return;
-    ref.read(highlightProvider(_documentId).notifier).add(
-          text.trim(),
-          color: color,
-        );
+    ref
+        .read(highlightProvider(_documentId).notifier)
+        .add(text.trim(), color: color);
     final created = ref.read(highlightProvider(_documentId)).lastOrNull;
     if (created != null) {
-      _webViewReaderKey.currentState
-          ?.addHighlightFromSelection(created.id, color);
+      _webViewReaderKey.currentState?.addHighlightFromSelection(
+        created.id,
+        color,
+      );
     }
   }
 
@@ -818,10 +820,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _updateHighlightColor(String highlightId, String color) {
-    ref.read(highlightProvider(_documentId).notifier).updateColor(
-          highlightId,
-          color,
-        );
+    ref
+        .read(highlightProvider(_documentId).notifier)
+        .updateColor(highlightId, color);
   }
 
   void _handleHighlightTap(Highlight highlight, Offset position) {
@@ -878,11 +879,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onTranslate: () {
         final trimmed = text.trim();
         final fullText = _expandToParagraphContext(trimmed);
-        showTranslationPopup(
-          context,
-          sourceText: trimmed,
-          fullText: fullText,
-        );
+        showTranslationPopup(context, sourceText: trimmed, fullText: fullText);
       },
       onCreateForNote: () {
         _addHighlight(text, kDefaultHighlightColor);
