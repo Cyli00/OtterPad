@@ -24,6 +24,11 @@ class IdentifierResolver {
   IdentifierResolver._();
   static final IdentifierResolver instance = IdentifierResolver._();
 
+  static final RegExp _elifeDoiRegExp = RegExp(
+    r'^10\.7554/elife\.(\d+)(?:\.\d+)?$',
+    caseSensitive: false,
+  );
+
   late final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 15),
@@ -110,20 +115,37 @@ class IdentifierResolver {
     bool metadataOnly = false,
     CancelToken? cancelToken,
   }) async {
+    final normalizedDoiForMetadata = normalizeElifeDoiForMetadata(doi);
+    final elifeArticleId = _extractElifeArticleId(normalizedDoiForMetadata);
+    if (elifeArticleId != null) {
+      try {
+        return await _resolveElifeArticle(
+          articleId: elifeArticleId,
+          doi: normalizedDoiForMetadata,
+          metadataOnly: metadataOnly,
+          cancelToken: cancelToken,
+        );
+      } catch (e) {
+        debugPrint('eLife API 解析失败，回退 Crossref: $e');
+      }
+    }
+
     try {
       final resp = await _dio.get(
-        'https://api.crossref.org/works/$doi',
+        'https://api.crossref.org/works/${_encodeDoiPathSegment(normalizedDoiForMetadata)}',
+        queryParameters: {'mailto': 'dev@otterpad.app'},
         cancelToken: cancelToken,
       );
       final msg = resp.data['message'] as Map<String, dynamic>;
 
-      final title = _extractFirst(msg['title']) ?? doi;
+      final title = _extractFirst(msg['title']) ?? normalizedDoiForMetadata;
       final authors = _extractCrossRefAuthors(msg['author']);
       final journal =
           _extractFirst(msg['container-title']) ??
           _extractFirst(msg['short-container-title']);
       final year = _extractCrossRefYear(msg);
-      final resolvedDoi = (msg['DOI'] as String? ?? doi).toLowerCase();
+      final resolvedDoi = (msg['DOI'] as String? ?? normalizedDoiForMetadata)
+          .toLowerCase();
 
       String filePath = '';
       if (!metadataOnly) {
@@ -133,7 +155,7 @@ class IdentifierResolver {
             year: year,
             authors: authors,
             title: title,
-            fallbackId: doi.replaceAll('/', '_'),
+            fallbackId: normalizedDoiForMetadata.replaceAll('/', '_'),
             cancelToken: cancelToken,
           );
         } catch (e) {
@@ -143,7 +165,7 @@ class IdentifierResolver {
         if (filePath.isEmpty) {
           try {
             final unpaywallResponse = await _dio.get(
-              'https://api.unpaywall.org/v2/$doi',
+              'https://api.unpaywall.org/v2/${_encodeDoiPathSegment(normalizedDoiForMetadata)}',
               queryParameters: {'email': 'dev@otterpad.app'},
               cancelToken: cancelToken,
             );
@@ -158,7 +180,7 @@ class IdentifierResolver {
                 year: year,
                 authors: authors,
                 title: title,
-                fallbackId: doi.replaceAll('/', '_'),
+                fallbackId: normalizedDoiForMetadata.replaceAll('/', '_'),
                 cancelToken: cancelToken,
               );
             }
@@ -186,6 +208,59 @@ class IdentifierResolver {
     }
   }
 
+  Future<Document> _resolveElifeArticle({
+    required String articleId,
+    required String doi,
+    bool metadataOnly = false,
+    CancelToken? cancelToken,
+  }) async {
+    final resp = await _dio.get(
+      'https://api.elifesciences.org/articles/$articleId',
+      cancelToken: cancelToken,
+    );
+    final data = resp.data as Map<String, dynamic>;
+
+    final title = (data['title'] as String?)?.trim();
+    final resolvedTitle = title == null || title.isEmpty ? doi : title;
+    final authors = _extractElifeAuthors(data['authors'], data['authorLine']);
+    final year = _extractYearFromString(data['published'] as String?);
+    final resolvedDoi =
+        IdentifierParser.normalizeDoi(data['doi'] as String?)?.toLowerCase() ??
+        doi.toLowerCase();
+    final keywords = _extractElifeKeywords(data['keywords'], data['subjects']);
+
+    String filePath = '';
+    if (!metadataOnly) {
+      final pdfUrl = data['pdf'] as String?;
+      if (pdfUrl != null && pdfUrl.isNotEmpty) {
+        try {
+          filePath = await _downloadPdf(
+            url: pdfUrl,
+            year: year,
+            authors: authors,
+            title: resolvedTitle,
+            fallbackId: articleId,
+            cancelToken: cancelToken,
+          );
+        } catch (e) {
+          debugPrint('eLife PDF 下载失败: $e');
+        }
+      }
+    }
+
+    return Document(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: resolvedTitle,
+      authors: authors,
+      journal: 'eLife',
+      year: year,
+      doi: resolvedDoi,
+      keywords: keywords,
+      filePath: filePath,
+      addedAt: DateTime.now(),
+    );
+  }
+
   Future<Document> _resolvePmid(
     String pmid, {
     bool metadataOnly = false,
@@ -196,29 +271,24 @@ class IdentifierResolver {
       // 只有 efetch 能拿到受控主题词，用于后续的推荐算法。
       final resp = await _dio.get(
         'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi',
-        queryParameters: {
-          'db': 'pubmed',
-          'id': pmid,
-          'retmode': 'xml',
-        },
+        queryParameters: {'db': 'pubmed', 'id': pmid, 'retmode': 'xml'},
         options: Options(responseType: ResponseType.plain),
         cancelToken: cancelToken,
       );
 
       final xmlDoc = XmlDocument.parse(resp.data as String);
-      final articleNode =
-          xmlDoc.findAllElements('PubmedArticle').firstOrNull;
+      final articleNode = xmlDoc.findAllElements('PubmedArticle').firstOrNull;
       if (articleNode == null) {
         throw const IdentifierResolveException('未找到该标识符对应的文献');
       }
-      final medline =
-          articleNode.findElements('MedlineCitation').firstOrNull;
+      final medline = articleNode.findElements('MedlineCitation').firstOrNull;
       final articleEl = medline?.findElements('Article').firstOrNull;
       if (articleEl == null) {
         throw const IdentifierResolveException('未找到该标识符对应的文献');
       }
 
-      final title = articleEl
+      final title =
+          articleEl
               .findElements('ArticleTitle')
               .firstOrNull
               ?.innerText
@@ -232,22 +302,34 @@ class IdentifierResolver {
       final authorList = articleEl.findElements('AuthorList').firstOrNull;
       if (authorList != null) {
         for (final author in authorList.findElements('Author')) {
-          final lastName =
-              author.findElements('LastName').firstOrNull?.innerText.trim();
-          final foreName =
-              author.findElements('ForeName').firstOrNull?.innerText.trim();
-          final initials =
-              author.findElements('Initials').firstOrNull?.innerText.trim();
+          final lastName = author
+              .findElements('LastName')
+              .firstOrNull
+              ?.innerText
+              .trim();
+          final foreName = author
+              .findElements('ForeName')
+              .firstOrNull
+              ?.innerText
+              .trim();
+          final initials = author
+              .findElements('Initials')
+              .firstOrNull
+              ?.innerText
+              .trim();
           final collective = author
               .findElements('CollectiveName')
               .firstOrNull
               ?.innerText
               .trim();
           if (lastName != null && lastName.isNotEmpty) {
-            final given =
-                (foreName != null && foreName.isNotEmpty) ? foreName : initials;
+            final given = (foreName != null && foreName.isNotEmpty)
+                ? foreName
+                : initials;
             authors.add(
-              (given != null && given.isNotEmpty) ? '$given $lastName' : lastName,
+              (given != null && given.isNotEmpty)
+                  ? '$given $lastName'
+                  : lastName,
             );
           } else if (collective != null && collective.isNotEmpty) {
             authors.add(collective);
@@ -256,11 +338,8 @@ class IdentifierResolver {
       }
 
       final journalEl = articleEl.findElements('Journal').firstOrNull;
-      final journal = journalEl
-              ?.findElements('Title')
-              .firstOrNull
-              ?.innerText
-              .trim() ??
+      final journal =
+          journalEl?.findElements('Title').firstOrNull?.innerText.trim() ??
           journalEl
               ?.findElements('ISOAbbreviation')
               .firstOrNull
@@ -273,8 +352,11 @@ class IdentifierResolver {
           .firstOrNull
           ?.findElements('PubDate')
           .firstOrNull;
-      String? year =
-          pubDate?.findElements('Year').firstOrNull?.innerText.trim();
+      String? year = pubDate
+          ?.findElements('Year')
+          .firstOrNull
+          ?.innerText
+          .trim();
       if ((year == null || year.isEmpty) && pubDate != null) {
         final medlineDate = pubDate
             .findElements('MedlineDate')
@@ -367,7 +449,7 @@ class IdentifierResolver {
             normalizedDoi.isNotEmpty) {
           try {
             final unpaywallResponse = await _dio.get(
-              'https://api.unpaywall.org/v2/$normalizedDoi',
+              'https://api.unpaywall.org/v2/${_encodeDoiPathSegment(normalizedDoi)}',
               queryParameters: {'email': 'dev@otterpad.app'},
               cancelToken: cancelToken,
             );
@@ -587,7 +669,7 @@ class IdentifierResolver {
     // 步骤 2: Unpaywall 开放获取
     try {
       final uResp = await _dio.get(
-        'https://api.unpaywall.org/v2/$doi',
+        'https://api.unpaywall.org/v2/${_encodeDoiPathSegment(doi)}',
         queryParameters: {'email': 'dev@otterpad.app'},
         cancelToken: cancelToken,
       );
@@ -612,7 +694,7 @@ class IdentifierResolver {
     // 步骤 3: Sci-Hub 兜底
     try {
       final sResp = await _dio.get(
-        'https://sci-hub.se/$doi',
+        'https://sci-hub.se/${_encodeDoiPathSegment(doi)}',
         cancelToken: cancelToken,
       );
       final html = sResp.data as String;
@@ -666,7 +748,7 @@ class IdentifierResolver {
     Uri? publisherUri;
     try {
       final resp = await _dio.head(
-        'https://doi.org/$doi',
+        _doiUrl(doi),
         options: Options(
           followRedirects: true,
           maxRedirects: 10,
@@ -776,6 +858,14 @@ class IdentifierResolver {
     return ct != null && ct.contains('application/pdf');
   }
 
+  String _doiUrl(String doi) {
+    return 'https://doi.org/${_encodeDoiPathSegment(doi)}';
+  }
+
+  String _encodeDoiPathSegment(String doi) {
+    return Uri.encodeComponent(doi);
+  }
+
   // ─── PDF 下载 ─────────────────────────────────────────────────────────────
 
   /// 下载 PDF 到文档目录，校验 %PDF 魔数后返回文件路径，校验失败则删除文件并返回空字符串。
@@ -846,6 +936,18 @@ class IdentifierResolver {
 
   // ─── 元数据提取工具 ───────────────────────────────────────────────────────
 
+  @visibleForTesting
+  static String normalizeElifeDoiForMetadata(String doi) {
+    final trimmed = doi.trim();
+    final match = _elifeDoiRegExp.firstMatch(trimmed);
+    if (match == null) return trimmed;
+    return '10.7554/elife.${match.group(1)}';
+  }
+
+  static String? _extractElifeArticleId(String doi) {
+    return _elifeDoiRegExp.firstMatch(doi.trim())?.group(1);
+  }
+
   String? _extractFirst(dynamic list) {
     if (list is List && list.isNotEmpty) return list.first.toString();
     return null;
@@ -862,6 +964,59 @@ class IdentifierResolver {
         })
         .where((name) => name.isNotEmpty)
         .toList();
+  }
+
+  List<String> _extractElifeAuthors(dynamic authorList, dynamic authorLine) {
+    final authors = <String>[];
+    if (authorList is List) {
+      for (final author in authorList) {
+        if (author is! Map) continue;
+        final name = author['name'];
+        if (name is Map) {
+          final preferred = name['preferred']?.toString().trim();
+          if (preferred != null && preferred.isNotEmpty) {
+            authors.add(preferred);
+          }
+        }
+      }
+    }
+
+    if (authors.isNotEmpty) return authors;
+    if (authorLine is! String || authorLine.trim().isEmpty) return authors;
+    return authorLine
+        .replaceAll('...', ',')
+        .split(',')
+        .map((author) => author.trim())
+        .where((author) => author.isNotEmpty)
+        .toList();
+  }
+
+  List<String> _extractElifeKeywords(dynamic keywordList, dynamic subjectList) {
+    final keywords = <String>[];
+    final seen = <String>{};
+
+    void addKeyword(String? value) {
+      if (value == null) return;
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return;
+      if (seen.add(trimmed.toLowerCase())) keywords.add(trimmed);
+    }
+
+    if (keywordList is List) {
+      for (final keyword in keywordList) {
+        addKeyword(keyword?.toString());
+      }
+    }
+
+    if (subjectList is List) {
+      for (final subject in subjectList) {
+        if (subject is Map) {
+          addKeyword(subject['name']?.toString());
+        }
+      }
+    }
+
+    return keywords;
   }
 
   String? _extractCrossRefYear(Map<String, dynamic> msg) {

@@ -15,15 +15,28 @@ class IdentifierParser {
 
   static final _doiRegExp = RegExp(r'^10\.\d{4,}/\S+$');
   static final _arxivNewRegExp = RegExp(r'^\d{4}\.\d{4,5}(v\d+)?$');
-  static final _arxivOldRegExp = RegExp(r'^[a-z-]+/\d{7}$');
+  static final _arxivOldRegExp = RegExp(
+    r'^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)?/\d{7}(v\d+)?$',
+    caseSensitive: false,
+  );
   static final _pmidRegExp = RegExp(r'^\d{1,8}$');
   static final _isbn10RegExp = RegExp(r'^\d{9}[\dXx]$');
   static final _isbn13RegExp = RegExp(r'^\d{13}$');
+  static final _doiTrailingPunctuationRegExp = RegExp(r'[.,;)\]]+$');
+  static final _doiTrailingXmlTagRegExp = RegExp(
+    r'</[A-Za-z][^<>\s]*>$',
+    caseSensitive: false,
+  );
+  static final _doiTrailingPdfSuffixRegExp = RegExp(
+    r'\.pdf$',
+    caseSensitive: false,
+  );
 
-  static ParsedIdentifier parse(String raw) {
+  static String? normalizeDoi(String? raw) {
+    if (raw == null) return null;
     var input = raw.trim();
+    if (input.isEmpty) return null;
 
-    // DOI：去除常见前缀
     final doiPrefixes = [
       'https://doi.org/',
       'http://doi.org/',
@@ -37,8 +50,19 @@ class IdentifierParser {
         break;
       }
     }
-    if (_doiRegExp.hasMatch(input)) {
-      return ParsedIdentifier(IdentifierType.doi, input);
+
+    input = input
+        .replaceAll(_doiTrailingXmlTagRegExp, '')
+        .replaceAll(_doiTrailingPdfSuffixRegExp, '')
+        .replaceAll(_doiTrailingPunctuationRegExp, '');
+    if (!_doiRegExp.hasMatch(input)) return null;
+    return input;
+  }
+
+  static ParsedIdentifier parse(String raw) {
+    final doi = normalizeDoi(raw);
+    if (doi != null) {
+      return ParsedIdentifier(IdentifierType.doi, doi);
     }
 
     // arXiv：去除常见前缀
@@ -54,13 +78,12 @@ class IdentifierParser {
     for (final prefix in arxivPrefixes) {
       if (arxivInput.toLowerCase().startsWith(prefix.toLowerCase())) {
         arxivInput = arxivInput.substring(prefix.length).trim();
-        // 去除可能的 .pdf 后缀
-        if (arxivInput.endsWith('.pdf')) {
-          arxivInput = arxivInput.substring(0, arxivInput.length - 4);
-        }
         break;
       }
     }
+    arxivInput = arxivInput
+        .replaceFirst(RegExp(r'[?#].*$'), '')
+        .replaceFirst(RegExp(r'\.pdf$', caseSensitive: false), '');
     if (_arxivNewRegExp.hasMatch(arxivInput) ||
         _arxivOldRegExp.hasMatch(arxivInput)) {
       return ParsedIdentifier(IdentifierType.arxiv, arxivInput);
@@ -82,14 +105,14 @@ class IdentifierParser {
 
     // ISBN：去除连字符和前缀
     var isbnInput = raw.trim();
-    final isbnPrefixes = ['ISBN:', 'isbn:', 'ISBN-10:', 'ISBN-13:'];
+    final isbnPrefixes = ['isbn-10:', 'isbn-13:', 'isbn:'];
     for (final prefix in isbnPrefixes) {
-      if (isbnInput.startsWith(prefix)) {
+      if (isbnInput.toLowerCase().startsWith(prefix)) {
         isbnInput = isbnInput.substring(prefix.length).trim();
         break;
       }
     }
-    isbnInput = isbnInput.replaceAll('-', '');
+    isbnInput = isbnInput.replaceAll(RegExp(r'[-\s]'), '');
     if (_isbn10RegExp.hasMatch(isbnInput) ||
         _isbn13RegExp.hasMatch(isbnInput)) {
       return ParsedIdentifier(IdentifierType.isbn, isbnInput);

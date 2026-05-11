@@ -1,5 +1,7 @@
 import 'package:path/path.dart' as p;
 
+import 'identifier_parser.dart';
+
 class DocumentMetadata {
   final String? title;
   final List<String> authors;
@@ -48,7 +50,7 @@ class DocumentMetadata {
 
 class DocumentMetadataParser {
   static final RegExp _doiPattern = RegExp(
-    r'10\.\d{4,}/[^\s<>"{}|\\^`\[\]]+',
+    r'10\.\d{4,}/[^\s"{}|\\^`\[\]]+',
     caseSensitive: false,
   );
 
@@ -57,7 +59,6 @@ class DocumentMetadataParser {
     r'\.pdf$',
     caseSensitive: false,
   );
-  static final RegExp _trailingPunctuationPattern = RegExp(r'[.,;)\]]+$');
 
   static DocumentMetadata parseFilePath(String filePath) {
     return parseText(p.basename(filePath));
@@ -87,7 +88,7 @@ class DocumentMetadataParser {
         .trim();
     final match = _doiPattern.firstMatch(normalizedInput);
     if (match == null) return null;
-    return match.group(0)?.replaceAll(_trailingPunctuationPattern, '');
+    return IdentifierParser.normalizeDoi(match.group(0));
   }
 
   static String? extractYear(String? text) {

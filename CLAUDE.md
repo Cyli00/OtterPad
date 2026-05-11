@@ -210,3 +210,4 @@ Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数
   3. **非 PubMed 文献兜底**：用快速 Agent 模型跑 abstract 抽关键词，单独存 `extractedKeywords` 字段，**不要**和受控 MeSH 混入同一字段（自由文本 vs 受控词表不能直接算 Jaccard）
   4. **MeSH Tree Number + IDF**（高级）：在 efetch 里额外解析 `DescriptorName` 的 tree numbers，配合本地 MeSH 树表（~2MB JSON）按层级距离算相似度；同时全库扫一遍建 IDF 权重，稀有词权重高
   - 架构原则：PubMed 文献走 MeSH 路径，其他领域走 embedding / 抽取关键词路径，**在更高层融合信号**，不要强行塞进同一个向量空间
+-  还想要"列表点击 →卡片扩展"或"下滑关闭"，告诉我，那是两个独立的小增强，单独可加

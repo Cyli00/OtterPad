@@ -16,80 +16,102 @@ class PdfIdentifierExtractor {
   static const _extractTimeout = Duration(seconds: 30);
 
   // 非锚定 DOI 正则，用于在散文文本中搜索
-  static final _doiRegExp = RegExp(r'10\.\d{4,}/[^\s<>"{}|\\^`\[\]]+');
+  static final _doiRegExp = RegExp(
+    r'10\.\d{4,}/[^\s"{}|\\^`\[\]]+',
+    caseSensitive: false,
+  );
 
   // arXiv ID 正则（新格式 YYMM.NNNNN，含可选版本号）
-  static final _arxivRegExp = RegExp(r'arXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?)');
+  static final _arxivNewRegExp = RegExp(
+    r'(?:arXiv:\s*|arxiv\.org/(?:abs|pdf)/)(\d{4}\.\d{4,5}(?:v\d+)?)',
+    caseSensitive: false,
+  );
 
-  // ISBN-13 正则（带可选连字符，保守匹配避免纯数字误匹配）
-  static final _isbnRegExp = RegExp(r'(?:ISBN[:\s-]*)(97[89]-?\d-?\d{2,7}-?\d{2,7}-?\d)');
+  // arXiv 旧格式：archive[.subject]/YYMMNNN，历史分类会出现大小写混排。
+  static final _arxivOldRegExp = RegExp(
+    r'(?:arXiv:\s*|arxiv\.org/(?:abs|pdf)/)?([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)?/\d{7}(?:v\d+)?)',
+    caseSensitive: false,
+  );
 
-  // 需要清理的尾部标点
-  static final _trailingPunctuation = RegExp(r'[.,;)\]]+$');
+  // ISBN 正则：必须带 ISBN 标签，避免把普通页码或编号误识别成图书标识符。
+  static final _isbnRegExp = RegExp(
+    r'(?:ISBN(?:-1[03])?[:\s-]*)([0-9Xx][0-9Xx\s-]{8,20})',
+    caseSensitive: false,
+  );
 
   /// 从 PDF 前 2 页提取文本（带超时保护）
   Future<String?> _extractText(String filePath) async {
-    return PdfProcessLock.instance.run(() async {
-      PdfDocument? document;
-      try {
-        document = await PdfDocument.openFile(
-          filePath,
-          passwordProvider: () => '',
+    return PdfProcessLock.instance
+        .run(() async {
+          PdfDocument? document;
+          try {
+            document = await PdfDocument.openFile(
+              filePath,
+              passwordProvider: () => '',
+            );
+
+            if (document.pages.isEmpty) return null;
+
+            final pageCount = document.pages.length.clamp(0, 2);
+            final buffer = StringBuffer();
+
+            for (int i = 0; i < pageCount; i++) {
+              final page = document.pages[i];
+              await page.ensureLoaded();
+              final text = await page.loadText();
+              buffer.write(text?.fullText ?? '');
+              buffer.write(' ');
+            }
+
+            return buffer.toString();
+          } catch (e) {
+            debugPrint('提取 PDF 文本失败 ($filePath): $e');
+            return null;
+          } finally {
+            document?.dispose();
+          }
+        })
+        .timeout(
+          _extractTimeout,
+          onTimeout: () {
+            debugPrint('提取 PDF 文本超时 ($filePath)');
+            return null;
+          },
         );
-
-        if (document.pages.isEmpty) return null;
-
-        final pageCount = document.pages.length.clamp(0, 2);
-        final buffer = StringBuffer();
-
-        for (int i = 0; i < pageCount; i++) {
-          final page = document.pages[i];
-          await page.ensureLoaded();
-          final text = await page.loadText();
-          buffer.write(text?.fullText ?? '');
-          buffer.write(' ');
-        }
-
-        return buffer.toString();
-      } catch (e) {
-        debugPrint('提取 PDF 文本失败 ($filePath): $e');
-        return null;
-      } finally {
-        document?.dispose();
-      }
-    }).timeout(
-      _extractTimeout,
-      onTimeout: () {
-        debugPrint('提取 PDF 文本超时 ($filePath)');
-        return null;
-      },
-    );
   }
 
   /// 从 PDF 前 2 页提取最佳标识符（DOI > arXiv > ISBN）
   Future<ParsedIdentifier?> extractIdentifier(String filePath) async {
     final fullText = await _extractText(filePath);
+    return extractIdentifierFromText(fullText);
+  }
+
+  @visibleForTesting
+  static ParsedIdentifier? extractIdentifierFromText(String? fullText) {
     if (fullText == null) return null;
 
     // 优先级 1: DOI
     final doiMatch = _doiRegExp.firstMatch(fullText);
     if (doiMatch != null) {
-      var doi = doiMatch.group(0)!;
-      doi = doi.replaceAll(_trailingPunctuation, '');
-      return ParsedIdentifier(IdentifierType.doi, doi);
+      final doi = IdentifierParser.normalizeDoi(doiMatch.group(0)!);
+      if (doi != null) return ParsedIdentifier(IdentifierType.doi, doi);
     }
 
     // 优先级 2: arXiv ID
-    final arxivMatch = _arxivRegExp.firstMatch(fullText);
-    if (arxivMatch != null) {
-      return ParsedIdentifier(IdentifierType.arxiv, arxivMatch.group(1)!);
+    final arxivNewMatch = _arxivNewRegExp.firstMatch(fullText);
+    if (arxivNewMatch != null) {
+      return ParsedIdentifier(IdentifierType.arxiv, arxivNewMatch.group(1)!);
+    }
+    final arxivOldMatch = _arxivOldRegExp.firstMatch(fullText);
+    if (arxivOldMatch != null) {
+      return ParsedIdentifier(IdentifierType.arxiv, arxivOldMatch.group(1)!);
     }
 
-    // 优先级 3: ISBN-13
+    // 优先级 3: ISBN-10 / ISBN-13
     final isbnMatch = _isbnRegExp.firstMatch(fullText);
     if (isbnMatch != null) {
-      final isbn = isbnMatch.group(1)!.replaceAll('-', '');
-      return ParsedIdentifier(IdentifierType.isbn, isbn);
+      final parsed = IdentifierParser.parse(isbnMatch.group(1)!);
+      if (parsed.type == IdentifierType.isbn) return parsed;
     }
 
     return null;
