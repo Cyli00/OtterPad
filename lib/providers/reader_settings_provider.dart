@@ -104,6 +104,30 @@ enum ReaderFont {
       };
 }
 
+/// 阅读器翻页方式
+///
+/// [vertical]：传统上下滚动（默认）；[horizontal]：CSS multi-column
+/// 横向分栏翻页（鼠标滚轮 / 键盘 ← → / 边缘 30% 点击 / 触摸滑动）。
+/// 全局生效，跨文献共享，与字号 / 字体同级。
+///
+/// 枚举尾追规则：Hive 持久化用 `.index`，删枚举或插中间会让老用户的
+/// 保存值错位加载，只能在 `values` 末尾追加。
+enum ReaderPaginationMode {
+  vertical,
+  horizontal;
+
+  String get label => switch (this) {
+        ReaderPaginationMode.vertical => '上下翻页',
+        ReaderPaginationMode.horizontal => '左右翻页',
+      };
+
+  /// JS `setPaginationMode(...)` 接受的字符串 id。
+  String get jsId => switch (this) {
+        ReaderPaginationMode.vertical => 'vertical',
+        ReaderPaginationMode.horizontal => 'horizontal',
+      };
+}
+
 /// 工具栏透明度预设
 enum ToolbarOpacity {
   opaque(1.0, '不透明'),
@@ -122,6 +146,7 @@ class ReaderSettingsState {
   final double fontSize;
   final DefaultReadingMode defaultReadingMode;
   final ToolbarOpacity toolbarOpacity;
+  final ReaderPaginationMode paginationMode;
 
   const ReaderSettingsState({
     this.theme = ReaderTheme.themed,
@@ -129,6 +154,7 @@ class ReaderSettingsState {
     this.fontSize = 16.0,
     this.defaultReadingMode = DefaultReadingMode.markdown,
     this.toolbarOpacity = ToolbarOpacity.glass,
+    this.paginationMode = ReaderPaginationMode.vertical,
   });
 
   ReaderSettingsState copyWith({
@@ -137,6 +163,7 @@ class ReaderSettingsState {
     double? fontSize,
     DefaultReadingMode? defaultReadingMode,
     ToolbarOpacity? toolbarOpacity,
+    ReaderPaginationMode? paginationMode,
   }) {
     return ReaderSettingsState(
       theme: theme ?? this.theme,
@@ -144,6 +171,7 @@ class ReaderSettingsState {
       fontSize: fontSize ?? this.fontSize,
       defaultReadingMode: defaultReadingMode ?? this.defaultReadingMode,
       toolbarOpacity: toolbarOpacity ?? this.toolbarOpacity,
+      paginationMode: paginationMode ?? this.paginationMode,
     );
   }
 
@@ -157,6 +185,7 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   static const _kFontSize = 'reader_font_size';
   static const _kDefaultMode = 'reader_default_mode';
   static const _kToolbarOpacity = 'reader_toolbar_opacity';
+  static const _kPaginationMode = 'reader_pagination_mode';
 
   ReaderSettingsNotifier() : super(_load());
 
@@ -167,6 +196,8 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     final fontSize = box.get(_kFontSize, defaultValue: 16.0) as double;
     final modeIndex = box.get(_kDefaultMode, defaultValue: 0) as int;
     final opacityIndex = box.get(_kToolbarOpacity, defaultValue: 2) as int;
+    final paginationIndex =
+        box.get(_kPaginationMode, defaultValue: 0) as int;
     return ReaderSettingsState(
       theme: ReaderTheme
           .values[themeIndex.clamp(0, ReaderTheme.values.length - 1)],
@@ -180,6 +211,8 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
           DefaultReadingMode.values[modeIndex.clamp(0, 1)],
       toolbarOpacity: ToolbarOpacity
           .values[opacityIndex.clamp(0, ToolbarOpacity.values.length - 1)],
+      paginationMode: ReaderPaginationMode.values[
+          paginationIndex.clamp(0, ReaderPaginationMode.values.length - 1)],
     );
   }
 
@@ -210,6 +243,11 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   void setToolbarOpacity(ToolbarOpacity opacity) {
     state = state.copyWith(toolbarOpacity: opacity);
     GStorage.setting.put(_kToolbarOpacity, opacity.index);
+  }
+
+  void setPaginationMode(ReaderPaginationMode mode) {
+    state = state.copyWith(paginationMode: mode);
+    GStorage.setting.put(_kPaginationMode, mode.index);
   }
 
   void reload() {

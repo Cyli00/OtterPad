@@ -898,7 +898,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _handleWebViewScrollDirection(ScrollDirection direction) {
     if (_sheetOpen || _searchActive || _highlightQuery != null) return;
+    // 横向翻页模式下不让滚动方向驱动工具栏隐藏——翻页时工具栏会频繁
+    // 闪烁。横向模式的工具栏 toggle 改由 JS 中央点击触发（onToggleToolbar）。
+    final mode = ref.read(readerSettingsProvider).paginationMode;
+    if (mode == ReaderPaginationMode.horizontal) return;
     _handleReaderScrollDirection(direction);
+  }
+
+  void _handleWebViewToggleToolbar() {
+    if (_sheetOpen || _searchActive || _highlightQuery != null) return;
+    setState(() => _toolbarsVisible = !_toolbarsVisible);
   }
 
   // ─── 选择/标记工具栏 ───
@@ -1632,6 +1641,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onHighlightClick: _handleHighlightTap,
       onImageClick: _handleMarkdownImageTap,
       onScrollDirection: _handleWebViewScrollDirection,
+      onToggleToolbar: _handleWebViewToggleToolbar,
     );
   }
 

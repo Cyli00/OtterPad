@@ -29,6 +29,10 @@ class WebViewMarkdownReader extends StatefulWidget {
   final void Function(String imageSource)? onImageClick;
   final void Function(ScrollDirection direction)? onScrollDirection;
 
+  /// 横向翻页模式下点击页面中央触发——view 层据此 toggle 沉浸式工具栏。
+  /// vertical 模式下不会被调（JS 侧已 mode 短路）。
+  final VoidCallback? onToggleToolbar;
+
   const WebViewMarkdownReader({
     super.key,
     required this.markdownData,
@@ -44,6 +48,7 @@ class WebViewMarkdownReader extends StatefulWidget {
     this.onHighlightClick,
     this.onImageClick,
     this.onScrollDirection,
+    this.onToggleToolbar,
   });
 
   @override
@@ -106,15 +111,20 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         widget.settings.fontSize != oldWidget.settings.fontSize ||
         widget.settings.font != oldWidget.settings.font ||
         widget.settings.theme != oldWidget.settings.theme;
+    final paginationChanged =
+        widget.settings.paginationMode != oldWidget.settings.paginationMode;
 
     // 数据变化必须重写 HTML + reload —— DOM 内容不在 CSS 变量控制范围。
-    // 主题/字号/字体单独变 → 仅写 CSS 变量，**不销毁** DOM/KaTeX 渲染缓存/
-    // 已绘制的 SVG 高亮——这是性能上最大的修正：之前任何主题切换都触发完整
-    // 重载，包括 KaTeX CDN 重新加载、所有图片重新下载、所有高亮 redraw。
+    // 主题/字号/字体/翻页方式单独变 → 仅改 CSS 变量或 body 属性，**不销毁**
+    // DOM/KaTeX 渲染缓存/已绘制的 SVG 高亮——这是性能上最大的修正：之前任何
+    // 主题切换都触发完整重载，包括 KaTeX CDN 重新加载、所有图片重新下载。
     if (dataChanged) {
       _reloadContent();
     } else if (themeChanged) {
       _applyTheme();
+    }
+    if (!dataChanged && paginationChanged) {
+      _applyPaginationMode();
     }
 
     if (!dataChanged && widget.highlights != oldWidget.highlights) {
@@ -164,6 +174,16 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     if (!_contentReady || _controller == null) return;
     _controller!.evaluateJavascript(
       source: buildThemeCssVars(widget.palette, widget.settings),
+    );
+  }
+
+  /// 翻页方式增量切换：仅改 body[data-pagination]，JS 侧 setPaginationMode
+  /// 内部触发 Overlayer.redraw() + 重发 scroll 让 lazy 图重新评估。
+  /// 与字号/主题切换同款"不重载 DOM"路径。
+  void _applyPaginationMode() {
+    if (!_contentReady || _controller == null) return;
+    _controller!.evaluateJavascript(
+      source: "window.setPaginationMode('${widget.settings.paginationMode.jsId}')",
     );
   }
 
@@ -321,7 +341,10 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         transparentBackground: false,
         disableContextMenu: true,
         supportZoom: false,
-        disableHorizontalScroll: true,
+        // 必须允许 WebView 横向滚动：horizontal 模式下 #content 通过
+        // scrollLeft 翻页；同时 vertical 模式下也让代码块/表格的
+        // overflow-x: auto 能正常工作。
+        disableHorizontalScroll: false,
         verticalScrollBarEnabled: true,
       ),
       onWebViewCreated: (controller) {
@@ -331,6 +354,10 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
           handlerName: 'onContentReady',
           callback: (_) {
             _contentReady = true;
+            // 翻页方式必须在首屏注入：JS 默认 body 没 data-pagination 属性，
+            // 视为 vertical；horizontal 时若不注入会以 vertical 渲染首屏，
+            // 直到第一次 didUpdateWidget 才切，造成"先看到 vertical 一闪"。
+            _applyPaginationMode();
             _restoreAllHighlights();
             _applySearchHighlight();
           },
@@ -389,6 +416,11 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
               widget.onScrollDirection?.call(ScrollDirection.forward);
             }
           },
+        );
+
+        controller.addJavaScriptHandler(
+          handlerName: 'onToggleToolbar',
+          callback: (_) => widget.onToggleToolbar?.call(),
         );
       },
     );

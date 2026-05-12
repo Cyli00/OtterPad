@@ -360,6 +360,55 @@ figcaption {
   animation: img-pulse 1s ease-in-out 2;
   border-radius: 4px;
 }
+
+/* ─── 左右翻页（CSS Multi-column）────────────────────────────
+ * 用浏览器原生分栏：column-width=100vw 让每一"列"= 一整个视口宽度，
+ * #content 横向溢出后通过水平滚动翻页。模式切换由 JS 改 body 的
+ * `data-pagination` 属性触发，不重排 DOM 也不销毁 KaTeX/高亮缓存。
+ *
+ * 关键约束：
+ * - figure / table / pre / 数学块 / h1-h3 加 break-inside: avoid，
+ *   避免被切到两页造成阅读断裂；
+ * - 大图最高 80vh，否则单张图独占一页导致大片空白；
+ * - scroll-snap-type: x mandatory 让滚动停在整页边界；
+ * - scrollbar 隐藏：横向模式视觉上是"翻书"，原生滚动条破坏沉浸感。
+ */
+body[data-pagination="horizontal"] {
+  height: 100vh;
+  overflow: hidden;
+  padding: 0;
+}
+body[data-pagination="horizontal"] #content {
+  padding: 24px 32px;
+  /* column-width 必须用 JS 喂入的 px 值（--page-width）而非 100vw：
+     在 InAppWebView 底层 (WebView2 / Chromium) 上 vw 单位不会触发
+     multi-column 的 reflow——窗口变大后会出现"一屏看到下一页"。
+     JS 在 load + resize 时主动 setProperty('--page-width', innerWidth+'px')，
+     CSS var 变化会触发 column layout invalidation，浏览器才重排。 */
+  column-width: var(--page-width, 100vw);
+  column-gap: 64px;
+  height: calc(100vh - 48px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+body[data-pagination="horizontal"] #content::-webkit-scrollbar {
+  display: none;
+}
+body[data-pagination="horizontal"] figure,
+body[data-pagination="horizontal"] table,
+body[data-pagination="horizontal"] pre,
+body[data-pagination="horizontal"] .math-display,
+body[data-pagination="horizontal"] .katex-display,
+body[data-pagination="horizontal"] h1,
+body[data-pagination="horizontal"] h2,
+body[data-pagination="horizontal"] h3 {
+  break-inside: avoid;
+}
+body[data-pagination="horizontal"] img {
+  max-height: 80vh;
+}
 ''';
 }
 
@@ -466,15 +515,27 @@ class Overlayer {
     return result.length ? result : [range];
   }
 
-  // 从 Range 计算 content-relative 矩形（不含 scrollX/Y，差值即 content 坐标）
+  // 从 Range 计算 content-relative 矩形（不含 scrollX/Y，差值即 content 坐标）。
+  //
+  // **关键**：`position: absolute` 的 SVG 起点是包含块的 **padding-box**，
+  // 但 `getBoundingClientRect()` 返回的是 **border-box** 视口坐标。当
+  // container（#content）自身有 padding 时（横向翻页模式 padding: 24px 32px），
+  // 直接用 `r.top - cRect.top` 算出的坐标基于 border-box 起点，比 SVG 实际
+  // 起点多偏移一个 padding 量——高亮整体向下/向右偏移 padding，文字行底。
+  // 减去 container padding 把坐标系对齐到 padding-box 起点（即 SVG 起点）。
+  //
+  // Vertical 模式下 container 无 padding，减 0 不变，保持兼容。
   _getContentRects(range) {
     const cRect = this.container.getBoundingClientRect();
+    const cs = getComputedStyle(this.container);
+    const padLeft = parseFloat(cs.paddingLeft) || 0;
+    const padTop = parseFloat(cs.paddingTop) || 0;
     let rects = [];
     for (const pr of this._splitRangeByParagraph(range)) {
       for (const r of pr.getClientRects()) {
         rects.push({
-          left: r.left - cRect.left,
-          top: r.top - cRect.top,
+          left: r.left - cRect.left - padLeft,
+          top: r.top - cRect.top - padTop,
           width: r.width,
           height: r.height,
         });
@@ -783,12 +844,33 @@ window.addEventListener('scroll', () => {
   });
 }, { passive: true });
 
-// ─── 图片点击 ───
+// ─── 图片点击 + 横向翻页点击区 ───
+// 单一 click listener：图片点击优先短路；其次横向模式下按 X 分三段——
+// 左 30% 上一页 / 右 30% 下一页 / 中央 toggle 工具栏。
+// 高亮点击不走这里——SVG <g data-hl-id> 自带 click 已 stopPropagation。
 document.addEventListener('click', (e) => {
   const img = e.target.closest('img');
   if (img && window.flutter_inappwebview) {
     e.preventDefault();
     window.flutter_inappwebview.callHandler('onImageClick', { src: img.src });
+    return;
+  }
+
+  if (document.body.dataset.pagination !== 'horizontal') return;
+
+  // 不抢可交互元素：链接、KaTeX 公式、搜索高亮 mark、SVG 高亮组
+  if (e.target.closest('a, .katex, mark, g[data-hl-id]')) return;
+  // 有未坍塌选区时不响应翻页/工具栏——避免误触打断拖选
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed) return;
+
+  const x = e.clientX / window.innerWidth;
+  if (x < 0.3) {
+    _flipPage(-1);
+  } else if (x > 0.7) {
+    _flipPage(1);
+  } else if (window.flutter_inappwebview) {
+    window.flutter_inappwebview.callHandler('onToggleToolbar');
   }
 });
 
@@ -936,5 +1018,135 @@ window.activateNearestSearchResult = function() {
     }
   }
 };
+
+// ─── 翻页模式切换（Flutter 调用）───
+// 由 Flutter 在 onContentReady 与 settings.paginationMode 变化时触发。
+// 模式变化导致容器尺寸/坐标系变化：
+//   1) sync --page-width 让 column 按当前 viewport 重排；
+//   2) Overlayer.redraw() 重算所有高亮 rect；
+//   3) dispatchEvent('scroll') 让 lazy 图片在新视口下重新评估。
+window.setPaginationMode = function(mode) {
+  if (mode !== 'vertical' && mode !== 'horizontal') return;
+  document.body.dataset.pagination = mode;
+  _syncPaginationVars();
+  if (window._overlayer) window._overlayer.redraw();
+  window.dispatchEvent(new Event('scroll'));
+  if (mode === 'horizontal') _targetPage = _currentPage();
+};
+
+// ─── 横向翻页"页号状态机"（参考 Flutter PageController）───
+// 不依赖 scrollLeft 当前值翻页——smooth scroll 在动画中会让 scrollLeft
+// 处于"非整页"状态，多次相对 scrollBy 累加会停在中间。改成：
+//   _targetPage 是真实意图位置，scrollBy 永远基于它的整页边界，
+//   连续翻页累加到 _targetPage，最终一次性 scrollTo 到对齐位置。
+let _targetPage = 0;
+
+function _currentPage() {
+  return Math.round(
+    document.getElementById('content').scrollLeft / window.innerWidth);
+}
+
+function _maxPage() {
+  const c = document.getElementById('content');
+  return Math.max(0, Math.round(c.scrollWidth / window.innerWidth) - 1);
+}
+
+function _goToPage(idx) {
+  const c = document.getElementById('content');
+  idx = Math.max(0, Math.min(_maxPage(), idx));
+  _targetPage = idx;
+  c.scrollTo({ left: idx * window.innerWidth, behavior: 'smooth' });
+}
+
+function _flipPage(delta) {
+  _goToPage(_targetPage + delta);
+}
+
+// ─── --page-width 同步 + resize 响应 ───
+// vw 在某些 WebView 实现里不触发 column reflow，必须用 JS 主动 setProperty。
+// resize 时记录视觉锚点（视口左侧最近的可见 block），重排后 scrollIntoView
+// 推回左缘——避免内容重排后 scrollLeft 数值含义失效导致页码错乱。
+function _syncPaginationVars() {
+  document.documentElement.style.setProperty(
+    '--page-width', window.innerWidth + 'px');
+}
+_syncPaginationVars();
+
+let _paginationResizeTimer = null;
+window.addEventListener('resize', () => {
+  // vertical 模式不需要锚点保持——浏览器原生处理纵向 reflow，scrollY 保持
+  // 段落相对位置足够。仅刷新 var 以便切回 horizontal 时是最新值。
+  if (document.body.dataset.pagination !== 'horizontal') {
+    _syncPaginationVars();
+    return;
+  }
+
+  // 重排前抓"当前视口左侧最近的 #content 子元素"作为锚点
+  const c = document.getElementById('content');
+  const cRect = c.getBoundingClientRect();
+  let anchor = null;
+  for (const el of c.children) {
+    if (el.tagName === 'svg' || el.tagName === 'SVG') continue;
+    const r = el.getBoundingClientRect();
+    if (r.right > cRect.left + 8) { anchor = el; break; }
+  }
+
+  clearTimeout(_paginationResizeTimer);
+  _paginationResizeTimer = setTimeout(() => {
+    _syncPaginationVars();
+    // 等下一帧 layout 完成再恢复锚点位置 + redraw 高亮
+    requestAnimationFrame(() => {
+      const c = document.getElementById('content');
+      if (anchor) {
+        anchor.scrollIntoView({ block: 'nearest', inline: 'start' });
+      }
+      // scrollIntoView 的锚点元素可能不在新 layout 的整页边界——
+      // 比如锚点段落被分到第 3 页中部。强制把 scrollLeft 落到最近整页
+      // 边界，避免视口里同时露出两半页内容。
+      const snapped =
+          Math.round(c.scrollLeft / window.innerWidth) * window.innerWidth;
+      if (Math.abs(c.scrollLeft - snapped) > 1) {
+        c.scrollTo({ left: snapped, behavior: 'auto' });
+      }
+      _targetPage = Math.round(c.scrollLeft / window.innerWidth);
+
+      if (window._overlayer) window._overlayer.redraw();
+      window.dispatchEvent(new Event('scroll'));
+    });
+  }, 120);
+});
+
+// ─── 横向翻页：滚轮 + 键盘 ───
+// 仅 horizontal 模式生效；vertical 模式提前 return 不影响原生上下滚动。
+
+// 滚轮 → 一次一页。
+// 节流：触控板 / 精密滚轮一次手势会喷出多个 wheel 事件，全响应就是"飞过头"。
+// 同向 280ms 内只翻一次；方向反转时立即响应（用户改主意翻回去不该被卡住）。
+let _wheelCooldownUntil = 0;
+let _wheelLastDir = 0;
+window.addEventListener('wheel', (e) => {
+  if (document.body.dataset.pagination !== 'horizontal') return;
+  e.preventDefault();
+  const dir = Math.sign(e.deltaY);
+  if (!dir) return;
+  const now = performance.now();
+  if (dir === _wheelLastDir && now < _wheelCooldownUntil) return;
+  _wheelCooldownUntil = now + 280;
+  _wheelLastDir = dir;
+  _flipPage(dir);
+}, { passive: false });
+
+// 键盘 → ArrowLeft/PageUp 上一页；ArrowRight/PageDown/Space 下一页
+window.addEventListener('keydown', (e) => {
+  if (document.body.dataset.pagination !== 'horizontal') return;
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+    e.preventDefault();
+    _flipPage(1);
+  } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+    e.preventDefault();
+    _flipPage(-1);
+  }
+});
 ''';
 }

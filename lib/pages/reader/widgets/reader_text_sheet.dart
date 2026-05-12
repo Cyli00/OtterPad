@@ -8,10 +8,10 @@ import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../services/translation_style.dart';
 
-/// 阅读器「字体/字号 + 译文样式」底部面板。
+/// 阅读器「字体/字号 + 翻页方式 + 译文样式」底部面板。
 ///
-/// 控件：字号 slider、字体族按钮组、译文样式按钮组。
-/// 边距 / 行距 / 阅读模式（上下/左右）见 CLAUDE.md Todolist，后续阶段再加。
+/// 控件：字号 slider、字体族按钮组、翻页方式按钮组、译文样式按钮组。
+/// 边距 / 行距见 CLAUDE.md Todolist，后续阶段再加。
 Future<void> showReaderTextSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -94,6 +94,17 @@ class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
             _FontFamilyRow(
               current: settings.font,
               onChanged: notifier.setFont,
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── 翻页方式 ──
+            _sectionLabel(theme, cs, Symbols.menu_book_rounded, '翻页方式',
+                settings.paginationMode.label),
+            const SizedBox(height: 12),
+            _PaginationModeRow(
+              current: settings.paginationMode,
+              onChanged: notifier.setPaginationMode,
             ),
 
             const SizedBox(height: 20),
@@ -208,6 +219,79 @@ class _FontFamilyRow extends StatelessWidget {
                           ? cs.onPrimaryContainer
                           : cs.onSurfaceVariant,
                     ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// 翻页方式双选行——与 [_FontFamilyRow] 视觉骨架完全对齐
+/// （高 56、圆角 12、`primaryContainer` 选中态、200ms easeOut）。
+class _PaginationModeRow extends StatelessWidget {
+  final ReaderPaginationMode current;
+  final ValueChanged<ReaderPaginationMode> onChanged;
+
+  const _PaginationModeRow({required this.current, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: ReaderPaginationMode.values.map((m) {
+        final selected = m == current;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: m != ReaderPaginationMode.values.last ? 8 : 0,
+            ),
+            child: Material(
+              color: selected ? cs.primaryContainer : cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => onChanged(m),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selected ? cs.primary : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        m == ReaderPaginationMode.vertical
+                            ? Symbols.swap_vert_rounded
+                            : Symbols.swap_horiz_rounded,
+                        size: 18,
+                        color: selected
+                            ? cs.onPrimaryContainer
+                            : cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        m.label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.w400,
+                          color: selected
+                              ? cs.onPrimaryContainer
+                              : cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
