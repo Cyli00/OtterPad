@@ -1195,14 +1195,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           },
         );
 
-    await notifier.translate(_mdContent!);
+    final fullyCached = await notifier.translate(_mdContent!);
     if (!mounted) return;
 
     final state = ref.read(documentTranslationProvider(pdfPath));
     final handle = _translationProgressHandle;
     _translationProgressHandle = null;
     if (state.status == DocTranslationStatus.done) {
-      handle?.finish(message: '翻译完成');
+      // 完全命中文件缓存：本次点击没有真的翻译（也没有花 API 配额），
+      // 用户可能困惑"为什么这么快/翻得跟上次一样"——明确提示并指引
+      // 重新翻译路径（顶栏省略号 → 重新翻译）。文案较长所以延长展示时间。
+      handle?.finish(
+        message: fullyCached
+            ? '使用了之前的翻译缓存，如需重新翻译请点击右上角省略号里的重新翻译'
+            : '翻译完成',
+        duration: fullyCached ? const Duration(seconds: 6) : null,
+      );
     } else {
       handle?.dismiss();
     }

@@ -43,11 +43,19 @@ class TranslationService {
   ///
   /// 优先使用快速模型，无快速模型时回退到默认模型。
   /// 翻译结果缓存 7 天。
+  ///
+  /// [translationThinkingLevel]：翻译专用思考强度。默认 [ThinkingLevel.off]——
+  /// 翻译是直译任务，思考开销纯属浪费 token 与延迟。模型若不支持完全关闭
+  /// （Gemini 2.5 Pro / Claude Opus 4.7 adaptive / Gemini 3 Pro 等），由
+  /// [_buildThinkingForGemini] / [_buildThinkingForAnthropic] / [_buildThinkingForOpenAI]
+  /// 内部自动 fallback 到该服务商支持的最低档。
+  /// 传 `null` 表示"沿用 modelParams 中用户为该模型配置的 thinkingLevel"。
   static Future<String> translate({
     required String text,
     required AgentApiState agentState,
     required TranslationConfig translationConfig,
     bool useCache = true,
+    ThinkingLevel? translationThinkingLevel = ThinkingLevel.off,
   }) async {
     if (text.trim().isEmpty) return '';
 
@@ -76,7 +84,14 @@ class TranslationService {
         .replaceAll('{{input}}', text);
 
     // ── 调用 API ──
-    final modelParams = agentState.paramsFor(modelId);
+    // 翻译专用 thinking 覆盖：translationThinkingLevel != null 时强制写入到
+    // params.thinkingLevel——request 构造层会再按 provider+model 翻译为具体字段。
+    // 不能关闭思考的模型 (Gemini 2.5 Pro / Claude adaptive / Gemini 3 Pro) 会
+    // 在 _buildThinkingFor* 内被 fallback 到该家最低档。
+    final modelParams = _applyTranslationThinking(
+      agentState.paramsFor(modelId),
+      translationThinkingLevel,
+    );
     final result = await _callApi(
       provider: agentState.provider,
       baseUrl: agentState.effectiveBaseUrl,
@@ -99,11 +114,15 @@ class TranslationService {
   /// 每个 emit 是"从开始到当前的完整文本"——消费者直接显示 snapshot.data
   /// 即可，无需自己累加。流结束后写入缓存；流式 API 失败时 fallback 到
   /// 非流式 [translate] 一次性 emit。
+  ///
+  /// [translationThinkingLevel] 语义与 [translate] 同：默认 [ThinkingLevel.off]，
+  /// 不可关闭的模型自动 fallback 到该服务商最低档；传 `null` 沿用用户配置。
   static Stream<String> translateStream({
     required String text,
     required AgentApiState agentState,
     required TranslationConfig translationConfig,
     String? extraSystemInstruction,
+    ThinkingLevel? translationThinkingLevel = ThinkingLevel.off,
   }) async* {
     if (text.trim().isEmpty) {
       yield '';
@@ -135,7 +154,10 @@ class TranslationService {
         .replaceAll('{{targetLanguage}}', targetLang)
         .replaceAll('{{input}}', text);
 
-    final modelParams = agentState.paramsFor(modelId);
+    final modelParams = _applyTranslationThinking(
+      agentState.paramsFor(modelId),
+      translationThinkingLevel,
+    );
     Object? streamErr;
     String accumulated = '';
     try {
@@ -179,6 +201,22 @@ class TranslationService {
     if (accumulated.isNotEmpty) {
       _putCache(cacheKey, accumulated);
     }
+  }
+
+  // ── 翻译专用思考强度覆盖 ───────────────────────────────────────────────────
+
+  /// 把翻译入口指定的 [override] thinkingLevel 应用到模型参数上。
+  /// 传 `null` 表示"沿用用户在 modelParams 里为该模型配置的 thinkingLevel"。
+  ///
+  /// 之所以不在此处做"能否关闭"的判断、直接交给 [_buildThinkingForGemini] /
+  /// [_buildThinkingForAnthropic] 等 provider 适配层处理 fallback：能力推断本来
+  /// 就集中在 [AgentModelCapability]，这里再分流会让 5 档语义在两个地方维护。
+  static AgentModelParams _applyTranslationThinking(
+    AgentModelParams params,
+    ThinkingLevel? override,
+  ) {
+    if (override == null) return params;
+    return params.copyWith(thinkingLevel: override);
   }
 
   // ── 流式 API 分派 ─────────────────────────────────────────────────────────

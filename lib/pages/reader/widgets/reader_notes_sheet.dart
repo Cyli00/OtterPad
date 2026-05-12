@@ -257,7 +257,6 @@ class _HighlightTileState extends State<_HighlightTile> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final hl = widget.highlight;
-    final hlColor = Color(int.parse('0xFF${hl.color}'));
     final hasNote = hl.note != null && hl.note!.isNotEmpty;
 
     return Container(
@@ -281,84 +280,69 @@ class _HighlightTileState extends State<_HighlightTile> {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             alignment: Alignment.topCenter,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 4,
-                  constraints: const BoxConstraints(minHeight: 48),
-                  color: hlColor,
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hl.text.trim(),
+                    style: theme.textTheme.bodyMedium,
+                    maxLines: _expanded ? null : 1,
+                    overflow: _expanded ? null : TextOverflow.ellipsis,
+                  ),
+                  if (hasNote) ...[
+                    const SizedBox(height: 8),
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          hl.text.trim(),
-                          style: theme.textTheme.bodyMedium,
-                          maxLines: _expanded ? null : 1,
-                          overflow:
-                              _expanded ? null : TextOverflow.ellipsis,
+                        // 中性引用线：仅作"笔记块"的视觉层级标记，
+                        // 不携带高亮颜色——避免列表卡片整体色彩噪音。
+                        Container(
+                          width: 2,
+                          constraints: const BoxConstraints(minHeight: 16),
+                          margin: const EdgeInsets.only(right: 10),
+                          color: cs.outlineVariant,
                         ),
-                        if (hasNote) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 2,
-                                constraints:
-                                    const BoxConstraints(minHeight: 16),
-                                margin: const EdgeInsets.only(right: 10),
-                                color: hlColor.withAlpha(120),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  hl.note!,
-                                  style:
-                                      theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: _expanded ? null : 2,
-                                  overflow: _expanded
-                                      ? null
-                                      : TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                        Expanded(
+                          child: Text(
+                            hl.note!,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: _expanded ? null : 2,
+                            overflow:
+                                _expanded ? null : TextOverflow.ellipsis,
                           ),
-                        ],
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text(
-                              _formatTime(hl.createdAt),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: cs.outline,
-                              ),
-                            ),
-                            const Spacer(),
-                            _MiniButton(
-                              icon: Symbols.edit_note_rounded,
-                              tooltip: '编辑笔记',
-                              onTap: widget.onEditNote,
-                            ),
-                            const SizedBox(width: 4),
-                            _MiniButton(
-                              icon: Symbols.delete_rounded,
-                              tooltip: '删除',
-                              onTap: widget.onDelete,
-                              color: cs.error,
-                            ),
-                          ],
                         ),
                       ],
                     ),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        _formatTime(hl.createdAt),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: cs.outline,
+                        ),
+                      ),
+                      const Spacer(),
+                      _MiniButton(
+                        icon: Symbols.edit_note_rounded,
+                        tooltip: '编辑笔记',
+                        onTap: widget.onEditNote,
+                      ),
+                      const SizedBox(width: 4),
+                      _MiniButton(
+                        icon: Symbols.delete_rounded,
+                        tooltip: '删除',
+                        onTap: widget.onDelete,
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -381,17 +365,16 @@ class _MiniButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
-  final Color? color;
 
   const _MiniButton({
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -399,7 +382,7 @@ class _MiniButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.all(4),
-          child: Icon(icon, size: 18, color: color),
+          child: Icon(icon, size: 18, color: cs.onSurfaceVariant),
         ),
       ),
     );

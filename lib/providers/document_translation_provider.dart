@@ -105,8 +105,13 @@ class DocumentTranslationNotifier
   /// [useCache] 为 false 时强制跳过 Hive 缓存查询——所有段都重新请求 LLM。
   /// 供 [retranslate] 使用作为"清缓存"之外的双保险：即便 clearCacheFor
   /// 因为某种异常未完全清除，也不会命中残留的旧译文。
-  Future<void> translate(String markdown, {bool useCache = true}) async {
-    if (state.status == DocTranslationStatus.loading) return;
+  ///
+  /// 返回值：`true` 表示"所有段都命中文件缓存、未向 LLM 发任何请求"。
+  /// view 层据此切换 SnackBar 文案（提示"使用了缓存，如需重翻请…"）。
+  /// 其他情况（loading 已被复用、AI 设置缺失、空段落、取消、失败、
+  /// useCache=false 等）均返回 `false`。
+  Future<bool> translate(String markdown, {bool useCache = true}) async {
+    if (state.status == DocTranslationStatus.loading) return false;
 
     final agentState = _ref.read(effectiveAgentApiProvider);
     final config = _ref.read(translationConfigProvider);
@@ -118,7 +123,7 @@ class DocumentTranslationNotifier
       onOpenSettings: () =>
           _ref.read(routerProvider).push(AppRoutes.settingsApi),
     )) {
-      return;
+      return false;
     }
 
     final paragraphs = MarkdownParagraphExtractor.extract(
@@ -127,7 +132,7 @@ class DocumentTranslationNotifier
     );
     if (paragraphs.isEmpty) {
       snackBar.showResult(message: '未检测到可翻译段落');
-      return;
+      return false;
     }
 
     final cancel = TranslationCancelToken();
@@ -149,7 +154,7 @@ class DocumentTranslationNotifier
     final translations = <String, String>{};
 
     try {
-      await DocumentTranslationService.translate(
+      final fullyCached = await DocumentTranslationService.translate(
         pdfPath: pdfPath,
         paragraphs: paragraphs,
         agentState: agentState,
@@ -173,7 +178,7 @@ class DocumentTranslationNotifier
       if (cancel.isCancelled) {
         // 已取消：不改 done 态，保留已翻译片段但状态回 idle
         state = state.copyWith(status: DocTranslationStatus.idle);
-        return;
+        return false;
       }
 
       state = state.copyWith(
@@ -181,6 +186,7 @@ class DocumentTranslationNotifier
         translations: translations,
         clearError: true,
       );
+      return fullyCached;
     } catch (e) {
       // 仅更新 state——错误消息交给 UI 层根据 state.error 决定如何展示。
       // 不在这里直接 showResult：那会和 view.dart 的进度 SnackBar 生命周期
@@ -189,6 +195,7 @@ class DocumentTranslationNotifier
         status: DocTranslationStatus.failed,
         error: e,
       );
+      return false;
     } finally {
       _cancelToken = null;
     }

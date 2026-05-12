@@ -13,22 +13,33 @@
 
 以下模块在对应场景下必须使用，**禁止绕过它们直接调用底层 API**。每行格式统一为 `**模块名** (路径) — 能力/入口。约束/禁令。`
 
+### 启动与运行时
+
+- **main 初始化链路** (`lib/main.dart`) — 启动顺序：`windowManager` 桌面标题栏 → `pdfrxFlutterInitialize()` → 并行 `GStorage.init()` / `AgentModelCapability.init()` / `BackMatterDetector.instance.init()` → `ReaderLocalhostServer.instance.start(documentRoot: GStorage.appRootPath)` → `proxyProvider.applyInitial()`。新增依赖启动态的服务必须挂在这里，且不能绕过 `GStorage` 自行推断根目录。
+- **ReaderLocalhostServer** (`lib/services/reader_localhost_server.dart`) — 阅读器本地静态文件服务，app 启动后通过 `ReaderLocalhostServer.instance.start()` 绑定 `127.0.0.1:0`，root 为 `GStorage.appRootPath`（`<AppSupport>/OtterPad/`，`db/` 与 `library/` 的共同父）。`urlForPath()` 只允许 root 内文件，URL 形如 `http://localhost:PORT/library/<hash>/.reader.html`；`/_assets/*` 从 `rootBundle` 服务 `assets/`（KaTeX CSS/JS/字体）。HTML 文件返回 `Cache-Control: no-store`，其他静态资源按类型缓存。禁止 WebView 直接加载 `file://` 阅读器 HTML 或自行暴露任意文件路径。
+
 ### 通知与任务
 
 - **SnackBarService** (`lib/services/snackbar_service.dart`) — 用户通知统一入口，通过 `ref.read(snackBarServiceProvider)` 调用。禁止直接使用 `ScaffoldMessenger.of(context).showSnackBar()`。
 - **TaskRunner** (`lib/providers/task_runner.dart`) — 后台任务通用模板 mixin（进度 SnackBar + 取消 + 状态管理），`runTask<T>()` 封装 token 创建 → 进度条 → 执行体 → 成功/取消/异常处理。`TaskType` / `TaskInfo` 定义在 `lib/providers/task_types.dart`。
-- **TaskProvider** (`lib/providers/task_provider.dart`) — 耗时操作调度入口，mixin `TaskRunner`，通过 `ref.read(taskProvider.notifier)` 调用。禁止在 Widget 方法中直接 await 或在 Widget state 中自管 CancelToken。
+- **TaskProvider** (`lib/providers/task_provider.dart`) — 耗时操作调度入口，mixin `TaskRunner`，通过 `ref.read(taskProvider.notifier)` 调用。当前统一管理 `addFiles` / `addByIdentifier` / `rebuild` / `redownloadPdf` / `extractDocument` / `generateSummaryImage`，状态为 `Map<TaskType, TaskInfo>`。禁止在 Widget 方法中直接 await 耗时服务或在 Widget state 中自管 `CancelToken`。
+- **SelectionProvider** (`lib/providers/selection_provider.dart`) — 文献库/收藏夹/无文件条目等列表多选状态入口，`sourceContext` 隔离页面来源。禁止各列表页面各自维护一套多选集合导致跨页串扰。
 
 ### 数据存储
 
 - **GStorage** (`lib/core/storage/storage.dart`) — Hive box 统一访问入口（`GStorage.setting` / `documents` / `favorites` / `highlights` / `history`）+ 文件系统根目录 (`appRootPath` = `<AppSupport>/OtterPad/`、`dbDirPath` = `<root>/db/`、`libraryDirPath` = `<root>/library/`)。`init()` 启动时自动迁移：旧 `<AppDocs>/{NightReader,OtterPad}/` → 新位置、旧子目录 `data/` → `db/`、`docs/` → `library/`，并替换 box 内残留绝对路径前缀。禁止直接调用 `Hive.openBox()` 或 `getApplicationDocumentsDirectory()` 拼路径；旧 `dataDirPath` 标 `@Deprecated`，新代码用 `dbDirPath`。
 - **DocPaths** (`lib/utils/doc_paths.dart`) — 文献文件路径中心工具，从 `pdfPath` 派生所有衍生文件路径（`.md`/`.json`/`figures/`/`summary/`）。禁止用 `p.basenameWithoutExtension` 自行拼接衍生路径。
 - **StorageCleanupService** (`lib/services/storage_cleanup_service.dart`) — 缓存/数据清理统一入口。新增缓存目录时在 `cacheEntries` 列表追加 `CacheEntry`；新增数据目录时在 `dataEntries` 追加。禁止在 UI 层直接删除缓存目录。
+- **BackupProvider** (`lib/providers/backup_provider.dart`) — 备份远端配置状态入口，管理 `BackupRemoteType`（S3 / WebDAV）、`BackupWebDavState`、`BackupS3State`，并统一做远端路径/endpoint/object key 规范化。禁止在设置页或服务里散落保存备份凭据。
+- **BackupRestoreService** (`lib/services/backup_restore_service.dart`) — 本地 ZIP 备份/恢复入口。归档内部仍使用兼容键名 `docs/` / `data/`，恢复时映射到当前 `library/` / `db/`，并重写恢复后的文献绝对路径。禁止手写 ZIP 结构或直接覆盖 Hive 文件而不经过 `GStorage.close()` / `reopen()`。
+- **BackupS3Service** (`lib/services/backup_s3_service.dart`) — S3 / S3-compatible 远端上传下载入口，内部实现 AWS Signature V4，支持 path-style / virtual-host style。禁止在 UI 层拼签名请求。
 
 ### Agent API 与模型
 
-- **AgentApiProvider** (`lib/providers/api_provider.dart`) — Agent API 配置中心（OpenAI / Anthropic / Gemini / OpenAI 兼容），管理 `defaultModelId` / `fastModelId` / `imageModelId` 三个模型槽位 + `AgentModelParams`（temperature / topP / thinking / web search 等）。通过 `ref.read(agentApiProvider)` / `ref.watch(effectiveAgentApiProvider)` 访问。
+- **AgentApiProvider** (`lib/providers/api_provider.dart`) — Agent API 配置中心（OpenAI / Anthropic / Gemini / OpenAI 兼容），每个 provider 独立保存 baseUrl / apiKey / models / per-model params；`defaultModelId` / `fastModelId` / `imageModelId` 是跨 provider 全局唯一角色，Hive 中存为 `provider:modelId`。API 调用通过 `ref.watch(effectiveAgentApiProvider)` 取有效配置；跨 provider 生图等场景用 `AgentApiNotifier.loadForProvider()` / `globalImageRole`。禁止在调用点自行猜当前 provider 是否就是目标模型 provider。
+- **AgentModelParams / ThinkingLevel** (`lib/providers/api_provider.dart`) — 模型参数结构化存储，统一 temperature / topP / maxTokens / systemPrompt / topK / `ThinkingLevel` / OpenAI Responses 参数 / Gemini penalties / web search。禁止用散落的字符串 key 在 UI 和服务间传参。
 - **AgentModelCapability** (`lib/services/agent_model_capability.dart`) — 从模型 ID 推断能力（text/image input/output/embedding），启动时 `init()` 加载 `assets/config/image_models.json`。`isImageGenerationModel()` 判断是否支持图像生成。禁止硬编码模型能力判断。
+- **AiSettingsPrompt** (`lib/services/ai_settings_prompt.dart`) — AI 配置缺失提示统一入口，负责检查文本模型/生图模型角色与 API Key，并提供"前往设置"动作。禁止各调用点自写不一致的 AI 设置错误文案。
 
 ### 翻译系统
 
@@ -37,7 +48,8 @@
 - **DocumentTranslationProvider** (`lib/providers/document_translation_provider.dart`) — 每文档翻译状态机（idle/loading/done/failed），Family provider 以 PDF 路径为 key。`cycleMode()` 切换双语/原文/译文，`retranslate()` 清缓存重翻。高频进度走 `ValueNotifier` 不重建状态。
 - **TranslationConfigProvider** (`lib/providers/translation_config_provider.dart`) — 翻译设置（system/user prompt、目标语言、temperature、显示风格、跳过章节），持久化到 Hive。
 - **MarkdownParagraphExtractor** (`lib/services/markdown_paragraph_extractor.dart`) — 从 Markdown 提取可翻译段落（跳过代码块/数学/图片/表格），返回 `TranslatableParagraph`（含 offset/hash/kind）。
-- **TranslationSkipSections** (`lib/services/translation_skip_sections.dart`) — 定义并检测翻译跳过区域（References / Bibliography / 参考文献等标题），由 `MarkdownParagraphExtractor` 内部调用。
+- **BackMatterDetector** (`lib/services/back_matter_detector.dart`) — 学术论文后置区域检测单一数据源，启动时加载 `assets/config/back_matter_sections.json`，按 references / acknowledgments / authors_contributions / funding_data / supplementary_appendix / ethics_legends 六类输出。翻译跳过与摘要图压缩必须共用它，禁止再新增硬编码 References 正则。
+- **TranslationSkipSections** (`lib/services/translation_skip_sections.dart`) — 翻译跳过区域适配层，从 `BackMatterDetector.availableSections` 派生 UI 勾选项与 `DetectedSkipSection`。由 `MarkdownParagraphExtractor` 内部调用；未勾选的后置区域合并为单段翻译。
 - **TranslationStyle** (`lib/services/translation_style.dart`) — 翻译显示风格策略模式（themed/bold/italic/weakened/dashed/highlight/blur/quote），`resolveTranslationStyle(id)` 查找。使用 `[[tr]]...[[/tr]]` 自定义标记。
 - **MarkdownTranslationWeaver** (`lib/utils/markdown_translation_weaver.dart`) — 将翻译结果按段落偏移拼接回 Markdown，支持双语/纯译文两种模式，`applyTranslationToMarkdown()` 入口。
 
@@ -46,6 +58,7 @@
 - **ImageGenerationService** (`lib/services/image_generation_service.dart`) — 图像生成入口（OpenAI / Gemini），`generate(ImageGenerationRequest)` 支持参考图输入 + 取消。不支持 Anthropic。
 - **DocumentSummaryImageService** (`lib/services/document_summary_image_service.dart`) — 文档摘要信息图生成管线：收集参考图 → 压缩 Markdown → 构建 prompt → 调用 ImageGenerationService → 保存图片 + 元数据 JSON。产物路径通过 `DocPaths.summaryDir()` / `summaryImage()` / `summaryMeta()` 获取。
 - **ImageGenerationConfigProvider** (`lib/providers/image_generation_config_provider.dart`) — 摘要图生成设置（宽高比、保真度、prompt 模板、最大参考图数），持久化到 Hive。
+- **SummaryImageProvider** (`lib/providers/summary_image_provider.dart`) — 每文档摘要图 UI 状态（`imagePath` / `revision` / `generating`）入口，读取磁盘初始状态并在生成完成后驱动大纲图表页刷新。禁止在多个 Widget 中各自 `File.existsSync()` 后维护互相独立的生成态。
 
 ### 网络代理
 
@@ -73,15 +86,18 @@
 
 ### 阅读器
 
-- **ReaderLocalhostServer** (`lib/services/reader_localhost_server.dart`) — 阅读器本地静态文件服务，app 启动后通过 `ReaderLocalhostServer.instance.start()` 绑定 `127.0.0.1:0`，root 为 `GStorage.appRootPath`（`<AppSupport>/OtterPad/`，`db/` 与 `library/` 的共同父）。`urlForPath()` 只允许 root 内文件，URL 形如 `http://localhost:PORT/library/<hash>/.reader.html`；`/_assets/*` 从 `rootBundle` 服务 `assets/`（KaTeX CSS/JS/字体）。HTML 文件返回 `Cache-Control: no-store`（reload 同 URL 时强制重新拉取，避免翻译/笔记重写后命中缓存看不到更新），其他静态资源 `max-age=300`。禁止 WebView 直接加载 `file://` 阅读器 HTML 或自行暴露任意文件路径。
+- **ReaderSettingsProvider** (`lib/providers/reader_settings_provider.dart`) — 阅读器设置入口，持久化 `ReaderTheme` / `ReaderFont` / `fontSize` / `DefaultReadingMode` / `ToolbarOpacity`。枚举持久化依赖 `.index` 的只能尾追，视觉顺序变化放 UI 层处理。主题实际颜色必须通过 `resolveReaderPalette()` 派生。
 - **WebViewMarkdownReader** (`lib/pages/reader/widgets/webview_markdown_reader.dart`) — **主渲染路径**。用 `flutter_inappwebview`（Windows WebView2）渲染 Markdown，提供浏览器原生多段落选择 + SVG 高亮覆盖层。Dart 侧将 Markdown 转 HTML（`webview_reader_html.dart`，内含 CSS + JS）→ 写入文献目录内 `<documentDir>/.reader.html`（与 figures/ 同 origin、自包含、随文献删除一并清理）→ 通过 `ReaderLocalhostServer` 的 `http://localhost:<port>/library/<hash>/.reader.html` 加载。reload 时 URL 附 `?v=<ms>` cache-buster 双保险绕过 WebView 缓存。公开 `WebViewMarkdownReaderState`，通过 `GlobalKey` 暴露 `scrollToBlockIndex()` / `highlightSearch()` / `flashImage()` / `activateNearestSearchResult()` 等方法。主题/字号/字体变化只更新 CSS 变量，不重载 DOM；高亮恢复走 `addHighlightsBatch()` 单次 IPC。JS → Flutter 通信走 `callHandler`（选择、高亮点击、图片点击、滚动方向），Flutter → JS 走 `evaluateJavascript`。
 - **webview_reader_html** (`lib/pages/reader/widgets/webview_reader_html.dart`) — HTML 模板生成器：`buildReaderHtml()` 组装完整 HTML 文档（`<base href>` + CSS 主题变量 + JS Overlayer/Selection/Bridge）。KaTeX 走本地 `assets/katex/`，由 `ReaderLocalhostServer` 的 `/_assets/katex/*` 路由服务，禁止依赖 CDN。`_LatexInlinePreserve` / `_LatexBlockPreserve` 保护 `$...$` / `$$...$$` 免被 markdown emphasis 破坏。`_TranslationInlineSyntax` 将 `[[tr]]...[/tr]]` 转为 `<span class="translated">`。`_convertFigCaptions()` 将 `<img alt="fig:...">` 转为 `<figure><img><figcaption>` 结构。图片路径保留相对 URL 并注入 `loading="lazy"` / `decoding="async"`。JS 层 Overlayer 参照 anx-reader 实现：存储 Range 对象 + `ResizeObserver` 防抖 150ms + `redraw()` 全量重算解决 KaTeX/图片 reflow 漂移；批量恢复高亮共享一次 TreeWalker 文本索引。CSS 性能优化：`contain: content` 布局隔离、`content-visibility: auto` 图片延迟渲染、`passive` 滚动事件。
+- **ReaderTopToolbar / ReaderBottomBar** (`lib/pages/reader/widgets/reader_top_toolbar.dart`, `reader_bottom_bar.dart`) — 阅读器工具栏拆分组件。顶栏负责返回、搜索、PDF/Markdown 切换、提取/重新提取、收藏、文献信息、总结图、重新排版/重翻译；底栏仅 Markdown 模式显示，负责大纲、翻译/模式循环、笔记、外观、字体。禁止把新按钮直接堆回 `ReaderPage` 的 build 里。
+- **ReaderSearchBars / ReaderSearchNavigator / SearchOverlay** (`lib/pages/reader/widgets/reader_search_bars.dart`, `reader_search_navigator.dart`, `search_overlay.dart`) — 搜索 UI 拆分。PDF 搜索走 `pdfrx` 的 `PdfTextSearcher`；Markdown 搜索走 `MarkdownDocumentCacheService` 预构建的搜索快照 + WebView DOM 高亮。禁止对长 Markdown 每次输入都重新全量解析。
 - **SelectionToolbar** (`lib/pages/reader/widgets/selection_toolbar.dart`) — `showReaderContextMenu()` 弹出 StatefulWidget OverlayEntry：5 色高亮圆点 + 复制/笔记/翻译/删除图标按钮 + **可展开笔记面板**（暗色 TextField + 保存按钮，关闭时自动保存）。新建高亮的笔记走 `onCreateForNote` 回调先创建高亮再展开面板。
 - **ReaderNotesSheet** (`lib/pages/reader/widgets/reader_notes_sheet.dart`) — `showReaderNotesSheet()` 底部面板，列出当前文献所有高亮与笔记。卡片可展开（`AnimatedSize`）：折叠态标注文本单行 + 笔记 `titleSmall` w600 最多 2 行；展开态显示全部。支持编辑笔记（Dialog）和删除。底部栏"笔记"按钮入口。
+- **ReaderFavoriteSheet / ReaderDocumentInfoSheet** (`lib/pages/reader/widgets/reader_favorite_sheet.dart`, `reader_document_info_sheet.dart`) — 阅读器内收藏夹移入/移出与文献信息底部面板。收藏夹增删必须走 `favoritesProvider`，文献信息只展示 `Document` 当前状态，不在 Sheet 内直接修正文献模型。
 - **Highlight** (`lib/data/models/book/highlight.dart`) — 高亮标记模型，含 `id` / `documentId` / `text` / `color`（hex String）/ `note` / `groupId`。`kHighlightColors` 定义 5 个预设色（Amber/Green/Blue/Red/Purple）。
 - **HighlightProvider** (`lib/providers/highlight_provider.dart`) — 按文献 ID（filePath）管理高亮的 Riverpod `StateNotifier.family`，Hive 持久化。`add(text, color:)` / `remove(id)` / `updateColor(id, color)` / `updateNote(id, note)`。删除文献时由 `DocCardActions.delete()` 级联清理 `GStorage.highlights.delete(filePath)`。
 - **双路径高亮策略**：新建高亮走 `addHighlightFromSelection()`（精确 Range，支持含 KaTeX 公式的文本），持久化恢复走 `addByText()`（TreeWalker 文本搜索，跳过 `.katex-mathml` 保留 `.katex-html`）。`_selectionHighlightIds` 集合防止 `_syncHighlights` 二次添加。
-- **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 加载 + 内存缓存 + 搜索快照。标题检测优先读取提取 `.json` 中 `block_label: "paragraph_title"`，无 JSON 时回退 ATX heading。
+- **MarkdownDocumentCacheService** (`lib/services/reader/markdown_document_cache_service.dart`) — Markdown 加载 + LRU 内存缓存 + 搜索快照缓存。搜索块按二级标题与空行切段，并把基础 Markdown/LaTeX 转成纯文本。提取完成后可用 `primeResolvedContent()` 预热，避免首次切到 Markdown 再读盘。
 - **MarkdownPreprocessor** (`lib/utils/markdown_preprocessor.dart`) — Markdown 预处理：LaTeX 修复、标题过滤、空表格移除。
 - **NR Markdown 组件** (`lib/pages/reader/widgets/md_widget/`) — 原生 Flutter 渲染组件集（LaTeX / 图片 / 标记 / 搜索高亮 / 翻译段落等）。**仅用于提取结果预览**（`extract_result_page.dart`），阅读器主路径已迁移到 WebView。
 - **TranslationPopup** (`lib/pages/reader/widgets/translation_popup.dart`) — 选中文本后弹出的流式翻译对话框（毛玻璃背景 + 高亮源文 + 增量渲染 + 复制菜单），通过 `showTranslationPopup()` 打开。
@@ -148,6 +164,7 @@ Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数
 - MD3 主题系统与动态配色 (`lib/common/theme/app_theme.dart`, `lib/providers/theme_provider.dart`)
 - go_router 声明式路由 + StatefulShellRoute 标签导航 (`lib/router/app_router.dart`, `lib/router/app_routes.dart`)
 - 响应式布局 (`lib/widgets/layout/adaptive_scaffold.dart`, `lib/utils/responsive.dart`)
+- 启动运行时统一初始化 (`lib/main.dart`) — `pdfrx`、`GStorage`、模型能力、BackMatterDetector、ReaderLocalhostServer、ProxyProvider 按固定顺序启动
 - 品牌重命名 NightReader → 獭祭鱼 OtterPad，含存储路径迁移 (`lib/core/storage/storage.dart` `_migrateLegacyDirectories()` + `_migrateHivePathReferences()`)
 - 跨平台数据目录统一到 `<AppSupport>/OtterPad/`（替代 `<AppDocs>`，iOS/Android sandbox 私有，不暴露 Files App / Finder），子目录改名 `data/` → `db/`、`docs/` → `library/`，每篇文献自包含目录（PDF + 抽取产物 + 翻译/笔记 JSON + `.reader.html` HTML 缓存）。启动一次性迁移：物理目录 rename（跨卷 fallback 复制）→ 修正 Hive box 内残留绝对路径前缀，链式兼容 NightReader / OtterPad-in-Documents / 旧子目录名三层旧布局
 
@@ -155,17 +172,19 @@ Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数
 
 - Document 模型与文件导入 (`lib/data/models/book/document.dart`, `lib/providers/documents_provider.dart`) — 含 `keywords: List<String>` 字段，PubMed 路径填充 MeSH + 作者 Keyword，其他路径暂为空
 - 收藏夹系统 (`lib/data/models/collection/favorite.dart`, `lib/providers/favorites_provider.dart`)
-- 备份与恢复 (`lib/services/backup_restore_service.dart`, `lib/services/backup_s3_service.dart`, `lib/providers/backup_provider.dart`)
+- 备份与恢复 (`lib/services/backup_restore_service.dart`, `lib/services/backup_s3_service.dart`, `lib/providers/backup_provider.dart`) — 本地 ZIP + WebDAV / S3 远端配置，归档格式兼容旧 `docs` / `data` 键名
 
 ### 用户界面
 
 - 文献库页面 (`lib/pages/library/`) — 网格/列表视图、卡片、封面、内联多选模式、批量提取进度面板
 - 书架与收藏夹 (`lib/pages/shelf/`)
-- 设置页面 (`lib/pages/setting/`) — API、外观、网络、OCR、Agent 模型管理、翻译设置、摘要图生成设置
-- 大纲参考文献解析 (`lib/pages/reader/widgets/outline_panel.dart`) — 支持编号格式（`1.`/`1)`/`[1]`）和 Author-Year 段落格式，二级回退
+- 设置页面 (`lib/pages/setting/`) — API、外观、网络、OCR、备份、Agent 模型管理、翻译设置、摘要图生成设置
+- 阅读器工具栏拆分 (`reader_top_toolbar.dart`, `reader_bottom_bar.dart`, `reader_search_bars.dart`, `reader_search_navigator.dart`) — 顶栏承载文档动作，底栏承载阅读动作，PDF/Markdown 搜索各走独立 UI
+- 大纲与图表面板 (`lib/pages/reader/widgets/outline_panel.dart`) — Figures / References 双 Tab，Figures 中内嵌 Graphical Summary；参考文献支持编号格式（`1.`/`1)`/`[1]`）和 Author-Year 段落格式，二级回退
 - WebView 阅读器 (`lib/pages/reader/widgets/webview_markdown_reader.dart`, `webview_reader_html.dart`, `lib/services/reader_localhost_server.dart`) — 替换原生 `markdown_widget` + `SelectionArea` 为 `flutter_inappwebview` WebView 渲染。Dart 侧 markdown→HTML（`markdown ^7.3.0` + LaTeX 保护语法）→ 本地 HTTP 服务加载 HTML/图片/KaTeX 离线资源 → SVG Overlayer 高亮覆盖层 → JS↔Flutter 双向桥接（选择/高亮点击/图片/滚动方向）。搜索高亮走 JS DOM 操作（TreeWalker + `<mark>` 包裹）。图片定位走 `flashImage()` 脉冲光晕动画。
 - 高亮标注系统 (`lib/data/models/book/highlight.dart`, `lib/providers/highlight_provider.dart`, `selection_toolbar.dart`) — 5 色预设（Amber/Green/Blue/Red/Purple），Hive 持久化，SVG 覆盖层渲染（anx-reader Overlayer 模式：存储 Range + ResizeObserver redraw），点击编辑/删除/换色，内嵌笔记面板，双路径高亮（新建走精确 Range，恢复走文本搜索）
-- 笔记管理面板 (`lib/pages/reader/widgets/reader_notes_sheet.dart`) — 底部栏"笔记"入口，展示当前文献所有标注与笔记，可展开卡片交互（AnimatedSize），编辑笔记 / 删除
+- 笔记管理面板 (`lib/pages/reader/widgets/reader_notes_sheet.dart`) — 底部栏"笔记"入口，展示当前文献所有标注与笔记，可展开卡片交互（AnimatedSize），编辑笔记 Dialog / 删除
+- 阅读器收藏与信息面板 (`reader_favorite_sheet.dart`, `reader_document_info_sheet.dart`) — 阅读器内移入/移出收藏夹、创建收藏夹、查看当前文献元数据
 - 文献删除级联清理 (`lib/pages/library/widgets/doc_card_actions.dart`) — 删除文献时级联清理高亮（`GStorage.highlights.delete`）+ 阅读历史（`historyProvider.removeDoc`），原有清理包括磁盘文件 / 缩略图 / 收藏夹引用
 
 ### 文档提取
@@ -199,7 +218,7 @@ Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数
 - 后续raw.md的保存可以删去，目前只是用于测试
 - 段落内提及的figure应该能被检出和点击高亮
 - 删除物理文件 `lib/pages/reader/widgets/appearance_panel.dart`（已在 refactor 中清空为占位，受工具限制无法 rm）
-- WebView 阅读器 Phase 2：翻译样式多风格 CSS（当前仅 themed）、笔记对话框
+- WebView 阅读器 Phase 2：为 `weakened` / `dashed` / `highlight` / `blur` 等译文样式补齐 WebView CSS，目前这些样式仍共用 `.translated` 的主题色渲染
 - 阅读器字体/排版扩展：边距 slider、行距 slider
   - 需要扩展 `ReaderSettingsState` 加 `margin` / `lineHeight` 字段（参照现有 `fontSize` 的 Hive 存储范式），WebView 侧通过 CSS 变量 `--margin` / `--line-height` 传递
   - UI 按 Slider 统一范式（`_sliderRow` 胶囊 + nullable 签名）补控件
@@ -210,4 +229,3 @@ Slider / TextField / Dialog / Bottom Sheet / Card 等组件的精确视觉参数
   3. **非 PubMed 文献兜底**：用快速 Agent 模型跑 abstract 抽关键词，单独存 `extractedKeywords` 字段，**不要**和受控 MeSH 混入同一字段（自由文本 vs 受控词表不能直接算 Jaccard）
   4. **MeSH Tree Number + IDF**（高级）：在 efetch 里额外解析 `DescriptorName` 的 tree numbers，配合本地 MeSH 树表（~2MB JSON）按层级距离算相似度；同时全库扫一遍建 IDF 权重，稀有词权重高
   - 架构原则：PubMed 文献走 MeSH 路径，其他领域走 embedding / 抽取关键词路径，**在更高层融合信号**，不要强行塞进同一个向量空间
--  还想要"列表点击 →卡片扩展"或"下滑关闭"，告诉我，那是两个独立的小增强，单独可加

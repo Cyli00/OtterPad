@@ -118,7 +118,11 @@ class DocumentTranslationService {
   ///
   /// [useCache] 为 false 时跳过文件缓存查询，所有段都进入 pending（专供
   /// "重新翻译"用）；写入仍执行。
-  static Future<void> translate({
+  ///
+  /// 返回值：`true` 表示"所有段都命中文件缓存、未向 LLM 发任何请求"（即
+  /// 用户其实是在看上次翻译的快照）。调用方据此提示"使用了缓存"；其他
+  /// 情况（部分命中、空文档、取消、useCache=false）均返回 `false`。
+  static Future<bool> translate({
     required String pdfPath,
     required List<TranslatableParagraph> paragraphs,
     required AgentApiState agentState,
@@ -131,7 +135,7 @@ class DocumentTranslationService {
     final total = paragraphs.length;
     if (total == 0) {
       onProgress(0, 0);
-      return;
+      return false;
     }
     onProgress(0, total);
 
@@ -158,7 +162,9 @@ class DocumentTranslationService {
     }
     onProgress(done, total);
 
-    if (pending.isEmpty) return;
+    // 全部命中文件缓存：直接返回 true，调用方据此提示"使用了缓存"。
+    // 此分支仅在 useCache=true 时可能成立（useCache=false 时 pending 必非空）。
+    if (pending.isEmpty) return true;
 
     // ── 并发翻译 ──
     int nextIdx = 0;
@@ -214,6 +220,7 @@ class DocumentTranslationService {
     // 等所有中间写盘任务清空，再做一次最终全量保存。
     await saveLock;
     await _saveTranslations(pdfPath, targetLang, all);
+    return false;
   }
 
   // ── 单段翻译（含重试）────────────────────────────────────────────────

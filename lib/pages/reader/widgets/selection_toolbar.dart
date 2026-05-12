@@ -104,6 +104,15 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
   void initState() {
     super.initState();
     _activeHighlight = widget.existingHighlight;
+    // 已有笔记的高亮：点击即默认展开笔记面板，省去再点一次"笔记"图标。
+    // 必须同步把笔记内容灌进 controller——否则 TextField 起手是空文本，
+    // 用户随手点保存会把已有笔记清掉。
+    final existingNote = widget.existingHighlight?.note;
+    if (existingNote != null && existingNote.isNotEmpty) {
+      _noteController.text = existingNote;
+      _noteDirty = false;
+      _showNotePanel = true;
+    }
   }
 
   @override
