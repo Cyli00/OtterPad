@@ -43,6 +43,36 @@ class DocumentSummaryImageService {
 
   // ── 生成入口 ──────────────────────────────────────────────────────────────
 
+  /// 仅构造生图提示词，不调用任何远端 API。
+  ///
+  /// 用于"官方生图"分支：用户把提示词复制到 ChatGPT / Gemini 官方 App 内手动生图，
+  /// 因此不依赖任何 `AgentApiState`/Key 配置，仅按 [provider] 决定与生图能力相关的
+  /// 文案细节（如保真度约束）。
+  ///
+  /// 复制路径**不嵌入 markdown 正文**——用户会在官方 App 内手动上传通过
+  /// "保存文献 Markdown" 导出的 .md 文件作为附件，避免剪贴板里塞几万字。
+  Future<String> composePrompt({
+    required Document document,
+    required ImageGenerationConfig config,
+    AgentApiProvider provider = AgentApiProvider.openai,
+    String? language,
+  }) async {
+    if (document.filePath.isEmpty) {
+      throw const DocumentSummaryImageException('当前文献没有关联 PDF 文件');
+    }
+    final mdPath = DocPaths.md(document.filePath);
+    if (!await File(mdPath).exists()) {
+      throw const DocumentSummaryImageException('请先完成文档提取，再生成总结图');
+    }
+    return _buildPrompt(
+      document: document,
+      markdown: null,
+      config: config,
+      provider: provider,
+      language: language,
+    );
+  }
+
   Future<DocumentSummaryImageResult> generate({
     required Document document,
     required AgentApiState agentState,
@@ -179,7 +209,7 @@ class DocumentSummaryImageService {
 
   String _buildPrompt({
     required Document document,
-    required String markdown,
+    required String? markdown,
     required ImageGenerationConfig config,
     required AgentApiProvider provider,
     String? language,
@@ -204,6 +234,12 @@ class DocumentSummaryImageService {
       );
     }
 
+    // markdown == null：复制到剪贴板路径，用户会手动把 .md 文件作为附件上传。
+    // markdown != null：API 调用路径，模型无法读取附件，必须把正文嵌进 prompt。
+    final bodySection = markdown == null
+        ? 'Paper full text:\nThe full paper Markdown is attached separately by the user. Read it to ground the infographic in the paper\'s actual content.'
+        : 'Processed Markdown:\n$markdown';
+
     return '''
 ${config.prompt.trim()}
 
@@ -221,8 +257,7 @@ Year: ${document.year ?? 'Unknown'}
 DOI: ${document.doi ?? 'Unknown'}
 Keywords: ${document.keywords.join(', ')}
 
-Processed Markdown:
-$markdown
+$bodySection
 
 Reference figures:
 The attached images are extracted figures from the paper. Use them as scientific visual references, but redraw the final result as a clean editorial infographic. Do not copy dense text from the source figures verbatim.

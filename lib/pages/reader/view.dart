@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:animations/animations.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -13,10 +14,10 @@ import 'package:go_router/go_router.dart';
 import '../../router/app_routes.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
-import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/image_generation_config_provider.dart';
 import '../../providers/document_translation_provider.dart';
@@ -201,6 +202,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             setState(() {
               _mdPath = mdPath;
               _mdContent = markdownContent;
+              // 首次提取也可能在已有 figures 的目录上覆盖(用户先 reprocess 再换流程),
+              // 重置缓存的 future 让下次按需读最新 manifest.
+              _figuresFuture = null;
               _markdownCacheKey = cacheKey;
               _searchSnapshot = cacheService.getSearchSnapshot(
                 cacheKey: cacheKey,
@@ -239,6 +243,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _mdContent = content;
         _markdownCacheKey = cacheKey;
         _loadFuture = null;
+        // 重新排版会重跑 extractFigures,figures.json 和 figures/*.png 都变了——
+        // 让"点图开 viewer"路径下次按需重读新 manifest.
+        _figuresFuture = null;
         _searchSnapshot = cacheService.getSearchSnapshot(
           cacheKey: cacheKey,
           markdownContent: content,
@@ -1291,11 +1298,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  static const _kSummaryImageCostDismissed = 'summary_image_cost_dismissed';
-
   Future<void> _handleGenerateSummaryImage({bool openOutline = true}) async {
     final imageRole = AgentApiNotifier.globalImageRole;
-    if (imageRole.provider == null || imageRole.modelId == null) {
+    final hasImageRole =
+        imageRole.provider != null && imageRole.modelId != null;
+
+    // 每次点击都弹窗，防止误触触发付费 API 调用。
+    final choice = await _showSummaryImageCostDialog(
+      hasImageRole: hasImageRole,
+    );
+    if (choice == null || choice == _SummaryImageChoice.cancel) return;
+
+    if (choice == _SummaryImageChoice.official) {
+      await _showOfficialGenDialog();
+      return;
+    }
+
+    // 走 API 生图前，再次确认生图模型已配置（前面只是为了让按钮可点）。
+    if (!hasImageRole) {
       _scaffoldKey.currentState?.closeEndDrawer();
       ref
           .read(snackBarServiceProvider)
@@ -1307,14 +1327,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           );
       return;
-    }
-
-    final dismissed =
-        GStorage.setting.get(_kSummaryImageCostDismissed, defaultValue: false)
-            as bool;
-    if (!dismissed) {
-      final confirmed = await _showSummaryImageCostDialog();
-      if (confirmed != true) return;
     }
 
     if (openOutline) _openOutlineSheet();
@@ -1364,8 +1376,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  Future<bool?> _showSummaryImageCostDialog() async {
-    var dontAskAgain = false;
+  Future<_SummaryImageChoice?> _showSummaryImageCostDialog({
+    required bool hasImageRole,
+  }) async {
     final cfg = ref.read(imageGenerationConfigProvider);
     final role = AgentApiNotifier.globalImageRole;
     final cost = role.provider == AgentApiProvider.openai
@@ -1378,91 +1391,186 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ? '当前设置预估费用约 \$${cost.toStringAsFixed(3)} / 张'
         : '';
 
-    return showDialog<bool>(
+    return showDialog<_SummaryImageChoice>(
       context: context,
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            final theme = Theme.of(ctx);
-            final cs = theme.colorScheme;
-            return AlertDialog(
-              backgroundColor: cs.surfaceContainerLow,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        return AlertDialog(
+          backgroundColor: cs.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          title: Text(
+            '生成总结图',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '总结图由第三方生图模型生成，可能产生 API 调用费用。',
+                style: theme.textTheme.bodyMedium,
               ),
-              contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-              title: Text(
-                '生成总结图',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '总结图由第三方生图模型生成，可能产生 API 调用费用。',
-                    style: theme.textTheme.bodyMedium,
+              if (costLine.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  costLine,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w500,
                   ),
-                  if (costLine.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      costLine,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () =>
-                        setDialogState(() => dontAskAgain = !dontAskAgain),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: Checkbox(
-                            value: dontAskAgain,
-                            onChanged: (v) =>
-                                setDialogState(() => dontAskAgain = v ?? false),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '不再提醒',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: const Text('取消'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    if (dontAskAgain) {
-                      GStorage.setting.put(_kSummaryImageCostDismissed, true);
-                    }
-                    Navigator.of(ctx).pop(true);
-                  },
-                  child: const Text('确定'),
                 ),
               ],
-            );
-          },
+              const SizedBox(height: 8),
+              Text(
+                '若希望使用 ChatGPT / Gemini 官方 App 生图，可选「官方生图」，导出文献素材后手动上传。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(ctx).pop(_SummaryImageChoice.cancel),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(ctx).pop(_SummaryImageChoice.official),
+              child: const Text('官方生图'),
+            ),
+            TextButton(
+              onPressed: hasImageRole
+                  ? () => Navigator.of(ctx).pop(_SummaryImageChoice.confirm)
+                  : null,
+              child: const Text('确定'),
+            ),
+          ],
         );
       },
     );
+  }
+
+  Future<void> _showOfficialGenDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _OfficialGenDialog(
+        onExportFigures: _exportFigures,
+        onExportMarkdown: _exportMarkdown,
+        onCopyPrompt: _copyGenPrompt,
+      ),
+    );
+  }
+
+  Future<String?> _exportFigures() async {
+    final figuresDir = Directory(DocPaths.figuresDir(widget.document.filePath));
+    if (!await figuresDir.exists()) {
+      return '未找到 figures 目录，请先完成文档提取';
+    }
+    final files = <File>[];
+    await for (final entity in figuresDir.list()) {
+      if (entity is! File) continue;
+      final lower = entity.path.toLowerCase();
+      if (lower.endsWith('.png') ||
+          lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.webp')) {
+        files.add(entity);
+      }
+    }
+    if (files.isEmpty) return 'figures 目录为空';
+
+    try {
+      if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+        final targetDir = await FilePicker.platform.getDirectoryPath(
+          dialogTitle: '选择保存目录',
+          lockParentWindow: true,
+        );
+        if (targetDir == null) return null;
+        var copied = 0;
+        for (final f in files) {
+          final name = p.basename(f.path);
+          await f.copy(p.join(targetDir, name));
+          copied++;
+        }
+        return '已保存 $copied 个 figure 到 $targetDir';
+      } else {
+        await Share.shareXFiles(
+          files.map((f) => XFile(f.path)).toList(),
+          subject: 'figures',
+        );
+        return null;
+      }
+    } catch (e) {
+      return '保存失败：$e';
+    }
+  }
+
+  Future<String?> _exportMarkdown() async {
+    final mdPath = DocPaths.md(widget.document.filePath);
+    final mdFile = File(mdPath);
+    if (!await mdFile.exists()) {
+      return '未找到 Markdown 文件，请先完成文档提取';
+    }
+    final defaultName = '${_safeFileStem(widget.document.title)}.md';
+
+    try {
+      if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+        final targetPath = await FilePicker.platform.saveFile(
+          dialogTitle: '保存 Markdown',
+          fileName: defaultName,
+          lockParentWindow: true,
+        );
+        if (targetPath == null) return null;
+        final target = File(targetPath);
+        if (await target.exists()) await target.delete();
+        await mdFile.copy(target.path);
+        return '已保存到 ${target.path}';
+      } else {
+        await Share.shareXFiles([XFile(mdFile.path)], subject: defaultName);
+        return null;
+      }
+    } catch (e) {
+      return '保存失败：$e';
+    }
+  }
+
+  Future<String?> _copyGenPrompt() async {
+    try {
+      final config = ref.read(imageGenerationConfigProvider);
+      final language = ref.read(translationConfigProvider).targetLanguage;
+      // 偏好使用已配置的生图 provider 文案约束；若未配置则用 OpenAI 兜底。
+      final role = AgentApiNotifier.globalImageRole;
+      final prompt = await DocumentSummaryImageService.instance.composePrompt(
+        document: widget.document,
+        config: config,
+        provider: role.provider ?? AgentApiProvider.openai,
+        language: language,
+      );
+      await Clipboard.setData(ClipboardData(text: prompt));
+      return '已复制生图提示词到剪贴板';
+    } on DocumentSummaryImageException catch (e) {
+      return e.message;
+    } catch (e) {
+      return '复制失败：$e';
+    }
+  }
+
+  String _safeFileStem(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return 'document';
+    final sanitized = trimmed
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    return sanitized.length > 80 ? sanitized.substring(0, 80) : sanitized;
   }
 
   Future<void> _openSummaryImage([String? imagePath]) async {
@@ -1736,6 +1844,222 @@ class _PdfScrollThumbState extends State<_PdfScrollThumb> {
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(width / 2),
+        ),
+      ),
+    );
+  }
+}
+
+enum _SummaryImageChoice { cancel, official, confirm }
+
+class _OfficialGenDialog extends StatefulWidget {
+  final Future<String?> Function() onExportFigures;
+  final Future<String?> Function() onExportMarkdown;
+  final Future<String?> Function() onCopyPrompt;
+
+  const _OfficialGenDialog({
+    required this.onExportFigures,
+    required this.onExportMarkdown,
+    required this.onCopyPrompt,
+  });
+
+  @override
+  State<_OfficialGenDialog> createState() => _OfficialGenDialogState();
+}
+
+class _OfficialGenDialogState extends State<_OfficialGenDialog> {
+  String? _notice;
+  Timer? _noticeTimer;
+  bool _running = false;
+
+  @override
+  void dispose() {
+    _noticeTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _run(Future<String?> Function() action) async {
+    if (_running) return;
+    setState(() => _running = true);
+    try {
+      final msg = await action();
+      if (!mounted) return;
+      if (msg == null) {
+        setState(() {});
+        return;
+      }
+      _noticeTimer?.cancel();
+      setState(() => _notice = msg);
+      _noticeTimer = Timer(const Duration(seconds: 3), () {
+        if (!mounted) return;
+        setState(() => _notice = null);
+      });
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return AlertDialog(
+      backgroundColor: cs.surfaceContainerLow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      title: Text(
+        '导出至官方生图',
+        style: theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '将文献素材导出后，到 ChatGPT / Gemini 等官方 App 中手动上传以生图。',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _OfficialGenAction(
+            icon: Symbols.image_rounded,
+            label: '保存文献 figures',
+            description: '导出提取出的所有 figure 图片',
+            enabled: !_running,
+            onTap: () => _run(widget.onExportFigures),
+          ),
+          const SizedBox(height: 8),
+          _OfficialGenAction(
+            icon: Symbols.description_rounded,
+            label: '保存文献 Markdown',
+            description: '导出 .md 全文，用于补充 prompt',
+            enabled: !_running,
+            onTap: () => _run(widget.onExportMarkdown),
+          ),
+          const SizedBox(height: 8),
+          _OfficialGenAction(
+            icon: Symbols.content_copy_rounded,
+            label: '复制生图提示词',
+            description: '复制完整 prompt 到剪贴板',
+            enabled: !_running,
+            onTap: () => _run(widget.onCopyPrompt),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: _notice == null
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.inverseSurface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Symbols.check_circle_rounded,
+                            color: cs.onInverseSurface,
+                            size: 18,
+                            fill: 1,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _notice!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: cs.onInverseSurface,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+      ],
+    );
+  }
+}
+
+class _OfficialGenAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String description;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _OfficialGenAction({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Material(
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Opacity(
+            opacity: enabled ? 1 : 0.5,
+            child: Row(
+              children: [
+                Icon(icon, color: cs.primary, size: 22),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        description,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Symbols.chevron_right_rounded,
+                  color: cs.onSurfaceVariant,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

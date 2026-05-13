@@ -172,6 +172,15 @@ class _OutlinePanelState extends State<OutlinePanel>
       return;
     }
     final figures = await FigureExtractService.loadManifest(widget.pdfPath!);
+    // 重新提取会原地覆盖 figures/*.png,但 Flutter 全局 ImageCache 以
+    // FileImage(path) 为 key,不感知 mtime,导致 Image.file 还显示旧字节.
+    // 显式 evict 这批 path,下次构建时 Image.file 重读磁盘.
+    if (figures != null && figures.isNotEmpty) {
+      final imageCache = PaintingBinding.instance.imageCache;
+      for (final fig in figures) {
+        imageCache.evict(FileImage(File(fig.imagePath)));
+      }
+    }
     if (mounted) {
       setState(() {
         _figures = figures;

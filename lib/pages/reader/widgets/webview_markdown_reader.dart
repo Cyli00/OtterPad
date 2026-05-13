@@ -323,7 +323,23 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
       palette: widget.palette,
       settings: widget.settings,
       baseHref: _docBaseHref,
+      imageCacheBuster: _figuresCacheBuster(),
     );
+  }
+
+  /// 用 figures.json 的 mtime 当 figure 路径的 cache buster.
+  /// localhost server 给 PNG 设了 max-age=300,重新提取后同 URL 5 分钟内拿旧字节;
+  /// mtime 变化时 URL 加的 `?v=` 也变,自然 cache miss → 新 PNG.
+  String _figuresCacheBuster() {
+    try {
+      final manifest = File(
+        p.join(widget.documentDir, 'figures', 'figures.json'),
+      );
+      if (manifest.existsSync()) {
+        return manifest.lastModifiedSync().millisecondsSinceEpoch.toString();
+      }
+    } catch (_) {}
+    return '';
   }
 
   @override

@@ -22,8 +22,9 @@ String buildReaderHtml({
   required ReaderPalette palette,
   required ReaderSettingsState settings,
   required String baseHref,
+  String imageCacheBuster = '',
 }) {
-  final htmlBody = _markdownToHtml(markdownContent);
+  final htmlBody = _markdownToHtml(markdownContent, imageCacheBuster);
   final css = _buildCss(palette, settings);
   final js = _buildJs();
 
@@ -63,7 +64,7 @@ String buildThemeCssVars(ReaderPalette palette, ReaderSettingsState settings) {
 
 // ─── Markdown → HTML ───
 
-String _markdownToHtml(String markdown) {
+String _markdownToHtml(String markdown, [String imageCacheBuster = '']) {
   var html = md.markdownToHtml(
     markdown,
     extensionSet: md.ExtensionSet.gitHubWeb,
@@ -71,7 +72,7 @@ String _markdownToHtml(String markdown) {
     blockSyntaxes: [_LatexBlockPreserve()],
   );
 
-  html = _injectImageAttrs(html);
+  html = _injectImageAttrs(html, imageCacheBuster);
   html = _convertFigCaptions(html);
   return html;
 }
@@ -167,7 +168,7 @@ class _LatexBlockPreserve extends md.BlockSyntax {
 ///   HTTP origin 下浏览器拒绝跨协议加载。把 `file:///<dataDir>/docs/<hash>/...`
 ///   转成 server URL `http://localhost:PORT/docs/<hash>/...` 后同 origin 加载
 ///   正常。相对路径与 http(s)/data URI 保留原样。
-String _injectImageAttrs(String html) {
+String _injectImageAttrs(String html, [String cacheBuster = '']) {
   const lazyAttrs = 'loading="lazy" decoding="async" ';
   return html.replaceAllMapped(
     RegExp(r'<img\s+([^>]*?)src="([^"]*?)"', caseSensitive: false),
@@ -175,14 +176,26 @@ String _injectImageAttrs(String html) {
       final attrs = match[1]!;
       final src = match[2]!;
       String resolved = src;
+      var fromFileScheme = false;
       if (src.startsWith('file://')) {
         try {
           final filePath = Uri.parse(src).toFilePath();
           final mapped = ReaderLocalhostServer.instance.urlForPath(filePath);
-          if (mapped != null) resolved = mapped;
+          if (mapped != null) {
+            resolved = mapped;
+            fromFileScheme = true;
+          }
         } catch (_) {
           // Uri.parse / toFilePath 失败 → 保留原 src，浏览器按原状处理
         }
+      }
+      // 给 figure 路径附 `?v=<cacheBuster>` 强制 WebView 不命中旧缓存:
+      // localhost server 给非 HTML 资源设了 max-age=300,重新提取后 5 分钟内
+      // 同 URL 会拿到旧 PNG. cacheBuster 通常是 figures.json 的 mtime,变化时
+      // URL 自然变,等价于 invalidation 信号.
+      if (fromFileScheme && cacheBuster.isNotEmpty) {
+        final sep = resolved.contains('?') ? '&' : '?';
+        resolved = '$resolved${sep}v=$cacheBuster';
       }
       return '<img $lazyAttrs${attrs}src="$resolved"';
     },

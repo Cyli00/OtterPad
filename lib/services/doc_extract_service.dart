@@ -519,8 +519,8 @@ class DocExtractService {
         // `<table border=1 ...>`，前缀匹配不上。改用通用 `<table` 起始标签定位。
         idx = _findLine(lines, '<table', skip);
       } else if (content.isNotEmpty) {
-        // figure_title / vision_footnote / 被 _recoverMissingAnchors
-        // 升格的 text/paragraph_title 等，按内容前缀搜索。
+        // figure_title / vision_footnote / 内容像 caption 的 text 等,
+        // 按内容前缀搜索。
         final probeLen = label == 'vision_footnote' ? 20 : 30;
         idx = _findLine(
           lines,
@@ -548,6 +548,19 @@ class DocExtractService {
             skip.add(i);
           }
         }
+      }
+    }
+
+    // markdown-only caption 兜底:manifest 带了 caption text 但 parsing_res_list
+    // 没对应 block 时,直接按 captionText 在 markdown 里搜行,占住并设为 anchor.
+    if (anchor == null && fig.captionText.isNotEmpty) {
+      final probe = fig.captionText
+          .substring(0, min(30, fig.captionText.length));
+      final idx = _findLine(lines, probe, skip);
+      if (idx != null) {
+        owned.add(idx);
+        skip.add(idx);
+        anchor = idx;
       }
     }
 
