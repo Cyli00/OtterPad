@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'dart:io';
 
 class MarkdownResolvedDocument {
@@ -29,6 +28,19 @@ class MarkdownSearchSnapshot {
   const MarkdownSearchSnapshot({required this.blocks});
 }
 
+/// Markdown 内容搜索结果。
+class SearchResult {
+  final String heading;
+  final String plainText;
+  final int charOffset;
+
+  const SearchResult({
+    required this.heading,
+    required this.plainText,
+    required this.charOffset,
+  });
+}
+
 class MarkdownDocumentCacheService {
   MarkdownDocumentCacheService._();
 
@@ -37,9 +49,8 @@ class MarkdownDocumentCacheService {
 
   static const _maxEntries = 4;
 
-  final _contentCache = LinkedHashMap<String, String>();
-  final _searchSnapshotCache =
-      LinkedHashMap<String, MarkdownSearchSnapshot>();
+  final _contentCache = <String, String>{};
+  final _searchSnapshotCache = <String, MarkdownSearchSnapshot>{};
   final _contentTasks = <String, Future<String>>{};
 
   Future<MarkdownResolvedDocument> loadDocument({

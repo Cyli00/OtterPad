@@ -3,24 +3,11 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/reader/markdown_document_cache_service.dart';
-import 'reader_background.dart';
 import '../../../utils/markdown_preprocessor.dart';
+import 'reader_background.dart';
 import 'md_widget/nr_markdown_config.dart';
 import 'md_widget/nr_search_highlight_builder.dart';
 import 'package:material_symbols_icons/symbols.dart';
-
-/// Markdown 内容搜索结果
-class SearchResult {
-  final String heading;
-  final String plainText;
-  final int charOffset;
-
-  const SearchResult({
-    required this.heading,
-    required this.plainText,
-    required this.charOffset,
-  });
-}
 
 /// 全屏搜索遮罩层
 ///
@@ -28,9 +15,8 @@ class SearchResult {
 /// 搜索结果使用与阅读器正文相同的 Markdown 渲染管线（LaTeX、高亮等）。
 class SearchOverlay extends StatefulWidget {
   final ReaderSettingsState readerSettings;
-  final void Function(
-          List<SearchResult> results, int tappedIndex, String query)
-      onResultTap;
+  final void Function(List<SearchResult> results, int tappedIndex, String query)
+  onResultTap;
   final VoidCallback onDismiss;
   final MarkdownSearchSnapshot searchSnapshot;
   final String? initialQuery;
@@ -95,11 +81,13 @@ class _SearchOverlayState extends State<SearchOverlay> {
     final lowerQuery = query.toLowerCase();
     final results = widget.searchSnapshot.blocks
         .where((block) => block.plainText.toLowerCase().contains(lowerQuery))
-        .map((block) => SearchResult(
-              heading: block.heading,
-              plainText: block.plainText,
-              charOffset: block.charOffset,
-            ))
+        .map(
+          (block) => SearchResult(
+            heading: block.heading,
+            plainText: block.plainText,
+            charOffset: block.charOffset,
+          ),
+        )
         .toList(growable: false);
 
     // 构建与正文相同的渲染管线，附加搜索高亮
@@ -113,8 +101,9 @@ class _SearchOverlayState extends State<SearchOverlay> {
     );
     _mdGenerator = buildReaderMarkdownGenerator(
       settings: widget.readerSettings,
-      searchRichTextBuilder:
-          searchBuilder.hasHighlights ? searchBuilder.call : null,
+      searchRichTextBuilder: searchBuilder.hasHighlights
+          ? searchBuilder.call
+          : null,
     );
 
     setState(() {
@@ -149,8 +138,11 @@ class _SearchOverlayState extends State<SearchOverlay> {
         child: Row(
           children: [
             IconButton(
-              icon: Icon(Symbols.chevron_left_rounded,
-                  size: 28, color: cs.onSurface),
+              icon: Icon(
+                Symbols.chevron_left_rounded,
+                size: 28,
+                color: cs.onSurface,
+              ),
               tooltip: '返回',
               onPressed: widget.onDismiss,
             ),
@@ -169,12 +161,18 @@ class _SearchOverlayState extends State<SearchOverlay> {
                       color: cs.onSurfaceVariant.withAlpha(160),
                       fontSize: 15,
                     ),
-                    prefixIcon: Icon(Symbols.search_rounded,
-                        size: 20, color: cs.onSurfaceVariant),
+                    prefixIcon: Icon(
+                      Symbols.search_rounded,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
                     suffixIcon: _controller.text.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Symbols.cancel_rounded,
-                                size: 18, color: cs.onSurfaceVariant),
+                            icon: Icon(
+                              Symbols.cancel_rounded,
+                              size: 18,
+                              color: cs.onSurfaceVariant,
+                            ),
                             onPressed: () {
                               _controller.clear();
                               setState(() {
@@ -186,8 +184,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                         : null,
                     filled: true,
                     fillColor: cs.surfaceContainerHigh,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(28),
                       borderSide: BorderSide.none,
@@ -201,8 +198,11 @@ class _SearchOverlayState extends State<SearchOverlay> {
             ),
             const SizedBox(width: 4),
             IconButton(
-              icon: Icon(Symbols.close_rounded,
-                  size: 22, color: cs.onSurfaceVariant),
+              icon: Icon(
+                Symbols.close_rounded,
+                size: 22,
+                color: cs.onSurfaceVariant,
+              ),
               tooltip: '退出搜索',
               onPressed: widget.onDismiss,
             ),

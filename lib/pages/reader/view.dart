@@ -1,8 +1,6 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:animations/animations.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -11,23 +9,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../router/app_routes.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/api_provider.dart';
-import '../../providers/image_generation_config_provider.dart';
+import '../../providers/document_task_provider.dart';
 import '../../providers/document_translation_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/reader_settings_provider.dart';
+import '../../providers/reader_session_provider.dart';
 import '../../providers/summary_image_provider.dart';
-import '../../providers/task_provider.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../services/doc_extract_service.dart';
-import '../../utils/doc_paths.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
@@ -35,6 +30,7 @@ import '../../data/models/book/highlight.dart';
 import '../../providers/highlight_provider.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/markdown_translation_weaver.dart';
+import 'coordinators/reader_summary_image_coordinator.dart';
 import 'widgets/figure_viewer.dart';
 import 'widgets/webview_markdown_reader.dart';
 import 'widgets/outline_panel.dart';
@@ -65,18 +61,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-
-  bool _showPreview = false;
-  String? _mdPath;
-  String? _mdContent;
-
-  // 搜索
-  bool _searchActive = false;
-  String? _highlightQuery;
-
-  // 搜索结果导航
-  List<SearchResult> _searchResults = [];
-  int _currentResultIndex = 0;
+  late final ReaderSessionArgs _sessionArgs;
 
   // WebView 阅读器引用（通过 GlobalKey 暴露方法）
   final _webViewReaderKey = GlobalKey<WebViewMarkdownReaderState>();
@@ -89,29 +74,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _pdfSearchFocusNode = FocusNode();
   String _pdfSearchQuery = '';
 
-  // 缓存加载 Future，避免重复创建相同加载任务
-  Future<String>? _loadFuture;
-  MarkdownSearchSnapshot? _searchSnapshot;
-  String? _markdownCacheKey;
-
   // 选择工具栏 Overlay（WebView 选择走 JS 桥接）
   OverlayEntry? _selectionToolbarEntry;
-
-  // 沉浸式：点击 markdown 内容区切换上下工具栏可见性
-  bool _toolbarsVisible = true;
-  bool _sheetOpen = false;
 
   // 桌面端工具栏自动隐藏
   static const _kEdgeTriggerZone = 16.0;
 
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-
-  // 异步初始化状态
-  bool _initialized = false;
-  bool? _fileExists;
-  bool _markdownLoading = false;
-  Object? _markdownLoadError;
 
   // Figure manifest 懒加载：首次点击图片时触发，Future 复用避免重复 IO
   Future<List<FigureManifestEntry>?>? _figuresFuture;
@@ -126,51 +96,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void initState() {
     super.initState();
-    _initAsync();
+    _sessionArgs = ReaderSessionArgs(
+      documentId: widget.document.filePath,
+      title: widget.document.title,
+      defaultReadingMode: ref.read(readerSettingsProvider).defaultReadingMode,
+    );
   }
 
-  Future<void> _initAsync() async {
-    final filePath = widget.document.filePath;
+  ReaderSessionState get _session =>
+      ref.read(readerSessionProvider(_sessionArgs));
 
-    final fileExistsFuture = filePath.isNotEmpty
-        ? File(filePath).exists()
-        : Future.value(false);
-    final mdPathFuture = _findMarkdownPath(filePath);
-    final summaryPathFuture = filePath.isNotEmpty
-        ? () async {
-            final sp = DocumentSummaryImageService.imagePathFor(filePath);
-            return await File(sp).exists() ? sp : null;
-          }()
-        : Future<String?>.value();
+  ReaderSessionNotifier get _sessionNotifier =>
+      ref.read(readerSessionProvider(_sessionArgs).notifier);
 
-    final fileExists = await fileExistsFuture;
-    final mdPath = await mdPathFuture;
-    final summaryPath = await summaryPathFuture;
-    if (mdPath != null) {
-      _mdPath = mdPath;
-    }
-
-    if (!mounted) return;
-
-    final defaultMode = ref.read(readerSettingsProvider).defaultReadingMode;
-    final wantMarkdown =
-        defaultMode == DefaultReadingMode.markdown && _hasResult;
-
-    setState(() {
-      _fileExists = fileExists;
-      _showPreview = wantMarkdown;
-      _initialized = true;
-      _markdownLoading = wantMarkdown && _mdContent == null && _mdPath != null;
-      _markdownLoadError = null;
-    });
-    _summaryImageState.value = SummaryImageState(imagePath: summaryPath);
-
-    if (wantMarkdown) {
-      unawaited(_ensureMarkdownReady());
-    }
-  }
-
-  bool get _hasResult => _mdPath != null || _mdContent != null;
+  ReaderSummaryImageCoordinator get _summaryCoordinator =>
+      ReaderSummaryImageCoordinator(
+        context: context,
+        ref: ref,
+        document: widget.document,
+        scaffoldKey: _scaffoldKey,
+        summaryImageState: _summaryImageState,
+        sessionNotifier: _sessionNotifier,
+        openOutlineSheet: _openOutlineSheet,
+      );
 
   // ─── 提取逻辑 ───
 
@@ -182,36 +130,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
 
     ref
-        .read(taskProvider.notifier)
+        .read(documentTaskProvider.notifier)
         .extractDocument(
+          documentId: widget.document.id,
           filePath: filePath,
           title: widget.document.title,
           apiState: ref.read(docExtractApiProvider),
           onSuccess: (mdPath, markdownContent) {
             if (!mounted) return;
-            final cacheService = MarkdownDocumentCacheService.instance;
-            final cacheKey = cacheService.buildMemoryCacheKey(
-              mdPath: mdPath,
-              title: widget.document.title,
+            _sessionNotifier.useExtractedMarkdown(
+              markdownPath: mdPath,
               markdownContent: markdownContent,
             );
-            cacheService.primeResolvedContent(
-              cacheKey: cacheKey,
-              content: markdownContent,
-            );
-            setState(() {
-              _mdPath = mdPath;
-              _mdContent = markdownContent;
-              // 首次提取也可能在已有 figures 的目录上覆盖(用户先 reprocess 再换流程),
-              // 重置缓存的 future 让下次按需读最新 manifest.
-              _figuresFuture = null;
-              _markdownCacheKey = cacheKey;
-              _searchSnapshot = cacheService.getSearchSnapshot(
-                cacheKey: cacheKey,
-                markdownContent: markdownContent,
-              );
-              _showPreview = true;
-            });
+            _figuresFuture = null;
           },
         );
   }
@@ -229,28 +160,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           .reprocessMarkdown(pdfPath: filePath, title: widget.document.title);
       if (!mounted) return;
 
-      // 刷新缓存和界面
-      final cacheService = MarkdownDocumentCacheService.instance;
-      final cacheKey = cacheService.buildMemoryCacheKey(
-        mdPath: mdPath,
-        title: widget.document.title,
+      _sessionNotifier.useExtractedMarkdown(
+        markdownPath: mdPath,
         markdownContent: content,
       );
-      cacheService.primeResolvedContent(cacheKey: cacheKey, content: content);
-
-      setState(() {
-        _mdPath = mdPath;
-        _mdContent = content;
-        _markdownCacheKey = cacheKey;
-        _loadFuture = null;
-        // 重新排版会重跑 extractFigures,figures.json 和 figures/*.png 都变了——
-        // 让"点图开 viewer"路径下次按需重读新 manifest.
-        _figuresFuture = null;
-        _searchSnapshot = cacheService.getSearchSnapshot(
-          cacheKey: cacheKey,
-          markdownContent: content,
-        );
-      });
+      _figuresFuture = null;
       ref.read(snackBarServiceProvider).showResult(message: '重新排版完成');
     } catch (e) {
       if (!mounted) return;
@@ -259,42 +173,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _togglePreview() {
-    _clearHighlight();
-    final enteringMarkdown = !_showPreview;
+    final enteringMarkdown = _sessionNotifier.togglePreview();
     if (enteringMarkdown) {
       _pdfSearchFocusNode.unfocus();
       _pdfSearchController.clear();
       _pdfSearcher?.resetTextSearch();
-    }
-    setState(() {
-      _showPreview = !_showPreview;
-      _searchActive = false;
-      if (enteringMarkdown) {
-        _pdfSearchQuery = '';
-      }
-    });
-    if (enteringMarkdown) {
-      unawaited(_ensureMarkdownReady());
+      _pdfSearchQuery = '';
     }
   }
 
   // ─── 搜索 ───
 
   Future<void> _openSearch() async {
-    if (_showPreview) {
-      if (_mdContent == null && _mdPath != null) {
-        await _ensureMarkdownReady();
-      }
-      if (!mounted || _mdContent == null) return;
-      setState(() => _searchActive = true);
+    final session = _session;
+    if (session.showPreview) {
+      await _sessionNotifier.openMarkdownSearch();
       return;
     }
 
-    if (!(_fileExists ?? false)) return;
+    if (!_sessionNotifier.openPdfSearch()) return;
     if (_pdfSearchController.text != _pdfSearchQuery) {
       _pdfSearchController.text = _pdfSearchQuery;
     }
-    setState(() => _searchActive = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _pdfSearchFocusNode.requestFocus();
@@ -306,8 +206,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _closeSearch() {
-    if (_showPreview) {
-      setState(() => _searchActive = false);
+    if (_session.showPreview) {
+      _sessionNotifier.closeSearch();
       return;
     }
     _clearPdfSearch();
@@ -353,8 +253,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _pdfSearchController.clear();
     _pdfSearchFocusNode.unfocus();
     _pdfSearcher?.resetTextSearch();
+    _sessionNotifier.closeSearch();
     setState(() {
-      _searchActive = false;
       _pdfSearchQuery = '';
     });
   }
@@ -364,14 +264,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     int tappedIndex,
     String query,
   ) {
-    final offset = results[tappedIndex].charOffset;
-    setState(() {
-      _searchActive = false;
-      _showPreview = true;
-      _searchResults = results;
-      _currentResultIndex = tappedIndex;
-      _highlightQuery = query;
-    });
+    final offset = _sessionNotifier.selectSearchResult(
+      results,
+      tappedIndex,
+      query,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _scrollToCharOffset(offset);
@@ -384,23 +281,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _clearHighlight() {
-    if (_highlightQuery != null) {
-      setState(() {
-        _highlightQuery = null;
-        _searchResults = [];
-        _currentResultIndex = 0;
-      });
-    }
+    _sessionNotifier.clearHighlight();
   }
 
   void _goToPrevResult() {
-    if (_searchResults.isEmpty) return;
-    setState(() {
-      _currentResultIndex =
-          (_currentResultIndex - 1 + _searchResults.length) %
-          _searchResults.length;
-    });
-    _scrollToCharOffset(_searchResults[_currentResultIndex].charOffset);
+    final offset = _sessionNotifier.goToPreviousSearchResult();
+    if (offset == null) return;
+    _scrollToCharOffset(offset);
     Future.delayed(const Duration(milliseconds: 350), () {
       if (mounted) {
         _webViewReaderKey.currentState?.activateNearestSearchResult();
@@ -409,11 +296,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _goToNextResult() {
-    if (_searchResults.isEmpty) return;
-    setState(() {
-      _currentResultIndex = (_currentResultIndex + 1) % _searchResults.length;
-    });
-    _scrollToCharOffset(_searchResults[_currentResultIndex].charOffset);
+    final offset = _sessionNotifier.goToNextSearchResult();
+    if (offset == null) return;
+    _scrollToCharOffset(offset);
     Future.delayed(const Duration(milliseconds: 350), () {
       if (mounted) {
         _webViewReaderKey.currentState?.activateNearestSearchResult();
@@ -438,16 +323,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // ─── 底部面板（字体 / 主题 / 大纲） ───
 
   Future<void> _openTextSheet() async {
-    if (_mdContent == null) return;
-    _sheetOpen = true;
+    if (_session.markdownContent == null) return;
+    _sessionNotifier.setSheetOpen(true);
     await showReaderTextSheet(context);
-    _sheetOpen = false;
+    _sessionNotifier.setSheetOpen(false);
   }
 
   Future<void> _openThemeSheet() async {
-    _sheetOpen = true;
+    _sessionNotifier.setSheetOpen(true);
     await showReaderThemeSheet(context);
-    _sheetOpen = false;
+    _sessionNotifier.setSheetOpen(false);
   }
 
   void _openNotesSheet() {
@@ -456,7 +341,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _openOutlineSheet() {
-    if (_mdContent == null) return;
+    if (_session.markdownContent == null) return;
     _scaffoldKey.currentState?.openEndDrawer();
   }
 
@@ -466,41 +351,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // WebView 内部 JS 检测滚动方向并通过 onScrollDirection 回调。
 
   bool _handlePdfScrollNotification(UserScrollNotification notification) {
-    if (_showPreview || _sheetOpen || _searchActive) return false;
+    final session = _session;
+    if (session.showPreview || !(_sessionNotifier.canReactToReaderScroll)) {
+      return false;
+    }
 
-    _handleReaderScrollDirection(notification.direction);
+    _sessionNotifier.handleReaderScrollDirection(notification.direction);
     return false;
   }
 
   void _handlePdfPointerSignal(PointerSignalEvent event) {
-    if (_showPreview || _sheetOpen || _searchActive) return;
+    final session = _session;
+    if (session.showPreview || !(_sessionNotifier.canReactToReaderScroll)) {
+      return;
+    }
     if (event is! PointerScrollEvent) return;
 
     if (event.scrollDelta.dy > 0) {
-      _handleReaderScrollDirection(ScrollDirection.reverse);
+      _sessionNotifier.handleReaderScrollDirection(ScrollDirection.reverse);
     } else if (event.scrollDelta.dy < 0) {
-      _handleReaderScrollDirection(ScrollDirection.forward);
+      _sessionNotifier.handleReaderScrollDirection(ScrollDirection.forward);
     }
   }
 
   void _handlePdfPointerMove(PointerMoveEvent event) {
-    if (_showPreview || _sheetOpen || _searchActive) return;
+    final session = _session;
+    if (session.showPreview || !(_sessionNotifier.canReactToReaderScroll)) {
+      return;
+    }
 
     if (event.delta.dy < -1) {
-      _handleReaderScrollDirection(ScrollDirection.reverse);
+      _sessionNotifier.handleReaderScrollDirection(ScrollDirection.reverse);
     } else if (event.delta.dy > 1) {
-      _handleReaderScrollDirection(ScrollDirection.forward);
-    }
-  }
-
-  void _handleReaderScrollDirection(ScrollDirection direction) {
-    switch (direction) {
-      case ScrollDirection.reverse:
-        if (_toolbarsVisible) setState(() => _toolbarsVisible = false);
-      case ScrollDirection.forward:
-        if (!_toolbarsVisible) setState(() => _toolbarsVisible = true);
-      case ScrollDirection.idle:
-        break;
+      _sessionNotifier.handleReaderScrollDirection(ScrollDirection.forward);
     }
   }
 
@@ -508,107 +391,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ///
   /// 隐藏仍由滚动方向或点击内容区触发，不再按无交互时长自动隐藏。
   void _onDesktopPointerHover(PointerHoverEvent event) {
+    final session = _session;
     final canShowToolbars =
-        (_showPreview && _hasResult && _mdContent != null) ||
-        (!_showPreview && (_fileExists ?? false));
-    if (!canShowToolbars || _sheetOpen) return;
+        (session.showPreview &&
+            session.hasResult &&
+            session.markdownContent != null) ||
+        (!session.showPreview && session.fileExists);
+    if (!canShowToolbars || session.sheetOpen) return;
     final height = context.size?.height ?? 0;
     final y = event.localPosition.dy;
     if (y < _kEdgeTriggerZone || y > height - _kEdgeTriggerZone) {
-      if (!_toolbarsVisible) setState(() => _toolbarsVisible = true);
+      _sessionNotifier.revealToolbars();
     }
   }
 
   // ─── 段落上下文扩展（翻译用）───
 
   String? _expandToParagraphContext(String selectedText) {
-    final md = _mdContent;
-    if (md == null || md.isEmpty) return null;
-
-    final plainText = _stripBasicMarkdown(md);
-
-    final paragraphs = plainText
-        .split(RegExp(r'\n\s*\n'))
-        .map((p) => p.trim())
-        .where((p) => p.isNotEmpty)
-        .toList();
-    if (paragraphs.isEmpty) return null;
-
-    // 跨段落选择时 SelectionArea 会丢失 \n\n，需要用空白规范化匹配
-    String norm(String s) => s.replaceAll(RegExp(r'\s+'), ' ').trim();
-    final normSelected = norm(selectedText);
-    final normParagraphs = paragraphs.map(norm).toList();
-
-    int startIdx = -1;
-    int endIdx = -1;
-
-    for (final chunkLen in [60, 30, 15]) {
-      if (startIdx >= 0 && endIdx >= 0) break;
-      final len = normSelected.length.clamp(1, chunkLen);
-
-      if (startIdx < 0) {
-        final chunk = normSelected.substring(0, len);
-        for (int i = 0; i < normParagraphs.length; i++) {
-          if (normParagraphs[i].contains(chunk)) {
-            startIdx = i;
-            break;
-          }
-        }
-      }
-
-      if (endIdx < 0) {
-        final chunk = normSelected.substring(normSelected.length - len);
-        for (int i = normParagraphs.length - 1; i >= 0; i--) {
-          if (normParagraphs[i].contains(chunk)) {
-            endIdx = i;
-            break;
-          }
-        }
-      }
-    }
-
-    if (startIdx < 0 && endIdx < 0) return null;
-    if (startIdx < 0) startIdx = endIdx;
-    if (endIdx < 0) endIdx = startIdx;
-    if (endIdx < startIdx) endIdx = startIdx;
-
-    final expanded = paragraphs.sublist(startIdx, endIdx + 1).join('\n\n');
-    return norm(expanded) == normSelected ? null : expanded;
-  }
-
-  static String _stripBasicMarkdown(String md) {
-    return md
-        .replaceAll(RegExp(r'!\[([^\]]*)\]\([^)]*\)'), r'$1')
-        .replaceAll(RegExp(r'\[([^\]]*)\]\([^)]*\)'), r'$1')
-        .replaceAll(RegExp(r'\*{2}(.+?)\*{2}'), r'$1')
-        .replaceAll(RegExp(r'_{2}(.+?)_{2}'), r'$1')
-        .replaceAll(
-          RegExp(r'(?<![a-zA-Z0-9])\*(?!\s)(.+?)(?<!\s)\*(?![a-zA-Z0-9])'),
-          r'$1',
-        )
-        .replaceAll(
-          RegExp(r'(?<![a-zA-Z0-9])_(?!\s)(.+?)(?<!\s)_(?![a-zA-Z0-9])'),
-          r'$1',
-        )
-        .replaceAll(RegExp(r'`([^`]+)`'), r'$1')
-        .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
-        .replaceAll(RegExp(r'^>\s?', multiLine: true), '');
+    return _session.expandToParagraphContext(selectedText);
   }
 
   // ─── 大纲导航 ───
 
   void _tryFlashImageAtOffset(int charOffset) {
-    final md = _mdContent;
-    if (md == null) return;
-    final around = md.substring(
-      charOffset,
-      (charOffset + 200).clamp(0, md.length),
-    );
-    final imgMatch = RegExp(
-      r'!\[.*?\]\(.*?([^/\\)]+\.(?:png|jpg|jpeg|gif|webp))',
-    ).firstMatch(around);
-    if (imgMatch == null) return;
-    final filename = imgMatch.group(1)!;
+    final filename = _session.imageFilenameNearOffset(charOffset);
+    if (filename == null) return;
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _webViewReaderKey.currentState?.flashImage(filename);
     });
@@ -618,13 +425,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ///
   /// `\n\n+` 分割数 = `#content > *` 直接子元素数（顶层块 1:1 对应）。
   void _scrollToCharOffset(int charOffset) {
-    if (_mdContent == null || _mdContent!.isEmpty) return;
-    final breaks = RegExp(r'\n\n+').allMatches(_mdContent!);
-    var blockIndex = 0;
-    for (final brk in breaks) {
-      if (brk.start >= charOffset) break;
-      blockIndex++;
-    }
+    final blockIndex = _session.blockIndexForCharOffset(charOffset);
+    if (blockIndex == null) return;
     _webViewReaderKey.currentState?.scrollToBlockIndex(blockIndex);
   }
 
@@ -740,80 +542,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  Future<String?> _findMarkdownPath(String filePath) async {
-    if (filePath.isEmpty) return null;
-    final mdPath = DocPaths.md(filePath);
-    return await File(mdPath).exists() ? mdPath : null;
-  }
-
-  Future<void> _ensureMarkdownReady() async {
-    if (_mdContent != null) {
-      _prewarmSearchSnapshot();
-      return;
-    }
-    if (_mdPath == null) return;
-
-    _loadFuture ??= _loadAndResolveMarkdown();
-
-    final shouldSetLoading = !_markdownLoading;
-    if (shouldSetLoading && mounted) {
-      setState(() {
-        _markdownLoading = true;
-        _markdownLoadError = null;
-      });
-    }
-
-    try {
-      final content = await _loadFuture!;
-      if (!mounted) return;
-      setState(() {
-        _mdContent = content;
-        _markdownLoading = false;
-        _markdownLoadError = null;
-      });
-      _prewarmSearchSnapshot();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _markdownLoading = false;
-        _markdownLoadError = error;
-      });
-    }
-  }
-
-  void _prewarmSearchSnapshot() {
-    final content = _mdContent;
-    final cacheKey = _markdownCacheKey;
-    if (content == null || cacheKey == null || _searchSnapshot != null) {
-      return;
-    }
-    final cacheService = MarkdownDocumentCacheService.instance;
-    _searchSnapshot = cacheService.getSearchSnapshot(
-      cacheKey: cacheKey,
-      markdownContent: content,
-    );
-  }
-
-  Future<String> _loadAndResolveMarkdown() async {
-    final resolved = await MarkdownDocumentCacheService.instance.loadDocument(
-      mdPath: _mdPath!,
-      title: widget.document.title,
-    );
-    _markdownCacheKey = resolved.cacheKey;
-    _searchSnapshot = null;
-    return resolved.content;
-  }
-
   // ─── 高亮标记 ───
 
-  String get _documentId => widget.document.filePath;
-
   void _addHighlight(String text, String color) {
-    if (text.trim().isEmpty) return;
-    ref
-        .read(highlightProvider(_documentId).notifier)
-        .add(text.trim(), color: color);
-    final created = ref.read(highlightProvider(_documentId)).lastOrNull;
+    final created = _sessionNotifier.addHighlight(text, color);
     if (created != null) {
       _webViewReaderKey.currentState?.addHighlightFromSelection(
         created.id,
@@ -823,13 +555,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _removeHighlight(String highlightId) {
-    ref.read(highlightProvider(_documentId).notifier).remove(highlightId);
+    _sessionNotifier.removeHighlight(highlightId);
   }
 
   void _updateHighlightColor(String highlightId, String color) {
-    ref
-        .read(highlightProvider(_documentId).notifier)
-        .updateColor(highlightId, color);
+    _sessionNotifier.updateHighlightColor(highlightId, color);
   }
 
   void _handleHighlightTap(Highlight highlight, Offset position) {
@@ -858,9 +588,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           fullText: fullText,
         );
       },
-      onNoteChanged: (id, note) => ref
-          .read(highlightProvider(_documentId).notifier)
-          .updateNote(id, note),
+      onNoteChanged: _sessionNotifier.updateHighlightNote,
       onDelete: () => _removeHighlight(highlight.id),
       onDismiss: () => _selectionToolbarEntry = null,
     );
@@ -889,12 +617,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         showTranslationPopup(context, sourceText: trimmed, fullText: fullText);
       },
       onCreateForNote: () {
-        _addHighlight(text, kDefaultHighlightColor);
-        return ref.read(highlightProvider(_documentId)).lastOrNull;
+        return _sessionNotifier.addHighlight(text, kDefaultHighlightColor);
       },
-      onNoteChanged: (id, note) => ref
-          .read(highlightProvider(_documentId).notifier)
-          .updateNote(id, note),
+      onNoteChanged: _sessionNotifier.updateHighlightNote,
       onDismiss: () => _selectionToolbarEntry = null,
     );
   }
@@ -904,17 +629,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _handleWebViewScrollDirection(ScrollDirection direction) {
-    if (_sheetOpen || _searchActive || _highlightQuery != null) return;
+    if (!_sessionNotifier.canReactToReaderScroll) return;
     // 横向翻页模式下不让滚动方向驱动工具栏隐藏——翻页时工具栏会频繁
     // 闪烁。横向模式的工具栏 toggle 改由 JS 中央点击触发（onToggleToolbar）。
     final mode = ref.read(readerSettingsProvider).paginationMode;
     if (mode == ReaderPaginationMode.horizontal) return;
-    _handleReaderScrollDirection(direction);
+    _sessionNotifier.handleReaderScrollDirection(direction);
   }
 
   void _handleWebViewToggleToolbar() {
-    if (_sheetOpen || _searchActive || _highlightQuery != null) return;
-    setState(() => _toolbarsVisible = !_toolbarsVisible);
+    _sessionNotifier.toggleToolbars();
   }
 
   // ─── 选择/标记工具栏 ───
@@ -944,15 +668,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final readerSettings = ref.watch(readerSettingsProvider);
+    final session = ref.watch(readerSessionProvider(_sessionArgs));
+    final extractTaskKey = DocumentTaskKey(
+      type: DocumentTaskType.extractDocument,
+      documentId: widget.document.id,
+    );
     final extracting = ref.watch(
-      taskProvider.select(
-        (tasks) =>
-            tasks[TaskType.extractDocument]?.status == TaskStatus.running,
+      documentTaskProvider.select(
+        (tasks) => tasks[extractTaskKey]?.isActive == true,
       ),
     );
+    _syncInitialSummaryImage(session);
 
     // 异步初始化完成前显示骨架加载状态
-    if (!_initialized) {
+    if (!session.initialized) {
       return Scaffold(
         backgroundColor: cs.surface,
         body: SafeArea(
@@ -973,26 +702,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
 
-    final fileExists = _fileExists ?? false;
+    final fileExists = session.fileExists;
 
-    final contentBg = (_showPreview && _hasResult)
+    final contentBg = (session.showPreview && session.hasResult)
         ? resolveReaderPalette(readerSettings.theme, cs).background
         : cs.surface;
 
-    final isMarkdownHighlightMode = _showPreview && _highlightQuery != null;
+    final isMarkdownHighlightMode = session.markdownHighlightMode;
     final pdfMatchCount = _pdfSearcher?.matches.length ?? 0;
-    final showPdfNavigator = !_showPreview && _pdfSearchQuery.isNotEmpty;
+    final showPdfNavigator = !session.showPreview && _pdfSearchQuery.isNotEmpty;
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: cs.surface,
       endDrawerEnableOpenDragGesture: false,
-      endDrawer: _mdContent != null
+      endDrawer: session.markdownContent != null
           ? Drawer(
               width: 380,
               child: OutlinePanel(
-                key: ValueKey(_mdContent.hashCode),
-                markdownContent: _mdContent!,
+                key: ValueKey(session.markdownContent.hashCode),
+                markdownContent: session.markdownContent!,
                 pdfPath: widget.document.filePath,
                 summaryImageState: _summaryImageState,
                 onNavigate: (offset) {
@@ -1018,7 +747,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   curve: Curves.easeInOut,
                   color: contentBg,
                   child: fileExists
-                      ? _buildBody(theme, cs, readerSettings)
+                      ? _buildBody(theme, cs, readerSettings, session)
                       : _buildFileNotFound(theme, cs),
                 ),
               ),
@@ -1030,21 +759,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 child: AnimatedSlide(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOut,
-                  offset: _toolbarsVisible ? Offset.zero : const Offset(0, -1),
+                  offset: session.toolbarsVisible
+                      ? Offset.zero
+                      : const Offset(0, -1),
                   child: Container(
                     color: cs.surface.withValues(
                       alpha: readerSettings.toolbarOpacity.value,
                     ),
                     child: isMarkdownHighlightMode
                         ? _buildHighlightSearchBar()
-                        : (_searchActive && !_showPreview
+                        : (session.searchActive && !session.showPreview
                               ? _buildPdfSearchBar()
                               : _buildToolbar(cs, extracting: extracting)),
                   ),
                 ),
               ),
               // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
-              if (_showPreview && _hasResult && _mdContent != null)
+              if (session.showPreview &&
+                  session.hasResult &&
+                  session.markdownContent != null)
                 Positioned(
                   bottom: 0,
                   left: 0,
@@ -1052,12 +785,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   child: AnimatedSlide(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOut,
-                    offset: _toolbarsVisible ? Offset.zero : const Offset(0, 1),
+                    offset: session.toolbarsVisible
+                        ? Offset.zero
+                        : const Offset(0, 1),
                     child: _buildBottomBar(readerSettings),
                   ),
                 ),
               // ── 浮动搜索结果导航器 ──
-              if (isMarkdownHighlightMode && _searchResults.isNotEmpty)
+              if (isMarkdownHighlightMode && session.searchResults.isNotEmpty)
                 Positioned(
                   right: 16,
                   bottom: 32,
@@ -1070,14 +805,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   child: _buildPdfResultNavigator(pdfMatchCount),
                 ),
               // ── 搜索遮罩层 ──
-              if (_searchActive && _showPreview && _searchSnapshot != null)
+              if (session.searchActive &&
+                  session.showPreview &&
+                  session.searchSnapshot != null)
                 Positioned.fill(
                   child: SearchOverlay(
                     readerSettings: readerSettings,
-                    searchSnapshot: _searchSnapshot!,
+                    searchSnapshot: session.searchSnapshot!,
                     onResultTap: _onSearchResultTap,
                     onDismiss: _closeSearch,
-                    initialQuery: _highlightQuery,
+                    initialQuery: session.highlightQuery,
                   ),
                 ),
             ],
@@ -1087,10 +824,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
+  void _syncInitialSummaryImage(ReaderSessionState session) {
+    final imagePath = session.summaryImagePath;
+    final current = _summaryImageState.value;
+    if (imagePath == null || current.imagePath != null || current.generating) {
+      return;
+    }
+    _summaryImageState.value = SummaryImageState(imagePath: imagePath);
+  }
+
   /// 顶部工具栏：返回 / 搜索 / PDF↔MD 切换 / 重新提取 / 信息
   ///
   /// 大纲、外观（颜色/背景）、字体面板 3 个按钮已挪到 [_buildBottomBar]。
   Widget _buildToolbar(ColorScheme cs, {bool extracting = false}) {
+    final session = ref.watch(readerSessionProvider(_sessionArgs));
     final favorites = ref.watch(favoritesProvider);
     final inFavorite = _isInAnyFavorite(favorites);
     final translation = ref.watch(
@@ -1101,13 +848,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
 
     return ReaderTopToolbar(
-      showPreview: _showPreview,
-      hasResult: _hasResult,
-      hasMarkdownContent: _mdContent != null,
-      fileExists: _fileExists ?? false,
+      showPreview: session.showPreview,
+      hasResult: session.hasResult,
+      hasMarkdownContent: session.markdownContent != null,
+      fileExists: session.fileExists,
       inFavorite: inFavorite,
       extracting: extracting,
-      canRetranslate: translation.hasResult && _mdContent != null,
+      canRetranslate: translation.hasResult && session.markdownContent != null,
       hasSummaryImage: File(summaryImagePath).existsSync(),
       extractButton: _buildExtractButton(cs, extracting),
       onBack: () => context.pop(),
@@ -1119,7 +866,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onShowInfo: () => _showDocumentInfo(context),
       onReprocess: _onReprocessPressed,
       onRetranslate: _handleRetranslate,
-      onOpenSummaryImage: _openSummaryImage,
+      onOpenSummaryImage: () => _summaryCoordinator.openSummaryImage(),
     );
   }
 
@@ -1139,8 +886,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// 高亮浏览模式下的顶部搜索栏：显示当前查询词，点击可重新搜索，✕ 退出搜索
   Widget _buildHighlightSearchBar() {
+    final session = ref.watch(readerSessionProvider(_sessionArgs));
     return ReaderHighlightSearchBar(
-      query: _highlightQuery ?? '',
+      query: session.highlightQuery ?? '',
       onBack: () => context.pop(),
       onOpenSearch: _openSearch,
       onClear: _clearHighlight,
@@ -1160,9 +908,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// 右下角浮动导航器：上/下雪佛龙 + 当前/总数 计数器
   Widget _buildResultNavigator() {
+    final session = ref.watch(readerSessionProvider(_sessionArgs));
     return ReaderTextResultNavigator(
-      currentIndex: _currentResultIndex,
-      total: _searchResults.length,
+      currentIndex: session.currentResultIndex,
+      total: session.searchResults.length,
       onPrevious: _goToPrevResult,
       onNext: _goToNextResult,
     );
@@ -1192,7 +941,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 启动全文翻译：show 一个长驻 SnackBar 订阅 provider 的进度 ValueListenable，
   /// 翻译结束（成功/失败/取消）后 finish 关闭。
   Future<void> _handleTranslate() async {
-    if (_mdContent == null || _mdContent!.isEmpty) return;
+    final markdown = _session.markdownContent;
+    if (markdown == null || markdown.isEmpty) return;
 
     final pdfPath = widget.document.filePath;
     final notifier = ref.read(documentTranslationProvider(pdfPath).notifier);
@@ -1211,7 +961,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           },
         );
 
-    final fullyCached = await notifier.translate(_mdContent!);
+    final fullyCached = await notifier.translate(markdown);
     if (!mounted) return;
 
     final state = ref.read(documentTranslationProvider(pdfPath));
@@ -1222,9 +972,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       // 用户可能困惑"为什么这么快/翻得跟上次一样"——明确提示并指引
       // 重新翻译路径（顶栏省略号 → 重新翻译）。文案较长所以延长展示时间。
       handle?.finish(
-        message: fullyCached
-            ? '使用了之前的翻译缓存，如需重新翻译请点击右上角省略号里的重新翻译'
-            : '翻译完成',
+        message: fullyCached ? '使用了之前的翻译缓存，如需重新翻译请点击右上角省略号里的重新翻译' : '翻译完成',
         duration: fullyCached ? const Duration(seconds: 6) : null,
       );
     } else {
@@ -1268,7 +1016,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// "更多"菜单里的"重新翻译"——清空缓存重新发起。
   Future<void> _handleRetranslate() async {
-    if (_mdContent == null || _mdContent!.isEmpty) return;
+    final markdown = _session.markdownContent;
+    if (markdown == null || markdown.isEmpty) return;
 
     final pdfPath = widget.document.filePath;
     final notifier = ref.read(documentTranslationProvider(pdfPath).notifier);
@@ -1285,7 +1034,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           },
         );
 
-    await notifier.retranslate(_mdContent!);
+    await notifier.retranslate(markdown);
     if (!mounted) return;
 
     final state = ref.read(documentTranslationProvider(pdfPath));
@@ -1299,299 +1048,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _handleGenerateSummaryImage({bool openOutline = true}) async {
-    final imageRole = AgentApiNotifier.globalImageRole;
-    final hasImageRole =
-        imageRole.provider != null && imageRole.modelId != null;
-
-    // 每次点击都弹窗，防止误触触发付费 API 调用。
-    final choice = await _showSummaryImageCostDialog(
-      hasImageRole: hasImageRole,
-    );
-    if (choice == null || choice == _SummaryImageChoice.cancel) return;
-
-    if (choice == _SummaryImageChoice.official) {
-      await _showOfficialGenDialog();
-      return;
-    }
-
-    // 走 API 生图前，再次确认生图模型已配置（前面只是为了让按钮可点）。
-    if (!hasImageRole) {
-      _scaffoldKey.currentState?.closeEndDrawer();
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(
-            message: '请先在「AI 设置」中选择生图模型',
-            action: SnackBarAction(
-              label: '前往设置',
-              onPressed: () => context.push(AppRoutes.settingsApi),
-            ),
-          );
-      return;
-    }
-
-    if (openOutline) _openOutlineSheet();
-
-    final alreadyRunning =
-        ref.read(taskProvider)[TaskType.generateSummaryImage]?.status ==
-        TaskStatus.running;
-    final current = _summaryImageState.value;
-    if (alreadyRunning) {
-      if (!current.generating) {
-        _summaryImageState.value = SummaryImageState(
-          imagePath: current.imagePath,
-          revision: current.revision,
-          generating: true,
-        );
-      }
-      return;
-    }
-
-    _summaryImageState.value = SummaryImageState(
-      imagePath: current.imagePath,
-      revision: current.revision,
-      generating: true,
-    );
-
-    await ref
-        .read(taskProvider.notifier)
-        .generateSummaryImage(
-          document: widget.document,
-          onSuccess: (imagePath) {
-            unawaited(FileImage(File(imagePath)).evict());
-            if (!mounted) return;
-            final revision = _summaryImageState.value.revision + 1;
-            setState(() {});
-            _summaryImageState.value = SummaryImageState(
-              imagePath: imagePath,
-              revision: revision,
-            );
-          },
-        );
-
-    if (!mounted || !_summaryImageState.value.generating) return;
-    final latest = _summaryImageState.value;
-    _summaryImageState.value = SummaryImageState(
-      imagePath: latest.imagePath,
-      revision: latest.revision,
-    );
-  }
-
-  Future<_SummaryImageChoice?> _showSummaryImageCostDialog({
-    required bool hasImageRole,
-  }) async {
-    final cfg = ref.read(imageGenerationConfigProvider);
-    final role = AgentApiNotifier.globalImageRole;
-    final cost = role.provider == AgentApiProvider.openai
-        ? estimateOpenAICost(
-            aspectRatio: cfg.aspectRatio,
-            fidelity: cfg.fidelity,
-          )
-        : null;
-    final costLine = cost != null
-        ? '当前设置预估费用约 \$${cost.toStringAsFixed(3)} / 张'
-        : '';
-
-    return showDialog<_SummaryImageChoice>(
-      context: context,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        final cs = theme.colorScheme;
-        return AlertDialog(
-          backgroundColor: cs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          title: Text(
-            '生成总结图',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '总结图由第三方生图模型生成，可能产生 API 调用费用。',
-                style: theme.textTheme.bodyMedium,
-              ),
-              if (costLine.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  costLine,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: cs.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              Text(
-                '若希望使用 ChatGPT / Gemini 官方 App 生图，可选「官方生图」，导出文献素材后手动上传。',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(ctx).pop(_SummaryImageChoice.cancel),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(ctx).pop(_SummaryImageChoice.official),
-              child: const Text('官方生图'),
-            ),
-            TextButton(
-              onPressed: hasImageRole
-                  ? () => Navigator.of(ctx).pop(_SummaryImageChoice.confirm)
-                  : null,
-              child: const Text('确定'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showOfficialGenDialog() async {
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => _OfficialGenDialog(
-        onExportFigures: _exportFigures,
-        onExportMarkdown: _exportMarkdown,
-        onCopyPrompt: _copyGenPrompt,
-      ),
-    );
-  }
-
-  Future<String?> _exportFigures() async {
-    final figuresDir = Directory(DocPaths.figuresDir(widget.document.filePath));
-    if (!await figuresDir.exists()) {
-      return '未找到 figures 目录，请先完成文档提取';
-    }
-    final files = <File>[];
-    await for (final entity in figuresDir.list()) {
-      if (entity is! File) continue;
-      final lower = entity.path.toLowerCase();
-      if (lower.endsWith('.png') ||
-          lower.endsWith('.jpg') ||
-          lower.endsWith('.jpeg') ||
-          lower.endsWith('.webp')) {
-        files.add(entity);
-      }
-    }
-    if (files.isEmpty) return 'figures 目录为空';
-
-    try {
-      if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-        final targetDir = await FilePicker.platform.getDirectoryPath(
-          dialogTitle: '选择保存目录',
-          lockParentWindow: true,
-        );
-        if (targetDir == null) return null;
-        var copied = 0;
-        for (final f in files) {
-          final name = p.basename(f.path);
-          await f.copy(p.join(targetDir, name));
-          copied++;
-        }
-        return '已保存 $copied 个 figure 到 $targetDir';
-      } else {
-        await Share.shareXFiles(
-          files.map((f) => XFile(f.path)).toList(),
-          subject: 'figures',
-        );
-        return null;
-      }
-    } catch (e) {
-      return '保存失败：$e';
-    }
-  }
-
-  Future<String?> _exportMarkdown() async {
-    final mdPath = DocPaths.md(widget.document.filePath);
-    final mdFile = File(mdPath);
-    if (!await mdFile.exists()) {
-      return '未找到 Markdown 文件，请先完成文档提取';
-    }
-    final defaultName = '${_safeFileStem(widget.document.title)}.md';
-
-    try {
-      if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-        final targetPath = await FilePicker.platform.saveFile(
-          dialogTitle: '保存 Markdown',
-          fileName: defaultName,
-          lockParentWindow: true,
-        );
-        if (targetPath == null) return null;
-        final target = File(targetPath);
-        if (await target.exists()) await target.delete();
-        await mdFile.copy(target.path);
-        return '已保存到 ${target.path}';
-      } else {
-        await Share.shareXFiles([XFile(mdFile.path)], subject: defaultName);
-        return null;
-      }
-    } catch (e) {
-      return '保存失败：$e';
-    }
-  }
-
-  Future<String?> _copyGenPrompt() async {
-    try {
-      final config = ref.read(imageGenerationConfigProvider);
-      final language = ref.read(translationConfigProvider).targetLanguage;
-      // 偏好使用已配置的生图 provider 文案约束；若未配置则用 OpenAI 兜底。
-      final role = AgentApiNotifier.globalImageRole;
-      final prompt = await DocumentSummaryImageService.instance.composePrompt(
-        document: widget.document,
-        config: config,
-        provider: role.provider ?? AgentApiProvider.openai,
-        language: language,
-      );
-      await Clipboard.setData(ClipboardData(text: prompt));
-      return '已复制生图提示词到剪贴板';
-    } on DocumentSummaryImageException catch (e) {
-      return e.message;
-    } catch (e) {
-      return '复制失败：$e';
-    }
-  }
-
-  String _safeFileStem(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return 'document';
-    final sanitized = trimmed
-        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
-        .replaceAll(RegExp(r'\s+'), ' ');
-    return sanitized.length > 80 ? sanitized.substring(0, 80) : sanitized;
-  }
-
-  Future<void> _openSummaryImage([String? imagePath]) async {
-    final path =
-        imagePath ??
-        DocumentSummaryImageService.imagePathFor(widget.document.filePath);
-    if (!await File(path).exists()) {
-      ref.read(snackBarServiceProvider).showResult(message: '总结图文件不存在');
-      return;
-    }
-    if (!mounted) return;
-    final entry = FigureManifestEntry(
-      imagePath: path,
-      captionText: 'Graphical Summary',
-      pageIndex: 0,
-      blockIds: const [],
-    );
-    await showFigureViewer(context, [entry]);
+    await _summaryCoordinator.generate(openOutline: openOutline);
   }
 
   Widget _buildExtractButton(ColorScheme cs, bool extracting) {
+    final session = ref.watch(readerSessionProvider(_sessionArgs));
     if (extracting) {
       return const Padding(
         padding: EdgeInsets.all(12),
@@ -1603,17 +1064,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
 
-    if (_hasResult) {
+    if (session.hasResult) {
       return IconButton(
         icon: Icon(
-          _showPreview
+          session.showPreview
               ? Symbols.picture_as_pdf_rounded
               : Symbols.article_rounded,
           size: 22,
           fill: 1,
           color: cs.onSurfaceVariant,
         ),
-        tooltip: _showPreview ? '查看 PDF' : '查看提取结果',
+        tooltip: session.showPreview ? '查看 PDF' : '查看提取结果',
         onPressed: _togglePreview,
       );
     }
@@ -1634,8 +1095,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ThemeData theme,
     ColorScheme cs,
     ReaderSettingsState readerSettings,
+    ReaderSessionState session,
   ) {
-    final showMarkdown = _showPreview && _hasResult;
+    final showMarkdown = session.showPreview && session.hasResult;
 
     return NotificationListener<UserScrollNotification>(
       onNotification: _handlePdfScrollNotification,
@@ -1657,7 +1119,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           child: showMarkdown
               ? KeyedSubtree(
                   key: const ValueKey('markdown'),
-                  child: _buildMarkdownPreview(theme, readerSettings),
+                  child: _buildMarkdownPreview(theme, readerSettings, session),
                 )
               : PdfViewer.file(
                   key: const ValueKey('pdf'),
@@ -1690,8 +1152,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  Widget _buildMarkdownPreview(ThemeData theme, ReaderSettingsState settings) {
-    if (_markdownLoadError != null) {
+  Widget _buildMarkdownPreview(
+    ThemeData theme,
+    ReaderSettingsState settings,
+    ReaderSessionState session,
+  ) {
+    if (session.markdownLoadError != null) {
       return Center(
         child: Text(
           '加载失败',
@@ -1702,7 +1168,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
 
-    if (_mdContent == null) {
+    if (session.markdownContent == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -1719,15 +1185,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final displayStyle = ref.watch(
       translationConfigProvider.select((c) => c.displayStyle),
     );
+    final markdownContent = session.markdownContent!;
     final effectiveMd = translation.hasResult
         ? applyTranslationToMarkdown(
-            markdown: _mdContent!,
+            markdown: markdownContent,
             paragraphs: translation.paragraphs,
             translations: translation.translations,
             mode: translation.mode,
             style: displayStyle,
           )
-        : _mdContent!;
+        : markdownContent;
 
     final cs = Theme.of(context).colorScheme;
     final palette = resolveReaderPalette(settings.theme, cs);
@@ -1743,7 +1210,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       documentDir: documentDir,
       topInset: topPad,
       bottomInset: bottomPad,
-      highlightQuery: _highlightQuery,
+      highlightQuery: session.highlightQuery,
       onSelectionEnd: _handleWebViewSelectionEnd,
       onSelectionCleared: _handleWebViewSelectionCleared,
       onHighlightClick: _handleHighlightTap,
@@ -1844,222 +1311,6 @@ class _PdfScrollThumbState extends State<_PdfScrollThumb> {
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(width / 2),
-        ),
-      ),
-    );
-  }
-}
-
-enum _SummaryImageChoice { cancel, official, confirm }
-
-class _OfficialGenDialog extends StatefulWidget {
-  final Future<String?> Function() onExportFigures;
-  final Future<String?> Function() onExportMarkdown;
-  final Future<String?> Function() onCopyPrompt;
-
-  const _OfficialGenDialog({
-    required this.onExportFigures,
-    required this.onExportMarkdown,
-    required this.onCopyPrompt,
-  });
-
-  @override
-  State<_OfficialGenDialog> createState() => _OfficialGenDialogState();
-}
-
-class _OfficialGenDialogState extends State<_OfficialGenDialog> {
-  String? _notice;
-  Timer? _noticeTimer;
-  bool _running = false;
-
-  @override
-  void dispose() {
-    _noticeTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _run(Future<String?> Function() action) async {
-    if (_running) return;
-    setState(() => _running = true);
-    try {
-      final msg = await action();
-      if (!mounted) return;
-      if (msg == null) {
-        setState(() {});
-        return;
-      }
-      _noticeTimer?.cancel();
-      setState(() => _notice = msg);
-      _noticeTimer = Timer(const Duration(seconds: 3), () {
-        if (!mounted) return;
-        setState(() => _notice = null);
-      });
-    } finally {
-      if (mounted) setState(() => _running = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return AlertDialog(
-      backgroundColor: cs.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      title: Text(
-        '导出至官方生图',
-        style: theme.textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '将文献素材导出后，到 ChatGPT / Gemini 等官方 App 中手动上传以生图。',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _OfficialGenAction(
-            icon: Symbols.image_rounded,
-            label: '保存文献 figures',
-            description: '导出提取出的所有 figure 图片',
-            enabled: !_running,
-            onTap: () => _run(widget.onExportFigures),
-          ),
-          const SizedBox(height: 8),
-          _OfficialGenAction(
-            icon: Symbols.description_rounded,
-            label: '保存文献 Markdown',
-            description: '导出 .md 全文，用于补充 prompt',
-            enabled: !_running,
-            onTap: () => _run(widget.onExportMarkdown),
-          ),
-          const SizedBox(height: 8),
-          _OfficialGenAction(
-            icon: Symbols.content_copy_rounded,
-            label: '复制生图提示词',
-            description: '复制完整 prompt 到剪贴板',
-            enabled: !_running,
-            onTap: () => _run(widget.onCopyPrompt),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            alignment: Alignment.topCenter,
-            child: _notice == null
-                ? const SizedBox(width: double.infinity)
-                : Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.inverseSurface,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Symbols.check_circle_rounded,
-                            color: cs.onInverseSurface,
-                            size: 18,
-                            fill: 1,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _notice!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onInverseSurface,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('关闭'),
-        ),
-      ],
-    );
-  }
-}
-
-class _OfficialGenAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String description;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _OfficialGenAction({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.onTap,
-    this.enabled = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Material(
-      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Opacity(
-            opacity: enabled ? 1 : 0.5,
-            child: Row(
-              children: [
-                Icon(icon, color: cs.primary, size: 22),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        description,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Symbols.chevron_right_rounded,
-                  color: cs.onSurfaceVariant,
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
