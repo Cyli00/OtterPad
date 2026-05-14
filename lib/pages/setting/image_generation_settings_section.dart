@@ -6,6 +6,17 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../providers/api_provider.dart';
 import '../../providers/image_generation_config_provider.dart';
+import 'setting_picker.dart';
+
+/// 画幅比例用户场景副标题——帮用户从"数字"映射到"使用场景"。
+const _kAspectRatioHints = <String, String>{
+  '1:1': '方形 · 社交配图',
+  '4:3': '传统打印 · 文档版面',
+  '3:2': '经典摄影',
+  '16:9': '横屏视频 · 桌面壁纸',
+  '21:9': '超宽屏 · 电影',
+  '9:16': '竖屏 · 手机壁纸',
+};
 
 class ImageGenerationSettingsSection extends ConsumerStatefulWidget {
   const ImageGenerationSettingsSection({super.key});
@@ -193,13 +204,13 @@ class _ImageGenerationSettingsSectionState
             'Gemini 映射为 imageConfig.aspectRatio；OpenAI 会映射到最接近的输出尺寸，并在 prompt 中保留比例要求。',
           ),
           const SizedBox(height: 12),
-          _segmented<String>(
-            theme: theme,
-            cs: cs,
-            values: kSummaryAspectRatios,
-            selected: cfg.aspectRatio,
+          SettingPicker<String>(
+            current: cfg.aspectRatio,
+            options: kSummaryAspectRatios,
             labelFor: (v) => v,
-            onSelected: notifier.setAspectRatio,
+            subtitleFor: (v) => _kAspectRatioHints[v] ?? '',
+            sheetTitle: '画幅比例',
+            onChanged: notifier.setAspectRatio,
           ),
           const SizedBox(height: 24),
           Row(

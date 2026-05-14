@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/api_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'setting_picker.dart';
 
 /// OCR 设置页 — 独立顶级设置入口
 class OcrSettingsPage extends ConsumerStatefulWidget {
@@ -536,35 +537,19 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: SegmentedButton<String>(
-                            segments: _layoutShapeModes
-                                .map((m) => ButtonSegment(
-                                      value: m.$1,
-                                      label: Text(m.$2),
-                                    ))
-                                .toList(),
-                            selected: {docState.layoutShapeMode},
-                            onSelectionChanged: (set) {
-                              final v = set.first;
-                              if (docState.layoutShapeMode != v) {
-                                ref
-                                    .read(docExtractApiProvider.notifier)
-                                    .setString('layoutShapeMode', v);
-                              }
-                            },
-                            style: SegmentedButton.styleFrom(
-                              backgroundColor: cs.surface,
-                              selectedBackgroundColor: cs.primaryContainer,
-                              side: BorderSide(
-                                color: cs.outlineVariant.withAlpha(100),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
+                        SettingPicker<String>(
+                          current: docState.layoutShapeMode,
+                          options: _layoutShapeModes.map((m) => m.$1).toList(),
+                          labelFor: (id) =>
+                              _layoutShapeModes.firstWhere((m) => m.$1 == id).$2,
+                          sheetTitle: '版面几何形状',
+                          onChanged: (v) {
+                            if (docState.layoutShapeMode != v) {
+                              ref
+                                  .read(docExtractApiProvider.notifier)
+                                  .setString('layoutShapeMode', v);
+                            }
+                          },
                         ),
                       ],
                     ),

@@ -236,6 +236,15 @@ SegmentedButton.styleFrom(
 - `showSelectedIcon: false`
 - 可选：`foregroundColor: cs.onSurfaceVariant` · `selectedForegroundColor: cs.onPrimaryContainer` · `textStyle: bodyMedium w600`
 
+**何时不应使用**：选项 ≥ 4，或选项 ≥ 3 且任一标签字符数 ≥ 5——SegmentedButton 强制等分宽度会触发 `1...` 截断或 `Op/en/AI` 竖向折断。改用 §3.8 SettingPicker。
+
+| 场景 | 选项数 | 最长标签 | 选用 |
+|---|---|---|---|
+| 主题模式（自动 / 亮 / 暗） | 3 | 2 字符 | SegmentedButton |
+| 备份类型（S3 / WebDAV） | 2 | 6 字符 | SegmentedButton（2 选项单段足够宽） |
+| 服务商（OpenAI / Anthropic / Gemini / Other） | 4 | 9 字符 | SettingPicker |
+| 画幅比例（1:1 … 9:16） | 6 | 6 字符 | SettingPicker |
+
 ### 3.7 Chip 选择器
 
 两种 Chip 变体共享相同的视觉骨架，区别在于内容渲染。
@@ -269,3 +278,38 @@ SegmentedButton.styleFrom(
 - 文本：`bodyMedium` + 样式自身视觉效果
 - 模糊预览 sigma **3**（低于渲染层 6，保持可读性）
 - 约束：样式仅在双语对照模式生效；仅译文模式下 `weaveTranslated()` 直接返回原文
+
+### 3.8 SettingPicker
+
+> 参考：`SettingPicker<T>`（setting_picker.dart）
+
+单选 picker：折叠态显示当前值 + ▼，点击弹 bottom sheet 列出全部选项。SegmentedButton 在长标签 / 多选项时的替代品（决策表见 §3.6）。
+
+**折叠态**：
+
+| 属性 | 值 |
+|---|---|
+| 布局 | `InkWell > Container > Row(Expanded(Text label) · Icon ▼)` |
+| width | `double.infinity` |
+| padding | h:16 v:14 |
+| 圆角 | 16 |
+| 背景 | `cs.surface` |
+| 边框 | `outlineVariant.withAlpha(100)` |
+| label | `bodyMedium` w500 |
+| trailing | `Symbols.expand_more_rounded` 20px `onSurfaceVariant` |
+
+**Bottom sheet**：沿用 §3.2 全部规范（`surfaceContainerHigh` + 28 圆角 + grabber）。例外：移除 `BackdropFilter`——picker 内容无预览语义、blur 多此一举。
+
+**Sheet item**：
+
+| 属性 | 值 |
+|---|---|
+| 容器 | `InkWell + Padding(h:24, v:12)` |
+| 主标题 | `bodyLarge` · 选中 w700 + `cs.primary` · 默认 w500 + `cs.onSurface` |
+| 副标题（可选 `subtitleFor`） | `bodySmall` `cs.onSurfaceVariant` |
+| 选中态 trailing | `Symbols.check_rounded` 20px `cs.primary` |
+
+- API 签名：`current` · `options` · `labelFor` · `subtitleFor?` · `sheetTitle` · `onChanged`
+- 桌面端 sheet 走 `constraints: maxWidth: 480` 居中
+- 点选立即触发 `onChanged` 并自动关闭 sheet（无显式确认按钮）
+- 仅用于「单选 from 固定列表」场景；多选见 §3.7 FilterChip

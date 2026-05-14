@@ -10,6 +10,16 @@ import 'agent_model_list_tile.dart';
 import 'agent_model_manage_sheet.dart';
 import 'agent_model_params_sheet.dart';
 import 'agent_model_tester.dart';
+import 'setting_picker.dart';
+
+/// 服务商副标题——给用户一个"选它能做什么"的简短提示。
+String _providerSubtitle(AgentApiProvider p) => switch (p) {
+      AgentApiProvider.openai => 'gpt / o 系列 · 生图支持 gpt-image-2',
+      AgentApiProvider.anthropic => 'Claude 系列',
+      AgentApiProvider.gemini => 'Google AI · 多模态',
+      AgentApiProvider.openAICompatible =>
+        'DeepSeek / 自部署等 OpenAI 兼容 API',
+    };
 
 /// 文档助手 Agent API 配置区块
 class AgentApiSection extends ConsumerStatefulWidget {
@@ -203,33 +213,21 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           // ── 服务商 ──
           _sectionLabel(theme, cs, '服务商'),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<AgentApiProvider>(
-              segments: AgentApiProvider.values
-                  .map((p) => ButtonSegment(value: p, label: Text(p.label)))
-                  .toList(),
-              selected: {agentState.provider},
-              onSelectionChanged: (set) {
-                if (agentState.provider != set.first) {
-                  ref.read(agentApiProvider.notifier).setProvider(set.first);
-                  final s = ref.read(agentApiProvider);
-                  _keyCtrl.text = s.apiKey;
-                  _urlCtrl.text = s.baseUrl.isNotEmpty
-                      ? s.baseUrl
-                      : set.first.defaultBaseUrl;
-                  _modelTestResults.clear();
-                }
-              },
-              style: SegmentedButton.styleFrom(
-                backgroundColor: cs.surface,
-                selectedBackgroundColor: cs.primaryContainer,
-                side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
+          SettingPicker<AgentApiProvider>(
+            current: agentState.provider,
+            options: AgentApiProvider.values,
+            labelFor: (p) => p.label,
+            subtitleFor: _providerSubtitle,
+            sheetTitle: '服务商',
+            onChanged: (next) {
+              if (agentState.provider == next) return;
+              ref.read(agentApiProvider.notifier).setProvider(next);
+              final s = ref.read(agentApiProvider);
+              _keyCtrl.text = s.apiKey;
+              _urlCtrl.text =
+                  s.baseUrl.isNotEmpty ? s.baseUrl : next.defaultBaseUrl;
+              _modelTestResults.clear();
+            },
           ),
           const SizedBox(height: 24),
 
