@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  仅放行 OtterPad ReaderLocalhostServer 使用的 localhost cleartext HTTP，
+  其他所有域名仍受 Android 9+ 默认安全策略保护（强制 HTTPS）。
+
+  Server 实际绑定 127.0.0.1:0（见 lib/services/reader_localhost_server.dart），
+  因此只声明 127.0.0.1 / localhost / ::1 三个域名足够，无需 base-config 全局放行。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">::1</domain>
+    </domain-config>
+</network-security-config>
