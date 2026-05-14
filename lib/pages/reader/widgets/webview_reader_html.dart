@@ -135,26 +135,53 @@ class _LatexBlockPreserve extends md.BlockSyntax {
 
   @override
   md.Node? parse(md.BlockParser parser) {
-    final opening = parser.current.content.trimLeft();
-    final isDoubleDollar = opening.startsWith(r'$$');
+    final firstLine = parser.current.content.trimLeft();
+    final isDoubleDollar = firstLine.startsWith(r'$$');
     final closer = isDoubleDollar ? r'$$' : r'\]';
-    final lines = <String>[parser.current.content];
-    parser.advance();
+    const openerLength = 2;
+    final lines = <String>[];
+    var isFirstLine = true;
 
     while (!parser.isDone) {
       final line = parser.current.content;
-      lines.add(line);
-      if (line.trimRight().endsWith(closer)) {
+      final searchStart = isFirstLine ? openerLength : 0;
+      final closeStart = line.indexOf(closer, searchStart);
+
+      if (closeStart >= 0) {
+        final closeEnd = closeStart + closer.length;
+        lines.add(line.substring(0, closeEnd));
+        final trailing = line.substring(closeEnd).trimLeft();
         parser.advance();
+        if (trailing.isNotEmpty) {
+          _insertLineBeforeCurrent(parser, trailing);
+        }
         break;
       }
+
+      lines.add(line);
       parser.advance();
+      isFirstLine = false;
     }
 
     final tex = lines.join('\n');
     final el = md.Element.text('div', tex);
     el.attributes['class'] = 'math-display';
     return el;
+  }
+
+  void _insertLineBeforeCurrent(md.BlockParser parser, String content) {
+    final line = md.Line(content);
+    if (parser.isDone) {
+      parser.lines.add(line);
+      return;
+    }
+
+    final currentIndex = parser.lines.indexOf(parser.current);
+    if (currentIndex >= 0) {
+      parser.lines.insert(currentIndex, line);
+    } else {
+      parser.lines.add(line);
+    }
   }
 }
 

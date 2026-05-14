@@ -92,11 +92,13 @@ class BatchExtractService {
   BatchExtractService._();
   static final BatchExtractService instance = BatchExtractService._();
 
-  late final Dio _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 300),
-    sendTimeout: const Duration(seconds: 120),
-  ));
+  late final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 300),
+      sendTimeout: const Duration(seconds: 120),
+    ),
+  );
 
   // ─── 代理配置 ──────────────────────────────────────────────────────────────
 
@@ -125,7 +127,7 @@ class BatchExtractService {
   // ─── 内部工具 ──────────────────────────────────────────────────────────────
 
   /// 每组并发提交的最大 Job 数
-  static const int _maxConcurrent = 3;
+  static const int _maxConcurrent = 5;
 
   static const _jobApiUrl =
       'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs';
@@ -134,12 +136,15 @@ class BatchExtractService {
     List<BatchJobStatus> statuses,
     String currentTitle,
   ) {
-    final succeeded =
-        statuses.where((s) => s.state == BatchJobState.done).length;
+    final succeeded = statuses
+        .where((s) => s.state == BatchJobState.done)
+        .length;
     final failed = statuses
-        .where((s) =>
-            s.state == BatchJobState.failed ||
-            s.state == BatchJobState.cancelled)
+        .where(
+          (s) =>
+              s.state == BatchJobState.failed ||
+              s.state == BatchJobState.cancelled,
+        )
         .length;
     return BatchExtractProgress(
       total: statuses.length,
@@ -148,16 +153,18 @@ class BatchExtractService {
       failed: failed,
       currentTitle: currentTitle,
       statuses: statuses
-          .map((s) => BatchJobStatus(
-                documentId: s.documentId,
-                title: s.title,
-                state: s.state,
-                jobId: s.jobId,
-                error: s.error,
-                extractedPages: s.extractedPages,
-                totalPages: s.totalPages,
-                savedPath: s.savedPath,
-              ))
+          .map(
+            (s) => BatchJobStatus(
+              documentId: s.documentId,
+              title: s.title,
+              state: s.state,
+              jobId: s.jobId,
+              error: s.error,
+              extractedPages: s.extractedPages,
+              totalPages: s.totalPages,
+              savedPath: s.savedPath,
+            ),
+          )
           .toList(),
     );
   }
@@ -177,7 +184,10 @@ class BatchExtractService {
     CancelToken? cancelToken,
   }) async {
     final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(filePath, filename: p.basename(filePath)),
+      'file': await MultipartFile.fromFile(
+        filePath,
+        filename: p.basename(filePath),
+      ),
       'model': 'PaddleOCR-VL-1.5',
       'optionalPayload': jsonEncode(DocExtractService.buildOptions(state)),
       // ignore: use_null_aware_elements
@@ -278,7 +288,8 @@ class BatchExtractService {
       try {
         final json = jsonDecode(trimmed) as Map<String, dynamic>;
         final result = json['result'] as Map<String, dynamic>?;
-        final parsingResults = result?['layoutParsingResults'] as List<dynamic>?;
+        final parsingResults =
+            result?['layoutParsingResults'] as List<dynamic>?;
         if (parsingResults == null) continue;
 
         for (final page in parsingResults) {
@@ -330,8 +341,9 @@ class BatchExtractService {
         if (jsonlUrl != null) {
           try {
             final extractResult = await _parseJsonlResult(jsonlUrl);
-            final item =
-                items.firstWhere((i) => i.documentId == status.documentId);
+            final item = items.firstWhere(
+              (i) => i.documentId == status.documentId,
+            );
             final savedPath = await DocExtractService.instance.saveResult(
               item.filePath,
               extractResult,
@@ -352,8 +364,9 @@ class BatchExtractService {
               options: Options(responseType: ResponseType.plain),
             );
             final markdown = mdResponse.data ?? '';
-            final item =
-                items.firstWhere((i) => i.documentId == status.documentId);
+            final item = items.firstWhere(
+              (i) => i.documentId == status.documentId,
+            );
             final extractResult = DocExtractResult(
               rawMarkdown: markdown,
               images: {},
@@ -396,7 +409,7 @@ class BatchExtractService {
     required String token,
     required DocExtractApiState state,
     void Function(String status, int extractedPages, int totalPages)?
-        onProgress,
+    onProgress,
     CancelToken? cancelToken,
   }) async {
     final jobUrl = _jobApiUrl;
@@ -478,10 +491,10 @@ class BatchExtractService {
     CancelToken? cancelToken,
   }) async {
     final jobStatuses = items
-        .map((item) => BatchJobStatus(
-              documentId: item.documentId,
-              title: item.title,
-            ))
+        .map(
+          (item) =>
+              BatchJobStatus(documentId: item.documentId, title: item.title),
+        )
         .toList();
     final results = <String, String?>{};
     final jobUrl = _jobApiUrl;
@@ -494,45 +507,46 @@ class BatchExtractService {
       final end = (i + _maxConcurrent).clamp(0, items.length);
       final groupIndices = List.generate(end - i, (j) => i + j);
 
-      onProgress?.call(_buildProgress(
-        jobStatuses,
-        items[i].title,
-      ));
+      onProgress?.call(_buildProgress(jobStatuses, items[i].title));
 
-      await Future.wait(groupIndices.map((idx) async {
-        final item = items[idx];
-        final status = jobStatuses[idx];
-        try {
-          final jobId = await _submitJob(
-            filePath: item.filePath,
-            jobUrl: jobUrl,
-            token: token,
-            state: state,
-            batchId: batchId,
-            cancelToken: cancelToken,
-          );
-          status.jobId = jobId;
-          status.state = BatchJobState.submitted;
-        } on DioException catch (e) {
-          if (e.type == DioExceptionType.cancel) {
-            status.state = BatchJobState.cancelled;
-          } else {
+      await Future.wait(
+        groupIndices.map((idx) async {
+          final item = items[idx];
+          final status = jobStatuses[idx];
+          try {
+            final jobId = await _submitJob(
+              filePath: item.filePath,
+              jobUrl: jobUrl,
+              token: token,
+              state: state,
+              batchId: batchId,
+              cancelToken: cancelToken,
+            );
+            status.jobId = jobId;
+            status.state = BatchJobState.submitted;
+          } on DioException catch (e) {
+            if (e.type == DioExceptionType.cancel) {
+              status.state = BatchJobState.cancelled;
+            } else {
+              status.state = BatchJobState.failed;
+              status.error = '提交任务失败: ${e.message ?? e.type.name}';
+            }
+            results[item.documentId] = null;
+          } catch (e) {
             status.state = BatchJobState.failed;
-            status.error = '提交任务失败: ${e.message ?? e.type.name}';
+            status.error = e.toString();
+            results[item.documentId] = null;
           }
-          results[item.documentId] = null;
-        } catch (e) {
-          status.state = BatchJobState.failed;
-          status.error = e.toString();
-          results[item.documentId] = null;
-        }
-        onJobUpdate?.call(status);
-      }));
+          onJobUpdate?.call(status);
+        }),
+      );
 
-      onProgress?.call(_buildProgress(
-        jobStatuses,
-        items[(end - 1).clamp(0, items.length - 1)].title,
-      ));
+      onProgress?.call(
+        _buildProgress(
+          jobStatuses,
+          items[(end - 1).clamp(0, items.length - 1)].title,
+        ),
+      );
     }
 
     // 建立 jobId → status 查找表
@@ -547,9 +561,11 @@ class BatchExtractService {
 
     while (cancelToken?.isCancelled != true) {
       final activeStatuses = jobStatuses
-          .where((s) =>
-              s.state == BatchJobState.submitted ||
-              s.state == BatchJobState.running)
+          .where(
+            (s) =>
+                s.state == BatchJobState.submitted ||
+                s.state == BatchJobState.running,
+          )
           .toList();
       if (activeStatuses.isEmpty) break;
 
@@ -607,9 +623,11 @@ class BatchExtractService {
 
       onProgress?.call(_buildProgress(jobStatuses, ''));
 
-      final stillRunning = jobStatuses.any((s) =>
-          s.state == BatchJobState.submitted ||
-          s.state == BatchJobState.running);
+      final stillRunning = jobStatuses.any(
+        (s) =>
+            s.state == BatchJobState.submitted ||
+            s.state == BatchJobState.running,
+      );
       if (stillRunning && cancelToken?.isCancelled != true) {
         await Future.delayed(Duration(milliseconds: pollDelayMs));
       }

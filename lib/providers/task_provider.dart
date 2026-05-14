@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,23 +6,13 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
-import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
-import '../services/ai_settings_prompt.dart';
-import '../services/batch_extract_service.dart';
-import '../services/doc_extract_service.dart';
-import '../services/document_summary_image_service.dart';
-import '../services/image_generation_service.dart';
 import '../services/identifier_resolver.dart';
 import '../services/snackbar_service.dart';
-import 'api_provider.dart';
 import 'documents_provider.dart';
-import 'image_generation_config_provider.dart';
-import 'summary_image_provider.dart';
 import 'task_runner.dart';
 import 'task_types.dart';
-import 'translation_config_provider.dart';
 
 // 对外 re-export：外部只 import 'task_provider.dart' 即可拿到 TaskType/TaskStatus
 export 'task_types.dart' show TaskType, TaskStatus, TaskInfo;
@@ -242,201 +229,6 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       onSuccess: (success) =>
           TaskFinish.text(success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源'),
     );
-  }
-
-  // ── 文档提取 ──
-
-  Future<void> generateSummaryImage({
-    required Document document,
-    required void Function(String imagePath) onSuccess,
-  }) async {
-    final imageRole = AgentApiNotifier.globalImageRole;
-    if (!AiSettingsPrompt.ensureImageModelSelected(
-      imageRole: imageRole,
-      snackBar: snackBar,
-      onOpenSettings: () => _router.push(AppRoutes.settingsApi),
-    )) {
-      return;
-    }
-    final agentState = AgentApiNotifier.loadForProvider(imageRole.provider!);
-    if (!AiSettingsPrompt.ensureImageModelConfigured(
-      agentState: agentState,
-      snackBar: snackBar,
-      onOpenSettings: () => _router.push(AppRoutes.settingsApi),
-    )) {
-      return;
-    }
-
-    if (isTaskRunning(TaskType.generateSummaryImage)) return;
-
-    final summaryNotifier = _ref.read(
-      summaryImageProvider(document.filePath).notifier,
-    );
-    summaryNotifier.start();
-
-    final result = await runTask<DocumentSummaryImageResult>(
-      type: TaskType.generateSummaryImage,
-      initialStatus: '正在生成总结图: ${document.title}',
-      busyMessage: '总结图生成正在进行中，请稍候',
-      showBusySnackBar: false,
-      showProgressSnackBar: false,
-      cancelledMessage: '已取消总结图生成',
-      body: (token, progress) async {
-        progress(
-          const ListenableProgress(current: 0, total: 0, status: '正在整理文献内容'),
-        );
-        final config = _ref.read(imageGenerationConfigProvider);
-        progress(
-          const ListenableProgress(current: 0, total: 0, status: '正在请求生图模型'),
-        );
-        final language = _ref.read(translationConfigProvider).targetLanguage;
-        return DocumentSummaryImageService.instance.generate(
-          document: document,
-          agentState: agentState,
-          config: config,
-          language: language,
-          cancelToken: token,
-        );
-      },
-      onSuccess: (result) {
-        unawaited(FileImage(File(result.imagePath)).evict());
-        summaryNotifier.generated(result.imagePath);
-        onSuccess(result.imagePath);
-        return TaskFinish.text('总结图已生成');
-      },
-      onError: (e) {
-        summaryNotifier.finishWithoutImage();
-        if (e is DocumentSummaryImageException) {
-          return TaskFinish.text(e.message);
-        }
-        if (e is ImageGenerationException) {
-          return TaskFinish.text(e.message);
-        }
-        if (e is DioException) {
-          return TaskFinish.text('网络错误: ${e.message}');
-        }
-        return TaskFinish.text('总结图生成失败: $e');
-      },
-    );
-    if (result == null &&
-        _ref.read(summaryImageProvider(document.filePath)).generating) {
-      summaryNotifier.finishWithoutImage();
-    }
-  }
-
-  Future<void> extractDocument({
-    required String filePath,
-    required String title,
-    required DocExtractApiState apiState,
-    required void Function(String mdPath, String markdownContent) onSuccess,
-  }) async {
-    // 前置条件检查（不走 runTask，因为是"没开始就失败"的直接提示）
-    if (!apiState.isConfigured) {
-      snackBar.showResult(
-        message: '请先在设置中配置文档提取 Access Token',
-        action: SnackBarAction(
-          label: '前往设置',
-          onPressed: () => _router.push(AppRoutes.settingsExtract),
-        ),
-      );
-      return;
-    }
-
-    await runTask<({String mdPath, String markdown})>(
-      type: TaskType.extractDocument,
-      initialStatus: '正在提交任务: $title',
-      busyMessage: '正在提取文档，请稍候',
-      cancelledMessage: '已取消提取',
-      body: (token, progress) async {
-        final result = await _extractAsync(
-          filePath: filePath,
-          title: title,
-          apiState: apiState,
-          cancelToken: token,
-          progress: progress,
-        );
-        if (token.isCancelled) {
-          throw DioException(
-            requestOptions: RequestOptions(path: ''),
-            type: DioExceptionType.cancel,
-          );
-        }
-        // saveResult 通常 1-2 秒；30 秒超时兜底防止异常阻塞
-        final savedMdPath = await DocExtractService.instance
-            .saveResult(filePath, result, token: apiState.apiKey, title: title)
-            .timeout(const Duration(seconds: 30));
-        return (mdPath: savedMdPath, markdown: result.processedMarkdown ?? '');
-      },
-      onSuccess: (r) {
-        onSuccess(r.mdPath, r.markdown);
-        return TaskFinish(
-          message: '文档提取完成：$title',
-          duration: const Duration(seconds: 6),
-        );
-      },
-      onError: (e) {
-        if (e is DocExtractException) return TaskFinish.text(e.message);
-        if (e is BatchExtractException) return TaskFinish.text(e.message);
-        if (e is DioException) {
-          return TaskFinish.text('网络错误: ${e.message}');
-        }
-        return TaskFinish.text('提取失败: $e');
-      },
-    );
-  }
-
-  /// 异步 Job API 优先，失败时 fallback 到同步 API（若已配置）。
-  Future<DocExtractResult> _extractAsync({
-    required String filePath,
-    required String title,
-    required DocExtractApiState apiState,
-    required CancelToken cancelToken,
-    required void Function(ListenableProgress) progress,
-  }) async {
-    try {
-      return await BatchExtractService.instance.extractSingle(
-        filePath: filePath,
-        token: apiState.apiKey,
-        state: apiState,
-        onProgress: (status, extracted, total) {
-          if (cancelToken.isCancelled) return;
-          progress(
-            ListenableProgress(
-              current: extracted,
-              total: total,
-              status: total > 0 ? '$status · $title' : '$status · $title',
-            ),
-          );
-        },
-        cancelToken: cancelToken,
-      );
-    } catch (asyncError) {
-      // 用户取消直接抛出，不 fallback
-      if (cancelToken.isCancelled ||
-          (asyncError is DioException &&
-              asyncError.type == DioExceptionType.cancel)) {
-        rethrow;
-      }
-      // 无同步 fallback 配置，直接抛原始错误
-      if (!apiState.hasSyncFallback) rethrow;
-
-      debugPrint('[TaskProvider] 异步提取失败，回退到同步 API: $asyncError');
-      progress(
-        ListenableProgress(
-          current: 0,
-          total: 0,
-          status: '异步失败，尝试同步提取 · $title',
-        ),
-      );
-
-      return DocExtractService.instance.extract(
-        filePath: filePath,
-        apiUrl: apiState.syncBaseUrl,
-        token: apiState.apiKey,
-        state: apiState,
-        cancelToken: cancelToken,
-      );
-    }
   }
 
   // ── 消息格式化 ──

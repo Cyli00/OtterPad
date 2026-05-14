@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:ui';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/api_provider.dart';
+import '../../../providers/document_task_provider.dart';
 import '../../../services/batch_extract_service.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -22,7 +24,7 @@ import 'package:material_symbols_icons/symbols.dart';
 ///   builder: (_) => BatchProgressSheet(items: items, apiState: apiState),
 /// );
 /// ```
-class BatchProgressSheet extends StatefulWidget {
+class BatchProgressSheet extends ConsumerStatefulWidget {
   final List<BatchExtractItem> items;
   final DocExtractApiState apiState;
 
@@ -33,64 +35,125 @@ class BatchProgressSheet extends StatefulWidget {
   });
 
   @override
-  State<BatchProgressSheet> createState() => _BatchProgressSheetState();
+  ConsumerState<BatchProgressSheet> createState() => _BatchProgressSheetState();
 }
 
-class _BatchProgressSheetState extends State<BatchProgressSheet> {
-  final _cancelToken = CancelToken();
-  BatchExtractProgress? _progress;
-  bool _isRunning = true;
+class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
+  bool _finished = false;
 
   @override
   void initState() {
     super.initState();
-    _run();
+    unawaited(_run());
   }
 
   @override
   void dispose() {
-    if (_isRunning) _cancelToken.cancel();
+    if (!_finished) {
+      final notifier = ref.read(documentTaskProvider.notifier);
+      for (final item in widget.items) {
+        notifier.cancelTask(
+          DocumentTaskKey(
+            type: DocumentTaskType.extractDocument,
+            documentId: item.documentId,
+          ),
+        );
+      }
+    }
     super.dispose();
   }
 
   Future<void> _run() async {
-    try {
-      await BatchExtractService.instance.extractBatch(
-        items: widget.items,
-        token: widget.apiState.apiKey,
-        state: widget.apiState,
-        onProgress: (progress) {
-          if (mounted) setState(() => _progress = progress);
-        },
-        onJobUpdate: (_) {
-          if (mounted) setState(() {});
-        },
-        cancelToken: _cancelToken,
+    await ref
+        .read(documentTaskProvider.notifier)
+        .extractBatch(items: widget.items, apiState: widget.apiState);
+    if (mounted) setState(() => _finished = true);
+  }
+
+  BatchExtractProgress _buildProgress(
+    Map<DocumentTaskKey, DocumentTaskInfo> tasks,
+  ) {
+    final statuses = widget.items.map((item) {
+      final key = DocumentTaskKey(
+        type: DocumentTaskType.extractDocument,
+        documentId: item.documentId,
       );
-    } catch (_) {}
-    if (mounted) setState(() => _isRunning = false);
+      final info = tasks[key];
+      if (info == null) {
+        return BatchJobStatus(documentId: item.documentId, title: item.title);
+      }
+      final state = switch (info.status) {
+        DocumentTaskStatus.queued => BatchJobState.pending,
+        DocumentTaskStatus.running => BatchJobState.running,
+        DocumentTaskStatus.completed => BatchJobState.done,
+        DocumentTaskStatus.failed => BatchJobState.failed,
+        DocumentTaskStatus.cancelled => BatchJobState.cancelled,
+      };
+      return BatchJobStatus(
+        documentId: item.documentId,
+        title: item.title,
+        state: state,
+        error: info.error?.toString(),
+        extractedPages: info.progress.current,
+        totalPages: info.progress.total,
+        savedPath: info.result as String?,
+      );
+    }).toList();
+    final completed = statuses
+        .where(
+          (s) =>
+              s.state == BatchJobState.done ||
+              s.state == BatchJobState.failed ||
+              s.state == BatchJobState.cancelled,
+        )
+        .length;
+    final succeeded = statuses
+        .where((s) => s.state == BatchJobState.done)
+        .length;
+    final failed = statuses
+        .where(
+          (s) =>
+              s.state == BatchJobState.failed ||
+              s.state == BatchJobState.cancelled,
+        )
+        .length;
+    final active = statuses.cast<BatchJobStatus?>().firstWhere(
+      (s) =>
+          s != null &&
+          (s.state == BatchJobState.pending ||
+              s.state == BatchJobState.submitted ||
+              s.state == BatchJobState.running),
+      orElse: () => null,
+    );
+    return BatchExtractProgress(
+      total: widget.items.length,
+      completed: completed,
+      succeeded: succeeded,
+      failed: failed,
+      currentTitle: active?.title ?? '',
+      statuses: statuses,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final progress = _progress;
+    final progress = _buildProgress(ref.watch(documentTaskProvider));
 
-    final total = progress?.total ?? widget.items.length;
-    final completed = progress?.completed ?? 0;
-    final succeeded = progress?.succeeded ?? 0;
-    final failed = progress?.failed ?? 0;
+    final total = progress.total;
+    final completed = progress.completed;
+    final succeeded = progress.succeeded;
+    final failed = progress.failed;
+    final isRunning = completed < total;
 
-    final statusText = _isRunning
-        ? (progress == null
-            ? '准备中...'
-            : (progress.currentTitle.isEmpty
-                ? '正在轮询任务状态...'
-                : '正在提交「${progress.currentTitle}」'))
+    final statusText = isRunning
+        ? (progress.currentTitle.isEmpty
+              ? '等待任务启动...'
+              : '正在处理「${progress.currentTitle}」')
         : (failed == 0
-            ? '全部提取完成，共 $succeeded 篇'
-            : '提取完成：成功 $succeeded 篇，失败 $failed 篇');
+              ? '全部提取完成，共 $succeeded 篇'
+              : '提取完成：成功 $succeeded 篇，失败 $failed 篇');
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
@@ -98,8 +161,7 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
         height: MediaQuery.sizeOf(context).height * 0.72,
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
           children: [
@@ -125,7 +187,7 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _isRunning ? '批量提取中' : '提取完成',
+                          isRunning ? '批量提取中' : '提取完成',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -142,7 +204,7 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
                       ],
                     ),
                   ),
-                  if (_isRunning)
+                  if (isRunning)
                     const SizedBox(
                       width: 24,
                       height: 24,
@@ -153,8 +215,9 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
                       failed == 0
                           ? Symbols.check_circle_rounded
                           : Symbols.warning_amber_rounded,
-                      color:
-                          failed == 0 ? colorScheme.primary : colorScheme.error,
+                      color: failed == 0
+                          ? colorScheme.primary
+                          : colorScheme.error,
                       size: 28,
                     ),
                 ],
@@ -171,13 +234,12 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
-                        value: _isRunning
+                        value: isRunning
                             ? (total > 0 ? completed / total : null)
                             : 1.0,
-                        backgroundColor:
-                            colorScheme.surfaceContainerHighest,
+                        backgroundColor: colorScheme.surfaceContainerHighest,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          failed > 0 && !_isRunning
+                          failed > 0 && !isRunning
                               ? colorScheme.error
                               : colorScheme.primary,
                         ),
@@ -198,30 +260,27 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
             ),
 
             const SizedBox(height: 12),
-            Divider(
-                height: 1,
-                color: colorScheme.outlineVariant.withAlpha(80)),
+            Divider(height: 1, color: colorScheme.outlineVariant.withAlpha(80)),
 
             // Job 状态列表
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount:
-                    progress?.statuses.length ?? widget.items.length,
+                itemCount: progress.statuses.length,
                 itemBuilder: (context, index) {
-                  if (progress == null) {
-                    return JobStatusTile(
-                      title: widget.items[index].title,
-                      state: BatchJobState.pending,
-                    );
-                  }
                   final s = progress.statuses[index];
+                  final key = DocumentTaskKey(
+                    type: DocumentTaskType.extractDocument,
+                    documentId: s.documentId,
+                  );
+                  final task = ref.read(documentTaskProvider)[key];
                   return JobStatusTile(
                     title: s.title,
                     state: s.state,
                     extractedPages: s.extractedPages,
                     totalPages: s.totalPages,
                     error: s.error,
+                    statusText: task?.progress.status,
                   );
                 },
               ),
@@ -231,10 +290,20 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                child: _isRunning
+                child: isRunning
                     ? OutlinedButton.icon(
                         onPressed: () {
-                          _cancelToken.cancel();
+                          final notifier = ref.read(
+                            documentTaskProvider.notifier,
+                          );
+                          for (final item in widget.items) {
+                            notifier.cancelTask(
+                              DocumentTaskKey(
+                                type: DocumentTaskType.extractDocument,
+                                documentId: item.documentId,
+                              ),
+                            );
+                          }
                           Navigator.pop(context);
                         },
                         icon: const Icon(Symbols.cancel),
@@ -249,9 +318,7 @@ class _BatchProgressSheetState extends State<BatchProgressSheet> {
                     : FilledButton.icon(
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Symbols.check_rounded),
-                        label: Text(
-                          failed == 0 ? '完成' : '关闭（$failed 篇失败）',
-                        ),
+                        label: Text(failed == 0 ? '完成' : '关闭（$failed 篇失败）'),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(double.infinity, 48),
                           shape: RoundedRectangleBorder(
@@ -282,6 +349,7 @@ class JobStatusTile extends StatelessWidget {
   final int extractedPages;
   final int totalPages;
   final String? error;
+  final String? statusText;
 
   const JobStatusTile({
     super.key,
@@ -290,6 +358,7 @@ class JobStatusTile extends StatelessWidget {
     this.extractedPages = 0,
     this.totalPages = 0,
     this.error,
+    this.statusText,
   });
 
   @override
@@ -297,50 +366,62 @@ class JobStatusTile extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final (Widget leading, String subtitle, Color subtitleColor) =
-        switch (state) {
+    final (
+      Widget leading,
+      String subtitle,
+      Color subtitleColor,
+    ) = switch (state) {
       BatchJobState.pending => (
-          Icon(Symbols.schedule_rounded,
-              color: colorScheme.onSurfaceVariant, size: 20),
-          '等待提交',
-          colorScheme.onSurfaceVariant,
+        Icon(
+          Symbols.schedule_rounded,
+          color: colorScheme.onSurfaceVariant,
+          size: 20,
         ),
+        statusText ?? '等待提交',
+        colorScheme.onSurfaceVariant,
+      ),
       BatchJobState.submitted => (
-          Icon(Symbols.cloud_upload,
-              color: colorScheme.primary, size: 20),
-          '已提交，等待处理',
-          colorScheme.onSurfaceVariant,
-        ),
+        Icon(Symbols.cloud_upload, color: colorScheme.primary, size: 20),
+        '已提交，等待处理',
+        colorScheme.onSurfaceVariant,
+      ),
       BatchJobState.running => (
-          SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colorScheme.primary,
-              value: totalPages > 0 ? extractedPages / totalPages : null,
-            ),
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: colorScheme.primary,
+            value: totalPages > 0 ? extractedPages / totalPages : null,
           ),
-          totalPages > 0 ? '提取中 $extractedPages / $totalPages 页' : '提取中...',
-          colorScheme.onSurfaceVariant,
         ),
+        statusText ??
+            (totalPages > 0 ? '提取中 $extractedPages / $totalPages 页' : '提取中...'),
+        colorScheme.onSurfaceVariant,
+      ),
       BatchJobState.done => (
-          Icon(Symbols.check_circle_rounded,
-              color: colorScheme.primary, size: 20),
-          totalPages > 0 ? '完成（共 $totalPages 页）' : '提取完成',
-          colorScheme.onSurfaceVariant,
+        Icon(
+          Symbols.check_circle_rounded,
+          color: colorScheme.primary,
+          size: 20,
         ),
+        totalPages > 0 ? '完成（共 $totalPages 页）' : '提取完成',
+        colorScheme.onSurfaceVariant,
+      ),
       BatchJobState.failed => (
-          Icon(Symbols.error_rounded, color: colorScheme.error, size: 20),
-          error ?? '提取失败',
-          colorScheme.error,
-        ),
+        Icon(Symbols.error_rounded, color: colorScheme.error, size: 20),
+        error ?? '提取失败',
+        colorScheme.error,
+      ),
       BatchJobState.cancelled => (
-          Icon(Symbols.cancel_rounded,
-              color: colorScheme.onSurfaceVariant, size: 20),
-          '已取消',
-          colorScheme.onSurfaceVariant,
+        Icon(
+          Symbols.cancel_rounded,
+          color: colorScheme.onSurfaceVariant,
+          size: 20,
         ),
+        '已取消',
+        colorScheme.onSurfaceVariant,
+      ),
     };
 
     return Padding(
