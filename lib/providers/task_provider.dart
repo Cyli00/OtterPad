@@ -10,6 +10,7 @@ import '../router/app_router.dart';
 import '../router/app_routes.dart';
 import '../services/identifier_resolver.dart';
 import '../services/snackbar_service.dart';
+import 'document_lifecycle_provider.dart';
 import 'documents_provider.dart';
 import 'task_runner.dart';
 import 'task_types.dart';
@@ -54,7 +55,8 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   // 兼容旧 API 名（外部调用方沿用）
   bool isRunning(TaskType type) => isTaskRunning(type);
 
-  DocumentsNotifier get _docs => _ref.read(documentsProvider.notifier);
+  DocumentLifecycleNotifier get _lifecycle =>
+      _ref.read(documentLifecycleProvider);
   GoRouter get _router => _ref.read(routerProvider);
 
   /// 外部主动取消任务。只负责触发 token.cancel()，
@@ -92,7 +94,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ),
           );
 
-          lastResult = await _docs.addFile(paths[i], cancelToken: token);
+          lastResult = await _lifecycle.importPdf(paths[i], cancelToken: token);
 
           if (lastResult!.type == AddFileResultType.duplicate) {
             duplicateCount++;
@@ -133,13 +135,13 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       initialStatus: '正在解析标识符: $identifier',
       busyMessage: '正在解析标识符，请稍候',
       body: (token, _) async =>
-          await _docs.addByIdentifier(identifier, cancelToken: token),
+          await _lifecycle.createByIdentifier(identifier, cancelToken: token),
       onSuccess: (r) {
         final (doc, addResult) = r;
         if (addResult == AddByIdentifierResult.duplicate) {
           return const TaskFinish.text('该文献已存在于文库中');
         }
-        if (doc.filePath.isEmpty) {
+        if (doc.contentHash == null) {
           return TaskFinish(
             message: '已添加「${doc.title}」，但未获取到关联 PDF',
             duration: const Duration(seconds: 6),
@@ -169,7 +171,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       cancelledMessage: '已取消重构文库',
       body: (token, progress) async {
         try {
-          return await _docs.rebuild(
+          return await _lifecycle.rebuildLibrary(
             cancelToken: token,
             onProgress: (rp) {
               if (token.isCancelled) return;
@@ -225,7 +227,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       initialStatus: '正在重新下载: $docTitle',
       busyMessage: '正在下载中，请稍候',
       body: (token, _) async =>
-          await _docs.redownloadPdf(docId, cancelToken: token),
+          await _lifecycle.redownloadPdf(docId, cancelToken: token),
       onSuccess: (success) =>
           TaskFinish.text(success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源'),
     );

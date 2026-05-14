@@ -6,10 +6,14 @@ class Document {
   final String? journal;
   final String? year;
   final String? doi;
+
   /// 关键词列表。PubMed 路径填充为 MeSH Descriptor + 作者 Keyword 合集，
   /// 其他路径暂时为空，后续可用快速模型基于 abstract 抽取填充。
   final List<String> keywords;
-  final String filePath;
+
+  /// 当前绑定 PDF 的内容指纹。为 null 时表示只有元数据、尚无本地 PDF。
+  final String? contentHash;
+
   final DateTime addedAt;
 
   const Document({
@@ -20,28 +24,31 @@ class Document {
     this.year,
     this.doi,
     this.keywords = const [],
-    required this.filePath,
+    this.contentHash,
     required this.addedAt,
   });
 
   Document copyWith({
+    String? id,
     String? title,
     List<String>? authors,
     String? journal,
     String? year,
     String? doi,
     List<String>? keywords,
-    String? filePath,
+    Object? contentHash = _sentinel,
   }) {
     return Document(
-      id: id,
+      id: id ?? this.id,
       title: title ?? this.title,
       authors: authors ?? this.authors,
       journal: journal ?? this.journal,
       year: year ?? this.year,
       doi: doi ?? this.doi,
       keywords: keywords ?? this.keywords,
-      filePath: filePath ?? this.filePath,
+      contentHash: identical(contentHash, _sentinel)
+          ? this.contentHash
+          : contentHash as String?,
       addedAt: addedAt,
     );
   }
@@ -54,7 +61,7 @@ class Document {
     'year': year,
     'doi': doi,
     'keywords': keywords,
-    'filePath': filePath,
+    'contentHash': contentHash,
     'addedAt': addedAt.toIso8601String(),
   };
 
@@ -75,6 +82,7 @@ class Document {
               .toList();
     final legacyPublisher = (json['publisher'] as String?)?.trim();
     final journal = (json['journal'] as String?)?.trim();
+    final contentHash = (json['contentHash'] as String?)?.trim();
 
     return Document(
       id: json['id'] as String,
@@ -88,7 +96,9 @@ class Document {
       year: (json['year'] as String?)?.trim(),
       doi: (json['doi'] as String?)?.trim(),
       keywords: keywords,
-      filePath: (json['filePath'] as String? ?? '').trim(),
+      contentHash: contentHash == null || contentHash.isEmpty
+          ? null
+          : contentHash,
       addedAt: DateTime.parse(json['addedAt'] as String),
     );
   }
@@ -105,3 +115,5 @@ class Document {
     return false;
   }
 }
+
+const _sentinel = Object();

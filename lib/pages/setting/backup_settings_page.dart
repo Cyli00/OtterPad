@@ -11,6 +11,7 @@ import '../../providers/backup_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/highlight_provider.dart';
+import '../../providers/history_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -553,6 +554,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     if (!mounted) return;
     ref.read(documentsProvider.notifier).reload();
     ref.read(favoritesProvider.notifier).reload();
+    ref.invalidate(historyProvider);
     _refreshSizeLabels();
     ref.read(snackBarServiceProvider).showResult(message: '所有数据已清除');
   }
@@ -717,6 +719,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       final previousDocIds = ref.read(documentsProvider).map((doc) => doc.id).toSet();
       ref.invalidate(documentsProvider);
       ref.invalidate(favoritesProvider);
+      ref.invalidate(historyProvider);
       final currentDocIds = ref.read(documentsProvider).map((doc) => doc.id).toSet();
       for (final docId in {...previousDocIds, ...currentDocIds}) {
         ref.invalidate(highlightProvider(docId));

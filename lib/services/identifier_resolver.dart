@@ -6,8 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
 
+import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
-import '../providers/documents_provider.dart';
 import 'identifier_parser.dart';
 
 /// 标识符解析过程中抛出的异常。
@@ -197,7 +197,6 @@ class IdentifierResolver {
         journal: journal,
         year: year,
         doi: resolvedDoi,
-        filePath: filePath,
         addedAt: DateTime.now(),
       );
     } on DioException catch (e) {
@@ -229,12 +228,11 @@ class IdentifierResolver {
         doi.toLowerCase();
     final keywords = _extractElifeKeywords(data['keywords'], data['subjects']);
 
-    String filePath = '';
     if (!metadataOnly) {
       final pdfUrl = data['pdf'] as String?;
       if (pdfUrl != null && pdfUrl.isNotEmpty) {
         try {
-          filePath = await _downloadPdf(
+          await _downloadPdf(
             url: pdfUrl,
             year: year,
             authors: authors,
@@ -256,7 +254,6 @@ class IdentifierResolver {
       year: year,
       doi: resolvedDoi,
       keywords: keywords,
-      filePath: filePath,
       addedAt: DateTime.now(),
     );
   }
@@ -482,7 +479,6 @@ class IdentifierResolver {
         year: year,
         doi: normalizedDoi,
         keywords: keywords,
-        filePath: filePath,
         addedAt: DateTime.now(),
       );
     } on IdentifierResolveException {
@@ -550,10 +546,9 @@ class IdentifierResolver {
           .trim()
           .toLowerCase();
 
-      String filePath = '';
       if (!metadataOnly) {
         try {
-          filePath = await _downloadPdf(
+          await _downloadPdf(
             url: 'https://arxiv.org/pdf/$arxivId.pdf',
             year: year,
             authors: authors,
@@ -573,7 +568,6 @@ class IdentifierResolver {
         journal: journal,
         year: year,
         doi: doi,
-        filePath: filePath,
         addedAt: DateTime.now(),
       );
     } on IdentifierResolveException {
@@ -628,7 +622,6 @@ class IdentifierResolver {
         authors: authors,
         journal: publisher,
         year: year,
-        filePath: '',
         addedAt: DateTime.now(),
       );
     } on DioException catch (e) {
@@ -647,6 +640,7 @@ class IdentifierResolver {
     List<String> authors = const [],
     required String title,
     required String fallbackId,
+    String? targetPath,
     CancelToken? cancelToken,
   }) async {
     String filePath = '';
@@ -659,6 +653,7 @@ class IdentifierResolver {
         authors: authors,
         title: title,
         fallbackId: fallbackId,
+        targetPath: targetPath,
         cancelToken: cancelToken,
       );
     } catch (e) {
@@ -683,6 +678,7 @@ class IdentifierResolver {
           authors: authors,
           title: title,
           fallbackId: fallbackId,
+          targetPath: targetPath,
           cancelToken: cancelToken,
         );
       }
@@ -722,6 +718,7 @@ class IdentifierResolver {
           authors: authors,
           title: title,
           fallbackId: fallbackId,
+          targetPath: targetPath,
           cancelToken: cancelToken,
         );
       }
@@ -743,6 +740,7 @@ class IdentifierResolver {
     List<String> authors = const [],
     required String title,
     required String fallbackId,
+    String? targetPath,
     CancelToken? cancelToken,
   }) async {
     Uri? publisherUri;
@@ -766,6 +764,7 @@ class IdentifierResolver {
           authors: authors,
           title: title,
           fallbackId: fallbackId,
+          targetPath: targetPath,
           cancelToken: cancelToken,
         );
       }
@@ -784,6 +783,7 @@ class IdentifierResolver {
             authors: authors,
             title: title,
             fallbackId: fallbackId,
+            targetPath: targetPath,
             cancelToken: cancelToken,
           );
           if (path.isNotEmpty) return path;
@@ -875,18 +875,23 @@ class IdentifierResolver {
     List<String> authors = const [],
     required String title,
     required String fallbackId,
+    String? targetPath,
     CancelToken? cancelToken,
   }) async {
-    final docsDir = await DocumentsNotifier.getDocsDir();
-    final fileName = buildPdfFileName(
-      year: year,
-      authors: authors,
-      title: title,
-      fallbackId: fallbackId,
-    );
-    final pdfPath = p.join(docsDir.path, fileName);
+    final pdfPath =
+        targetPath ??
+        p.join(
+          GStorage.libraryDirPath,
+          buildPdfFileName(
+            year: year,
+            authors: authors,
+            title: title,
+            fallbackId: fallbackId,
+          ),
+        );
 
     if (await File(pdfPath).exists()) return pdfPath;
+    await Directory(p.dirname(pdfPath)).create(recursive: true);
 
     await _dio.download(url, pdfPath, cancelToken: cancelToken);
 

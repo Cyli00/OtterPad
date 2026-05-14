@@ -133,7 +133,7 @@ bool _looksLikeReference(String text) {
 
 class OutlinePanel extends StatefulWidget {
   final String markdownContent;
-  final String? pdfPath;
+  final String? documentId;
   final ValueListenable<SummaryImageState> summaryImageState;
   final void Function(int charOffset) onNavigate;
   final VoidCallback? onRegenerateSummary;
@@ -141,7 +141,7 @@ class OutlinePanel extends StatefulWidget {
   const OutlinePanel({
     super.key,
     required this.markdownContent,
-    this.pdfPath,
+    this.documentId,
     required this.summaryImageState,
     required this.onNavigate,
     this.onRegenerateSummary,
@@ -167,11 +167,11 @@ class _OutlinePanelState extends State<OutlinePanel>
   }
 
   Future<void> _loadFigures() async {
-    if (widget.pdfPath == null || widget.pdfPath!.isEmpty) {
+    if (widget.documentId == null || widget.documentId!.isEmpty) {
       if (mounted) setState(() => _figuresLoaded = true);
       return;
     }
-    final figures = await FigureExtractService.loadManifest(widget.pdfPath!);
+    final figures = await FigureExtractService.loadManifest(widget.documentId!);
     // 重新提取会原地覆盖 figures/*.png,但 Flutter 全局 ImageCache 以
     // FileImage(path) 为 key,不感知 mtime,导致 Image.file 还显示旧字节.
     // 显式 evict 这批 path,下次构建时 Image.file 重读磁盘.

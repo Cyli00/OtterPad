@@ -242,13 +242,13 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
   Future<String>? _loadFuture;
 
   Future<void> _init() async {
-    final filePath = args.documentId;
-    final fileExistsFuture = filePath.isNotEmpty
-        ? File(filePath).exists()
+    final pdfPath = DocPaths.pdf(args.documentId);
+    final fileExistsFuture = args.documentId.isNotEmpty
+        ? File(pdfPath).exists()
         : Future.value(false);
-    final markdownPathFuture = _findMarkdownPath(filePath);
-    final summaryPathFuture = filePath.isNotEmpty
-        ? _findSummaryImagePath(filePath)
+    final markdownPathFuture = _findMarkdownPath(args.documentId);
+    final summaryPathFuture = args.documentId.isNotEmpty
+        ? _findSummaryImagePath(args.documentId)
         : Future<String?>.value();
 
     final fileExists = await fileExistsFuture;
@@ -274,14 +274,14 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     }
   }
 
-  Future<String?> _findMarkdownPath(String filePath) async {
-    if (filePath.isEmpty) return null;
-    final mdPath = DocPaths.md(filePath);
+  Future<String?> _findMarkdownPath(String documentId) async {
+    if (documentId.isEmpty) return null;
+    final mdPath = DocPaths.md(documentId);
     return await File(mdPath).exists() ? mdPath : null;
   }
 
-  Future<String?> _findSummaryImagePath(String filePath) async {
-    final path = DocumentSummaryImageService.imagePathFor(filePath);
+  Future<String?> _findSummaryImagePath(String documentId) async {
+    final path = DocumentSummaryImageService.imagePathFor(documentId);
     return await File(path).exists() ? path : null;
   }
 

@@ -7,6 +7,7 @@ import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
+import '../../utils/doc_paths.dart';
 import 'widgets/batch_progress_sheet.dart';
 import 'widgets/bookshelf_grid.dart';
 import 'widgets/bookshelf_list.dart';
@@ -92,7 +93,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     final docs = ref.read(validDocsProvider);
     final selectedDocs = docs
         .where(
-          (d) => selection.selectedIds.contains(d.id) && d.filePath.isNotEmpty,
+          (d) => selection.selectedIds.contains(d.id) && d.contentHash != null,
         )
         .toList();
 
@@ -107,7 +108,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
         .map(
           (d) => BatchExtractItem(
             documentId: d.id,
-            filePath: d.filePath,
+            filePath: DocPaths.pdf(d.id),
             title: d.title,
           ),
         )

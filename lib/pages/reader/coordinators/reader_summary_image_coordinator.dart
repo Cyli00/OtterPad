@@ -126,8 +126,7 @@ class ReaderSummaryImageCoordinator {
 
   Future<void> openSummaryImage([String? imagePath]) async {
     final path =
-        imagePath ??
-        DocumentSummaryImageService.imagePathFor(document.filePath);
+        imagePath ?? DocumentSummaryImageService.imagePathFor(document.id);
     if (!await File(path).exists()) {
       ref.read(snackBarServiceProvider).showResult(message: '总结图文件不存在');
       return;
@@ -237,7 +236,7 @@ class ReaderSummaryImageCoordinator {
   }
 
   Future<String?> _exportFigures() async {
-    final figuresDir = Directory(DocPaths.figuresDir(document.filePath));
+    final figuresDir = Directory(DocPaths.figuresDir(document.id));
     if (!await figuresDir.exists()) {
       return '未找到 figures 目录，请先完成文档提取';
     }
@@ -281,7 +280,7 @@ class ReaderSummaryImageCoordinator {
   }
 
   Future<String?> _exportMarkdown() async {
-    final mdPath = DocPaths.md(document.filePath);
+    final mdPath = DocPaths.md(document.id);
     final mdFile = File(mdPath);
     if (!await mdFile.exists()) {
       return '未找到 Markdown 文件，请先完成文档提取';

@@ -264,7 +264,7 @@ class DocumentTaskNotifier
     }
 
     final summaryNotifier = _ref.read(
-      summaryImageProvider(document.filePath).notifier,
+      summaryImageProvider(document.id).notifier,
     );
     summaryNotifier.start();
 
@@ -318,7 +318,7 @@ class DocumentTaskNotifier
       },
     );
     if (result == null &&
-        _ref.read(summaryImageProvider(document.filePath)).generating) {
+        _ref.read(summaryImageProvider(document.id)).generating) {
       summaryNotifier.finishWithoutImage();
     }
     return result;
@@ -614,7 +614,10 @@ class _QueuedDocumentTask<T> {
     void Function(ListenableProgress progress) progress,
   )
   body;
-  final TaskFinish Function(T result) onSuccess;
+  // `T` 出现在参数位置（逆变），如果直接暴露 `TaskFinish Function(T)`，
+  // 队列 `_QueuedDocumentTask<dynamic>` 读取该字段时会触发运行时类型检查失败。
+  // 统一存为 `Function(Object?)`，在 onSuccess() 内部 cast 回 T。
+  final TaskFinish Function(Object? result) onSuccess;
   final TaskFinish Function(Object error)? onError;
   final String? cancelledMessage;
   final bool showResultSnackBar;
@@ -634,12 +637,12 @@ class _QueuedDocumentTask<T> {
     required this.completer,
     required this.runningStatus,
     required this.body,
-    required this.onSuccess,
+    required TaskFinish Function(T result) onSuccess,
     required this.onError,
     required this.cancelledMessage,
     required this.showResultSnackBar,
     required this.finish,
-  });
+  }) : onSuccess = ((result) => onSuccess(result as T));
 
   void complete(T? value) {
     if (!completer.isCompleted) completer.complete(value);

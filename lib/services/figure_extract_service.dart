@@ -198,6 +198,24 @@ class _Inventory {
   final List<_PageData> pages;
 }
 
+/// 页面上一个连续的文字栏区域(单栏论文整页一栏,双栏论文左右两栏).
+///
+/// caption-anchored region inference 用它做两件事:
+///   1. direction inference 时,只看同栏内的 visual blocks 投票.
+///   2. 完全漏检场景(无 visual block) 时,作为横向边界兜底.
+///
+/// 注意:扩展 bbox 时的横向 overlap 判断**仍然用 visualUnion** 横向,
+/// column 不参与;这样保留原行为,避免邻栏污染.
+class _Column {
+  const _Column(this.left, this.right);
+  final double left, right;
+  double get width => right - left;
+}
+
+/// figure 相对 caption 的纵向方向. 论文约 90% caption 在 figure 下方
+/// (即 figure 在上方),少数现场 caption 在 figure 上方.
+enum _FigureDirection { above, below }
+
 // ─── 服务 ───────────────────────────────────────────────
 
 /// 从 PaddleOCR 版面解析 JSON + 原始 PDF 中提取 figure 区域。
@@ -656,37 +674,93 @@ class FigureExtractService {
   // ─── Stage 3: 裁剪 ─────────────────────────────────────
 
   /// 计算 segment 的裁剪 bbox.
-  /// 优先 image/chart/table——这是论文 figure 真正的视觉内容,自动排除
-  /// caption、vision_footnote 等文字标签.
   ///
-  /// 当 [pageBlocks] 提供时,会针对 PaddleOCR 漏检子图的常见现场做向上扩展:
-  /// 若 caption 在 visual union 下方,而 union 上方在同栏宽度内存在大段完全
-  /// 无 layout block 的空白,则把 top 抬升到最近上方阻塞的 bottom + 小 margin.
-  /// 触发条件:绝对 gap ≥ [_missedVisualGapAbs] **且** gap / visualHeight
-  /// ≥ [_missedVisualGapRatio],双门控避免误伤紧邻段落的 figure.
+  /// **核心思路**: 把 figure 视为 "caption 定义的页面区域",而不是 "已检出
+  /// 视觉块的 union". PaddleOCR 检出的 image/chart/table 只作为基础边界 + 信号,
+  /// 真正的区域由 caption 在 page geometry 上的位置推断:
+  ///
+  ///   1. 找 caption 所在 column (单/双栏)
+  ///   2. 推断 figure 在 caption 上方还是下方 (基于同 column 内视觉块分布)
+  ///   3. 沿该方向找最近 "stable blocker"(正文段落 / 另一 caption / 页眉页脚),
+  ///      把 bbox 的对应边扩展到 blocker.bottom (或 .top) + 小 margin
+  ///
+  /// 这种做法对 PaddleOCR 的视觉块完整性不敏感——即使部分子图被漏检,
+  /// 只要 caption 还在,region 就能正确锚定.
+  ///
+  /// 触发双门控避免误伤紧邻段落: 扩展量 gap 必须满足
+  /// `gap ≥ _missedVisualGapAbs` **且** `gap / visualHeight ≥ _missedVisualGapRatio`.
+  ///
+  /// 不传 [pageBlocks] 或 segment 内无 caption (匿名 segment) 时退化为
+  /// legacy "visual union" 路径.
   @visibleForTesting
   List<double> computeMergedBbox(
     List<LayoutBlock> segment, {
     List<LayoutBlock>? pageBlocks,
   }) {
-    final visuals = segment
-        .where((b) =>
-            b.blockLabel == 'image' ||
-            b.blockLabel == 'chart' ||
-            b.blockLabel == 'table')
-        .toList();
+    final visuals = segment.where(_isVisualBlock).toList();
+    final baseBbox = visuals.isNotEmpty
+        ? _Bbox.union(visuals).toList()
+        : _legacyFallbackBbox(segment);
 
-    if (visuals.isNotEmpty) {
-      final base = _Bbox.union(visuals).toList();
-      if (pageBlocks == null || pageBlocks.isEmpty) return base;
-      return _expandForMissedVisuals(
-        baseBbox: base,
-        segment: segment,
-        pageBlocks: pageBlocks,
-      );
+    if (pageBlocks == null || pageBlocks.isEmpty) return baseBbox;
+    if (visuals.isEmpty) return baseBbox; // 完全无视觉块不做激进扩展
+
+    final caption = _findSegmentCaption(segment);
+    if (caption == null) return baseBbox; // 匿名 segment 走 legacy 路径
+
+    return _inferRegionFromCaption(
+      caption: caption,
+      baseBbox: baseBbox,
+      segment: segment,
+      pageBlocks: pageBlocks,
+    );
+  }
+
+  /// 视觉内容 block (figure 真正的可视部分).
+  static bool _isVisualBlock(LayoutBlock b) =>
+      b.blockLabel == 'image' ||
+      b.blockLabel == 'chart' ||
+      b.blockLabel == 'table';
+
+  /// "稳定阻塞" labels——这些 block 出现在 caption 同 column 一侧意味着
+  /// figure 区域不应跨过它. **不包括 figure_title / vision_footnote / 视觉块**,
+  /// 它们要么是 figure 本身的一部分,要么是另一 figure 的内部细节.
+  static const _stableBlockerLabels = {
+    'text',
+    'paragraph_title',
+    'abstract',
+    'header',
+    'footer',
+    'header_image',
+    'aside_text',
+    'number',
+    'formula',
+  };
+
+  bool _isStableBlocker(LayoutBlock b) {
+    if (_stableBlockerLabels.contains(b.blockLabel)) return true;
+    // 另一个 figure 的主 caption (长 figure_title) 也阻塞,但短子标签
+    // ("(A)"/"(b)" 这类) 不算——它们本身就是 figure 内部.
+    if (b.blockLabel == 'figure_title' &&
+        _mainCaptionRe.hasMatch(b.blockContent.trim())) {
+      return true;
     }
+    return false;
+  }
 
-    // 完全无视觉块时退一步:排除 caption 和子图注文字
+  /// 在 segment 中找出 main caption (label==figure_title + 匹配主标题正则).
+  LayoutBlock? _findSegmentCaption(List<LayoutBlock> segment) {
+    for (final b in segment) {
+      if (b.blockLabel == 'figure_title' &&
+          _mainCaptionRe.hasMatch(b.blockContent.trim())) {
+        return b;
+      }
+    }
+    return null;
+  }
+
+  /// 完全无视觉块时的 fallback bbox:排除 caption 和 vision_footnote 的 union.
+  List<double> _legacyFallbackBbox(List<LayoutBlock> segment) {
     final contents = segment
         .where((b) =>
             !_mainCaptionRe.hasMatch(b.blockContent.trim()) &&
@@ -696,58 +770,173 @@ class FigureExtractService {
     return _Bbox.union(effective).toList();
   }
 
-  /// 上方扩展的双重阈值——只有两条同时满足才扩展.
-  /// 阈值均基于 API 坐标系 (zoom 2.0, 144 DPI).
+  /// 双重门控阈值——扩展量必须同时满足.阈值基于 API 坐标系(144 DPI).
+  /// 绝对值过滤微小扩展引入的 noise; 比例过滤大 figure 紧贴小段落场景.
   static const _missedVisualGapAbs = 80.0;
   static const _missedVisualGapRatio = 0.30;
 
-  /// 扩展后留给 blocker 的 margin (API 坐标系),避免裁到上方段落底部.
+  /// 扩展后留给 blocker 的安全 margin (API 坐标系).
   static const _missedVisualMargin = 8.0;
 
-  List<double> _expandForMissedVisuals({
+  /// 双栏判定要求左右两栏各自至少有这么多 text-like blocks.少于则视为单栏.
+  static const _doubleColumnMinPerSide = 3;
+
+  /// caption 中点判栏时的 margin 容忍度(API 坐标系).
+  static const _columnSideMargin = 30.0;
+
+  /// caption-anchored region inference 主流程.
+  List<double> _inferRegionFromCaption({
+    required LayoutBlock caption,
     required List<double> baseBbox,
     required List<LayoutBlock> segment,
     required List<LayoutBlock> pageBlocks,
   }) {
-    // 找 segment 内的 caption block (label==figure_title 且匹配主标题正则)
-    LayoutBlock? caption;
-    for (final b in segment) {
-      if (b.blockLabel == 'figure_title' &&
-          _mainCaptionRe.hasMatch(b.blockContent.trim())) {
-        caption = b;
-        break;
+    final column = _detectColumnFor(caption, pageBlocks);
+    final direction = _inferFigureDirection(caption, column, pageBlocks);
+
+    return direction == _FigureDirection.above
+        ? _extendUpward(
+            caption: caption,
+            baseBbox: baseBbox,
+            segment: segment,
+            pageBlocks: pageBlocks,
+          )
+        : _extendDownward(
+            caption: caption,
+            baseBbox: baseBbox,
+            segment: segment,
+            pageBlocks: pageBlocks,
+          );
+  }
+
+  /// 推断 caption 所在的 column(单栏论文整页一栏,双栏论文左右两栏).
+  ///
+  /// 启发式:
+  ///   1. page 上 text/paragraph_title/abstract block 不足 4 个 → 整页一栏
+  ///      (页面被 figure 占满的情况,无法可靠判栏,保守用整页)
+  ///   2. 否则按 page 横向中点切两半,左右两侧各自 text block 数 ≥
+  ///      _doubleColumnMinPerSide → 双栏,否则单栏
+  ///   3. 双栏下,caption 的横向位置决定它属于哪一栏:
+  ///      - 完全在左 → 左栏 column
+  ///      - 完全在右 → 右栏 column
+  ///      - 横跨两栏 → 整页 column (cross-column figure)
+  _Column _detectColumnFor(LayoutBlock caption, List<LayoutBlock> pageBlocks) {
+    // page 横向边界估算
+    double pageLeft = double.infinity, pageRight = 0;
+    for (final b in pageBlocks) {
+      if (b.blockBbox[0] < pageLeft) pageLeft = b.blockBbox[0];
+      if (b.blockBbox[2] > pageRight) pageRight = b.blockBbox[2];
+    }
+    if (pageLeft.isInfinite || pageRight <= pageLeft) {
+      return _Column(caption.blockBbox[0], caption.blockBbox[2]);
+    }
+
+    const textLabels = {'text', 'paragraph_title', 'abstract'};
+    final textBlocks = pageBlocks
+        .where((b) => textLabels.contains(b.blockLabel))
+        .toList();
+    if (textBlocks.length < 4) {
+      return _Column(pageLeft, pageRight);
+    }
+
+    final pageMid = pageLeft + (pageRight - pageLeft) / 2;
+    final leftBlocks = textBlocks
+        .where((b) => b.blockBbox[2] <= pageMid + _columnSideMargin)
+        .toList();
+    final rightBlocks = textBlocks
+        .where((b) => b.blockBbox[0] >= pageMid - _columnSideMargin)
+        .toList();
+
+    final isDoubleColumn = leftBlocks.length >= _doubleColumnMinPerSide &&
+        rightBlocks.length >= _doubleColumnMinPerSide;
+    if (!isDoubleColumn) return _Column(pageLeft, pageRight);
+
+    final leftColRight = leftBlocks.fold<double>(
+      0.0,
+      (m, b) => b.blockBbox[2] > m ? b.blockBbox[2] : m,
+    );
+    final rightColLeft = rightBlocks.fold<double>(
+      double.infinity,
+      (m, b) => b.blockBbox[0] < m ? b.blockBbox[0] : m,
+    );
+
+    final cLeft = caption.blockBbox[0];
+    final cRight = caption.blockBbox[2];
+
+    // caption 同时跨过左栏 right 和右栏 left → 跨栏 figure
+    if (cLeft < leftColRight + _columnSideMargin &&
+        cRight > rightColLeft - _columnSideMargin) {
+      return _Column(pageLeft, pageRight);
+    }
+    if (cRight <= leftColRight + _columnSideMargin) {
+      final lLeft = leftBlocks.fold<double>(
+        double.infinity,
+        (m, b) => b.blockBbox[0] < m ? b.blockBbox[0] : m,
+      );
+      return _Column(lLeft, leftColRight);
+    }
+    if (cLeft >= rightColLeft - _columnSideMargin) {
+      final rRight = rightBlocks.fold<double>(
+        0.0,
+        (m, b) => b.blockBbox[2] > m ? b.blockBbox[2] : m,
+      );
+      return _Column(rightColLeft, rRight);
+    }
+    return _Column(pageLeft, pageRight);
+  }
+
+  /// 推断 figure 相对 caption 的方向: 比较同 column 内 caption 上方/下方的
+  /// 视觉块总高度,多的一边胜出.两边相等时 fallback 到 above (论文常态).
+  _FigureDirection _inferFigureDirection(
+    LayoutBlock caption,
+    _Column column,
+    List<LayoutBlock> pageBlocks,
+  ) {
+    final captionTop = caption.blockBbox[1];
+    final captionBottom = caption.blockBbox[3];
+
+    double aboveHeight = 0, belowHeight = 0;
+    for (final b in pageBlocks) {
+      if (!_isVisualBlock(b)) continue;
+      final bLeft = b.blockBbox[0];
+      final bRight = b.blockBbox[2];
+      // 仅看同 column (横向与 column overlap)
+      if (bRight <= column.left || bLeft >= column.right) continue;
+
+      final bTop = b.blockBbox[1];
+      final bBottom = b.blockBbox[3];
+      final h = bBottom - bTop;
+      if (bBottom <= captionTop) {
+        aboveHeight += h;
+      } else if (bTop >= captionBottom) {
+        belowHeight += h;
       }
     }
-    if (caption == null) return baseBbox;
-    // caption 必须在 visualUnion 下方,才认为是"下置 caption + 上方 figure"格局
-    if (caption.blockBbox[1] < baseBbox[3]) return baseBbox;
+    if (belowHeight > aboveHeight) return _FigureDirection.below;
+    return _FigureDirection.above; // 平局或上方多 → 默认 above
+  }
 
-    final visualLeft = baseBbox[0];
+  /// 沿 caption 上方扩展 baseBbox.top.
+  /// 横向 overlap 判断仍用 visualUnion 边界(baseBbox 的 left/right),
+  /// 这样保留对邻栏块的天然过滤,避免横向污染.
+  List<double> _extendUpward({
+    required LayoutBlock caption,
+    required List<double> baseBbox,
+    required List<LayoutBlock> segment,
+    required List<LayoutBlock> pageBlocks,
+  }) {
+    if (caption.blockBbox[1] < baseBbox[3]) return baseBbox;
     final visualTop = baseBbox[1];
-    final visualRight = baseBbox[2];
     final visualHeight = baseBbox[3] - baseBbox[1];
     if (visualHeight <= 0) return baseBbox;
 
-    final segmentIds = segment.map((b) => b.blockId).toSet();
-
-    // 收集 page 上所有"非 segment 内"且横向与 visualUnion 有 overlap 的块.
-    // 这些是上方扩展时的潜在 blocker——本栏内最低 bottom 决定扩展上限.
-    double? nearestBlockerBottom;
-    for (final b in pageBlocks) {
-      if (segmentIds.contains(b.blockId)) continue;
-      final bLeft = b.blockBbox[0];
-      final bRight = b.blockBbox[2];
-      final bBottom = b.blockBbox[3];
-      // 横向必须与 visualUnion 有交集 (双栏 layout 下排除邻栏块)
-      if (bRight <= visualLeft || bLeft >= visualRight) continue;
-      // 仅看位于 visualUnion 上方的 blocker
-      if (bBottom >= visualTop) continue;
-      if (nearestBlockerBottom == null || bBottom > nearestBlockerBottom) {
-        nearestBlockerBottom = bBottom;
-      }
-    }
-    final blockerBottom = nearestBlockerBottom ?? 0.0;
-
+    final blockerBottom = _nearestBlockerAbove(
+      anchorTop: visualTop,
+      hLeft: baseBbox[0],
+      hRight: baseBbox[2],
+      segment: segment,
+      pageBlocks: pageBlocks,
+    );
     final gap = visualTop - blockerBottom;
     if (gap < _missedVisualGapAbs) return baseBbox;
     if (gap / visualHeight < _missedVisualGapRatio) return baseBbox;
@@ -755,6 +944,84 @@ class FigureExtractService {
     final newTop = blockerBottom + _missedVisualMargin;
     if (newTop >= visualTop) return baseBbox;
     return [baseBbox[0], newTop, baseBbox[2], baseBbox[3]];
+  }
+
+  /// 沿 caption 下方扩展 baseBbox.bottom.对 [_extendUpward] 的对称实现.
+  List<double> _extendDownward({
+    required LayoutBlock caption,
+    required List<double> baseBbox,
+    required List<LayoutBlock> segment,
+    required List<LayoutBlock> pageBlocks,
+  }) {
+    if (caption.blockBbox[3] > baseBbox[1]) return baseBbox;
+    final visualBottom = baseBbox[3];
+    final visualHeight = baseBbox[3] - baseBbox[1];
+    if (visualHeight <= 0) return baseBbox;
+
+    final pageBottom = pageBlocks.fold<double>(
+      0.0,
+      (m, b) => b.blockBbox[3] > m ? b.blockBbox[3] : m,
+    );
+    final blockerTop = _nearestBlockerBelow(
+      anchorBottom: visualBottom,
+      pageBottom: pageBottom,
+      hLeft: baseBbox[0],
+      hRight: baseBbox[2],
+      segment: segment,
+      pageBlocks: pageBlocks,
+    );
+    final gap = blockerTop - visualBottom;
+    if (gap < _missedVisualGapAbs) return baseBbox;
+    if (gap / visualHeight < _missedVisualGapRatio) return baseBbox;
+
+    final newBottom = blockerTop - _missedVisualMargin;
+    if (newBottom <= visualBottom) return baseBbox;
+    return [baseBbox[0], baseBbox[1], baseBbox[2], newBottom];
+  }
+
+  double _nearestBlockerAbove({
+    required double anchorTop,
+    required double hLeft,
+    required double hRight,
+    required List<LayoutBlock> segment,
+    required List<LayoutBlock> pageBlocks,
+  }) {
+    final segmentIds = segment.map((b) => b.blockId).toSet();
+    double nearest = 0;
+    for (final b in pageBlocks) {
+      if (segmentIds.contains(b.blockId)) continue;
+      if (!_isStableBlocker(b)) continue;
+      final bLeft = b.blockBbox[0];
+      final bRight = b.blockBbox[2];
+      final bBottom = b.blockBbox[3];
+      if (bRight <= hLeft || bLeft >= hRight) continue;
+      if (bBottom >= anchorTop) continue;
+      if (bBottom > nearest) nearest = bBottom;
+    }
+    return nearest;
+  }
+
+  double _nearestBlockerBelow({
+    required double anchorBottom,
+    required double pageBottom,
+    required double hLeft,
+    required double hRight,
+    required List<LayoutBlock> segment,
+    required List<LayoutBlock> pageBlocks,
+  }) {
+    final segmentIds = segment.map((b) => b.blockId).toSet();
+    double nearest = pageBottom;
+    for (final b in pageBlocks) {
+      if (segmentIds.contains(b.blockId)) continue;
+      if (!_isStableBlocker(b)) continue;
+      final bLeft = b.blockBbox[0];
+      final bRight = b.blockBbox[2];
+      final bTop = b.blockBbox[1];
+      if (bRight <= hLeft || bLeft >= hRight) continue;
+      if (bTop <= anchorBottom) continue;
+      if (bTop < nearest) nearest = bTop;
+    }
+    return nearest;
   }
 
   /// 将 API 坐标缩放到 renderZoom

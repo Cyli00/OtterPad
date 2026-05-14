@@ -66,12 +66,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   ///   时容易漏（DocCardActions.delete 没显式清理它）；
   /// - `.reader.html` 的 `.` 前缀让 macOS Finder / iOS Files App 默认隐藏；
   /// - server root 在 OtterPad/ 下，URL 形如
-  ///   `http://localhost:PORT/library/<hash>/.reader.html`，与同目录内的
+  ///   `http://localhost:PORT/library/<documentId>/.reader.html`，与同目录内的
   ///   `figures/Figure_*.png` 共 origin、共 base href，相对路径解析自然。
   String get _htmlFilePath => p.join(widget.documentDir, '.reader.html');
 
-  /// docDir 相对 server root 的子路径（如 `docs/abc123`），写入 HTML 的
-  /// `base href` 标签后，相对图片路径仍能解析到 `docs/{hash}/figures/...`。
+  /// docDir 相对 server root 的子路径（如 `library/<documentId>`），写入 HTML 的
+  /// `base href` 标签后，相对图片路径仍能解析到 `library/<documentId>/figures/...`。
   /// 注：URL 用 forward slash，Windows 反斜杠路径需转换。
   String get _docBaseHref {
     final root = ReaderLocalhostServer.instance.root;
@@ -183,7 +183,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   void _applyPaginationMode() {
     if (!_contentReady || _controller == null) return;
     _controller!.evaluateJavascript(
-      source: "window.setPaginationMode('${widget.settings.paginationMode.jsId}')",
+      source:
+          "window.setPaginationMode('${widget.settings.paginationMode.jsId}')",
     );
   }
 

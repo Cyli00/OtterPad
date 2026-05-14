@@ -37,15 +37,17 @@ class DocumentSummaryImageService {
   static final DocumentSummaryImageService instance =
       DocumentSummaryImageService._();
 
-  static String outputDirFor(String pdfPath) => DocPaths.summaryDir(pdfPath);
+  static String outputDirFor(String documentId) =>
+      DocPaths.summaryDir(documentId);
 
-  static String imagePathFor(String pdfPath) => DocPaths.summaryImage(pdfPath);
+  static String imagePathFor(String documentId) =>
+      DocPaths.summaryImage(documentId);
 
   // ── 生成入口 ──────────────────────────────────────────────────────────────
 
   /// 仅构造生图提示词，不调用任何远端 API。
   ///
-  /// 用于"官方生图"分支：用户把提示词复制到 ChatGPT / Gemini 官方 App 内手动生图，
+  /// 用于"官方 App 生图"分支：用户把提示词复制到 ChatGPT / Gemini 官方 App 内手动生图，
   /// 因此不依赖任何 `AgentApiState`/Key 配置，仅按 [provider] 决定与生图能力相关的
   /// 文案细节（如保真度约束）。
   ///
@@ -57,10 +59,10 @@ class DocumentSummaryImageService {
     AgentApiProvider provider = AgentApiProvider.openai,
     String? language,
   }) async {
-    if (document.filePath.isEmpty) {
+    if (document.contentHash == null) {
       throw const DocumentSummaryImageException('当前文献没有关联 PDF 文件');
     }
-    final mdPath = DocPaths.md(document.filePath);
+    final mdPath = DocPaths.md(document.id);
     if (!await File(mdPath).exists()) {
       throw const DocumentSummaryImageException('请先完成文档提取，再生成总结图');
     }
@@ -87,11 +89,11 @@ class DocumentSummaryImageService {
     if (agentState.apiKey.trim().isEmpty) {
       throw const DocumentSummaryImageException('请先在「AI 设置」中填写生图模型 API Key');
     }
-    if (document.filePath.isEmpty) {
+    if (document.contentHash == null) {
       throw const DocumentSummaryImageException('当前文献没有关联 PDF 文件');
     }
 
-    final mdPath = DocPaths.md(document.filePath);
+    final mdPath = DocPaths.md(document.id);
     final mdFile = File(mdPath);
     if (!await mdFile.exists()) {
       throw const DocumentSummaryImageException('请先完成文档提取，再生成总结图');
@@ -100,7 +102,7 @@ class DocumentSummaryImageService {
     final results = await Future.wait([
       mdFile.readAsString(),
       _collectReferenceImages(
-        document.filePath,
+        document.id,
         maxCount: _maxReferencesForProvider(
           agentState.provider,
           config.maxReferenceImages,
@@ -132,7 +134,7 @@ class DocumentSummaryImageService {
       ),
     );
 
-    final outDir = Directory(outputDirFor(document.filePath));
+    final outDir = Directory(outputDirFor(document.id));
     await outDir.create(recursive: true);
     final imagePath = p.join(outDir.path, 'summary.png');
     final metadataPath = p.join(outDir.path, 'summary.meta.json');
@@ -271,8 +273,9 @@ The attached images are extracted figures from the paper. Use them as scientific
   ) async {
     // back-matter 检测统一走 [BackMatterDetector]，与翻译跳过共享数据源。
     // detector 已封装 L1/L2/L3 + 位置约束逻辑，这里只取首个命中 offset。
-    int? backMatterOffset =
-        BackMatterDetector.instance.detectFirstOffset(markdown);
+    int? backMatterOffset = BackMatterDetector.instance.detectFirstOffset(
+      markdown,
+    );
     backMatterOffset ??= _detectBackMatterViaPosition(markdown);
 
     final bodyMarkdown = backMatterOffset != null

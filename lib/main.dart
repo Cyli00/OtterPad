@@ -55,7 +55,7 @@ Future<void> main() async {
   // （依赖 GStorage.appRootPath 作为 documentRoot）。
   // root 用 `<AppSupport>/OtterPad/`（db/ 与 library/ 的共同父），所有
   // 文献子目录与 hive 数据库都在 root 下；HTML 现在自包含到
-  // `library/<hash>/.reader.html`，与同目录 figures/ 共 origin 加载。
+  // `library/<documentId>/.reader.html`，与同目录 figures/ 共 origin 加载。
   // 单例进程级，整个 app 生命周期共享。
   await ReaderLocalhostServer.instance.start(
     documentRoot: GStorage.appRootPath,
@@ -66,8 +66,7 @@ Future<void> main() async {
   // 初始化代理配置
   container.read(proxyProvider.notifier).applyInitial();
 
-  runApp(UncontrolledProviderScope(
-    container: container,
-    child: const OtterPadApp(),
-  ));
+  runApp(
+    UncontrolledProviderScope(container: container, child: const OtterPadApp()),
+  );
 }

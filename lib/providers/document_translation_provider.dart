@@ -41,14 +41,13 @@ class DocumentTranslationState {
     DocTranslationMode? mode,
     Object? error,
     bool clearError = false,
-  }) =>
-      DocumentTranslationState(
-        status: status ?? this.status,
-        translations: translations ?? this.translations,
-        paragraphs: paragraphs ?? this.paragraphs,
-        mode: mode ?? this.mode,
-        error: clearError ? null : (error ?? this.error),
-      );
+  }) => DocumentTranslationState(
+    status: status ?? this.status,
+    translations: translations ?? this.translations,
+    paragraphs: paragraphs ?? this.paragraphs,
+    mode: mode ?? this.mode,
+    error: clearError ? null : (error ?? this.error),
+  );
 }
 
 // ── 进度信息 ─────────────────────────────────────────────────────────
@@ -64,16 +63,15 @@ class TranslationProgress {
     required this.status,
   });
 
-  static const zero =
-      TranslationProgress(current: 0, total: 0, status: '准备中');
+  static const zero = TranslationProgress(current: 0, total: 0, status: '准备中');
 }
 
 // ── Notifier ─────────────────────────────────────────────────────────
 
 class DocumentTranslationNotifier
     extends StateNotifier<DocumentTranslationState> {
-  DocumentTranslationNotifier(this._ref, this.pdfPath)
-      : super(const DocumentTranslationState()) {
+  DocumentTranslationNotifier(this._ref, this.documentId)
+    : super(const DocumentTranslationState()) {
     // 目标语言变更：已有结果的情况下清空并提示"请重新翻译"
     _ref.listen<String>(
       translationConfigProvider.select((c) => c.targetLanguage),
@@ -81,23 +79,24 @@ class DocumentTranslationNotifier
         if (prev == null || prev == next) return;
         if (state.hasResult) {
           _reset();
-          _ref.read(snackBarServiceProvider).showResult(
-                message: '目标语言已变更，请重新翻译',
-              );
+          _ref
+              .read(snackBarServiceProvider)
+              .showResult(message: '目标语言已变更，请重新翻译');
         }
       },
     );
   }
 
   final Ref _ref;
-  final String pdfPath;
+  final String documentId;
 
   TranslationCancelToken? _cancelToken;
 
   /// 外部可订阅的进度——SnackBar 用 ValueListenableBuilder 绑定。
   /// 高频更新只刷新 notifier.value，不触发 state 变更，避免文档级 rebuild。
-  final ValueNotifier<TranslationProgress> _progress =
-      ValueNotifier(TranslationProgress.zero);
+  final ValueNotifier<TranslationProgress> _progress = ValueNotifier(
+    TranslationProgress.zero,
+  );
   ValueListenable<TranslationProgress> get progress => _progress;
 
   /// 启动一次完整的文档翻译。
@@ -155,7 +154,7 @@ class DocumentTranslationNotifier
 
     try {
       final fullyCached = await DocumentTranslationService.translate(
-        pdfPath: pdfPath,
+        pdfPath: documentId,
         paragraphs: paragraphs,
         agentState: agentState,
         config: config,
@@ -191,10 +190,7 @@ class DocumentTranslationNotifier
       // 仅更新 state——错误消息交给 UI 层根据 state.error 决定如何展示。
       // 不在这里直接 showResult：那会和 view.dart 的进度 SnackBar 生命周期
       // 抢 scaffold messenger，导致错误消息被 handle.dismiss 误关。
-      state = state.copyWith(
-        status: DocTranslationStatus.failed,
-        error: e,
-      );
+      state = state.copyWith(status: DocTranslationStatus.failed, error: e);
       return false;
     } finally {
       _cancelToken = null;
@@ -233,7 +229,7 @@ class DocumentTranslationNotifier
 
     final config = _ref.read(translationConfigProvider);
     await DocumentTranslationService.clearTranslations(
-      pdfPath,
+      documentId,
       config.targetLanguage,
     );
 
@@ -256,8 +252,10 @@ class DocumentTranslationNotifier
 
 // ── Provider ─────────────────────────────────────────────────────────
 
-/// 按文档路径隔离翻译状态——同时打开多份文档时互不串扰。
-final documentTranslationProvider = StateNotifierProvider.family<
-    DocumentTranslationNotifier, DocumentTranslationState, String>(
-  (ref, pdfPath) => DocumentTranslationNotifier(ref, pdfPath),
-);
+/// 按稳定 documentId 隔离翻译状态——同时打开多份文档时互不串扰。
+final documentTranslationProvider =
+    StateNotifierProvider.family<
+      DocumentTranslationNotifier,
+      DocumentTranslationState,
+      String
+    >((ref, documentId) => DocumentTranslationNotifier(ref, documentId));

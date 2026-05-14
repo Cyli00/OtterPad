@@ -17,7 +17,7 @@ Future<ReaderFavoriteSelectionResult?> showReaderFavoritePickerSheet({
   required BuildContext context,
   required String title,
   required List<Favorite> favorites,
-  required String docPath,
+  required String documentId,
   required ReaderFavoritePickerMode mode,
   Future<Favorite?> Function()? onCreateFavorite,
 }) {
@@ -28,7 +28,7 @@ Future<ReaderFavoriteSelectionResult?> showReaderFavoritePickerSheet({
     builder: (ctx) => _ReaderFavoritePickerContent(
       title: title,
       favorites: favorites,
-      docPath: docPath,
+      documentId: documentId,
       mode: mode,
       onCreateFavorite: onCreateFavorite,
     ),
@@ -38,14 +38,14 @@ Future<ReaderFavoriteSelectionResult?> showReaderFavoritePickerSheet({
 class _ReaderFavoritePickerContent extends StatefulWidget {
   final String title;
   final List<Favorite> favorites;
-  final String docPath;
+  final String documentId;
   final ReaderFavoritePickerMode mode;
   final Future<Favorite?> Function()? onCreateFavorite;
 
   const _ReaderFavoritePickerContent({
     required this.title,
     required this.favorites,
-    required this.docPath,
+    required this.documentId,
     required this.mode,
     this.onCreateFavorite,
   });
@@ -86,7 +86,7 @@ class _ReaderFavoritePickerContentState
   }
 
   void _toggle(Favorite favorite) {
-    final alreadyIn = favorite.docPaths.contains(widget.docPath);
+    final alreadyIn = favorite.documentIds.contains(widget.documentId);
     if (_isAddMode && alreadyIn) return;
 
     setState(() {
@@ -190,19 +190,19 @@ class _ReaderFavoritePickerContentState
   }
 
   String _subtitleFor(Favorite favorite) {
-    if (_isAddMode && favorite.docPaths.contains(widget.docPath)) {
+    if (_isAddMode && favorite.documentIds.contains(widget.documentId)) {
       return '已包含当前文献';
     }
-    return '${favorite.docPaths.length} 篇文献';
+    return '${favorite.documentIds.length} 篇文献';
   }
 
   bool _checkedFor(Favorite favorite) {
-    return (_isAddMode && favorite.docPaths.contains(widget.docPath)) ||
+    return (_isAddMode && favorite.documentIds.contains(widget.documentId)) ||
         _selectedIds.contains(favorite.id);
   }
 
   bool _enabledFor(Favorite favorite) {
-    return !_isAddMode || !favorite.docPaths.contains(widget.docPath);
+    return !_isAddMode || !favorite.documentIds.contains(widget.documentId);
   }
 }
 

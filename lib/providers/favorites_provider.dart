@@ -7,8 +7,7 @@ import '../data/models/collection/favorite.dart';
 
 /// 收藏夹状态管理
 ///
-/// 收藏夹通过 Hive 存储文献的原始路径引用（指向 OtterPad/docs/ 中的文件），
-/// 不复制文件，不创建链接——同一份 PDF 只占一份磁盘和一份缩略图缓存。
+/// 收藏夹通过稳定 documentId 引用文献，不保存 PDF 绝对路径。
 class FavoritesNotifier extends StateNotifier<List<Favorite>> {
   final Box _box;
 
@@ -19,11 +18,15 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
   /// 从 Hive 加载收藏夹列表，确保默认"我的收藏"始终存在且置顶
   void _load() {
     final raw = _box.get('favorites') as List<dynamic>?;
+    var needsSchemaUpgrade = false;
     if (raw != null) {
-      state = raw
-          .map((e) => Favorite.fromJson(
-              Map<String, dynamic>.from(jsonDecode(e as String))))
-          .toList();
+      state = raw.map((e) {
+        final json = Map<String, dynamic>.from(jsonDecode(e as String));
+        if (json.containsKey('docPaths') && !json.containsKey('documentIds')) {
+          needsSchemaUpgrade = true;
+        }
+        return Favorite.fromJson(json);
+      }).toList();
     }
     // 首次启动或数据迁移：确保默认收藏夹存在
     if (!state.any((f) => f.isDefault)) {
@@ -33,16 +36,18 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
       final def = state.firstWhere((f) => f.isDefault);
       state = [def, ...state.where((f) => !f.isDefault)];
       _save();
+    } else if (needsSchemaUpgrade) {
+      _save();
     }
   }
 
   static Favorite _createDefault() => Favorite(
-        id: Favorite.defaultId,
-        emoji: '📖',
-        name: '我的收藏',
-        docPaths: [],
-        createdAt: DateTime.now(),
-      );
+    id: Favorite.defaultId,
+    emoji: '📖',
+    name: '我的收藏',
+    documentIds: [],
+    createdAt: DateTime.now(),
+  );
 
   void reload() {
     _load();
@@ -55,15 +60,12 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
   }
 
   /// 创建新收藏夹
-  Future<Favorite> create({
-    required String emoji,
-    required String name,
-  }) async {
+  Future<Favorite> create({required String emoji, required String name}) async {
     final favorite = Favorite(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       emoji: emoji,
       name: name,
-      docPaths: [],
+      documentIds: [],
       createdAt: DateTime.now(),
     );
     state = [...state, favorite];
@@ -87,27 +89,30 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     await _save();
   }
 
-  /// 向收藏夹添加文档
-  Future<void> addDoc(String favoriteId, String docPath) async {
+  /// 向收藏夹添加文献。
+  Future<void> addDocument(String favoriteId, String documentId) async {
     state = [
       for (final f in state)
-        if (f.id == favoriteId && !f.docPaths.contains(docPath))
-          f.copyWith(docPaths: [...f.docPaths, docPath])
+        if (f.id == favoriteId && !f.documentIds.contains(documentId))
+          f.copyWith(documentIds: [...f.documentIds, documentId])
         else
           f,
     ];
     await _save();
   }
 
-  /// 从所有收藏夹中移除指定文档路径（级联删除时使用）
-  Future<void> removeDocFromAll(String docPath) async {
+  /// 从所有收藏夹中移除指定文献（级联删除时使用）。
+  Future<void> removeDocumentFromAll(String documentId) async {
     bool changed = false;
     final updated = <Favorite>[];
     for (final f in state) {
-      if (f.docPaths.contains(docPath)) {
+      if (f.documentIds.contains(documentId)) {
         changed = true;
-        updated.add(f.copyWith(
-            docPaths: f.docPaths.where((p) => p != docPath).toList()));
+        updated.add(
+          f.copyWith(
+            documentIds: f.documentIds.where((id) => id != documentId).toList(),
+          ),
+        );
       } else {
         updated.add(f);
       }
@@ -118,13 +123,14 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     }
   }
 
-  /// 从收藏夹移除文档
-  Future<void> removeDoc(String favoriteId, String docPath) async {
+  /// 从收藏夹移除文献。
+  Future<void> removeDocument(String favoriteId, String documentId) async {
     state = [
       for (final f in state)
         if (f.id == favoriteId)
           f.copyWith(
-              docPaths: f.docPaths.where((p) => p != docPath).toList())
+            documentIds: f.documentIds.where((id) => id != documentId).toList(),
+          )
         else
           f,
     ];
@@ -134,5 +140,5 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
 
 final favoritesProvider =
     StateNotifierProvider<FavoritesNotifier, List<Favorite>>((ref) {
-  return FavoritesNotifier(GStorage.favorites);
-});
+      return FavoritesNotifier(GStorage.favorites);
+    });

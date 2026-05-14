@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../data/models/book/document.dart';
+import '../../../utils/doc_paths.dart';
 import 'pdf_cover.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -67,11 +68,11 @@ class DocListCard extends StatelessWidget {
           onLongPress: isSelectionMode
               ? null
               : onLongPress != null
-                  ? () {
-                      HapticFeedback.mediumImpact();
-                      onLongPress!();
-                    }
-                  : null,
+              ? () {
+                  HapticFeedback.mediumImpact();
+                  onLongPress!();
+                }
+              : null,
           child: Padding(
             padding: EdgeInsets.all(compact ? 12 : 16),
             child: Column(
@@ -81,7 +82,7 @@ class DocListCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // 缩略图 + 选中蒙版
-                    if (doc.filePath.isNotEmpty)
+                    if (doc.contentHash != null)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
@@ -91,28 +92,27 @@ class DocListCard extends StatelessWidget {
                             fit: StackFit.expand,
                             children: [
                               PdfCoverRender(
-                                assetPath: doc.filePath,
+                                assetPath: DocPaths.pdf(doc.id),
                                 fit: BoxFit.cover,
                               ),
                               if (isSelected)
                                 Container(
                                   color: colorScheme.primary.withAlpha(80),
                                   child: Center(
-                                    child: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        color: colorScheme.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Symbols.check_rounded,
-                                        color: colorScheme.onPrimary,
-                                        size: 22,
-                                      ),
-                                    )
-                                        .animate()
-                                        .scaleXY(
+                                    child:
+                                        Container(
+                                          width: 36,
+                                          height: 36,
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.primary,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            Symbols.check_rounded,
+                                            color: colorScheme.onPrimary,
+                                            size: 22,
+                                          ),
+                                        ).animate().scaleXY(
                                           begin: 0.6,
                                           end: 1,
                                           duration: 200.ms,
@@ -124,7 +124,7 @@ class DocListCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (doc.filePath.isNotEmpty) const SizedBox(width: 16),
+                    if (doc.contentHash != null) const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,21 +157,22 @@ class DocListCard extends StatelessWidget {
                             Text(
                               doc.journal!,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant
-                                    .withAlpha(180),
+                                color: colorScheme.onSurfaceVariant.withAlpha(
+                                  180,
+                                ),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
-                          if (doc.year != null &&
-                              doc.year!.isNotEmpty) ...[
+                          if (doc.year != null && doc.year!.isNotEmpty) ...[
                             const SizedBox(height: 2),
                             Text(
                               doc.year!,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant
-                                    .withAlpha(140),
+                                color: colorScheme.onSurfaceVariant.withAlpha(
+                                  140,
+                                ),
                               ),
                             ),
                           ],

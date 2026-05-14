@@ -90,19 +90,11 @@ class BackupRestoreService {
   }) async {
     final archiveBytes = await File(archivePath).readAsBytes();
     final archive = ZipDecoder().decodeBytes(archiveBytes);
-    final manifest = _readJsonMap(
-      archive,
-      _manifestPath,
-      fallback: const <String, dynamic>{},
-    );
-    final sourceDocsRoot = manifest['docsRoot']?.toString() ?? '';
-
     final docsDir = Directory(GStorage.libraryDirPath);
     final dataDir = Directory(GStorage.dbDirPath);
     final tempRoot = await _createRestoreTempRoot();
     final extractedDocsDir = Directory(p.join(tempRoot.path, 'docs'));
     final extractedDataDir = Directory(p.join(tempRoot.path, 'data'));
-    var libraryRestored = false;
 
     try {
       await _extractArchiveSection(archive, _docsDir, extractedDocsDir);
@@ -113,7 +105,6 @@ class BackupRestoreService {
       if (scope == BackupRestoreScope.full) {
         await _replaceDirectory(docsDir, extractedDocsDir);
         await _replaceDirectory(dataDir, extractedDataDir);
-        libraryRestored = true;
       } else if (scope == BackupRestoreScope.libraryOnly) {
         await _replaceDirectory(docsDir, extractedDocsDir);
         await _replaceBoxFiles(
@@ -121,7 +112,6 @@ class BackupRestoreService {
           toDir: dataDir,
           boxNames: _libraryBoxNames,
         );
-        libraryRestored = true;
       } else if (scope == BackupRestoreScope.settingsOnly) {
         await _replaceBoxFiles(
           fromDir: extractedDataDir,
@@ -131,12 +121,6 @@ class BackupRestoreService {
       }
     } finally {
       await GStorage.reopen();
-      if (libraryRestored) {
-        await _rewriteRestoredPaths(
-          sourceDocsRoot: sourceDocsRoot,
-          currentDocsRoot: docsDir.path,
-        );
-      }
       if (await tempRoot.exists()) {
         await tempRoot.delete(recursive: true);
       }
@@ -164,9 +148,11 @@ class BackupRestoreService {
 
       archive.add(
         ArchiveFile.bytes(
-          '$archiveRoot/$relativePath',
-          await entity.readAsBytes(),
-        )..lastModTime = entity.lastModifiedSync().millisecondsSinceEpoch ~/ 1000,
+            '$archiveRoot/$relativePath',
+            await entity.readAsBytes(),
+          )
+          ..lastModTime =
+              entity.lastModifiedSync().millisecondsSinceEpoch ~/ 1000,
       );
     }
   }
@@ -290,133 +276,8 @@ class BackupRestoreService {
     }
   }
 
-  static Future<void> _rewriteRestoredPaths({
-    required String sourceDocsRoot,
-    required String currentDocsRoot,
-  }) async {
-    final documentsBox = GStorage.documents;
-    final favoritesBox = GStorage.favorites;
-
-    final rawDocuments = documentsBox.get('documents') as List<dynamic>?;
-    if (rawDocuments != null) {
-      final normalized = rawDocuments.map((item) {
-        if (item is! String) return item;
-        try {
-          final json = Map<String, dynamic>.from(jsonDecode(item) as Map);
-          final filePath = json['filePath']?.toString() ?? '';
-          json['filePath'] = _remapDocsPath(
-            filePath,
-            sourceDocsRoot: sourceDocsRoot,
-            currentDocsRoot: currentDocsRoot,
-          );
-          return jsonEncode(json);
-        } catch (_) {
-          return item;
-        }
-      }).toList();
-      await documentsBox.put('documents', normalized);
-    }
-
-    final rawFavorites = favoritesBox.get('favorites') as List<dynamic>?;
-    if (rawFavorites != null) {
-      final normalized = rawFavorites.map((item) {
-        if (item is! String) return item;
-        try {
-          final json = Map<String, dynamic>.from(jsonDecode(item) as Map);
-          final docPaths = (json['docPaths'] as List<dynamic>? ?? const [])
-              .map(
-                (path) => _remapDocsPath(
-                  path.toString(),
-                  sourceDocsRoot: sourceDocsRoot,
-                  currentDocsRoot: currentDocsRoot,
-                ),
-              )
-              .toList();
-          json['docPaths'] = docPaths;
-          return jsonEncode(json);
-        } catch (_) {
-          return item;
-        }
-      }).toList();
-      await favoritesBox.put('favorites', normalized);
-    }
-
-    await GStorage.flush();
-  }
-
-  static String _remapDocsPath(
-    String value, {
-    required String sourceDocsRoot,
-    required String currentDocsRoot,
-  }) {
-    final filePath = value.trim();
-    if (filePath.isEmpty) return filePath;
-
-    final relative = _extractDocsRelativePath(
-      filePath,
-      sourceDocsRoot: sourceDocsRoot,
-    );
-    if (relative == null || relative.isEmpty) {
-      return filePath;
-    }
-
-    return p.normalize(
-      p.joinAll([
-        currentDocsRoot,
-        ...relative.split('/').where((item) => item.isNotEmpty),
-      ]),
-    );
-  }
-
-  static String? _extractDocsRelativePath(
-    String fullPath, {
-    required String sourceDocsRoot,
-  }) {
-    final normalizedPath = _normalizePath(fullPath);
-    final normalizedRoot = _normalizePath(sourceDocsRoot);
-
-    if (normalizedRoot.isNotEmpty) {
-      final lowerPath = normalizedPath.toLowerCase();
-      final lowerRoot = normalizedRoot.toLowerCase();
-      if (lowerPath == lowerRoot) {
-        return '';
-      }
-      final prefix = '$lowerRoot/';
-      if (lowerPath.startsWith(prefix)) {
-        return normalizedPath.substring(normalizedRoot.length + 1);
-      }
-    }
-
-    final marker = '/otterpad/docs/';
-    final index = normalizedPath.toLowerCase().indexOf(marker);
-    if (index >= 0) {
-      return normalizedPath.substring(index + marker.length);
-    }
-
-    return null;
-  }
-
   static List<String> _boxRelatedFileNames(String boxName) {
     return ['$boxName.hive', '$boxName.lock'];
-  }
-
-  static Map<String, dynamic> _readJsonMap(
-    Archive archive,
-    String path, {
-    required Map<String, dynamic> fallback,
-  }) {
-    final file = archive.find(path);
-    if (file == null) return fallback;
-    final bytes = file.readBytes();
-    if (bytes == null) return fallback;
-    final decoded = jsonDecode(utf8.decode(bytes));
-    if (decoded is Map<String, dynamic>) {
-      return decoded;
-    }
-    if (decoded is Map) {
-      return decoded.map((key, value) => MapEntry(key.toString(), value));
-    }
-    return fallback;
   }
 
   static Future<void> _copyDirectory(
@@ -459,10 +320,6 @@ class BackupRestoreService {
       await restoreDir.create(recursive: true);
     }
     return restoreDir;
-  }
-
-  static String _normalizePath(String value) {
-    return value.replaceAll('\\', '/').replaceAll(RegExp('/+'), '/').trim();
   }
 
   static String _toArchivePath(String value) {

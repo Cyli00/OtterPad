@@ -13,7 +13,7 @@ import 'package:path_provider/path_provider.dart';
 /// ├── db/                       ← Hive 数据库（dbDirPath / dataDirPath 别名）
 /// │   └── *.hive *.lock
 /// └── library/                  ← 文献库（libraryDirPath）
-///     └── <hash>/                ← 每篇文献自包含目录
+///     └── <documentId>/          ← 每篇文献自包含目录
 ///         ├── source.pdf
 ///         ├── extract.md / extract.json
 ///         ├── figures/
@@ -32,7 +32,6 @@ import 'package:path_provider/path_provider.dart';
 /// 1. 老 `<AppDocs>/NightReader/` → `<AppSupport>/OtterPad/`（rebrand + 移位）
 /// 2. 老 `<AppDocs>/OtterPad/` → `<AppSupport>/OtterPad/`（仅移位）
 /// 3. 老子目录 `data/` → `db/`、`docs/` → `library/`（统一布局）
-/// 4. Hive box value 内的旧绝对路径前缀替换（保证 `Document.filePath` 等仍可解析）
 class GStorage {
   static late Box _settingBox;
   static late Box _favoritesBox;
@@ -69,9 +68,6 @@ class GStorage {
       _initialized = true;
     }
     await _openBoxes();
-
-    // Phase 2: 修正 box 内残留的旧绝对路径引用（Document.filePath 等）
-    await _migrateHivePathReferences(appDocsPath: appDocs.path);
   }
 
   static Future<void> reopen() async {
@@ -171,7 +167,7 @@ class GStorage {
     }
 
     // 旧 HTML 缓存目录 ._readers/（v1 设计），新方案 HTML 自包含到
-    // library/<hash>/.reader.html 后无用，启动时一次性清理。
+    // library/<documentId>/.reader.html 后无用，启动时一次性清理。
     for (final stale in const ['._readers', '_readers']) {
       final dir = Directory(p.join(targetRoot.path, 'db', stale));
       if (await dir.exists()) {
@@ -196,101 +192,6 @@ class GStorage {
       }
     }
   }
-
-  // ─── Hive 内绝对路径修正 ──────────────────────────────────────────────────
-
-  /// 把 box value 内残留的旧绝对路径前缀（NightReader、AppDocs/OtterPad/docs
-  /// 等）替换成新位置。**顺序**：先替换更具体的（含 `/docs` `/data` 等子目录
-  /// 名的完整路径），再替换通用 OtterPad 父目录前缀——否则父前缀替换会破坏
-  /// 子目录名替换的结果。
-  static Future<void> _migrateHivePathReferences({
-    required String appDocsPath,
-  }) async {
-    final mappings = <(String, String)>[
-      // 旧 NightReader 完整路径
-      (p.join(appDocsPath, 'NightReader', 'docs'),
-          p.join(_appRootPath, 'library')),
-      (p.join(appDocsPath, 'NightReader', 'data'),
-          p.join(_appRootPath, 'db')),
-      (p.join(appDocsPath, 'NightReader'), _appRootPath),
-      // 旧 OtterPad-in-Documents 完整路径
-      (p.join(appDocsPath, 'OtterPad', 'docs'),
-          p.join(_appRootPath, 'library')),
-      (p.join(appDocsPath, 'OtterPad', 'data'),
-          p.join(_appRootPath, 'db')),
-      (p.join(appDocsPath, 'OtterPad'), _appRootPath),
-      // 同根但旧子目录名（极端情况：上次启动到一半中断）
-      (p.join(_appRootPath, 'docs'), p.join(_appRootPath, 'library')),
-      (p.join(_appRootPath, 'data'), p.join(_appRootPath, 'db')),
-    ];
-
-    final boxes = [
-      _settingBox,
-      _favoritesBox,
-      _documentsBox,
-      _highlightsBox,
-      _historyBox,
-    ];
-    for (final box in boxes) {
-      for (final key in box.keys.toList()) {
-        var value = box.get(key);
-        var changed = false;
-        for (final (oldP, newP) in mappings) {
-          if (p.equals(oldP, newP)) continue;
-          final next = _replaceLegacyPath(value, oldP, newP);
-          if (!identical(next, value)) {
-            value = next;
-            changed = true;
-          }
-        }
-        if (changed) await box.put(key, value);
-      }
-    }
-  }
-
-  static dynamic _replaceLegacyPath(
-    dynamic value,
-    String legacyPath,
-    String currentPath,
-  ) {
-    if (value is String) {
-      final migrated = value
-          .replaceAll(legacyPath, currentPath)
-          .replaceAll(_jsonPath(legacyPath), _jsonPath(currentPath));
-      return migrated == value ? value : migrated;
-    }
-
-    if (value is List) {
-      var changed = false;
-      final migrated = value.map((item) {
-        final next = _replaceLegacyPath(item, legacyPath, currentPath);
-        changed = changed || !identical(next, item);
-        return next;
-      }).toList();
-      return changed ? migrated : value;
-    }
-
-    if (value is Map) {
-      var changed = false;
-      final migrated = <dynamic, dynamic>{};
-      value.forEach((key, item) {
-        final nextKey = _replaceLegacyPath(key, legacyPath, currentPath);
-        final nextValue = _replaceLegacyPath(
-          item,
-          legacyPath,
-          currentPath,
-        );
-        changed =
-            changed || !identical(nextKey, key) || !identical(nextValue, item);
-        migrated[nextKey] = nextValue;
-      });
-      return changed ? migrated : value;
-    }
-
-    return value;
-  }
-
-  static String _jsonPath(String path) => path.replaceAll(r'\', r'\\');
 
   // ─── 生命周期 ──────────────────────────────────────────────────────────────
 
@@ -333,8 +234,8 @@ class GStorage {
 
   /// `<AppSupport>/OtterPad/`——`db/` 与 `library/` 的共同父目录。
   ///
-  /// **用于 [ReaderLocalhostServer] 的 root**：HTML（在 `library/<hash>/.reader.html`）
-  /// 与 figures（在 `library/<hash>/figures/`）现在同处一个文献目录，server
+  /// **用于 [ReaderLocalhostServer] 的 root**：HTML（在 `library/<documentId>/.reader.html`）
+  /// 与 figures（在 `library/<documentId>/figures/`）现在同处一个文献目录，server
   /// root 仍设在此处统一服务（保留向后兼容，HTML 路径写死时也能找到）。
   static String get appRootPath => _appRootPath;
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../providers/task_provider.dart';
@@ -264,8 +265,8 @@ class NoFileEntriesPage extends ConsumerWidget {
     final snackBar = ref.read(snackBarServiceProvider);
     try {
       await ref
-          .read(documentsProvider.notifier)
-          .attachFile(docId, result.files.first.path!);
+          .read(documentLifecycleProvider)
+          .attachPdf(docId, result.files.first.path!);
       snackBar.showResult(message: '文件附加成功');
     } catch (e) {
       snackBar.showResult(message: '附加文件失败: $e');

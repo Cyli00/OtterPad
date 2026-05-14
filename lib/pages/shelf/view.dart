@@ -6,6 +6,7 @@ import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../router/app_routes.dart';
+import '../../utils/doc_paths.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
@@ -25,11 +26,9 @@ class ShelfPage extends ConsumerWidget {
       initialName: fav.name,
     );
     if (result != null) {
-      ref.read(favoritesProvider.notifier).rename(
-            fav.id,
-            emoji: result['emoji'],
-            name: result['name'],
-          );
+      ref
+          .read(favoritesProvider.notifier)
+          .rename(fav.id, emoji: result['emoji'], name: result['name']);
     }
   }
 
@@ -72,13 +71,18 @@ class ShelfPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final favorites = ref.watch(favoritesProvider);
+    final docs = ref.watch(documentsProvider);
+    final byId = {for (final doc in docs) doc.id: doc};
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 16.0,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -92,7 +96,7 @@ class ShelfPage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 32),
-                
+
                 // 菜单列表项
                 LibraryMenuItem(
                   icon: Symbols.cloud_sync,
@@ -153,12 +157,11 @@ class ShelfPage extends ConsumerWidget {
                               ),
                             )
                           : null,
-                      onTap: () =>
-                          context.push(AppRoutes.shelfNoFileEntries),
+                      onTap: () => context.push(AppRoutes.shelfNoFileEntries),
                     );
                   },
                 ),
-                
+
                 // 分割线
                 Divider(
                   height: 32,
@@ -166,7 +169,7 @@ class ShelfPage extends ConsumerWidget {
                   color: theme.colorScheme.outlineVariant.withAlpha(128),
                 ),
                 const SizedBox(height: 8),
-                
+
                 // 收藏夹标题与操作栏
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -183,10 +186,11 @@ class ShelfPage extends ConsumerWidget {
                       icon: const Icon(Symbols.add),
                       color: theme.colorScheme.onSurfaceVariant,
                       onPressed: () async {
-                        final result =
-                            await showCreateFavoriteDialog(context);
+                        final result = await showCreateFavoriteDialog(context);
                         if (result != null) {
-                          ref.read(favoritesProvider.notifier).create(
+                          ref
+                              .read(favoritesProvider.notifier)
+                              .create(
                                 emoji: result['emoji']!,
                                 name: result['name']!,
                               );
@@ -196,7 +200,7 @@ class ShelfPage extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                
+
                 // 水平滚动的卡片列表
                 SizedBox(
                   height: 380,
@@ -206,9 +210,14 @@ class ShelfPage extends ConsumerWidget {
                     itemCount: favorites.length,
                     itemBuilder: (context, index) {
                       final fav = favorites[index];
+                      final pdfAssets = [
+                        for (final documentId in fav.documentIds)
+                          if (byId[documentId]?.contentHash != null)
+                            DocPaths.pdf(documentId),
+                      ];
                       return FavoriteCard(
                         title: fav.name,
-                        subtitle: '${fav.docPaths.length} 篇文献',
+                        subtitle: '${fav.documentIds.length} 篇文献',
                         subtitleIcon: Container(
                           width: 24,
                           height: 24,
@@ -222,8 +231,8 @@ class ShelfPage extends ConsumerWidget {
                             style: const TextStyle(fontSize: 13, height: 1.0),
                           ),
                         ),
-                        pdfAssets: fav.docPaths,
-                        totalCount: fav.docPaths.length,
+                        pdfAssets: pdfAssets,
+                        totalCount: fav.documentIds.length,
                         onTap: () => _openDetail(context, fav),
                         onEdit: () => _editFavorite(context, ref, fav),
                         onDelete: fav.isDefault
@@ -233,7 +242,7 @@ class ShelfPage extends ConsumerWidget {
                     },
                   ),
                 ),
-                
+
                 const SizedBox(height: 32), // 底部留白
               ],
             ),

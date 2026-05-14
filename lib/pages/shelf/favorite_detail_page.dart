@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path/path.dart' as p;
 import '../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/api_provider.dart';
+import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
+import '../../utils/doc_paths.dart';
 import '../library/widgets/batch_progress_sheet.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
@@ -39,20 +40,11 @@ class FavoriteDetailPage extends ConsumerWidget {
     final isSelectionMode =
         selection.isActive && selection.sourceContext == _sourceContext;
 
-    // 解析收藏夹内的文献列表
-    final favDocs = <Document>[];
-    for (final docPath in currentFavorite.docPaths) {
-      final doc =
-          docs.where((d) => d.filePath == docPath).firstOrNull ??
-          Document(
-            id: '',
-            title: p.basenameWithoutExtension(docPath),
-            authors: [],
-            filePath: docPath,
-            addedAt: DateTime.now(),
-          );
-      favDocs.add(doc);
-    }
+    final byId = {for (final doc in docs) doc.id: doc};
+    final favDocs = [
+      for (final documentId in currentFavorite.documentIds)
+        if (byId[documentId] != null) byId[documentId]!,
+    ];
 
     final allIds = favDocs
         .where((d) => d.id.isNotEmpty)
@@ -98,7 +90,7 @@ class FavoriteDetailPage extends ConsumerWidget {
               ),
         body: CustomScrollView(
           slivers: [
-            if (currentFavorite.docPaths.isEmpty)
+            if (currentFavorite.documentIds.isEmpty)
               SliverFillRemaining(
                 child: Center(
                   child: Column(
@@ -165,10 +157,10 @@ class FavoriteDetailPage extends ConsumerWidget {
   ) async {
     var count = 0;
     for (final doc in favDocs) {
-      if (selection.selectedIds.contains(doc.id) && doc.filePath.isNotEmpty) {
+      if (selection.selectedIds.contains(doc.id)) {
         await ref
-            .read(favoritesProvider.notifier)
-            .removeDoc(favorite.id, doc.filePath);
+            .read(documentLifecycleProvider)
+            .removeFromFavorite(favorite.id, doc.id);
         count++;
       }
     }
@@ -228,7 +220,7 @@ class FavoriteDetailPage extends ConsumerWidget {
 
     final selectedDocs = favDocs
         .where(
-          (d) => selection.selectedIds.contains(d.id) && d.filePath.isNotEmpty,
+          (d) => selection.selectedIds.contains(d.id) && d.contentHash != null,
         )
         .toList();
 
@@ -243,7 +235,7 @@ class FavoriteDetailPage extends ConsumerWidget {
         .map(
           (d) => BatchExtractItem(
             documentId: d.id,
-            filePath: d.filePath,
+            filePath: DocPaths.pdf(d.id),
             title: d.title,
           ),
         )

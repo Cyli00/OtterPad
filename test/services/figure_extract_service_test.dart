@@ -191,6 +191,85 @@ void main() {
     expect(bbox[3], 1000.0);
   });
 
+  test('caption 在 figure 上方(direction=below) → 向下扩展裁剪框', () {
+    // 罕见现场:caption "Figure X." 出现在 figure 之上,figure 视觉块在 caption
+    // 下方 + 漏检了下半部分.direction inference 看到 caption 下方 visual height
+    // 远大于上方 → below,沿下方扩展.
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('cap', 'figure_title', [115, 200, 783, 220],
+          'Figure 5. Caption on top.'),
+      // 已检出的视觉块在 caption 下方紧邻 (panel A 被检出)
+      _block('v1', 'chart', [193, 250, 524, 410]),
+      _block('v2', 'chart', [520, 255, 680, 408]),
+      // 漏检的 panel B/C/D 在 y=410..1300 范围 (无 block) - 这是测试要扩展的空白
+      // 下方 blocker: 段落
+      _block('p1', 'text', [114, 1350, 1100, 1450], 'subsequent paragraph'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'cap', 'v1', 'v2'}.contains(b.blockId))
+        .toList();
+
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+
+    // visualUnion = [193, 250, 680, 410]; height=160
+    // direction=below (caption.bottom=220 < visual.top=250, 视觉块都在 caption 下方)
+    // 下方最近 blocker = text.top=1350, gap=1350-410=940, gap/height=940/160=5.875
+    // newBottom = 1350 - 8 = 1342
+    expect(bbox[0], 193.0);
+    expect(bbox[1], 250.0);
+    expect(bbox[2], 680.0);
+    expect(bbox[3], 1342.0);
+  });
+
+  test('column detection: caption 横跨双栏 → 整页 column', () {
+    // 双栏论文中 caption 横跨整页,figure 也横跨两栏.
+    // 上方 blocker 应包括左右两栏的 paragraph/header.
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      // 左右两栏各 3 段(足够 detection 判双栏)
+      _block('L1', 'text', [100, 200, 590, 300], 'L1'),
+      _block('L2', 'text', [100, 310, 590, 410], 'L2'),
+      _block('L3', 'text', [100, 420, 590, 520], 'L3'),
+      _block('R1', 'text', [610, 200, 1100, 300], 'R1'),
+      _block('R2', 'text', [610, 310, 1100, 410], 'R2'),
+      _block('R3', 'text', [610, 420, 1100, 520], 'R3'),
+      // 跨栏 figure: caption [100, 1098, 1100, 1118] 跨整页
+      _block('v1', 'chart', [100, 700, 1100, 1080]),
+      _block('cap', 'figure_title', [100, 1098, 1100, 1118],
+          'Figure 1. Full-width figure.'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'v1', 'cap'}.contains(b.blockId))
+        .toList();
+
+    // visualUnion top=700, blocker = max(L3.bottom=520, R3.bottom=520) = 520
+    // gap = 700-520 = 180, height = 1080-700 = 380, ratio=0.47 ≥ 0.3 → 扩展
+    // newTop = 520 + 8 = 528
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+    expect(bbox[1], 528.0);
+  });
+
+  test('column detection: 单栏 figure 上方有 header → 扩展到 header 底', () {
+    // 单栏论文(text block 不足 4 个),整页一栏.figure 上方只有 header.
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('h1', 'header', [100, 50, 1100, 110], 'Journal Name'),
+      _block('v1', 'chart', [200, 400, 1000, 800]),
+      _block('cap', 'figure_title', [200, 820, 1000, 840],
+          'Figure 1. Single column.'),
+      _block('p1', 'text', [100, 900, 1100, 1000], 'body text'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'v1', 'cap'}.contains(b.blockId))
+        .toList();
+
+    // gap = 400-110 = 290, height = 400, ratio=0.725 ≥ 0.3 → 扩展
+    // newTop = 110 + 8 = 118
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+    expect(bbox[1], 118.0);
+  });
+
   test('gap 占比过小 → 不扩展(防止误伤段落)', () {
     // gap=200, visualHeight=1000, ratio=0.2 < 0.30 → 不扩展.
     final service = FigureExtractService.instance;

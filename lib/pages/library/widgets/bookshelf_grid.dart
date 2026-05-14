@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../utils/doc_paths.dart';
 import 'doc_card_actions.dart';
 import 'document_card.dart';
 
@@ -32,32 +33,28 @@ class BookshelfGrid extends ConsumerWidget {
           maxCrossAxisExtent: 300, // ← 调大 = 更宽卡片、更少列数
           mainAxisSpacing: 16.0,
           crossAxisSpacing: 16.0,
-          childAspectRatio: 0.618  // ← 宽高比，调小 = 更高的卡片
+          childAspectRatio: 0.618, // ← 宽高比，调小 = 更高的卡片
         ),
         // └──────────────────────────────────────────────────────────┘
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final doc = docs[index];
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final doc = docs[index];
 
-            return DocumentCard(
-              docId: doc.id,
-              coverAsset: doc.filePath,
-              name: doc.title,
-              authors: doc.authors.join(', '),
-              journalName: doc.journal ?? '',
-              year: doc.year ?? '',
-              isSelectionMode: isSelectionMode,
-              isSelected: selection.selectedIds.contains(doc.id),
-              onTap: () => DocCardActions.openReader(context, ref, doc),
-              onLongPress: () => ref
-                  .read(selectionProvider.notifier)
-                  .enter(doc.id, 'library'),
-              onSelectionTap: () =>
-                  ref.read(selectionProvider.notifier).toggle(doc.id),
-            );
-          },
-          childCount: docs.length,
-        ),
+          return DocumentCard(
+            docId: doc.id,
+            coverAsset: doc.contentHash == null ? '' : DocPaths.pdf(doc.id),
+            name: doc.title,
+            authors: doc.authors.join(', '),
+            journalName: doc.journal ?? '',
+            year: doc.year ?? '',
+            isSelectionMode: isSelectionMode,
+            isSelected: selection.selectedIds.contains(doc.id),
+            onTap: () => DocCardActions.openReader(context, ref, doc),
+            onLongPress: () =>
+                ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
+            onSelectionTap: () =>
+                ref.read(selectionProvider.notifier).toggle(doc.id),
+          );
+        }, childCount: docs.length),
       ),
     );
   }
