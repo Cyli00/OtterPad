@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -165,6 +167,12 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
   @override
   Widget build(BuildContext context) {
     final activeColor = _activeHighlight?.color ?? widget.existingHighlight?.color;
+    // 键盘 inset 让 delegate 把"可用高度"压缩，否则展开笔记面板 TextField
+    // autofocus 触发输入法弹出时，工具栏定位仍按全屏高度算，会被键盘遮挡。
+    // AndroidManifest 已设 windowSoftInputMode="adjustResize"，viewInsets 会
+    // 随键盘动画逐帧更新，触发 MediaQuery → build → delegate 重算 → 工具栏
+    // 平滑上移。
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Stack(
       children: [
@@ -175,7 +183,10 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
           ),
         ),
         CustomSingleChildLayout(
-          delegate: _SelectionMenuDelegate(selectionRect: widget.selectionRect),
+          delegate: _SelectionMenuDelegate(
+            selectionRect: widget.selectionRect,
+            keyboardInset: keyboardInset,
+          ),
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
             duration: const Duration(milliseconds: 150),
@@ -407,9 +418,13 @@ class _Divider extends StatelessWidget {
 
 class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
   final Rect selectionRect;
+  final double keyboardInset;
   static const _gap = 8.0;
 
-  _SelectionMenuDelegate({required this.selectionRect});
+  _SelectionMenuDelegate({
+    required this.selectionRect,
+    this.keyboardInset = 0,
+  });
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
@@ -418,22 +433,29 @@ class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
+    // 键盘占用屏幕底部 keyboardInset px，可用区域上界 = size.height - keyboardInset。
+    // 笔记面板 autofocus 弹键盘时这里会一帧帧减小，工具栏自动从"选区下方"
+    // 切换到"选区上方"或贴到键盘上沿。
+    final availableHeight = size.height - keyboardInset;
     final cx = selectionRect.center.dx;
     final clampedX =
         (cx - childSize.width / 2).clamp(8.0, size.width - childSize.width - 8);
 
-    if (selectionRect.bottom + _gap + childSize.height <= size.height) {
+    if (selectionRect.bottom + _gap + childSize.height <= availableHeight) {
       return Offset(clampedX, selectionRect.bottom + _gap);
     }
+    // 选区上方放置——优先把 childSize.height 完整塞进 availableHeight。
+    // max(0.0, …) 防御 availableHeight < childSize.height 时 clamp(0, 负数) 抛错。
+    final upperBound = math.max(0.0, availableHeight - childSize.height);
     return Offset(
       clampedX,
-      (selectionRect.top - _gap - childSize.height)
-          .clamp(0.0, size.height - childSize.height),
+      (selectionRect.top - _gap - childSize.height).clamp(0.0, upperBound),
     );
   }
 
   @override
   bool shouldRelayout(_SelectionMenuDelegate oldDelegate) {
-    return selectionRect != oldDelegate.selectionRect;
+    return selectionRect != oldDelegate.selectionRect ||
+        keyboardInset != oldDelegate.keyboardInset;
   }
 }

@@ -11,9 +11,9 @@ import 'reader_background.dart';
 
 /// 构建完整 HTML 文档。
 ///
-/// [baseHref] 是 docDir 相对 server root 的子路径（如 `/docs/abc123/`），
+/// [baseHref] 是 docDir 相对 server root 的子路径（如 `/library/<documentId>/`），
 /// 注入 `<base>` 标签后浏览器解析所有相对 URL 时都以此为基准——HTML 文件
-/// 实际放在 `<dataDir>/_readers/<hash>.html` 仍能正确加载图片。
+/// 放在文献目录内也能正确加载同目录下的图片。
 ///
 /// KaTeX 走本地打包，由 [ReaderLocalhostServer] 的 `/_assets/*` 路由从
 /// `assets/katex/` rootBundle 服务，零网络依赖、彻底离线可用。
@@ -50,15 +50,21 @@ String buildReaderHtml({
 }
 
 String buildThemeCssVars(ReaderPalette palette, ReaderSettingsState settings) {
+  // setProperty 第二个参数必须用**双引号**字面量包裹——_cssFontFamily 返回的
+  // 字体列表内含字面单引号（如 'Times New Roman'），用单引号包会引发未 escape
+  // 单引号嵌套的 JS 语法错误，导致整段 evaluateJavascript 不执行（JS 先整段
+  // parse 再 run），字号/字体/主题色全部 silent fail。Dart 三引号字符串里
+  // 嵌入字面双引号无需 escape，与 JS 双引号字符串嵌入字面单引号无需 escape
+  // 刚好双向无冲突。
   return '''
-    document.documentElement.style.setProperty('--bg','${_cssColor(palette.background)}');
-    document.documentElement.style.setProperty('--text','${_cssColor(palette.text)}');
-    document.documentElement.style.setProperty('--secondary','${_cssColor(palette.secondaryText)}');
-    document.documentElement.style.setProperty('--link','${_cssColor(palette.link)}');
-    document.documentElement.style.setProperty('--divider','${_cssColor(palette.divider)}');
-    document.documentElement.style.setProperty('--code-bg','${_cssColor(palette.codeBlock)}');
-    document.documentElement.style.setProperty('--font-size','${settings.fontSize}px');
-    document.documentElement.style.setProperty('--font-family','${_cssFontFamily(settings.font)}');
+    document.documentElement.style.setProperty('--bg', "${_cssColor(palette.background)}");
+    document.documentElement.style.setProperty('--text', "${_cssColor(palette.text)}");
+    document.documentElement.style.setProperty('--secondary', "${_cssColor(palette.secondaryText)}");
+    document.documentElement.style.setProperty('--link', "${_cssColor(palette.link)}");
+    document.documentElement.style.setProperty('--divider', "${_cssColor(palette.divider)}");
+    document.documentElement.style.setProperty('--code-bg', "${_cssColor(palette.codeBlock)}");
+    document.documentElement.style.setProperty('--font-size', "${settings.fontSize}px");
+    document.documentElement.style.setProperty('--font-family', "${_cssFontFamily(settings.font)}");
   ''';
 }
 
@@ -192,8 +198,8 @@ class _LatexBlockPreserve extends md.BlockSyntax {
 /// - async：图片解码不阻塞主线程，避免大图加载瞬间冻屏；
 /// - **file:// 转换**：figure 提取管线写入 markdown 的 src 是绝对 file:// URL
 ///   （`doc_extract_service.dart` 里 `Uri.file(fig.imagePath)`），在 localhost
-///   HTTP origin 下浏览器拒绝跨协议加载。把 `file:///<dataDir>/docs/<hash>/...`
-///   转成 server URL `http://localhost:PORT/docs/<hash>/...` 后同 origin 加载
+///   HTTP origin 下浏览器拒绝跨协议加载。把 `file:///<root>/library/<documentId>/...`
+///   转成 server URL `http://localhost:PORT/library/<documentId>/...` 后同 origin 加载
 ///   正常。相对路径与 http(s)/data URI 保留原样。
 String _injectImageAttrs(String html, [String cacheBuster = '']) {
   const lazyAttrs = 'loading="lazy" decoding="async" ';
@@ -834,15 +840,32 @@ function _handleSelection() {
   }, 200);
 }
 
-// **只听"选择终止"事件**，不再听 selectionchange——后者拖选过程中
-// 每像素都 fire，与 pointerup 终止信号双触发是闪烁根因。
-// - pointerup：鼠标/触控笔抬起，桌面端拖选的标准终止信号
-// - keyup：键盘选择（Shift+Arrow / Ctrl+A 等）的终止信号，覆盖原来
-//   依赖 selectionchange 的键盘场景
-// 触摸端的选择仍走系统原生 UI，OtterPad 不拦截（disableContextMenu=true
-// 仅拦右键菜单，系统选择 handle 不受影响）。
+// 三路"选择变化"信号：
+// - pointerup：鼠标/触控笔/桌面端拖选的标准终止信号（毫秒级响应）；
+//   selection 从有→无时也由它驱动 onSelectionCleared 让工具栏 dismiss。
+// - keyup：键盘选择（Shift+Arrow / Ctrl+A 等）的终止信号。
+// - selectionchange (debounced)：兜底 Android touch 场景。Android WebView
+//   在 native TextSelection 激活期间会**吞掉 pointer 事件**，pointerup 不到
+//   DOM——必须依赖 selectionchange 感知"选区出现"。
+//
+// **关键约束**：selectionchange listener 只在当前**有非空选区**时 schedule
+// _handleSelection。Selection 从有→无（被系统/SVG handler 清空）**不**调
+// _handleSelection，否则会和 _suppressNextClear 的"消耗一次"模式冲突——
+// 点击已有高亮时 SVG g handler 同步清 selection，触发 selectionchange，
+// 若让它驱动 _handleSelection，第一次能被 _suppressNextClear 拦住，但后续
+// 任何 selection 状态扰动（Overlay 让 WebView 失焦等）就会裸奔 emit clear，
+// 工具栏 500ms 后被错误 dismiss。
+// "用户主动点空白"清工具栏的需求由 pointerup（桌面）和 Flutter 端
+// Overlay 的 outside-tap dismiss（Android）承担。
+let _selectionChangeTimer = null;
 document.addEventListener('pointerup', (e) => {
-  if (e.pointerType !== 'touch') _handleSelection();
+  _handleSelection();
+});
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+  clearTimeout(_selectionChangeTimer);
+  _selectionChangeTimer = setTimeout(_handleSelection, 350);
 });
 document.addEventListener('keyup', (e) => {
   // 仅在"可能改变选区的键"上响应，避免输入框/快捷键噪音

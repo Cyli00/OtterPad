@@ -12,9 +12,10 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
-import '../../../data/models/book/document.dart';
+import '../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/api_provider.dart';
+import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/document_task_provider.dart';
 import '../../providers/document_translation_provider.dart';
 import '../../providers/favorites_provider.dart';
@@ -29,6 +30,7 @@ import '../../services/reader/markdown_document_cache_service.dart';
 import '../../data/models/book/highlight.dart';
 import '../../providers/highlight_provider.dart';
 import '../../services/snackbar_service.dart';
+import '../../utils/doc_paths.dart';
 import '../../utils/markdown_translation_weaver.dart';
 import 'coordinators/reader_summary_image_coordinator.dart';
 import 'widgets/figure_viewer.dart';
@@ -97,7 +99,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void initState() {
     super.initState();
     _sessionArgs = ReaderSessionArgs(
-      documentId: widget.document.filePath,
+      documentId: widget.document.id,
       title: widget.document.title,
       defaultReadingMode: ref.read(readerSettingsProvider).defaultReadingMode,
     );
@@ -123,8 +125,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // ─── 提取逻辑 ───
 
   void _onExtractPressed() {
-    final filePath = widget.document.filePath;
-    if (filePath.isEmpty || !File(filePath).existsSync()) {
+    final filePath = DocPaths.pdf(widget.document.id);
+    if (widget.document.contentHash == null || !File(filePath).existsSync()) {
       ref.read(snackBarServiceProvider).showResult(message: 'PDF 文件不存在');
       return;
     }
@@ -148,8 +150,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _onReprocessPressed() async {
-    final filePath = widget.document.filePath;
-    if (filePath.isEmpty || !File(filePath).existsSync()) {
+    final filePath = DocPaths.pdf(widget.document.id);
+    if (widget.document.contentHash == null || !File(filePath).existsSync()) {
       ref.read(snackBarServiceProvider).showResult(message: 'PDF 文件不存在');
       return;
     }
@@ -336,8 +338,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _openNotesSheet() {
-    if (widget.document.filePath.isEmpty) return;
-    showReaderNotesSheet(context, documentId: widget.document.filePath);
+    showReaderNotesSheet(context, documentId: widget.document.id);
   }
 
   void _openOutlineSheet() {
@@ -431,41 +432,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   bool _isInAnyFavorite(List<Favorite> favorites) {
-    final docPath = widget.document.filePath;
-    if (docPath.isEmpty) return false;
-    return favorites.any((fav) => fav.docPaths.contains(docPath));
+    final documentId = widget.document.id;
+    return favorites.any((fav) => fav.documentIds.contains(documentId));
   }
 
   List<Favorite> _favoritesContainingDoc(List<Favorite> favorites) {
-    final docPath = widget.document.filePath;
-    if (docPath.isEmpty) return const [];
-    return favorites.where((fav) => fav.docPaths.contains(docPath)).toList();
+    final documentId = widget.document.id;
+    return favorites
+        .where((fav) => fav.documentIds.contains(documentId))
+        .toList();
   }
 
   Future<void> _showFavoritePicker() async {
-    final docPath = widget.document.filePath;
-    if (docPath.isEmpty) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: '此文献无本地文件，无法添加到收藏夹');
-      return;
-    }
+    final documentId = widget.document.id;
 
     final result = await _showFavoritePickerSheet(
       title: '移入收藏夹',
       favorites: ref.read(favoritesProvider),
-      docPath: docPath,
+      documentId: documentId,
       mode: ReaderFavoritePickerMode.add,
     );
     if (!mounted || result == null) return;
 
     final selected = result.favorites
-        .where((favorite) => !favorite.docPaths.contains(docPath))
+        .where((favorite) => !favorite.documentIds.contains(documentId))
         .toList();
     if (selected.isEmpty) return;
 
     for (final favorite in selected) {
-      await ref.read(favoritesProvider.notifier).addDoc(favorite.id, docPath);
+      await ref
+          .read(documentLifecycleProvider)
+          .addToFavorite(favorite.id, documentId);
     }
     if (!mounted) return;
     final message = selected.length == 1
@@ -484,8 +481,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _showFavoriteRemovalPicker() async {
-    final docPath = widget.document.filePath;
-    if (docPath.isEmpty) return;
+    final documentId = widget.document.id;
 
     final favorites = _favoritesContainingDoc(ref.read(favoritesProvider));
     if (favorites.isEmpty) {
@@ -496,7 +492,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final result = await _showFavoritePickerSheet(
       title: '移出收藏夹',
       favorites: favorites,
-      docPath: docPath,
+      documentId: documentId,
       mode: ReaderFavoritePickerMode.remove,
     );
     if (!mounted) return;
@@ -505,8 +501,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     for (final favorite in selected) {
       await ref
-          .read(favoritesProvider.notifier)
-          .removeDoc(favorite.id, docPath);
+          .read(documentLifecycleProvider)
+          .removeFromFavorite(favorite.id, documentId);
     }
     if (!mounted) return;
     final message = selected.length == 1
@@ -518,14 +514,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<ReaderFavoriteSelectionResult?> _showFavoritePickerSheet({
     required String title,
     required List<Favorite> favorites,
-    required String docPath,
+    required String documentId,
     required ReaderFavoritePickerMode mode,
   }) {
     return showReaderFavoritePickerSheet(
       context: context,
       title: title,
       favorites: favorites,
-      docPath: docPath,
+      documentId: documentId,
       mode: mode,
       onCreateFavorite: mode == ReaderFavoritePickerMode.add
           ? _createFavoriteFromPicker
@@ -722,7 +718,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               child: OutlinePanel(
                 key: ValueKey(session.markdownContent.hashCode),
                 markdownContent: session.markdownContent!,
-                pdfPath: widget.document.filePath,
+                documentId: widget.document.id,
                 summaryImageState: _summaryImageState,
                 onNavigate: (offset) {
                   _scaffoldKey.currentState?.closeEndDrawer();
@@ -752,29 +748,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 ),
               ),
               // ── 顶部工具栏（沉浸式时向上滑出） ──
+              // ClipRect 必须包在 AnimatedSlide 外：AnimatedSlide 内部 transform
+              // 只动 paint 位移不动 layout box，Stack 的 clipBehavior 按 layout
+              // 边界剪不到。少了 ClipRect 时工具栏向上滑出的部分会透过透明状态栏显示。
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOut,
-                  offset: session.toolbarsVisible
-                      ? Offset.zero
-                      : const Offset(0, -1),
-                  child: Container(
-                    color: cs.surface.withValues(
-                      alpha: readerSettings.toolbarOpacity.value,
+                child: ClipRect(
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    offset: session.toolbarsVisible
+                        ? Offset.zero
+                        : const Offset(0, -1),
+                    child: Container(
+                      color: cs.surface.withValues(
+                        alpha: readerSettings.toolbarOpacity.value,
+                      ),
+                      child: isMarkdownHighlightMode
+                          ? _buildHighlightSearchBar()
+                          : (session.searchActive && !session.showPreview
+                                ? _buildPdfSearchBar()
+                                : _buildToolbar(cs, extracting: extracting)),
                     ),
-                    child: isMarkdownHighlightMode
-                        ? _buildHighlightSearchBar()
-                        : (session.searchActive && !session.showPreview
-                              ? _buildPdfSearchBar()
-                              : _buildToolbar(cs, extracting: extracting)),
                   ),
                 ),
               ),
               // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
+              // 同样的 ClipRect 防御：避免向下滑出后透过透明导航栏区域显示。
               if (session.showPreview &&
                   session.hasResult &&
                   session.markdownContent != null)
@@ -782,13 +784,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  child: AnimatedSlide(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    offset: session.toolbarsVisible
-                        ? Offset.zero
-                        : const Offset(0, 1),
-                    child: _buildBottomBar(readerSettings),
+                  child: ClipRect(
+                    child: AnimatedSlide(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      offset: session.toolbarsVisible
+                          ? Offset.zero
+                          : const Offset(0, 1),
+                      child: _buildBottomBar(readerSettings),
+                    ),
                   ),
                 ),
               // ── 浮动搜索结果导航器 ──
@@ -841,10 +845,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final favorites = ref.watch(favoritesProvider);
     final inFavorite = _isInAnyFavorite(favorites);
     final translation = ref.watch(
-      documentTranslationProvider(widget.document.filePath),
+      documentTranslationProvider(widget.document.id),
     );
     final summaryImagePath = DocumentSummaryImageService.imagePathFor(
-      widget.document.filePath,
+      widget.document.id,
     );
 
     return ReaderTopToolbar(
@@ -923,7 +927,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 阅读内容之上；沉浸式状态切换由 [AnimatedSlide] 在 build 里处理。
   Widget _buildBottomBar(ReaderSettingsState readerSettings) {
     final translation = ref.watch(
-      documentTranslationProvider(widget.document.filePath),
+      documentTranslationProvider(widget.document.id),
     );
 
     return ReaderBottomBar(
@@ -944,8 +948,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final markdown = _session.markdownContent;
     if (markdown == null || markdown.isEmpty) return;
 
-    final pdfPath = widget.document.filePath;
-    final notifier = ref.read(documentTranslationProvider(pdfPath).notifier);
+    final documentId = widget.document.id;
+    final notifier = ref.read(documentTranslationProvider(documentId).notifier);
 
     // 先显示 SnackBar 让用户立即看到反馈——translate 内部异步开始后才有第一次
     // onProgress，避免短暂的"点了没反应"观感。
@@ -964,7 +968,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final fullyCached = await notifier.translate(markdown);
     if (!mounted) return;
 
-    final state = ref.read(documentTranslationProvider(pdfPath));
+    final state = ref.read(documentTranslationProvider(documentId));
     final handle = _translationProgressHandle;
     _translationProgressHandle = null;
     if (state.status == DocTranslationStatus.done) {
@@ -1010,7 +1014,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 三态循环：双语 → 原文 → 译文 → 双语。
   void _handleCycleTranslationMode() {
     ref
-        .read(documentTranslationProvider(widget.document.filePath).notifier)
+        .read(documentTranslationProvider(widget.document.id).notifier)
         .cycleMode();
   }
 
@@ -1019,8 +1023,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final markdown = _session.markdownContent;
     if (markdown == null || markdown.isEmpty) return;
 
-    final pdfPath = widget.document.filePath;
-    final notifier = ref.read(documentTranslationProvider(pdfPath).notifier);
+    final documentId = widget.document.id;
+    final notifier = ref.read(documentTranslationProvider(documentId).notifier);
 
     _translationProgressHandle?.dismiss();
     _translationProgressHandle = ref
@@ -1037,7 +1041,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     await notifier.retranslate(markdown);
     if (!mounted) return;
 
-    final state = ref.read(documentTranslationProvider(pdfPath));
+    final state = ref.read(documentTranslationProvider(documentId));
     final handle = _translationProgressHandle;
     _translationProgressHandle = null;
     if (state.status == DocTranslationStatus.done) {
@@ -1123,7 +1127,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 )
               : PdfViewer.file(
                   key: const ValueKey('pdf'),
-                  widget.document.filePath,
+                  DocPaths.pdf(widget.document.id),
                   controller: _pdfController,
                   params: PdfViewerParams(
                     backgroundColor: Colors.transparent,
@@ -1180,7 +1184,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // 翻译完成后按当前模式织入译文；未翻译或进行中保持原文，避免长文档
     // 在翻译过程中反复重建 widget 列表（完成时一次性切换即可）。
     final translation = ref.watch(
-      documentTranslationProvider(widget.document.filePath),
+      documentTranslationProvider(widget.document.id),
     );
     final displayStyle = ref.watch(
       translationConfigProvider.select((c) => c.displayStyle),
@@ -1198,8 +1202,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final cs = Theme.of(context).colorScheme;
     final palette = resolveReaderPalette(settings.theme, cs);
-    final highlights = ref.watch(highlightProvider(widget.document.filePath));
-    final documentDir = p.dirname(widget.document.filePath);
+    final highlights = ref.watch(highlightProvider(widget.document.id));
+    final documentDir = DocPaths.docDir(widget.document.id);
 
     return WebViewMarkdownReader(
       key: _webViewReaderKey,
@@ -1225,21 +1229,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 匹配策略：从 url 提取 basename（`Figure_N.png`）与 manifest entry
   /// 的 `imagePath` basename 比对，和 outline_panel 保持一致。
   Future<void> _handleMarkdownImageTap(String url) async {
-    final pdfPath = widget.document.filePath;
-    if (pdfPath.isEmpty) return;
+    final documentId = widget.document.id;
 
-    // 从 url 提取文件名：file:// URI 走 Uri 解析，否则直接取最后一段
+    // figure 路径在 _injectImageAttrs 里被附了 `?v=<cacheBuster>`，
+    // 必须用 Uri 解析剥离 query 后再取末段，否则 `Figure_1.png?v=123`
+    // 与 manifest 的 basename `Figure_1.png` 无法匹配。
     String fileName;
     try {
-      fileName = url.startsWith('file://')
-          ? p.basename(Uri.parse(url).toFilePath())
-          : url.split(RegExp(r'[/\\]')).last;
+      if (url.startsWith('file://')) {
+        fileName = p.basename(Uri.parse(url).toFilePath());
+      } else {
+        final segs = Uri.parse(url).pathSegments;
+        fileName = segs.isNotEmpty ? segs.last : '';
+      }
     } catch (_) {
-      fileName = url.split(RegExp(r'[/\\]')).last;
+      final noQuery = url.split('?').first;
+      fileName = noQuery.split(RegExp(r'[/\\]')).last;
     }
     if (fileName.isEmpty) return;
 
-    _figuresFuture ??= FigureExtractService.loadManifest(pdfPath);
+    _figuresFuture ??= FigureExtractService.loadManifest(documentId);
     final figures = await _figuresFuture;
     if (!mounted) return;
     if (figures == null || figures.isEmpty) return;
@@ -1266,7 +1275,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32.0),
             child: Text(
-              widget.document.filePath,
+              DocPaths.pdf(widget.document.id),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
               ),

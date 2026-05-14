@@ -14,5 +14,13 @@
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
+        <!-- WebView 选择手柄 / 光标颜色继承自 Activity colorAccent；不覆盖
+             则走系统默认 Material green。这里对齐 Flutter 端 themeProvider 的
+             默认 seedColor (Colors.blue = #2196F3)。
+             注：这是静态色，用户在 app 设置里改主题色不会同步到 native
+             selection handle——完整动态跟随需要 MethodChannel + native
+             reflection 改 WebView TextSelectHandle drawables。 -->
+        <item name="android:colorAccent">#2196F3</item>
+        <item name="android:colorControlActivated">#2196F3</item>
     </style>
 </resources>
