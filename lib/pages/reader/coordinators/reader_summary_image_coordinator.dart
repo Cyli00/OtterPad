@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -227,104 +228,93 @@ class ReaderSummaryImageCoordinator {
   Future<void> _showOfficialGenDialog() async {
     await showDialog<void>(
       context: context,
-      builder: (ctx) => _OfficialGenDialog(
-        onExportFigures: _exportFigures,
-        onExportMarkdown: _exportMarkdown,
-        onCopyPrompt: _copyGenPrompt,
-      ),
+      builder: (ctx) => _OfficialGenDialog(onExportAll: _exportAll),
     );
   }
 
-  Future<String?> _exportFigures() async {
+  /// 一键导出：移动端 share figures + markdown，桌面端打包 ZIP；
+  /// 两种路径都同步把生图 prompt 写入剪贴板，方便用户在 ChatGPT
+  /// 等目标 app 内直接粘贴。
+  Future<String?> _exportAll() async {
+    // 1. 收集 figures（允许为空——某些文献可能没图）
     final figuresDir = Directory(DocPaths.figuresDir(document.id));
-    if (!await figuresDir.exists()) {
-      return '未找到 figures 目录，请先完成文档提取';
-    }
-    final files = <File>[];
-    await for (final entity in figuresDir.list()) {
-      if (entity is! File) continue;
-      final lower = entity.path.toLowerCase();
-      if (lower.endsWith('.png') ||
-          lower.endsWith('.jpg') ||
-          lower.endsWith('.jpeg') ||
-          lower.endsWith('.webp')) {
-        files.add(entity);
-      }
-    }
-    if (files.isEmpty) return 'figures 目录为空';
-
-    try {
-      if (_isDesktop) {
-        final targetDir = await FilePicker.platform.getDirectoryPath(
-          dialogTitle: '选择保存目录',
-          lockParentWindow: true,
-        );
-        if (targetDir == null) return null;
-        var copied = 0;
-        for (final f in files) {
-          final name = p.basename(f.path);
-          await f.copy(p.join(targetDir, name));
-          copied++;
+    final figureFiles = <File>[];
+    if (await figuresDir.exists()) {
+      await for (final entity in figuresDir.list()) {
+        if (entity is! File) continue;
+        final lower = entity.path.toLowerCase();
+        if (lower.endsWith('.png') ||
+            lower.endsWith('.jpg') ||
+            lower.endsWith('.jpeg') ||
+            lower.endsWith('.webp')) {
+          figureFiles.add(entity);
         }
-        return '已保存 $copied 个 figure 到 $targetDir';
-      } else {
-        await Share.shareXFiles(
-          files.map((f) => XFile(f.path)).toList(),
-          subject: 'figures',
-        );
-        return null;
       }
-    } catch (e) {
-      return '保存失败：$e';
     }
-  }
 
-  Future<String?> _exportMarkdown() async {
-    final mdPath = DocPaths.md(document.id);
-    final mdFile = File(mdPath);
+    // 2. 必须有 markdown,否则没有正文可导出
+    final mdFile = File(DocPaths.md(document.id));
     if (!await mdFile.exists()) {
       return '未找到 Markdown 文件，请先完成文档提取';
     }
-    final defaultName = '${_safeFileStem(document.title)}.md';
 
-    try {
-      if (_isDesktop) {
-        final targetPath = await FilePicker.platform.saveFile(
-          dialogTitle: '保存 Markdown',
-          fileName: defaultName,
-          lockParentWindow: true,
-        );
-        if (targetPath == null) return null;
-        final target = File(targetPath);
-        if (await target.exists()) await target.delete();
-        await mdFile.copy(target.path);
-        return '已保存到 ${target.path}';
-      } else {
-        await Share.shareXFiles([XFile(mdFile.path)], subject: defaultName);
-        return null;
-      }
-    } catch (e) {
-      return '保存失败：$e';
-    }
-  }
-
-  Future<String?> _copyGenPrompt() async {
+    // 3. 生成生图 prompt（含文献元数据 + Markdown + figure 索引）
+    final String prompt;
     try {
       final config = ref.read(imageGenerationConfigProvider);
       final language = ref.read(translationConfigProvider).targetLanguage;
       final role = AgentApiNotifier.globalImageRole;
-      final prompt = await DocumentSummaryImageService.instance.composePrompt(
+      prompt = await DocumentSummaryImageService.instance.composePrompt(
         document: document,
         config: config,
         provider: role.provider ?? AgentApiProvider.openai,
         language: language,
       );
-      await Clipboard.setData(ClipboardData(text: prompt));
-      return '已复制生图提示词到剪贴板';
     } on DocumentSummaryImageException catch (e) {
       return e.message;
     } catch (e) {
-      return '复制失败：$e';
+      return '生成 prompt 失败：$e';
+    }
+
+    // 4. 平台分流
+    try {
+      if (_isDesktop) {
+        // 桌面：打包 ZIP（全平铺：根目录直接放 figure / article.md / prompt.md，
+        // 用户解压后一次框选拖到 ChatGPT 网页版即可）
+        final targetPath = await FilePicker.platform.saveFile(
+          dialogTitle: '保存导出 ZIP',
+          fileName: '${_safeFileStem(document.title)}.zip',
+          lockParentWindow: true,
+        );
+        if (targetPath == null) return null; // 用户取消,不写剪贴板
+
+        final mdContent = await mdFile.readAsString();
+        final archive = Archive()
+          ..add(ArchiveFile.string('article.md', mdContent))
+          ..add(ArchiveFile.string('prompt.md', prompt));
+        for (final f in figureFiles) {
+          archive.add(
+            ArchiveFile.bytes(p.basename(f.path), await f.readAsBytes()),
+          );
+        }
+        final bytes = ZipEncoder().encodeBytes(archive);
+        await File(targetPath).writeAsBytes(bytes, flush: true);
+
+        await Clipboard.setData(ClipboardData(text: prompt));
+        return '已导出到 ${p.basename(targetPath)}，prompt 已复制';
+      } else {
+        // 移动：share sheet 多文件 + 剪贴板。markdown 放在 list 第一位让目标
+        // app 的附件列表把 .md 排在最显眼位置。
+        await Clipboard.setData(ClipboardData(text: prompt));
+        final files = <XFile>[
+          XFile(mdFile.path),
+          for (final f in figureFiles) XFile(f.path),
+        ];
+        await Share.shareXFiles(files, subject: document.title);
+        return null; // share sheet 自带反馈,不另加 toast
+      }
+    } catch (e) {
+      return '导出失败：$e';
     }
   }
 
@@ -344,15 +334,9 @@ class ReaderSummaryImageCoordinator {
 enum _SummaryImageChoice { cancel, official, confirm }
 
 class _OfficialGenDialog extends StatefulWidget {
-  final Future<String?> Function() onExportFigures;
-  final Future<String?> Function() onExportMarkdown;
-  final Future<String?> Function() onCopyPrompt;
+  final Future<String?> Function() onExportAll;
 
-  const _OfficialGenDialog({
-    required this.onExportFigures,
-    required this.onExportMarkdown,
-    required this.onCopyPrompt,
-  });
+  const _OfficialGenDialog({required this.onExportAll});
 
   @override
   State<_OfficialGenDialog> createState() => _OfficialGenDialogState();
@@ -417,27 +401,13 @@ class _OfficialGenDialogState extends State<_OfficialGenDialog> {
           ),
           const SizedBox(height: 16),
           _OfficialGenAction(
-            icon: Symbols.image_rounded,
-            label: '保存文献 figures',
-            description: '导出提取出的所有 figure 图片',
+            icon: Symbols.ios_share_rounded,
+            label: '一键导出',
+            description: Platform.isAndroid || Platform.isIOS
+                ? '同时分享 figures + Markdown，prompt 自动复制到剪贴板'
+                : '打包 figures + article.md + prompt.md 为 ZIP，prompt 自动复制到剪贴板',
             enabled: !_running,
-            onTap: () => _run(widget.onExportFigures),
-          ),
-          const SizedBox(height: 8),
-          _OfficialGenAction(
-            icon: Symbols.description_rounded,
-            label: '保存文献 Markdown',
-            description: '导出 .md 全文，用于补充 prompt',
-            enabled: !_running,
-            onTap: () => _run(widget.onExportMarkdown),
-          ),
-          const SizedBox(height: 8),
-          _OfficialGenAction(
-            icon: Symbols.content_copy_rounded,
-            label: '复制生图提示词',
-            description: '复制完整 prompt 到剪贴板',
-            enabled: !_running,
-            onTap: () => _run(widget.onCopyPrompt),
+            onTap: () => _run(widget.onExportAll),
           ),
           AnimatedSize(
             duration: const Duration(milliseconds: 200),
