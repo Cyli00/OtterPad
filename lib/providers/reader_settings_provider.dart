@@ -153,7 +153,7 @@ class ReaderSettingsState {
     this.font = ReaderFont.serif,
     this.fontSize = 16.0,
     this.defaultReadingMode = DefaultReadingMode.markdown,
-    this.toolbarOpacity = ToolbarOpacity.glass,
+    this.toolbarOpacity = ToolbarOpacity.opaque,
     this.paginationMode = ReaderPaginationMode.vertical,
   });
 
@@ -194,8 +194,13 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     final themeIndex = box.get(_kTheme, defaultValue: 0) as int;
     final fontIndex = box.get(_kFont, defaultValue: 0) as int;
     final fontSize = box.get(_kFontSize, defaultValue: 16.0) as double;
-    final modeIndex = box.get(_kDefaultMode, defaultValue: 0) as int;
-    final opacityIndex = box.get(_kToolbarOpacity, defaultValue: 2) as int;
+    // markdown = enum index 1, opaque = enum index 0
+    final modeIndex =
+        box.get(_kDefaultMode, defaultValue: DefaultReadingMode.markdown.index)
+            as int;
+    final opacityIndex =
+        box.get(_kToolbarOpacity, defaultValue: ToolbarOpacity.opaque.index)
+            as int;
     final paginationIndex =
         box.get(_kPaginationMode, defaultValue: 0) as int;
     return ReaderSettingsState(

@@ -121,20 +121,6 @@ class HomeHeader extends ConsumerWidget {
               }
             },
           ),
-          const SizedBox(width: 8.0),
-          Container(
-            width: isMobile ? 36 : 40,
-            height: isMobile ? 36 : 40,
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Symbols.person_rounded,
-              color: colorScheme.primary,
-              size: isMobile ? 20 : 22,
-            ),
-          ),
         ],
       ),
     );

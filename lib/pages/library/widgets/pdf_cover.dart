@@ -9,6 +9,7 @@ class PdfCoverRender extends StatefulWidget {
   final double? width;
   final double? height;
   final BoxFit fit;
+  final Alignment alignment;
 
   const PdfCoverRender({
     super.key,
@@ -16,6 +17,7 @@ class PdfCoverRender extends StatefulWidget {
     this.width,
     this.height,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
   });
 
   @override
@@ -106,6 +108,7 @@ class _PdfCoverRenderState extends State<PdfCoverRender> {
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
+      alignment: widget.alignment,
       cacheWidth: widget.width?.toInt(),
       filterQuality: FilterQuality.medium,
     );

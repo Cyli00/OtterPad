@@ -25,6 +25,8 @@ class ReadingHistoryPage extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     final sections = ref.watch(historySectionsProvider);
     final totalCount = ref.watch(historyCountProvider);
+    final history = ref.watch(historyProvider);
+    final progressByDoc = {for (final e in history) e.docId: e.progress};
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -59,6 +61,7 @@ class ReadingHistoryPage extends ConsumerWidget {
                     ref: ref,
                     section: sections[i],
                     isFirst: i == 0,
+                    progressByDoc: progressByDoc,
                   ),
                 const SliverToBoxAdapter(child: SizedBox(height: 32)),
               ],
@@ -105,6 +108,7 @@ class ReadingHistoryPage extends ConsumerWidget {
     required WidgetRef ref,
     required HistorySection section,
     required bool isFirst,
+    required Map<String, double> progressByDoc,
   }) {
     return [
       SliverToBoxAdapter(
@@ -158,6 +162,7 @@ class ReadingHistoryPage extends ConsumerWidget {
               child: DocListCard(
                 doc: doc,
                 compact: true,
+                progress: progressByDoc[doc.id] ?? 0.0,
                 isSelectionMode: false,
                 isSelected: false,
                 onTap: () => DocCardActions.openReader(context, ref, doc),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
@@ -6,26 +8,45 @@ import 'package:hive/hive.dart';
 
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
-import 'documents_provider.dart';
+import 'documents_provider.dart' show validDocsProvider;
 
-/// 单次阅读事件：记录文档 id 与打开时间。
+/// 单次阅读事件：记录文档 id、打开时间、阅读进度。
 ///
 /// 阅读历史作为独立事件流存储，而非 Document 模型的衍生字段——
 /// 这样后续要加阅读时长/进度/次数等维度时不必改动 Document。
+///
+/// `progress` 含义：0.0 = 未读/未滚动；1.0 = 读到底。PDF 模式用
+/// `currentPage / totalPages`，Markdown 模式用 `scrollTop / (scrollHeight - viewHeight)`。
+/// 老版本 Hive 数据无 `progress` 字段时回退 0.0。
 class HistoryEntry {
   final String docId;
   final DateTime openedAt;
+  final double progress;
 
-  const HistoryEntry({required this.docId, required this.openedAt});
+  const HistoryEntry({
+    required this.docId,
+    required this.openedAt,
+    this.progress = 0.0,
+  });
+
+  HistoryEntry copyWith({DateTime? openedAt, double? progress}) {
+    return HistoryEntry(
+      docId: docId,
+      openedAt: openedAt ?? this.openedAt,
+      progress: progress ?? this.progress,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
         'docId': docId,
         'openedAt': openedAt.toIso8601String(),
+        'progress': progress,
       };
 
   factory HistoryEntry.fromMap(Map map) => HistoryEntry(
         docId: map['docId'] as String,
         openedAt: DateTime.parse(map['openedAt'] as String),
+        progress: (map['progress'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0,
       );
 }
 
@@ -37,6 +58,12 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
   final Box _box;
   static const _key = 'entries';
   static const _maxEntries = 500;
+
+  /// 进度写盘防抖：阅读器内部高频更新（Markdown 滚动每 500ms 触发一次）
+  /// 时不立即 flush 到 Hive，2s 内最多一次磁盘写；reader dispose 时
+  /// 调 [flushProgress] 强制立即落盘。
+  Timer? _progressDebounce;
+  static const _progressDebounceDelay = Duration(seconds: 2);
 
   HistoryNotifier(this._box) : super(<HistoryEntry>[]) {
     _load();
@@ -88,6 +115,40 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
     state = <HistoryEntry>[];
     _save();
   }
+
+  /// 更新阅读进度。state 立即更新（让网格卡片 UI 实时刷新），写盘走 2s 防抖。
+  ///
+  /// 注意：仅更新已存在 entry 的 progress；如果文献从未打开过（无 HistoryEntry）
+  /// 则直接忽略——`record(docId)` 在 reader 入口已经先建好 entry 了。
+  void setProgress(String docId, double progress) {
+    final clamped = progress.clamp(0.0, 1.0);
+    final idx = state.indexWhere((e) => e.docId == docId);
+    if (idx < 0) return;
+    final old = state[idx];
+    // 同进度不动 state，避免无谓 rebuild
+    if ((old.progress - clamped).abs() < 1e-4) return;
+    final next = [...state];
+    next[idx] = old.copyWith(progress: clamped);
+    state = next;
+
+    _progressDebounce?.cancel();
+    _progressDebounce = Timer(_progressDebounceDelay, _save);
+  }
+
+  /// reader dispose / 退出阅读器时调，强制立即写盘，避免崩溃丢最后一次更新。
+  Future<void> flushProgress() async {
+    if (_progressDebounce?.isActive ?? false) {
+      _progressDebounce!.cancel();
+      _progressDebounce = null;
+      await _save();
+    }
+  }
+
+  @override
+  void dispose() {
+    _progressDebounce?.cancel();
+    super.dispose();
+  }
 }
 
 final historyProvider =
@@ -108,7 +169,9 @@ class HistorySection {
 /// 每个桶互斥——靠分支顺序隐式保证优先级。
 final historySectionsProvider = Provider<List<HistorySection>>((ref) {
   final history = ref.watch(historyProvider);
-  final docs = ref.watch(documentsProvider);
+  // 只索引有文件的文献——无 PDF 的元数据条目（contentHash == null）不能打开阅读器，
+  // 出现在历史里只会让人困惑、点了无反应。
+  final docs = ref.watch(validDocsProvider);
   final byId = {for (final d in docs) d.id: d};
 
   final now = DateTime.now();

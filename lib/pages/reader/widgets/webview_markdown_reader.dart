@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -11,6 +14,14 @@ import '../../../providers/reader_settings_provider.dart';
 import '../../../services/reader_localhost_server.dart';
 import 'reader_background.dart';
 import 'webview_reader_html.dart';
+
+/// 覆盖滚动条度量。`progress` ∈ [0,1] = 当前滚动位置；`viewportRatio` ∈ [0,1] =
+/// 视口高度 / 文档高度，决定 thumb 高度比例。
+class _ScrollbarMetrics {
+  final double progress;
+  final double viewportRatio;
+  const _ScrollbarMetrics({this.progress = 0, this.viewportRatio = 1});
+}
 
 class WebViewMarkdownReader extends StatefulWidget {
   final String markdownData;
@@ -28,6 +39,9 @@ class WebViewMarkdownReader extends StatefulWidget {
   final void Function(Highlight highlight, Offset position)? onHighlightClick;
   final void Function(String imageSource)? onImageClick;
   final void Function(ScrollDirection direction)? onScrollDirection;
+
+  /// 阅读进度上报（0.0–1.0）。WebView JS 侧已做 500ms 节流。
+  final void Function(double progress)? onScrollProgress;
 
   /// 横向翻页模式下点击页面中央触发——view 层据此 toggle 沉浸式工具栏。
   /// vertical 模式下不会被调（JS 侧已 mode 短路）。
@@ -48,6 +62,7 @@ class WebViewMarkdownReader extends StatefulWidget {
     this.onHighlightClick,
     this.onImageClick,
     this.onScrollDirection,
+    this.onScrollProgress,
     this.onToggleToolbar,
   });
 
@@ -59,6 +74,16 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   InAppWebViewController? _controller;
   bool _contentReady = false;
   final _webViewKey = GlobalKey();
+
+  // 覆盖滚动条状态：JS rAF 通道更新 metrics；UI 在 1.5s idle 后淡出。
+  // _scrollbarVisible 通过 setState 直接驱动 AnimatedOpacity，不放 ValueNotifier
+  // 里——metrics 是高频更新（rAF），visible 是低频两态（show/hide），分开走避免
+  // 把整个 thumb 重建塞进每帧。
+  final ValueNotifier<_ScrollbarMetrics> _scrollMetrics =
+      ValueNotifier(const _ScrollbarMetrics());
+  bool _scrollbarVisible = false;
+  Timer? _scrollbarHideTimer;
+  bool _scrollbarPointerActive = false;
 
   /// HTML 写到文献目录内 `<documentDir>/.reader.html`：
   /// - **自包含**：HTML 缓存随文献目录一起被备份/恢复/删除，无需单独清理；
@@ -89,10 +114,37 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     _writeHtmlFile();
   }
 
+  @override
+  void dispose() {
+    _scrollbarHideTimer?.cancel();
+    _scrollMetrics.dispose();
+    super.dispose();
+  }
+
   // dispose 不再清理 HTML——`.reader.html` 在文献目录内，随文献删除一起走。
   // 留着的好处：用户从阅读器返回后再次进入同一文献，HTML 能被复用（虽然
   // initState 总会重写一次，但避免了"删→写→删→写"的瞬时 IO 抖动）；
   // 留下的代价仅几十 KB 磁盘占用，可忽略。
+
+  /// 覆盖滚动条可见性：每次新事件重置 1.5s 淡出计时器。
+  /// 用户在 thumb 上按住期间（[_scrollbarPointerActive]）也保持可见。
+  void _showScrollbarTransiently() {
+    if (!_scrollbarVisible) {
+      setState(() => _scrollbarVisible = true);
+    }
+    _scrollbarHideTimer?.cancel();
+    _scrollbarHideTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      if (_scrollbarPointerActive) return;
+      setState(() => _scrollbarVisible = false);
+    });
+  }
+
+  /// Flutter 拖动覆盖条 → JS scrollTo。ratio ∈ [0,1]。
+  void _scrollToRatio(double ratio) {
+    final r = ratio.clamp(0.0, 1.0);
+    _controller?.evaluateJavascript(source: 'window._scrollToRatio($r)');
+  }
 
   void _writeHtmlFile() {
     final html = _buildHtml();
@@ -349,8 +401,10 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     // 不再需要 allowFileAccessFromFileURLs / allowUniversalAccessFromFileURLs。
     // server 未启动时退化到 about:blank（理论上不应发生：main.dart 启动时已 start）。
     final url = _readerUrl() ?? 'about:blank';
+    final isHorizontal =
+        widget.settings.paginationMode == ReaderPaginationMode.horizontal;
 
-    return InAppWebView(
+    final webView = InAppWebView(
       key: _webViewKey,
       initialUrlRequest: URLRequest(url: WebUri(url)),
       initialSettings: InAppWebViewSettings(
@@ -362,7 +416,11 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         // scrollLeft 翻页；同时 vertical 模式下也让代码块/表格的
         // overflow-x: auto 能正常工作。
         disableHorizontalScroll: false,
-        verticalScrollBarEnabled: true,
+        // 关掉原生滚动条——本组件用 Flutter 覆盖层 [_OverlayScrollbar]
+        // 接管视觉 + 拖动交互。Android 原生条 OS 层绘制，CSS 无法接管，
+        // 且不可触摸拖动（仅指示器）。
+        verticalScrollBarEnabled: false,
+        horizontalScrollBarEnabled: false,
       ),
       onWebViewCreated: (controller) {
         _controller = controller;
@@ -436,8 +494,151 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         );
 
         controller.addJavaScriptHandler(
+          handlerName: 'onScrollProgress',
+          callback: (args) {
+            if (args.isEmpty) return;
+            final data = args[0] as Map<String, dynamic>;
+            final raw = data['progress'];
+            if (raw is num) {
+              widget.onScrollProgress?.call(raw.toDouble().clamp(0.0, 1.0));
+            }
+          },
+        );
+
+        // rAF 高频通道：覆盖滚动条 thumb 位置 + 高度
+        controller.addJavaScriptHandler(
+          handlerName: 'onScrollMetrics',
+          callback: (args) {
+            if (args.isEmpty) return;
+            final data = args[0] as Map<String, dynamic>;
+            final progress = (data['progress'] as num?)?.toDouble() ?? 0;
+            final viewportRatio =
+                (data['viewportRatio'] as num?)?.toDouble() ?? 1;
+            _scrollMetrics.value = _ScrollbarMetrics(
+              progress: progress.clamp(0.0, 1.0),
+              viewportRatio: viewportRatio.clamp(0.05, 1.0),
+            );
+            _showScrollbarTransiently();
+          },
+        );
+
+        controller.addJavaScriptHandler(
           handlerName: 'onToggleToolbar',
           callback: (_) => widget.onToggleToolbar?.call(),
+        );
+      },
+    );
+
+    // horizontal 翻页模式不需要覆盖滚动条——那边有页号 / 边缘点击翻页 UI。
+    if (isHorizontal) return webView;
+
+    return Stack(
+      children: [
+        webView,
+        Positioned(
+          top: widget.topInset,
+          bottom: widget.bottomInset,
+          right: 0,
+          child: IgnorePointer(
+            ignoring: !_scrollbarVisible,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _scrollbarVisible ? 1 : 0,
+              child: _OverlayScrollbar(
+                metrics: _scrollMetrics,
+                onJumpTo: _scrollToRatio,
+                onInteractionStart: () {
+                  _scrollbarPointerActive = true;
+                  _showScrollbarTransiently();
+                },
+                onInteractionEnd: () {
+                  _scrollbarPointerActive = false;
+                  _showScrollbarTransiently();
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── 覆盖滚动条 ─────────────────────────────────────────────────
+//
+// 12px 宽柱形布局：触摸热区 12px（手指友好），thumb 视觉 6px 居中（精致）。
+// 拖动时按 localPosition.dy / trackHeight 反算 ratio，调 onJumpTo。
+// thumb min-height 48 防止超长文档下 thumb 缩成针线。
+class _OverlayScrollbar extends StatelessWidget {
+  final ValueListenable<_ScrollbarMetrics> metrics;
+  final ValueChanged<double> onJumpTo;
+  final VoidCallback onInteractionStart;
+  final VoidCallback onInteractionEnd;
+
+  const _OverlayScrollbar({
+    required this.metrics,
+    required this.onJumpTo,
+    required this.onInteractionStart,
+    required this.onInteractionEnd,
+  });
+
+  static const double _trackWidth = 12;
+  static const double _thumbWidth = 6;
+  static const double _minThumbHeight = 48;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final trackHeight = constraints.maxHeight;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) {
+            onInteractionStart();
+            final ratio = (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
+            onJumpTo(ratio);
+          },
+          onTapUp: (_) => onInteractionEnd(),
+          onTapCancel: onInteractionEnd,
+          onVerticalDragStart: (_) => onInteractionStart(),
+          onVerticalDragUpdate: (d) {
+            final ratio = (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
+            onJumpTo(ratio);
+          },
+          onVerticalDragEnd: (_) => onInteractionEnd(),
+          onVerticalDragCancel: onInteractionEnd,
+          child: SizedBox(
+            width: _trackWidth,
+            child: ValueListenableBuilder<_ScrollbarMetrics>(
+              valueListenable: metrics,
+              builder: (context, m, _) {
+                final thumbHeight = math.max(
+                  _minThumbHeight,
+                  trackHeight * m.viewportRatio,
+                );
+                final maxTop = math.max(0.0, trackHeight - thumbHeight);
+                final thumbTop = m.progress * maxTop;
+                return Stack(
+                  children: [
+                    Positioned(
+                      top: thumbTop,
+                      left: (_trackWidth - _thumbWidth) / 2,
+                      width: _thumbWidth,
+                      height: thumbHeight,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: cs.onSurfaceVariant.withAlpha(140),
+                          borderRadius:
+                              BorderRadius.circular(_thumbWidth / 2),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         );
       },
     );

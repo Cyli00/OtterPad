@@ -241,32 +241,45 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
+      // Row 在窄屏（≤ ~330px）会 overflow：标题 + 2 个 pill + 3 个 IconButton
+      // 自然宽度 ~354px。Expanded 把"标题 + pill"作为一组挤压区独占剩余空间；
+      // Text 用 Flexible + ellipsis 让标题在极窄屏时优先被截断（pill 信息更紧凑、
+      // 更值得完整保留）。
       child: Row(
         children: [
-          Text(
-            '${widget.providerLabel} 模型',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: cs.onSurface,
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    '${widget.providerLabel} 模型',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+                if (_models != null) ...[
+                  const SizedBox(width: 10),
+                  _CountPill(
+                    value: _models!.length,
+                    bg: cs.primaryContainer,
+                    fg: cs.onPrimaryContainer,
+                  ),
+                  if (addedCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _CountPill(
+                      value: addedCount,
+                      bg: compContainer,
+                      fg: onCompContainer,
+                    ),
+                  ],
+                ],
+              ],
             ),
           ),
-          if (_models != null) ...[
-            const SizedBox(width: 10),
-            _CountPill(
-              value: _models!.length,
-              bg: cs.primaryContainer,
-              fg: cs.onPrimaryContainer,
-            ),
-            if (addedCount > 0) ...[
-              const SizedBox(width: 6),
-              _CountPill(
-                value: addedCount,
-                bg: compContainer,
-                fg: onCompContainer,
-              ),
-            ],
-          ],
-          const Spacer(),
           IconButton(
             icon: Icon(
               Symbols.refresh_rounded,

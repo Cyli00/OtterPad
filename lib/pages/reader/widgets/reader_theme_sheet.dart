@@ -73,11 +73,16 @@ class _ReaderThemeSheet extends ConsumerWidget {
                 ref.read(readerSettingsProvider.notifier).setTheme(t);
                 // 同步 app 亮度：浅色背景（主题/羊皮/护眼）用 light，
                 // 暗色背景（夜间/纯黑）用 dark，工具栏 cs.surface 自然跟随。
-                ref.read(themeProvider.notifier).setThemeMode(
-                      t.brightness == Brightness.dark
-                          ? ThemeMode.dark
-                          : ThemeMode.light,
-                    );
+                // **例外**：用户在设置页显式选了"自动"（ThemeMode.system）时
+                // 不动 ThemeMode，否则点 reader 背景会把 Auto 默默清掉。
+                final currentMode = ref.read(themeProvider).mode;
+                if (currentMode != ThemeMode.system) {
+                  ref.read(themeProvider.notifier).setThemeMode(
+                        t.brightness == Brightness.dark
+                            ? ThemeMode.dark
+                            : ThemeMode.light,
+                      );
+                }
               },
             ),
 

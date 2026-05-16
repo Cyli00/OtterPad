@@ -66,7 +66,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   onSelectionChanged: (set) {
                     final mode = set.first;
                     ref.read(themeProvider.notifier).setThemeMode(mode);
-                    _syncReaderTheme(ref, context, mode);
+                    _syncReaderTheme(ref, mode);
                   },
                   style: SegmentedButton.styleFrom(
                     backgroundColor: cs.surface,
@@ -228,18 +228,16 @@ class AppearanceSettingsPage extends ConsumerWidget {
   }
 
   /// 切换应用主题模式时，同步更新阅读器内部主题
-  void _syncReaderTheme(WidgetRef ref, BuildContext context, ThemeMode mode) {
-    final ReaderTheme readerTheme;
-    if (mode == ThemeMode.dark) {
-      readerTheme = ReaderTheme.night;
-    } else if (mode == ThemeMode.light) {
-      readerTheme = ReaderTheme.themed;
-    } else {
-      // 跟随系统：取当前平台亮度
-      final brightness = MediaQuery.platformBrightnessOf(context);
-      readerTheme =
-          brightness == Brightness.dark ? ReaderTheme.night : ReaderTheme.themed;
-    }
+  ///
+  /// 自动模式必须用 [ReaderTheme.themed]——它的 background = cs.surface，会跟着
+  /// `MaterialApp` 在 light/dark 之间的实时切换走。用 `ReaderTheme.night` 是
+  /// 硬编码 `Color(0xFF1C1B1F)`，系统翻面后阅读器卡死。
+  void _syncReaderTheme(WidgetRef ref, ThemeMode mode) {
+    final ReaderTheme readerTheme = switch (mode) {
+      ThemeMode.dark => ReaderTheme.night,
+      ThemeMode.light => ReaderTheme.themed,
+      ThemeMode.system => ReaderTheme.themed,
+    };
     ref.read(readerSettingsProvider.notifier).setTheme(readerTheme);
   }
 

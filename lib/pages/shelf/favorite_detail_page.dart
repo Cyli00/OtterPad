@@ -7,6 +7,7 @@ import '../../providers/api_provider.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
+import '../../providers/history_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../services/batch_extract_service.dart';
@@ -32,6 +33,8 @@ class FavoriteDetailPage extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     final docs = ref.watch(documentsProvider);
     final favorites = ref.watch(favoritesProvider);
+    final history = ref.watch(historyProvider);
+    final progressByDoc = {for (final e in history) e.docId: e.progress};
     final currentFavorite = favorites.firstWhere(
       (f) => f.id == favorite.id,
       orElse: () => favorite,
@@ -123,6 +126,7 @@ class FavoriteDetailPage extends ConsumerWidget {
 
                     return DocListCard(
                       doc: doc,
+                      progress: progressByDoc[doc.id] ?? 0.0,
                       isSelectionMode: isSelectionMode,
                       isSelected: selection.selectedIds.contains(doc.id),
                       onTap: () => DocCardActions.openReader(context, ref, doc),

@@ -11,6 +11,7 @@ import '../services/document_summary_image_service.dart';
 import '../services/reader/markdown_document_cache_service.dart';
 import '../utils/doc_paths.dart';
 import 'highlight_provider.dart';
+import 'history_provider.dart';
 import 'reader_settings_provider.dart';
 
 class ReaderSessionArgs {
@@ -516,6 +517,23 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     _ref
         .read(highlightProvider(args.documentId).notifier)
         .updateNote(highlightId, note);
+  }
+
+  /// 上报阅读进度 (0.0–1.0)。
+  ///
+  /// 写盘节流走 [HistoryNotifier.setProgress] 内的 2s 防抖；session 自己不持有
+  /// progress state（事实源是 HistoryEntry，UI 直接 watch historyProvider）。
+  /// PDF 翻页 + Markdown WebView 滚动两条路都把数据汇到这里。
+  void reportProgress(double progress) {
+    if (args.documentId.isEmpty) return;
+    _ref
+        .read(historyProvider.notifier)
+        .setProgress(args.documentId, progress);
+  }
+
+  /// reader 退出时调，强制把防抖窗口里的最后一次进度落盘。
+  Future<void> flushProgress() async {
+    await _ref.read(historyProvider.notifier).flushProgress();
   }
 }
 

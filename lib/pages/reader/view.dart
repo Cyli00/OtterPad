@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show ImageFilter;
 
 import 'package:animations/animations.dart';
 import 'package:flutter/foundation.dart';
@@ -23,6 +25,8 @@ import '../../providers/reader_settings_provider.dart';
 import '../../providers/reader_session_provider.dart';
 import '../../providers/summary_image_provider.dart';
 import '../../providers/translation_config_provider.dart';
+import '../../router/app_routes.dart';
+import '../../services/ai_settings_prompt.dart';
 import '../../services/doc_extract_service.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
@@ -95,6 +99,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // 翻译进度 SnackBar 句柄——点按"翻译"时 show，翻译结束 finish/dismiss。
   SnackBarProgressHandle? _translationProgressHandle;
 
+  // PDF 进度采集：上一次上报的 pageNumber 缓存，避免每次 controller 通知（包括
+  // 滚动 / zoom / fit）都触发一次 reportProgress——只有 pageNumber 真变了才上报。
+  int? _lastReportedPdfPage;
+
   @override
   void initState() {
     super.initState();
@@ -103,6 +111,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       title: widget.document.title,
       defaultReadingMode: ref.read(readerSettingsProvider).defaultReadingMode,
     );
+    _pdfController.addListener(_onPdfControllerChanged);
+  }
+
+  /// PDF 控制器变化回调：仅在当前页号变化时上报。pdfrx 的 PdfViewerController
+  /// 是 ChangeNotifier，滚动、zoom、fit 都会通知；筛 pageNumber 防抖。
+  void _onPdfControllerChanged() {
+    if (!_pdfController.isReady) return;
+    final pageNumber = _pdfController.pageNumber;
+    final totalPages = _pdfController.pages.length;
+    if (pageNumber == null || totalPages <= 0) return;
+    if (_lastReportedPdfPage == pageNumber) return;
+    _lastReportedPdfPage = pageNumber;
+    final progress = pageNumber / totalPages;
+    _sessionNotifier.reportProgress(progress);
   }
 
   ReaderSessionState get _session =>
@@ -343,7 +365,87 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _openOutlineSheet() {
     if (_session.markdownContent == null) return;
-    _scaffoldKey.currentState?.openEndDrawer();
+    // 桌面端：380px 侧边 Drawer（屏幕够宽，多面板共存体验更好）。
+    // 移动端：bottom sheet（Drawer 在窄屏会盖住整个阅读区，sheet 可半透出底层）。
+    if (_isDesktop) {
+      _scaffoldKey.currentState?.openEndDrawer();
+    } else {
+      _showOutlineBottomSheet();
+    }
+  }
+
+  Future<void> _showOutlineBottomSheet() async {
+    final session = _session;
+    if (session.markdownContent == null) return;
+
+    // 必须在 showModalBottomSheet 之前读：modal route 对 useSafeArea: false
+    // 会调 MediaQuery.removePadding(removeTop: true)，源码里同时把 viewPadding.top
+    // 也扣掉（viewPadding.top - padding.top），sheetContext 里读 viewPaddingOf().top
+    // 会得到 0，sheet 顶部就盖到状态栏上。
+    final topInset = MediaQuery.viewPaddingOf(context).top;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      // useSafeArea: false——让 sheet 容器自己控制顶部 padding，避免 Flutter
+      // 内置 SafeArea 在 sheet 之上留出"空白条"破坏堆叠卡片视觉。
+      useSafeArea: false,
+      // 加深底层遮罩到 alpha 0.45（默认约 0.32）：底层阅读器更暗，
+      // 上下两层呈现"前景卡片 + 后景卡片"的堆叠层次。
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final cs = theme.colorScheme;
+
+        return Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(28),
+            ),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+              child: Container(
+                color: cs.surface,
+                child: Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 12, bottom: 4),
+                        width: 32,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: cs.onSurfaceVariant.withAlpha(80),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: OutlinePanel(
+                        key: ValueKey(session.markdownContent.hashCode),
+                        markdownContent: session.markdownContent!,
+                        documentId: widget.document.id,
+                        summaryImageState: _summaryImageState,
+                        inSheet: true,
+                        onNavigate: (offset) {
+                          Navigator.of(sheetContext).pop();
+                          _scrollToCharOffset(offset);
+                          _tryFlashImageAtOffset(offset);
+                        },
+                        onRegenerateSummary: () {
+                          _handleGenerateSummaryImage(openOutline: false);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // ─── 沉浸式 ───
@@ -648,6 +750,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   void dispose() {
+    _pdfController.removeListener(_onPdfControllerChanged);
+    // 强制把防抖窗口里的最后一次进度落盘；fire-and-forget——dispose 同步路径
+    // 不能 await，但 HistoryNotifier 内部用 await _save()，下一帧前会完成。
+    unawaited(_sessionNotifier.flushProgress());
     _disposePdfSearchListener?.call();
     _pdfSearcher?.dispose();
     _pdfSearchController.dispose();
@@ -712,7 +818,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       key: _scaffoldKey,
       backgroundColor: cs.surface,
       endDrawerEnableOpenDragGesture: false,
-      endDrawer: session.markdownContent != null
+      // 仅桌面端挂 Drawer——移动端走 _showOutlineBottomSheet。这里直接 null 掉
+      // 避免在移动端浪费 OutlinePanel 的 initState（parseReferences 等）。
+      endDrawer: (_isDesktop && session.markdownContent != null)
           ? Drawer(
               width: 380,
               child: OutlinePanel(
@@ -948,6 +1056,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final markdown = _session.markdownContent;
     if (markdown == null || markdown.isEmpty) return;
 
+    // **必须**在显示进度 SnackBar 前检查 AI 配置：否则配置缺失时
+    // provider 内 AiSettingsPrompt 弹的错误 SnackBar 会被即将出场的
+    // 进度 SnackBar 覆盖，用户感受到的是"点了毫无反应"。Provider 内的
+    // 同一检查保留作 defense in depth。
+    if (!_ensureAgentConfigured()) return;
+
     final documentId = widget.document.id;
     final notifier = ref.read(documentTranslationProvider(documentId).notifier);
 
@@ -981,6 +1095,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     } else {
       handle?.dismiss();
+      _reportTranslationFailure(state);
     }
   }
 
@@ -1023,6 +1138,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final markdown = _session.markdownContent;
     if (markdown == null || markdown.isEmpty) return;
 
+    // 同 _handleTranslate：进度 SnackBar 会盖住 AiSettingsPrompt 的错误提醒，
+    // 必须在显示进度条之前检查配置。
+    if (!_ensureAgentConfigured()) return;
+
     final documentId = widget.document.id;
     final notifier = ref.read(documentTranslationProvider(documentId).notifier);
 
@@ -1048,11 +1167,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       handle?.finish(message: '翻译完成');
     } else {
       handle?.dismiss();
+      _reportTranslationFailure(state);
     }
   }
 
   Future<void> _handleGenerateSummaryImage({bool openOutline = true}) async {
     await _summaryCoordinator.generate(openOutline: openOutline);
+  }
+
+  /// 翻译相关动作的"前置配置守卫"——必须在显示进度 SnackBar 之前调用。
+  /// 失败时 AiSettingsPrompt 已经弹了"前往设置"SnackBar，调用方直接 return。
+  bool _ensureAgentConfigured() {
+    return AiSettingsPrompt.ensureTextModelConfigured(
+      agentState: ref.read(effectiveAgentApiProvider),
+      snackBar: ref.read(snackBarServiceProvider),
+      onOpenSettings: () => context.push(AppRoutes.settingsApi),
+    );
+  }
+
+  /// 翻译失败时把 state.error 暴露给用户——provider 内 catch 后只更新 state，
+  /// 注释明说"交给 UI 层"。优先用 [AiSettingsPrompt.showForConfigError] 识别
+  /// "AI 设置"相关错误并附加"前往设置"按钮；其它错误走通用 SnackBar。
+  /// 取消（status=idle）和无 error 的情况静默——用户已知道自己点了取消。
+  void _reportTranslationFailure(DocumentTranslationState state) {
+    final error = state.error;
+    if (state.status != DocTranslationStatus.failed || error == null) return;
+
+    final snackBar = ref.read(snackBarServiceProvider);
+    final handled = AiSettingsPrompt.showForConfigError(
+      error: error,
+      snackBar: snackBar,
+      onOpenSettings: () => context.push(AppRoutes.settingsApi),
+    );
+    if (!handled) {
+      snackBar.showResult(message: '翻译失败：$error');
+    }
   }
 
   Widget _buildExtractButton(ColorScheme cs, bool extracting) {
@@ -1220,6 +1369,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onHighlightClick: _handleHighlightTap,
       onImageClick: _handleMarkdownImageTap,
       onScrollDirection: _handleWebViewScrollDirection,
+      onScrollProgress: _sessionNotifier.reportProgress,
       onToggleToolbar: _handleWebViewToggleToolbar,
     );
   }

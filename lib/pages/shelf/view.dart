@@ -72,6 +72,8 @@ class ShelfPage extends ConsumerWidget {
     final theme = Theme.of(context);
     final favorites = ref.watch(favoritesProvider);
     final docs = ref.watch(documentsProvider);
+    final historyCount = ref.watch(historyCountProvider);
+    final noFileCount = ref.watch(noFileDocsCountProvider);
     final byId = {for (final doc in docs) doc.id: doc};
 
     return Scaffold(
@@ -103,63 +105,53 @@ class ShelfPage extends ConsumerWidget {
                   title: '已同步',
                   onTap: () {},
                 ),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final count = ref.watch(historyCountProvider);
-                    return LibraryMenuItem(
-                      icon: Symbols.history,
-                      title: '阅读历史',
-                      trailing: count > 0
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '$count',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSecondaryContainer,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            )
-                          : null,
-                      onTap: () => context.push(AppRoutes.shelfHistory),
-                    );
-                  },
+                LibraryMenuItem(
+                  icon: Symbols.history,
+                  title: '阅读历史',
+                  trailing: historyCount > 0
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.secondaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '$historyCount',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSecondaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        )
+                      : null,
+                  onTap: () => context.push(AppRoutes.shelfHistory),
                 ),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final count = ref.watch(noFileDocsCountProvider);
-                    return LibraryMenuItem(
-                      icon: Symbols.description,
-                      title: '无文件条目',
-                      trailing: count > 0
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.errorContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '$count',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.error,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            )
-                          : null,
-                      onTap: () => context.push(AppRoutes.shelfNoFileEntries),
-                    );
-                  },
+                LibraryMenuItem(
+                  icon: Symbols.description,
+                  title: '无文件条目',
+                  trailing: noFileCount > 0
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.errorContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '$noFileCount',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.error,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        )
+                      : null,
+                  onTap: () => context.push(AppRoutes.shelfNoFileEntries),
                 ),
 
                 // 分割线

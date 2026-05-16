@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../../data/models/book/document.dart';
 import '../../../utils/doc_paths.dart';
 import 'pdf_cover.dart';
+import 'progress_chip.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 /// 文献列表卡片（文献库列表视图 + 收藏夹详情页共用）
@@ -21,6 +22,11 @@ class DocListCard extends StatelessWidget {
   final VoidCallback? onSelectionTap;
   final bool compact;
 
+  /// 阅读进度 0.0–1.0；==0 时不渲染 chip。
+  /// 由调用方从 historyProvider 派生后传入（统一在父级 watch，避免每张卡都
+  /// 单独订阅 historyProvider）。
+  final double progress;
+
   const DocListCard({
     super.key,
     required this.doc,
@@ -31,12 +37,22 @@ class DocListCard extends StatelessWidget {
     this.isSelected = false,
     this.onSelectionTap,
     this.compact = false,
+    this.progress = 0.0,
   });
+
+  // 缩略图尺寸——W:H 收紧到 ~0.85，看起来更紧凑。BoxFit.cover + topCenter
+  // 跟网格卡一致，从顶部裁切保留标题区。右列文字高度跟它对齐。
+  static const double _thumbWidthCompact = 80;
+  static const double _thumbHeightCompact = 96;
+  static const double _thumbWidthFull = 110;
+  static const double _thumbHeightFull = 132;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final thumbWidth = compact ? _thumbWidthCompact : _thumbWidthFull;
+    final thumbHeight = compact ? _thumbHeightCompact : _thumbHeightFull;
 
     return AnimatedContainer(
       duration: 150.ms,
@@ -86,14 +102,15 @@ class DocListCard extends StatelessWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
-                          width: compact ? 80 : 120,
-                          height: compact ? 112 : 168,
+                          width: thumbWidth,
+                          height: thumbHeight,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
                               PdfCoverRender(
                                 assetPath: DocPaths.pdf(doc.id),
                                 fit: BoxFit.cover,
+                                alignment: Alignment.topCenter,
                               ),
                               if (isSelected)
                                 Container(
@@ -125,58 +142,83 @@ class DocListCard extends StatelessWidget {
                         ),
                       ),
                     if (doc.contentHash != null) const SizedBox(width: 16),
+                    // 右列文字：有 thumb 时，高度锁到 thumb 高度，Spacer 把年份行
+                    // 顶到 thumb 底边对齐；没 thumb（无文件条目页）走自然高度，年份
+                    // 行紧跟期刊行——Spacer 在 unbounded Column 里会断言失败，必须用
+                    // 固定的 SizedBox 留白。
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            doc.title,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onSurface,
-                              height: 1.3,
-                            ),
-                            maxLines: compact ? 2 : 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (doc.authors.isNotEmpty) ...[
-                            const SizedBox(height: 8),
+                      child: SizedBox(
+                        height: doc.contentHash != null ? thumbHeight : null,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              doc.authors.join(', '),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
+                              doc.title,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                                height: 1.3,
                               ),
-                              maxLines: 1,
+                              maxLines: compact ? 2 : 3,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                          if (doc.journal != null &&
-                              doc.journal!.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              doc.journal!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant.withAlpha(
-                                  180,
+                            // compact 模式下隐藏作者：右列高度 96 装不下 title(2 行) +
+                            // authors + journal + year row。作者信息密度最低（同期作者
+                            // 经常重复），优先牺牲。Full 模式（132 高 + 3 行标题）保留。
+                            if (!compact && doc.authors.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                doc.authors.join(', '),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                          if (doc.year != null && doc.year!.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              doc.year!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant.withAlpha(
-                                  140,
+                            ],
+                            if (doc.journal != null &&
+                                doc.journal!.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                doc.journal!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant
+                                      .withAlpha(180),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
+                            ],
+                            if ((doc.year != null && doc.year!.isNotEmpty) ||
+                                progress > 0) ...[
+                              if (doc.contentHash != null)
+                                const Spacer()
+                              else
+                                const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      doc.year ?? '',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant
+                                                .withAlpha(140),
+                                          ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (progress > 0)
+                                    ProgressChip(progress: progress),
+                                ],
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ],

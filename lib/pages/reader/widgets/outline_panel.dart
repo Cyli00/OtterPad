@@ -138,6 +138,11 @@ class OutlinePanel extends StatefulWidget {
   final void Function(int charOffset) onNavigate;
   final VoidCallback? onRegenerateSummary;
 
+  /// true: 嵌入 bottom sheet（外壳由 caller 提供圆角+drag handle，本组件不再加
+  /// Scaffold/SafeArea-top，避免双层背景盖住 sheet 顶部圆角）。
+  /// false: 作为 Drawer 内容渲染，自带 Scaffold + SafeArea(top: true)。
+  final bool inSheet;
+
   const OutlinePanel({
     super.key,
     required this.markdownContent,
@@ -145,6 +150,7 @@ class OutlinePanel extends StatefulWidget {
     required this.summaryImageState,
     required this.onNavigate,
     this.onRegenerateSummary,
+    this.inSheet = false,
   });
 
   @override
@@ -200,50 +206,63 @@ class _OutlinePanelState extends State<OutlinePanel>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
+    final content = Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Figures'),
+            Tab(text: 'References'),
+          ],
+          labelColor: cs.primary,
+          unselectedLabelColor: cs.onSurfaceVariant,
+          indicatorColor: cs.primary,
+          indicatorWeight: 2.5,
+          labelStyle: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+          unselectedLabelStyle: theme.textTheme.labelLarge,
+          dividerHeight: 0,
+        ),
+        Divider(height: 1, color: cs.outlineVariant.withAlpha(80)),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              ValueListenableBuilder<SummaryImageState>(
+                valueListenable: widget.summaryImageState,
+                builder: (context, summaryState, _) {
+                  return _FiguresTab(
+                    figures: _figures,
+                    loaded: _figuresLoaded,
+                    markdownContent: widget.markdownContent,
+                    onNavigate: widget.onNavigate,
+                    summaryState: summaryState,
+                    onRegenerateSummary: widget.onRegenerateSummary,
+                  );
+                },
+              ),
+              _ReferencesTab(references: _references),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    // Sheet 模式：外层由 caller 提供圆角 + drag handle + 背景，本组件只负责内容。
+    // SafeArea(top: false) 因为 sheet 不接触 status bar；bottom: false 留给内层 ListView
+    // 的 viewPadding 处理（_FiguresTab/_ReferencesTab 的 ListView padding 都已含
+    // MediaQuery.padding.bottom）。
+    if (widget.inSheet) {
+      return content;
+    }
+
     return Scaffold(
       backgroundColor: cs.surface,
-      body: Column(
-        children: [
-          TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: 'Figures'),
-              Tab(text: 'References'),
-            ],
-            labelColor: cs.primary,
-            unselectedLabelColor: cs.onSurfaceVariant,
-            indicatorColor: cs.primary,
-            indicatorWeight: 2.5,
-            labelStyle: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-            unselectedLabelStyle: theme.textTheme.labelLarge,
-            dividerHeight: 0,
-          ),
-          Divider(height: 1, color: cs.outlineVariant.withAlpha(80)),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                ValueListenableBuilder<SummaryImageState>(
-                  valueListenable: widget.summaryImageState,
-                  builder: (context, summaryState, _) {
-                    return _FiguresTab(
-                      figures: _figures,
-                      loaded: _figuresLoaded,
-                      markdownContent: widget.markdownContent,
-                      onNavigate: widget.onNavigate,
-                      summaryState: summaryState,
-                      onRegenerateSummary: widget.onRegenerateSummary,
-                    );
-                  },
-                ),
-                _ReferencesTab(references: _references),
-              ],
-            ),
-          ),
-        ],
-      ),
+      // SafeArea 必须显式加：Drawer 内嵌 Scaffold 时 Drawer 自带的 inset 不会
+      // 透传到嵌套 Scaffold 的 body，TabBar 会侵占 Android 透明状态栏。
+      // bottom: false——drawer 自己处理底部 inset + 内层 ListView 自带 viewPadding。
+      body: SafeArea(top: true, bottom: false, child: content),
     );
   }
 }

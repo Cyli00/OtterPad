@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/documents_provider.dart';
+import '../../../providers/history_provider.dart';
 import '../../../providers/selection_provider.dart';
 import 'doc_card_actions.dart';
 import 'doc_list_card.dart';
@@ -24,6 +25,9 @@ class BookshelfList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final docs = ref.watch(validDocsProvider);
     final selection = ref.watch(selectionProvider);
+    // 顶层一次 watch，派生进度 Map 下推给每张卡——避免 500 张卡各自订阅。
+    final history = ref.watch(historyProvider);
+    final progressByDoc = {for (final e in history) e.docId: e.progress};
     final isSelectionMode =
         selection.isActive && selection.sourceContext == 'library';
 
@@ -40,6 +44,7 @@ class BookshelfList extends ConsumerWidget {
       final doc = docs[index];
       return DocListCard(
         doc: doc,
+        progress: progressByDoc[doc.id] ?? 0.0,
         isSelectionMode: isSelectionMode,
         isSelected: selection.selectedIds.contains(doc.id),
         onTap: () => DocCardActions.openReader(context, ref, doc),

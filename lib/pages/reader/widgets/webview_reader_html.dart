@@ -407,6 +407,36 @@ figcaption {
   border-radius: 4px;
 }
 
+/* ─── 垂直模式滚动条（vertical 模式，默认）─────────────────
+ * Android WebView 原生滚动条默认 4-6px 宽，触摸根本抓不住。
+ * 接管样式：12px 宽 + thumb 圆角 + min-height 48 保证可拖。
+ * 颜色用主题的 --secondary 半透明，深浅色背景都不刺眼。
+ * 注：horizontal 模式下方有专门规则 display:none 隐藏，不冲突。
+ */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: transparent;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--secondary) 55%, transparent);
+  border-radius: 6px;
+  min-height: 48px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--secondary) 75%, transparent);
+}
+/* Firefox / 标准 scrollbar-* —— InAppWebView 主路径走 WebKit，这里只兜底 */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--secondary) 55%, transparent) transparent;
+}
+
 /* ─── 左右翻页（CSS Multi-column）────────────────────────────
  * 用浏览器原生分栏：column-width=100vw 让每一"列"= 一整个视口宽度，
  * #content 横向溢出后通过水平滚动翻页。模式切换由 JS 改 body 的
@@ -906,6 +936,80 @@ window.addEventListener('scroll', () => {
     }
   });
 }, { passive: true });
+
+// ─── 阅读进度上报（500ms 节流 + 双滚动源）───
+// vertical 模式滚 window，horizontal 模式滚 #content；两边事件互不冒泡，所以
+// 必须给两个目标各挂一次。Flutter 端的 HistoryNotifier.setProgress 还有 2s
+// 防抖 Hive 写盘，这里只负责把 0–1 的比例丢过去——多上报几次代价是 IPC，不写盘。
+let _progressThrottleTimer = null;
+function _reportScrollProgress() {
+  if (_progressThrottleTimer) return;
+  _progressThrottleTimer = setTimeout(() => {
+    _progressThrottleTimer = null;
+    if (!window.flutter_inappwebview) return;
+    let ratio = 0;
+    if (document.body.dataset.pagination === 'horizontal') {
+      const max = _maxPage();
+      ratio = max > 0 ? _currentPage() / max : 0;
+    } else {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      ratio = max > 0 ? window.scrollY / max : 0;
+    }
+    if (ratio < 0) ratio = 0;
+    if (ratio > 1) ratio = 1;
+    window.flutter_inappwebview.callHandler('onScrollProgress', { progress: ratio });
+  }, 500);
+}
+window.addEventListener('scroll', _reportScrollProgress, { passive: true });
+const _scrollProgressContent = document.getElementById('content');
+if (_scrollProgressContent) {
+  _scrollProgressContent.addEventListener('scroll', _reportScrollProgress, { passive: true });
+}
+
+// ─── 高频滚动度量上报（rAF，~60Hz）+ scrollTo 反向接口 ───
+// 给 Flutter 侧覆盖滚动条用的实时位置 + 视口比例。
+// 区别于上面的 onScrollProgress：
+//   - 频率：rAF（合并到现有 _scrollRAF）vs 500ms timer
+//   - payload：progress + viewportRatio vs 仅 progress
+//   - 用途：覆盖滚动条 thumb 位置/高度 vs Hive 写盘
+// horizontal 模式不上报——那边有自己的页号翻页 UI。
+function _reportScrollMetrics() {
+  if (!window.flutter_inappwebview) return;
+  if (document.body.dataset.pagination === 'horizontal') return;
+  const scrollHeight = document.documentElement.scrollHeight;
+  const viewHeight = window.innerHeight;
+  const max = scrollHeight - viewHeight;
+  let progress = max > 0 ? window.scrollY / max : 0;
+  if (progress < 0) progress = 0;
+  if (progress > 1) progress = 1;
+  let viewportRatio = scrollHeight > 0 ? viewHeight / scrollHeight : 1;
+  if (viewportRatio < 0.05) viewportRatio = 0.05;
+  if (viewportRatio > 1) viewportRatio = 1;
+  window.flutter_inappwebview.callHandler('onScrollMetrics', {
+    progress: progress,
+    viewportRatio: viewportRatio,
+  });
+}
+let _metricsRAF = null;
+function _scheduleMetricsReport() {
+  if (_metricsRAF) return;
+  _metricsRAF = requestAnimationFrame(() => {
+    _metricsRAF = null;
+    _reportScrollMetrics();
+  });
+}
+window.addEventListener('scroll', _scheduleMetricsReport, { passive: true });
+window.addEventListener('resize', _scheduleMetricsReport, { passive: true });
+// 首屏渲染完后主动报一次，让 Flutter 端拿到初始 viewportRatio。
+window.addEventListener('load', () => setTimeout(_reportScrollMetrics, 100));
+
+// Flutter 拖动覆盖滚动条时调这个：ratio ∈ [0,1] → window.scrollY 绝对像素值。
+window._scrollToRatio = function(ratio) {
+  const max = document.documentElement.scrollHeight - window.innerHeight;
+  if (max <= 0) return;
+  const r = Math.max(0, Math.min(1, ratio));
+  window.scrollTo({ top: r * max, behavior: 'auto' });
+};
 
 // ─── 图片点击 + 横向翻页点击区 ───
 // 单一 click listener：图片点击优先短路；其次横向模式下按 X 分三段——
