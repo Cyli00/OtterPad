@@ -98,20 +98,20 @@ void main() {
     expect(segments.single.blocks.first.blockId, '2');
   });
 
-  test('匿名兜底:无 caption 的 image cluster 仍被裁剪', () {
+  test('无 caption 的 image cluster 被丢弃(防误识别图标/装饰图)', () {
+    // 与下一条"纯 table 孤儿"语义对齐: caption 召回失败时,视觉簇宁可漏也不要错.
+    // 后续 PR-4 (Stage D + inline reference) 会用正文引用做弱兜底,
+    // 替代旧的"无 caption 也产出匿名 segment"路线.
     final service = FigureExtractService.instance;
     final pages = [
       [_block('1', 'image', [101, 196, 732, 1196])],
     ];
 
     final segments = service.findFigures(pages, markdowns: ['']);
-    expect(segments.length, 1);
-    expect(segments.single.captionName, isEmpty);
-    expect(segments.single.captionText, isEmpty);
-    expect(segments.single.blocks.single.blockId, '1');
+    expect(segments, isEmpty);
   });
 
-  test('匿名兜底拒绝纯 table 孤儿(防 sidebar 误识别)', () {
+  test('纯 table 孤儿同样被丢弃(防 sidebar 误识别)', () {
     final service = FigureExtractService.instance;
     final pages = [
       [_block('1', 'table', [100, 100, 700, 700])],
@@ -285,6 +285,325 @@ void main() {
 
     final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
     expect(bbox[1], 400.0); // 不扩展
+  });
+
+  // ─── PR-2: caption 候选放宽 (label 白名单解除 + 多行合并) ───────
+
+  test('PR-2: 白名单外 label 的 caption 内容也被召回 (image_caption / unknown)', () {
+    // PaddleOCR-VL 可能把 caption 错标为 image_caption 或某新版 label.
+    // PR-1 之前 _captionCandidateLabels 白名单 (figure_title/text/footer/...)
+    // 会过滤掉它们; PR-2 解除白名单后只看内容匹配 _mainCaptionRe.
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('1', 'image', [100, 100, 700, 600]),
+        _block('2', 'image_caption', [100, 620, 700, 660],
+            'Figure 3. Caption with custom label.'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 1);
+    expect(segments.single.captionName, 'Figure_3');
+    expect(segments.single.captionText, contains('Caption with custom label'));
+  });
+
+  test('PR-2: 多行 caption 合并 - 延续行被吸收为同一候选', () {
+    // PaddleOCR 把一段长 caption 拆成 3 个连续的 figure_title block.
+    // 第 1 行匹配 _mainCaptionRe; 第 2/3 行不匹配但纵向紧邻、横向同 column.
+    // 期望: 合并为单个 caption candidate, 全部 3 个 block 都进 segment.blocks
+    // (用于下游 markdown 替换抹掉残骸).
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('img', 'image', [100, 100, 700, 600]),
+        _block('cap1', 'figure_title', [100, 620, 700, 640],
+            'Figure 1. First line of a long caption that continues'),
+        _block('cap2', 'figure_title', [100, 645, 700, 665],
+            'across multiple lines and includes detailed methodology'),
+        _block('cap3', 'figure_title', [100, 670, 700, 690],
+            'about the experimental setup.'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 1);
+
+    // 合并后的 captionText 包含三行全部内容
+    final text = segments.single.captionText;
+    expect(text, contains('First line'));
+    expect(text, contains('across multiple lines'));
+    expect(text, contains('experimental setup'));
+
+    // 3 个 caption-related block id 都在 segment.blocks 里
+    final ids = segments.single.blocks.map((b) => b.blockId).toSet();
+    expect(ids, containsAll(['cap1', 'cap2', 'cap3']));
+  });
+
+  test('PR-2: 多行合并不跨越下一个 caption (Figure 1 不吸 Figure 2)', () {
+    // 两个 caption 紧邻: Figure 1 + Figure 2, 中间几何上"看着像延续".
+    // 硬终止条件 (_mainCaptionRe 匹配) 阻止 Figure 1 把 Figure 2 吃掉.
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('img1', 'image', [100, 100, 700, 400]),
+        _block('cap1', 'figure_title', [100, 420, 700, 440],
+            'Figure 1. First.'),
+        _block('img2', 'image', [100, 500, 700, 800]),
+        _block('cap2', 'figure_title', [100, 820, 700, 840],
+            'Figure 2. Second.'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 2);
+    expect(
+      segments.map((s) => s.captionName).toSet(),
+      equals({'Figure_1', 'Figure_2'}),
+    );
+    // 各自 caption 文本独立, 没串吃
+    final figure1 = segments.firstWhere((s) => s.captionName == 'Figure_1');
+    expect(figure1.captionText, isNot(contains('Second')));
+  });
+
+  test('PR-2: 纵向 gap 过大时不视为延续行', () {
+    // gap = 250 - 40 = 210; anchor 高度 20 → maxGap = max(20*0.8, 15) = 16.
+    // 210 >> 16, 不应作为 caption 延续吃掉远处文字.
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('img', 'image', [100, 100, 700, 30]),
+        _block('cap', 'figure_title', [100, 20, 700, 40],
+            'Figure 1. Short caption.'),
+        _block('far', 'text', [100, 250, 700, 270],
+            'unrelated paragraph far below'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 1);
+    // 不应该把远处文字吃进 caption
+    expect(segments.single.captionText,
+        equals('Figure 1. Short caption.'));
+  });
+
+  // ─── PR-5b: vision_footnote 双角色 (子图标签 vs caption 说明) ────
+
+  test('PR-5b: vision_footnote (a) 是 figure 左上角的唯一锚点 (移除该位置其他 visual)', () {
+    // 终于的设计: figure 真实占据 [100,200,1000,900], 但 PaddleOCR 只识别右半部分.
+    // (a) 子图标签 vf 位于 [110,210,140,230] 是左上角唯一信号.
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('p', 'text', [50, 50, 1100, 150], 'preceding paragraph'),
+      // (a) 子图位置: 仅 vf 标签存在, image 漏检
+      _block('vfa', 'vision_footnote', [110, 210, 140, 230], '(a)'),
+      // 右上 (b), 右下 (c), 左下 (d) — image 都被识别. 子图坐标设计成
+      // 让左上角 [100~500, 200~400] 完全没 image, vfa 是唯一锚.
+      _block('vb', 'image', [600, 200, 1000, 400]),
+      _block('vc', 'image', [600, 500, 1000, 900]),
+      _block('vd', 'image', [600, 600, 1000, 900]),
+      _block('cap', 'figure_title', [100, 950, 900, 970],
+          'Figure 1. Four-panel composite.'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'vfa', 'vb', 'vc', 'vd', 'cap'}.contains(b.blockId))
+        .toList();
+
+    // 不并入 vfa: visuals=[vb,vc,vd], union=[600,200,1000,900]
+    // 并入 vfa: union=[110,200,1000,900] — left 从 600 拉到 110 ✓
+    //
+    // direction inference: visuals 都在 caption 上方 (caption.top=950)
+    //   aboveArea (vb+vc+vd): (400*200) + (400*400) + (400*300) = 360000
+    //   leftArea / rightArea: caption 横向 [100..900], 与 visuals 同 row 检查...
+    //     vb top=200 < captionBottom=970, bottom=400 > captionTop=950? 400<950 ✗ 不 inRow
+    //   → above 胜出
+    // vfa 同 direction (above): vfa.bottom=230 ≤ caption.top=950 ✓ → 并入
+    //
+    // 期望: bbox.left = 110 (vfa 锚定), 而不是 600 (visuals 单独).
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+
+    expect(bbox[0], 110.0,
+        reason: 'vision_footnote (a) 应作为左上角锚点, 把 left 从 600 拉到 110');
+    expect(bbox[1], 200.0); // top 不变 (vb.top=200 = vfa.top+10 中较小者)
+    expect(bbox[2], 1000.0);
+    expect(bbox[3], 900.0);
+  });
+
+  test('PR-5b 回归保护: vision_footnote 在 caption 反侧 (下方说明文字) 不并入', () {
+    // 这是已有测试 1 的关键场景, 用更显式的断言:
+    // direction=above (figure 在 caption 上), 但 vf 在 caption 下方 → 反侧, 排除.
+    // 验证 PR-5b 改动没破坏 vf 角色 (1) 的处理.
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('p', 'text', [50, 50, 1100, 150], 'preceding paragraph'),
+      _block('v', 'image', [200, 200, 800, 900]),
+      _block('cap', 'figure_title', [100, 950, 900, 970],
+          'Figure 1. Composite.'),
+      // 这条 vision_footnote 在 caption 下方 (top=985 > caption.bottom=970)
+      // → 反侧 → 不并入. 即使它的 left=50 比 visual.left=200 小, bbox.left 也应仍是 200.
+      _block('vfBelow', 'vision_footnote', [50, 985, 1100, 1010],
+          '(A) Description below caption.'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'v', 'cap', 'vfBelow'}.contains(b.blockId))
+        .toList();
+
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+
+    // bbox.left 必须是 200 (visual), 而不是 50 (vfBelow)
+    expect(bbox[0], 200.0,
+        reason: 'caption 下方的 vision_footnote 是说明文字, 不该污染 bbox.left');
+    expect(bbox[2], 800.0,
+        reason: '同上, 不该影响 bbox.right');
+  });
+
+  // ─── PR-5a: left/right 方向扩展 ───────────────────────────
+
+  test('PR-5a: caption 在 figure 右侧 → direction=left → 向左扩展', () {
+    // figure 占大版面在左, caption 作为 sidebar 在右. 上方有一段 header text.
+    // visual 块漏检导致左侧有空白, 期望沿 caption 反方向(向左)扩展到 stable
+    // blocker (页边界 = 0) + margin.
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('h', 'text', [50, 100, 1100, 250], 'header line'),
+      _block('v', 'chart', [400, 250, 800, 900]),
+      _block('cap', 'figure_title', [820, 400, 1100, 440],
+          'Figure 1. Right sidebar caption.'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'v', 'cap'}.contains(b.blockId))
+        .toList();
+
+    // direction inference (面积比较):
+    //   aboveArea (text inColumn): 1050 * 150 = 157500
+    //   leftArea  (chart inRow):    400 *  650 = 260000
+    //   → direction = left
+    // _extendLeftward: visualLeft=400, visualWidth=400, blockerRight=0 (text 横跨)
+    //   gap=400, gap/width=1.0 ≥ 0.30 → newLeft = 0 + 8 = 8
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+    expect(bbox, [8.0, 250.0, 800.0, 900.0]);
+  });
+
+  test('PR-5a: caption 在 figure 左侧 → direction=right → 向右扩展', () {
+    // 与上一条对称: caption 在左 sidebar, figure 在右占大版面.
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('h', 'text', [50, 100, 1100, 250], 'header line'),
+      _block('cap', 'figure_title', [50, 400, 280, 440],
+          'Figure 1. Left sidebar caption.'),
+      _block('v', 'chart', [300, 250, 700, 900]),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'v', 'cap'}.contains(b.blockId))
+        .toList();
+
+    // direction inference:
+    //   aboveArea (text inColumn): 157500
+    //   rightArea (chart inRow):   260000
+    //   → direction = right
+    // _extendRightward: visualRight=700, visualWidth=400, pageRight=1100,
+    //   blockerLeft=1100 (text bLeft=50 ≤ 700 不算 blocker), gap=400, ratio=1.0
+    //   → newRight = 1100 - 8 = 1092
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+    expect(bbox, [300.0, 250.0, 1092.0, 900.0]);
+  });
+
+  test('PR-5a: trim 在 caption 重叠 region 左侧时从 left 收缩', () {
+    // 直接测 trim 算法的 left 收缩分支.
+    // region [100,100,1000,1000], caption [120,400,200,440] 在 region 左半中间.
+    // 损失面积 (w=900, h=900):
+    //   trim top    = 900 * (440-100) = 306000
+    //   trim bottom = 900 * (1000-400) = 540000
+    //   trim left   = 900 * (200-100) = 90000  ← min
+    //   trim right  = 900 * (1000-120) = 792000
+    // → trim left → newLeft = 200 + 8 = 208
+    final service = FigureExtractService.instance;
+    final segment = [
+      _block('cap', 'figure_title', [120, 400, 200, 440],
+          'Figure 1. Left edge caption inside region.'),
+      _block('v', 'image', [100, 100, 1000, 1000]),
+    ];
+    final trimmed =
+        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    expect(trimmed, [208.0, 100.0, 1000.0, 1000.0]);
+  });
+
+  test('PR-5a: trim 在 caption 重叠 region 右侧时从 right 收缩', () {
+    // 对称: caption [900,400,980,440] 在 region 右半中间.
+    // 损失面积:
+    //   trim top    = 900 * 340 = 306000
+    //   trim bottom = 900 * 600 = 540000
+    //   trim left   = 900 * 880 = 792000
+    //   trim right  = 900 * 100 = 90000  ← min
+    // → trim right → newRight = 900 - 8 = 892
+    final service = FigureExtractService.instance;
+    final segment = [
+      _block('cap', 'figure_title', [900, 400, 980, 440],
+          'Figure 1. Right edge caption inside region.'),
+      _block('v', 'image', [100, 100, 1000, 1000]),
+    ];
+    final trimmed =
+        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    expect(trimmed, [100.0, 100.0, 892.0, 1000.0]);
+  });
+
+  // ─── 硬契约: trimCaptionFromRegion ────────────────────────
+  //
+  // 这组测试单独验证 "裁剪 region 不含 main caption" 的契约.
+  // 当前实现下 visual-union 起点 + 扩展方向天然避开 caption, trim 是 no-op;
+  // 但通过显式测试这个函数, 任何未来对 _isVisualBlock / region 扩展的改动
+  // 若意外把 caption 包进 bbox, 都会被这组测试拦下.
+
+  test('硬契约: caption 在 region 上半 + 横向重叠 → top 收缩', () {
+    final service = FigureExtractService.instance;
+    final segment = [
+      _block('cap', 'figure_title', [200, 200, 800, 250],
+          'Figure 1. Top caption inside region.'),
+      _block('v', 'image', [100, 100, 1000, 1000]),
+    ];
+    // distFromTop = 250-100 = 150, distFromBottom = 1000-200 = 800
+    // → top 收缩: newTop = 250 + 8 = 258
+    final trimmed =
+        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    expect(trimmed, [100.0, 258.0, 1000.0, 1000.0]);
+  });
+
+  test('硬契约: caption 在 region 下半 + 横向重叠 → bottom 收缩', () {
+    final service = FigureExtractService.instance;
+    final segment = [
+      _block('cap', 'figure_title', [200, 900, 800, 950],
+          'Figure 1. Bottom caption inside region.'),
+      _block('v', 'image', [100, 100, 1000, 1000]),
+    ];
+    // distFromTop = 950-100 = 850, distFromBottom = 1000-900 = 100
+    // → bottom 收缩: newBottom = 900 - 8 = 892
+    final trimmed =
+        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    expect(trimmed, [100.0, 100.0, 1000.0, 892.0]);
+  });
+
+  test('硬契约: 子标签 "(a)" / "(b)" 不被视为 main caption → trim no-op', () {
+    // 子标签 figure_title 内容不匹配 _mainCaptionRe, 应保留在 region 内
+    // (它们是 figure 内部结构, 不是"图注").
+    final service = FigureExtractService.instance;
+    final segment = [
+      _block('subA', 'figure_title', [200, 200, 220, 220], '(a)'),
+      _block('subB', 'figure_title', [600, 200, 620, 220], '(b)'),
+      _block('v', 'image', [100, 100, 1000, 1000]),
+    ];
+    final trimmed =
+        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    expect(trimmed, [100.0, 100.0, 1000.0, 1000.0]);
+  });
+
+  test('硬契约: caption 与 region 无重叠 → trim no-op (visual-union 常态)', () {
+    // 当前 visual-union baseBbox 路径下的常态: caption 在 region 之外.
+    // 这条用例确保不相交时 trim 一次都不动 region.
+    final service = FigureExtractService.instance;
+    final segment = [
+      _block('cap', 'figure_title', [200, 1100, 800, 1150],
+          'Figure 1. Below region.'),
+      _block('v', 'image', [100, 100, 1000, 1000]),
+    ];
+    final trimmed =
+        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    expect(trimmed, [100.0, 100.0, 1000.0, 1000.0]);
   });
 
   test('连续底部图注不会把后一张图吸到前一张', () {

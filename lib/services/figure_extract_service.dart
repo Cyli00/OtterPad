@@ -145,14 +145,24 @@ class _Bbox {
   List<double> toList() => [left, top, right, bottom];
 }
 
-/// 一条 caption 来源:既可能源自 parsing_res_list 某 block,也可能仅出现在 markdown.
-class _CaptionMention {
-  _CaptionMention({
+/// Stage B1 召回的 caption 候选.可能来自 parsing_res_list 某 block,
+/// 也可能仅出现在 markdown 行(此时 bbox/blockId 为 null).
+///
+/// 命名暗示: 这是"候选",最终是否采纳要等 Stage D 匹配决定.
+///
+/// 字段 [continuationBlocks] 用于多行 caption 合并: PaddleOCR 偶尔把长 caption
+/// 拆成多个相邻 block,本字段记录除 anchor 外的延续行(原 LayoutBlock,保留各自
+/// 原始 bbox/content). [text] 已是合并后的完整 caption 文本, [bbox] 已是
+/// 全部参与合并 block 的 outer union. 下游 [FigureSegment.blocks] 会把它们
+/// 一并带上,markdown 替换时确保不留多余孤行.
+class _CaptionCandidate {
+  _CaptionCandidate({
     required this.pageIndex,
     required this.text,
     required this.captionName,
     this.bbox,
     this.blockId,
+    this.continuationBlocks = const [],
   });
 
   final int pageIndex;
@@ -160,6 +170,7 @@ class _CaptionMention {
   final String captionName;
   final _Bbox? bbox;
   final String? blockId;
+  final List<LayoutBlock> continuationBlocks;
 }
 
 class _PageData {
@@ -193,7 +204,7 @@ class _Inventory {
     required this.pages,
   });
 
-  final List<_CaptionMention> captions;
+  final List<_CaptionCandidate> captions;
   final List<_FigureBlock> figureBlocks;
   final List<_PageData> pages;
 }
@@ -212,9 +223,19 @@ class _Column {
   double get width => right - left;
 }
 
-/// figure 相对 caption 的纵向方向. 论文约 90% caption 在 figure 下方
-/// (即 figure 在上方),少数现场 caption 在 figure 上方.
-enum _FigureDirection { above, below }
+/// trimCaptionFromRegion 内部使用: 表示从 region 哪一侧收缩.
+enum _TrimSide { top, bottom, left, right }
+
+/// figure 相对 caption 的方向. 语义: 该枚举值 = "figure 相对 caption 的位置".
+///
+///   * [above] — figure 在 caption **上方**. 论文常态 (~80% caption 在下).
+///   * [below] — figure 在 caption **下方**. 少数现场 (caption 顶置).
+///   * [left]  — figure 在 caption **左侧**. 大 figure + caption 在右侧栏注.
+///   * [right] — figure 在 caption **右侧**. 大 figure + caption 在左侧栏注.
+///
+/// PR-5a 把方向从纵向 2-向扩到 4-向, 让"caption 在大 figure 左右侧"的版面
+/// 也能被正确识别 (PaddleOCR-VL 把这种 caption 误判为别的 label 的概率很高).
+enum _FigureDirection { above, below, left, right }
 
 // ─── 服务 ───────────────────────────────────────────────
 
@@ -248,19 +269,28 @@ class FigureExtractService {
   /// 裁剪渲染时使用的 zoom 级别（216 DPI，比 API 高 50%）
   static const renderZoom = 3.0;
 
-  /// 内容若匹配 caption 正则,这些 label 的 block 都可作 caption mention.
-  /// 不限于 figure_title——PaddleOCR 常把 caption 错标为这些 label.
-  static const _captionCandidateLabels = {
-    'figure_title',
-    'text',
-    'footer',
-    'paragraph_title',
-    'abstract',
-    'vision_footnote',
+  /// caption 多行合并时,延续行不能是这些视觉 label——它们绝不是 caption 文本.
+  /// (PR-2 把 caption 召回从 label 白名单改为内容匹配,但合并扫描时仍要排除视觉块)
+  static const _captionMergeExcludeLabels = {
+    'image',
+    'chart',
+    'table',
   };
 
   /// figure_title 子标签(如 `A`、`(b)`)的最大长度,超过视为正文误标
   static const _maxSubLabelLength = 30;
+
+  /// 多行 caption 合并: 延续行与上一行的最大纵向 gap 占 anchor 行高的比例.
+  /// 超过此比例则视为非延续 (caption 与下方段落已分开).
+  static const _continuationGapRatio = 0.8;
+
+  /// 多行合并 gap 阈值的最小绝对值 (API 坐标系 144 DPI).
+  /// 防止 caption 块高度极小(如单字符)时阈值塌成 0.
+  static const _continuationGapMin = 15.0;
+
+  /// 多行合并要求延续行与 anchor 横向 overlap ≥ 此比例 (按 anchor 宽度).
+  /// 偏低 (≥0.5) 容忍 caption 延续行轻微缩排; 太低则容易吃入邻栏文字.
+  static const _continuationOverlapRatio = 0.6;
 
   /// 视觉簇配 caption 的距离阈值占整页对角线的比例
   static const _captionMatchRatio = 0.5;
@@ -307,7 +337,7 @@ class FigureExtractService {
     caseSensitive: false,
   );
 
-  bool _isTableCaption(_CaptionMention c) => _tableCaptionRe.hasMatch(c.text);
+  bool _isTableCaption(_CaptionCandidate c) => _tableCaptionRe.hasMatch(c.text);
 
   // ─── Stage 0: 解析 ────────────────────────────────────
 
@@ -340,75 +370,30 @@ class FigureExtractService {
 
   // ─── Stage 1: Inventory ───────────────────────────────
 
-  /// 把所有 caption 来源归一到一个 mention 列表;所有视觉/子图注块单独成 list.
+  /// Stage B: 收集 caption + figure 候选,聚合为 inventory.
   ///
-  /// caption 来源(同 captionName 选最长内容):
-  ///   1. parsing_res_list 中 `_captionCandidateLabels` 任一 label 的 block,
-  ///      内容匹配主标题正则——一次性吃掉旧实现里的 figure_title 直采 +
-  ///      `_recoverMissingAnchors` 升格 + `_unifyAnchorCaptions` 短标签扩展.
-  ///   2. markdown.text 中匹配正则的行——救 parsing_res_list 漏掉的 caption
-  ///      (双流不一致的常见现场).
+  /// 拆成两个独立 collector 是 PR-1 重构的核心动作之一:
+  /// caption 召回与 figure 召回从此互相解耦,后续 PR 可以独立扩展 caption 来源
+  /// (markdown 行→ PDF 文本流 → 多行合并) 或 figure 来源 (PDF 图形元素聚类),
+  /// 不会引入串扰.
   _Inventory _buildInventory(List<_PageData> pages) {
-    final captions = <_CaptionMention>[];
+    final captions = <_CaptionCandidate>[];
     final figureBlocks = <_FigureBlock>[];
 
     for (final page in pages) {
-      final pageMentions = <String, _CaptionMention>{};
+      final pageCaptions = _collectCaptionCandidates(page);
+      captions.addAll(pageCaptions);
 
-      // 来源 1: parsing_res_list
-      for (final b in page.blocks) {
-        final content = b.blockContent.trim();
-        if (content.isEmpty) continue;
-        if (!_captionCandidateLabels.contains(b.blockLabel)) continue;
-        if (!_mainCaptionRe.hasMatch(content)) continue;
-
-        final name = _extractCaptionName(content);
-        if (name.isEmpty) continue;
-
-        final existing = pageMentions[name];
-        if (existing == null || content.length > existing.text.length) {
-          pageMentions[name] = _CaptionMention(
-            pageIndex: page.pageIndex,
-            text: content,
-            captionName: name,
-            bbox: _Bbox.fromBlock(b),
-            blockId: b.blockId,
-          );
+      // 排除集合 = anchor blockId ∪ 所有 continuation block ids.
+      // 后者由多行 caption 合并产生, 同样不应被 figure 召回当成视觉块/子标签.
+      final captionBlockIds = <String>{};
+      for (final c in pageCaptions) {
+        if (c.blockId != null) captionBlockIds.add(c.blockId!);
+        for (final cont in c.continuationBlocks) {
+          captionBlockIds.add(cont.blockId);
         }
       }
-
-      // 来源 2: markdown 行(只补 parsing_res_list 漏掉的)
-      if (page.markdown.isNotEmpty) {
-        for (final raw in page.markdown.split('\n')) {
-          final t = raw.trim();
-          if (t.isEmpty || !_mainCaptionRe.hasMatch(t)) continue;
-          final name = _extractCaptionName(t);
-          if (name.isEmpty || pageMentions.containsKey(name)) continue;
-          pageMentions[name] = _CaptionMention(
-            pageIndex: page.pageIndex,
-            text: t,
-            captionName: name,
-          );
-        }
-      }
-
-      captions.addAll(pageMentions.values);
-
-      // 视觉/子图注块(不包括已成 caption 的 figure_title block)
-      final captionBlockIds = pageMentions.values
-          .map((m) => m.blockId)
-          .whereType<String>()
-          .toSet();
-      for (final b in page.blocks) {
-        if (!figureLabels.contains(b.blockLabel)) continue;
-        if (captionBlockIds.contains(b.blockId)) continue;
-        // figure_title 但内容过长 → 正文噪声(否则 (a)/(b) 这类短标签会被错误剔除)
-        if (b.blockLabel == 'figure_title' &&
-            b.blockContent.trim().length > _maxSubLabelLength) {
-          continue;
-        }
-        figureBlocks.add(_FigureBlock(page.pageIndex, b));
-      }
+      figureBlocks.addAll(_collectFigureCandidates(page, captionBlockIds));
     }
 
     return _Inventory(
@@ -416,6 +401,177 @@ class FigureExtractService {
       figureBlocks: figureBlocks,
       pages: pages,
     );
+  }
+
+  /// Stage B1: 召回单页所有 caption 候选.
+  ///
+  /// 三个 Phase:
+  ///   Phase 1 (anchor 识别): 遍历 parsing_res_list, 任意 label 的 block
+  ///     只要内容匹配 [_mainCaptionRe] 就是 anchor. 同 captionName 选内容最长.
+  ///     ★ PR-2 放宽: 去掉 label 白名单——PaddleOCR 把 figure_title 错标为
+  ///       paragraph_title / image_caption / 其他未知 label 时仍能召回.
+  ///   Phase 2 (多行合并): 对每个 anchor, 沿 page.blocks 顺序向下扫描延续行,
+  ///     吸收同 column、纵向相邻、内容不构成新 caption 的 block.合并后 text
+  ///     拼接、bbox 取 outer union, continuation block 列表交给下游用.
+  ///   Phase 3 (markdown 兜底): markdown.text 行中匹配正则但 parsing_res_list
+  ///     完全漏检的 caption 名, 不做合并, 仅以单行候选补入.
+  List<_CaptionCandidate> _collectCaptionCandidates(_PageData page) {
+    // Phase 1: 识别 anchor — 任意 label, 仅看内容是否匹配主标题正则.
+    // 同 captionName 选内容最长的 block (保留它在 page.blocks 中的索引,
+    // Phase 2 从该索引向下扫描延续行).
+    final anchorByName = <String, ({int index, LayoutBlock block})>{};
+    for (var i = 0; i < page.blocks.length; i++) {
+      final b = page.blocks[i];
+      final content = b.blockContent.trim();
+      if (content.isEmpty) continue;
+      if (!_mainCaptionRe.hasMatch(content)) continue;
+
+      final name = _extractCaptionName(content);
+      if (name.isEmpty) continue;
+
+      final existing = anchorByName[name];
+      if (existing == null ||
+          content.length > existing.block.blockContent.trim().length) {
+        anchorByName[name] = (index: i, block: b);
+      }
+    }
+
+    // Phase 2: 对每个 anchor 吸收延续行.
+    final candidates = <_CaptionCandidate>[];
+    for (final pick in anchorByName.values) {
+      final continuations = _scanCaptionContinuation(page, pick.index);
+      final anchor = pick.block;
+      final anchorContent = anchor.blockContent.trim();
+      final mergedText = continuations.isEmpty
+          ? anchorContent
+          : [
+              anchorContent,
+              for (final c in continuations) c.blockContent.trim()
+            ].join(' ');
+      final mergedBbox = continuations.isEmpty
+          ? _Bbox.fromBlock(anchor)
+          : _Bbox.union([anchor, ...continuations]);
+
+      candidates.add(_CaptionCandidate(
+        pageIndex: page.pageIndex,
+        text: mergedText,
+        captionName: _extractCaptionName(anchorContent),
+        bbox: mergedBbox,
+        blockId: anchor.blockId,
+        continuationBlocks: continuations,
+      ));
+    }
+
+    // Phase 3: markdown 行兜底 (parsing_res_list 完全漏检时).
+    final knownNames = candidates.map((c) => c.captionName).toSet();
+    if (page.markdown.isNotEmpty) {
+      for (final raw in page.markdown.split('\n')) {
+        final t = raw.trim();
+        if (t.isEmpty || !_mainCaptionRe.hasMatch(t)) continue;
+        final name = _extractCaptionName(t);
+        if (name.isEmpty || knownNames.contains(name)) continue;
+        knownNames.add(name);
+        candidates.add(_CaptionCandidate(
+          pageIndex: page.pageIndex,
+          text: t,
+          captionName: name,
+        ));
+      }
+    }
+
+    return candidates;
+  }
+
+  /// 从 anchor block 之后扫描连续的延续行, 用于多行 caption 合并.
+  ///
+  /// 终止条件 (任一满足即停):
+  ///   1. **遇到新 caption** — block 内容匹配 [_mainCaptionRe] (这是最强护栏:
+  ///      即使 Figure 1 / Figure 2 caption 紧邻, 也不会串吃).
+  ///   2. **跨越视觉块** — block 是 image/chart/table (caption 不会继续到这种 block 之后).
+  ///   3. **纵向 gap 过大** — gap > max(anchorHeight * 0.8, 15px).
+  ///   4. **横向 overlap 不足** — 候选块与 anchor 横向 overlap < 60% (邻栏文字).
+  ///   5. **越过 page.blocks 末尾**.
+  ///
+  /// 满足 (2)/(3)/(4) 时跳过该 block 继续扫描——可能 PaddleOCR 在 caption 中间
+  /// 插入了不相关的 vision_footnote 等; 不应中断合并扫描. 但 (1) 是硬终止.
+  /// 实际为了简单, 我们对 (2) 直接 break, (3)/(4) 也 break, 只有 (1) 单独标记.
+  /// 选择 break 是因为延续行在 PaddleOCR 视角通常是紧邻的, 一旦中断就不再续.
+  List<LayoutBlock> _scanCaptionContinuation(_PageData page, int anchorIndex) {
+    final anchor = page.blocks[anchorIndex];
+    final anchorBbox = _Bbox.fromBlock(anchor);
+    final anchorHeight = anchorBbox.bottom - anchorBbox.top;
+    final anchorWidth = anchorBbox.right - anchorBbox.left;
+    if (anchorHeight <= 0 || anchorWidth <= 0) return const [];
+
+    final maxGap = math.max(
+      anchorHeight * _continuationGapRatio,
+      _continuationGapMin,
+    );
+
+    final result = <LayoutBlock>[];
+    var lastBottom = anchorBbox.bottom;
+
+    for (var j = anchorIndex + 1; j < page.blocks.length; j++) {
+      final cand = page.blocks[j];
+      final candContent = cand.blockContent.trim();
+
+      // 硬终止: 新 caption 出现 — 即使紧邻也不能吃
+      if (_mainCaptionRe.hasMatch(candContent)) break;
+      // 终止: 视觉块阻断
+      if (_captionMergeExcludeLabels.contains(cand.blockLabel)) break;
+
+      final cbox = _Bbox.fromBlock(cand);
+      // 终止: 纵向 gap 过大
+      final gap = cbox.top - lastBottom;
+      if (gap < 0 || gap > maxGap) break;
+
+      // 终止: 横向 overlap 不足 (避免吃入邻栏)
+      final overlap = math.max(
+        0.0,
+        math.min(anchorBbox.right, cbox.right) -
+            math.max(anchorBbox.left, cbox.left),
+      );
+      if (overlap / anchorWidth < _continuationOverlapRatio) break;
+
+      // 跳过空内容 (PaddleOCR 偶有空 block)
+      if (candContent.isEmpty) {
+        lastBottom = cbox.bottom;
+        continue;
+      }
+
+      result.add(cand);
+      lastBottom = cbox.bottom;
+    }
+
+    return result;
+  }
+
+  /// Stage B2: 召回单页所有 figure 视觉/子图注 block 候选.
+  ///
+  /// 跳过 [excludeBlockIds] 中的 block (这些 block 已被识别为 caption,
+  /// 不应同时作为 figure 视觉块).
+  ///
+  /// 当前 figure_title label 的 block 若 [excludeBlockIds] 不含且内容
+  /// 长度 ≤ `_maxSubLabelLength`,被视为子标签 ((a)/(b) 这类),保留;
+  /// 超长的视为正文噪声,跳过.
+  ///
+  /// PR-6 会在此处加: PDF 图形元素聚类作为第二条 figure 候选源.
+  List<_FigureBlock> _collectFigureCandidates(
+    _PageData page,
+    Set<String> excludeBlockIds,
+  ) {
+    final result = <_FigureBlock>[];
+    for (final b in page.blocks) {
+      if (!figureLabels.contains(b.blockLabel)) continue;
+      if (excludeBlockIds.contains(b.blockId)) continue;
+      // figure_title 但内容过长 → 正文噪声(否则 (a)/(b) 这类短标签会被错误剔除)
+      if (b.blockLabel == 'figure_title' &&
+          b.blockContent.trim().length > _maxSubLabelLength) {
+        continue;
+      }
+      result.add(_FigureBlock(page.pageIndex, b));
+    }
+    return result;
   }
 
   // ─── Stage 2: 配对 ────────────────────────────────────
@@ -449,19 +605,19 @@ class FigureExtractService {
       );
     }
 
-    final captionsByPage = <int, List<_CaptionMention>>{};
+    final captionsByPage = <int, List<_CaptionCandidate>>{};
     for (final c in inv.captions) {
       captionsByPage.putIfAbsent(c.pageIndex, () => []).add(c);
     }
 
     final segments = <FigureSegment>[];
     final usedClusters = <_Cluster>{};
-    final usedCaptions = <_CaptionMention>{};
+    final usedCaptions = <_CaptionCandidate>{};
 
     // Pass 1: 同页配对——每个 cluster 找同页最近 caption,然后按 caption 合并簇.
     // 多个簇映射到同一 caption(如 Figure_2 的 image + 远处 vision_footnote 被
     // cluster gap 切开) 时,应合并为一个 segment,而不是各起一个 .
-    final byCaption = <_CaptionMention, List<_Cluster>>{};
+    final byCaption = <_CaptionCandidate, List<_Cluster>>{};
     for (final entry in clustersByPage.entries) {
       final pi = entry.key;
       final pageCaptions = captionsByPage[pi] ?? const [];
@@ -512,8 +668,12 @@ class FigureExtractService {
       );
     }
 
-    // Pass 3: 匿名兜底——仍未配对 cluster 若含 image/chart 就升格.
+    // Pass 3: 同页晚到 caption 认领——cluster 自己没在 Pass 1 配上 caption,
+    // 但同页还有未占用的 figure_title caption 时,把这条 caption 抓过来.
     // 限 image/chart(不含 table)——独立 table 多为侧栏定义框,宁可漏不可错.
+    //
+    // **不再生成匿名 segment**:没匹配到 figure_title 的视觉簇直接丢弃.
+    // (目前临时策略,后续可加 markdown ![](...) 反推 caption 等兜底)
     final claimedNames = segments
         .map((s) => s.captionName)
         .where((n) => n.isNotEmpty)
@@ -526,34 +686,27 @@ class FigureExtractService {
       );
       if (!hasVisual) continue;
 
-      // 同页未占用 caption(包括 markdown-only)优先认领
-      _CaptionMention? attached;
+      _CaptionCandidate? attached;
       for (final c in captionsByPage[cluster.pageIndex] ?? const []) {
         if (usedCaptions.contains(c)) continue;
         if (claimedNames.contains(c.captionName)) continue;
         attached = c;
         break;
       }
-      if (attached != null) {
-        usedCaptions.add(attached);
-        claimedNames.add(attached.captionName);
-        segments.add(_buildSegmentFromBlocks(cluster.blocks, attached));
+      if (attached == null) {
         debugPrint(
-          '[FigureExtract] anonymous + same-page caption: '
-          '"${attached.captionName}" on page ${cluster.pageIndex}',
-        );
-      } else {
-        segments.add(FigureSegment(
-          pageIndex: cluster.pageIndex,
-          blocks: cluster.blocks.map((b) => b.block).toList(),
-          captionText: '',
-          captionName: '',
-        ));
-        debugPrint(
-          '[FigureExtract] anonymous orphan emitted on page '
+          '[FigureExtract] dropped uncaptioned cluster on page '
           '${cluster.pageIndex} (${cluster.blocks.length} blocks)',
         );
+        continue;
       }
+      usedCaptions.add(attached);
+      claimedNames.add(attached.captionName);
+      segments.add(_buildSegmentFromBlocks(cluster.blocks, attached));
+      debugPrint(
+        '[FigureExtract] late-bound caption: "${attached.captionName}" '
+        'on page ${cluster.pageIndex}',
+      );
     }
 
     // 按 pageIndex 稳定排序(同页保留插入顺序)
@@ -601,9 +754,9 @@ class FigureExtractService {
 
   /// 在 [candidates] 中找最近 caption(基于 cluster.bbox 到 caption.bbox 的距离).
   /// markdown-only caption(无 bbox) 走"同页且 cluster 找不到其他候选"的兜底.
-  _CaptionMention? _nearestCaption(
+  _CaptionCandidate? _nearestCaption(
     _Cluster cluster,
-    List<_CaptionMention> candidates,
+    List<_CaptionCandidate> candidates,
     double threshold,
   ) {
     final boxed =
@@ -621,7 +774,7 @@ class FigureExtractService {
     final rest = boxed.where((c) => _isTableCaption(c) != isTableCluster);
     final ordered = [...preferred, ...rest];
 
-    _CaptionMention? best;
+    _CaptionCandidate? best;
     var bestGap = double.infinity;
     for (final c in ordered) {
       final gap = cluster.bbox.gapTo(c.bbox!);
@@ -638,13 +791,25 @@ class FigureExtractService {
   }
 
   /// 把若干 figure block + 一个 caption 组装成 FigureSegment.
-  /// caption 若来自 parsing_res_list block,合成对应 LayoutBlock 放在 blocks 头部,
-  /// 让下游 markdown 替换能按 block_id 找到 caption 行并占住.
+  ///
+  /// caption 若来自 parsing_res_list block,合成对应 LayoutBlock 放在 blocks 头部
+  /// (blockBbox 用合并后的 outer union, blockContent 用合并后的完整文本),
+  /// 让下游 markdown 替换能按 block_id / 内容前缀找到 caption 行并占住.
+  ///
+  /// PR-2: caption.continuationBlocks 同样进 blocks (保留各自原始 bbox/content),
+  /// 下游 [DocExtractService._planFigureLines] 按内容前缀搜行抹掉它们,
+  /// 避免合并的 caption 留下孤行残骸.
+  ///
+  /// 注: trim 硬契约只识别"label==figure_title 且匹配 _mainCaptionRe"的 caption.
+  /// anchor 合成的 LayoutBlock 内容是合并后的完整 caption text → 仍匹配正则,
+  /// 其 bbox 已是合并 outer union → trim 自然扣除整个合并区域.
+  /// continuation block 内容不匹配正则 → trim 跳过, 不重复扣除 (语义正确).
   FigureSegment _buildSegmentFromBlocks(
     List<_FigureBlock> figureBlocks,
-    _CaptionMention caption,
+    _CaptionCandidate caption,
   ) {
     final blocks = <LayoutBlock>[];
+    final captionAllIds = <String>{};
     if (caption.blockId != null) {
       blocks.add(LayoutBlock(
         blockId: caption.blockId!,
@@ -652,9 +817,14 @@ class FigureExtractService {
         blockBbox: caption.bbox?.toList() ?? const [0, 0, 0, 0],
         blockContent: caption.text,
       ));
+      captionAllIds.add(caption.blockId!);
+    }
+    for (final cont in caption.continuationBlocks) {
+      blocks.add(cont);
+      captionAllIds.add(cont.blockId);
     }
     for (final b in figureBlocks) {
-      if (b.block.blockId == caption.blockId) continue;
+      if (captionAllIds.contains(b.block.blockId)) continue;
       blocks.add(b.block);
     }
     return FigureSegment(
@@ -692,29 +862,163 @@ class FigureExtractService {
   ///
   /// 不传 [pageBlocks] 或 segment 内无 caption (匿名 segment) 时退化为
   /// legacy "visual union" 路径.
+  ///
+  /// **硬契约**: 返回的 region 不能与 segment 中任何 main caption 的 bbox 相交.
+  /// 所有 return 路径在最后统一过 [trimCaptionFromRegion] 强制实现此契约.
   @visibleForTesting
   List<double> computeMergedBbox(
     List<LayoutBlock> segment, {
     List<LayoutBlock>? pageBlocks,
   }) {
     final visuals = segment.where(_isVisualBlock).toList();
-    final baseBbox = visuals.isNotEmpty
-        ? _Bbox.union(visuals).toList()
-        : _legacyFallbackBbox(segment);
 
-    if (pageBlocks == null || pageBlocks.isEmpty) return baseBbox;
-    if (visuals.isEmpty) return baseBbox; // 完全无视觉块不做激进扩展
-
+    // 早返路径: 无 pageBlocks / 无 visuals / 无 caption → legacy "visual union".
+    if (pageBlocks == null || pageBlocks.isEmpty || visuals.isEmpty) {
+      final baseBbox = visuals.isNotEmpty
+          ? _Bbox.union(visuals).toList()
+          : _legacyFallbackBbox(segment);
+      return trimCaptionFromRegion(baseBbox, segment);
+    }
     final caption = _findSegmentCaption(segment);
-    if (caption == null) return baseBbox; // 匿名 segment 走 legacy 路径
+    if (caption == null) {
+      return trimCaptionFromRegion(_Bbox.union(visuals).toList(), segment);
+    }
 
-    return _inferRegionFromCaption(
+    // direction-aware baseBbox.
+    //
+    // vision_footnote 在 PaddleOCR 视角有两种语义:
+    //   (1) caption 下方说明文字 "(B) 2-photon optical path." — 不属于 figure 区域
+    //   (2) figure 内部子图位置标签 "(a)/(b)" — 属于 figure 区域 (PaddleOCR 漏检
+    //       image 时, 这是唯一能锚定子图位置的 block)
+    // 判据: vf 与 figure 同 direction 侧 (相对 caption) → 角色 (2), 并入 baseBbox;
+    //       反侧 → 角色 (1), 排除 (保持现有行为).
+    final column = _detectColumnFor(caption, pageBlocks);
+    final direction = _inferFigureDirection(caption, column, pageBlocks);
+    final relevantVfs = segment
+        .where((b) =>
+            b.blockLabel == 'vision_footnote' &&
+            _isVisionFootnoteInFigureRegion(b, caption, direction))
+        .toList();
+    final baseBbox = relevantVfs.isEmpty
+        ? _Bbox.union(visuals).toList()
+        : _Bbox.union([...visuals, ...relevantVfs]).toList();
+
+    final region = _inferRegionFromCaption(
       caption: caption,
       baseBbox: baseBbox,
       segment: segment,
       pageBlocks: pageBlocks,
+      direction: direction,
     );
+    return trimCaptionFromRegion(region, segment);
   }
+
+  /// 判断 vision_footnote 是否属于 figure 内部 (而非 caption 下方说明文字).
+  ///
+  /// 判据: vf 与 figure 在 [direction] 同侧.
+  ///   * `above` (figure 在 caption 上方) → vf.bottom ≤ caption.top
+  ///   * `below` (figure 在 caption 下方) → vf.top ≥ caption.bottom
+  ///   * `left`  (figure 在 caption 左侧) → vf.right ≤ caption.left
+  ///   * `right` (figure 在 caption 右侧) → vf.left ≥ caption.right
+  ///
+  /// 反侧的 vision_footnote (与 caption 同侧, 远离 figure) 视为 caption 注脚,
+  /// 不参与 figure baseBbox.
+  bool _isVisionFootnoteInFigureRegion(
+    LayoutBlock vf,
+    LayoutBlock caption,
+    _FigureDirection direction,
+  ) {
+    final v = _Bbox.fromBlock(vf);
+    final c = _Bbox.fromBlock(caption);
+    return switch (direction) {
+      _FigureDirection.above => v.bottom <= c.top,
+      _FigureDirection.below => v.top >= c.bottom,
+      _FigureDirection.left => v.right <= c.left,
+      _FigureDirection.right => v.left >= c.right,
+    };
+  }
+
+  /// 硬契约: 把 [region] 收缩到与 [segment] 内任何 main caption 的 bbox 都不相交.
+  ///
+  /// "main caption" = label==`figure_title` **且** 内容匹配 [_mainCaptionRe].
+  /// 子标签 ((a)/(b) 这类短 figure_title) 不被视为 main caption,保留在 region
+  /// 内——它们是 figure 内部结构的一部分.
+  ///
+  /// PR-5a: 算法从"上下二选一"扩展为"4 方向最小损失". 对每个与 region 相交的
+  /// caption, 计算从 top/bottom/left/right 4 个方向 trim 后各自损失的面积,
+  /// 选损失最小的方向. 这能正确处理 caption 横向重叠 region 的场景 (大 figure
+  /// 左右侧 caption), 旧"纵向二选一"在这些场景下会结构性错位.
+  ///
+  /// 注: 此算法对 PR-1 的 top/bottom 收缩测试 backward compatible —— caption
+  /// 在 region 上半时 trim top 损失最小, 下半时 trim bottom 损失最小, 行为
+  /// 与旧"二选一"一致.
+  ///
+  /// 当前路径下大多数情况 region 与 caption 不相交 (因为 baseBbox 由 `_isVisualBlock`
+  /// 过滤掉了 figure_title, 扩展方向也避开 caption), 此函数是 no-op. 它的价值
+  /// 在于把"裁剪框无 caption"这条不变量提升为可被测试 enforce 的硬契约.
+  @visibleForTesting
+  List<double> trimCaptionFromRegion(
+    List<double> region,
+    List<LayoutBlock> segment,
+  ) {
+    var left = region[0], top = region[1], right = region[2], bottom = region[3];
+
+    for (final b in segment) {
+      if (b.blockLabel != 'figure_title') continue;
+      if (!_mainCaptionRe.hasMatch(b.blockContent.trim())) continue;
+
+      final cap = _Bbox.fromBlock(b);
+      // 不相交直接跳过 (绝大多数路径走这里)
+      if (cap.bottom <= top || cap.top >= bottom) continue;
+      if (cap.right <= left || cap.left >= right) continue;
+
+      // 4 方向 trim 后的损失面积 (近似: 用 region 宽/高乘以"被吃进的边距").
+      // 注: 这是上界估算 (没扣 caption 在 region 外的部分), 但对所有 4 方向
+      // 一致, 因此用作相对比较选最优方向是正确的.
+      final w = right - left;
+      final h = bottom - top;
+      final lossTop = w * (cap.bottom - top);
+      final lossBottom = w * (bottom - cap.top);
+      final lossLeft = h * (cap.right - left);
+      final lossRight = h * (right - cap.left);
+
+      // 选损失最小方向
+      var bestLoss = lossTop;
+      var bestSide = _TrimSide.top;
+      if (lossBottom < bestLoss) {
+        bestLoss = lossBottom;
+        bestSide = _TrimSide.bottom;
+      }
+      if (lossLeft < bestLoss) {
+        bestLoss = lossLeft;
+        bestSide = _TrimSide.left;
+      }
+      if (lossRight < bestLoss) {
+        bestSide = _TrimSide.right;
+      }
+
+      switch (bestSide) {
+        case _TrimSide.top:
+          final newTop = cap.bottom + _captionGap;
+          if (newTop < bottom) top = newTop;
+        case _TrimSide.bottom:
+          final newBottom = cap.top - _captionGap;
+          if (newBottom > top) bottom = newBottom;
+        case _TrimSide.left:
+          final newLeft = cap.right + _captionGap;
+          if (newLeft < right) left = newLeft;
+        case _TrimSide.right:
+          final newRight = cap.left - _captionGap;
+          if (newRight > left) right = newRight;
+      }
+    }
+    return [left, top, right, bottom];
+  }
+
+  /// caption ↔ region 的最小分隔间距 (API 坐标系 144 DPI).
+  /// 数值与 [_missedVisualMargin] 一致, 保证 caption 边界与 stable blocker 边界
+  /// 视觉对齐. 改动两者中任一个时应同时改另一个.
+  static const _captionGap = 8.0;
 
   /// 视觉内容 block (figure 真正的可视部分).
   static bool _isVisualBlock(LayoutBlock b) =>
@@ -790,23 +1094,35 @@ class FigureExtractService {
     required List<double> baseBbox,
     required List<LayoutBlock> segment,
     required List<LayoutBlock> pageBlocks,
+    required _FigureDirection direction,
   }) {
-    final column = _detectColumnFor(caption, pageBlocks);
-    final direction = _inferFigureDirection(caption, column, pageBlocks);
-
-    return direction == _FigureDirection.above
-        ? _extendUpward(
-            caption: caption,
-            baseBbox: baseBbox,
-            segment: segment,
-            pageBlocks: pageBlocks,
-          )
-        : _extendDownward(
-            caption: caption,
-            baseBbox: baseBbox,
-            segment: segment,
-            pageBlocks: pageBlocks,
-          );
+    // Dart 3 exhaustive switch: 新增 _FigureDirection 值时编译器强制要求处理.
+    return switch (direction) {
+      _FigureDirection.above => _extendUpward(
+          caption: caption,
+          baseBbox: baseBbox,
+          segment: segment,
+          pageBlocks: pageBlocks,
+        ),
+      _FigureDirection.below => _extendDownward(
+          caption: caption,
+          baseBbox: baseBbox,
+          segment: segment,
+          pageBlocks: pageBlocks,
+        ),
+      _FigureDirection.left => _extendLeftward(
+          caption: caption,
+          baseBbox: baseBbox,
+          segment: segment,
+          pageBlocks: pageBlocks,
+        ),
+      _FigureDirection.right => _extendRightward(
+          caption: caption,
+          baseBbox: baseBbox,
+          segment: segment,
+          pageBlocks: pageBlocks,
+        ),
+    };
   }
 
   /// 推断 caption 所在的 column(单栏论文整页一栏,双栏论文左右两栏).
@@ -887,6 +1203,16 @@ class FigureExtractService {
 
   /// 推断 figure 相对 caption 的方向: 比较同 column 内 caption 上方/下方的
   /// 视觉块总高度,多的一边胜出.两边相等时 fallback 到 above (论文常态).
+  /// 推断 figure 相对 caption 的 4 方向. 用**视觉块面积**作判据
+  /// (纵向 height 与横向 width 不能直接比, 用 area 维度统一).
+  ///
+  /// 4 个统计区域:
+  ///   above — 同 column 内, 完全在 caption 上方的视觉块面积之和
+  ///   below — 同 column 内, 完全在 caption 下方的视觉块面积之和
+  ///   left  — 同 "row" (caption 纵向区间) 内, 完全在 caption 左侧的视觉块面积
+  ///   right — 同 "row" 内, 完全在 caption 右侧的视觉块面积
+  ///
+  /// 选面积最大方向. 全 0 (无视觉块) 时 fallback 到 above (论文常态).
   _FigureDirection _inferFigureDirection(
     LayoutBlock caption,
     _Column column,
@@ -894,26 +1220,56 @@ class FigureExtractService {
   ) {
     final captionTop = caption.blockBbox[1];
     final captionBottom = caption.blockBbox[3];
+    final captionLeft = caption.blockBbox[0];
+    final captionRight = caption.blockBbox[2];
 
-    double aboveHeight = 0, belowHeight = 0;
+    double aboveArea = 0, belowArea = 0, leftArea = 0, rightArea = 0;
     for (final b in pageBlocks) {
       if (!_isVisualBlock(b)) continue;
       final bLeft = b.blockBbox[0];
-      final bRight = b.blockBbox[2];
-      // 仅看同 column (横向与 column overlap)
-      if (bRight <= column.left || bLeft >= column.right) continue;
-
       final bTop = b.blockBbox[1];
+      final bRight = b.blockBbox[2];
       final bBottom = b.blockBbox[3];
-      final h = bBottom - bTop;
-      if (bBottom <= captionTop) {
-        aboveHeight += h;
-      } else if (bTop >= captionBottom) {
-        belowHeight += h;
+      final area = (bRight - bLeft) * (bBottom - bTop);
+      if (area <= 0) continue;
+
+      // 同 column = 横向与 caption.column 有 overlap → 看上下方分布
+      final inColumn = bRight > column.left && bLeft < column.right;
+      // 同 row = 纵向与 caption 有 overlap → 看左右分布
+      final inRow = bBottom > captionTop && bTop < captionBottom;
+
+      if (inColumn) {
+        if (bBottom <= captionTop) {
+          aboveArea += area;
+        } else if (bTop >= captionBottom) {
+          belowArea += area;
+        }
+      }
+      if (inRow) {
+        if (bRight <= captionLeft) {
+          leftArea += area;
+        } else if (bLeft >= captionRight) {
+          rightArea += area;
+        }
       }
     }
-    if (belowHeight > aboveHeight) return _FigureDirection.below;
-    return _FigureDirection.above; // 平局或上方多 → 默认 above
+
+    // 4 方向比较, 取最大. 平局 fallback 顺序: above > below > left > right.
+    var best = _FigureDirection.above;
+    var bestArea = aboveArea;
+    if (belowArea > bestArea) {
+      best = _FigureDirection.below;
+      bestArea = belowArea;
+    }
+    if (leftArea > bestArea) {
+      best = _FigureDirection.left;
+      bestArea = leftArea;
+    }
+    if (rightArea > bestArea) {
+      best = _FigureDirection.right;
+      bestArea = rightArea;
+    }
+    return best;
   }
 
   /// 沿 caption 上方扩展 baseBbox.top.
@@ -1020,6 +1376,117 @@ class FigureExtractService {
       if (bRight <= hLeft || bLeft >= hRight) continue;
       if (bTop <= anchorBottom) continue;
       if (bTop < nearest) nearest = bTop;
+    }
+    return nearest;
+  }
+
+  /// 沿 caption 左侧扩展 baseBbox.left (figure 在 caption 左侧的版面).
+  /// 与 [_extendUpward] 对称: 纵向 overlap 判断用 visualUnion 的 top/bottom,
+  /// gap 双门控用 visualUnion 的 width.
+  List<double> _extendLeftward({
+    required LayoutBlock caption,
+    required List<double> baseBbox,
+    required List<LayoutBlock> segment,
+    required List<LayoutBlock> pageBlocks,
+  }) {
+    // caption 必须在 baseBbox 右侧 (左侧扩展场景: figure 左, caption 右)
+    if (caption.blockBbox[0] < baseBbox[2]) return baseBbox;
+    final visualLeft = baseBbox[0];
+    final visualWidth = baseBbox[2] - baseBbox[0];
+    if (visualWidth <= 0) return baseBbox;
+
+    final blockerRight = _nearestBlockerLeft(
+      anchorLeft: visualLeft,
+      vTop: baseBbox[1],
+      vBottom: baseBbox[3],
+      segment: segment,
+      pageBlocks: pageBlocks,
+    );
+    final gap = visualLeft - blockerRight;
+    if (gap < _missedVisualGapAbs) return baseBbox;
+    if (gap / visualWidth < _missedVisualGapRatio) return baseBbox;
+
+    final newLeft = blockerRight + _missedVisualMargin;
+    if (newLeft >= visualLeft) return baseBbox;
+    return [newLeft, baseBbox[1], baseBbox[2], baseBbox[3]];
+  }
+
+  /// 沿 caption 右侧扩展 baseBbox.right (figure 在 caption 右侧的版面).
+  /// 对 [_extendLeftward] 的对称实现.
+  List<double> _extendRightward({
+    required LayoutBlock caption,
+    required List<double> baseBbox,
+    required List<LayoutBlock> segment,
+    required List<LayoutBlock> pageBlocks,
+  }) {
+    if (caption.blockBbox[2] > baseBbox[0]) return baseBbox;
+    final visualRight = baseBbox[2];
+    final visualWidth = baseBbox[2] - baseBbox[0];
+    if (visualWidth <= 0) return baseBbox;
+
+    final pageRight = pageBlocks.fold<double>(
+      0.0,
+      (m, b) => b.blockBbox[2] > m ? b.blockBbox[2] : m,
+    );
+    final blockerLeft = _nearestBlockerRight(
+      anchorRight: visualRight,
+      pageRight: pageRight,
+      vTop: baseBbox[1],
+      vBottom: baseBbox[3],
+      segment: segment,
+      pageBlocks: pageBlocks,
+    );
+    final gap = blockerLeft - visualRight;
+    if (gap < _missedVisualGapAbs) return baseBbox;
+    if (gap / visualWidth < _missedVisualGapRatio) return baseBbox;
+
+    final newRight = blockerLeft - _missedVisualMargin;
+    if (newRight <= visualRight) return baseBbox;
+    return [baseBbox[0], baseBbox[1], newRight, baseBbox[3]];
+  }
+
+  double _nearestBlockerLeft({
+    required double anchorLeft,
+    required double vTop,
+    required double vBottom,
+    required List<LayoutBlock> segment,
+    required List<LayoutBlock> pageBlocks,
+  }) {
+    final segmentIds = segment.map((b) => b.blockId).toSet();
+    double nearest = 0;
+    for (final b in pageBlocks) {
+      if (segmentIds.contains(b.blockId)) continue;
+      if (!_isStableBlocker(b)) continue;
+      final bTop = b.blockBbox[1];
+      final bRight = b.blockBbox[2];
+      final bBottom = b.blockBbox[3];
+      // 必须与 visual union 纵向 overlap (同 row)
+      if (bBottom <= vTop || bTop >= vBottom) continue;
+      if (bRight >= anchorLeft) continue;
+      if (bRight > nearest) nearest = bRight;
+    }
+    return nearest;
+  }
+
+  double _nearestBlockerRight({
+    required double anchorRight,
+    required double pageRight,
+    required double vTop,
+    required double vBottom,
+    required List<LayoutBlock> segment,
+    required List<LayoutBlock> pageBlocks,
+  }) {
+    final segmentIds = segment.map((b) => b.blockId).toSet();
+    double nearest = pageRight;
+    for (final b in pageBlocks) {
+      if (segmentIds.contains(b.blockId)) continue;
+      if (!_isStableBlocker(b)) continue;
+      final bLeft = b.blockBbox[0];
+      final bTop = b.blockBbox[1];
+      final bBottom = b.blockBbox[3];
+      if (bBottom <= vTop || bTop >= vBottom) continue;
+      if (bLeft <= anchorRight) continue;
+      if (bLeft < nearest) nearest = bLeft;
     }
     return nearest;
   }
