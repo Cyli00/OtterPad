@@ -184,12 +184,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           .reprocessMarkdown(pdfPath: filePath, title: widget.document.title);
       if (!mounted) return;
 
-      _sessionNotifier.useExtractedMarkdown(
-        markdownPath: mdPath,
-        markdownContent: content,
-      );
-      _figuresFuture = null;
-      ref.read(snackBarServiceProvider).showResult(message: '重新排版完成');
+      // 推迟到下一帧：reprocess 完成那一刻可能还有正在 unmount 的子 Consumer
+      // （工具栏 AnimatedSlide、search bar 等），同步发 state 通知会撞上 defunct
+      // Element 的断言。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _sessionNotifier.useExtractedMarkdown(
+          markdownPath: mdPath,
+          markdownContent: content,
+        );
+        _figuresFuture = null;
+        ref.read(snackBarServiceProvider).showResult(message: '重新排版完成');
+      });
     } catch (e) {
       if (!mounted) return;
       ref.read(snackBarServiceProvider).showResult(message: '排版失败: $e');
