@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
@@ -162,8 +163,6 @@ class DocumentTranslationNotifier
         useCache: useCache,
         onResult: (hash, translation) {
           translations[hash] = translation;
-          // 复制一份避免外部引用未来被替换——StateNotifier 等值比较依赖身份判断
-          state = state.copyWith(translations: Map.of(translations));
         },
         onProgress: (done, total) {
           _progress.value = TranslationProgress(
@@ -174,9 +173,20 @@ class DocumentTranslationNotifier
         },
       );
 
+      // 等到下一帧 finalizeTree 结束：LLM 调用横跨多秒，调用方 widget 可能
+      // 在 await 期间被 pop。Riverpod 3.x 的 ConsumerStatefulElement 在
+      // unmount() 中先把 Element 标为 defunct + state.dispose()，再 close
+      // 订阅；若此时同步写 state，listener `(_, _) => markNeedsBuild()` 会
+      // 命中 defunct Element 的断言。等帧结束后所有 in-flight unmount 已完
+      // 成，订阅被清理，写入安全。参见 commit 7bb7fac 对 reprocess 路径的
+      // 同款修复。
+      await SchedulerBinding.instance.endOfFrame;
+
       if (cancel.isCancelled) {
-        // 已取消：不改 done 态，保留已翻译片段但状态回 idle
-        state = state.copyWith(status: DocTranslationStatus.idle);
+        state = state.copyWith(
+          status: DocTranslationStatus.idle,
+          translations: translations,
+        );
         return false;
       }
 
@@ -190,6 +200,7 @@ class DocumentTranslationNotifier
       // 仅更新 state——错误消息交给 UI 层根据 state.error 决定如何展示。
       // 不在这里直接 showResult：那会和 view.dart 的进度 SnackBar 生命周期
       // 抢 scaffold messenger，导致错误消息被 handle.dismiss 误关。
+      await SchedulerBinding.instance.endOfFrame;
       state = state.copyWith(status: DocTranslationStatus.failed, error: e);
       return false;
     } finally {
@@ -233,6 +244,9 @@ class DocumentTranslationNotifier
       config.targetLanguage,
     );
 
+    // 与 translate() 同款保护：clearTranslations 的 await 跨过 widget unmount
+    // 时，_reset() 同步写 state 会撞 defunct listener 的 markNeedsBuild。
+    await SchedulerBinding.instance.endOfFrame;
     _reset();
     await translate(markdown, useCache: false);
   }
