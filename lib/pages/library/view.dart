@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/api_provider.dart';
+import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
+import '../../providers/favorites_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/doc_paths.dart';
+import '../shelf/widgets/create_favorite_dialog.dart';
+import '../shelf/widgets/pick_favorite_sheet.dart';
 import 'widgets/batch_progress_sheet.dart';
 import 'widgets/bookshelf_grid.dart';
 import 'widgets/bookshelf_list.dart';
@@ -40,6 +44,42 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// 把选中文献移入某个收藏夹——先选目标收藏夹（含新建入口），再批量加入。
+  ///
+  /// Provider 层 `addDocuments` 自带去重；pick sheet 还会显示与每个收藏夹
+  /// 的重叠度提示，让用户清楚有多少篇会被跳过。
+  Future<void> _addSelectedToFavorite() async {
+    final selection = ref.read(selectionProvider);
+    if (selection.selectedIds.isEmpty) return;
+
+    final favorites = ref.read(favoritesProvider);
+    final selectedIds = selection.selectedIds.toSet();
+
+    final result = await showPickFavoriteSheet(
+      context: context,
+      favorites: favorites,
+      selectedDocumentIds: selectedIds,
+      onCreateFavorite: () async {
+        final res = await showCreateFavoriteDialog(context);
+        if (res == null) return null;
+        return ref
+            .read(favoritesProvider.notifier)
+            .create(emoji: res['emoji']!, name: res['name']!);
+      },
+    );
+    if (result == null) return;
+
+    final added = await ref
+        .read(documentLifecycleProvider)
+        .addToFavoriteBatch(result.favoriteId, selectedIds);
+    final skipped = selectedIds.length - added;
+    final msg = skipped == 0
+        ? '已加入 $added 篇文献'
+        : '已加入 $added 篇文献，$skipped 篇已存在已跳过';
+    ref.read(snackBarServiceProvider).showResult(message: msg);
+    ref.read(selectionProvider.notifier).exit();
   }
 
   /// 批量删除选中文献
@@ -179,6 +219,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                             .read(selectionProvider.notifier)
                             .toggleAll(allIds),
                         onExtract: _extractSelected,
+                        onAddToFavorite: _addSelectedToFavorite,
                         onDelete: _deleteSelected,
                       )
                     : const HomeHeader(key: ValueKey('normal')),

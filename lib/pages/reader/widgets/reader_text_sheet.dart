@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../services/translation_style.dart';
+import 'reader_background.dart';
 
 /// 阅读器「字体/字号 + 翻页方式 + 译文样式」底部面板。
 ///
@@ -17,7 +18,7 @@ Future<void> showReaderTextSheet(BuildContext context) {
     context: context,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.25),
-    builder: (_) => const _ReaderTextSheet(),
+    builder: (_) => const ReaderLocalTheme(child: _ReaderTextSheet()),
   );
 }
 
@@ -65,16 +66,19 @@ class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
             const SizedBox(height: 4),
 
             // ── 字号 ──
-            _sectionLabel(theme, cs, Symbols.format_size_rounded, '字号',
-                '${_localFontSize.round()}px'),
+            _sectionLabel(
+              theme,
+              cs,
+              Symbols.format_size_rounded,
+              '字号',
+              '${_localFontSize.round()}px',
+            ),
             const SizedBox(height: 8),
             SliderTheme(
               data: SliderTheme.of(context).copyWith(
                 trackHeight: 3,
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 8),
-                overlayShape:
-                    const RoundSliderOverlayShape(overlayRadius: 16),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
               ),
               child: Slider(
                 value: _localFontSize,
@@ -88,19 +92,26 @@ class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
             const SizedBox(height: 16),
 
             // ── 字体族 ──
-            _sectionLabel(theme, cs, Symbols.text_fields_rounded, '字体',
-                settings.font.label),
-            const SizedBox(height: 12),
-            _FontFamilyRow(
-              current: settings.font,
-              onChanged: notifier.setFont,
+            _sectionLabel(
+              theme,
+              cs,
+              Symbols.text_fields_rounded,
+              '字体',
+              settings.font.label,
             ),
+            const SizedBox(height: 12),
+            _FontFamilyRow(current: settings.font, onChanged: notifier.setFont),
 
             const SizedBox(height: 16),
 
             // ── 翻页方式 ──
-            _sectionLabel(theme, cs, Symbols.menu_book_rounded, '翻页方式',
-                settings.paginationMode.label),
+            _sectionLabel(
+              theme,
+              cs,
+              Symbols.menu_book_rounded,
+              '翻页方式',
+              settings.paginationMode.label,
+            ),
             const SizedBox(height: 12),
             _PaginationModeRow(
               current: settings.paginationMode,
@@ -110,8 +121,13 @@ class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
             const SizedBox(height: 20),
 
             // ── 译文样式 ──
-            _sectionLabel(theme, cs, Symbols.translate_rounded, '译文样式',
-                currentStyle.label),
+            _sectionLabel(
+              theme,
+              cs,
+              Symbols.translate_rounded,
+              '译文样式',
+              currentStyle.label,
+            ),
             const SizedBox(height: 12),
             _TranslationStyleRow(currentId: translationCfg.displayStyleId),
           ],
@@ -213,8 +229,7 @@ class _FontFamilyRow extends StatelessWidget {
                       fontFamily: f.fontFamily,
                       fontFamilyFallback: f.fontFamilyFallback,
                       fontSize: 15,
-                      fontWeight:
-                          selected ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                       color: selected
                           ? cs.onPrimaryContainer
                           : cs.onSurfaceVariant,
@@ -284,8 +299,9 @@ class _PaginationModeRow extends StatelessWidget {
                         m.label,
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight:
-                              selected ? FontWeight.w600 : FontWeight.w400,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
                           color: selected
                               ? cs.onPrimaryContainer
                               : cs.onSurfaceVariant,
@@ -430,46 +446,57 @@ class _TranslationStyleRowState extends ConsumerState<_TranslationStyleRow> {
   /// 把样式 id 映射为"自描述 chip"的预览内容——文本本身就反映该样式特征。
   /// 与 translation_settings_section 的 _buildStyledLabel 视觉一致。
   Widget _styledLabel(
-      String styleId, String label, ColorScheme cs, ThemeData theme) {
+    String styleId,
+    String label,
+    ColorScheme cs,
+    ThemeData theme,
+  ) {
     final base = theme.textTheme.bodyMedium!;
     return switch (styleId) {
       'themed' => Text(label, style: base.copyWith(color: cs.primary)),
-      'bold' =>
-        Text(label, style: base.copyWith(fontWeight: FontWeight.bold)),
-      'italic' =>
-        Text(label, style: base.copyWith(fontStyle: FontStyle.italic)),
-      'weakened' => Text(label,
-          style: base.copyWith(color: cs.onSurface.withAlpha(120))),
-      'dashed' => Text(label,
-          style: base.copyWith(
-            color: cs.primary,
-            decoration: TextDecoration.underline,
-            decorationStyle: TextDecorationStyle.dashed,
-            decorationColor: cs.primary.withAlpha(140),
-          )),
-      'highlight' => Text(label,
-          style: base.copyWith(backgroundColor: cs.primaryContainer)),
+      'bold' => Text(label, style: base.copyWith(fontWeight: FontWeight.bold)),
+      'italic' => Text(
+        label,
+        style: base.copyWith(fontStyle: FontStyle.italic),
+      ),
+      'weakened' => Text(
+        label,
+        style: base.copyWith(color: cs.onSurface.withAlpha(120)),
+      ),
+      'dashed' => Text(
+        label,
+        style: base.copyWith(
+          color: cs.primary,
+          decoration: TextDecoration.underline,
+          decorationStyle: TextDecorationStyle.dashed,
+          decorationColor: cs.primary.withAlpha(140),
+        ),
+      ),
+      'highlight' => Text(
+        label,
+        style: base.copyWith(backgroundColor: cs.primaryContainer),
+      ),
       'blur' => ClipRect(
-          child: ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-            child: Text(label, style: base),
-          ),
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+          child: Text(label, style: base),
         ),
+      ),
       'quote' => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 3,
-              height: 16,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(1.5),
-              ),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 3,
+            height: 16,
+            decoration: BoxDecoration(
+              color: cs.outlineVariant,
+              borderRadius: BorderRadius.circular(1.5),
             ),
-            const SizedBox(width: 6),
-            Text(label, style: base.copyWith(color: cs.onSurfaceVariant)),
-          ],
-        ),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: base.copyWith(color: cs.onSurfaceVariant)),
+        ],
+      ),
       _ => Text(label, style: base),
     };
   }

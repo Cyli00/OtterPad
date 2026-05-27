@@ -22,6 +22,7 @@ String buildReaderHtml({
   required ReaderPalette palette,
   required ReaderSettingsState settings,
   required String baseHref,
+  String translationStyleId = 'themed',
   String imageCacheBuster = '',
 }) {
   final htmlBody = _markdownToHtml(markdownContent, imageCacheBuster);
@@ -40,7 +41,7 @@ String buildReaderHtml({
 <link rel="stylesheet" href="/_assets/katex/katex.min.css">
 <style>$css</style>
 </head>
-<body>
+<body data-translation-style="$translationStyleId">
 <article id="content">$htmlBody</article>
 <script src="/_assets/katex/katex.min.js"></script>
 <script src="/_assets/katex/contrib/auto-render.min.js"></script>
@@ -65,6 +66,10 @@ String buildThemeCssVars(ReaderPalette palette, ReaderSettingsState settings) {
     document.documentElement.style.setProperty('--code-bg', "${_cssColor(palette.codeBlock)}");
     document.documentElement.style.setProperty('--font-size', "${settings.fontSize}px");
     document.documentElement.style.setProperty('--font-family', "${_cssFontFamily(settings.font)}");
+    document.documentElement.style.setProperty('--tr-weak', "${_cssColorWithAlpha(palette.text, 0.47)}");
+    document.documentElement.style.setProperty('--tr-hl-bg', "${_cssColorWithAlpha(palette.link, 0.14)}");
+    document.documentElement.style.setProperty('--tr-hl-text', "${_cssColorWithAlpha(palette.link, 0.71)}");
+    document.documentElement.style.setProperty('--tr-deco', "${_cssColorWithAlpha(palette.link, 0.55)}");
   ''';
 }
 
@@ -249,6 +254,10 @@ String _buildCss(ReaderPalette palette, ReaderSettingsState settings) {
   --font-size: ${settings.fontSize}px;
   --font-family: ${_cssFontFamily(settings.font)};
   --line-height: 1.7;
+  --tr-weak: ${_cssColorWithAlpha(palette.text, 0.47)};
+  --tr-hl-bg: ${_cssColorWithAlpha(palette.link, 0.14)};
+  --tr-hl-text: ${_cssColorWithAlpha(palette.link, 0.71)};
+  --tr-deco: ${_cssColorWithAlpha(palette.link, 0.55)};
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -368,6 +377,29 @@ figcaption {
 }
 
 .translated { color: var(--link); }
+body[data-translation-style="weakened"] .translated {
+  color: var(--tr-weak);
+}
+body[data-translation-style="dashed"] .translated {
+  text-decoration: underline dashed var(--tr-deco);
+  text-underline-offset: 3px;
+}
+body[data-translation-style="highlight"] .translated {
+  color: var(--tr-hl-text);
+  background-color: var(--tr-hl-bg);
+  border-radius: 3px;
+  padding: 1px 3px;
+}
+body[data-translation-style="blur"] .translated {
+  color: var(--text);
+  filter: blur(5px);
+  transition: filter 0.15s ease-out;
+  cursor: pointer;
+}
+body[data-translation-style="blur"] .translated:hover,
+body[data-translation-style="blur"] .translated.revealed {
+  filter: none;
+}
 
 /* KaTeX 默认行内公式 1.21em，在 OtterPad 长文献正文里偏大——撑大行高、
    破坏段落节奏。压回 1.0em 让公式与正文同字号；display 数学维持稍大
@@ -407,34 +439,23 @@ figcaption {
   border-radius: 4px;
 }
 
-/* ─── 垂直模式滚动条（vertical 模式，默认）─────────────────
- * Android WebView 原生滚动条默认 4-6px 宽，触摸根本抓不住。
- * 接管样式：12px 宽 + thumb 圆角 + min-height 48 保证可拖。
- * 颜色用主题的 --secondary 半透明，深浅色背景都不刺眼。
- * 注：horizontal 模式下方有专门规则 display:none 隐藏，不冲突。
+/* ─── 隐藏 WebView 内置滚动条 ──────────────────────────────
+ * 垂直滚动视觉由 Flutter 侧 [_OverlayScrollbar] 覆盖层接管（在 WebView
+ * 上方 Stack 渲染 + 拖动交互）。CSS 这里必须把 WebKit / 标准滚动条
+ * 全部隐藏，否则桌面端（Windows WebView2 / macOS WKWebView，Chromium
+ * /WebKit 内核）会和 Flutter 覆盖层同时显示，出现"双滚动条"。
+ *
+ * Android 侧 InAppWebViewSettings.verticalScrollBarEnabled=false 只关
+ * OS 层原生条，对桌面 Chromium 内核无效，所以必须靠 CSS 兜底。
  */
 ::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-  background: transparent;
+  display: none;
+  width: 0;
+  height: 0;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background-color: color-mix(in srgb, var(--secondary) 55%, transparent);
-  border-radius: 6px;
-  min-height: 48px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in srgb, var(--secondary) 75%, transparent);
-}
-/* Firefox / 标准 scrollbar-* —— InAppWebView 主路径走 WebKit，这里只兜底 */
-html {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--secondary) 55%, transparent) transparent;
+html, body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* ─── 左右翻页（CSS Multi-column）────────────────────────────
@@ -496,6 +517,13 @@ String _cssColor(Color c) {
   return 'rgba($r,$g,$b,${a.toStringAsFixed(2)})';
 }
 
+String _cssColorWithAlpha(Color c, double a) {
+  final r = (c.r * 255).round();
+  final g = (c.g * 255).round();
+  final b = (c.b * 255).round();
+  return 'rgba($r,$g,$b,${a.toStringAsFixed(2)})';
+}
+
 /// 阅读器两套字体族的 CSS 表达（与 [ReaderFont.fontFamily] 对齐）。
 ///
 /// `serif` 首选 Times New Roman；`sans` 完全交给浏览器/系统默认
@@ -523,34 +551,84 @@ document.addEventListener('DOMContentLoaded', function() {
   window._overlayer = new Overlayer(document.getElementById('content'));
 });
 
-window.addEventListener('load', function() {
-  if (typeof renderMathInElement === 'function') {
-    renderMathInElement(document.body, {
-      delimiters: [
-        {left: '$$', right: '$$', display: true},
-        {left: '\\[', right: '\\]', display: true},
-        {left: '$', right: '$', display: false},
-        {left: '\\(', right: '\\)', display: false},
-      ],
-      throwOnError: false,
-    });
-  }
-  // KaTeX 渲染完后重绘已有高亮（如果有的话），再通知 Flutter 可以恢复高亮
+window.addEventListener('load', function() { _initLazyMath(); });
+
+function _onInitialRenderDone() {
   if (window._overlayer) window._overlayer.redraw();
-
-  // **关键**：触发一次 scroll 事件让浏览器重新评估所有 loading="lazy"
-  // 图片的可见性。HTML 解析时 KaTeX 还没渲染，浏览器评估视口时 layout
-  // 还很短（公式区都是 raw `$x$` 字面量），把首屏外图片误标记为屏外
-  // 永不加载；KaTeX 渲染完后 layout 大幅变长，但浏览器**不会自动**
-  // 重新评估 lazy 状态——必须人工触发 scroll 事件让 IntersectionObserver
-  // 重新跑一遍。否则用户看到的现象是"首次打开图片不显示，切换字号/字体
-  // 触发 layout 变化才出现"。
   window.dispatchEvent(new Event('scroll'));
-
   if (window.flutter_inappwebview) {
     window.flutter_inappwebview.callHandler('onContentReady');
   }
-});
+}
+
+function _initLazyMath() {
+  const content = document.getElementById('content');
+  if (typeof renderMathInElement !== 'function') {
+    _onInitialRenderDone();
+    return;
+  }
+
+  const opts = {
+    delimiters: [
+      {left: '$$', right: '$$', display: true},
+      {left: '\\[', right: '\\]', display: true},
+      {left: '$', right: '$', display: false},
+      {left: '\\(', right: '\\)', display: false},
+    ],
+    throwOnError: false,
+  };
+  const mathRe = /\$|\\\[|\\\(/;
+  const vh = window.innerHeight;
+  const deferred = [];
+
+  for (const el of content.children) {
+    if (el.tagName === 'svg' || el.tagName === 'SVG') continue;
+    if (!el.classList.contains('math-display') && !mathRe.test(el.textContent)) continue;
+    if (el.getBoundingClientRect().top < vh + 300) {
+      renderMathInElement(el, opts);
+    } else {
+      deferred.push(el);
+    }
+  }
+
+  _onInitialRenderDone();
+  if (!deferred.length) return;
+
+  const queue = [];
+  let scheduled = false;
+  const rIC = window.requestIdleCallback || function(cb) {
+    setTimeout(() => cb({ didTimeout: true, timeRemaining: () => 8 }), 16);
+  };
+
+  function scheduleFlush() {
+    if (scheduled || !queue.length) return;
+    scheduled = true;
+    rIC(flushQueue, { timeout: 500 });
+  }
+
+  function flushQueue(deadline) {
+    scheduled = false;
+    while (queue.length && (deadline.timeRemaining() > 3 || deadline.didTimeout)) {
+      renderMathInElement(queue.shift(), opts);
+    }
+    if (window._overlayer) window._overlayer.redraw();
+    window.dispatchEvent(new Event('scroll'));
+    if (queue.length) scheduleFlush();
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      observer.unobserve(entry.target);
+      queue.push(entry.target);
+    }
+    scheduleFlush();
+  }, { rootMargin: '300px' });
+
+  for (const block of deferred) {
+    observer.observe(block);
+  }
+}
 
 // ─── SVG Overlayer（参照 anx-reader foliate-js/src/overlayer.js）───
 class Overlayer {
@@ -694,11 +772,16 @@ class Overlayer {
     obj.element.querySelectorAll('rect').forEach(r => r.setAttribute('fill', '#' + color));
   }
 
-  // 核心：从存储的 Range 重新计算所有高亮位置——解决 KaTeX/图片 reflow 漂移
+  // 核心：从存储的 Range 重新计算所有高亮位置——解决 KaTeX/图片 reflow 漂移。
+  // 读写分离：先批量读取所有 getClientRects（1 次强制 layout），
+  // 再批量写 SVG（1 次 DOM 更新），避免 N 次 layout thrashing。
   redraw() {
+    const updates = [];
     for (const [id, obj] of this.map) {
+      updates.push({ id, obj, rects: this._getContentRects(obj.range) });
+    }
+    for (const { id, obj, rects } of updates) {
       obj.element.remove();
-      const rects = this._getContentRects(obj.range);
       const g = this._drawGroup(id, rects, obj.color);
       this.svg.appendChild(g);
       obj.element = g;
@@ -990,17 +1073,25 @@ function _reportScrollMetrics() {
     viewportRatio: viewportRatio,
   });
 }
-let _metricsRAF = null;
+let _metricsTimer = null;
+let _metricsLastTime = 0;
 function _scheduleMetricsReport() {
-  if (_metricsRAF) return;
-  _metricsRAF = requestAnimationFrame(() => {
-    _metricsRAF = null;
+  const now = performance.now();
+  if (now - _metricsLastTime >= 50) {
+    _metricsLastTime = now;
+    clearTimeout(_metricsTimer);
+    _metricsTimer = null;
     _reportScrollMetrics();
-  });
+  } else if (!_metricsTimer) {
+    _metricsTimer = setTimeout(() => {
+      _metricsTimer = null;
+      _metricsLastTime = performance.now();
+      _reportScrollMetrics();
+    }, 50 - (now - _metricsLastTime));
+  }
 }
 window.addEventListener('scroll', _scheduleMetricsReport, { passive: true });
 window.addEventListener('resize', _scheduleMetricsReport, { passive: true });
-// 首屏渲染完后主动报一次，让 Flutter 端拿到初始 viewportRatio。
 window.addEventListener('load', () => setTimeout(_reportScrollMetrics, 100));
 
 // Flutter 拖动覆盖滚动条时调这个：ratio ∈ [0,1] → window.scrollY 绝对像素值。
@@ -1011,11 +1102,34 @@ window._scrollToRatio = function(ratio) {
   window.scrollTo({ top: r * max, behavior: 'auto' });
 };
 
+window._restoreProgress = function(ratio) {
+  requestAnimationFrame(() => {
+    const r = Math.max(0, Math.min(1, ratio));
+    if (document.body.dataset.pagination === 'horizontal') {
+      const max = _maxPage();
+      if (max > 0) {
+        const idx = Math.max(0, Math.min(max, Math.round(r * max)));
+        _targetPage = idx;
+        document.getElementById('content')
+          .scrollTo({ left: idx * window.innerWidth, behavior: 'auto' });
+      }
+    } else {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max > 0) window.scrollTo({ top: r * max, behavior: 'auto' });
+    }
+  });
+};
+
 // ─── 图片点击 + 横向翻页点击区 ───
 // 单一 click listener：图片点击优先短路；其次横向模式下按 X 分三段——
 // 左 30% 上一页 / 右 30% 下一页 / 中央 toggle 工具栏。
 // 高亮点击不走这里——SVG <g data-hl-id> 自带 click 已 stopPropagation。
 document.addEventListener('click', (e) => {
+  if (document.body.dataset.translationStyle === 'blur') {
+    const span = e.target.closest('.translated');
+    if (span) { span.classList.toggle('revealed'); return; }
+  }
+
   const img = e.target.closest('img');
   if (img && window.flutter_inappwebview) {
     e.preventDefault();
@@ -1042,6 +1156,14 @@ document.addEventListener('click', (e) => {
 });
 
 // ─── Bridge 函数（Flutter → JS）───
+window.setTranslationStyle = function(id) {
+  document.body.dataset.translationStyle = id;
+  if (id !== 'blur') {
+    document.querySelectorAll('.translated.revealed').forEach(
+      el => el.classList.remove('revealed'));
+  }
+};
+
 window.addHighlight = function(id, text, color) {
   if (!window._overlayer) return false;
   return window._overlayer.addByText(id, text, color);

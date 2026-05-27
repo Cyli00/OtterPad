@@ -6,19 +6,26 @@ import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import 'reader_background.dart';
 
+/// 阅读器底部面板的局部主题包裹入口。
+///
+/// [showModalBottomSheet] 走 root navigator，不继承阅读器页面的
+/// [Theme] 覆盖。这里在 builder 内用 [ReaderLocalTheme] 重新应用
+/// 阅读器亮度，使面板配色与阅读器一致。
+Widget _wrapLocalTheme(Widget child) => ReaderLocalTheme(child: child);
+
 /// 阅读器「主题色 + 背景」底部面板。
 ///
 /// 结构：
 /// - **颜色**：复用 [themeProvider] 的 seed color（与设置页的色板对齐）；
-/// - **背景**：5 个固定选项 — 白天 / 羊皮 / 护眼 / 夜间 / 纯黑，落到
-///   [ReaderTheme] 枚举上。选择时会同步切换 app 的 [ThemeMode]，工具栏
-///   `cs.surface` 随之变暗/变亮。
+/// - **背景**：5 个固定选项 — 白色 / 羊皮 / 护眼 / 夜间 / 纯黑，落到
+///   [ReaderTheme] 枚举上。背景仅影响阅读器页面（局部主题），不改全局
+///   [ThemeMode]。
 Future<void> showReaderThemeSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.25),
-    builder: (_) => const _ReaderThemeSheet(),
+    builder: (_) => _wrapLocalTheme(const _ReaderThemeSheet()),
   );
 }
 
@@ -53,13 +60,13 @@ class _ReaderThemeSheet extends ConsumerWidget {
             _sectionLabel(theme, cs, Symbols.palette_rounded, '颜色'),
             const SizedBox(height: 12),
             _SeedColorRow(
-              selected:
-                  themeState.useDynamicColor ? null : themeState.seedColor,
+              selected: themeState.useDynamicColor
+                  ? null
+                  : themeState.seedColor,
               isDynamic: themeState.useDynamicColor,
               onDynamic: () =>
                   ref.read(themeProvider.notifier).setUseDynamicColor(true),
-              onSelect: (c) =>
-                  ref.read(themeProvider.notifier).setSeedColor(c),
+              onSelect: (c) => ref.read(themeProvider.notifier).setSeedColor(c),
             ),
 
             const SizedBox(height: 20),
@@ -71,18 +78,6 @@ class _ReaderThemeSheet extends ConsumerWidget {
               current: readerSettings.theme,
               onChanged: (t) {
                 ref.read(readerSettingsProvider.notifier).setTheme(t);
-                // 同步 app 亮度：浅色背景（主题/羊皮/护眼）用 light，
-                // 暗色背景（夜间/纯黑）用 dark，工具栏 cs.surface 自然跟随。
-                // **例外**：用户在设置页显式选了"自动"（ThemeMode.system）时
-                // 不动 ThemeMode，否则点 reader 背景会把 Auto 默默清掉。
-                final currentMode = ref.read(themeProvider).mode;
-                if (currentMode != ThemeMode.system) {
-                  ref.read(themeProvider.notifier).setThemeMode(
-                        t.brightness == Brightness.dark
-                            ? ThemeMode.dark
-                            : ThemeMode.light,
-                      );
-                }
               },
             ),
 
@@ -117,7 +112,11 @@ class _ReaderThemeSheet extends ConsumerWidget {
   }
 
   Widget _sectionLabel(
-      ThemeData theme, ColorScheme cs, IconData icon, String title) {
+    ThemeData theme,
+    ColorScheme cs,
+    IconData icon,
+    String title,
+  ) {
     return Row(
       children: [
         Icon(icon, size: 18, color: cs.primary),
@@ -152,11 +151,7 @@ class _SeedColorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <Widget>[
-      _ColorDot(
-        isDynamic: true,
-        isSelected: isDynamic,
-        onTap: onDynamic,
-      ),
+      _ColorDot(isDynamic: true, isSelected: isDynamic, onTap: onDynamic),
       for (final color in ThemeNotifier.presetColors)
         _ColorDot(
           color: color,
@@ -169,17 +164,14 @@ class _SeedColorRow extends StatelessWidget {
       builder: (_, constraints) {
         const size = 40.0;
         const minSpacing = 8.0;
-        final count = ((constraints.maxWidth + minSpacing) / (size + minSpacing))
-            .floor()
-            .clamp(1, items.length);
+        final count =
+            ((constraints.maxWidth + minSpacing) / (size + minSpacing))
+                .floor()
+                .clamp(1, items.length);
         final spacing = count > 1
             ? (constraints.maxWidth - count * size) / (count - 1)
             : 0.0;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: 10,
-          children: items,
-        );
+        return Wrap(spacing: spacing, runSpacing: 10, children: items);
       },
     );
   }
@@ -324,10 +316,7 @@ class _CheckerPainter extends CustomPainter {
     for (var y = 0.0; y < size.height; y += step) {
       for (var x = 0.0; x < size.width; x += step) {
         final isEven = ((x ~/ step) + (y ~/ step)) % 2 == 0;
-        canvas.drawRect(
-          Rect.fromLTWH(x, y, step, step),
-          isEven ? light : dark,
-        );
+        canvas.drawRect(Rect.fromLTWH(x, y, step, step), isEven ? light : dark);
       }
     }
   }
@@ -397,14 +386,13 @@ class _BackgroundCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = resolveReaderPalette(theme, cs);
-    // 「白天」卡片的预览语义是"切回浅色阅读模式"——固定为白底深线，
-    // 不让它跟随当前 app 的 dark surface 变成深色（实际阅读颜色仍由
-    // resolveReaderPalette 在运行时按系统亮度解出，不受影响）。
-    final isThemed = theme == ReaderTheme.themed;
-    final previewBg = isThemed ? const Color(0xFFFFFFFF) : palette.background;
-    final previewLine =
-        isThemed ? const Color(0xFF1C1B1F).withAlpha(120) : palette.text.withAlpha(120);
+    final previewCs = ColorScheme.fromSeed(
+      seedColor: cs.primary,
+      brightness: theme.brightness,
+    );
+    final palette = resolveReaderPalette(theme, previewCs);
+    final previewBg = palette.background;
+    final previewLine = palette.text.withAlpha(120);
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -435,9 +423,9 @@ class _BackgroundCard extends StatelessWidget {
           Text(
             theme.shortLabel,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: selected ? cs.primary : cs.onSurfaceVariant,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                ),
+              color: selected ? cs.primary : cs.onSurfaceVariant,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
           ),
         ],
       ),

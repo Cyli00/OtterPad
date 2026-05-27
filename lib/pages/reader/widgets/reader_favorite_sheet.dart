@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../data/models/collection/favorite.dart';
+import 'reader_background.dart';
 
 enum ReaderFavoritePickerMode { add, remove }
 
@@ -25,12 +26,14 @@ Future<ReaderFavoriteSelectionResult?> showReaderFavoritePickerSheet({
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (ctx) => _ReaderFavoritePickerContent(
-      title: title,
-      favorites: favorites,
-      documentId: documentId,
-      mode: mode,
-      onCreateFavorite: onCreateFavorite,
+    builder: (ctx) => ReaderLocalTheme(
+      child: _ReaderFavoritePickerContent(
+        title: title,
+        favorites: favorites,
+        documentId: documentId,
+        mode: mode,
+        onCreateFavorite: onCreateFavorite,
+      ),
     ),
   );
 }

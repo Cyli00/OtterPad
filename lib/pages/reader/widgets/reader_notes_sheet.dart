@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/highlight_provider.dart';
+import 'reader_background.dart';
 
 Future<void> showReaderNotesSheet(
   BuildContext context, {
@@ -17,14 +18,16 @@ Future<void> showReaderNotesSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (_) => DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      minChildSize: 0.3,
-      maxChildSize: 0.9,
-      expand: false,
-      builder: (context, scrollController) => _NotesSheetBody(
-        documentId: documentId,
-        scrollController: scrollController,
+    builder: (_) => ReaderLocalTheme(
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => _NotesSheetBody(
+          documentId: documentId,
+          scrollController: scrollController,
+        ),
       ),
     ),
   );
@@ -98,9 +101,8 @@ class _NotesSheetBody extends ConsumerWidget {
                     return _HighlightTile(
                       key: ValueKey(hl.id),
                       highlight: hl,
-                      onEditNote: () => _showEditNoteDialog(
-                        context, ref, documentId, hl,
-                      ),
+                      onEditNote: () =>
+                          _showEditNoteDialog(context, ref, documentId, hl),
                       onDelete: () => ref
                           .read(highlightProvider(documentId).notifier)
                           .remove(hl.id),
@@ -117,8 +119,7 @@ class _NotesSheetBody extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Symbols.highlight_rounded,
-              size: 48, color: cs.outlineVariant),
+          Icon(Symbols.highlight_rounded, size: 48, color: cs.outlineVariant),
           const SizedBox(height: 12),
           Text(
             '还没有标注',
@@ -129,9 +130,7 @@ class _NotesSheetBody extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             '选中文本后点击颜色圆点即可创建',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: cs.outline,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
           ),
         ],
       ),
@@ -203,7 +202,8 @@ class _NotesSheetBody extends ConsumerWidget {
                   ),
                   hintText: '写下你的想法...',
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14,
+                    horizontal: 16,
+                    vertical: 14,
                   ),
                 ),
               ),
@@ -224,9 +224,7 @@ class _NotesSheetBody extends ConsumerWidget {
     ).then((note) {
       controller.dispose();
       if (note == null) return;
-      ref
-          .read(highlightProvider(documentId).notifier)
-          .updateNote(hl.id, note);
+      ref.read(highlightProvider(documentId).notifier).updateNote(hl.id, note);
     });
   }
 }
@@ -311,8 +309,7 @@ class _HighlightTileState extends State<_HighlightTile> {
                               fontWeight: FontWeight.w600,
                             ),
                             maxLines: _expanded ? null : 2,
-                            overflow:
-                                _expanded ? null : TextOverflow.ellipsis,
+                            overflow: _expanded ? null : TextOverflow.ellipsis,
                           ),
                         ),
                       ],
