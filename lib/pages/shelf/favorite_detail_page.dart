@@ -13,6 +13,7 @@ import '../../providers/selection_provider.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/doc_paths.dart';
+import '../../router/app_routes.dart';
 import '../library/widgets/batch_progress_sheet.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
@@ -90,6 +91,17 @@ class FavoriteDetailPage extends ConsumerWidget {
                   onPressed: () => context.pop(),
                   icon: const Icon(Symbols.arrow_back_rounded),
                 ),
+                actions: [
+                  IconButton(
+                    onPressed: () => _openAddDocumentsPage(
+                      context,
+                      currentFavorite,
+                    ),
+                    icon: const Icon(Symbols.bookmark_add_rounded),
+                    tooltip: '添加文献',
+                  ),
+                  const SizedBox(width: 4),
+                ],
               ),
         body: CustomScrollView(
           slivers: [
@@ -110,6 +122,13 @@ class FavoriteDetailPage extends ConsumerWidget {
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.tonalIcon(
+                        onPressed: () =>
+                            _openAddDocumentsPage(context, currentFavorite),
+                        icon: const Icon(Symbols.bookmark_add_rounded, size: 20),
+                        label: const Text('添加文献'),
                       ),
                     ],
                   ),
@@ -150,6 +169,12 @@ class FavoriteDetailPage extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 跳转到"添加文献"页面——全屏多选列表，已含文献灰显不可选，右下确认/取消。
+  /// 入页面后内部直接调用 lifecycleProvider 完成批量加入，调用方不接收返回值。
+  void _openAddDocumentsPage(BuildContext context, Favorite currentFavorite) {
+    context.push(AppRoutes.shelfFavoriteAddDocs, extra: currentFavorite);
   }
 
   /// 从收藏夹中移除选中文献（不删除文献本身）

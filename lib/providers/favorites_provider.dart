@@ -101,6 +101,34 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     await _save();
   }
 
+  /// 批量向收藏夹添加文献（已存在的自动跳过，单次写盘）。
+  ///
+  /// 返回真正新增的篇数——用于 UI 区分"已经在里面跳过了 N 篇"vs"全是新加的"。
+  Future<int> addDocuments(String favoriteId, Iterable<String> documentIds) async {
+    final target = state.firstWhere(
+      (f) => f.id == favoriteId,
+      orElse: () => _createDefault(),
+    );
+    if (target.id != favoriteId) return 0;
+
+    final existing = target.documentIds.toSet();
+    final toAdd = <String>[];
+    for (final id in documentIds) {
+      if (existing.add(id)) toAdd.add(id);
+    }
+    if (toAdd.isEmpty) return 0;
+
+    state = [
+      for (final f in state)
+        if (f.id == favoriteId)
+          f.copyWith(documentIds: [...f.documentIds, ...toAdd])
+        else
+          f,
+    ];
+    await _save();
+    return toAdd.length;
+  }
+
   /// 从所有收藏夹中移除指定文献（级联删除时使用）。
   Future<void> removeDocumentFromAll(String documentId) async {
     bool changed = false;

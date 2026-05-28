@@ -11,6 +11,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onSelectAll;
   final bool allSelected;
   final VoidCallback? onExtract;
+  final VoidCallback? onAddToFavorite;
   final VoidCallback? onRemoveFromFavorite;
   final VoidCallback onDelete;
 
@@ -21,6 +22,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onSelectAll,
     required this.allSelected,
     this.onExtract,
+    this.onAddToFavorite,
     this.onRemoveFromFavorite,
     required this.onDelete,
   });
@@ -86,6 +88,18 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                     tooltip: '文本提取',
                     bg: cs.primaryContainer,
                     fg: cs.primary,
+                  ),
+                ],
+                if (onAddToFavorite != null) ...[
+                  const SizedBox(width: 8),
+                  _button(
+                    icon: Symbols.bookmark_add_rounded,
+                    sz: sz,
+                    iconSz: iconSz,
+                    onPressed: enabled ? onAddToFavorite : null,
+                    tooltip: '加入收藏夹',
+                    bg: cs.tertiaryContainer,
+                    fg: cs.tertiary,
                   ),
                 ],
                 if (onRemoveFromFavorite != null) ...[
