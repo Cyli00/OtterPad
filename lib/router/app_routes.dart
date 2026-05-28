@@ -9,6 +9,7 @@ abstract class AppRoutes {
 
   // 书架子页面
   static const shelfFavorite = '/shelf/favorite';
+  static const shelfFavoriteAddDocs = '/shelf/favorite/add-documents';
   static const shelfHistory = '/shelf/history';
   static const shelfNoFileEntries = '/shelf/no-file-entries';
 

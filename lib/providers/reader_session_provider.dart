@@ -328,16 +328,18 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     return resolved.content;
   }
 
-  void _prewarmSearchSnapshot() {
+  Future<void> _prewarmSearchSnapshot() async {
     final content = state.markdownContent;
     final cacheKey = state.markdownCacheKey;
     if (content == null || cacheKey == null || state.searchSnapshot != null) {
       return;
     }
-    final snapshot = MarkdownDocumentCacheService.instance.getSearchSnapshot(
+    final snapshot =
+        await MarkdownDocumentCacheService.instance.getSearchSnapshot(
       cacheKey: cacheKey,
       markdownContent: content,
     );
+    if (!mounted) return;
     state = state.copyWith(searchSnapshot: snapshot);
   }
 
@@ -355,10 +357,6 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
       cacheKey: cacheKey,
       content: markdownContent,
     );
-    final snapshot = cacheService.getSearchSnapshot(
-      cacheKey: cacheKey,
-      markdownContent: markdownContent,
-    );
     _loadFuture = null;
     state = state.copyWith(
       markdownPath: markdownPath,
@@ -366,13 +364,14 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
       markdownCacheKey: cacheKey,
       markdownLoading: false,
       markdownLoadError: null,
-      searchSnapshot: snapshot,
+      searchSnapshot: null,
       showPreview: true,
       searchActive: false,
       highlightQuery: null,
       searchResults: const [],
       currentResultIndex: 0,
     );
+    _prewarmSearchSnapshot();
   }
 
   bool togglePreview() {

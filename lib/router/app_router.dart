@@ -15,6 +15,7 @@ import '../pages/setting/appearance_settings_page.dart';
 import '../pages/setting/backup_settings_page.dart';
 import '../pages/setting/network_settings_page.dart';
 import '../pages/setting/view.dart';
+import '../pages/shelf/add_documents_to_favorite_page.dart';
 import '../pages/shelf/favorite_detail_page.dart';
 import '../pages/shelf/no_file_entries_page.dart';
 import '../pages/shelf/reading_history_page.dart';
@@ -99,6 +100,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                         favorite: state.extra! as Favorite,
                       ),
                     ),
+                    routes: [
+                      GoRoute(
+                        path: 'add-documents',
+                        parentNavigatorKey: _rootNavigatorKey,
+                        pageBuilder: (context, state) => _buildAnimatedPage(
+                          state: state,
+                          child: AddDocumentsToFavoritePage(
+                            favorite: state.extra! as Favorite,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   GoRoute(
                     path: 'history',

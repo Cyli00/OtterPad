@@ -66,14 +66,11 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   onSelectionChanged: (set) {
                     final mode = set.first;
                     ref.read(themeProvider.notifier).setThemeMode(mode);
-                    _syncReaderTheme(ref, mode);
                   },
                   style: SegmentedButton.styleFrom(
                     backgroundColor: cs.surface,
                     selectedBackgroundColor: cs.primaryContainer,
-                    side: BorderSide(
-                      color: cs.outlineVariant.withAlpha(100),
-                    ),
+                    side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -113,17 +110,18 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: SegmentedButton<DefaultReadingMode>(
-                      segments: const [
-                        DefaultReadingMode.markdown,
-                        DefaultReadingMode.pdf,
-                      ]
-                          .map(
-                            (m) => ButtonSegment(
-                              value: m,
-                              label: Text(m.label),
-                            ),
-                          )
-                          .toList(),
+                      segments:
+                          const [
+                                DefaultReadingMode.markdown,
+                                DefaultReadingMode.pdf,
+                              ]
+                              .map(
+                                (m) => ButtonSegment(
+                                  value: m,
+                                  label: Text(m.label),
+                                ),
+                              )
+                              .toList(),
                       selected: {settings.defaultReadingMode},
                       onSelectionChanged: (set) => ref
                           .read(readerSettingsProvider.notifier)
@@ -170,18 +168,9 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     width: double.infinity,
                     child: SegmentedButton<double>(
                       segments: const [
-                        ButtonSegment(
-                          value: 1.0,
-                          label: Text('标准'),
-                        ),
-                        ButtonSegment(
-                          value: 1.15,
-                          label: Text('大'),
-                        ),
-                        ButtonSegment(
-                          value: 1.3,
-                          label: Text('特大'),
-                        ),
+                        ButtonSegment(value: 1.0, label: Text('标准')),
+                        ButtonSegment(value: 1.15, label: Text('大')),
+                        ButtonSegment(value: 1.3, label: Text('特大')),
                       ],
                       selected: {_closestPreset(themeState.textScale)},
                       onSelectionChanged: (set) => ref
@@ -227,20 +216,6 @@ class AppearanceSettingsPage extends ConsumerWidget {
     return best;
   }
 
-  /// 切换应用主题模式时，同步更新阅读器内部主题
-  ///
-  /// 自动模式必须用 [ReaderTheme.themed]——它的 background = cs.surface，会跟着
-  /// `MaterialApp` 在 light/dark 之间的实时切换走。用 `ReaderTheme.night` 是
-  /// 硬编码 `Color(0xFF1C1B1F)`，系统翻面后阅读器卡死。
-  void _syncReaderTheme(WidgetRef ref, ThemeMode mode) {
-    final ReaderTheme readerTheme = switch (mode) {
-      ThemeMode.dark => ReaderTheme.night,
-      ThemeMode.light => ReaderTheme.themed,
-      ThemeMode.system => ReaderTheme.themed,
-    };
-    ref.read(readerSettingsProvider.notifier).setTheme(readerTheme);
-  }
-
   Widget _buildColorGrid(
     BuildContext context,
     WidgetRef ref,
@@ -270,14 +245,11 @@ class AppearanceSettingsPage extends ConsumerWidget {
         final crossAxisCount =
             ((constraints.maxWidth + minSpacing) / (itemSize + minSpacing))
                 .floor();
-        final spacing = (constraints.maxWidth - crossAxisCount * itemSize) /
+        final spacing =
+            (constraints.maxWidth - crossAxisCount * itemSize) /
             (crossAxisCount - 1);
 
-        return Wrap(
-          spacing: spacing,
-          runSpacing: 12,
-          children: allItems,
-        );
+        return Wrap(spacing: spacing, runSpacing: 12, children: allItems);
       },
     );
   }
@@ -349,8 +321,9 @@ class _ColorCircle extends StatelessWidget {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: (isDynamic ? cs.primary : color!)
-                        .withValues(alpha: 0.4),
+                    color: (isDynamic ? cs.primary : color!).withValues(
+                      alpha: 0.4,
+                    ),
                     blurRadius: 8,
                     spreadRadius: 1,
                   ),
@@ -427,6 +400,5 @@ class _PieChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PieChartPainter old) =>
-      old.scheme != scheme;
+  bool shouldRepaint(covariant _PieChartPainter old) => old.scheme != scheme;
 }

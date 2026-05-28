@@ -6,9 +6,11 @@ import '../core/storage/storage.dart';
 
 /// 阅读器背景模式
 ///
-/// [themed] 表示采用当前应用主题色（由 `themeProvider` 管理的 seed color），
-/// 其他几项为固定背景：羊皮纸 / 夜间 / 纯黑 / 护眼绿。具体颜色统一走
-/// `reader_background.dart` 的 `resolveReaderPalette()`。
+/// [themed] 为固定白色背景；其他几项为固定背景：羊皮纸 / 夜间 / 纯黑 / 护眼绿。
+/// 具体颜色统一走 `reader_background.dart` 的 `resolveReaderPalette()`。
+///
+/// 阅读器通过 `buildReaderThemeData()` 生成局部 [ThemeData]，仅影响阅读器页面，
+/// 不改变全局 [ThemeMode]。
 ///
 /// 枚举顺序即 Hive 持久化 `.index` 的序号 API——**只能尾追**，不能插入中间，
 /// 否则老用户保存的 theme 会错位加载。如需改变"视觉顺序"，在 UI 层用
@@ -22,34 +24,32 @@ enum ReaderTheme {
 
   /// 详细中文名（设置页等需要完整描述的场景）。
   String get label => switch (this) {
-        ReaderTheme.themed => '主题色',
-        ReaderTheme.sepia => '羊皮纸',
-        ReaderTheme.green => '护眼绿',
-        ReaderTheme.night => '夜间',
-        ReaderTheme.dark => '纯黑',
-      };
+    ReaderTheme.themed => '白色',
+    ReaderTheme.sepia => '羊皮纸',
+    ReaderTheme.green => '护眼绿',
+    ReaderTheme.night => '夜间',
+    ReaderTheme.dark => '纯黑',
+  };
 
   /// 阅读器底部面板用的短名（空间紧张、视觉整齐）。
   String get shortLabel => switch (this) {
-        ReaderTheme.themed => '白天',
-        ReaderTheme.sepia => '羊皮',
-        ReaderTheme.green => '护眼',
-        ReaderTheme.night => '夜间',
-        ReaderTheme.dark => '纯黑',
-      };
+    ReaderTheme.themed => '白色',
+    ReaderTheme.sepia => '羊皮',
+    ReaderTheme.green => '护眼',
+    ReaderTheme.night => '夜间',
+    ReaderTheme.dark => '纯黑',
+  };
 
-  /// 该阅读器主题适配的 app 亮度模式。
+  /// 该阅读器背景对应的亮度。
   ///
-  /// UI 切换 reader theme 时，同时把 [themeProvider] 的 `ThemeMode` 刷成
-  /// 对应亮度——这样工具栏的 `cs.surface`、文字色、分割线都自然跟着变，
-  /// 无需为每个 widget 单独派生 ColorScheme。
+  /// 阅读器页面用此值通过 `buildReaderThemeData()` 生成局部主题，
+  /// 使工具栏、底部栏等 chrome 自动匹配亮暗。
   Brightness get brightness => switch (this) {
-        ReaderTheme.themed ||
-        ReaderTheme.sepia ||
-        ReaderTheme.green =>
-          Brightness.light,
-        ReaderTheme.night || ReaderTheme.dark => Brightness.dark,
-      };
+    ReaderTheme.themed ||
+    ReaderTheme.sepia ||
+    ReaderTheme.green => Brightness.light,
+    ReaderTheme.night || ReaderTheme.dark => Brightness.dark,
+  };
 }
 
 /// 默认阅读模式
@@ -58,9 +58,9 @@ enum DefaultReadingMode {
   markdown;
 
   String get label => switch (this) {
-        DefaultReadingMode.pdf => 'PDF',
-        DefaultReadingMode.markdown => 'Markdown',
-      };
+    DefaultReadingMode.pdf => 'PDF',
+    DefaultReadingMode.markdown => 'Markdown',
+  };
 }
 
 /// 阅读器字体族
@@ -76,9 +76,9 @@ enum ReaderFont {
   sans;
 
   String get label => switch (this) {
-        ReaderFont.serif => 'Serif',
-        ReaderFont.sans => 'Sans',
-      };
+    ReaderFont.serif => 'Serif',
+    ReaderFont.sans => 'Sans',
+  };
 
   /// 映射到实际字体族名（首选字体）。
   ///
@@ -87,21 +87,21 @@ enum ReaderFont {
   /// Android = Roboto、iOS = San Francisco）。中文回退依赖
   /// [fontFamilyFallback]，以及更上层 CSS（webview_reader_html）的回退链。
   String? get fontFamily => switch (this) {
-        ReaderFont.serif => 'Times New Roman',
-        ReaderFont.sans => null,
-      };
+    ReaderFont.serif => 'Times New Roman',
+    ReaderFont.sans => null,
+  };
 
   /// 跨平台备选字体列表（CJK 兜底）。
   List<String>? get fontFamilyFallback => switch (this) {
-        ReaderFont.serif => const [
-            'Songti SC',
-            'STSong',
-            'SimSun',
-            'Noto Serif CJK SC',
-            'Noto Serif',
-          ],
-        ReaderFont.sans => null,
-      };
+    ReaderFont.serif => const [
+      'Songti SC',
+      'STSong',
+      'SimSun',
+      'Noto Serif CJK SC',
+      'Noto Serif',
+    ],
+    ReaderFont.sans => null,
+  };
 }
 
 /// 阅读器翻页方式
@@ -117,15 +117,15 @@ enum ReaderPaginationMode {
   horizontal;
 
   String get label => switch (this) {
-        ReaderPaginationMode.vertical => '上下翻页',
-        ReaderPaginationMode.horizontal => '左右翻页',
-      };
+    ReaderPaginationMode.vertical => '上下翻页',
+    ReaderPaginationMode.horizontal => '左右翻页',
+  };
 
   /// JS `setPaginationMode(...)` 接受的字符串 id。
   String get jsId => switch (this) {
-        ReaderPaginationMode.vertical => 'vertical',
-        ReaderPaginationMode.horizontal => 'horizontal',
-      };
+    ReaderPaginationMode.vertical => 'vertical',
+    ReaderPaginationMode.horizontal => 'horizontal',
+  };
 }
 
 /// 工具栏透明度预设
@@ -201,23 +201,23 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     final opacityIndex =
         box.get(_kToolbarOpacity, defaultValue: ToolbarOpacity.opaque.index)
             as int;
-    final paginationIndex =
-        box.get(_kPaginationMode, defaultValue: 0) as int;
+    final paginationIndex = box.get(_kPaginationMode, defaultValue: 0) as int;
     return ReaderSettingsState(
       theme: ReaderTheme
           .values[themeIndex.clamp(0, ReaderTheme.values.length - 1)],
-      font: ReaderFont
-          .values[fontIndex.clamp(0, ReaderFont.values.length - 1)],
+      font: ReaderFont.values[fontIndex.clamp(0, ReaderFont.values.length - 1)],
       fontSize: fontSize.clamp(
         ReaderSettingsState.minFontSize,
         ReaderSettingsState.maxFontSize,
       ),
-      defaultReadingMode:
-          DefaultReadingMode.values[modeIndex.clamp(0, 1)],
+      defaultReadingMode: DefaultReadingMode.values[modeIndex.clamp(0, 1)],
       toolbarOpacity: ToolbarOpacity
           .values[opacityIndex.clamp(0, ToolbarOpacity.values.length - 1)],
-      paginationMode: ReaderPaginationMode.values[
-          paginationIndex.clamp(0, ReaderPaginationMode.values.length - 1)],
+      paginationMode:
+          ReaderPaginationMode.values[paginationIndex.clamp(
+            0,
+            ReaderPaginationMode.values.length - 1,
+          )],
     );
   }
 
@@ -262,5 +262,5 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
 
 final readerSettingsProvider =
     StateNotifierProvider<ReaderSettingsNotifier, ReaderSettingsState>(
-  (ref) => ReaderSettingsNotifier(),
-);
+      (ref) => ReaderSettingsNotifier(),
+    );

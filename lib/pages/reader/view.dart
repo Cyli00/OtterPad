@@ -103,6 +103,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // 滚动 / zoom / fit）都触发一次 reportProgress——只有 pageNumber 真变了才上报。
   int? _lastReportedPdfPage;
 
+  double _markdownScrollProgress = 0;
+
   @override
   void initState() {
     super.initState();
@@ -111,6 +113,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       title: widget.document.title,
       defaultReadingMode: ref.read(readerSettingsProvider).defaultReadingMode,
     );
+    // 在 initState 中 cache notifier 引用——Riverpod 3.x 禁止在 dispose()
+    // 中通过 ref.read 取 provider（widget 已 unmount-pending）。Notifier 实
+    // 例的生命周期由 provider 管理、独立于 widget，cache 安全。
+    _sessionNotifier = ref.read(readerSessionProvider(_sessionArgs).notifier);
     _pdfController.addListener(_onPdfControllerChanged);
   }
 
@@ -130,8 +136,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ReaderSessionState get _session =>
       ref.read(readerSessionProvider(_sessionArgs));
 
-  ReaderSessionNotifier get _sessionNotifier =>
-      ref.read(readerSessionProvider(_sessionArgs).notifier);
+  late final ReaderSessionNotifier _sessionNotifier;
 
   ReaderSummaryImageCoordinator get _summaryCoordinator =>
       ReaderSummaryImageCoordinator(
@@ -401,50 +406,56 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       // 上下两层呈现"前景卡片 + 后景卡片"的堆叠层次。
       barrierColor: Colors.black.withValues(alpha: 0.45),
       builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        final cs = theme.colorScheme;
+        final localTheme = buildReaderThemeData(
+          Theme.of(sheetContext),
+          ref.read(readerSettingsProvider).theme,
+        );
+        final cs = localTheme.colorScheme;
 
-        return Padding(
-          padding: EdgeInsets.only(top: topInset),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(28),
-            ),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-              child: Container(
-                color: cs.surface,
-                child: Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 12, bottom: 4),
-                        width: 32,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: cs.onSurfaceVariant.withAlpha(80),
-                          borderRadius: BorderRadius.circular(2),
+        return Theme(
+          data: localTheme,
+          child: Padding(
+            padding: EdgeInsets.only(top: topInset),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                child: Container(
+                  color: cs.surface,
+                  child: Column(
+                    children: [
+                      Center(
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 12, bottom: 4),
+                          width: 32,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: cs.onSurfaceVariant.withAlpha(80),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: OutlinePanel(
-                        key: ValueKey(session.markdownContent.hashCode),
-                        markdownContent: session.markdownContent!,
-                        documentId: widget.document.id,
-                        summaryImageState: _summaryImageState,
-                        inSheet: true,
-                        onNavigate: (offset) {
-                          Navigator.of(sheetContext).pop();
-                          _scrollToCharOffset(offset);
-                          _tryFlashImageAtOffset(offset);
-                        },
-                        onRegenerateSummary: () {
-                          _handleGenerateSummaryImage(openOutline: false);
-                        },
+                      Expanded(
+                        child: OutlinePanel(
+                          key: ValueKey(session.markdownContent.hashCode),
+                          markdownContent: session.markdownContent!,
+                          documentId: widget.document.id,
+                          summaryImageState: _summaryImageState,
+                          inSheet: true,
+                          onNavigate: (offset) {
+                            Navigator.of(sheetContext).pop();
+                            _scrollToCharOffset(offset);
+                            _tryFlashImageAtOffset(offset);
+                          },
+                          onRegenerateSummary: () {
+                            _handleGenerateSummaryImage(openOutline: false);
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -642,7 +653,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => ReaderDocumentInfoSheet(document: widget.document),
+      builder: (context) => ReaderLocalTheme(
+        child: ReaderDocumentInfoSheet(document: widget.document),
+      ),
     );
   }
 
@@ -667,6 +680,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _handleHighlightTap(Highlight highlight, Offset position) {
+    if (!mounted) return;
     _dismissSelectionToolbar();
     final rect = Rect.fromCenter(center: position, width: 4, height: 4);
     _selectionToolbarEntry = showReaderContextMenu(
@@ -699,6 +713,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _handleWebViewSelectionEnd(String text, Rect rect) {
+    if (!mounted) return;
     _dismissSelectionToolbar();
     if (text.trim().isEmpty) return;
     _selectionToolbarEntry = showReaderContextMenu(
@@ -729,10 +744,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _handleWebViewSelectionCleared() {
+    if (!mounted) return;
     _dismissSelectionToolbar();
   }
 
   void _handleWebViewScrollDirection(ScrollDirection direction) {
+    if (!mounted) return;
     if (!_sessionNotifier.canReactToReaderScroll) return;
     // 横向翻页模式下不让滚动方向驱动工具栏隐藏——翻页时工具栏会频繁
     // 闪烁。横向模式的工具栏 toggle 改由 JS 中央点击触发（onToggleToolbar）。
@@ -742,6 +759,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _handleWebViewToggleToolbar() {
+    if (!mounted) return;
     _sessionNotifier.toggleToolbars();
   }
 
@@ -773,9 +791,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final readerSettings = ref.watch(readerSettingsProvider);
+    final theme = buildReaderThemeData(Theme.of(context), readerSettings.theme);
+    final cs = theme.colorScheme;
     final session = ref.watch(readerSessionProvider(_sessionArgs));
     final extractTaskKey = DocumentTaskKey(
       type: DocumentTaskType.extractDocument,
@@ -790,21 +808,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     // 异步初始化完成前显示骨架加载状态
     if (!session.initialized) {
-      return Scaffold(
-        backgroundColor: cs.surface,
-        body: SafeArea(
-          child: Column(
-            children: [
-              _buildToolbar(cs),
-              Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(
-                    color: cs.primary.withAlpha(120),
-                    strokeWidth: 2,
+      return Theme(
+        data: theme,
+        child: Scaffold(
+          backgroundColor: cs.surface,
+          body: SafeArea(
+            child: Column(
+              children: [
+                _buildToolbar(cs),
+                Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: cs.primary.withAlpha(120),
+                      strokeWidth: 2,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -820,82 +841,55 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final pdfMatchCount = _pdfSearcher?.matches.length ?? 0;
     final showPdfNavigator = !session.showPreview && _pdfSearchQuery.isNotEmpty;
 
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: cs.surface,
-      endDrawerEnableOpenDragGesture: false,
-      // 仅桌面端挂 Drawer——移动端走 _showOutlineBottomSheet。这里直接 null 掉
-      // 避免在移动端浪费 OutlinePanel 的 initState（parseReferences 等）。
-      endDrawer: (_isDesktop && session.markdownContent != null)
-          ? Drawer(
-              width: 380,
-              child: OutlinePanel(
-                key: ValueKey(session.markdownContent.hashCode),
-                markdownContent: session.markdownContent!,
-                documentId: widget.document.id,
-                summaryImageState: _summaryImageState,
-                onNavigate: (offset) {
-                  _scaffoldKey.currentState?.closeEndDrawer();
-                  _scrollToCharOffset(offset);
-                  _tryFlashImageAtOffset(offset);
-                },
-                onRegenerateSummary: () {
-                  _handleGenerateSummaryImage(openOutline: false);
-                },
-              ),
-            )
-          : null,
-      body: SafeArea(
-        child: Listener(
-          onPointerHover: _isDesktop ? _onDesktopPointerHover : null,
-          child: Stack(
-            children: [
-              // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
-              Positioned.fill(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
-                  color: contentBg,
-                  child: fileExists
-                      ? _buildBody(theme, cs, readerSettings, session)
-                      : _buildFileNotFound(theme, cs),
+    return Theme(
+      data: theme,
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: cs.surface,
+        endDrawerEnableOpenDragGesture: false,
+        // 仅桌面端挂 Drawer——移动端走 _showOutlineBottomSheet。这里直接 null 掉
+        // 避免在移动端浪费 OutlinePanel 的 initState（parseReferences 等）。
+        endDrawer: (_isDesktop && session.markdownContent != null)
+            ? Drawer(
+                width: 380,
+                child: OutlinePanel(
+                  key: ValueKey(session.markdownContent.hashCode),
+                  markdownContent: session.markdownContent!,
+                  documentId: widget.document.id,
+                  summaryImageState: _summaryImageState,
+                  onNavigate: (offset) {
+                    _scaffoldKey.currentState?.closeEndDrawer();
+                    _scrollToCharOffset(offset);
+                    _tryFlashImageAtOffset(offset);
+                  },
+                  onRegenerateSummary: () {
+                    _handleGenerateSummaryImage(openOutline: false);
+                  },
                 ),
-              ),
-              // ── 顶部工具栏（沉浸式时向上滑出） ──
-              // ClipRect 必须包在 AnimatedSlide 外：AnimatedSlide 内部 transform
-              // 只动 paint 位移不动 layout box，Stack 的 clipBehavior 按 layout
-              // 边界剪不到。少了 ClipRect 时工具栏向上滑出的部分会透过透明状态栏显示。
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: ClipRect(
-                  child: AnimatedSlide(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    offset: session.toolbarsVisible
-                        ? Offset.zero
-                        : const Offset(0, -1),
-                    child: Container(
-                      color: cs.surface.withValues(
-                        alpha: readerSettings.toolbarOpacity.value,
-                      ),
-                      child: isMarkdownHighlightMode
-                          ? _buildHighlightSearchBar()
-                          : (session.searchActive && !session.showPreview
-                                ? _buildPdfSearchBar()
-                                : _buildToolbar(cs, extracting: extracting)),
-                    ),
+              )
+            : null,
+        body: SafeArea(
+          child: Listener(
+            onPointerHover: _isDesktop ? _onDesktopPointerHover : null,
+            child: Stack(
+              children: [
+                // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
+                Positioned.fill(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    color: contentBg,
+                    child: fileExists
+                        ? _buildBody(theme, cs, readerSettings, session)
+                        : _buildFileNotFound(theme, cs),
                   ),
                 ),
-              ),
-              // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
-              // 同样的 ClipRect 防御：避免向下滑出后透过透明导航栏区域显示。
-              if (session.showPreview &&
-                  session.hasResult &&
-                  session.markdownContent != null)
+                // ── 顶部工具栏（沉浸式时向上滑出） ──
+                // ClipRect 必须包在 AnimatedSlide 外：AnimatedSlide 内部 transform
+                // 只动 paint 位移不动 layout box，Stack 的 clipBehavior 按 layout
+                // 边界剪不到。少了 ClipRect 时工具栏向上滑出的部分会透过透明状态栏显示。
                 Positioned(
-                  bottom: 0,
+                  top: 0,
                   left: 0,
                   right: 0,
                   child: ClipRect(
@@ -904,38 +898,68 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       curve: Curves.easeOut,
                       offset: session.toolbarsVisible
                           ? Offset.zero
-                          : const Offset(0, 1),
-                      child: _buildBottomBar(readerSettings),
+                          : const Offset(0, -1),
+                      child: Container(
+                        color: cs.surface.withValues(
+                          alpha: readerSettings.toolbarOpacity.value,
+                        ),
+                        child: isMarkdownHighlightMode
+                            ? _buildHighlightSearchBar()
+                            : (session.searchActive && !session.showPreview
+                                  ? _buildPdfSearchBar()
+                                  : _buildToolbar(cs, extracting: extracting)),
+                      ),
                     ),
                   ),
                 ),
-              // ── 浮动搜索结果导航器 ──
-              if (isMarkdownHighlightMode && session.searchResults.isNotEmpty)
-                Positioned(
-                  right: 16,
-                  bottom: 32,
-                  child: _buildResultNavigator(),
-                ),
-              if (showPdfNavigator)
-                Positioned(
-                  right: 16,
-                  bottom: 32,
-                  child: _buildPdfResultNavigator(pdfMatchCount),
-                ),
-              // ── 搜索遮罩层 ──
-              if (session.searchActive &&
-                  session.showPreview &&
-                  session.searchSnapshot != null)
-                Positioned.fill(
-                  child: SearchOverlay(
-                    readerSettings: readerSettings,
-                    searchSnapshot: session.searchSnapshot!,
-                    onResultTap: _onSearchResultTap,
-                    onDismiss: _closeSearch,
-                    initialQuery: session.highlightQuery,
+                // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
+                // 同样的 ClipRect 防御：避免向下滑出后透过透明导航栏区域显示。
+                if (session.showPreview &&
+                    session.hasResult &&
+                    session.markdownContent != null)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: ClipRect(
+                      child: AnimatedSlide(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
+                        offset: session.toolbarsVisible
+                            ? Offset.zero
+                            : const Offset(0, 1),
+                        child: _buildBottomBar(readerSettings),
+                      ),
+                    ),
                   ),
-                ),
-            ],
+                // ── 浮动搜索结果导航器 ──
+                if (isMarkdownHighlightMode && session.searchResults.isNotEmpty)
+                  Positioned(
+                    right: 16,
+                    bottom: 32,
+                    child: _buildResultNavigator(),
+                  ),
+                if (showPdfNavigator)
+                  Positioned(
+                    right: 16,
+                    bottom: 32,
+                    child: _buildPdfResultNavigator(pdfMatchCount),
+                  ),
+                // ── 搜索遮罩层 ──
+                if (session.searchActive &&
+                    session.showPreview &&
+                    session.searchSnapshot != null)
+                  Positioned.fill(
+                    child: SearchOverlay(
+                      readerSettings: readerSettings,
+                      searchSnapshot: session.searchSnapshot!,
+                      onResultTap: _onSearchResultTap,
+                      onDismiss: _closeSearch,
+                      initialQuery: session.highlightQuery,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1355,7 +1379,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           )
         : markdownContent;
 
-    final cs = Theme.of(context).colorScheme;
+    final cs = theme.colorScheme;
     final palette = resolveReaderPalette(settings.theme, cs);
     final highlights = ref.watch(highlightProvider(widget.document.id));
     final documentDir = DocPaths.docDir(widget.document.id);
@@ -1367,6 +1391,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       palette: palette,
       highlights: highlights,
       documentDir: documentDir,
+      translationStyleId: displayStyle.id,
+      initialScrollProgress: _markdownScrollProgress,
       topInset: topPad,
       bottomInset: bottomPad,
       highlightQuery: session.highlightQuery,
@@ -1375,7 +1401,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onHighlightClick: _handleHighlightTap,
       onImageClick: _handleMarkdownImageTap,
       onScrollDirection: _handleWebViewScrollDirection,
-      onScrollProgress: _sessionNotifier.reportProgress,
+      onScrollProgress: (p) {
+        if (!mounted) return;
+        _markdownScrollProgress = p;
+        _sessionNotifier.reportProgress(p);
+      },
       onToggleToolbar: _handleWebViewToggleToolbar,
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 class MarkdownResolvedDocument {
   final String cacheKey;
@@ -86,16 +87,29 @@ class MarkdownDocumentCacheService {
     _writeContentCache(cacheKey, content);
   }
 
-  MarkdownSearchSnapshot getSearchSnapshot({
+  Future<MarkdownSearchSnapshot> getSearchSnapshot({
     required String cacheKey,
     required String markdownContent,
-  }) {
+  }) async {
     final cached = _readSearchSnapshotCache(cacheKey);
     if (cached != null) return cached;
-    return _buildSearchSnapshotInternal(
-      cacheKey: cacheKey,
-      markdownContent: markdownContent,
+
+    final blocksData = await Isolate.run(
+      () => _buildSearchBlocks(markdownContent),
     );
+    final snapshot = MarkdownSearchSnapshot(
+      blocks: blocksData
+          .map(
+            (item) => MarkdownSearchBlock(
+              heading: item['heading'] as String,
+              plainText: item['plainText'] as String,
+              charOffset: item['charOffset'] as int,
+            ),
+          )
+          .toList(growable: false),
+    );
+    _writeSearchSnapshotCache(cacheKey, snapshot);
+    return snapshot;
   }
 
   Future<String> buildCacheKey({
@@ -156,27 +170,6 @@ class MarkdownDocumentCacheService {
     return content;
   }
 
-  MarkdownSearchSnapshot _buildSearchSnapshotInternal({
-    required String cacheKey,
-    required String markdownContent,
-  }) {
-    final blocksData = _buildSearchBlocks(markdownContent);
-
-    final snapshot = MarkdownSearchSnapshot(
-      blocks: blocksData
-          .map(
-            (item) => MarkdownSearchBlock(
-              heading: item['heading'] as String,
-              plainText: item['plainText'] as String,
-              charOffset: item['charOffset'] as int,
-            ),
-          )
-          .toList(growable: false),
-    );
-
-    _writeSearchSnapshotCache(cacheKey, snapshot);
-    return snapshot;
-  }
 }
 
 // ─── LaTeX → Unicode 映射 ───

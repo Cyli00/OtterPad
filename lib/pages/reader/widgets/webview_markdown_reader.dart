@@ -32,6 +32,8 @@ class WebViewMarkdownReader extends StatefulWidget {
   final double topInset;
   final double bottomInset;
 
+  final String translationStyleId;
+  final double initialScrollProgress;
   final String? highlightQuery;
 
   final void Function(String text, Rect selectionRect)? onSelectionEnd;
@@ -54,6 +56,8 @@ class WebViewMarkdownReader extends StatefulWidget {
     required this.palette,
     this.highlights = const [],
     required this.documentDir,
+    this.translationStyleId = 'themed',
+    this.initialScrollProgress = 0,
     this.topInset = 0,
     this.bottomInset = 0,
     this.highlightQuery,
@@ -111,7 +115,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   @override
   void initState() {
     super.initState();
-    _writeHtmlFile();
+    _writeHtmlFileSync();
   }
 
   @override
@@ -146,11 +150,18 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     _controller?.evaluateJavascript(source: 'window._scrollToRatio($r)');
   }
 
-  void _writeHtmlFile() {
+  void _writeHtmlFileSync() {
     final html = _buildHtml();
     final file = File(_htmlFilePath);
     file.parent.createSync(recursive: true);
     file.writeAsStringSync(html);
+  }
+
+  Future<void> _writeHtmlFile() async {
+    final html = _buildHtml();
+    final file = File(_htmlFilePath);
+    await file.parent.create(recursive: true);
+    await file.writeAsString(html);
   }
 
   @override
@@ -165,6 +176,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         widget.settings.theme != oldWidget.settings.theme;
     final paginationChanged =
         widget.settings.paginationMode != oldWidget.settings.paginationMode;
+    final styleChanged =
+        widget.translationStyleId != oldWidget.translationStyleId;
 
     // 数据变化必须重写 HTML + reload —— DOM 内容不在 CSS 变量控制范围。
     // 主题/字号/字体/翻页方式单独变 → 仅改 CSS 变量或 body 属性，**不销毁**
@@ -178,6 +191,9 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     if (!dataChanged && paginationChanged) {
       _applyPaginationMode();
     }
+    if (!dataChanged && styleChanged) {
+      _applyTranslationStyle();
+    }
 
     if (!dataChanged && widget.highlights != oldWidget.highlights) {
       _syncHighlights(oldWidget.highlights, widget.highlights);
@@ -190,22 +206,18 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
 
   void _reloadContent() {
     _contentReady = false;
-    _writeHtmlFile();
-    // **重要**：reload 必须用带 cache-buster 的 URL。
-    // server 已经对 .html 设了 `Cache-Control: no-store`，但部分 WebView
-    // 实现（Android System WebView 旧版、WebView2 在某些 IE compatibility
-    // 模式下）会忽略 no-store 仍走内部缓存——加 query 让 URL 字符串变化，
-    // 是绕过任何 WebView 缓存最稳的兜底。query 不影响 server 路径解析
-    // （`_serveFile` 只看 `req.uri.path`，不看 query）。
-    final url = _readerUrl(cacheBust: true);
-    if (url == null) {
-      debugPrint(
-        '[WebViewMarkdownReader] localhost server not running or '
-        'document outside server root: $_htmlFilePath',
-      );
-      return;
-    }
-    _controller?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+    _writeHtmlFile().then((_) {
+      if (!mounted) return;
+      final url = _readerUrl(cacheBust: true);
+      if (url == null) {
+        debugPrint(
+          '[WebViewMarkdownReader] localhost server not running or '
+          'document outside server root: $_htmlFilePath',
+        );
+        return;
+      }
+      _controller?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+    });
   }
 
   /// HTML 文件经 localhost server 暴露的 URL：
@@ -226,6 +238,13 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     if (!_contentReady || _controller == null) return;
     _controller!.evaluateJavascript(
       source: buildThemeCssVars(widget.palette, widget.settings),
+    );
+  }
+
+  void _applyTranslationStyle() {
+    if (!_contentReady || _controller == null) return;
+    _controller!.evaluateJavascript(
+      source: "window.setTranslationStyle('${widget.translationStyleId}')",
     );
   }
 
@@ -376,6 +395,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
       palette: widget.palette,
       settings: widget.settings,
       baseHref: _docBaseHref,
+      translationStyleId: widget.translationStyleId,
       imageCacheBuster: _figuresCacheBuster(),
     );
   }
@@ -435,6 +455,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
             _applyPaginationMode();
             _restoreAllHighlights();
             _applySearchHighlight();
+            if (widget.initialScrollProgress > 0) {
+              _controller?.evaluateJavascript(
+                source:
+                    'window._restoreProgress(${widget.initialScrollProgress})',
+              );
+            }
           },
         );
 
