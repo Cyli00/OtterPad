@@ -33,7 +33,14 @@ Future<void> showReaderNotesSheet(
   );
 }
 
-class _NotesSheetBody extends ConsumerWidget {
+/// 笔记 sheet 内容容器。
+///
+/// 改造为 StatefulWidget 是为**键盘弹出期间的性能**：原 ConsumerWidget 在
+/// viewInsets 每帧变化时整树 build，ListView 和所有 _HighlightTile 全部重建。
+/// 现在把 list 子树构造一次缓存为字段，build 方法复用同一个 widget reference
+/// → Flutter 比较时跳过 child.build，list 在 IME 动画期间不再级联重建。
+/// header（标题计数）仍随 sheet rebuild 而更新——计数变化时父级 watch 触发。
+class _NotesSheetBody extends StatefulWidget {
   final String documentId;
   final ScrollController scrollController;
 
@@ -43,189 +50,284 @@ class _NotesSheetBody extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final highlights = ref.watch(highlightProvider(documentId));
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+  State<_NotesSheetBody> createState() => _NotesSheetBodyState();
+}
 
-    return Column(
-      children: [
-        // Grabber
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Container(
-            width: 32,
-            height: 4,
-            decoration: BoxDecoration(
-              color: cs.onSurfaceVariant.withAlpha(80),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ),
-        // 标题行
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              Icon(Symbols.bookmark_rounded, color: cs.primary, size: 22),
-              const SizedBox(width: 8),
-              Text(
-                '标注与笔记',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: cs.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${highlights.length} 条',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        // 列表
-        Expanded(
-          child: highlights.isEmpty
-              ? _buildEmptyState(theme, cs)
-              : ListView.separated(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  itemCount: highlights.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final hl = highlights[index];
-                    return _HighlightTile(
-                      key: ValueKey(hl.id),
-                      highlight: hl,
-                      onEditNote: () =>
-                          _showEditNoteDialog(context, ref, documentId, hl),
-                      onDelete: () => ref
-                          .read(highlightProvider(documentId).notifier)
-                          .remove(hl.id),
-                    );
-                  },
-                ),
-        ),
-      ],
+class _NotesSheetBodyState extends State<_NotesSheetBody> {
+  late final Widget _listSubtree;
+
+  @override
+  void initState() {
+    super.initState();
+    // 缓存 list widget reference——viewport 重建时父级 build 复用此引用，
+    // Flutter 比较新旧 widget 相同 → 不调用 _NotesList.build，避免树重绘。
+    _listSubtree = _NotesList(
+      documentId: widget.documentId,
+      scrollController: widget.scrollController,
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme, ColorScheme cs) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _Grabber(),
+        _Header(documentId: widget.documentId),
+        const SizedBox(height: 12),
+        Expanded(child: _listSubtree),
+      ],
+    );
+  }
+}
+
+/// 顶部小条——纯静态，const 化避免 rebuild。
+class _Grabber extends StatelessWidget {
+  const _Grabber();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Container(
+        width: 32,
+        height: 4,
+        decoration: BoxDecoration(
+          color: cs.onSurfaceVariant.withAlpha(80),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+}
+
+/// 标题行：图标 + "标注与笔记" + 计数。
+///
+/// 自管 watch——只在 highlights 长度变化时重建，不受父 viewport 重建影响。
+class _Header extends ConsumerWidget {
+  final String documentId;
+  const _Header({required this.documentId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(
+      highlightProvider(documentId).select((list) => list.length),
+    );
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
         children: [
-          Icon(Symbols.highlight_rounded, size: 48, color: cs.outlineVariant),
-          const SizedBox(height: 12),
+          Icon(Symbols.bookmark_rounded, color: cs.primary, size: 22),
+          const SizedBox(width: 8),
           Text(
-            '还没有标注',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: cs.onSurfaceVariant,
+            '标注与笔记',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 4),
+          const Spacer(),
           Text(
-            '选中文本后点击颜色圆点即可创建',
-            style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
+            '$count 条',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  void _showEditNoteDialog(
-    BuildContext context,
-    WidgetRef ref,
-    String documentId,
-    Highlight hl,
-  ) {
-    final controller = TextEditingController(text: hl.note ?? '');
+/// 笔记列表本身——自治 Consumer，只在 highlights 变化时重建。
+///
+/// 由 [_NotesSheetBodyState] 在 initState 一次性构造，引用稳定。
+/// 父级 sheet 在 IME viewport 变化时 build，Flutter 比较 widget 引用相同
+/// → 跳过此处 build → list 不被键盘动画拖累。
+class _NotesList extends ConsumerStatefulWidget {
+  final String documentId;
+  final ScrollController scrollController;
+
+  const _NotesList({required this.documentId, required this.scrollController});
+
+  @override
+  ConsumerState<_NotesList> createState() => _NotesListState();
+}
+
+class _NotesListState extends ConsumerState<_NotesList> {
+  /// 把 callback 提取为 instance method——itemBuilder 中使用 closure
+  /// `() => method(hl)` 时 closure 每次 build 都新建，但 Tile 持有 callback
+  /// 字段差异不会触发 didUpdateWidget 之外的开销；method 路径更稳。
+  void _onEdit(Highlight hl) {
     showDialog<String>(
       context: context,
-      builder: (ctx) {
-        final dTheme = Theme.of(ctx);
-        final dCs = dTheme.colorScheme;
-        return AlertDialog(
-          backgroundColor: dCs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-          title: Text(
-            '编辑笔记',
-            style: dTheme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                constraints: const BoxConstraints(maxHeight: 60),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: dCs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    hl.text.trim(),
-                    style: dTheme.textTheme.bodySmall?.copyWith(
-                      color: dCs.onSurfaceVariant,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+      builder: (_) => _EditNoteDialog(highlight: hl),
+    ).then((note) {
+      if (note == null) return;
+      if (!mounted) return;
+      ref
+          .read(highlightProvider(widget.documentId).notifier)
+          .updateNote(hl.id, note);
+    });
+  }
+
+  void _onDelete(Highlight hl) {
+    ref.read(highlightProvider(widget.documentId).notifier).remove(hl.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final highlights = ref.watch(highlightProvider(widget.documentId));
+    if (highlights.isEmpty) {
+      final theme = Theme.of(context);
+      final cs = theme.colorScheme;
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Symbols.highlight_rounded, size: 48, color: cs.outlineVariant),
+            const SizedBox(height: 12),
+            Text(
+              '还没有标注',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                maxLines: 4,
-                minLines: 2,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: dCs.surfaceContainerLow,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: dCs.outline),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: dCs.primary, width: 2),
-                  ),
-                  hintText: '写下你的想法...',
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消'),
             ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('保存'),
+            const SizedBox(height: 4),
+            Text(
+              '选中文本后点击颜色圆点即可创建',
+              style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
             ),
           ],
+        ),
+      );
+    }
+    return ListView.separated(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      itemCount: highlights.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final hl = highlights[index];
+        return RepaintBoundary(
+          child: _HighlightTile(
+            key: ValueKey(hl.id),
+            highlight: hl,
+            onEditNote: () => _onEdit(hl),
+            onDelete: () => _onDelete(hl),
+          ),
         );
       },
-    ).then((note) {
-      controller.dispose();
-      if (note == null) return;
-      ref.read(highlightProvider(documentId).notifier).updateNote(hl.id, note);
-    });
+    );
+  }
+}
+
+/// 编辑笔记对话框。
+///
+/// `TextEditingController` 必须由本 StatefulWidget 的 State 持有并 dispose——
+/// 之前的实现把 controller 定义在外部闭包、通过 `showDialog().then(...)` 异步
+/// dispose，会和 dialog 子树 unmount 形成竞态：`.then` microtask 可能在 TextField
+/// unmount 前先 fire，导致 TextField 持有的 listener 引用 disposed controller，
+/// 后续 InheritedWidget 依赖解除顺序错乱，触发 `_dependents.isEmpty` 断言失败。
+class _EditNoteDialog extends StatefulWidget {
+  final Highlight highlight;
+  const _EditNoteDialog({required this.highlight});
+
+  @override
+  State<_EditNoteDialog> createState() => _EditNoteDialogState();
+}
+
+class _EditNoteDialogState extends State<_EditNoteDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.highlight.note ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final hl = widget.highlight;
+    return AlertDialog(
+      backgroundColor: cs.surfaceContainerLow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+      title: Text(
+        '编辑笔记',
+        style: theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            constraints: const BoxConstraints(maxHeight: 60),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: SingleChildScrollView(
+              child: Text(
+                hl.text.trim(),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            maxLines: 4,
+            minLines: 2,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: cs.surfaceContainerLow,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: cs.outline),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: cs.primary, width: 2),
+              ),
+              hintText: '写下你的想法...',
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('保存'),
+        ),
+      ],
+    );
   }
 }
 

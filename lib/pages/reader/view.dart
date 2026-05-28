@@ -357,21 +357,38 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // ─── 底部面板（字体 / 主题 / 大纲） ───
 
+  /// 包围一次 sheet/dialog 弹出：暂停背景 WebView 的 JS timer + 动画，
+  /// 释放 CPU/GPU 给前景 IME 动画和 TextField。
+  ///
+  /// WebView 作为 Android Platform View 即使被 sheet 覆盖也持续渲染，
+  /// 每帧 Flutter compositor 都要等它——pause 期间 frame composition
+  /// 不再受 WebView 拖累，键盘弹出/输入显著流畅。
+  Future<T?> _withPausedWebView<T>(Future<T?> Function() body) async {
+    _webViewReaderKey.currentState?.pauseWebView();
+    try {
+      return await body();
+    } finally {
+      if (mounted) _webViewReaderKey.currentState?.resumeWebView();
+    }
+  }
+
   Future<void> _openTextSheet() async {
     if (_session.markdownContent == null) return;
     _sessionNotifier.setSheetOpen(true);
-    await showReaderTextSheet(context);
+    await _withPausedWebView(() => showReaderTextSheet(context));
     _sessionNotifier.setSheetOpen(false);
   }
 
   Future<void> _openThemeSheet() async {
     _sessionNotifier.setSheetOpen(true);
-    await showReaderThemeSheet(context);
+    await _withPausedWebView(() => showReaderThemeSheet(context));
     _sessionNotifier.setSheetOpen(false);
   }
 
-  void _openNotesSheet() {
-    showReaderNotesSheet(context, documentId: widget.document.id);
+  Future<void> _openNotesSheet() async {
+    await _withPausedWebView(
+      () => showReaderNotesSheet(context, documentId: widget.document.id),
+    );
   }
 
   void _openOutlineSheet() {

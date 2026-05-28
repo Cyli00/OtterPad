@@ -1,5 +1,3 @@
-import 'dart:ui' show Color;
-
 import 'package:markdown/markdown.dart' as md;
 
 import '../../../providers/reader_settings_provider.dart';
@@ -29,7 +27,7 @@ String buildReaderHtml({
   final css = _buildCss(palette, settings);
   final js = _buildJs();
 
-  final bgColor = _cssColor(palette.background);
+  final bgColor = cssColor(palette.background);
 
   return '''
 <!DOCTYPE html>
@@ -51,26 +49,32 @@ String buildReaderHtml({
 }
 
 String buildThemeCssVars(ReaderPalette palette, ReaderSettingsState settings) {
-  // setProperty 第二个参数必须用**双引号**字面量包裹——_cssFontFamily 返回的
-  // 字体列表内含字面单引号（如 'Times New Roman'），用单引号包会引发未 escape
-  // 单引号嵌套的 JS 语法错误，导致整段 evaluateJavascript 不执行（JS 先整段
-  // parse 再 run），字号/字体/主题色全部 silent fail。Dart 三引号字符串里
-  // 嵌入字面双引号无需 escape，与 JS 双引号字符串嵌入字面单引号无需 escape
-  // 刚好双向无冲突。
-  return '''
-    document.documentElement.style.setProperty('--bg', "${_cssColor(palette.background)}");
-    document.documentElement.style.setProperty('--text', "${_cssColor(palette.text)}");
-    document.documentElement.style.setProperty('--secondary', "${_cssColor(palette.secondaryText)}");
-    document.documentElement.style.setProperty('--link', "${_cssColor(palette.link)}");
-    document.documentElement.style.setProperty('--divider', "${_cssColor(palette.divider)}");
-    document.documentElement.style.setProperty('--code-bg', "${_cssColor(palette.codeBlock)}");
-    document.documentElement.style.setProperty('--font-size', "${settings.fontSize}px");
-    document.documentElement.style.setProperty('--font-family', "${_cssFontFamily(settings.font)}");
-    document.documentElement.style.setProperty('--tr-weak', "${_cssColorWithAlpha(palette.text, 0.47)}");
-    document.documentElement.style.setProperty('--tr-hl-bg', "${_cssColorWithAlpha(palette.link, 0.14)}");
-    document.documentElement.style.setProperty('--tr-hl-text', "${_cssColorWithAlpha(palette.link, 0.71)}");
-    document.documentElement.style.setProperty('--tr-deco', "${_cssColorWithAlpha(palette.link, 0.55)}");
-  ''';
+  return _cssVarsToJsSetProperty({
+    ...palette.toCssVars(),
+    ...settings.toCssVars(),
+  });
+}
+
+/// `Map<varName, value>` → CSS 变量声明块（用于 `:root { ... }` 注入）。
+///
+/// 输出形如 `  --bg: rgba(...);\n  --text: rgba(...);`，可直接拼进 CSS 字符串。
+String _cssVarsToCssBlock(Map<String, String> vars) {
+  return vars.entries.map((e) => '  ${e.key}: ${e.value};').join('\n');
+}
+
+/// `Map<varName, value>` → JS `setProperty` 调用序列（用于 evaluateJavascript）。
+///
+/// setProperty 第二个参数必须用**双引号**字面量包裹——字体列表内含字面单引号
+/// （如 'Times New Roman'），用单引号包会引发未 escape 的 JS 语法错误，导致
+/// 整段 evaluateJavascript silent fail。Dart 三引号字符串里嵌字面双引号无需
+/// escape，与 JS 双引号字符串嵌字面单引号无需 escape 刚好双向无冲突。
+String _cssVarsToJsSetProperty(Map<String, String> vars) {
+  return vars.entries
+      .map(
+        (e) =>
+            'document.documentElement.style.setProperty(\'${e.key}\', "${e.value}");',
+      )
+      .join('\n');
 }
 
 // ─── Markdown → HTML ───
@@ -243,21 +247,14 @@ String _injectImageAttrs(String html, [String cacheBuster = '']) {
 // ─── CSS ───
 
 String _buildCss(ReaderPalette palette, ReaderSettingsState settings) {
+  final vars = _cssVarsToCssBlock({
+    ...palette.toCssVars(),
+    ...settings.toCssVars(),
+    '--line-height': '1.7',
+  });
   return '''
 :root {
-  --bg: ${_cssColor(palette.background)};
-  --text: ${_cssColor(palette.text)};
-  --secondary: ${_cssColor(palette.secondaryText)};
-  --link: ${_cssColor(palette.link)};
-  --divider: ${_cssColor(palette.divider)};
-  --code-bg: ${_cssColor(palette.codeBlock)};
-  --font-size: ${settings.fontSize}px;
-  --font-family: ${_cssFontFamily(settings.font)};
-  --line-height: 1.7;
-  --tr-weak: ${_cssColorWithAlpha(palette.text, 0.47)};
-  --tr-hl-bg: ${_cssColorWithAlpha(palette.link, 0.14)};
-  --tr-hl-text: ${_cssColorWithAlpha(palette.link, 0.71)};
-  --tr-deco: ${_cssColorWithAlpha(palette.link, 0.55)};
+$vars
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -507,37 +504,6 @@ body[data-pagination="horizontal"] img {
   max-height: 80vh;
 }
 ''';
-}
-
-String _cssColor(Color c) {
-  final r = (c.r * 255).round();
-  final g = (c.g * 255).round();
-  final b = (c.b * 255).round();
-  final a = c.a;
-  return 'rgba($r,$g,$b,${a.toStringAsFixed(2)})';
-}
-
-String _cssColorWithAlpha(Color c, double a) {
-  final r = (c.r * 255).round();
-  final g = (c.g * 255).round();
-  final b = (c.b * 255).round();
-  return 'rgba($r,$g,$b,${a.toStringAsFixed(2)})';
-}
-
-/// 阅读器两套字体族的 CSS 表达（与 [ReaderFont.fontFamily] 对齐）。
-///
-/// `serif` 首选 Times New Roman；`sans` 完全交给浏览器/系统默认
-/// （`system-ui`、`-apple-system`、`Segoe UI`），CJK 通过列表里
-/// `Noto Serif CJK SC` / `PingFang SC` / `Microsoft YaHei` 等兜底。
-String _cssFontFamily(ReaderFont font) {
-  return switch (font) {
-    ReaderFont.serif =>
-      "'Times New Roman', 'Songti SC', STSong, SimSun, "
-          "'Noto Serif CJK SC', Georgia, 'Noto Serif', serif",
-    ReaderFont.sans =>
-      "system-ui, -apple-system, 'Segoe UI', 'PingFang SC', "
-          "'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
-  };
 }
 
 // ─── JavaScript ───

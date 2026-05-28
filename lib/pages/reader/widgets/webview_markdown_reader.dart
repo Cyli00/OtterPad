@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -13,15 +12,8 @@ import '../../../data/models/book/highlight.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/reader_localhost_server.dart';
 import 'reader_background.dart';
+import 'reader_js_bridge.dart';
 import 'webview_reader_html.dart';
-
-/// 覆盖滚动条度量。`progress` ∈ [0,1] = 当前滚动位置；`viewportRatio` ∈ [0,1] =
-/// 视口高度 / 文档高度，决定 thumb 高度比例。
-class _ScrollbarMetrics {
-  final double progress;
-  final double viewportRatio;
-  const _ScrollbarMetrics({this.progress = 0, this.viewportRatio = 1});
-}
 
 class WebViewMarkdownReader extends StatefulWidget {
   final String markdownData;
@@ -74,20 +66,26 @@ class WebViewMarkdownReader extends StatefulWidget {
   WebViewMarkdownReaderState createState() => WebViewMarkdownReaderState();
 }
 
-class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
-  InAppWebViewController? _controller;
-  bool _contentReady = false;
+class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
+    implements ReaderJsBridgeListener {
+  ReaderJsBridge? _bridge;
   final _webViewKey = GlobalKey();
 
   // 覆盖滚动条状态：JS rAF 通道更新 metrics；UI 在 1.5s idle 后淡出。
   // _scrollbarVisible 通过 setState 直接驱动 AnimatedOpacity，不放 ValueNotifier
   // 里——metrics 是高频更新（rAF），visible 是低频两态（show/hide），分开走避免
   // 把整个 thumb 重建塞进每帧。
-  final ValueNotifier<_ScrollbarMetrics> _scrollMetrics =
-      ValueNotifier(const _ScrollbarMetrics());
+  final ValueNotifier<ReaderScrollMetrics> _scrollMetrics = ValueNotifier(
+    const ReaderScrollMetrics(progress: 0, viewportRatio: 1),
+  );
   bool _scrollbarVisible = false;
   Timer? _scrollbarHideTimer;
   bool _scrollbarPointerActive = false;
+
+  /// 用户在 WebView 内通过文本选择创建的高亮 id 集合——JS 已直接画 SVG，
+  /// 下一次 syncHighlights 不应再添加，否则重复绘制。bridge.syncHighlights
+  /// 接受 skipNewIds 参数，这里维护它的来源。
+  final _selectionHighlightIds = <String>{};
 
   /// HTML 写到文献目录内 `<documentDir>/.reader.html`：
   /// - **自包含**：HTML 缓存随文献目录一起被备份/恢复/删除，无需单独清理；
@@ -145,10 +143,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
   }
 
   /// Flutter 拖动覆盖条 → JS scrollTo。ratio ∈ [0,1]。
-  void _scrollToRatio(double ratio) {
-    final r = ratio.clamp(0.0, 1.0);
-    _controller?.evaluateJavascript(source: 'window._scrollToRatio($r)');
-  }
+  void _scrollToRatio(double ratio) => _bridge?.scrollToRatio(ratio);
 
   void _writeHtmlFileSync() {
     final html = _buildHtml();
@@ -186,26 +181,33 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     if (dataChanged) {
       _reloadContent();
     } else if (themeChanged) {
-      _applyTheme();
+      _bridge?.applyTheme(widget.palette, widget.settings);
     }
     if (!dataChanged && paginationChanged) {
-      _applyPaginationMode();
+      _bridge?.applyPagination(widget.settings.paginationMode);
     }
     if (!dataChanged && styleChanged) {
-      _applyTranslationStyle();
+      _bridge?.applyTranslationStyle(widget.translationStyleId);
     }
 
     if (!dataChanged && widget.highlights != oldWidget.highlights) {
-      _syncHighlights(oldWidget.highlights, widget.highlights);
+      _bridge?.syncHighlights(
+        oldWidget.highlights,
+        widget.highlights,
+        skipNewIds: _selectionHighlightIds,
+      );
+      // syncHighlights 已消费过的 selection id 从集合里移除（避免无界增长）。
+      _selectionHighlightIds.removeWhere(
+        (id) => widget.highlights.any((h) => h.id == id),
+      );
     }
 
     if (widget.highlightQuery != oldWidget.highlightQuery) {
-      _applySearchHighlight();
+      _bridge?.applySearchQuery(widget.highlightQuery);
     }
   }
 
   void _reloadContent() {
-    _contentReady = false;
     _writeHtmlFile().then((_) {
       if (!mounted) return;
       final url = _readerUrl(cacheBust: true);
@@ -216,7 +218,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         );
         return;
       }
-      _controller?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+      _bridge?.reloadUrl(url);
     });
   }
 
@@ -232,132 +234,27 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
     return '$base?v=${DateTime.now().millisecondsSinceEpoch}';
   }
 
-  /// 主题/字号/字体增量更新——直接 setProperty 改 CSS 变量。
-  /// 浏览器只对受 var(--xxx) 影响的属性重排，零页面重载。
-  void _applyTheme() {
-    if (!_contentReady || _controller == null) return;
-    _controller!.evaluateJavascript(
-      source: buildThemeCssVars(widget.palette, widget.settings),
-    );
-  }
-
-  void _applyTranslationStyle() {
-    if (!_contentReady || _controller == null) return;
-    _controller!.evaluateJavascript(
-      source: "window.setTranslationStyle('${widget.translationStyleId}')",
-    );
-  }
-
-  /// 翻页方式增量切换：仅改 body[data-pagination]，JS 侧 setPaginationMode
-  /// 内部触发 Overlayer.redraw() + 重发 scroll 让 lazy 图重新评估。
-  /// 与字号/主题切换同款"不重载 DOM"路径。
-  void _applyPaginationMode() {
-    if (!_contentReady || _controller == null) return;
-    _controller!.evaluateJavascript(
-      source:
-          "window.setPaginationMode('${widget.settings.paginationMode.jsId}')",
-    );
-  }
-
-  void _applySearchHighlight() {
-    if (!_contentReady || _controller == null) return;
-    final q = widget.highlightQuery;
-    if (q == null || q.isEmpty) {
-      _controller!.evaluateJavascript(source: 'window.clearSearchHighlight()');
-    } else {
-      final escaped = q.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
-      _controller!.evaluateJavascript(
-        source: "window.highlightSearch('$escaped')",
-      );
-    }
-  }
-
   // ─── 对外暴露的方法（通过 GlobalKey 调用） ───
+  // 都是单行转发到 bridge——bridge 字段未初始化时（WebView 未 ready）静默跳过。
 
-  void scrollToBlockIndex(int index) {
-    _controller?.evaluateJavascript(source: 'window.scrollToBlock($index)');
-  }
+  void scrollToBlockIndex(int index) => _bridge?.scrollToBlock(index);
 
-  void scrollToSearchResult(int index) {
-    _controller?.evaluateJavascript(
-      source: 'window.scrollToSearchResult($index)',
-    );
-  }
+  void scrollToSearchResult(int index) => _bridge?.scrollToSearchResult(index);
 
-  void activateNearestSearchResult() {
-    _controller?.evaluateJavascript(
-      source: 'window.activateNearestSearchResult()',
-    );
-  }
+  void activateNearestSearchResult() => _bridge?.activateNearestSearchResult();
 
-  void flashImage(String filename) {
-    final escaped = filename.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
-    _controller?.evaluateJavascript(source: "window.flashImage('$escaped')");
-  }
-
-  // ─── 高亮同步 ───
-
-  void _syncHighlights(List<Highlight> oldList, List<Highlight> newList) {
-    if (!_contentReady || _controller == null) return;
-
-    final oldIds = oldList.map((h) => h.id).toSet();
-    final newIds = newList.map((h) => h.id).toSet();
-
-    for (final id in oldIds.difference(newIds)) {
-      _controller!.evaluateJavascript(source: "window.removeHighlight('$id')");
-    }
-
-    for (final hl in newList) {
-      if (!oldIds.contains(hl.id)) {
-        if (_selectionHighlightIds.remove(hl.id)) continue;
-        _addHighlightToWebView(hl);
-      } else {
-        final old = oldList.firstWhere((h) => h.id == hl.id);
-        if (old.color != hl.color) {
-          _controller!.evaluateJavascript(
-            source: "window.updateHighlightColor('${hl.id}','${hl.color}')",
-          );
-        }
-      }
-    }
-  }
-
-  void _addHighlightToWebView(Highlight hl) {
-    final escapedText = hl.text
-        .replaceAll('\\', '\\\\')
-        .replaceAll("'", "\\'")
-        .replaceAll('\n', '\\n')
-        .replaceAll('\r', '');
-    _controller?.evaluateJavascript(
-      source: "window.addHighlight('${hl.id}','$escapedText','${hl.color}')",
-    );
-  }
-
-  /// 批量恢复所有高亮——一次 IPC + JS 端共享一次 walker 扫描。
-  ///
-  /// 旧实现是逐个 [_addHighlightToWebView] → N 次 evaluateJavascript +
-  /// N 次完整 TreeWalker 扫描（每条都从头扫）。N=50 高亮在长文献上明显卡。
-  /// JSON 用 base64 包裹避开"嵌入 JS 单引号字符串需要逐字符 escape"的坑——
-  /// `highlight.text` 含换行/反斜杠/引号都不会破坏 source。
-  void _restoreAllHighlights() {
-    if (widget.highlights.isEmpty) return;
-    final payload = widget.highlights
-        .map((h) => {'id': h.id, 'text': h.text, 'color': h.color})
-        .toList();
-    final encoded = base64Encode(utf8.encode(jsonEncode(payload)));
-    _controller?.evaluateJavascript(
-      source: "window.addHighlightsBatch('$encoded')",
-    );
-  }
-
-  final _selectionHighlightIds = <String>{};
+  void flashImage(String filename) => _bridge?.flashImage(filename);
 
   void addHighlightFromSelection(String id, String color) {
     _selectionHighlightIds.add(id);
-    _controller?.evaluateJavascript(
-      source: "window.addHighlightFromSelection('$id','$color')",
-    );
+    _bridge?.addHighlightFromSelection(id, color);
   }
+
+  /// 暂停背景 WebView——前景弹出 sheet/dialog 时调用，释放 CPU/GPU。
+  /// 必须配对 [resumeWebView] 调用，否则恢复后 WebView 静止。
+  void pauseWebView() => _bridge?.pauseTimers();
+
+  void resumeWebView() => _bridge?.resumeTimers();
 
   // ─── 坐标转换 ───
 
@@ -443,115 +340,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
         horizontalScrollBarEnabled: false,
       ),
       onWebViewCreated: (controller) {
-        _controller = controller;
-
-        controller.addJavaScriptHandler(
-          handlerName: 'onContentReady',
-          callback: (_) {
-            _contentReady = true;
-            // 翻页方式必须在首屏注入：JS 默认 body 没 data-pagination 属性，
-            // 视为 vertical；horizontal 时若不注入会以 vertical 渲染首屏，
-            // 直到第一次 didUpdateWidget 才切，造成"先看到 vertical 一闪"。
-            _applyPaginationMode();
-            _restoreAllHighlights();
-            _applySearchHighlight();
-            if (widget.initialScrollProgress > 0) {
-              _controller?.evaluateJavascript(
-                source:
-                    'window._restoreProgress(${widget.initialScrollProgress})',
-              );
-            }
-          },
-        );
-
-        controller.addJavaScriptHandler(
-          handlerName: 'onSelectionEnd',
-          callback: (args) {
-            if (args.isEmpty) return;
-            final data = args[0] as Map<String, dynamic>;
-            final text = data['text'] as String? ?? '';
-            if (text.isEmpty) return;
-            final rect = _normalizedToScreen(data);
-            widget.onSelectionEnd?.call(text, rect);
-          },
-        );
-
-        controller.addJavaScriptHandler(
-          handlerName: 'onSelectionCleared',
-          callback: (_) => widget.onSelectionCleared?.call(),
-        );
-
-        controller.addJavaScriptHandler(
-          handlerName: 'onHighlightClick',
-          callback: (args) {
-            if (args.isEmpty) return;
-            final data = args[0] as Map<String, dynamic>;
-            final id = data['id'] as String? ?? '';
-            if (id.isEmpty) return;
-            final hl = widget.highlights.where((h) => h.id == id).firstOrNull;
-            if (hl == null) return;
-            final pos = _normalizedToOffset(data);
-            widget.onHighlightClick?.call(hl, pos);
-          },
-        );
-
-        controller.addJavaScriptHandler(
-          handlerName: 'onImageClick',
-          callback: (args) {
-            if (args.isEmpty) return;
-            final data = args[0] as Map<String, dynamic>;
-            final src = data['src'] as String? ?? '';
-            if (src.isNotEmpty) widget.onImageClick?.call(src);
-          },
-        );
-
-        controller.addJavaScriptHandler(
-          handlerName: 'onScrollDirection',
-          callback: (args) {
-            if (args.isEmpty) return;
-            final data = args[0] as Map<String, dynamic>;
-            final dir = data['direction'] as String? ?? '';
-            if (dir == 'down') {
-              widget.onScrollDirection?.call(ScrollDirection.reverse);
-            } else if (dir == 'up') {
-              widget.onScrollDirection?.call(ScrollDirection.forward);
-            }
-          },
-        );
-
-        controller.addJavaScriptHandler(
-          handlerName: 'onScrollProgress',
-          callback: (args) {
-            if (args.isEmpty) return;
-            final data = args[0] as Map<String, dynamic>;
-            final raw = data['progress'];
-            if (raw is num) {
-              widget.onScrollProgress?.call(raw.toDouble().clamp(0.0, 1.0));
-            }
-          },
-        );
-
-        // rAF 高频通道：覆盖滚动条 thumb 位置 + 高度
-        controller.addJavaScriptHandler(
-          handlerName: 'onScrollMetrics',
-          callback: (args) {
-            if (args.isEmpty) return;
-            final data = args[0] as Map<String, dynamic>;
-            final progress = (data['progress'] as num?)?.toDouble() ?? 0;
-            final viewportRatio =
-                (data['viewportRatio'] as num?)?.toDouble() ?? 1;
-            _scrollMetrics.value = _ScrollbarMetrics(
-              progress: progress.clamp(0.0, 1.0),
-              viewportRatio: viewportRatio.clamp(0.05, 1.0),
-            );
-            _showScrollbarTransiently();
-          },
-        );
-
-        controller.addJavaScriptHandler(
-          handlerName: 'onToggleToolbar',
-          callback: (_) => widget.onToggleToolbar?.call(),
-        );
+        _bridge = ReaderJsBridge(controller, this)..attachHandlers();
       },
     );
 
@@ -588,6 +377,60 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
       ],
     );
   }
+
+  // ─── ReaderJsBridgeListener 实现 ───
+  //
+  // Bridge 把 JS 端的 9 路 handler 全部归一到这些方法。widget 自己实现，
+  // 而不是再绕一层"listener 适配器"——本来 widget 就是回调的天然消费者。
+
+  @override
+  void onContentReady() {
+    // 翻页方式必须在首屏注入：JS 默认 body 没 data-pagination 属性，
+    // 视为 vertical；horizontal 时若不注入会以 vertical 渲染首屏，
+    // 直到第一次 didUpdateWidget 才切，造成"先看到 vertical 一闪"。
+    _bridge?.applyPagination(widget.settings.paginationMode);
+    _bridge?.restoreAllHighlights(widget.highlights);
+    _bridge?.applySearchQuery(widget.highlightQuery);
+    if (widget.initialScrollProgress > 0) {
+      _bridge?.restoreScrollProgress(widget.initialScrollProgress);
+    }
+  }
+
+  @override
+  void onSelectionEnd(String text, Map<String, dynamic> rawRect) {
+    widget.onSelectionEnd?.call(text, _normalizedToScreen(rawRect));
+  }
+
+  @override
+  void onSelectionCleared() => widget.onSelectionCleared?.call();
+
+  @override
+  void onHighlightClick(String highlightId, Map<String, dynamic> rawPos) {
+    final hl = widget.highlights.where((h) => h.id == highlightId).firstOrNull;
+    if (hl == null) return;
+    widget.onHighlightClick?.call(hl, _normalizedToOffset(rawPos));
+  }
+
+  @override
+  void onImageClick(String imageSource) =>
+      widget.onImageClick?.call(imageSource);
+
+  @override
+  void onScrollDirection(ScrollDirection direction) =>
+      widget.onScrollDirection?.call(direction);
+
+  @override
+  void onScrollProgress(double progress) =>
+      widget.onScrollProgress?.call(progress);
+
+  @override
+  void onScrollMetrics(ReaderScrollMetrics metrics) {
+    _scrollMetrics.value = metrics;
+    _showScrollbarTransiently();
+  }
+
+  @override
+  void onToggleToolbar() => widget.onToggleToolbar?.call();
 }
 
 // ─── 覆盖滚动条 ─────────────────────────────────────────────────
@@ -596,7 +439,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader> {
 // 拖动时按 localPosition.dy / trackHeight 反算 ratio，调 onJumpTo。
 // thumb min-height 48 防止超长文档下 thumb 缩成针线。
 class _OverlayScrollbar extends StatelessWidget {
-  final ValueListenable<_ScrollbarMetrics> metrics;
+  final ValueListenable<ReaderScrollMetrics> metrics;
   final ValueChanged<double> onJumpTo;
   final VoidCallback onInteractionStart;
   final VoidCallback onInteractionEnd;
@@ -636,7 +479,7 @@ class _OverlayScrollbar extends StatelessWidget {
           onVerticalDragCancel: onInteractionEnd,
           child: SizedBox(
             width: _trackWidth,
-            child: ValueListenableBuilder<_ScrollbarMetrics>(
+            child: ValueListenableBuilder<ReaderScrollMetrics>(
               valueListenable: metrics,
               builder: (context, m, _) {
                 final thumbHeight = math.max(
@@ -655,8 +498,7 @@ class _OverlayScrollbar extends StatelessWidget {
                       child: Container(
                         decoration: BoxDecoration(
                           color: cs.onSurfaceVariant.withAlpha(140),
-                          borderRadius:
-                              BorderRadius.circular(_thumbWidth / 2),
+                          borderRadius: BorderRadius.circular(_thumbWidth / 2),
                         ),
                       ),
                     ),

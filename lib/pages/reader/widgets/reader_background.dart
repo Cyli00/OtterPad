@@ -3,6 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/reader_settings_provider.dart';
 
+/// [Color] → CSS `rgba(...)` 字符串。
+///
+/// 公开给 [webview_reader_html.dart] 等所有需要把 palette 颜色塞进 CSS
+/// 的调用方共用，避免重复实现。
+String cssColor(Color c) {
+  final r = (c.r * 255).round();
+  final g = (c.g * 255).round();
+  final b = (c.b * 255).round();
+  return 'rgba($r,$g,$b,${c.a.toStringAsFixed(2)})';
+}
+
+/// [Color] + 指定 alpha → CSS `rgba(...)` 字符串。
+String cssColorWithAlpha(Color c, double a) {
+  final r = (c.r * 255).round();
+  final g = (c.g * 255).round();
+  final b = (c.b * 255).round();
+  return 'rgba($r,$g,$b,${a.toStringAsFixed(2)})';
+}
+
 /// 阅读器主题的 6 色调色板——所有 `resolveReader*` 入口唯一出处。
 ///
 /// 以 record 形态一次性派发，让 `nr_markdown_config.dart` 等调用方
@@ -25,6 +44,24 @@ class ReaderPalette {
     required this.codeBlock,
   });
 
+  /// palette → 所有相关 CSS 变量。
+  ///
+  /// 包含 6 个原始色 + 4 个翻译派生色（`--tr-*`，从 text/link 算 alpha 变体）。
+  /// **唯一映射出处**——`_buildCss` 初始注入和 `buildThemeCssVars` 增量更新
+  /// 都基于此 map 生成，新增字段只改一处。
+  Map<String, String> toCssVars() => {
+    '--bg': cssColor(background),
+    '--text': cssColor(text),
+    '--secondary': cssColor(secondaryText),
+    '--link': cssColor(link),
+    '--divider': cssColor(divider),
+    '--code-bg': cssColor(codeBlock),
+    '--tr-weak': cssColorWithAlpha(text, 0.47),
+    '--tr-hl-bg': cssColorWithAlpha(link, 0.14),
+    '--tr-hl-text': cssColorWithAlpha(link, 0.71),
+    '--tr-deco': cssColorWithAlpha(link, 0.55),
+  };
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -44,8 +81,9 @@ class ReaderPalette {
 /// 根据 [readerTheme] 生成阅读器页面的局部 [ThemeData]。
 ///
 /// 以 parent 的 primary 为 seed 生成对应亮度的基础 [ColorScheme]，
-/// 再用 [ReaderPalette] 覆盖 surface 系列字段——工具栏、底部栏、弹窗
-/// 的 `cs.surface` / `cs.onSurface` 等全部跟随阅读器背景配色。
+/// 再用 [ReaderPalette] 仅覆盖 `surface`——工具栏/底部栏背景跟随阅读器
+/// 背景色。**图标、文字、强调色继续来自 seed 派生**，保证外观面板里
+/// 选的主题色（橙/紫/蓝…）在所有背景下保持一致。
 ThemeData buildReaderThemeData(ThemeData parent, ReaderTheme readerTheme) {
   final brightness = readerTheme.brightness;
   final baseCs = parent.colorScheme.brightness == brightness
@@ -55,13 +93,7 @@ ThemeData buildReaderThemeData(ThemeData parent, ReaderTheme readerTheme) {
           brightness: brightness,
         );
   final palette = resolveReaderPalette(readerTheme, baseCs);
-  final localCs = baseCs.copyWith(
-    surface: palette.background,
-    surfaceContainerHigh: palette.codeBlock,
-    onSurface: palette.text,
-    onSurfaceVariant: palette.secondaryText,
-    outlineVariant: palette.divider,
-  );
+  final localCs = baseCs.copyWith(surface: palette.background);
   return ThemeData(
     colorScheme: localCs,
     useMaterial3: true,
