@@ -418,7 +418,14 @@ final RegExp _wsRunRe = RegExp(r'\s+');
 // _reflowParagraphs 辅助
 final RegExp _multiBlankRe = RegExp(r'\n{3,}');
 final RegExp _listItemRe = RegExp(r'^([-*+]|\d+[.)])\s');
-final RegExp _figureLineRe = RegExp(r'^!\[[^\]]*\]\([^)]*\)\s*$');
+/// 匹配独占一行的 markdown 图片. alt 部分用贪婪 `.*` 而非 `[^\]]*`,
+/// 因为 figure caption 内随处可见**平衡的方括号** (`[Cont]`, `[KA1D]`,
+/// `[Color figure can be viewed at wileyonlinelibrary.com]` 等),
+/// `[^\]]*` 会在首个 `]` 处过早断裂导致整行匹配失败 → `_isProtectedLine`
+/// 返回 false → `_reflowParagraphs` 把 imgTag 当成正文合并进相邻段落.
+/// 贪婪 `.*` 让正则引擎从末尾 backtrack 找最后一个 `]\(...\)` 边界,
+/// 平衡 / 不平衡的内嵌方括号都能命中.
+final RegExp _figureLineRe = RegExp(r'^!\[.*\]\(.*\)\s*$');
 final RegExp _horizontalRuleRe = RegExp(r'^[-*_]{3,}\s*$');
 final RegExp _sentenceEndCharRe = RegExp(r'[.!?。！？:;]');
 

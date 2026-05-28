@@ -110,10 +110,10 @@ class DocExtractService {
 
     final normalizedApiUrl = apiUrl.trim();
     final url = normalizedApiUrl.endsWith('/layout-parsing')
-      ? normalizedApiUrl
-      : normalizedApiUrl.endsWith('/')
-      ? '${normalizedApiUrl}layout-parsing'
-      : '$normalizedApiUrl/layout-parsing';
+        ? normalizedApiUrl
+        : normalizedApiUrl.endsWith('/')
+        ? '${normalizedApiUrl}layout-parsing'
+        : '$normalizedApiUrl/layout-parsing';
 
     final Response<Map<String, dynamic>> response;
     try {
@@ -396,17 +396,20 @@ class DocExtractService {
     final mdPages = <String>[];
     for (var pageIdx = 0; pageIdx < pages.length; pageIdx++) {
       final page = pages[pageIdx] as Map<String, dynamic>;
-      var mdText = (page['markdown'] as Map<String, dynamic>?)?['text']
-              as String? ??
-          '';
+      var mdText =
+          (page['markdown'] as Map<String, dynamic>?)?['text'] as String? ?? '';
 
       if (pageFigs.containsKey(pageIdx)) {
-        final pageBlocks = (page['prunedResult']
-                    as Map<String, dynamic>?)?['parsing_res_list']
+        final pageBlocks =
+            (page['prunedResult'] as Map<String, dynamic>?)?['parsing_res_list']
                 as List<dynamic>? ??
             [];
-        mdText =
-            _replaceInPageMd(mdText, pageFigs[pageIdx]!, pageBlocks, mdDir);
+        mdText = _replaceInPageMd(
+          mdText,
+          pageFigs[pageIdx]!,
+          pageBlocks,
+          mdDir,
+        );
       }
       mdPages.add(mdText);
     }
@@ -521,12 +524,8 @@ class DocExtractService {
       } else if (content.isNotEmpty) {
         // figure_title / vision_footnote / 内容像 caption 的 text 等,
         // 按内容前缀搜索。
-        final probeLen = label == 'vision_footnote' ? 20 : 30;
-        idx = _findLine(
-          lines,
-          content.substring(0, min(probeLen, content.length)),
-          skip,
-        );
+        final probeLen = label == 'vision_footnote' ? 32 : 120;
+        idx = _findContentLine(lines, content, probeLen, skip);
       }
 
       if (idx == null) continue;
@@ -554,9 +553,7 @@ class DocExtractService {
     // markdown-only caption 兜底:manifest 带了 caption text 但 parsing_res_list
     // 没对应 block 时,直接按 captionText 在 markdown 里搜行,占住并设为 anchor.
     if (anchor == null && fig.captionText.isNotEmpty) {
-      final probe = fig.captionText
-          .substring(0, min(30, fig.captionText.length));
-      final idx = _findLine(lines, probe, skip);
+      final idx = _findContentLine(lines, fig.captionText, 120, skip);
       if (idx != null) {
         owned.add(idx);
         skip.add(idx);
@@ -565,30 +562,139 @@ class DocExtractService {
     }
 
     if (owned.isEmpty) return null;
+    _claimCaptionLines(lines, fig.captionText, owned, skip, claimed);
     anchor ??= owned.reduce(min);
+    if (anchor != owned.reduce(min)) {
+      anchor = owned.reduce(min);
+    }
 
     // 吸收紧邻空行——避免替换后留下连续空行堆。
     // blockedByOthers=claimed，不越过其他 figure 的行；不触碰自身 owned 行。
     _absorbBlankNeighbors(lines, owned, claimed);
 
     final uri = Uri.file(fig.imagePath);
+    final caption = _normalizeInlineText(fig.captionText);
     return _FigurePlan(
       ownedLines: owned,
       anchorLine: anchor,
-      imgTag: '\n![fig:${fig.captionText}]($uri)\n',
+      imgTag: '\n![fig:$caption]($uri)\n',
     );
   }
 
   /// 在行列表中找到包含 [text] 的第一行（跳过已使用的行）
-  static int? _findLine(
-    List<String> lines,
-    String text,
-    Set<int> usedLines,
-  ) {
+  static int? _findLine(List<String> lines, String text, Set<int> usedLines) {
     for (var i = 0; i < lines.length; i++) {
       if (!usedLines.contains(i) && lines[i].contains(text)) return i;
     }
     return null;
+  }
+
+  static int? _findContentLine(
+    List<String> lines,
+    String content,
+    int maxProbeLen,
+    Set<int> usedLines,
+  ) {
+    final normalized = _normalizeInlineText(content);
+    if (normalized.isEmpty) return null;
+
+    final lengths = <int>{
+      min(maxProbeLen, normalized.length),
+      min(80, normalized.length),
+      min(48, normalized.length),
+      min(24, normalized.length),
+    }.where((len) => len > 0).toList()..sort((a, b) => b.compareTo(a));
+
+    for (final len in lengths) {
+      final probe = normalized.substring(0, len);
+      for (var i = 0; i < lines.length; i++) {
+        if (usedLines.contains(i)) continue;
+        if (_lineSearchText(lines[i]).contains(probe)) return i;
+      }
+    }
+    return null;
+  }
+
+  static final RegExp _inlineWhitespaceRe = RegExp(r'\s+');
+  static final RegExp _centeredDivLineRe = RegExp(
+    r'^<div\s+style="text-align:\s*center;\s*">\s*(.*?)\s*</div>$',
+    caseSensitive: false,
+  );
+  static final RegExp _htmlTagRe = RegExp(r'<[^>]+>');
+  static final RegExp _captionLeadRe = RegExp(
+    r'^((?:figure|fig\.?|table|tab\.?)\s*\d+[a-z]?\s*[.)]?)',
+    caseSensitive: false,
+  );
+  static final RegExp _captionNoteLeadRe = RegExp(
+    r'^(?:\([a-z](?:\s*(?:,|and|&)\s*[a-z])*\)|[a-z](?:\s*(?:,|and|&)\s*[a-z])*[).:;-])\s+\S',
+    caseSensitive: false,
+  );
+
+  static String _normalizeInlineText(String text) {
+    return text.trim().replaceAll(_inlineWhitespaceRe, ' ');
+  }
+
+  static String _lineSearchText(String line) {
+    var text = line.trim();
+    final divMatch = _centeredDivLineRe.firstMatch(text);
+    if (divMatch != null) {
+      text = divMatch.group(1)!;
+    }
+    text = text.replaceAll(_htmlTagRe, ' ');
+    text = text.replaceAll(RegExp(r'^[*_]+|[*_]+$'), '');
+    return _normalizeInlineText(text);
+  }
+
+  static void _claimCaptionLines(
+    List<String> lines,
+    String captionText,
+    Set<int> owned,
+    Set<int> skip,
+    Set<int> claimed,
+  ) {
+    final captionLead = _captionLead(captionText);
+    if (captionLead == null) return;
+
+    final anchors = <int>[];
+    for (var i = 0; i < lines.length; i++) {
+      if (claimed.contains(i) && !owned.contains(i)) continue;
+      final text = _lineSearchText(lines[i]);
+      if (!text.toLowerCase().startsWith(captionLead.toLowerCase())) continue;
+      owned.add(i);
+      skip.add(i);
+      anchors.add(i);
+    }
+
+    for (final anchor in anchors) {
+      _claimFollowingCaptionNotes(lines, anchor, owned, skip, claimed);
+    }
+  }
+
+  static String? _captionLead(String captionText) {
+    final text = _normalizeInlineText(captionText);
+    final match = _captionLeadRe.firstMatch(text);
+    return match?.group(1);
+  }
+
+  static void _claimFollowingCaptionNotes(
+    List<String> lines,
+    int anchor,
+    Set<int> owned,
+    Set<int> skip,
+    Set<int> claimed,
+  ) {
+    for (var i = anchor + 1; i < lines.length; i++) {
+      if (claimed.contains(i) && !owned.contains(i)) break;
+      final text = _lineSearchText(lines[i]);
+      if (text.isEmpty) {
+        owned.add(i);
+        skip.add(i);
+        continue;
+      }
+      if (!_captionNoteLeadRe.hasMatch(text)) break;
+      owned.add(i);
+      skip.add(i);
+    }
   }
 
   /// 以 [openLine] 为起点（含 `<table`）扫描到闭合 `</table>` 行，返回 end（exclusive）。
@@ -658,8 +764,9 @@ class DocExtractService {
       final pages = jsonDecode(jsonContent) as List<dynamic>;
       final titles = <String>{};
       for (final page in pages) {
-        final blocks = (page as Map<String, dynamic>)['prunedResult']
-                ?['parsing_res_list'] as List<dynamic>? ??
+        final blocks =
+            (page as Map<String, dynamic>)['prunedResult']?['parsing_res_list']
+                as List<dynamic>? ??
             [];
         for (final block in blocks) {
           final b = block as Map<String, dynamic>;
@@ -678,8 +785,10 @@ class DocExtractService {
   static bool _titleSetContains(Set<String> titles, String text) {
     if (titles.contains(text)) return true;
     final stripped = text.replaceFirst(
-      RegExp(r'^(?:\d+(?:\.\d+)*|[ivxlcdm]+)\s*[:.)\-]?\s+',
-          caseSensitive: false),
+      RegExp(
+        r'^(?:\d+(?:\.\d+)*|[ivxlcdm]+)\s*[:.)\-]?\s+',
+        caseSensitive: false,
+      ),
       '',
     );
     return stripped != text && titles.contains(stripped);
@@ -690,8 +799,7 @@ class DocExtractService {
     var result = markdown;
     // <div><img src="relative_path"></div>
     result = result.replaceAllMapped(
-      RegExp(
-          r'<div[^>]*>\s*<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>\s*</div>'),
+      RegExp(r'<div[^>]*>\s*<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>\s*</div>'),
       (match) {
         final src = match.group(1)!;
         if (src.startsWith('http') || src.startsWith('file:///')) {
@@ -714,8 +822,9 @@ class DocExtractService {
     return result;
   }
 
-  static final _figureSubLabelRe =
-      RegExp(r'^\(?[a-zA-Z](?:\s*,\s*[a-zA-Z])*\)?$');
+  static final _figureSubLabelRe = RegExp(
+    r'^\(?[a-zA-Z](?:\s*,\s*[a-zA-Z])*\)?$',
+  );
 
   /// 将居中文本 div 转为斜体（含 img / figure 子标签的 div 直接移除）
   static String _convertCenteredDivs(String markdown) {

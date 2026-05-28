@@ -695,7 +695,11 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   bool _looksLikePlaceholderTitle(Document doc) {
     final normalizedTitle = _normalizeComparisonKey(doc.title);
     if (normalizedTitle.isEmpty) return true;
-    return normalizedTitle == _normalizeComparisonKey(doc.id);
+    if (normalizedTitle == _normalizeComparisonKey(doc.id)) return true;
+    // 文件路径 / LaTeX 中间产物 / Word 占位文本——这种 title 也算 placeholder，
+    // 让 rebuild 能继续尝试修复（例如 PDF 正文里的 DOI / arXiv ID）。
+    if (!DocumentMetadataParser.isPlausibleTitle(doc.title)) return true;
+    return false;
   }
 
   String _normalizeComparisonKey(String? value) {

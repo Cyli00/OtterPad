@@ -31,13 +31,21 @@ class PdfMetadataExtractor {
     final subjectValue = _extractPdfString(raw, 'Subject');
     final keywordsValue = _extractPdfString(raw, 'Keywords');
 
-    final rawTitleMetadata = DocumentMetadata(title: _cleanText(titleValue));
-    final parsedTitleMetadata = titleValue == null
+    // pdfTeX 会把 EPS/DVI 临时文件路径塞进 /Title，必须先过一遍 plausibility 检查，
+    // 否则脏 title 会一路冒泡到 UI（参考 `DocumentMetadataParser.isPlausibleTitle`）。
+    final cleanedTitle = _cleanText(titleValue);
+    final acceptedTitle = DocumentMetadataParser.isPlausibleTitle(cleanedTitle)
+        ? cleanedTitle
+        : null;
+    final rawTitleMetadata = DocumentMetadata(title: acceptedTitle);
+    final parsedTitleMetadata = acceptedTitle == null
         ? const DocumentMetadata()
-        : DocumentMetadataParser.parseText(titleValue);
+        : DocumentMetadataParser.parseText(acceptedTitle);
 
+    // metadataText 用于 regex 抓 DOI / 年份，让脏 title 留在里面也没用（路径串
+    // 不匹配 DOI/年份模式），但移除可以省点正则匹配成本。
     final metadataText = [
-      titleValue,
+      acceptedTitle,
       subjectValue,
       keywordsValue,
     ].whereType<String>().join(' ');
@@ -74,10 +82,15 @@ class PdfMetadataExtractor {
         _firstText(document, 'doi') ?? _firstText(document, 'identifier'),
       );
 
-      final rawTitleMetadata = DocumentMetadata(title: _cleanText(title));
-      final parsedTitleMetadata = title == null
+      final cleanedXmpTitle = _cleanText(title);
+      final acceptedXmpTitle =
+          DocumentMetadataParser.isPlausibleTitle(cleanedXmpTitle)
+          ? cleanedXmpTitle
+          : null;
+      final rawTitleMetadata = DocumentMetadata(title: acceptedXmpTitle);
+      final parsedTitleMetadata = acceptedXmpTitle == null
           ? const DocumentMetadata()
-          : DocumentMetadataParser.parseText(title);
+          : DocumentMetadataParser.parseText(acceptedXmpTitle);
 
       return rawTitleMetadata
           .merge(parsedTitleMetadata)

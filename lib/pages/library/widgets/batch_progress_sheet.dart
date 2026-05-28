@@ -40,19 +40,23 @@ class BatchProgressSheet extends ConsumerStatefulWidget {
 
 class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
   bool _finished = false;
+  // 在 initState 中 cache notifier——Riverpod 3.x 禁止在 dispose() 中通过
+  // ref.read 取 provider（widget 已 unmount-pending）。Notifier 生命周期由
+  // provider 管理，可安全 cache 到字段。
+  late final DocumentTaskNotifier _taskNotifier;
 
   @override
   void initState() {
     super.initState();
+    _taskNotifier = ref.read(documentTaskProvider.notifier);
     unawaited(_run());
   }
 
   @override
   void dispose() {
     if (!_finished) {
-      final notifier = ref.read(documentTaskProvider.notifier);
       for (final item in widget.items) {
-        notifier.cancelTask(
+        _taskNotifier.cancelTask(
           DocumentTaskKey(
             type: DocumentTaskType.extractDocument,
             documentId: item.documentId,
@@ -64,9 +68,10 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
   }
 
   Future<void> _run() async {
-    await ref
-        .read(documentTaskProvider.notifier)
-        .extractBatch(items: widget.items, apiState: widget.apiState);
+    await _taskNotifier.extractBatch(
+      items: widget.items,
+      apiState: widget.apiState,
+    );
     if (mounted) setState(() => _finished = true);
   }
 

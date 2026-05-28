@@ -11,6 +11,32 @@ import 'package:pdfrx/pdfrx.dart';
 import '../utils/doc_paths.dart';
 import 'pdf_process_lock.dart';
 
+// ─── 诊断枚举 ─────────────────────────────────────────────
+
+/// Caption 的发现来源
+enum CaptionSource {
+  /// Phase 1/2: parsing_res_list block 内容匹配正则
+  blockMatch,
+
+  /// Phase 3: markdown 行兜底
+  markdownFallback,
+}
+
+/// Figure-Caption 配对方式
+enum PairMethod {
+  /// Pass 1: 同页空间距离最近
+  samePage,
+
+  /// Pass 2: 跨页 ±1 双向唯一
+  crossPage,
+
+  /// Pass 3: 同页晚到 caption 认领
+  lateBound,
+
+  /// Pass 4: 分离式排版序号配对（预印本 Figure Legends 布局）
+  ordinalMatch,
+}
+
 // ─── 公开数据模型 ─────────────────────────────────────────
 
 /// 版面解析 API 返回的单个 block
@@ -48,12 +74,16 @@ class FigureSegment {
   final List<LayoutBlock> blocks;
   final String captionText;
   final String captionName;
+  final CaptionSource captionSource;
+  final PairMethod pairMethod;
 
   const FigureSegment({
     required this.pageIndex,
     required this.blocks,
     required this.captionText,
     required this.captionName,
+    required this.captionSource,
+    required this.pairMethod,
   });
 }
 
@@ -64,19 +94,62 @@ class FigureManifestEntry {
   final int pageIndex;
   final List<String> blockIds;
 
+  /// 裁剪区域 [left, top, right, bottom]，API 坐标系 (144 DPI)
+  final List<double>? cropBbox;
+
+  /// Caption 的 bbox [left, top, right, bottom]，API 坐标系
+  final List<double>? captionBbox;
+
+  /// 输出图片宽度 (px)
+  final int? widthPx;
+
+  /// 输出图片高度 (px)
+  final int? heightPx;
+
+  /// Caption 发现来源 (block_match / markdown_fallback)
+  final String? captionSource;
+
+  /// Figure 相对 caption 的方向 (above / below / left / right)
+  final String? direction;
+
+  /// 配对方式 (same_page / cross_page / late_bound)
+  final String? pairMethod;
+
+  /// 裁剪区域推断方式 (caption_anchored / visual_union / legacy_fallback)
+  final String? regionMethod;
+
   const FigureManifestEntry({
     required this.imagePath,
     required this.captionText,
     required this.pageIndex,
     required this.blockIds,
+    this.cropBbox,
+    this.captionBbox,
+    this.widthPx,
+    this.heightPx,
+    this.captionSource,
+    this.direction,
+    this.pairMethod,
+    this.regionMethod,
   });
 
-  Map<String, dynamic> toJson() => {
-        'img': imagePath,
-        'figure_title': captionText,
-        'page_idx': pageIndex,
-        'block_ids': blockIds,
-      };
+  Map<String, dynamic> toJson() {
+    final m = <String, dynamic>{
+      'img': imagePath,
+      'figure_title': captionText,
+      'page_idx': pageIndex,
+      'block_ids': blockIds,
+    };
+    if (cropBbox != null) m['crop_bbox'] = cropBbox;
+    if (captionBbox != null) m['caption_bbox'] = captionBbox;
+    if (widthPx != null) m['width_px'] = widthPx;
+    if (heightPx != null) m['height_px'] = heightPx;
+    if (captionSource != null) m['caption_source'] = captionSource;
+    if (direction != null) m['direction'] = direction;
+    if (pairMethod != null) m['pair_method'] = pairMethod;
+    if (regionMethod != null) m['region_method'] = regionMethod;
+    return m;
+  }
 
   factory FigureManifestEntry.fromJson(Map<String, dynamic> json) {
     return FigureManifestEntry(
@@ -86,14 +159,59 @@ class FigureManifestEntry {
       blockIds: (json['block_ids'] as List<dynamic>)
           .map((e) => e.toString())
           .toList(),
+      cropBbox: (json['crop_bbox'] as List<dynamic>?)
+          ?.map((v) => (v as num).toDouble())
+          .toList(),
+      captionBbox: (json['caption_bbox'] as List<dynamic>?)
+          ?.map((v) => (v as num).toDouble())
+          .toList(),
+      widthPx: json['width_px'] as int?,
+      heightPx: json['height_px'] as int?,
+      captionSource: json['caption_source'] as String?,
+      direction: json['direction'] as String?,
+      pairMethod: json['pair_method'] as String?,
+      regionMethod: json['region_method'] as String?,
     );
   }
+}
+
+/// 提取过程的整体诊断统计
+class FigureExtractDiagnostics {
+  final int totalCaptions;
+  final int totalClusters;
+  final int pairedCount;
+  final int croppedCount;
+  final int droppedCount;
+  final List<Map<String, dynamic>> dropped;
+
+  const FigureExtractDiagnostics({
+    required this.totalCaptions,
+    required this.totalClusters,
+    required this.pairedCount,
+    required this.croppedCount,
+    required this.droppedCount,
+    this.dropped = const [],
+  });
+
+  Map<String, dynamic> toJson() => {
+    'total_captions': totalCaptions,
+    'total_clusters': totalClusters,
+    'paired_count': pairedCount,
+    'cropped_count': croppedCount,
+    'dropped_count': droppedCount,
+    if (dropped.isNotEmpty) 'dropped': dropped,
+  };
 }
 
 class FigureExtractResult {
   final String outputDir;
   final List<FigureManifestEntry> entries;
-  const FigureExtractResult({required this.outputDir, required this.entries});
+  final FigureExtractDiagnostics diagnostics;
+  const FigureExtractResult({
+    required this.outputDir,
+    required this.entries,
+    required this.diagnostics,
+  });
 }
 
 // ─── 内部数据 ────────────────────────────────────────────
@@ -104,12 +222,8 @@ class _Bbox {
 
   final double left, top, right, bottom;
 
-  factory _Bbox.fromBlock(LayoutBlock b) => _Bbox(
-        b.blockBbox[0],
-        b.blockBbox[1],
-        b.blockBbox[2],
-        b.blockBbox[3],
-      );
+  factory _Bbox.fromBlock(LayoutBlock b) =>
+      _Bbox(b.blockBbox[0], b.blockBbox[1], b.blockBbox[2], b.blockBbox[3]);
 
   factory _Bbox.union(Iterable<LayoutBlock> blocks) {
     var l = double.infinity, t = double.infinity;
@@ -160,6 +274,7 @@ class _CaptionCandidate {
     required this.pageIndex,
     required this.text,
     required this.captionName,
+    required this.source,
     this.bbox,
     this.blockId,
     this.continuationBlocks = const [],
@@ -168,6 +283,7 @@ class _CaptionCandidate {
   final int pageIndex;
   final String text;
   final String captionName;
+  final CaptionSource source;
   final _Bbox? bbox;
   final String? blockId;
   final List<LayoutBlock> continuationBlocks;
@@ -191,7 +307,7 @@ class _FigureBlock {
 
 class _Cluster {
   _Cluster(this.pageIndex, this.blocks)
-      : bbox = _Bbox.union(blocks.map((b) => b.block));
+    : bbox = _Bbox.union(blocks.map((b) => b.block));
   final int pageIndex;
   final List<_FigureBlock> blocks;
   final _Bbox bbox;
@@ -271,11 +387,7 @@ class FigureExtractService {
 
   /// caption 多行合并时,延续行不能是这些视觉 label——它们绝不是 caption 文本.
   /// (PR-2 把 caption 召回从 label 白名单改为内容匹配,但合并扫描时仍要排除视觉块)
-  static const _captionMergeExcludeLabels = {
-    'image',
-    'chart',
-    'table',
-  };
+  static const _captionMergeExcludeLabels = {'image', 'chart', 'table'};
 
   /// figure_title 子标签(如 `A`、`(b)`)的最大长度,超过视为正文误标
   static const _maxSubLabelLength = 30;
@@ -312,10 +424,9 @@ class FigureExtractService {
     );
     final conf = jsonDecode(raw) as Map<String, dynamic>;
 
-    final prefixes = (conf['prefixes'] as List<dynamic>)
-        .map((e) => e as String)
-        .toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
+    final prefixes =
+        (conf['prefixes'] as List<dynamic>).map((e) => e as String).toList()
+          ..sort((a, b) => b.length.compareTo(a.length));
 
     final prefixGroup = prefixes.map(RegExp.escape).join('|');
     _mainCaptionRe = RegExp(
@@ -327,9 +438,31 @@ class FigureExtractService {
 
   /// 从 caption 文本提取文件名标识(如 "Figure 1." → "Figure_1")
   String _extractCaptionName(String text) {
-    final m = _mainCaptionRe.firstMatch(text.trim());
+    final m = _mainCaptionRe.firstMatch(_normalizeCaptionText(text));
     if (m == null) return '';
     return m.group(0)!.replaceAll('.', '').replaceAll(' ', '_').trim();
+  }
+
+  static final RegExp _captionWhitespaceRe = RegExp(r'\s+');
+  static final RegExp _captionNoteLeadRe = RegExp(
+    r'^(?:\([a-z](?:\s*(?:,|and|&)\s*[a-z])*\)|[a-z](?:\s*(?:,|and|&)\s*[a-z])*[).:;-])\s+\S',
+    caseSensitive: false,
+  );
+
+  static String _normalizeCaptionText(String text) {
+    return text.trim().replaceAll(_captionWhitespaceRe, ' ');
+  }
+
+  static String _joinCaptionParts(Iterable<String> parts) {
+    final merged = <String>[];
+    for (final raw in parts) {
+      final text = _normalizeCaptionText(raw);
+      if (text.isEmpty) continue;
+      if (merged.any((existing) => existing.contains(text))) continue;
+      merged.removeWhere((existing) => text.contains(existing));
+      merged.add(text);
+    }
+    return merged.join(' ');
   }
 
   static final _tableCaptionRe = RegExp(
@@ -357,14 +490,13 @@ class FigureExtractService {
   static _PageData _parsePage(Map<String, dynamic> page, int index) {
     final blockList =
         ((page['prunedResult'] as Map<String, dynamic>?)?['parsing_res_list']
-                as List<dynamic>?) ??
-            const [];
+            as List<dynamic>?) ??
+        const [];
     final blocks = blockList
         .map((b) => LayoutBlock.fromJson(b as Map<String, dynamic>))
         .toList();
     final markdown =
-        ((page['markdown'] as Map<String, dynamic>?)?['text'] as String?) ??
-            '';
+        ((page['markdown'] as Map<String, dynamic>?)?['text'] as String?) ?? '';
     return _PageData(index, blocks, markdown);
   }
 
@@ -414,7 +546,7 @@ class FigureExtractService {
   ///     吸收同 column、纵向相邻、内容不构成新 caption 的 block.合并后 text
   ///     拼接、bbox 取 outer union, continuation block 列表交给下游用.
   ///   Phase 3 (markdown 兜底): markdown.text 行中匹配正则但 parsing_res_list
-  ///     完全漏检的 caption 名, 不做合并, 仅以单行候选补入.
+  ///     完全漏检的 caption 名, 吸收后续 `(A)`/`(B)` 子图说明后补入.
   List<_CaptionCandidate> _collectCaptionCandidates(_PageData page) {
     // Phase 1: 识别 anchor — 任意 label, 仅看内容是否匹配主标题正则.
     // 同 captionName 选内容最长的 block (保留它在 page.blocks 中的索引,
@@ -422,7 +554,7 @@ class FigureExtractService {
     final anchorByName = <String, ({int index, LayoutBlock block})>{};
     for (var i = 0; i < page.blocks.length; i++) {
       final b = page.blocks[i];
-      final content = b.blockContent.trim();
+      final content = _normalizeCaptionText(b.blockContent);
       if (content.isEmpty) continue;
       if (!_mainCaptionRe.hasMatch(content)) continue;
 
@@ -441,41 +573,51 @@ class FigureExtractService {
     for (final pick in anchorByName.values) {
       final continuations = _scanCaptionContinuation(page, pick.index);
       final anchor = pick.block;
-      final anchorContent = anchor.blockContent.trim();
-      final mergedText = continuations.isEmpty
-          ? anchorContent
-          : [
-              anchorContent,
-              for (final c in continuations) c.blockContent.trim()
-            ].join(' ');
+      final anchorContent = _normalizeCaptionText(anchor.blockContent);
+      final mergedText = _joinCaptionParts([
+        anchorContent,
+        for (final c in continuations) c.blockContent,
+      ]);
       final mergedBbox = continuations.isEmpty
           ? _Bbox.fromBlock(anchor)
           : _Bbox.union([anchor, ...continuations]);
 
-      candidates.add(_CaptionCandidate(
-        pageIndex: page.pageIndex,
-        text: mergedText,
-        captionName: _extractCaptionName(anchorContent),
-        bbox: mergedBbox,
-        blockId: anchor.blockId,
-        continuationBlocks: continuations,
-      ));
+      candidates.add(
+        _CaptionCandidate(
+          pageIndex: page.pageIndex,
+          text: mergedText,
+          captionName: _extractCaptionName(anchorContent),
+          source: CaptionSource.blockMatch,
+          bbox: mergedBbox,
+          blockId: anchor.blockId,
+          continuationBlocks: continuations,
+        ),
+      );
     }
 
     // Phase 3: markdown 行兜底 (parsing_res_list 完全漏检时).
     final knownNames = candidates.map((c) => c.captionName).toSet();
     if (page.markdown.isNotEmpty) {
       for (final raw in page.markdown.split('\n')) {
-        final t = raw.trim();
+        final t = _normalizeCaptionText(raw);
         if (t.isEmpty || !_mainCaptionRe.hasMatch(t)) continue;
         final name = _extractCaptionName(t);
         if (name.isEmpty || knownNames.contains(name)) continue;
         knownNames.add(name);
-        candidates.add(_CaptionCandidate(
-          pageIndex: page.pageIndex,
-          text: t,
-          captionName: name,
-        ));
+        candidates.add(
+          _CaptionCandidate(
+            pageIndex: page.pageIndex,
+            text: _joinCaptionParts([
+              t,
+              ..._scanMarkdownCaptionContinuation(
+                page.markdown.split('\n'),
+                raw,
+              ),
+            ]),
+            captionName: name,
+            source: CaptionSource.markdownFallback,
+          ),
+        );
       }
     }
 
@@ -546,6 +688,26 @@ class FigureExtractService {
     return result;
   }
 
+  List<String> _scanMarkdownCaptionContinuation(
+    List<String> lines,
+    String anchorLine,
+  ) {
+    final anchorIndex = lines.indexOf(anchorLine);
+    if (anchorIndex < 0) return const [];
+
+    final result = <String>[];
+    for (var i = anchorIndex + 1; i < lines.length; i++) {
+      final text = _normalizeCaptionText(lines[i]);
+      if (text.isEmpty) continue;
+      if (_captionNoteLeadRe.hasMatch(text)) {
+        result.add(text);
+        continue;
+      }
+      break;
+    }
+    return result;
+  }
+
   /// Stage B2: 召回单页所有 figure 视觉/子图注 block 候选.
   ///
   /// 跳过 [excludeBlockIds] 中的 block (这些 block 已被识别为 caption,
@@ -581,10 +743,9 @@ class FigureExtractService {
   ///   2. 同页 caption 未配上 + ±1 页 cluster 未配上 → 跨页双向唯一配对.
   ///   3. 仍剩的 cluster 含 image/chart → 匿名 figure(若有同页未占用 markdown
   ///      caption 也带上文字).
-  List<FigureSegment> _pair(_Inventory inv) {
+  ({List<FigureSegment> segments, List<Map<String, dynamic>> dropped, int totalClusters}) _pair(_Inventory inv) {
     final pageDiagonals = <int, double>{
-      for (final page in inv.pages)
-        page.pageIndex: _pageDiagonal(page.blocks),
+      for (final page in inv.pages) page.pageIndex: _pageDiagonal(page.blocks),
     };
 
     // 视觉块按页聚簇
@@ -610,7 +771,13 @@ class FigureExtractService {
       captionsByPage.putIfAbsent(c.pageIndex, () => []).add(c);
     }
 
+    final totalClusters = clustersByPage.values.fold<int>(
+      0,
+      (sum, list) => sum + list.length,
+    );
+
     final segments = <FigureSegment>[];
+    final dropped = <Map<String, dynamic>>[];
     final usedClusters = <_Cluster>{};
     final usedCaptions = <_CaptionCandidate>{};
 
@@ -636,12 +803,15 @@ class FigureExtractService {
       for (final c in entry.value) {
         usedClusters.add(c);
       }
-      segments.add(_buildSegmentFromBlocks(merged, caption));
+      segments.add(
+        _buildSegmentFromBlocks(merged, caption, PairMethod.samePage),
+      );
     }
 
     // Pass 2: 跨页 ±1 双向唯一——caption 在 A 页,cluster 在 A±1 页.
-    final orphanCaptions =
-        inv.captions.where((c) => !usedCaptions.contains(c)).toList();
+    final orphanCaptions = inv.captions
+        .where((c) => !usedCaptions.contains(c))
+        .toList();
     final orphanClusters = [
       for (final list in clustersByPage.values)
         ...list.where((c) => !usedClusters.contains(c)),
@@ -661,7 +831,9 @@ class FigureExtractService {
 
       usedClusters.add(cluster);
       usedCaptions.add(caption);
-      segments.add(_buildSegmentFromBlocks(cluster.blocks, caption));
+      segments.add(
+        _buildSegmentFromBlocks(cluster.blocks, caption, PairMethod.crossPage),
+      );
       debugPrint(
         '[FigureExtract] cross-page paired: "${caption.captionName}" '
         'page ${caption.pageIndex} ↔ cluster page ${cluster.pageIndex}',
@@ -672,17 +844,16 @@ class FigureExtractService {
     // 但同页还有未占用的 figure_title caption 时,把这条 caption 抓过来.
     // 限 image/chart(不含 table)——独立 table 多为侧栏定义框,宁可漏不可错.
     //
-    // **不再生成匿名 segment**:没匹配到 figure_title 的视觉簇直接丢弃.
-    // (目前临时策略,后续可加 markdown ![](...) 反推 caption 等兜底)
+    // 未配对的 visual cluster 不立即 drop,而是收集到 pass3Orphans 交给 Pass 4.
     final claimedNames = segments
         .map((s) => s.captionName)
         .where((n) => n.isNotEmpty)
         .toSet();
+    final pass3Orphans = <_Cluster>[];
     for (final cluster in orphanClusters) {
       if (usedClusters.contains(cluster)) continue;
       final hasVisual = cluster.blocks.any(
-        (b) =>
-            b.block.blockLabel == 'image' || b.block.blockLabel == 'chart',
+        (b) => b.block.blockLabel == 'image' || b.block.blockLabel == 'chart',
       );
       if (!hasVisual) continue;
 
@@ -694,30 +865,98 @@ class FigureExtractService {
         break;
       }
       if (attached == null) {
-        debugPrint(
-          '[FigureExtract] dropped uncaptioned cluster on page '
-          '${cluster.pageIndex} (${cluster.blocks.length} blocks)',
-        );
+        pass3Orphans.add(cluster);
         continue;
       }
       usedCaptions.add(attached);
       claimedNames.add(attached.captionName);
-      segments.add(_buildSegmentFromBlocks(cluster.blocks, attached));
+      segments.add(
+        _buildSegmentFromBlocks(cluster.blocks, attached, PairMethod.lateBound),
+      );
       debugPrint(
         '[FigureExtract] late-bound caption: "${attached.captionName}" '
         'on page ${cluster.pageIndex}',
       );
     }
 
+    // Pass 4: 分离式排版序号配对——预印本 Figure Legends 布局.
+    // caption 集中在少数页面,figure 图片在后续独立页面上,两者无空间关联.
+    // 按文档顺序 1:1 配对.
+    final pass4Captions = inv.captions
+        .where((c) => !usedCaptions.contains(c) && !_isTableCaption(c))
+        .toList()
+      ..sort((a, b) {
+        final pc = a.pageIndex.compareTo(b.pageIndex);
+        return pc != 0 ? pc : (a.bbox?.top ?? 0).compareTo(b.bbox?.top ?? 0);
+      });
+    final pass4Clusters = pass3Orphans
+        .where(
+          (c) => c.blocks.any(
+            (b) =>
+                b.block.blockLabel == 'image' ||
+                b.block.blockLabel == 'chart',
+          ),
+        )
+        .toList()
+      ..sort((a, b) {
+        final pc = a.pageIndex.compareTo(b.pageIndex);
+        return pc != 0 ? pc : a.bbox.top.compareTo(b.bbox.top);
+      });
+
+    final captionPages = pass4Captions.map((c) => c.pageIndex).toSet();
+    final clusterPages = pass4Clusters.map((c) => c.pageIndex).toSet();
+
+    if (pass4Captions.length >= 2 &&
+        pass4Clusters.length >= 2 &&
+        (pass4Captions.length - pass4Clusters.length).abs() <= 1 &&
+        captionPages.intersection(clusterPages).isEmpty) {
+      final pairCount = math.min(pass4Captions.length, pass4Clusters.length);
+      for (var i = 0; i < pairCount; i++) {
+        final caption = pass4Captions[i];
+        final cluster = pass4Clusters[i];
+        usedCaptions.add(caption);
+        usedClusters.add(cluster);
+        claimedNames.add(caption.captionName);
+        segments.add(
+          _buildSegmentFromBlocks(
+            cluster.blocks,
+            caption,
+            PairMethod.ordinalMatch,
+          ),
+        );
+        debugPrint(
+          '[FigureExtract] ordinal-matched: "${caption.captionName}" '
+          'caption page ${caption.pageIndex} ↔ '
+          'cluster page ${cluster.pageIndex}',
+        );
+      }
+    }
+
+    // 剩余未配对的 pass3Orphans → dropped
+    for (final cluster in pass3Orphans) {
+      if (usedClusters.contains(cluster)) continue;
+      dropped.add({
+        'page_idx': cluster.pageIndex,
+        'block_count': cluster.blocks.length,
+        'reason': 'uncaptioned',
+      });
+      debugPrint(
+        '[FigureExtract] dropped uncaptioned cluster on page '
+        '${cluster.pageIndex} (${cluster.blocks.length} blocks)',
+      );
+    }
+
     // 按 pageIndex 稳定排序(同页保留插入顺序)
-    final tagged = [
-      for (var i = 0; i < segments.length; i++) (i, segments[i]),
-    ];
+    final tagged = [for (var i = 0; i < segments.length; i++) (i, segments[i])];
     tagged.sort((a, b) {
       final cmp = a.$2.pageIndex.compareTo(b.$2.pageIndex);
       return cmp != 0 ? cmp : a.$1.compareTo(b.$1);
     });
-    return [for (final t in tagged) t.$2];
+    return (
+      segments: [for (final t in tagged) t.$2],
+      dropped: dropped,
+      totalClusters: totalClusters,
+    );
   }
 
   /// 按邻近距离把 figure block 聚成簇.
@@ -737,9 +976,7 @@ class FigureExtractService {
         expanded = false;
         for (var i = remaining.length - 1; i >= 0; i--) {
           final cand = remaining[i];
-          final touches = cluster.any(
-            (b) => b.bbox.gapTo(cand.bbox) <= maxGap,
-          );
+          final touches = cluster.any((b) => b.bbox.gapTo(cand.bbox) <= maxGap);
           if (!touches) continue;
           cluster.add(cand);
           remaining.removeAt(i);
@@ -759,10 +996,8 @@ class FigureExtractService {
     List<_CaptionCandidate> candidates,
     double threshold,
   ) {
-    final boxed =
-        candidates.where((c) => c.bbox != null).toList();
-    final unboxed =
-        candidates.where((c) => c.bbox == null).toList();
+    final boxed = candidates.where((c) => c.bbox != null).toList();
+    final unboxed = candidates.where((c) => c.bbox == null).toList();
 
     // 同类亲和:cluster 全是 table/vision_footnote 时优先 Table N. caption
     final isTableCluster = cluster.blocks.every(
@@ -807,16 +1042,19 @@ class FigureExtractService {
   FigureSegment _buildSegmentFromBlocks(
     List<_FigureBlock> figureBlocks,
     _CaptionCandidate caption,
+    PairMethod pairMethod,
   ) {
     final blocks = <LayoutBlock>[];
     final captionAllIds = <String>{};
     if (caption.blockId != null) {
-      blocks.add(LayoutBlock(
-        blockId: caption.blockId!,
-        blockLabel: 'figure_title',
-        blockBbox: caption.bbox?.toList() ?? const [0, 0, 0, 0],
-        blockContent: caption.text,
-      ));
+      blocks.add(
+        LayoutBlock(
+          blockId: caption.blockId!,
+          blockLabel: 'figure_title',
+          blockBbox: caption.bbox?.toList() ?? const [0, 0, 0, 0],
+          blockContent: caption.text,
+        ),
+      );
       captionAllIds.add(caption.blockId!);
     }
     for (final cont in caption.continuationBlocks) {
@@ -827,13 +1065,29 @@ class FigureExtractService {
       if (captionAllIds.contains(b.block.blockId)) continue;
       blocks.add(b.block);
     }
+    final captionText = _joinCaptionParts([
+      caption.text,
+      for (final b in figureBlocks)
+        if (_isCaptionNoteBlock(b.block)) b.block.blockContent,
+    ]);
+
     return FigureSegment(
-      pageIndex:
-          figureBlocks.isNotEmpty ? figureBlocks.first.pageIndex : caption.pageIndex,
+      pageIndex: figureBlocks.isNotEmpty
+          ? figureBlocks.first.pageIndex
+          : caption.pageIndex,
       blocks: blocks,
-      captionText: caption.text,
+      captionText: captionText,
       captionName: caption.captionName,
+      captionSource: caption.source,
+      pairMethod: pairMethod,
     );
+  }
+
+  bool _isCaptionNoteBlock(LayoutBlock block) {
+    if (block.blockLabel != 'vision_footnote') return false;
+    final text = _normalizeCaptionText(block.blockContent);
+    if (text.length <= _maxSubLabelLength) return false;
+    return _captionNoteLeadRe.hasMatch(text);
   }
 
   static double _pageDiagonal(List<LayoutBlock> blocks) {
@@ -895,9 +1149,11 @@ class FigureExtractService {
     final column = _detectColumnFor(caption, pageBlocks);
     final direction = _inferFigureDirection(caption, column, pageBlocks);
     final relevantVfs = segment
-        .where((b) =>
-            b.blockLabel == 'vision_footnote' &&
-            _isVisionFootnoteInFigureRegion(b, caption, direction))
+        .where(
+          (b) =>
+              b.blockLabel == 'vision_footnote' &&
+              _isVisionFootnoteInFigureRegion(b, caption, direction),
+        )
         .toList();
     final baseBbox = relevantVfs.isEmpty
         ? _Bbox.union(visuals).toList()
@@ -961,7 +1217,10 @@ class FigureExtractService {
     List<double> region,
     List<LayoutBlock> segment,
   ) {
-    var left = region[0], top = region[1], right = region[2], bottom = region[3];
+    var left = region[0],
+        top = region[1],
+        right = region[2],
+        bottom = region[3];
 
     for (final b in segment) {
       if (b.blockLabel != 'figure_title') continue;
@@ -1066,9 +1325,11 @@ class FigureExtractService {
   /// 完全无视觉块时的 fallback bbox:排除 caption 和 vision_footnote 的 union.
   List<double> _legacyFallbackBbox(List<LayoutBlock> segment) {
     final contents = segment
-        .where((b) =>
-            !_mainCaptionRe.hasMatch(b.blockContent.trim()) &&
-            b.blockLabel != 'vision_footnote')
+        .where(
+          (b) =>
+              !_mainCaptionRe.hasMatch(b.blockContent.trim()) &&
+              b.blockLabel != 'vision_footnote',
+        )
         .toList();
     final effective = contents.isNotEmpty ? contents : segment;
     return _Bbox.union(effective).toList();
@@ -1099,29 +1360,29 @@ class FigureExtractService {
     // Dart 3 exhaustive switch: 新增 _FigureDirection 值时编译器强制要求处理.
     return switch (direction) {
       _FigureDirection.above => _extendUpward(
-          caption: caption,
-          baseBbox: baseBbox,
-          segment: segment,
-          pageBlocks: pageBlocks,
-        ),
+        caption: caption,
+        baseBbox: baseBbox,
+        segment: segment,
+        pageBlocks: pageBlocks,
+      ),
       _FigureDirection.below => _extendDownward(
-          caption: caption,
-          baseBbox: baseBbox,
-          segment: segment,
-          pageBlocks: pageBlocks,
-        ),
+        caption: caption,
+        baseBbox: baseBbox,
+        segment: segment,
+        pageBlocks: pageBlocks,
+      ),
       _FigureDirection.left => _extendLeftward(
-          caption: caption,
-          baseBbox: baseBbox,
-          segment: segment,
-          pageBlocks: pageBlocks,
-        ),
+        caption: caption,
+        baseBbox: baseBbox,
+        segment: segment,
+        pageBlocks: pageBlocks,
+      ),
       _FigureDirection.right => _extendRightward(
-          caption: caption,
-          baseBbox: baseBbox,
-          segment: segment,
-          pageBlocks: pageBlocks,
-        ),
+        caption: caption,
+        baseBbox: baseBbox,
+        segment: segment,
+        pageBlocks: pageBlocks,
+      ),
     };
   }
 
@@ -1163,7 +1424,8 @@ class FigureExtractService {
         .where((b) => b.blockBbox[0] >= pageMid - _columnSideMargin)
         .toList();
 
-    final isDoubleColumn = leftBlocks.length >= _doubleColumnMinPerSide &&
+    final isDoubleColumn =
+        leftBlocks.length >= _doubleColumnMinPerSide &&
         rightBlocks.length >= _doubleColumnMinPerSide;
     if (!isDoubleColumn) return _Column(pageLeft, pageRight);
 
@@ -1534,10 +1796,37 @@ class FigureExtractService {
     );
     final picture = recorder.endRecording();
     final cropped = await picture.toImage(cropWidth, cropHeight);
-    final byteData =
-        await cropped.toByteData(format: ui.ImageByteFormat.png);
+    final byteData = await cropped.toByteData(format: ui.ImageByteFormat.png);
     cropped.dispose();
     return byteData?.buffer.asUint8List();
+  }
+
+  // ─── 诊断辅助 ─────────────────────────────────────────
+
+  /// 裁剪区域 + 推断方式 + 方向，用于填充 manifest 诊断字段。
+  /// 不改变 [computeMergedBbox] 的公开接口——在其上层包装。
+  ({List<double> bbox, String regionMethod, String? direction}) _computeCropInfo(
+    List<LayoutBlock> segment, {
+    List<LayoutBlock>? pageBlocks,
+  }) {
+    final visuals = segment.where(_isVisualBlock).toList();
+    final caption = _findSegmentCaption(segment);
+
+    String regionMethod;
+    String? direction;
+
+    if (pageBlocks == null || pageBlocks.isEmpty || visuals.isEmpty) {
+      regionMethod = visuals.isNotEmpty ? 'visual_union' : 'legacy_fallback';
+    } else if (caption == null) {
+      regionMethod = 'visual_union';
+    } else {
+      regionMethod = 'caption_anchored';
+      final column = _detectColumnFor(caption, pageBlocks);
+      direction = _inferFigureDirection(caption, column, pageBlocks).name;
+    }
+
+    final bbox = computeMergedBbox(segment, pageBlocks: pageBlocks);
+    return (bbox: bbox, regionMethod: regionMethod, direction: direction);
   }
 
   // ─── 公开入口 ─────────────────────────────────────────
@@ -1551,10 +1840,14 @@ class FigureExtractService {
     assert(_initialized, 'FigureExtractService.init() 未调用');
     final pageData = [
       for (var i = 0; i < pages.length; i++)
-        _PageData(i, pages[i], markdowns != null && i < markdowns.length ? markdowns[i] : ''),
+        _PageData(
+          i,
+          pages[i],
+          markdowns != null && i < markdowns.length ? markdowns[i] : '',
+        ),
     ];
     final inv = _buildInventory(pageData);
-    return _pair(inv);
+    return _pair(inv).segments;
   }
 
   /// 测试入口:单页用 `List<LayoutBlock>` 输入,返回 `List<List<LayoutBlock>>`.
@@ -1584,7 +1877,8 @@ class FigureExtractService {
     final content = await resultFile.readAsString();
     final pages = _parsePages(content);
     final inv = _buildInventory(pages);
-    final segments = _pair(inv);
+    final pairResult = _pair(inv);
+    final segments = pairResult.segments;
 
     final totalSegments = segments.length;
     onProgress?.call(0, totalSegments);
@@ -1638,11 +1932,11 @@ class FigureExtractService {
                 ? pages[pageIdx].blocks
                 : const <LayoutBlock>[];
             for (final (idx, seg) in entry.value) {
-              final apiBbox = computeMergedBbox(
+              final cropInfo = _computeCropInfo(
                 seg.blocks,
                 pageBlocks: pageBlocks,
               );
-              final renderBbox = scaleBbox(apiBbox);
+              final renderBbox = scaleBbox(cropInfo.bbox);
 
               final pngBytes = await _cropRegion(fullImage, renderBbox);
               if (pngBytes == null) {
@@ -1651,18 +1945,41 @@ class FigureExtractService {
                 continue;
               }
 
+              final cropWidth =
+                  (renderBbox[2] - renderBbox[0]).clamp(0, fullImage.width.toDouble()).toInt();
+              final cropHeight =
+                  (renderBbox[3] - renderBbox[1]).clamp(0, fullImage.height.toDouble()).toInt();
+
               final name = seg.captionName.isNotEmpty
                   ? _sanitizeFilename(seg.captionName)
                   : 'fig$figureIndex';
               final outPath = p.join(outputDir, '$name.png');
               await File(outPath).writeAsBytes(pngBytes);
 
-              manifest.add(FigureManifestEntry(
-                imagePath: outPath,
-                captionText: seg.captionText,
-                pageIndex: pageIdx,
-                blockIds: seg.blocks.map((b) => b.blockId).toList(),
-              ));
+              final caption = _findSegmentCaption(seg.blocks);
+              manifest.add(
+                FigureManifestEntry(
+                  imagePath: outPath,
+                  captionText: seg.captionText,
+                  pageIndex: pageIdx,
+                  blockIds: seg.blocks.map((b) => b.blockId).toList(),
+                  cropBbox: cropInfo.bbox,
+                  captionBbox: caption != null
+                      ? [
+                          caption.blockBbox[0],
+                          caption.blockBbox[1],
+                          caption.blockBbox[2],
+                          caption.blockBbox[3],
+                        ]
+                      : null,
+                  widthPx: cropWidth > 0 ? cropWidth : null,
+                  heightPx: cropHeight > 0 ? cropHeight : null,
+                  captionSource: seg.captionSource.name,
+                  direction: cropInfo.direction,
+                  pairMethod: seg.pairMethod.name,
+                  regionMethod: cropInfo.regionMethod,
+                ),
+              );
 
               figureIndex++;
               onProgress?.call(idx + 1, totalSegments);
@@ -1676,31 +1993,55 @@ class FigureExtractService {
       }
     });
 
-    final manifestPath = p.join(outputDir, 'figures.json');
-    await File(manifestPath).writeAsString(
-      const JsonEncoder.withIndent('  ').convert(
-        manifest.map((e) => e.toJson()).toList(),
-      ),
+    final diagnostics = FigureExtractDiagnostics(
+      totalCaptions: inv.captions.length,
+      totalClusters: pairResult.totalClusters,
+      pairedCount: segments.length,
+      croppedCount: figureIndex,
+      droppedCount: pairResult.dropped.length,
+      dropped: pairResult.dropped,
     );
 
-    debugPrint('[FigureExtract] 共提取 $figureIndex 个 figure → $outputDir');
-    return FigureExtractResult(outputDir: outputDir, entries: manifest);
+    final manifestPath = p.join(outputDir, 'figures.json');
+    await File(manifestPath).writeAsString(
+      const JsonEncoder.withIndent('  ').convert({
+        'figures': manifest.map((e) => e.toJson()).toList(),
+        'diagnostics': diagnostics.toJson(),
+      }),
+    );
+
+    debugPrint(
+      '[FigureExtract] 共提取 $figureIndex 个 figure → $outputDir '
+      '(captions=${inv.captions.length}, clusters=${pairResult.totalClusters}, '
+      'dropped=${pairResult.dropped.length})',
+    );
+    return FigureExtractResult(
+      outputDir: outputDir,
+      entries: manifest,
+      diagnostics: diagnostics,
+    );
   }
 
   static String _sanitizeFilename(String name) {
     return name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
   }
 
-  static Future<List<FigureManifestEntry>?> loadManifest(
-      String pdfPath) async {
+  static Future<List<FigureManifestEntry>?> loadManifest(String pdfPath) async {
     final manifestPath = DocPaths.figuresManifest(pdfPath);
     final file = File(manifestPath);
     if (!file.existsSync()) return null;
     try {
-      final json = jsonDecode(await file.readAsString()) as List<dynamic>;
-      return json
-          .map(
-              (e) => FigureManifestEntry.fromJson(e as Map<String, dynamic>))
+      final decoded = jsonDecode(await file.readAsString());
+      final List<dynamic> figuresList;
+      if (decoded is List) {
+        figuresList = decoded;
+      } else if (decoded is Map<String, dynamic>) {
+        figuresList = decoded['figures'] as List<dynamic>? ?? [];
+      } else {
+        return null;
+      }
+      return figuresList
+          .map((e) => FigureManifestEntry.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
       debugPrint('[FigureExtract] 加载 manifest 失败: $e');

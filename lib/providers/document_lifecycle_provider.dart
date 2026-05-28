@@ -66,6 +66,16 @@ class DocumentLifecycleNotifier {
         .addDocument(favoriteId, documentId);
   }
 
+  /// 批量加入收藏夹——返回真正新增的篇数（已在里面的自动跳过）。
+  Future<int> addToFavoriteBatch(
+    String favoriteId,
+    Iterable<String> documentIds,
+  ) {
+    return _ref
+        .read(favoritesProvider.notifier)
+        .addDocuments(favoriteId, documentIds);
+  }
+
   Future<void> removeFromFavorite(String favoriteId, String documentId) {
     return _ref
         .read(favoritesProvider.notifier)

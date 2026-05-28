@@ -649,6 +649,173 @@ void main() {
         containsAll(['6', '7', '8', '9', '10']));
     expect(_idsForCaption(segments, 'Table 1'), ['13', '12']);
   });
+  // ─── Pass 4: ordinal matching ──────────────────────────
+
+  group('Pass 4 ordinal matching (预印本 Figure Legends 布局)', () {
+    test('标准分离布局——3 caption 集中 + 3 image 分散', () {
+      final service = FigureExtractService.instance;
+      // Page 0: 正文
+      // Page 1: Figure Legends (3 个 caption, 无 image)
+      // Page 2-4: 每页一张 figure image
+      final segments = service.findFigures([
+        // page 0: 正文
+        [_block('t1', 'text', [100, 100, 700, 200], 'Introduction...')],
+        // page 1: Figure Legends
+        [
+          _block('c1', 'figure_title', [100, 100, 700, 130],
+              'Figure 1. Experimental setup.'),
+          _block('c2', 'figure_title', [100, 300, 700, 330],
+              'Figure 2. Results overview.'),
+          _block('c3', 'figure_title', [100, 500, 700, 530],
+              'Figure 3. Statistical analysis.'),
+        ],
+        // page 2: figure image 1
+        [_block('i1', 'image', [100, 100, 700, 900])],
+        // page 3: figure image 2
+        [_block('i2', 'image', [100, 100, 700, 900])],
+        // page 4: figure image 3
+        [_block('i3', 'image', [100, 100, 700, 900])],
+      ]);
+
+      expect(segments.length, 3);
+      expect(segments[0].captionName, 'Figure_1');
+      expect(segments[0].pairMethod, PairMethod.ordinalMatch);
+      expect(segments[0].blocks.any((b) => b.blockId == 'i1'), isTrue);
+      expect(segments[1].captionName, 'Figure_2');
+      expect(segments[1].pairMethod, PairMethod.ordinalMatch);
+      expect(segments[1].blocks.any((b) => b.blockId == 'i2'), isTrue);
+      expect(segments[2].captionName, 'Figure_3');
+      expect(segments[2].pairMethod, PairMethod.ordinalMatch);
+      expect(segments[2].blocks.any((b) => b.blockId == 'i3'), isTrue);
+    });
+
+    test('数量差 1 容忍——3 caption + 2 cluster = 配对 2 个', () {
+      final service = FigureExtractService.instance;
+      final segments = service.findFigures([
+        // page 0: Figure Legends
+        [
+          _block('c1', 'figure_title', [100, 100, 700, 130],
+              'Figure 1. Setup.'),
+          _block('c2', 'figure_title', [100, 300, 700, 330],
+              'Figure 2. Data.'),
+          _block('c3', 'figure_title', [100, 500, 700, 530],
+              'Figure 3. Stats.'),
+        ],
+        // page 1-2: 只有 2 个 figure image
+        [_block('i1', 'image', [100, 100, 700, 900])],
+        [_block('i2', 'image', [100, 100, 700, 900])],
+      ]);
+
+      expect(segments.length, 2);
+      expect(segments[0].captionName, 'Figure_1');
+      expect(segments[0].pairMethod, PairMethod.ordinalMatch);
+      expect(segments[1].captionName, 'Figure_2');
+      expect(segments[1].pairMethod, PairMethod.ordinalMatch);
+    });
+
+    test('数量差 >1 的安全守卫——4 caption + 2 cluster = 不触发', () {
+      final service = FigureExtractService.instance;
+      final segments = service.findFigures([
+        // page 0: Figure Legends (4 个 caption)
+        [
+          _block('c1', 'figure_title', [100, 100, 700, 130],
+              'Figure 1. A.'),
+          _block('c2', 'figure_title', [100, 200, 700, 230],
+              'Figure 2. B.'),
+          _block('c3', 'figure_title', [100, 300, 700, 330],
+              'Figure 3. C.'),
+          _block('c4', 'figure_title', [100, 400, 700, 430],
+              'Figure 4. D.'),
+        ],
+        // page 1-2: 只有 2 个 figure image
+        [_block('i1', 'image', [100, 100, 700, 900])],
+        [_block('i2', 'image', [100, 100, 700, 900])],
+      ]);
+
+      // 数量差 2 > 1 → 不触发 ordinal match, cluster 被 drop
+      expect(segments.length, 0);
+    });
+
+    test('Table caption 被正确排除', () {
+      final service = FigureExtractService.instance;
+      final segments = service.findFigures([
+        // page 0: Figure Legends 含 table caption 夹在中间
+        [
+          _block('c1', 'figure_title', [100, 100, 700, 130],
+              'Figure 1. Setup.'),
+          _block('ct', 'figure_title', [100, 250, 700, 280],
+              'Table 1. Summary of results.'),
+          _block('c2', 'figure_title', [100, 400, 700, 430],
+              'Figure 2. Data.'),
+        ],
+        // page 1-2: 2 个 figure image
+        [_block('i1', 'image', [100, 100, 700, 900])],
+        [_block('i2', 'image', [100, 100, 700, 900])],
+      ]);
+
+      expect(segments.length, 2);
+      expect(segments[0].captionName, 'Figure_1');
+      expect(segments[0].pairMethod, PairMethod.ordinalMatch);
+      expect(segments[1].captionName, 'Figure_2');
+      expect(segments[1].pairMethod, PairMethod.ordinalMatch);
+    });
+
+    test('非分离布局不触发——caption 与 cluster 同页有交集', () {
+      final service = FigureExtractService.instance;
+      final segments = service.findFigures([
+        // page 0: caption + image 在同一页 (Pass 1 能处理)
+        [
+          _block('c1', 'figure_title', [100, 800, 700, 830],
+              'Figure 1. Setup.'),
+          _block('i1', 'image', [100, 100, 700, 780]),
+        ],
+        // page 1: 独立 caption (无 cluster 在此页)
+        [
+          _block('c2', 'figure_title', [100, 100, 700, 130],
+              'Figure 2. Data.'),
+        ],
+        // page 2: 独立 cluster (无 caption 在此页)
+        [_block('i2', 'image', [100, 100, 700, 900])],
+      ]);
+
+      // Figure 1 由 Pass 1 同页配对, Figure 2 + i2 只有各 1 个 → < 2 不触发
+      expect(
+        segments.where((s) => s.pairMethod == PairMethod.ordinalMatch).length,
+        0,
+      );
+      // Figure 1 应该被 Pass 1 配上
+      expect(segments.any((s) => s.captionName == 'Figure_1'), isTrue);
+    });
+
+    test('Supplementary figure 混合排序', () {
+      final service = FigureExtractService.instance;
+      final segments = service.findFigures([
+        // page 0: Figure Legends 含 supplementary
+        [
+          _block('c1', 'figure_title', [100, 100, 700, 130],
+              'Figure 1. Main result.'),
+          _block('c2', 'figure_title', [100, 250, 700, 280],
+              'Figure 2. Secondary.'),
+          _block('cs', 'figure_title', [100, 400, 700, 430],
+              'Supplementary Figure S1. Extra data.'),
+        ],
+        // page 1-3: 按顺序排列
+        [_block('i1', 'image', [100, 100, 700, 900])],
+        [_block('i2', 'image', [100, 100, 700, 900])],
+        [_block('is', 'image', [100, 100, 700, 900])],
+      ]);
+
+      expect(segments.length, 3);
+      expect(segments[0].captionName, 'Figure_1');
+      expect(segments[1].captionName, 'Figure_2');
+      // Supplementary 排在最后
+      expect(segments[2].captionText, startsWith('Supplementary Figure S1'));
+      expect(
+        segments.every((s) => s.pairMethod == PairMethod.ordinalMatch),
+        isTrue,
+      );
+    });
+  });
 }
 
 LayoutBlock _block(
