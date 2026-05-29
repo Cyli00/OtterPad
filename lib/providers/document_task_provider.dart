@@ -556,48 +556,22 @@ class DocumentTaskNotifier
     required CancelToken cancelToken,
     required void Function(ListenableProgress) progress,
   }) async {
-    try {
-      return await BatchExtractService.instance.extractSingle(
-        filePath: filePath,
-        token: apiState.apiKey,
-        state: apiState,
-        onProgress: (status, extracted, total) {
-          if (cancelToken.isCancelled) return;
-          progress(
-            ListenableProgress(
-              current: extracted,
-              total: total,
-              status: '$status · $title',
-            ),
-          );
-        },
-        cancelToken: cancelToken,
-      );
-    } catch (asyncError) {
-      if (cancelToken.isCancelled ||
-          (asyncError is DioException &&
-              asyncError.type == DioExceptionType.cancel)) {
-        rethrow;
-      }
-      if (!apiState.hasSyncFallback) rethrow;
-
-      debugPrint('[DocumentTask] 异步提取失败，回退到同步 API: $asyncError');
-      progress(
-        ListenableProgress(
-          current: 0,
-          total: 0,
-          status: '异步失败，尝试同步提取 · $title',
-        ),
-      );
-
-      return DocExtractService.instance.extract(
-        filePath: filePath,
-        apiUrl: apiState.syncBaseUrl,
-        token: apiState.apiKey,
-        state: apiState,
-        cancelToken: cancelToken,
-      );
-    }
+    return await BatchExtractService.instance.extractSingle(
+      filePath: filePath,
+      token: apiState.apiKey,
+      state: apiState,
+      onProgress: (status, extracted, total) {
+        if (cancelToken.isCancelled) return;
+        progress(
+          ListenableProgress(
+            current: extracted,
+            total: total,
+            status: '$status · $title',
+          ),
+        );
+      },
+      cancelToken: cancelToken,
+    );
   }
 }
 

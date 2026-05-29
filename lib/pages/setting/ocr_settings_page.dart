@@ -53,29 +53,46 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     'aside_text': '旁注',
   };
 
-  late final TextEditingController _urlCtrl;
+
   late final TextEditingController _keyCtrl;
 
-  bool _keyObscured = true;
-  Timer? _urlTimer;
-  Timer? _keyTimer;
+    bool _keyObscured = true;
+    Timer? _keyTimer;
 
-  @override
-  void initState() {
-    super.initState();
-    final s = ref.read(docExtractApiProvider);
-    _urlCtrl = TextEditingController(text: s.syncBaseUrl);
-    _keyCtrl = TextEditingController(text: s.apiKey);
-  }
+    @override
+    void initState() {
+      super.initState();
+      final s = ref.read(docExtractApiProvider);
+      _keyCtrl = TextEditingController(text: s.apiKey);
+    }
 
-  @override
-  void dispose() {
-    _urlCtrl.dispose();
-    _keyCtrl.dispose();
-    _urlTimer?.cancel();
-    _keyTimer?.cancel();
-    super.dispose();
-  }
+    @override
+    void dispose() {
+      _keyCtrl.dispose();
+      _keyTimer?.cancel();
+      super.dispose();
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   bool _getOptionValue(DocExtractApiState s, String field) => switch (field) {
     'useChartRecognition' => s.useChartRecognition,
@@ -394,6 +411,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
+                            
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: cs.tertiaryContainer,
@@ -452,61 +470,62 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // ── 同步 Base URL ──
-                    Row(
-                      children: [
-                        Text('同步 Base URL',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            )),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text('可选',
-                              style: theme.textTheme.labelSmall
-                                  ?.copyWith(color: cs.onSurfaceVariant)),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: () => launchUrl(
-                            Uri.parse(
-                                'https://aistudio.baidu.com/paddleocr'),
-                            mode: LaunchMode.externalApplication,
-                          ),
-                          icon: Icon(Symbols.arrow_outward_rounded,
-                              size: 16, color: cs.onSurfaceVariant),
-                          tooltip: '获取地址',
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                              minWidth: 28, minHeight: 28),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _urlCtrl,
-                      onChanged: (v) {
-                        _urlTimer?.cancel();
-                        _urlTimer =
-                            Timer(const Duration(milliseconds: 600), () {
-                          ref
-                              .read(docExtractApiProvider.notifier)
-                              .setSyncBaseUrl(v.trim());
-                        });
-                      },
-                      decoration: fieldDeco(
-                          hint: 'https://xxx.aistudio-app.com'),
-                      keyboardType: TextInputType.url,
-                      autocorrect: false,
-                      style: theme.textTheme.bodyMedium,
-                    ),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    
                   ],
                 ),
               ),

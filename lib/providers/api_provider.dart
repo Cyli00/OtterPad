@@ -11,7 +11,8 @@ extension AgentApiProviderExt on AgentApiProvider {
     AgentApiProvider.openai => 'OpenAI',
     AgentApiProvider.anthropic => 'Anthropic',
     AgentApiProvider.gemini => 'Gemini',
-    AgentApiProvider.openAICompatible => 'Other',
+    AgentApiProvider.openAICompatible
+     => 'Other',
   };
 
   /// 纯域名，不含版本路径
@@ -846,9 +847,14 @@ const kDefaultIgnoreLabels = [
   'aside_text',
 ];
 
+
+
+
+
 class DocExtractApiState {
-  final String apiKey; // Access Token（异步 Job API 必填）
-  final String syncBaseUrl; // 同步 API 地址（可选 fallback）
+
+
+    final String apiKey; // Access Token（异步 Job API 必填）
 
   // ── 提取选项 ──
   final bool useChartRecognition;
@@ -866,14 +872,23 @@ class DocExtractApiState {
   final List<String> markdownIgnoreLabels;
 
   /// 异步 API 只需 token，是否已配置
-  bool get isConfigured => apiKey.isNotEmpty;
 
-  /// 是否配置了同步 API 作为 fallback
-  bool get hasSyncFallback => syncBaseUrl.isNotEmpty;
+
+
+
+
+
+
+
+
+
+
+
+
+    bool get isConfigured => apiKey.isNotEmpty;
 
   const DocExtractApiState({
     this.apiKey = '',
-    this.syncBaseUrl = '',
     this.useChartRecognition = false,
     this.useDocOrientationClassify = false,
     this.useDocUnwarping = false,
@@ -887,9 +902,11 @@ class DocExtractApiState {
     this.markdownIgnoreLabels = kDefaultIgnoreLabels,
   });
 
-  DocExtractApiState copyWith({
+
+
+
+    DocExtractApiState copyWith({
     String? apiKey,
-    String? syncBaseUrl,
     bool? useChartRecognition,
     bool? useDocOrientationClassify,
     bool? useDocUnwarping,
@@ -902,9 +919,12 @@ class DocExtractApiState {
     double? repetitionPenalty,
     List<String>? markdownIgnoreLabels,
   }) => DocExtractApiState(
-    apiKey: apiKey ?? this.apiKey,
-    syncBaseUrl: syncBaseUrl ?? this.syncBaseUrl,
-    useChartRecognition: useChartRecognition ?? this.useChartRecognition,
+
+
+
+
+        apiKey: apiKey ?? this.apiKey,
+        useChartRecognition: useChartRecognition ?? this.useChartRecognition,
     useDocOrientationClassify:
         useDocOrientationClassify ?? this.useDocOrientationClassify,
     useDocUnwarping: useDocUnwarping ?? this.useDocUnwarping,
@@ -920,17 +940,21 @@ class DocExtractApiState {
 }
 
 class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
-  static const _baseUrlKey = 'doc_extract_api_base_url';
   static const _apiKeyKey = 'doc_extract_api_key';
   static const _prefix = 'doc_extract_';
 
   DocExtractApiNotifier() : super(_load());
 
-  static DocExtractApiState _load() {
-    final box = GStorage.setting;
-    final apiKey = box.get(_apiKeyKey, defaultValue: '') as String;
-    final syncBaseUrl = box.get(_baseUrlKey, defaultValue: '') as String;
 
+
+
+
+
+    static DocExtractApiState _load() {
+    final box = GStorage.setting;
+
+
+        final apiKey = box.get(_apiKeyKey, defaultValue: '') as String;
     final useChartRecognition =
         box.get('${_prefix}useChartRecognition', defaultValue: false) as bool;
     final useDocOrientationClassify =
@@ -958,9 +982,8 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         ? rawLabels.cast<String>().toList()
         : List<String>.from(kDefaultIgnoreLabels);
 
-    return DocExtractApiState(
+        return DocExtractApiState(
       apiKey: apiKey,
-      syncBaseUrl: syncBaseUrl,
       useChartRecognition: useChartRecognition,
       useDocOrientationClassify: useDocOrientationClassify,
       useDocUnwarping: useDocUnwarping,
@@ -975,10 +998,10 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     );
   }
 
-  Future<void> setSyncBaseUrl(String url) async {
-    state = state.copyWith(syncBaseUrl: url);
-    await GStorage.setting.put(_baseUrlKey, url);
-  }
+
+
+
+
 
   Future<void> setApiKey(String key) async {
     state = state.copyWith(apiKey: key);

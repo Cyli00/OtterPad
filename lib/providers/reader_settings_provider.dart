@@ -102,6 +102,18 @@ enum ReaderFont {
     ],
     ReaderFont.sans => null,
   };
+
+  /// 阅读器 WebView 用的字体族 CSS 字符串（含 CJK fallback 链）。
+  ///
+  /// `serif` 首选 Times New Roman；`sans` 完全交给浏览器/系统默认。
+  String get cssFontFamily => switch (this) {
+    ReaderFont.serif =>
+      "'Times New Roman', 'Songti SC', STSong, SimSun, "
+          "'Noto Serif CJK SC', Georgia, 'Noto Serif', serif",
+    ReaderFont.sans =>
+      "system-ui, -apple-system, 'Segoe UI', 'PingFang SC', "
+          "'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
+  };
 }
 
 /// 阅读器翻页方式
@@ -177,6 +189,15 @@ class ReaderSettingsState {
 
   static const double minFontSize = 12.0;
   static const double maxFontSize = 28.0;
+
+  /// 字体相关 CSS 变量。
+  ///
+  /// 仅产出字体/字号字段；颜色由 [ReaderPalette.toCssVars] 负责。
+  /// 调用方合并两 map 得到完整 `:root` 变量集合。
+  Map<String, String> toCssVars() => {
+    '--font-size': '${fontSize}px',
+    '--font-family': font.cssFontFamily,
+  };
 }
 
 class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
