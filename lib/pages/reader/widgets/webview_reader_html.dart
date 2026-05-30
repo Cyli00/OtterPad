@@ -569,7 +569,10 @@ function _initLazyMath() {
   function scheduleFlush() {
     if (scheduled || !queue.length) return;
     scheduled = true;
-    rIC(flushQueue, { timeout: 500 });
+    // timeout 收窄到 150ms：快速 fling 时主线程持续繁忙、rIC 一直拿不到 idle，
+    // 旧的 500ms 会让公式停在未渲染态约半秒（明显露白）。150ms 上限把最坏空窗
+    // 压到约一帧多，didTimeout 分支会照常渲染。
+    rIC(flushQueue, { timeout: 150 });
   }
 
   function flushQueue(deadline) {
@@ -589,7 +592,9 @@ function _initLazyMath() {
       queue.push(entry.target);
     }
     scheduleFlush();
-  }, { rootMargin: '300px' });
+    // rootMargin 800px（约一屏）给 rIC 更多提前量：公式还在屏外一屏时就入队，
+    // 多数滚动下渲染能赶在它真正可见之前完成。
+  }, { rootMargin: '800px' });
 
   for (const block of deferred) {
     observer.observe(block);

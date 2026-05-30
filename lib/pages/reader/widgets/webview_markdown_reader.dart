@@ -13,6 +13,7 @@ import '../../../providers/reader_settings_provider.dart';
 import '../../../services/reader_localhost_server.dart';
 import 'reader_background.dart';
 import 'reader_js_bridge.dart';
+import 'reader_update_plan.dart';
 import 'webview_reader_html.dart';
 
 class WebViewMarkdownReader extends StatefulWidget {
@@ -162,48 +163,44 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   @override
   void didUpdateWidget(covariant WebViewMarkdownReader oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    final dataChanged = widget.markdownData != oldWidget.markdownData;
-    final themeChanged =
-        widget.palette != oldWidget.palette ||
-        widget.settings.fontSize != oldWidget.settings.fontSize ||
-        widget.settings.font != oldWidget.settings.font ||
-        widget.settings.theme != oldWidget.settings.theme;
-    final paginationChanged =
-        widget.settings.paginationMode != oldWidget.settings.paginationMode;
-    final styleChanged =
-        widget.translationStyleId != oldWidget.translationStyleId;
-
-    // 数据变化必须重写 HTML + reload —— DOM 内容不在 CSS 变量控制范围。
-    // 主题/字号/字体/翻页方式单独变 → 仅改 CSS 变量或 body 属性，**不销毁**
-    // DOM/KaTeX 渲染缓存/已绘制的 SVG 高亮——这是性能上最大的修正：之前任何
-    // 主题切换都触发完整重载，包括 KaTeX CDN 重新加载、所有图片重新下载。
-    if (dataChanged) {
-      _reloadContent();
-    } else if (themeChanged) {
-      _bridge?.applyTheme(widget.palette, widget.settings);
+    // "什么变了 → 该做什么"由纯函数 planUpdates 决定（可无 mock 单测）；
+    // 这里只负责把每个动作落到 bridge / 实例态上。
+    for (final update in planUpdates(_propsOf(oldWidget), _propsOf(widget))) {
+      _applyUpdate(update);
     }
-    if (!dataChanged && paginationChanged) {
-      _bridge?.applyPagination(widget.settings.paginationMode);
-    }
-    if (!dataChanged && styleChanged) {
-      _bridge?.applyTranslationStyle(widget.translationStyleId);
-    }
+  }
 
-    if (!dataChanged && widget.highlights != oldWidget.highlights) {
-      _bridge?.syncHighlights(
-        oldWidget.highlights,
-        widget.highlights,
-        skipNewIds: _selectionHighlightIds,
-      );
-      // syncHighlights 已消费过的 selection id 从集合里移除（避免无界增长）。
-      _selectionHighlightIds.removeWhere(
-        (id) => widget.highlights.any((h) => h.id == id),
-      );
-    }
+  ReaderProps _propsOf(WebViewMarkdownReader w) => ReaderProps(
+    markdownData: w.markdownData,
+    palette: w.palette,
+    settings: w.settings,
+    translationStyleId: w.translationStyleId,
+    highlights: w.highlights,
+    highlightQuery: w.highlightQuery,
+  );
 
-    if (widget.highlightQuery != oldWidget.highlightQuery) {
-      _bridge?.applySearchQuery(widget.highlightQuery);
+  void _applyUpdate(ReaderUpdate update) {
+    switch (update) {
+      case ReloadContent():
+        _reloadContent();
+      case ApplyTheme(:final palette, :final settings):
+        _bridge?.applyTheme(palette, settings);
+      case ApplyPagination(:final mode):
+        _bridge?.applyPagination(mode);
+      case ApplyTranslationStyle(:final styleId):
+        _bridge?.applyTranslationStyle(styleId);
+      case SyncHighlights(:final oldHighlights, :final newHighlights):
+        _bridge?.syncHighlights(
+          oldHighlights,
+          newHighlights,
+          skipNewIds: _selectionHighlightIds,
+        );
+        // syncHighlights 已消费过的 selection id 从集合里移除（避免无界增长）。
+        _selectionHighlightIds.removeWhere(
+          (id) => newHighlights.any((h) => h.id == id),
+        );
+      case ApplySearchQuery(:final query):
+        _bridge?.applySearchQuery(query);
     }
   }
 
@@ -327,6 +324,10 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
         transparentBackground: false,
+        // 关掉 hybrid composition：本组件只读、无内嵌输入框，改走 texture 合成
+        // 后，键盘/对话框等 Flutter 侧动画期间不再逐帧强制 WebView 重合成，
+        // 消除 ART GC 抖动与掉帧。
+        useHybridComposition: false,
         disableContextMenu: true,
         supportZoom: false,
         // 必须允许 WebView 横向滚动：horizontal 模式下 #content 通过
