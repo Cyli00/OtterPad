@@ -280,7 +280,10 @@ class _ImageGenerationSettingsSectionState
 
   String? _costLabel(ImageGenerationConfig cfg) {
     final role = AgentApiNotifier.globalImageRole;
-    if (role.provider != AgentApiProvider.openai) return null;
+    final protocol = role.id == null
+        ? null
+        : AgentApiNotifier.loadInstance(role.id!)?.provider;
+    if (protocol != AgentApiProvider.openai) return null;
     final cost = estimateOpenAICost(
       aspectRatio: cfg.aspectRatio,
       fidelity: cfg.fidelity,

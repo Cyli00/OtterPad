@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../services/agent_model_capability.dart';
 import '../../widgets/spring_dismissible.dart';
 import 'agent_role_widgets.dart';
 
-/// 模型列表中单条记录的渲染——左滑可移除。
+/// 模型列表中单条记录的渲染——左滑可移除，点按编辑能力。
 ///
-/// 组件只负责视觉呈现；所有状态（检测结果、角色）和动作都通过入参传入，
-/// 父组件持有 _modelTestResults/_modelTesting 等状态。
+/// 组件只负责视觉呈现；所有状态（检测结果、能力）和动作都通过入参传入。
 class AgentModelListTile extends StatelessWidget {
   final String modelId;
   final bool isTesting;
@@ -16,16 +16,15 @@ class AgentModelListTile extends StatelessWidget {
   /// 若 [hasTested] 为 true，`null` 表示连通成功，非空字符串为错误信息。
   final String? errorMsg;
 
-  /// 该模型是否已设置过自定义参数（非全部默认）。
-  final bool hasCustomParams;
-
-  /// 是否为生图模型——生图模型显示 badge，隐藏调参按钮。
-  final bool isImageModel;
+  /// 模型能力（分类 + 模态 + 工具/推理），用于渲染 badge。
+  final AgentModelCapability capability;
 
   final VoidCallback onRemove;
   final VoidCallback onTest;
   final VoidCallback onShowError;
-  final VoidCallback? onTune;
+
+  /// 点按整行 → 编辑能力。
+  final VoidCallback onEdit;
 
   const AgentModelListTile({
     super.key,
@@ -33,12 +32,11 @@ class AgentModelListTile extends StatelessWidget {
     required this.isTesting,
     required this.hasTested,
     required this.errorMsg,
-    required this.hasCustomParams,
-    this.isImageModel = false,
+    required this.capability,
     required this.onRemove,
     required this.onTest,
     required this.onShowError,
-    this.onTune,
+    required this.onEdit,
   });
 
   @override
@@ -81,116 +79,127 @@ class AgentModelListTile extends StatelessWidget {
   }
 
   Widget _buildCard(ThemeData theme, ColorScheme cs, bool isOk, bool isErr) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
+    final badges = _badges(cs);
+    return Material(
+      color: cs.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isOk
-              ? cs.primary.withAlpha(100)
-              : isErr
-              ? cs.error.withAlpha(100)
-              : cs.outlineVariant.withAlpha(60),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isOk
-                    ? cs.primary
-                    : isErr
-                    ? cs.error
-                    : cs.outlineVariant,
-              ),
+        onTap: onEdit,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isOk
+                  ? cs.primary.withAlpha(100)
+                  : isErr
+                  ? cs.error.withAlpha(100)
+                  : cs.outlineVariant.withAlpha(60),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                modelId,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isOk
+                      ? cs.primary
+                      : isErr
+                      ? cs.error
+                      : cs.outlineVariant,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            if (isImageModel) ...[
-              const SizedBox(width: 6),
-              RoleBadge(
-                label: '生图',
-                bg: cs.secondaryContainer,
-                fg: cs.onSecondaryContainer,
-              ),
-            ],
-            const SizedBox(width: 8),
-            if (onTune != null)
-              SizedBox(
-                width: 32,
-                height: 32,
-                child: Stack(
-                  clipBehavior: Clip.none,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    IconButton(
-                      icon: Icon(
-                        Symbols.tune_rounded,
-                        size: 20,
-                        color: hasCustomParams ? cs.primary : cs.onSurfaceVariant,
+                    Text(
+                      modelId,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
                       ),
-                      padding: EdgeInsets.zero,
-                      tooltip: '调节参数',
-                      onPressed: onTune,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (hasCustomParams)
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: cs.primary,
-                            border: Border.all(color: cs.surface, width: 1),
-                          ),
-                        ),
-                      ),
+                    if (badges.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(spacing: 4, runSpacing: 4, children: badges),
+                    ],
                   ],
                 ),
               ),
-            const SizedBox(width: 4),
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: isTesting
-                  ? const Padding(
-                      padding: EdgeInsets.all(6),
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : IconButton(
-                      icon: Icon(
-                        Symbols.vital_signs,
-                        size: 20,
-                        color: isOk
-                            ? cs.primary
-                            : isErr
-                            ? cs.error
-                            : cs.onSurfaceVariant,
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: isTesting
+                    ? const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        icon: Icon(
+                          Symbols.vital_signs,
+                          size: 20,
+                          color: isOk
+                              ? cs.primary
+                              : isErr
+                              ? cs.error
+                              : cs.onSurfaceVariant,
+                        ),
+                        padding: EdgeInsets.zero,
+                        tooltip: isErr ? errorMsg : '检测模型',
+                        onPressed: isErr ? onShowError : onTest,
                       ),
-                      padding: EdgeInsets.zero,
-                      tooltip: isErr ? errorMsg : '检测模型',
-                      onPressed: isErr ? onShowError : onTest,
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
+  /// 由能力派生 badge 列表。嵌入模型只显示「嵌入」，其余按模态/能力展开。
+  List<Widget> _badges(ColorScheme cs) {
+    final c = capability;
+    if (c.embedding) {
+      return [
+        RoleBadge(
+          label: '嵌入',
+          bg: cs.tertiaryContainer,
+          fg: cs.onTertiaryContainer,
+        ),
+      ];
+    }
+    return [
+      if (c.imageInput)
+        RoleBadge(
+          label: '视觉',
+          bg: cs.primaryContainer,
+          fg: cs.onPrimaryContainer,
+        ),
+      if (c.imageOutput)
+        RoleBadge(
+          label: '生图',
+          bg: cs.secondaryContainer,
+          fg: cs.onSecondaryContainer,
+        ),
+      if (c.tool)
+        RoleBadge(
+          label: '工具',
+          bg: cs.surfaceContainerHighest,
+          fg: cs.onSurfaceVariant,
+        ),
+      if (c.reasoning)
+        RoleBadge(
+          label: '推理',
+          bg: cs.surfaceContainerHighest,
+          fg: cs.onSurfaceVariant,
+        ),
+    ];
+  }
+}

@@ -4,24 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
+import '../../services/snackbar_service.dart';
 import 'agent_model_list_tile.dart';
+import 'agent_model_capability_sheet.dart';
 import 'agent_model_manage_sheet.dart';
-import 'agent_model_params_sheet.dart';
 import 'agent_model_tester.dart';
-import 'setting_picker.dart';
 
-/// 服务商副标题——给用户一个"选它能做什么"的简短提示。
-String _providerSubtitle(AgentApiProvider p) => switch (p) {
-      AgentApiProvider.openai => 'gpt / o 系列 · 生图支持 gpt-image-2',
-      AgentApiProvider.anthropic => 'Claude 系列',
-      AgentApiProvider.gemini => 'Google AI · 多模态',
-      AgentApiProvider.openAICompatible =>
-        'DeepSeek / 自部署等 OpenAI 兼容 API',
-    };
+/// 协议副标题——给用户一个"选它能做什么"的简短提示。
+String _protocolSubtitle(AgentApiProvider p) => switch (p) {
+  AgentApiProvider.openai => 'gpt / o 系列 · 生图支持 gpt-image',
+  AgentApiProvider.anthropic => 'Claude 系列',
+  AgentApiProvider.gemini => 'Google AI · 多模态',
+  AgentApiProvider.openAICompatible => 'DeepSeek / 自部署等 OpenAI 兼容 API',
+};
 
-/// 文档助手 Agent API 配置区块
+/// 文档助手 Agent API 配置区块。
+///
+/// 单页内联布局：顶部 [SettingPicker] Sheet 切换服务商（内置三家 + 自定义），
+/// 下方直接编辑当前服务商的 API Key / 地址 / 模型；底部为全局模型角色。
 class AgentApiSection extends ConsumerStatefulWidget {
   const AgentApiSection({super.key});
 
@@ -30,8 +33,13 @@ class AgentApiSection extends ConsumerStatefulWidget {
 }
 
 class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
+  static const _lastInstanceKey = 'agent_api_last_instance';
+
   late final TextEditingController _urlCtrl;
   late final TextEditingController _keyCtrl;
+
+  /// 当前正在编辑的实例 id，持久化到 Hive 以便跨页面保留选择。
+  String _currentId = '';
 
   bool _keyObscured = true;
   Timer? _urlTimer;
@@ -44,11 +52,13 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   @override
   void initState() {
     super.initState();
-    final s = ref.read(agentApiProvider);
-    _urlCtrl = TextEditingController(
-      text: s.baseUrl.isNotEmpty ? s.baseUrl : s.provider.defaultBaseUrl,
-    );
-    _keyCtrl = TextEditingController(text: s.apiKey);
+    final instances = ref.read(agentApiProvider).instances;
+    final lastId = GStorage.setting.get(_lastInstanceKey) as String?;
+    final inst = instances.where((i) => i.id == lastId).firstOrNull ??
+        (instances.isNotEmpty ? instances.first : null);
+    _currentId = inst?.id ?? '';
+    _urlCtrl = TextEditingController(text: _urlText(inst));
+    _keyCtrl = TextEditingController(text: inst?.apiKey ?? '');
   }
 
   @override
@@ -60,20 +70,383 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     super.dispose();
   }
 
+  /// URL 输入框显示值：用户未填时回落到协议默认地址。
+  String _urlText(AgentProviderInstance? inst) => inst == null
+      ? ''
+      : (inst.baseUrl.isNotEmpty ? inst.baseUrl : inst.protocol.defaultBaseUrl);
+
+  /// 切换当前编辑的实例，同步输入框并持久化选择。
+  void _switchTo(AgentProviderInstance inst) {
+    setState(() {
+      _currentId = inst.id;
+      _keyCtrl.text = inst.apiKey;
+      _urlCtrl.text = _urlText(inst);
+      _modelTestResults.clear();
+    });
+    GStorage.setting.put(_lastInstanceKey, inst.id);
+  }
+
+  // ── 添加 / 删除服务商 ──
+
+  Future<void> _addProvider() async {
+    final protocol = await _showProtocolPicker();
+    if (protocol == null || !mounted) return;
+
+    // 选完协议后填表确认——名称 / 地址 / Key 都填齐才能创建
+    final form = await showDialog<({String name, String baseUrl, String apiKey})>(
+      context: context,
+      builder: (_) => _AddProviderDialog(protocol: protocol),
+    );
+    if (form == null || !mounted) return;
+
+    final id = await ref
+        .read(agentApiProvider.notifier)
+        .addInstance(
+          protocol,
+          name: form.name,
+          baseUrl: form.baseUrl,
+          apiKey: form.apiKey,
+        );
+    final inst = ref.read(agentApiProvider).byId(id);
+    if (inst != null && mounted) _switchTo(inst);
+  }
+
+  /// 删除指定自定义实例（带确认）。删的若是当前项，删后切回第一个。
+  Future<void> _deleteInstance(AgentProviderInstance inst) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        return AlertDialog(
+          backgroundColor: cs.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          title: Text(
+            '删除服务商',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text('确定删除「${inst.name}」？将清除其 API Key、地址和模型。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+    final wasCurrent = inst.id == _currentId;
+    await ref.read(agentApiProvider.notifier).removeInstance(inst.id);
+    if (!mounted) return;
+    // 删的是当前项才切回第一个（内置三家恒在，列表必非空）
+    if (wasCurrent) {
+      _switchTo(ref.read(agentApiProvider).instances.first);
+    }
+  }
+
+  // ── 服务商切换器（折叠 tile + 管理 sheet）──
+
+  /// 折叠态：当前服务商名 + ▼（§3.8 SettingPicker 折叠态规格）。
+  Widget _providerTile(
+    ThemeData theme,
+    ColorScheme cs,
+    AgentProviderInstance current,
+  ) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: _showProviderSwitcher,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                current.name,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              Symbols.expand_more_rounded,
+              size: 20,
+              color: cs.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 管理 sheet：点选切换、自定义行尾删除、底部「添加服务商」。
+  /// picker 类内容无预览语义，按 §3.8 例外不加 BackdropFilter。
+  Future<void> _showProviderSwitcher() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      constraints: const BoxConstraints(maxWidth: 480),
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        final maxH = MediaQuery.sizeOf(ctx).height * 0.7;
+        return Container(
+          constraints: BoxConstraints(maxHeight: maxH),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 32,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.onSurfaceVariant.withAlpha(80),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '服务商',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+              Flexible(
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final instances = ref.watch(agentApiProvider).instances;
+                    return ListView(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.of(ctx).padding.bottom + 12,
+                      ),
+                      children: [
+                        ...instances.map(
+                          (inst) => _switcherRow(ctx, theme, cs, inst),
+                        ),
+                        _addRow(ctx, theme, cs),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _switcherRow(
+    BuildContext sheetCtx,
+    ThemeData theme,
+    ColorScheme cs,
+    AgentProviderInstance inst,
+  ) {
+    final selected = inst.id == _currentId;
+    final isCustom = !AgentApiNotifier.isBuiltin(inst.id);
+    return InkWell(
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        _switchTo(inst);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    inst.name,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                      color: selected ? cs.primary : cs.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    inst.protocol.label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Icon(Symbols.check_rounded, size: 20, color: cs.primary),
+              ),
+            if (isCustom)
+              IconButton(
+                icon: Icon(
+                  Symbols.delete_rounded,
+                  size: 20,
+                  color: cs.onSurfaceVariant.withAlpha(160),
+                ),
+                tooltip: '删除',
+                onPressed: () => _deleteInstance(inst),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _addRow(BuildContext sheetCtx, ThemeData theme, ColorScheme cs) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        _addProvider();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          children: [
+            Icon(Symbols.add_rounded, size: 22, color: cs.primary),
+            const SizedBox(width: 12),
+            Text(
+              '添加服务商',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: cs.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<AgentApiProvider?> _showProtocolPicker() {
+    return showModalBottomSheet<AgentApiProvider>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      constraints: const BoxConstraints(maxWidth: 480),
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        return Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.onSurfaceVariant.withAlpha(80),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '选择协议',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+              // 每行撑满整宽 → 标题/副标题统一左对齐
+              ...AgentApiProvider.values.map((p) {
+                return InkWell(
+                  onTap: () => Navigator.pop(ctx, p),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.label,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _protocolSubtitle(p),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              SizedBox(height: MediaQuery.of(ctx).padding.bottom + 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // ── 模型连通性检测 ──
 
-  Future<void> _testModel(String modelId) async {
+  Future<void> _testModel(AgentProviderInstance inst, String modelId) async {
     if (_modelTesting.contains(modelId)) return;
     setState(() {
       _modelTesting.add(modelId);
       _modelTestResults.remove(modelId);
     });
 
-    final agentState = ref.read(agentApiProvider);
     final err = await testAgentModel(
-      provider: agentState.provider,
-      baseUrl: agentState.effectiveBaseUrl,
-      apiKey: agentState.apiKey,
+      provider: inst.protocol,
+      baseUrl: inst.effectiveBaseUrl,
+      apiKey: inst.apiKey,
       modelId: modelId,
     );
 
@@ -82,91 +455,103 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       _modelTestResults[modelId] = err;
       _modelTesting.remove(modelId);
     });
+    final snackBar = ref.read(snackBarServiceProvider);
     if (err == null) {
-      _showTestSuccess(modelId);
+      snackBar.showResult(message: '$modelId 连接成功');
+    } else {
+      _showTestError(modelId, err);
     }
   }
 
-  void _showTestSuccess(String modelId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(
-              Symbols.check_circle_rounded,
-              color: Colors.green,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: Text('$modelId 连接成功')),
-          ],
-        ),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   void _showTestError(String modelId, String error) {
-    final cs = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(Symbols.error_rounded, color: cs.error, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SelectableText(
-                '$modelId: $error',
-                style: TextStyle(color: cs.onInverseSurface),
-              ),
-            ),
-          ],
-        ),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(
-          label: '重试',
-          onPressed: () => _testModel(modelId),
-        ),
+    ref.read(snackBarServiceProvider).showResult(
+      message: '$modelId: $error',
+      duration: const Duration(seconds: 5),
+      action: SnackBarAction(
+        label: '重试',
+        onPressed: () {
+          final inst = ref.read(agentApiProvider).byId(_currentId);
+          if (inst != null) _testModel(inst, modelId);
+        },
       ),
     );
   }
 
-  Future<void> _openModelManageSheet() async {
-    final s = ref.read(agentApiProvider);
-    if (s.apiKey.isEmpty) return;
-
+  Future<void> _openModelManageSheet(AgentProviderInstance inst) async {
+    if (inst.apiKey.isEmpty) return;
+    final notifier = ref.read(agentApiProvider.notifier);
+    final id = inst.id;
     await showAgentModelManageSheet(
       context: context,
-      baseUrl: s.effectiveBaseUrl,
-      apiKey: s.apiKey,
-      providerType: s.provider,
-      providerLabel: s.provider.label,
-      addedModels: s.models,
-      currentDefaultModel: s.defaultModelId,
-      currentFastModel: s.fastModelId,
-      currentImageModel: s.imageModelId,
-      onAdd: (id, {bool setAsDefault = false, bool setAsFast = false, bool setAsImage = false}) => ref
-          .read(agentApiProvider.notifier)
-          .addModel(id, setAsDefault: setAsDefault, setAsFast: setAsFast, setAsImage: setAsImage),
-      onRemove: (id) {
-        ref.read(agentApiProvider.notifier).removeModel(id);
-        _modelTestResults.remove(id);
+      baseUrl: inst.effectiveBaseUrl,
+      apiKey: inst.apiKey,
+      providerType: inst.protocol,
+      providerLabel: inst.name,
+      addedModels: inst.models,
+      currentDefaultModel: AgentApiNotifier.globalDefaultRole.id == id
+          ? AgentApiNotifier.globalDefaultRole.modelId
+          : null,
+      currentFastModel: AgentApiNotifier.globalFastRole.id == id
+          ? AgentApiNotifier.globalFastRole.modelId
+          : null,
+      currentImageModel: AgentApiNotifier.globalImageRole.id == id
+          ? AgentApiNotifier.globalImageRole.modelId
+          : null,
+      onAdd:
+          (
+            modelId, {
+            bool setAsDefault = false,
+            bool setAsFast = false,
+            bool setAsImage = false,
+          }) => notifier.addModel(
+            id,
+            modelId,
+            setAsDefault: setAsDefault,
+            setAsFast: setAsFast,
+            setAsImage: setAsImage,
+          ),
+      onRemove: (modelId) {
+        notifier.removeModel(id, modelId);
+        _modelTestResults.remove(modelId);
       },
     );
   }
 
-  Future<void> _openModelParamsSheet(String modelId) async {
-    final s = ref.read(agentApiProvider);
-    await showAgentModelParamsSheet(
+  Future<void> _openCapabilitySheet(
+    AgentProviderInstance inst,
+    String modelId,
+  ) async {
+    await showAgentModelCapabilitySheet(
       context: context,
-      provider: s.provider,
-      providerLabel: s.provider.label,
       modelId: modelId,
-      initialParams: s.paramsFor(modelId),
-      onSave: (p) =>
-          ref.read(agentApiProvider.notifier).setModelParams(modelId, p),
+      protocol: inst.protocol,
+      initial: inst.capabilityFor(modelId),
+      inferred: AgentModelCapability.infer(
+        provider: inst.protocol,
+        modelId: modelId,
+      ),
+      onSave: (cap) => ref
+          .read(agentApiProvider.notifier)
+          .setModelCapability(inst.id, modelId, cap),
+      onReset: () {
+        ref
+            .read(agentApiProvider.notifier)
+            .resetModelCapability(inst.id, modelId);
+        ref
+            .read(agentApiProvider.notifier)
+            .setModelThinkingLevel(inst.id, modelId, null);
+        ref
+            .read(agentApiProvider.notifier)
+            .setModelBuiltInTools(inst.id, modelId, {});
+      },
+      initialThinkingLevel: inst.paramsFor(modelId).thinkingLevel,
+      onThinkingLevelChanged: (level) => ref
+          .read(agentApiProvider.notifier)
+          .setModelThinkingLevel(inst.id, modelId, level),
+      initialBuiltInTools: inst.builtInToolsFor(modelId),
+      onBuiltInToolsChanged: (tools) => ref
+          .read(agentApiProvider.notifier)
+          .setModelBuiltInTools(inst.id, modelId, tools),
     );
   }
 
@@ -176,59 +561,22 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final agentState = ref.watch(agentApiProvider);
-
-    InputDecoration fieldDeco({required String hint, Widget? suffix}) =>
-        InputDecoration(
-          hintText: hint,
-          hintStyle: theme.textTheme.bodyMedium?.copyWith(
-            color: cs.onSurfaceVariant.withAlpha(120),
-          ),
-          filled: true,
-          fillColor: cs.surfaceContainerLow,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: cs.outline),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: cs.primary, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
-          suffixIcon: suffix,
-        );
+    final instances = ref.watch(agentApiProvider).instances;
+    // 当前实例；id 失效（极少见）时回落到第一个
+    final current = instances.firstWhere(
+      (i) => i.id == _currentId,
+      orElse: () => instances.first,
+    );
 
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── 服务商 ──
+          // ── 服务商（点开 sheet 切换 / 添加 / 删除）──
           _sectionLabel(theme, cs, '服务商'),
           const SizedBox(height: 12),
-          SettingPicker<AgentApiProvider>(
-            current: agentState.provider,
-            options: AgentApiProvider.values,
-            labelFor: (p) => p.label,
-            subtitleFor: _providerSubtitle,
-            sheetTitle: '服务商',
-            onChanged: (next) {
-              if (agentState.provider == next) return;
-              ref.read(agentApiProvider.notifier).setProvider(next);
-              final s = ref.read(agentApiProvider);
-              _keyCtrl.text = s.apiKey;
-              _urlCtrl.text =
-                  s.baseUrl.isNotEmpty ? s.baseUrl : next.defaultBaseUrl;
-              _modelTestResults.clear();
-            },
-          ),
+          _providerTile(theme, cs, current),
           const SizedBox(height: 24),
 
           // ── API Key ──
@@ -239,12 +587,16 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             onChanged: (v) {
               _keyTimer?.cancel();
               _keyTimer = Timer(const Duration(milliseconds: 600), () {
-                ref.read(agentApiProvider.notifier).setApiKey(v.trim());
+                ref
+                    .read(agentApiProvider.notifier)
+                    .setApiKey(current.id, v.trim());
               });
             },
             obscureText: _keyObscured,
-            decoration: fieldDeco(
-              hint: agentState.provider.apiKeyHint,
+            decoration: _fieldDeco(
+              theme,
+              cs,
+              hint: current.protocol.apiKeyHint,
               suffix: IconButton(
                 icon: Icon(
                   _keyObscured ? Symbols.visibility_off : Symbols.visibility,
@@ -267,22 +619,26 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             onChanged: (v) {
               _urlTimer?.cancel();
               _urlTimer = Timer(const Duration(milliseconds: 600), () {
-                ref.read(agentApiProvider.notifier).setBaseUrl(v.trim());
+                ref
+                    .read(agentApiProvider.notifier)
+                    .setBaseUrl(current.id, v.trim());
               });
             },
-            decoration: fieldDeco(
-              hint: agentState.provider.defaultBaseUrl,
+            decoration: _fieldDeco(
+              theme,
+              cs,
+              hint: current.protocol.defaultBaseUrl,
               suffix: IconButton(
                 icon: Icon(
                   Symbols.tune_rounded,
                   size: 20,
-                  color: agentState.apiKey.isNotEmpty
+                  color: current.apiKey.isNotEmpty
                       ? cs.primary
                       : cs.onSurfaceVariant.withAlpha(80),
                 ),
                 tooltip: '管理模型',
-                onPressed: agentState.apiKey.isNotEmpty
-                    ? _openModelManageSheet
+                onPressed: current.apiKey.isNotEmpty
+                    ? () => _openModelManageSheet(current)
                     : null,
               ),
             ),
@@ -293,7 +649,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           Padding(
             padding: const EdgeInsets.only(left: 4, top: 6),
             child: Text(
-              '预览: ${agentState.effectiveBaseUrl}${agentState.provider.chatPath}',
+              '预览: ${current.effectiveBaseUrl}${current.protocol.chatPath}',
               style: theme.textTheme.labelSmall?.copyWith(
                 color: cs.onSurfaceVariant.withAlpha(120),
               ),
@@ -303,32 +659,29 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           ),
 
           // ── 模型列表 ──
-          if (agentState.models.isNotEmpty) ...[
+          if (current.models.isNotEmpty) ...[
             const SizedBox(height: 24),
             _sectionLabel(theme, cs, '模型'),
             const SizedBox(height: 12),
-            ...agentState.models.map((modelId) {
+            ...current.models.map((modelId) {
               final hasTested = _modelTestResults.containsKey(modelId);
               final errorMsg = _modelTestResults[modelId];
-              final isImage = AgentModelCapability.isImageGenerationModel(
-                provider: agentState.provider,
-                modelId: modelId,
-              );
               return AgentModelListTile(
-                key: ValueKey(modelId),
+                key: ValueKey('${current.id}/$modelId'),
                 modelId: modelId,
                 isTesting: _modelTesting.contains(modelId),
                 hasTested: hasTested,
                 errorMsg: errorMsg,
-                hasCustomParams: !agentState.paramsFor(modelId).isDefault,
-                isImageModel: isImage,
+                capability: current.capabilityFor(modelId),
                 onRemove: () {
-                  ref.read(agentApiProvider.notifier).removeModel(modelId);
+                  ref
+                      .read(agentApiProvider.notifier)
+                      .removeModel(current.id, modelId);
                   _modelTestResults.remove(modelId);
                 },
-                onTest: () => _testModel(modelId),
+                onTest: () => _testModel(current, modelId),
                 onShowError: () => _showTestError(modelId, errorMsg!),
-                onTune: isImage ? null : () => _openModelParamsSheet(modelId),
+                onEdit: () => _openCapabilitySheet(current, modelId),
               );
             }),
           ],
@@ -372,15 +725,15 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             iconBg: cs.primaryContainer,
             iconFg: cs.onPrimaryContainer,
             label: '专家模型',
-            provider: defaultRole.provider,
+            instanceId: defaultRole.id,
             modelId: defaultRole.modelId,
             onTap: () => _showRolePickerDialog(
               roleLabel: '专家模型',
-              currentProvider: defaultRole.provider,
+              currentInstanceId: defaultRole.id,
               currentModelId: defaultRole.modelId,
-              onSelect: (prov, id) => ref
+              onSelect: (instId, id) => ref
                   .read(agentApiProvider.notifier)
-                  .setGlobalDefaultModel(prov, id),
+                  .setGlobalDefaultModel(instId, id),
               onClear: () => ref
                   .read(agentApiProvider.notifier)
                   .setGlobalDefaultModel(null, null),
@@ -394,15 +747,15 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             iconBg: cs.tertiaryContainer,
             iconFg: cs.onTertiaryContainer,
             label: '快速模型',
-            provider: fastRole.provider,
+            instanceId: fastRole.id,
             modelId: fastRole.modelId,
             onTap: () => _showRolePickerDialog(
               roleLabel: '快速模型',
-              currentProvider: fastRole.provider,
+              currentInstanceId: fastRole.id,
               currentModelId: fastRole.modelId,
-              onSelect: (prov, id) => ref
+              onSelect: (instId, id) => ref
                   .read(agentApiProvider.notifier)
-                  .setGlobalFastModel(prov, id),
+                  .setGlobalFastModel(instId, id),
               onClear: () => ref
                   .read(agentApiProvider.notifier)
                   .setGlobalFastModel(null, null),
@@ -416,16 +769,16 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             iconBg: cs.secondaryContainer,
             iconFg: cs.onSecondaryContainer,
             label: '生图模型',
-            provider: imageRole.provider,
+            instanceId: imageRole.id,
             modelId: imageRole.modelId,
             onTap: () => _showRolePickerDialog(
               roleLabel: '生图模型',
-              currentProvider: imageRole.provider,
+              currentInstanceId: imageRole.id,
               currentModelId: imageRole.modelId,
               imageOnly: true,
-              onSelect: (prov, id) => ref
+              onSelect: (instId, id) => ref
                   .read(agentApiProvider.notifier)
-                  .setGlobalImageModel(prov, id),
+                  .setGlobalImageModel(instId, id),
               onClear: () => ref
                   .read(agentApiProvider.notifier)
                   .setGlobalImageModel(null, null),
@@ -443,11 +796,12 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     required Color iconBg,
     required Color iconFg,
     required String label,
-    required AgentApiProvider? provider,
+    required String? instanceId,
     required String? modelId,
     required VoidCallback onTap,
   }) {
-    final isSet = provider != null && modelId != null;
+    final instName = ref.read(agentApiProvider).byId(instanceId)?.name;
+    final isSet = instanceId != null && modelId != null && instName != null;
 
     return Material(
       color: Colors.transparent,
@@ -487,7 +841,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                     const SizedBox(height: 2),
                     if (isSet)
                       Text(
-                        '$modelId · ${provider.label}',
+                        '$modelId · $instName',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.onSurfaceVariant,
                         ),
@@ -513,26 +867,26 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
 
   Future<void> _showRolePickerDialog({
     required String roleLabel,
-    required AgentApiProvider? currentProvider,
+    required String? currentInstanceId,
     required String? currentModelId,
     bool imageOnly = false,
-    required void Function(AgentApiProvider provider, String modelId) onSelect,
+    required void Function(String instanceId, String modelId) onSelect,
     required VoidCallback onClear,
   }) async {
-    final allModels = AgentApiNotifier.getAllConfiguredModels();
-    final displayModels = allModels.map(
-      (provider, models) => MapEntry(
-        provider,
-        models.where((modelId) {
-          final isImage = AgentModelCapability.isImageGenerationModel(
-            provider: provider,
-            modelId: modelId,
-          );
-          return imageOnly ? isImage : !isImage;
-        }).toList(),
-      ),
-    );
-    displayModels.removeWhere((_, models) => models.isEmpty);
+    // 按实例分组收集可选模型；按角色用能力过滤后剔除空实例：
+    // 生图角色只收 canGenerateImage；文本角色排除嵌入与生图模型。
+    final entries = <({String id, String name, List<String> models})>[];
+    for (final inst in ref.read(agentApiProvider).instances) {
+      final models = inst.models.where((modelId) {
+        final cap = inst.capabilityFor(modelId);
+        return imageOnly
+            ? cap.canGenerateImage
+            : (!cap.embedding && !cap.imageOutput);
+      }).toList();
+      if (models.isNotEmpty) {
+        entries.add((id: inst.id, name: inst.name, models: models));
+      }
+    }
 
     if (!mounted) return;
     await showDialog<void>(
@@ -540,7 +894,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       builder: (ctx) {
         final theme = Theme.of(ctx);
         final cs = theme.colorScheme;
-        final isSet = currentProvider != null && currentModelId != null;
+        final isSet = currentInstanceId != null && currentModelId != null;
 
         return Dialog(
           backgroundColor: cs.surfaceContainerLow,
@@ -562,7 +916,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  if (displayModels.isEmpty)
+                  if (entries.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(
@@ -583,23 +937,23 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              for (final entry in displayModels.entries) ...[
+                              for (final entry in entries) ...[
                                 Padding(
                                   padding: const EdgeInsets.only(
                                     left: 2,
                                     bottom: 8,
                                   ),
                                   child: Text(
-                                    entry.key.label,
+                                    entry.name,
                                     style: theme.textTheme.titleSmall?.copyWith(
                                       color: cs.onSurfaceVariant,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
-                                ...entry.value.map((modelId) {
+                                ...entry.models.map((modelId) {
                                   final selected =
-                                      entry.key == currentProvider &&
+                                      entry.id == currentInstanceId &&
                                       modelId == currentModelId;
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
@@ -613,7 +967,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                                         borderRadius: BorderRadius.circular(12),
                                         onTap: () {
                                           Navigator.pop(ctx);
-                                          onSelect(entry.key, modelId);
+                                          onSelect(entry.id, modelId);
                                         },
                                         child: Padding(
                                           padding: const EdgeInsets.symmetric(
@@ -671,9 +1025,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                             Navigator.pop(ctx);
                             onClear();
                           },
-                          style: TextButton.styleFrom(
-                            foregroundColor: cs.error,
-                          ),
+                          style: TextButton.styleFrom(foregroundColor: cs.error),
                           child: const Text('清除'),
                         ),
                       TextButton(
@@ -691,12 +1043,200 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     );
   }
 
+  InputDecoration _fieldDeco(
+    ThemeData theme,
+    ColorScheme cs, {
+    required String hint,
+    Widget? suffix,
+  }) => InputDecoration(
+    hintText: hint,
+    hintStyle: theme.textTheme.bodyMedium?.copyWith(
+      color: cs.onSurfaceVariant.withAlpha(120),
+    ),
+    filled: true,
+    fillColor: cs.surfaceContainerLow,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: cs.outline),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: cs.primary, width: 2),
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    suffixIcon: suffix,
+  );
+
   Widget _sectionLabel(ThemeData theme, ColorScheme cs, String text) {
     return Text(
       text,
       style: theme.textTheme.titleSmall?.copyWith(
         color: cs.onSurfaceVariant,
         fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+/// 「添加服务商」第二步：填写名称 / API 地址 / API Key，三项齐备方可创建。
+/// 取消返回 null；确认返回 (name, baseUrl, apiKey)。
+class _AddProviderDialog extends StatefulWidget {
+  final AgentApiProvider protocol;
+  const _AddProviderDialog({required this.protocol});
+
+  @override
+  State<_AddProviderDialog> createState() => _AddProviderDialogState();
+}
+
+class _AddProviderDialogState extends State<_AddProviderDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _urlCtrl;
+  late final TextEditingController _keyCtrl;
+  bool _keyObscured = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.protocol.label);
+    _urlCtrl = TextEditingController(text: widget.protocol.defaultBaseUrl);
+    _keyCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _urlCtrl.dispose();
+    _keyCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _canAdd =>
+      _nameCtrl.text.trim().isNotEmpty &&
+      _urlCtrl.text.trim().isNotEmpty &&
+      _keyCtrl.text.trim().isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    InputDecoration deco(String hint, {Widget? suffix}) => InputDecoration(
+      hintText: hint,
+      hintStyle: theme.textTheme.bodyMedium?.copyWith(
+        color: cs.onSurfaceVariant.withAlpha(120),
+      ),
+      filled: true,
+      fillColor: cs.surfaceContainerHighest.withAlpha(80),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: cs.outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: cs.primary, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      suffixIcon: suffix,
+      isDense: true,
+    );
+
+    Widget fieldLabel(String t) => Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 6, left: 2),
+      child: Text(
+        t,
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+
+    return Dialog(
+      backgroundColor: cs.surfaceContainerLow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '添加 ${widget.protocol.label}',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              fieldLabel('名称'),
+              TextField(
+                controller: _nameCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: deco('服务商名称'),
+                autocorrect: false,
+                style: theme.textTheme.bodyMedium,
+              ),
+              fieldLabel('API 地址'),
+              TextField(
+                controller: _urlCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: deco(widget.protocol.defaultBaseUrl),
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                style: theme.textTheme.bodyMedium,
+              ),
+              fieldLabel('API Key'),
+              TextField(
+                controller: _keyCtrl,
+                onChanged: (_) => setState(() {}),
+                obscureText: _keyObscured,
+                decoration: deco(
+                  widget.protocol.apiKeyHint,
+                  suffix: IconButton(
+                    icon: Icon(
+                      _keyObscured ? Symbols.visibility_off : Symbols.visibility,
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _keyObscured = !_keyObscured),
+                  ),
+                ),
+                autocorrect: false,
+                enableSuggestions: false,
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _canAdd
+                        ? () => Navigator.pop(context, (
+                            name: _nameCtrl.text.trim(),
+                            baseUrl: _urlCtrl.text.trim(),
+                            apiKey: _keyCtrl.text.trim(),
+                          ))
+                        : null,
+                    child: const Text('添加'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
