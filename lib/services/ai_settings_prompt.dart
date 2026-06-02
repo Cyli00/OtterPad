@@ -34,11 +34,11 @@ class AiSettingsPrompt {
   }
 
   static bool ensureImageModelSelected({
-    required ({AgentApiProvider? provider, String? modelId}) imageRole,
+    required ({String? id, String? modelId}) imageRole,
     required SnackBarService snackBar,
     required VoidCallback onOpenSettings,
   }) {
-    if (imageRole.provider != null && imageRole.modelId != null) return true;
+    if (imageRole.id != null && imageRole.modelId != null) return true;
     _show(
       snackBar,
       message: '请先在「AI 设置」中选择生图模型',

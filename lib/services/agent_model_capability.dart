@@ -9,17 +9,68 @@ enum AgentModelModality { text, image }
 class AgentModelCapability {
   final bool textInput;
   final bool imageInput;
+
+  /// 文本输出（对话模型恒有；embedding 在编辑器中隐藏输出，不参与展示）。
+  final bool textOutput;
   final bool imageOutput;
   final bool embedding;
+
+  /// 函数调用能力（工具）。embedding 模型恒为 false。
+  final bool tool;
+
+  /// 推理 / 思考能力。embedding 模型恒为 false。
+  final bool reasoning;
 
   const AgentModelCapability({
     this.textInput = true,
     this.imageInput = false,
+    this.textOutput = true,
     this.imageOutput = false,
     this.embedding = false,
+    this.tool = false,
+    this.reasoning = false,
   });
 
   bool get canGenerateImage => imageOutput && !embedding;
+
+  AgentModelCapability copyWith({
+    bool? textInput,
+    bool? imageInput,
+    bool? textOutput,
+    bool? imageOutput,
+    bool? embedding,
+    bool? tool,
+    bool? reasoning,
+  }) => AgentModelCapability(
+    textInput: textInput ?? this.textInput,
+    imageInput: imageInput ?? this.imageInput,
+    textOutput: textOutput ?? this.textOutput,
+    imageOutput: imageOutput ?? this.imageOutput,
+    embedding: embedding ?? this.embedding,
+    tool: tool ?? this.tool,
+    reasoning: reasoning ?? this.reasoning,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'textInput': textInput,
+    'imageInput': imageInput,
+    'textOutput': textOutput,
+    'imageOutput': imageOutput,
+    'embedding': embedding,
+    'tool': tool,
+    'reasoning': reasoning,
+  };
+
+  factory AgentModelCapability.fromJson(Map<String, dynamic> json) =>
+      AgentModelCapability(
+        textInput: json['textInput'] as bool? ?? true,
+        imageInput: json['imageInput'] as bool? ?? false,
+        textOutput: json['textOutput'] as bool? ?? true,
+        imageOutput: json['imageOutput'] as bool? ?? false,
+        embedding: json['embedding'] as bool? ?? false,
+        tool: json['tool'] as bool? ?? false,
+        reasoning: json['reasoning'] as bool? ?? false,
+      );
 
   factory AgentModelCapability.infer({
     required AgentApiProvider provider,
@@ -70,9 +121,14 @@ class AgentModelCapability {
 
     final imageOutput = isImageGenerationModel(provider: provider, modelId: id);
     final imageInput = imageOutput || _isKnownVisionModel(id);
+    // 生图模型不带工具/推理能力（对齐 kelivo）
+    final tool = !imageOutput && _isToolModel(id);
+    final reasoning = !imageOutput && _isReasoningModel(id);
     return AgentModelCapability(
       imageInput: imageInput,
       imageOutput: imageOutput,
+      tool: tool,
+      reasoning: reasoning,
     );
   }
 
@@ -113,6 +169,26 @@ class AgentModelCapability {
       caseSensitive: false,
     ).hasMatch(id);
   }
+
+  // ─── 能力识别（工具 / 推理）—— 正则移植自 kelivo ModelRegistry ───
+
+  static final RegExp _toolRe = RegExp(
+    r'(gpt-4o|gpt-4\.1|gpt-oss|gpt-5(?!-chat)|o\d|gemini|claude|qwen-?3|'
+    r'grok-4|kimi-k2|glm-4[-.](?:5|6|7)|glm-5|minimax-m2|'
+    r'deepseek-(?:chat|r1|reasoner|v3|v3\.1|v3\.2|v4))',
+    caseSensitive: false,
+  );
+
+  static final RegExp _reasoningRe = RegExp(
+    r'(gpt-oss|gpt-5(?!-chat)|o\d|gemini-(?:2\.5|3)|gemma[-_]?4|claude|'
+    r'qwen-?3|grok-4|kimi-k2|glm-4[-.](?:5|6|7)|glm-5|minimax-m2|'
+    r'deepseek-(?:r1|reasoner|v3\.1|v3\.2|v4))',
+    caseSensitive: false,
+  );
+
+  static bool _isToolModel(String id) => _toolRe.hasMatch(id);
+
+  static bool _isReasoningModel(String id) => _reasoningRe.hasMatch(id);
 
   // ─── Thinking / reasoning 版本识别 ───────────────────────────────────
   // 这些方法服务于请求构造层把统一的 ThinkingLevel 翻译成各家具体字段。

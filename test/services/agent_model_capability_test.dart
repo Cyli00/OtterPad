@@ -73,4 +73,72 @@ void main() {
       expect(capability.canGenerateImage, isFalse);
     });
   });
+
+  group('AgentModelCapability 能力推断', () {
+    AgentModelCapability cap(String id) => AgentModelCapability.fromModelId(
+      provider: AgentApiProvider.openAICompatible,
+      modelId: id,
+    );
+
+    test('gpt-4o：工具 + 视觉，无推理', () {
+      final c = cap('gpt-4o');
+      expect(c.tool, isTrue);
+      expect(c.reasoning, isFalse);
+      expect(c.imageInput, isTrue);
+    });
+
+    test('o3：工具 + 推理', () {
+      final c = cap('o3');
+      expect(c.tool, isTrue);
+      expect(c.reasoning, isTrue);
+    });
+
+    test('claude-opus-4-7：工具 + 推理 + 视觉', () {
+      final c = cap('claude-opus-4-7');
+      expect(c.tool, isTrue);
+      expect(c.reasoning, isTrue);
+      expect(c.imageInput, isTrue);
+    });
+
+    test('deepseek-chat：工具，无推理', () {
+      final c = cap('deepseek-chat');
+      expect(c.tool, isTrue);
+      expect(c.reasoning, isFalse);
+    });
+
+    test('embedding 模型清空工具/推理', () {
+      final c = cap('text-embedding-3-large');
+      expect(c.embedding, isTrue);
+      expect(c.tool, isFalse);
+      expect(c.reasoning, isFalse);
+    });
+
+    test('生图模型不带工具/推理', () {
+      final c = AgentModelCapability.fromModelId(
+        provider: AgentApiProvider.openai,
+        modelId: 'gpt-image-2',
+      );
+      expect(c.imageOutput, isTrue);
+      expect(c.tool, isFalse);
+      expect(c.reasoning, isFalse);
+    });
+
+    test('toJson/fromJson 往返保真', () {
+      const c = AgentModelCapability(
+        textInput: true,
+        imageInput: true,
+        imageOutput: false,
+        embedding: false,
+        tool: true,
+        reasoning: true,
+      );
+      final r = AgentModelCapability.fromJson(c.toJson());
+      expect(r.textInput, c.textInput);
+      expect(r.imageInput, c.imageInput);
+      expect(r.imageOutput, c.imageOutput);
+      expect(r.embedding, c.embedding);
+      expect(r.tool, c.tool);
+      expect(r.reasoning, c.reasoning);
+    });
+  });
 }
