@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'providers/task_activity_provider.dart';
 import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
 import 'services/snackbar_service.dart';
@@ -25,6 +26,11 @@ class OtterPadApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeState = ref.watch(themeProvider);
     final router = ref.watch(routerProvider);
+
+    // snackbar surface：Task Activity 变化时把单槽同步到当前活集合。
+    ref.listen(taskActivityProvider, (_, tasks) {
+      ref.read(snackBarServiceProvider).renderActiveTasks(tasks);
+    });
 
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {

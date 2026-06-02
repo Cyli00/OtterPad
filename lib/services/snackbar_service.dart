@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../providers/task_activity_provider.dart';
+
+export '../providers/task_activity_provider.dart' show ListenableProgress;
+
 /// 全局 ScaffoldMessenger Key，挂载在 MaterialApp.router 上，
 /// 使 SnackBar 跨页面导航持续显示。
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 final snackBarServiceProvider = Provider<SnackBarService>((ref) {
-  return SnackBarService(scaffoldMessengerKey);
+  return SnackBarService(scaffoldMessengerKey, ref);
 });
 
 /// 统一 SnackBar 服务
@@ -17,8 +21,15 @@ final snackBarServiceProvider = Provider<SnackBarService>((ref) {
 /// 不依赖页面级 BuildContext，确保 SnackBar 在任何导航状态下可用。
 class SnackBarService {
   final GlobalKey<ScaffoldMessengerState> _key;
+  final Ref _ref;
 
-  SnackBarService(this._key);
+  SnackBarService(this._key, this._ref);
+
+  /// snackbar surface 当前持有的活跃任务集合（由 [renderActiveTasks] 同步）。
+  List<ActiveTask> _tasks = const [];
+
+  /// 当前占用单槽的一次性结果（Transient Result）；非空时进度渲染让位，结束后回收。
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _transient;
 
   ScaffoldMessengerState? get _messenger => _key.currentState;
 
@@ -116,7 +127,9 @@ class SnackBarService {
       );
   }
 
-  /// 结果/信息型 SnackBar：文字消息 + 可选操作按钮
+  /// 结果/信息型 SnackBar（Transient Result）：文字消息 + 可选操作按钮。
+  ///
+  /// 短暂占用单槽；关闭后由 [_refreshSlot] 回收，重新呈现仍在跑的 Active Task。
   void showResult({
     required String message,
     Duration duration = const Duration(seconds: 4),
@@ -125,6 +138,176 @@ class SnackBarService {
     final messenger = _messenger;
     if (messenger == null) return;
 
+    final mobile = _isMobile;
+
+    messenger.clearSnackBars();
+    final controller = messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        width: mobile ? null : 400,
+        margin: mobile
+            ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
+            : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+        elevation: 6,
+        content: Text(message, style: const TextStyle(fontSize: 14)),
+        action: action,
+        duration: duration,
+      ),
+    );
+    _transient = controller;
+    controller.closed.then((_) {
+      if (identical(_transient, controller)) {
+        _transient = null;
+        _refreshSlot();
+      }
+    });
+  }
+
+  /// 隐藏当前 SnackBar
+  void hide() {
+    _messenger?.hideCurrentSnackBar();
+  }
+
+  /// 以 [ValueListenable] 驱动的进度任务：登记进 Task Activity，由
+  /// [renderActiveTasks] 仲裁呈现（1 个显示完整进度，≥2 聚合）。
+  ///
+  /// 返回的 [SnackBarProgressHandle] 用于完成/失败时收尾——注销该任务，
+  /// 完成消息以 Transient Result 形式短暂呈现。[duration] 仅为兼容旧签名保留。
+  SnackBarProgressHandle showListenableProgress({
+    required ValueListenable<ListenableProgress> listenable,
+    VoidCallback? onCancel,
+    Duration duration = const Duration(hours: 1),
+    String title = '',
+  }) {
+    final activity = _ref.read(taskActivityProvider.notifier);
+    final id = activity.report(
+      progress: listenable,
+      title: title,
+      onCancel: onCancel,
+    );
+    return SnackBarProgressHandle._(
+      () => activity.finish(id),
+      (msg, action, dur) {
+        // 先把完成消息作为 Transient Result 占槽，再注销任务——这样后续
+        // renderActiveTasks 看到 Transient 占槽会让位，消息不会被进度回收顶掉。
+        if (msg != null) {
+          showResult(
+            message: msg,
+            action: action,
+            duration: dur ?? const Duration(seconds: 4),
+          );
+        }
+        activity.finish(id);
+      },
+    );
+  }
+
+  /// snackbar surface：观察 Task Activity，把单槽同步到当前活集合。
+  /// 0 个 → 清空；1 个 → 完整进度；≥2 个 → 聚合"N 个任务进行中"。
+  void renderActiveTasks(List<ActiveTask> tasks) {
+    _tasks = tasks;
+    _refreshSlot();
+  }
+
+  /// 依据当前 [_tasks] 重绘单槽。Transient Result 占槽期间让位，由其关闭回调回收。
+  void _refreshSlot() {
+    final messenger = _messenger;
+    if (messenger == null) return;
+    if (_transient != null) return;
+
+    final tasks = _tasks;
+    if (tasks.isEmpty) {
+      messenger.clearSnackBars();
+    } else if (tasks.length == 1) {
+      _showProgressSnackBar(tasks.single);
+    } else {
+      _showAggregateSnackBar(tasks);
+    }
+  }
+
+  void _showProgressSnackBar(ActiveTask task) {
+    final messenger = _messenger;
+    if (messenger == null) return;
+    final mobile = _isMobile;
+    final onCancel = task.onCancel;
+
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          width: mobile ? null : 400,
+          margin: mobile
+              ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
+              : null,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          elevation: 6,
+          content: ValueListenableBuilder<ListenableProgress>(
+            valueListenable: task.progress,
+            // 完成态：左侧图标由 spinner 切成对勾，避免"完成但还在转圈"的视觉 bug。
+            builder: (ctx, info, _) => Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: (info.total > 0 && info.current >= info.total)
+                      ? Icon(
+                          Symbols.check_circle_rounded,
+                          color: Theme.of(ctx).colorScheme.primary,
+                          size: 22,
+                          fill: 1,
+                        )
+                      : const CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          info.status,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (info.total > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            '${info.current} / ${info.total}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          action: onCancel == null
+              ? null
+              : SnackBarAction(label: '取消', onPressed: onCancel),
+          duration: const Duration(hours: 1),
+        ),
+      );
+  }
+
+  void _showAggregateSnackBar(List<ActiveTask> tasks) {
+    final messenger = _messenger;
+    if (messenger == null) return;
     final mobile = _isMobile;
 
     messenger
@@ -141,140 +324,39 @@ class SnackBarService {
           padding:
               const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
           elevation: 6,
-          content: Text(message, style: const TextStyle(fontSize: 14)),
-          action: action,
-          duration: duration,
-        ),
-      );
-  }
-
-  /// 隐藏当前 SnackBar
-  void hide() {
-    _messenger?.hideCurrentSnackBar();
-  }
-
-  /// 以 [ValueListenable] 驱动内容的进度 SnackBar。
-  ///
-  /// 相比 [showProgress]，本方法**只 show 一次** SnackBar，后续内容更新
-  /// 通过 `ValueListenableBuilder` 驱动。适合高频进度更新场景
-  /// （例如文档级批量翻译）——进度事件再快也不会被 ScaffoldMessenger
-  /// 的 queue 机制吞掉：每帧内 notifier 的最终值必定上屏。
-  ///
-  /// 返回的 [SnackBarProgressHandle] 用于翻译完成/失败时主动收尾。
-  SnackBarProgressHandle showListenableProgress({
-    required ValueListenable<ListenableProgress> listenable,
-    VoidCallback? onCancel,
-    Duration duration = const Duration(hours: 1),
-  }) {
-    final messenger = _messenger;
-    if (messenger == null) {
-      return SnackBarProgressHandle._(() {}, (_, _, _) {});
-    }
-
-    final mobile = _isMobile;
-
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        width: mobile ? null : 400,
-        margin: mobile
-            ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
-            : null,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-        elevation: 6,
-        content: ValueListenableBuilder<ListenableProgress>(
-          valueListenable: listenable,
-          // 完成态：左侧图标由 spinner 切成对勾，避免"翻译完成但还在转圈"
-          // 的视觉 bug——ScaffoldMessenger 的 hide/show 动画有 ~250ms
-          // 窗口，这段时间仍在显示当前 SnackBar 的 content。
-          builder: (ctx, info, _) => Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          content: Row(
             children: [
-              SizedBox(
+              const SizedBox(
                 width: 22,
                 height: 22,
-                child: (info.total > 0 && info.current >= info.total)
-                    ? Icon(
-                        Symbols.check_circle_rounded,
-                        color: Theme.of(ctx).colorScheme.primary,
-                        size: 22,
-                        fill: 1,
-                      )
-                    : const CircularProgressIndicator(strokeWidth: 2.5),
+                child: CircularProgressIndicator(strokeWidth: 2.5),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        info.status,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (info.total > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Text(
-                          '${info.current} / ${info.total}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                  ],
+                child: Text(
+                  '${tasks.length} 个任务进行中',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
+          action: SnackBarAction(
+            label: '取消全部',
+            onPressed: () {
+              for (final task in tasks) {
+                task.onCancel?.call();
+              }
+            },
+          ),
+          duration: const Duration(hours: 1),
         ),
-        action: onCancel == null
-            ? null
-            : SnackBarAction(label: '取消', onPressed: onCancel),
-        duration: duration,
-      ),
-    );
-
-    return SnackBarProgressHandle._(
-      () => messenger.hideCurrentSnackBar(),
-      (msg, action, duration) {
-        // 先 hide 进度 SnackBar，再 show 结果 SnackBar。
-        // showResult 内部会 clearSnackBars 把进度 SnackBar 排掉。
-        if (msg != null) {
-          showResult(
-            message: msg,
-            action: action,
-            duration: duration ?? const Duration(seconds: 4),
-          );
-        } else {
-          messenger.clearSnackBars();
-        }
-      },
-    );
+      );
   }
-}
-
-/// [SnackBarService.showListenableProgress] 使用的通用进度数据。
-class ListenableProgress {
-  final int current;
-  final int total;
-  final String status;
-
-  const ListenableProgress({
-    required this.current,
-    required this.total,
-    required this.status,
-  });
 }
 
 /// 进度 SnackBar 的生命周期句柄。
