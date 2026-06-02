@@ -636,7 +636,8 @@ class BatchExtractService {
     // 取消时将所有未完成任务标记为 cancelled
     if (cancelToken?.isCancelled == true) {
       for (final status in jobStatuses) {
-        if (status.state == BatchJobState.submitted ||
+        if (status.state == BatchJobState.pending ||
+            status.state == BatchJobState.submitted ||
             status.state == BatchJobState.running) {
           status.state = BatchJobState.cancelled;
           results[status.documentId] = null;

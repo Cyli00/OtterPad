@@ -223,24 +223,132 @@ class DocumentTaskNotifier
       return {for (final item in items) item.documentId: null};
     }
 
-    final futures = <String, Future<String?>>{};
-    for (final item in items) {
-      futures[item.documentId] = extractDocument(
-        documentId: item.documentId,
-        filePath: item.filePath,
-        title: item.title,
-        apiState: apiState,
-        showProgressSnackBar: false,
-        showBusySnackBar: false,
-        showResultSnackBar: false,
-      );
+    final pendingItems =
+        items.where((item) => !hasActiveDocumentTask(item.documentId)).toList();
+    if (pendingItems.isEmpty) {
+      return {for (final item in items) item.documentId: null};
     }
 
-    final results = <String, String?>{};
-    for (final entry in futures.entries) {
-      results[entry.key] = await entry.value;
+    final cancelToken = CancelToken();
+    for (final item in pendingItems) {
+      final key = DocumentTaskKey(
+        type: DocumentTaskType.extractDocument,
+        documentId: item.documentId,
+      );
+      state = {
+        ...state,
+        key: DocumentTaskInfo(
+          key: key,
+          title: item.title,
+          status: DocumentTaskStatus.queued,
+          progress: const ListenableProgress(
+            current: 0,
+            total: 0,
+            status: '等待提交',
+          ),
+          cancelToken: cancelToken,
+        ),
+      };
     }
-    return results;
+
+    try {
+      final results = await BatchExtractService.instance.extractBatch(
+        items: pendingItems,
+        token: apiState.apiKey,
+        state: apiState,
+        cancelToken: cancelToken,
+        onJobUpdate: _onBatchJobUpdate,
+      );
+      for (final item in pendingItems) {
+        final key = DocumentTaskKey(
+          type: DocumentTaskType.extractDocument,
+          documentId: item.documentId,
+        );
+        if (state[key]?.isActive == true) {
+          _finishTask(key, DocumentTaskStatus.cancelled);
+        }
+      }
+      return results;
+    } catch (e) {
+      for (final item in pendingItems) {
+        final key = DocumentTaskKey(
+          type: DocumentTaskType.extractDocument,
+          documentId: item.documentId,
+        );
+        if (state[key]?.isActive == true) {
+          _finishTask(key, DocumentTaskStatus.failed, error: e);
+        }
+      }
+      return {for (final item in pendingItems) item.documentId: null};
+    }
+  }
+
+  void _onBatchJobUpdate(BatchJobStatus jobStatus) {
+    final key = DocumentTaskKey(
+      type: DocumentTaskType.extractDocument,
+      documentId: jobStatus.documentId,
+    );
+    final current = state[key];
+    if (current == null || !current.isActive) return;
+
+    switch (jobStatus.state) {
+      case BatchJobState.pending:
+        _updateTask(
+          key,
+          progress: ListenableProgress(
+            current: 0,
+            total: 0,
+            status: '等待提交: ${jobStatus.title}',
+          ),
+        );
+
+      case BatchJobState.submitted:
+        _updateTask(
+          key,
+          status: DocumentTaskStatus.running,
+          progress: ListenableProgress(
+            current: 0,
+            total: 0,
+            status: '已提交，等待处理: ${jobStatus.title}',
+          ),
+        );
+
+      case BatchJobState.running:
+        _updateTask(
+          key,
+          status: DocumentTaskStatus.running,
+          progress: ListenableProgress(
+            current: jobStatus.extractedPages,
+            total: jobStatus.totalPages,
+            status: '正在提取… · ${jobStatus.title}',
+          ),
+        );
+
+      case BatchJobState.done:
+        if (jobStatus.savedPath != null) {
+          _finishTask(
+            key,
+            DocumentTaskStatus.completed,
+            result: jobStatus.savedPath,
+          );
+        } else {
+          _finishTask(
+            key,
+            DocumentTaskStatus.failed,
+            error: jobStatus.error ?? '保存结果失败',
+          );
+        }
+
+      case BatchJobState.failed:
+        _finishTask(
+          key,
+          DocumentTaskStatus.failed,
+          error: jobStatus.error ?? '提取失败',
+        );
+
+      case BatchJobState.cancelled:
+        _finishTask(key, DocumentTaskStatus.cancelled);
+    }
   }
 
   Future<DocumentSummaryImageResult?> generateSummaryImage({
@@ -255,7 +363,8 @@ class DocumentTaskNotifier
     )) {
       return null;
     }
-    final agentState = AgentApiNotifier.loadForProvider(imageRole.provider!);
+    final agentState = AgentApiNotifier.loadInstance(imageRole.id!);
+    if (agentState == null) return null; // 角色指向的实例已被删除
     if (!AiSettingsPrompt.ensureImageModelConfigured(
       agentState: agentState,
       snackBar: _snackBar,

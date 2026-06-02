@@ -47,7 +47,7 @@ class ReaderSummaryImageCoordinator {
   Future<void> generate({bool openOutline = true}) async {
     final imageRole = AgentApiNotifier.globalImageRole;
     final hasImageRole =
-        imageRole.provider != null && imageRole.modelId != null;
+        imageRole.id != null && imageRole.modelId != null;
 
     final choice = await _showCostDialog(hasImageRole: hasImageRole);
     if (!context.mounted ||
@@ -147,7 +147,10 @@ class ReaderSummaryImageCoordinator {
   }) async {
     final cfg = ref.read(imageGenerationConfigProvider);
     final role = AgentApiNotifier.globalImageRole;
-    final cost = role.provider == AgentApiProvider.openai
+    final protocol = role.id == null
+        ? null
+        : AgentApiNotifier.loadInstance(role.id!)?.provider;
+    final cost = protocol == AgentApiProvider.openai
         ? estimateOpenAICost(
             aspectRatio: cfg.aspectRatio,
             fidelity: cfg.fidelity,
@@ -264,10 +267,13 @@ class ReaderSummaryImageCoordinator {
       final config = ref.read(imageGenerationConfigProvider);
       final language = ref.read(translationConfigProvider).targetLanguage;
       final role = AgentApiNotifier.globalImageRole;
+      final protocol = role.id == null
+          ? null
+          : AgentApiNotifier.loadInstance(role.id!)?.provider;
       prompt = await DocumentSummaryImageService.instance.composePrompt(
         document: document,
         config: config,
-        provider: role.provider ?? AgentApiProvider.openai,
+        provider: protocol ?? AgentApiProvider.openai,
         language: language,
       );
     } on DocumentSummaryImageException catch (e) {
