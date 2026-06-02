@@ -63,7 +63,7 @@ class SettingPage extends StatelessWidget {
               _SettingsTile(
                 icon: Symbols.backup_table_rounded,
                 title: '数据管理',
-                subtitle: '远程备份 · 本地备份',
+                subtitle: '远程备份 · 本地备份 · Zotero 同步',
                 onTap: () => context.push(AppRoutes.settingsBackup),
               ),
             ],

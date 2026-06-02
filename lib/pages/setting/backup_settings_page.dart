@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/api_provider.dart';
 import '../../providers/backup_provider.dart';
@@ -14,7 +16,9 @@ import '../../providers/highlight_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/reader_settings_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/zotero_sync_provider.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
 import '../../services/snackbar_service.dart';
@@ -36,10 +40,24 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   String? _cacheSizeText;
   String? _dataSizeText;
 
+  late final TextEditingController _zoteroKeyCtrl;
+  Timer? _zoteroKeyTimer;
+  bool _zoteroKeyObscured = true;
+
   @override
   void initState() {
     super.initState();
+    _zoteroKeyCtrl = TextEditingController(
+      text: ref.read(zoteroSyncProvider).apiKey,
+    );
     _refreshSizeLabels();
+  }
+
+  @override
+  void dispose() {
+    _zoteroKeyTimer?.cancel();
+    _zoteroKeyCtrl.dispose();
+    super.dispose();
   }
 
   void _refreshSizeLabels() {
@@ -66,6 +84,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     final remoteType = ref.watch(backupRemoteTypeProvider);
     final webDav = ref.watch(backupWebDavProvider);
     final s3 = ref.watch(backupS3Provider);
+    final zotero = ref.watch(zoteroSyncProvider);
     _ensurePingFuture(remoteType, webDav, s3);
 
     return Scaffold(
@@ -172,6 +191,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   ],
                 ),
               ),
+              _buildZoteroGroup(context, zotero),
               _buildGroup(
                 context,
                 title: '本地备份',
@@ -239,30 +259,35 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       color: cs.surface,
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(strokeWidth: 2.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _busyText,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
+                    child: _buildBusyIndicator(theme),
                   ),
                 ),
               ),
             ),
         ],
       ),
+    );
+  }
+
+  /// 忙碌遮罩内容：备份/恢复/清理期间的不确定转圈。
+  Widget _buildBusyIndicator(ThemeData theme) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          _busyText,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 
@@ -307,6 +332,189 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       indent: 80,
       endIndent: 20,
       color: cs.outlineVariant.withAlpha(70),
+    );
+  }
+
+  Widget _buildZoteroGroup(BuildContext context, ZoteroSyncState zotero) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final importedCount = ZoteroSyncStore.importedCount;
+
+    return _buildGroup(
+      context,
+      title: 'Zotero 同步',
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'API Key',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => launchUrl(
+                        Uri.parse('https://www.zotero.org/settings/keys/new'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      icon: Icon(
+                        Symbols.arrow_outward_rounded,
+                        size: 16,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      tooltip: '获取 Token',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _zoteroKeyCtrl,
+                  onChanged: (v) {
+                    _zoteroKeyTimer?.cancel();
+                    _zoteroKeyTimer = Timer(
+                      const Duration(milliseconds: 600),
+                      () => ref
+                          .read(zoteroSyncProvider.notifier)
+                          .setApiKey(v.trim()),
+                    );
+                  },
+                  obscureText: _zoteroKeyObscured,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: theme.textTheme.bodyMedium,
+                  decoration: InputDecoration(
+                    hintText: 'Zotero API Key ...',
+                    hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant.withAlpha(120),
+                    ),
+                    filled: true,
+                    fillColor: cs.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: cs.outlineVariant.withAlpha(100),
+                        width: 1,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: cs.primary, width: 2),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    isDense: true,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _zoteroKeyObscured
+                            ? Symbols.visibility_off
+                            : Symbols.visibility,
+                        size: 20,
+                      ),
+                      onPressed: () => setState(
+                        () => _zoteroKeyObscured = !_zoteroKeyObscured,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _buildDivider(context),
+          _ActionTile(
+            icon: Symbols.sync_rounded,
+            title: '同步 Zotero 文库',
+            subtitle: zotero.isConfigured
+                ? (importedCount > 0
+                      ? '已导入 $importedCount 篇 · 拉取新增条目'
+                      : '从 Zotero 个人库导入文献')
+                : '请先填写 API Key',
+            enabled: zotero.isConfigured && !_busy,
+            onTap: () => _syncZotero(zotero),
+          ),
+          if (zotero.isConfigured) ...[
+            _buildDivider(context),
+            _ActionTile(
+              icon: Symbols.restart_alt_rounded,
+              title: '重置并全量重新导入',
+              subtitle: '清除导入记录，从 Zotero 重新拉取（找回已删除条目）',
+              enabled: !_busy,
+              onTap: () => _syncZotero(zotero, fullResync: true),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _syncZotero(
+    ZoteroSyncState zotero, {
+    bool fullResync = false,
+  }) async {
+    if (!zotero.isConfigured) return;
+    if (fullResync) {
+      final confirmed = await _confirmZoteroReset();
+      if (confirmed != true) return;
+    }
+    // 同步走全局 TaskProvider（进度 snackbar + 可取消），与重构文库等后台任务一致。
+    await ref
+        .read(taskProvider.notifier)
+        .syncZotero(zotero.apiKey, fullResync: fullResync);
+    if (mounted) setState(() {}); // 刷新「已导入 N 篇」副标题
+  }
+
+  Future<bool?> _confirmZoteroReset() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        return AlertDialog(
+          backgroundColor: cs.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          title: Text(
+            '重置 Zotero 同步',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            '将清除本地的 Zotero 导入记录并从文库全量重新拉取：已删除的条目会重新出现，仍在库中的不会重复。继续吗？',
+            style: theme.textTheme.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('重新导入'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -707,7 +915,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       ref.read(backupRemoteTypeProvider.notifier).reload();
       ref.read(backupS3Provider.notifier).reload();
       ref.read(backupWebDavProvider.notifier).reload();
+      ref.read(zoteroSyncProvider.notifier).reload();
       if (mounted) {
+        _zoteroKeyCtrl.text = ref.read(zoteroSyncProvider).apiKey;
         setState(() {
           _pingFuture = null;
           _pingCacheKey = '';
