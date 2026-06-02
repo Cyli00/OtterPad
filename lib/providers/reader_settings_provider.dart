@@ -197,6 +197,7 @@ class ReaderSettingsState {
   Map<String, String> toCssVars() => {
     '--font-size': '${fontSize}px',
     '--font-family': font.cssFontFamily,
+    '--line-height': '1.7',
   };
 }
 

@@ -30,7 +30,6 @@ String buildReaderHtml({
   final rootVars = _cssVarsToCssBlock({
     ...palette.toCssVars(),
     ...settings.toCssVars(),
-    '--line-height': '1.7',
   });
 
   final bgColor = cssColor(palette.background);
