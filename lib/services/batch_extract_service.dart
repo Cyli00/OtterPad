@@ -188,7 +188,7 @@ class BatchExtractService {
         filePath,
         filename: p.basename(filePath),
       ),
-      'model': 'PaddleOCR-VL-1.5',
+      'model': 'PaddleOCR-VL-1.6',
       'optionalPayload': jsonEncode(DocExtractService.buildOptions(state)),
       // ignore: use_null_aware_elements
       if (batchId != null) 'batchId': batchId,

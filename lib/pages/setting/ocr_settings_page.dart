@@ -74,26 +74,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   bool _getOptionValue(DocExtractApiState s, String field) => switch (field) {
     'useChartRecognition' => s.useChartRecognition,
     'useDocOrientationClassify' => s.useDocOrientationClassify,
@@ -355,21 +335,25 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             color: cs.onSurfaceVariant.withAlpha(120),
           ),
           filled: true,
-          fillColor: cs.surfaceContainerLow,
+          fillColor: cs.surface,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: cs.outline),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: cs.outlineVariant.withAlpha(100),
+              width: 1,
+            ),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide(color: cs.primary, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 14),
+              horizontal: 16, vertical: 16),
+          isDense: true,
           suffixIcon: suffix,
         );
 
@@ -408,19 +392,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                               color: cs.onSurfaceVariant,
                               fontWeight: FontWeight.w600,
                             )),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: cs.tertiaryContainer,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text('必填',
-                              style: theme.textTheme.labelSmall
-                                  ?.copyWith(color: cs.onTertiaryContainer)),
-                        ),
                         const Spacer(),
                         IconButton(
                           onPressed: () => launchUrl(
@@ -468,64 +439,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                       enableSuggestions: false,
                       style: theme.textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: 24),
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                    
                   ],
                 ),
               ),
