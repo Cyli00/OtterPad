@@ -40,12 +40,12 @@ class DocListCard extends StatelessWidget {
     this.progress = 0.0,
   });
 
-  // 缩略图尺寸——W:H 收紧到 ~0.85，看起来更紧凑。BoxFit.cover + topCenter
-  // 跟网格卡一致，从顶部裁切保留标题区。右列文字高度跟它对齐。
-  static const double _thumbWidthCompact = 80;
-  static const double _thumbHeightCompact = 96;
-  static const double _thumbWidthFull = 110;
-  static const double _thumbHeightFull = 132;
+  // 缩略图尺寸——锁 A4 比例（W/H 0.707），cover + topCenter 不裁切页面。
+  // 右列文字高度跟它对齐，年份行顶到缩略图底边。
+  static const double _thumbWidthCompact = 88;
+  static const double _thumbHeightCompact = 124;
+  static const double _thumbWidthFull = 120;
+  static const double _thumbHeightFull = 170;
 
   @override
   Widget build(BuildContext context) {
@@ -142,10 +142,9 @@ class DocListCard extends StatelessWidget {
                         ),
                       ),
                     if (doc.contentHash != null) const SizedBox(width: 16),
-                    // 右列文字：有 thumb 时，高度锁到 thumb 高度，Spacer 把年份行
-                    // 顶到 thumb 底边对齐；没 thumb（无文件条目页）走自然高度，年份
-                    // 行紧跟期刊行——Spacer 在 unbounded Column 里会断言失败，必须用
-                    // 固定的 SizedBox 留白。
+                    // 右列文字锁到缩略图高度：有 thumb 时用 Spacer 把年份行顶到
+                    // 缩略图底边对齐；没 thumb（无文件条目页）走自然高度，用固定留白
+                    // ——Spacer 在 unbounded Column 里会断言失败。
                     Expanded(
                       child: SizedBox(
                         height: doc.contentHash != null ? thumbHeight : null,
@@ -162,9 +161,8 @@ class DocListCard extends StatelessWidget {
                               maxLines: compact ? 2 : 3,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            // compact 模式下隐藏作者：右列高度 96 装不下 title(2 行) +
-                            // authors + journal + year row。作者信息密度最低（同期作者
-                            // 经常重复），优先牺牲。Full 模式（132 高 + 3 行标题）保留。
+                            // compact 模式下隐藏作者：作者信息密度最低（同期作者经常
+                            // 重复），窄卡优先牺牲。Full 模式保留。
                             if (!compact && doc.authors.isNotEmpty) ...[
                               const SizedBox(height: 6),
                               Text(

@@ -10,6 +10,10 @@ import 'document_card.dart';
 class BookshelfGrid extends ConsumerWidget {
   const BookshelfGrid({super.key});
 
+  /// 文字块固定高度：标题 2 行 + 期刊 1 行 + 年份行 + 上下 8px padding +
+  /// 行间 4px 间距，约 92px，留少量余量防字体渲染舍入触发 overflow。
+  static const double _kTextBlockHeight = 96.0;
+
   /// 屏幕宽度 → 列数。移动端窄屏 2 列，宽屏桌面 3–4 列。
   ///
   /// 之前用 `SliverGridDelegateWithMaxCrossAxisExtent(300)` 在大桌面屏上
@@ -45,18 +49,22 @@ class BookshelfGrid extends ConsumerWidget {
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = _columnsFor(constraints.crossAxisExtent);
+        // tile 高度 = 封面高 + 固定文字块高，让卡片底部紧贴年份行而非留空。
+        // 封面锁 A4 比例 (W/H 0.707)，高度随列宽成比例放大；文字块（标题 2 行
+        // + 期刊 + 年份行 + 上下 8px padding）是固定像素，所以用 mainAxisExtent
+        // 而非 childAspectRatio——后者会让宽列产生越来越大的底部空隙。
+        final cardWidth =
+            (constraints.crossAxisExtent - 32.0 - 16.0 * (crossAxisCount - 1)) /
+                crossAxisCount;
+        final coverHeight = cardWidth / 0.707;
         return SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           sliver: SliverGrid(
-            // childAspectRatio 0.50：A4 缩略图 (W/H 0.707) 占满卡宽时高度
-            // ≈ 1.414×宽，整卡需为缩略图 + 文字层（标题 2 行 + 期刊 + 底行
-            // ≈ 78px inner）留出空间。0.55 在移动端 156px 时只给 48px 内高，
-            // 文字 column 会触发 14px 的 RenderFlex overflow。
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
               mainAxisSpacing: 16.0,
               crossAxisSpacing: 16.0,
-              childAspectRatio: 0.50,
+              mainAxisExtent: coverHeight + _kTextBlockHeight,
             ),
             delegate: SliverChildBuilderDelegate((context, index) {
               final doc = docs[index];

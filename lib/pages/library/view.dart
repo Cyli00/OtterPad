@@ -236,9 +236,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               ),
               // ── 内容区 ──
               Expanded(
-                child: isSelectionMode
-                    ? _buildSelectionContent(isGrid)
-                    : _buildTabContent(isGrid),
+                child: _buildTabContent(isGrid),
               ),
             ],
           ),
@@ -280,9 +278,4 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     );
   }
 
-  Widget _buildSelectionContent(bool isGrid) {
-    return CustomScrollView(
-      slivers: [if (isGrid) const BookshelfGrid() else const BookshelfList()],
-    );
-  }
 }
