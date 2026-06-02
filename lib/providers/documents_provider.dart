@@ -211,6 +211,38 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return (doc, AddByIdentifierResult.success);
   }
 
+  /// 批量导入已带元数据的文献（如 Zotero 同步），不经过 `IdentifierResolver`
+  /// 重新联网解析。每篇以 `contentHash: null` 入库（纯元数据、暂无 PDF），
+  /// 后续 rebuild 会对带 DOI 的自动补回 PDF。
+  ///
+  /// 返回与 [incoming] 等长、同序的结果列表：重复项返回库中已存在的那篇，
+  /// 新增项返回分配了 id 后的新文献——便于调用方记录外部 key ↔ documentId 映射。
+  Future<List<Document>> importDocuments(List<Document> incoming) async {
+    if (incoming.isEmpty) return const [];
+
+    final results = <Document>[];
+    final additions = <Document>[];
+    for (final candidate in incoming) {
+      final existing = [...state, ...additions].cast<Document?>().firstWhere(
+        (doc) => doc != null && _isDuplicateDocument(doc, candidate),
+        orElse: () => null,
+      );
+      if (existing != null) {
+        results.add(existing);
+        continue;
+      }
+      final doc = candidate.copyWith(id: _newDocumentId(), contentHash: null);
+      additions.add(doc);
+      results.add(doc);
+    }
+
+    if (additions.isNotEmpty) {
+      state = [...state, ...additions];
+      await _save();
+    }
+    return results;
+  }
+
   Future<RebuildResult> rebuild({
     void Function(RebuildProgress)? onProgress,
     CancelToken? cancelToken,

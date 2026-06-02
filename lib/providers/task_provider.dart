@@ -6,14 +6,18 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
+import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
 import '../services/identifier_resolver.dart';
 import '../services/snackbar_service.dart';
+import '../services/zotero_item_mapper.dart';
+import '../services/zotero_sync_service.dart';
 import 'document_lifecycle_provider.dart';
 import 'documents_provider.dart';
 import 'task_runner.dart';
 import 'task_types.dart';
+import 'zotero_sync_provider.dart';
 
 // 对外 re-export：外部只 import 'task_provider.dart' 即可拿到 TaskType/TaskStatus
 export 'task_types.dart' show TaskType, TaskStatus, TaskInfo;
@@ -219,17 +223,66 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
     );
   }
 
-  // ── 重新下载 PDF ──
+  // ── Zotero 同步 ──
 
-  Future<void> redownloadPdf(String docId, String docTitle) async {
-    await runTask<bool>(
-      type: TaskType.redownloadPdf,
-      initialStatus: '正在重新下载: $docTitle',
-      busyMessage: '正在下载中，请稍候',
-      body: (token, _) async =>
-          await _lifecycle.redownloadPdf(docId, cancelToken: token),
-      onSuccess: (success) =>
-          TaskFinish.text(success ? '下载成功：$docTitle' : '下载失败，未找到可用的 PDF 源'),
+  /// 单向导入 Zotero 个人库。与 [rebuildLibrary] 同属库级后台任务：
+  /// 进度 snackbar + 可取消。[fullResync] 时先清空簿记游标，回到 since=0 全量重拉。
+  Future<void> syncZotero(String apiKey, {bool fullResync = false}) async {
+    await runTask<int>(
+      type: TaskType.zoteroSync,
+      initialStatus: '正在拉取 Zotero 条目...',
+      busyMessage: 'Zotero 同步正在进行中',
+      cancelledMessage: '已取消 Zotero 同步',
+      body: (token, progress) async {
+        if (fullResync) await ZoteroSyncStore.clear();
+
+        final result = await ZoteroSyncService.instance.fetchTopItems(
+          apiKey: apiKey,
+          sinceVersion: ZoteroSyncStore.libraryVersion,
+          cancelToken: token,
+          onProgress: (fetched, total) => progress(
+            ListenableProgress(
+              current: fetched,
+              total: total,
+              status: '正在拉取 Zotero 条目',
+            ),
+          ),
+        );
+
+        progress(
+          const ListenableProgress(current: 0, total: 0, status: '正在导入文献...'),
+        );
+
+        // 跳过已导入的 zoteroKey 与非文献条目，映射出待导入的 Document。
+        final docs = <Document>[];
+        final keys = <String>[];
+        final versions = <int>[];
+        for (final item in result.items) {
+          final key = item['key'] as String?;
+          if (key == null || ZoteroSyncStore.hasItem(key)) continue;
+          final doc = ZoteroItemMapper.toDocument(item);
+          if (doc == null) continue;
+          docs.add(doc);
+          keys.add(key);
+          versions.add((item['version'] as num?)?.toInt() ?? 0);
+        }
+
+        final before = _ref.read(documentsProvider).map((d) => d.id).toSet();
+        final imported = await _lifecycle.importDocuments(docs);
+        for (var i = 0; i < imported.length; i++) {
+          await ZoteroSyncStore.recordItem(keys[i], imported[i].id, versions[i]);
+        }
+        await ZoteroSyncStore.setLibraryVersion(result.libraryVersion);
+        return imported.where((d) => !before.contains(d.id)).length;
+      },
+      onSuccess: (addedCount) => TaskFinish.text(
+        addedCount > 0 ? 'Zotero 同步完成，新增 $addedCount 篇' : 'Zotero 同步完成，暂无新增条目',
+      ),
+      onError: (e) {
+        if (e is ZoteroSyncException) return TaskFinish.text('Zotero 同步失败：$e');
+        if (e is DioException) return const TaskFinish.text('Zotero 同步失败：网络请求失败');
+        return TaskFinish.text('Zotero 同步失败：$e');
+      },
     );
   }
 

@@ -38,6 +38,7 @@ class GStorage {
   static late Box _documentsBox;
   static late Box _highlightsBox;
   static late Box _historyBox;
+  static late Box _zoteroSyncBox;
   static late String _dbDirPath;
   static late String _libraryDirPath;
   static late String _appRootPath;
@@ -95,12 +96,16 @@ class GStorage {
       Hive.isBoxOpen('history')
           ? Future.value(Hive.box('history'))
           : Hive.openBox('history'),
+      Hive.isBoxOpen('zotero_sync')
+          ? Future.value(Hive.box('zotero_sync'))
+          : Hive.openBox('zotero_sync'),
     ]);
     _settingBox = results[0];
     _favoritesBox = results[1];
     _documentsBox = results[2];
     _highlightsBox = results[3];
     _historyBox = results[4];
+    _zoteroSyncBox = results[5];
   }
 
   // ─── 物理目录迁移 ──────────────────────────────────────────────────────────
@@ -204,6 +209,9 @@ class GStorage {
       futures.add(Hive.box('highlights').flush());
     }
     if (Hive.isBoxOpen('history')) futures.add(Hive.box('history').flush());
+    if (Hive.isBoxOpen('zotero_sync')) {
+      futures.add(Hive.box('zotero_sync').flush());
+    }
     await Future.wait(futures);
   }
 
@@ -219,6 +227,10 @@ class GStorage {
   static Box get documents => _documentsBox;
   static Box get highlights => _highlightsBox;
   static Box get history => _historyBox;
+
+  /// Zotero 同步簿记：`item:<zoteroKey>` → {documentId, version}，
+  /// 以及标量 `_libraryVersion`（增量拉取游标）。
+  static Box get zoteroSync => _zoteroSyncBox;
 
   /// `<AppSupport>/OtterPad/db/`——Hive 数据库目录。
   static String get dbDirPath => _dbDirPath;

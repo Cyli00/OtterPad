@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
 /// 后台任务类型。新增任务先在这里加一个值。
-enum TaskType { addFiles, addByIdentifier, rebuild, redownloadPdf }
+enum TaskType { addFiles, addByIdentifier, rebuild, zoteroSync }
 
 /// 任务运行状态。
 enum TaskStatus { running, completed, cancelled, failed }

@@ -6,6 +6,7 @@ import '../data/models/book/document.dart';
 import 'documents_provider.dart';
 import 'favorites_provider.dart';
 import 'history_provider.dart';
+import 'zotero_sync_provider.dart';
 
 /// 文献生命周期入口：页面和任务编排通过这里表达文献写操作。
 ///
@@ -39,6 +40,11 @@ class DocumentLifecycleNotifier {
     return _documents.rebuild(onProgress: onProgress, cancelToken: cancelToken);
   }
 
+  /// 批量导入已带元数据的文献（Zotero 同步入口）。
+  Future<List<Document>> importDocuments(List<Document> documents) {
+    return _documents.importDocuments(documents);
+  }
+
   Future<void> attachPdf(String documentId, String sourcePath) {
     return _documents.attachFile(documentId, sourcePath);
   }
@@ -53,6 +59,7 @@ class DocumentLifecycleNotifier {
         .removeDocumentFromAll(documentId);
     await GStorage.highlights.delete(documentId);
     _ref.read(historyProvider.notifier).removeDoc(documentId);
+    await ZoteroSyncStore.removeByDocumentId(documentId);
     await _documents.delete(documentId);
   }
 
