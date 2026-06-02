@@ -454,24 +454,6 @@ class DocumentTaskNotifier
   }) {
     if (hasActiveDocumentTask(key.documentId)) {
       if (showBusySnackBar) _snackBar.showResult(message: busyMessage);
-      if (!isActive(key) && !showBusySnackBar) {
-        final progress = ListenableProgress(
-          current: 0,
-          total: 0,
-          status: busyMessage,
-        );
-        state = {
-          ...state,
-          key: DocumentTaskInfo(
-            key: key,
-            title: title,
-            status: DocumentTaskStatus.failed,
-            progress: progress,
-            cancelToken: CancelToken(),
-            error: busyMessage,
-          ),
-        };
-      }
       return Future.value(null);
     }
 
@@ -502,7 +484,6 @@ class DocumentTaskNotifier
       onError: onError,
       cancelledMessage: cancelledMessage,
       showResultSnackBar: showResultSnackBar,
-      finish: _finishSnackBar,
     );
 
     state = {
@@ -550,51 +531,36 @@ class DocumentTaskNotifier
 
     unawaited(() async {
       try {
-        final result = await request.body(request.token, (progress) {
-          if (request.token.isCancelled) return;
-          request.notifier.value = progress;
-          _updateTask(request.key, progress: progress);
-        });
-
-        if (request.token.isCancelled) {
-          _finishTask(request.key, DocumentTaskStatus.cancelled);
-          request.finish(
-            request.handle,
-            TaskFinish.text(request.cancelledMessage ?? '已取消'),
+        final result = await executeTaskBody<T>(
+          token: request.token,
+          onProgress: (p) {
+            request.notifier.value = p;
+            _updateTask(request.key, progress: p);
+          },
+          body: request.body,
+          onSuccess: request.onSuccess,
+          onError: request.onError,
+          cancelledMessage: request.cancelledMessage,
+          onFinished: (f) => finishSnackBar(
+            handle: request.handle,
+            finish: f,
             showResultDirectly:
                 request.showResultSnackBar && request.handle == null,
-          );
-          request.complete(null);
-          return;
-        }
-
-        _finishTask(request.key, DocumentTaskStatus.completed, result: result);
-        request.finish(
-          request.handle,
-          request.onSuccess(result),
-          showResultDirectly:
-              request.showResultSnackBar && request.handle == null,
+            snackBar: _snackBar,
+          ),
+          onCancelled: () =>
+              _finishTask(request.key, DocumentTaskStatus.cancelled),
+          onCompleted: (result) => _finishTask(
+            request.key,
+            DocumentTaskStatus.completed,
+            result: result,
+          ),
+          onFailed: (e) =>
+              _finishTask(request.key, DocumentTaskStatus.failed, error: e),
+          debugTag: 'DocumentTask:${request.key.type}',
         );
         request.complete(result);
-      } catch (e, st) {
-        if (_isCancellation(e, request.token)) {
-          _finishTask(request.key, DocumentTaskStatus.cancelled);
-          request.finish(
-            request.handle,
-            TaskFinish.text(request.cancelledMessage ?? '已取消'),
-            showResultDirectly:
-                request.showResultSnackBar && request.handle == null,
-          );
-        } else {
-          _finishTask(request.key, DocumentTaskStatus.failed, error: e);
-          request.finish(
-            request.handle,
-            request.onError?.call(e) ?? TaskFinish(message: '任务失败: $e'),
-            showResultDirectly:
-                request.showResultSnackBar && request.handle == null,
-          );
-          debugPrint('[DocumentTask] ${request.key.type} failed: $e\n$st');
-        }
+      } catch (_) {
         request.complete(null);
       } finally {
         _runningCount--;
@@ -631,32 +597,6 @@ class DocumentTaskNotifier
     Object? result = _sentinel,
   }) {
     _updateTask(key, status: status, error: error, result: result);
-  }
-
-  void _finishSnackBar(
-    SnackBarProgressHandle? handle,
-    TaskFinish finish, {
-    required bool showResultDirectly,
-  }) {
-    if (handle != null) {
-      handle.finish(
-        message: finish.message,
-        action: finish.action,
-        duration: finish.duration,
-      );
-      return;
-    }
-    if (!showResultDirectly || finish.message == null) return;
-    _snackBar.showResult(
-      message: finish.message!,
-      action: finish.action,
-      duration: finish.duration ?? const Duration(seconds: 4),
-    );
-  }
-
-  bool _isCancellation(Object e, CancelToken token) {
-    if (token.isCancelled) return true;
-    return e is DioException && e.type == DioExceptionType.cancel;
   }
 
   Future<DocExtractResult> _extractAsync({
@@ -705,12 +645,6 @@ class _QueuedDocumentTask<T> {
   final TaskFinish Function(Object error)? onError;
   final String? cancelledMessage;
   final bool showResultSnackBar;
-  final void Function(
-    SnackBarProgressHandle? handle,
-    TaskFinish finish, {
-    required bool showResultDirectly,
-  })
-  finish;
 
   _QueuedDocumentTask({
     required this.key,
@@ -725,7 +659,6 @@ class _QueuedDocumentTask<T> {
     required this.onError,
     required this.cancelledMessage,
     required this.showResultSnackBar,
-    required this.finish,
   }) : onSuccess = ((result) => onSuccess(result as T));
 
   void complete(T? value) {

@@ -85,7 +85,11 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
       );
       final info = tasks[key];
       if (info == null) {
-        return BatchJobStatus(documentId: item.documentId, title: item.title);
+        return BatchJobStatus(
+          documentId: item.documentId,
+          title: item.title,
+          state: _finished ? BatchJobState.cancelled : BatchJobState.pending,
+        );
       }
       final state = switch (info.status) {
         DocumentTaskStatus.queued => BatchJobState.pending,

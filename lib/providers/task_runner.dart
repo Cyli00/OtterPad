@@ -6,6 +6,86 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../services/snackbar_service.dart';
 import 'task_types.dart';
 
+// ── 共享的任务执行生命周期 ──
+
+/// 核心执行生命周期：运行 [body]，处理 completed/cancelled/failed 三种终态，
+/// 通过回调通知调用者。返回 body 的结果；cancelled / failed 返回 null。
+///
+/// 调用者负责创建 CancelToken、ValueNotifier 和清理（dispose）。
+Future<T?> executeTaskBody<T>({
+  required CancelToken token,
+  required void Function(ListenableProgress) onProgress,
+  required Future<T> Function(
+    CancelToken token,
+    void Function(ListenableProgress) progress,
+  ) body,
+  required TaskFinish Function(T result) onSuccess,
+  TaskFinish Function(Object error)? onError,
+  String? cancelledMessage,
+  required void Function(TaskFinish finish) onFinished,
+  required void Function() onCancelled,
+  required void Function(T result) onCompleted,
+  required void Function(Object error) onFailed,
+  String? debugTag,
+}) async {
+  try {
+    final result = await body(token, (p) {
+      if (!token.isCancelled) onProgress(p);
+    });
+
+    if (token.isCancelled) {
+      onCancelled();
+      onFinished(TaskFinish.text(cancelledMessage ?? '已取消'));
+      return null;
+    }
+
+    onCompleted(result);
+    final finish = onSuccess(result);
+    onFinished(finish);
+    return result;
+  } catch (e, st) {
+    if (isCancellation(e, token)) {
+      onCancelled();
+      onFinished(TaskFinish.text(cancelledMessage ?? '已取消'));
+    } else {
+      onFailed(e);
+      final finish = onError?.call(e) ?? TaskFinish(message: '任务失败: $e');
+      onFinished(finish);
+      if (debugTag != null) debugPrint('[$debugTag] failed: $e\n$st');
+    }
+    return null;
+  }
+}
+
+/// 结束进度 SnackBar 或直接展示结果消息。
+void finishSnackBar({
+  required SnackBarProgressHandle? handle,
+  required TaskFinish finish,
+  required bool showResultDirectly,
+  required SnackBarService snackBar,
+}) {
+  if (handle != null) {
+    handle.finish(
+      message: finish.message,
+      action: finish.action,
+      duration: finish.duration,
+    );
+    return;
+  }
+  if (!showResultDirectly || finish.message == null) return;
+  snackBar.showResult(
+    message: finish.message!,
+    action: finish.action,
+    duration: finish.duration ?? const Duration(seconds: 4),
+  );
+}
+
+/// 判断异常是否为取消操作。
+bool isCancellation(Object e, CancelToken token) {
+  if (token.isCancelled) return true;
+  return e is DioException && e.type == DioExceptionType.cancel;
+}
+
 /// 后台任务通用骨架 mixin。
 ///
 /// 把"busy 检查 → _startTask → 生成 CancelToken → show 进度 SnackBar →
@@ -70,78 +150,27 @@ mixin TaskRunner<S> on StateNotifier<S> {
         : null;
 
     try {
-      final result = await body(token, (p) {
-        // 任务已取消后到达的进度事件直接丢弃，避免"取消后还刷进度"的视觉 bug
-        if (!token.isCancelled) notifier.value = p;
-      });
-
-      if (token.isCancelled) {
-        markTaskFinished(type, TaskStatus.cancelled);
-        _finishSnackBar(
-          handle,
-          TaskFinish.text(cancelledMessage ?? '已取消'),
+      return await executeTaskBody<T>(
+        token: token,
+        onProgress: (p) => notifier.value = p,
+        body: body,
+        onSuccess: onSuccess,
+        onError: onError,
+        cancelledMessage: cancelledMessage,
+        onFinished: (f) => finishSnackBar(
+          handle: handle,
+          finish: f,
           showResultDirectly: !showProgressSnackBar,
-        );
-        return null;
-      }
-
-      markTaskFinished(type, TaskStatus.completed);
-      final finish = onSuccess(result);
-      _finishSnackBar(
-        handle,
-        finish,
-        showResultDirectly: !showProgressSnackBar,
+          snackBar: snackBar,
+        ),
+        onCancelled: () => markTaskFinished(type, TaskStatus.cancelled),
+        onCompleted: (_) => markTaskFinished(type, TaskStatus.completed),
+        onFailed: (_) => markTaskFinished(type, TaskStatus.failed),
+        debugTag: 'TaskRunner:$type',
       );
-      return result;
-    } catch (e, st) {
-      if (_isCancellation(e, token)) {
-        markTaskFinished(type, TaskStatus.cancelled);
-        _finishSnackBar(
-          handle,
-          TaskFinish.text(cancelledMessage ?? '已取消'),
-          showResultDirectly: !showProgressSnackBar,
-        );
-      } else {
-        markTaskFinished(type, TaskStatus.failed);
-        final finish = onError?.call(e) ?? TaskFinish(message: '任务失败: $e');
-        _finishSnackBar(
-          handle,
-          finish,
-          showResultDirectly: !showProgressSnackBar,
-        );
-        debugPrint('[TaskRunner] $type failed: $e\n$st');
-      }
-      return null;
     } finally {
       notifier.dispose();
     }
-  }
-
-  void _finishSnackBar(
-    SnackBarProgressHandle? handle,
-    TaskFinish finish, {
-    required bool showResultDirectly,
-  }) {
-    if (handle != null) {
-      handle.finish(
-        message: finish.message,
-        action: finish.action,
-        duration: finish.duration,
-      );
-      return;
-    }
-    if (!showResultDirectly || finish.message == null) return;
-    snackBar.showResult(
-      message: finish.message!,
-      action: finish.action,
-      duration: finish.duration ?? const Duration(seconds: 4),
-    );
-  }
-
-  bool _isCancellation(Object e, CancelToken token) {
-    if (token.isCancelled) return true;
-    if (e is DioException && e.type == DioExceptionType.cancel) return true;
-    return false;
   }
 }
 
