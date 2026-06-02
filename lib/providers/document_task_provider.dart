@@ -19,12 +19,13 @@ import '../services/document_summary_image_service.dart';
 import '../services/image_generation_service.dart';
 import '../services/snackbar_service.dart';
 import 'api_provider.dart';
+import 'document_lifecycle_provider.dart';
 import 'image_generation_config_provider.dart';
 import 'summary_image_provider.dart';
 import 'task_runner.dart';
 import 'translation_config_provider.dart';
 
-enum DocumentTaskType { extractDocument, generateSummaryImage }
+enum DocumentTaskType { extractDocument, generateSummaryImage, redownloadPdf }
 
 enum DocumentTaskStatus { queued, running, completed, cancelled, failed }
 
@@ -322,6 +323,115 @@ class DocumentTaskNotifier
       summaryNotifier.finishWithoutImage();
     }
     return result;
+  }
+
+  /// 重新从公网拉取 PDF（复用「通过标识符添加」的 DOI 下载链路）。
+  /// 单篇入口；批量见 [redownloadBatch]。
+  Future<bool> redownloadPdf({
+    required String documentId,
+    required String title,
+    bool showProgressSnackBar = true,
+    bool showBusySnackBar = true,
+    bool showResultSnackBar = true,
+  }) async {
+    final result = await _enqueue<bool>(
+      key: DocumentTaskKey(
+        type: DocumentTaskType.redownloadPdf,
+        documentId: documentId,
+      ),
+      title: title,
+      initialStatus: '等待下载: $title',
+      runningStatus: '正在下载: $title',
+      busyMessage: '该文献已有任务正在进行中',
+      showBusySnackBar: showBusySnackBar,
+      showProgressSnackBar: showProgressSnackBar,
+      showResultSnackBar: showResultSnackBar,
+      cancelledMessage: '已取消下载',
+      body: (token, _) => _ref
+          .read(documentLifecycleProvider)
+          .redownloadPdf(documentId, cancelToken: token),
+      onSuccess: (success) =>
+          TaskFinish.text(success ? '下载成功：$title' : '下载失败，未找到可用的 PDF 源'),
+      onError: (e) {
+        if (e is DioException) return TaskFinish.text('网络错误: ${e.message}');
+        return TaskFinish.text('下载失败: $e');
+      },
+    );
+    return result ?? false;
+  }
+
+  /// 批量重新下载（无文件条目多选入口）：并发上限由 [_enqueue] 队列控制。
+  /// 聚合为单个进度 snackbar（已完成 / 总数 + 取消），与单条 [redownloadPdf]
+  /// 同一套 [SnackBarService.showListenableProgress]。返回 `documentId → 是否成功`。
+  ///
+  /// [skipped] 为调用方因无 DOI 而未纳入下载的篇数，仅用于汇总文案提示。
+  Future<Map<String, bool>> redownloadBatch(
+    List<({String documentId, String title})> items, {
+    int skipped = 0,
+  }) async {
+    if (items.isEmpty) return const {};
+
+    final total = items.length;
+    var completed = 0;
+    var cancelled = false;
+
+    final notifier = ValueNotifier<ListenableProgress>(
+      ListenableProgress(current: 0, total: total, status: '正在下载 PDF'),
+    );
+    final handle = _snackBar.showListenableProgress(
+      listenable: notifier,
+      onCancel: () {
+        cancelled = true;
+        for (final item in items) {
+          cancelTask(
+            DocumentTaskKey(
+              type: DocumentTaskType.redownloadPdf,
+              documentId: item.documentId,
+            ),
+          );
+        }
+      },
+    );
+
+    final results = <String, bool>{};
+    final futures = <String, Future<bool>>{};
+    for (final item in items) {
+      futures[item.documentId] =
+          redownloadPdf(
+            documentId: item.documentId,
+            title: item.title,
+            showProgressSnackBar: false,
+            showBusySnackBar: false,
+            showResultSnackBar: false,
+          ).then((success) {
+            completed++;
+            notifier.value = ListenableProgress(
+              current: completed,
+              total: total,
+              status: '正在下载 PDF',
+            );
+            return success;
+          });
+    }
+    for (final entry in futures.entries) {
+      results[entry.key] = await entry.value;
+    }
+
+    final ok = results.values.where((success) => success).length;
+    final fail = results.length - ok;
+    final String base;
+    if (cancelled) {
+      base = '已取消下载，已成功 $ok 篇';
+    } else if (fail == 0) {
+      base = '下载完成，成功 $ok 篇';
+    } else {
+      base = '下载完成：成功 $ok 篇，失败 $fail 篇';
+    }
+    handle.finish(
+      message: skipped > 0 ? '$base（$skipped 篇无 DOI 跳过）' : base,
+    );
+    notifier.dispose();
+    return results;
   }
 
   Future<T?> _enqueue<T>({

@@ -5,9 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/document_lifecycle_provider.dart';
+import '../../providers/document_task_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/selection_provider.dart';
-import '../../providers/task_provider.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
@@ -51,6 +51,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                 onSelectAll: () =>
                     ref.read(selectionProvider.notifier).toggleAll(allIds),
                 // 无文件条目没有 PDF，不提供文本提取
+                onDownload: () => _downloadSelected(ref, selection),
                 onDelete: () => _deleteSelected(context, ref, selection),
               )
             : AppBar(
@@ -251,6 +252,32 @@ class NoFileEntriesPage extends ConsumerWidget {
     ref.read(selectionProvider.notifier).exit();
   }
 
+  /// 批量从公网拉取 PDF：仅对有 DOI 的选中项发起下载，成功项会自动从无文件列表移除。
+  /// 进度与汇总由 [DocumentTaskNotifier.redownloadBatch] 的聚合 snackbar 负责。
+  Future<void> _downloadSelected(WidgetRef ref, SelectionState selection) async {
+    final selectedIds = selection.selectedIds;
+    final selected = ref
+        .read(noFileDocsProvider)
+        .where((d) => selectedIds.contains(d.id))
+        .toList();
+    final downloadable = selected
+        .where((d) => d.doi != null && d.doi!.isNotEmpty)
+        .toList();
+
+    if (downloadable.isEmpty) {
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: '所选条目没有可用 DOI，无法下载');
+      return;
+    }
+
+    ref.read(selectionProvider.notifier).exit();
+    await ref.read(documentTaskProvider.notifier).redownloadBatch(
+      [for (final d in downloadable) (documentId: d.id, title: d.title)],
+      skipped: selected.length - downloadable.length,
+    );
+  }
+
   Future<void> _handleAttachFile(
     BuildContext context,
     WidgetRef ref,
@@ -279,6 +306,8 @@ class NoFileEntriesPage extends ConsumerWidget {
   }
 
   void _handleRedownload(WidgetRef ref, String docId, String docTitle) {
-    ref.read(taskProvider.notifier).redownloadPdf(docId, docTitle);
+    ref
+        .read(documentTaskProvider.notifier)
+        .redownloadPdf(documentId: docId, title: docTitle);
   }
 }
