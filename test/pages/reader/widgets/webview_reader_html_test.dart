@@ -45,4 +45,29 @@ Figure 1. Example caption.
     expect(html, isNot(contains('## References')));
     expect(html, isNot(contains('## Figure legends')));
   });
+
+  test('JS/CSS 已外移到 /_assets/reader/，仅动态 :root 内联', () {
+    final html = buildReaderHtml(
+      markdownContent: '# Title\n\nBody text.',
+      palette: palette,
+      settings: const ReaderSettingsState(),
+      baseHref: '/library/doc/',
+    );
+
+    // 外部静态资源引用
+    expect(
+      html,
+      contains('<link rel="stylesheet" href="/_assets/reader/reader.css">'),
+    );
+    expect(
+      html,
+      contains('<script src="/_assets/reader/reader.js"></script>'),
+    );
+    // 动态 CSS 变量块仍按文档内联（palette/字体）
+    expect(html, contains(':root {'));
+    expect(html, contains('--font-size'));
+    // JS 与静态 CSS 规则不再内联在 HTML 中
+    expect(html, isNot(contains('addHighlightsBatch')));
+    expect(html, isNot(contains('-webkit-scrollbar')));
+  });
 }

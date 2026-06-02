@@ -47,8 +47,8 @@ class ReaderPalette {
   /// palette → 所有相关 CSS 变量。
   ///
   /// 包含 6 个原始色 + 4 个翻译派生色（`--tr-*`，从 text/link 算 alpha 变体）。
-  /// **唯一映射出处**——`_buildCss` 初始注入和 `buildThemeCssVars` 增量更新
-  /// 都基于此 map 生成，新增字段只改一处。
+  /// **唯一映射出处**——`buildReaderHtml` 的 `:root` 初始注入和 `buildThemeCssVars`
+  /// 增量更新都基于此 map 生成，新增字段只改一处。
   Map<String, String> toCssVars() => {
     '--bg': cssColor(background),
     '--text': cssColor(text),

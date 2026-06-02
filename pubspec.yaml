@@ -126,6 +126,8 @@ flutter:
     - assets/katex/
     - assets/katex/contrib/
     - assets/katex/fonts/
+    # 阅读器静态 JS/CSS，同走 /_assets/* 路由（见 webview_reader_html）。
+    - assets/reader/
 
   # fonts:
   #   - family: CustomFont

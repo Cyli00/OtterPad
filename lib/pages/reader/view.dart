@@ -863,6 +863,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: cs.surface,
+        // 键盘弹出时不缩放 body：阅读器搜索框锚在顶部工具栏，笔记/编辑走独立
+        // sheet/dialog，正文从不需要为底部键盘让位。设 false 切断 WebView 平台
+        // 视图随 viewInsets 每帧 resize（MIUI 的 adjustResize 会逐帧推 inset）。
+        resizeToAvoidBottomInset: false,
         endDrawerEnableOpenDragGesture: false,
         // 仅桌面端挂 Drawer——移动端走 _showOutlineBottomSheet。这里直接 null 掉
         // 避免在移动端浪费 OutlinePanel 的 initState（parseReferences 等）。
