@@ -22,14 +22,18 @@ String buildReaderHtml({
   required String baseHref,
   String translationStyleId = 'themed',
   String imageCacheBuster = '',
+  double topInset = 0,
 }) {
   final htmlBody = _markdownToHtml(markdownContent, imageCacheBuster);
   // 动态 CSS 变量块（palette/字体/行高）按文档注入 :root；静态 CSS 在
   // assets/reader/reader.css、JS 在 assets/reader/reader.js，均经 localhost
   // /_assets/* 路由提供（见 ReaderLocalhostServer）。
+  // --top-inset：顶部工具栏高度，让正文 padding-top 把首行（标题）顶到工具栏
+  // 之下，否则半透明工具栏会压住标题最上沿。
   final rootVars = _cssVarsToCssBlock({
     ...palette.toCssVars(),
     ...settings.toCssVars(),
+    '--top-inset': '${topInset}px',
   });
 
   final bgColor = cssColor(palette.background);

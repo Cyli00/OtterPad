@@ -342,6 +342,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       baseHref: _docBaseHref,
       translationStyleId: widget.translationStyleId,
       imageCacheBuster: _figuresCacheBuster(),
+      topInset: widget.topInset,
     );
   }
 
