@@ -47,8 +47,9 @@
 
 ### 通知与任务
 
-- **SnackBarService** (`lib/services/snackbar_service.dart`) — 禁止直接使用 `ScaffoldMessenger.showSnackBar()`。
-- **TaskRunner** (`lib/providers/task_runner.dart`) — 后台任务模板 mixin，`TaskType`/`TaskInfo` 在 `task_types.dart`。
+- **SnackBarService** (`lib/services/snackbar_service.dart`) — 全局 SnackBar 唯一出口，单槽渲染（瞬时结果与进度互相让位、结束回收）；观察 `taskActivityProvider` 自动呈现进度。禁止直接使用 `ScaffoldMessenger.showSnackBar()`。
+- **TaskActivityProvider** (`lib/providers/task_activity_provider.dart`) — 正在运行的后台任务**活集合**单一真值源（`report`/`finish`/`cancelAll`，`ActiveTask`/`ListenableProgress`）。后台任务进度统一 `report` 到这里，由 SnackBar surface（及未来多文档任务面板）观察渲染。禁止后台任务各自直接弹进度 SnackBar。
+- **TaskRunner** (`lib/providers/task_runner.dart`) — 后台任务模板 mixin，`TaskType`/`TaskInfo` 在 `task_types.dart`；执行生命周期统一走 `executeTaskBody`（与 `DocumentTaskNotifier` 共用 completed/cancelled/failed 三态处理）。
 - **TaskProvider** (`lib/providers/task_provider.dart`) — 全局任务调度。禁止把单篇文献任务塞回全局 TaskType。
 - **DocumentLifecycleProvider** (`lib/providers/document_lifecycle_provider.dart`) — 文献生命周期写入口。禁止页面/任务/阅读器直接绕过它修改跨模块状态。
 - **DocumentTaskProvider** (`lib/providers/document_task_provider.dart`) — 单篇文献任务入口（max 5 并发）。禁止 Widget 自管 CancelToken。
@@ -57,17 +58,20 @@
 ### 数据存储
 
 - **GStorage** (`lib/core/storage/storage.dart`) — Hive box 统一访问 + 文件系统根目录。禁止直接调用 `Hive.openBox()` 或 `getApplicationDocumentsDirectory()` 拼路径。
+- **SecureCredentialVault** (`lib/core/storage/secure_credential_vault.dart`) — 所有 API key / secret / 密码的唯一存取接缝（同步读内存缓存 + 异步写各平台 Keystore/Keychain/DPAPI/libsecret）。`main` 启动时 `init()` 从 Hive 迁移历史明文。禁止把 secret 写进 `GStorage`；凭据不随备份迁移（`BackupMergeService` 按 `isCredentialKey` 跳过）。
 - **DocPaths** (`lib/utils/doc_paths.dart`) — 文献文件路径中心工具。禁止用 `p.basenameWithoutExtension` 或持久化绝对路径自行拼接。
 - **StorageCleanupService** (`lib/services/storage_cleanup_service.dart`) — 禁止在 UI 层直接删除缓存目录。
 - **BackupProvider** (`lib/providers/backup_provider.dart`) — 禁止在设置页或服务里散落保存备份凭据。
 - **BackupRestoreService** (`lib/services/backup_restore_service.dart`) — 禁止手写 ZIP 结构或直接覆盖 Hive 文件而不经过 `GStorage.close()`/`reopen()`。
+- **BackupMergeService** (`lib/services/backup_merge_service.dart`) — 备份增量合并（按 ID 去重、只增不覆盖、不做版本比较）。本地专属配置（代理 / 备份凭据）不参与合并。禁止在 restore/merge 流程外自行拼装 Hive box 合并逻辑。
 - **BackupS3Service** (`lib/services/backup_s3_service.dart`) — 禁止在 UI 层拼签名请求。
 
 ### Agent API 与模型
 
-- **AgentApiProvider** (`lib/providers/api_provider.dart`) — API 配置中心，`defaultModelId`/`fastModelId`/`imageModelId` 跨 provider 全局唯一。禁止在调用点自行猜 provider。
+- **AgentApiProvider** (`lib/providers/api_provider.dart`) — API 配置中心，现为**多实例**（`AgentProviderInstance` 有序列表，同协议可多开、按 `instanceId` 寻址）。专家/快速/生图三个全局角色仍唯一，持久化为 `"instanceId:modelId"`。调用层读已解析视图 `effectiveAgentApiProvider`（`AgentApiState`），禁止在调用点自行猜 provider/实例。
 - **AgentModelParams** (`lib/providers/api_provider.dart`) — 禁止用散落字符串 key 在 UI 和服务间传参。
 - **AgentModelCapability** (`lib/services/agent_model_capability.dart`) — 禁止硬编码模型能力判断。
+- **BuiltInToolNames** (`lib/services/builtin_tools.dart`) — 各厂内置工具名常量（snake_case，对齐 API 字段）与 `forProvider` 可用集。禁止在请求构造 / 设置 UI 里硬编码工具名字符串。
 - **AiSettingsPrompt** (`lib/services/ai_settings_prompt.dart`) — 禁止各调用点自写 AI 设置错误文案。
 
 ### 翻译系统
@@ -98,7 +102,15 @@
 
 - **IdentifierParser** (`lib/services/identifier_parser.dart`) — 禁止自行编写标识符正则。
 - **IdentifierResolver** (`lib/services/identifier_resolver.dart`) — PubMed 走 `efetch.fcgi`（XML）。禁止直接调用出版商 API 或 Unpaywall。
-- 其他：`DocumentMetadataParser`、`PdfIdentifierExtractor`（须通过 PdfProcessLock）、`PdfMetadataExtractor`。
+- **MetadataSearchService** (`lib/services/metadata_search_service.dart`) — 无标识符时按标题搜学术库回退（`IdentifierResolver` 的平行接缝，多源按优先级 `canSearch`→`search`）。禁止绕过它在调用点直接拼出版商搜索请求。
+- **ChineseMetadataExtractor** (`lib/services/chinese_metadata_extractor.dart`) — 中文期刊 PDF 首页文本元数据提取。是否中文走 `ChineseTextDetector`，禁止自行写 CJK 判定正则。
+- 其他：`DocumentMetadataParser`、`PdfIdentifierExtractor`（须通过 PdfProcessLock）、`PdfMetadataExtractor`、`ChineseTextDetector`（CJK 检测单一来源）、`ChineseNameUtils`。
+
+### Zotero 同步
+
+- **ZoteroSyncService** (`lib/services/zotero_sync_service.dart`) — Zotero Web API v3 只读客户端（认证 / 分页 / 增量拉取），返回原始 item JSON，接入 `ProxyProvider`。禁止在此落盘或做 `Document` 映射。
+- **ZoteroItemMapper** (`lib/services/zotero_item_mapper.dart`) — Zotero item ↔ `Document` 唯一防腐层（消化 itemType / creators / 字段差异）。禁止让 Zotero 字段细节渗入 `Document` 或 `IdentifierResolver`；落盘 id 由 `DocumentsNotifier.importDocuments` 分配。
+- **ZoteroSyncProvider** (`lib/providers/zotero_sync_provider.dart`) — Zotero 凭据状态（API Key）。禁止在设置页 / 服务里散落保存 Zotero 凭据。
 
 ### 文档提取
 
@@ -111,7 +123,8 @@
 - **ReaderSettingsProvider** (`lib/providers/reader_settings_provider.dart`) — 主题颜色必须通过 `resolveReaderPalette()` 派生。枚举只能尾追。
 - **ReaderSessionProvider** (`lib/providers/reader_session_provider.dart`) — 禁止在 `ReaderPage` 散落维护 Markdown 缓存/搜索状态/直接写 `highlightProvider`。
 - **WebViewMarkdownReader** (`lib/pages/reader/widgets/webview_markdown_reader.dart`) — 主渲染路径，Dart markdown→HTML→localhost server 加载。主题/字号变化只更新 CSS 变量。
-- **webview_reader_html** (`lib/pages/reader/widgets/webview_reader_html.dart`) — KaTeX 走本地 `assets/katex/`。禁止依赖 CDN。
+- **webview_reader_html** (`lib/pages/reader/widgets/webview_reader_html.dart`) — 只生成每文档动态 HTML + 注入 `:root` CSS 变量（含工具栏让位的 `--top-inset`）；静态样式/脚本已外置到 `assets/reader/reader.css`、`assets/reader/reader.js`，经 localhost `/_assets/*` 提供。KaTeX 走本地 `assets/katex/`。禁止把样式/脚本内联回 Dart 字符串、禁止依赖 CDN。
+- **ReaderSheetHost** (`lib/pages/reader/widgets/reader_sheet_host.dart`) — 阅读器内嵌 bottom sheet 宿主（z-order 低于底栏，弹出时底栏仍可见可交互）。阅读器内所有 sheet（信息/大纲/笔记/主题/字体/收藏）走 host 的 `show()`，关闭用 `ReaderSheetHost.closeOf(context)`。禁止在阅读器内用 `showModalBottomSheet`。
 - **ReaderTopToolbar / ReaderBottomBar** — 禁止把新按钮直接堆回 `ReaderPage` 的 build 里。
 - **搜索** — PDF 走 `pdfrx` PdfTextSearcher；Markdown 走 `MarkdownDocumentCacheService` 搜索快照。禁止每次输入全量解析。
 - **双路径高亮** — 新建走精确 Range（`addHighlightFromSelection`），恢复走文本搜索（`addByText`）。
