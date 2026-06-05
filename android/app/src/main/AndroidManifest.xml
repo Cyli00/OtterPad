@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- release 必需：本地阅读器 HTTP server 绑定 socket + 所有联网功能（Agent API/翻译/封面图）。
+         debug/profile 由 Flutter 自动注入，main 需手动声明。 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="OtterPad"
         android:name="${applicationName}"

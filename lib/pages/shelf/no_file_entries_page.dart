@@ -252,7 +252,7 @@ class NoFileEntriesPage extends ConsumerWidget {
     ref.read(selectionProvider.notifier).exit();
   }
 
-  /// 批量从公网拉取 PDF：仅对有 DOI 的选中项发起下载，成功项会自动从无文件列表移除。
+  /// 批量从公网拉取 PDF：对所有选中项发起下载（无 DOI 的条目会先尝试标题搜索补全）。
   /// 进度与汇总由 [DocumentTaskNotifier.redownloadBatch] 的聚合 snackbar 负责。
   Future<void> _downloadSelected(WidgetRef ref, SelectionState selection) async {
     final selectedIds = selection.selectedIds;
@@ -260,21 +260,12 @@ class NoFileEntriesPage extends ConsumerWidget {
         .read(noFileDocsProvider)
         .where((d) => selectedIds.contains(d.id))
         .toList();
-    final downloadable = selected
-        .where((d) => d.doi != null && d.doi!.isNotEmpty)
-        .toList();
 
-    if (downloadable.isEmpty) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: '所选条目没有可用 DOI，无法下载');
-      return;
-    }
+    if (selected.isEmpty) return;
 
     ref.read(selectionProvider.notifier).exit();
     await ref.read(documentTaskProvider.notifier).redownloadBatch(
-      [for (final d in downloadable) (documentId: d.id, title: d.title)],
-      skipped: selected.length - downloadable.length,
+      [for (final d in selected) (documentId: d.id, title: d.title)],
     );
   }
 
