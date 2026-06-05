@@ -200,9 +200,6 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
           final parts = <String>[];
           if (result.addedCount > 0) parts.add('新增 ${result.addedCount} 篇');
           if (result.removedCount > 0) parts.add('清理 ${result.removedCount} 篇');
-          if (result.downloadedCount > 0) {
-            parts.add('补回 PDF ${result.downloadedCount} 篇');
-          }
           if (result.repairedCount > 0) {
             parts.add('修复元数据 ${result.repairedCount} 篇');
           }

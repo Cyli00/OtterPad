@@ -473,11 +473,10 @@ class DocumentTaskNotifier
   /// 聚合为单个进度 snackbar（已完成 / 总数 + 取消），与单条 [redownloadPdf]
   /// 同一套 [SnackBarService.showListenableProgress]。返回 `documentId → 是否成功`。
   ///
-  /// [skipped] 为调用方因无 DOI 而未纳入下载的篇数，仅用于汇总文案提示。
+  /// 无 DOI 的条目会由底层 [redownloadPdf] 先用标题搜索补全。
   Future<Map<String, bool>> redownloadBatch(
-    List<({String documentId, String title})> items, {
-    int skipped = 0,
-  }) async {
+    List<({String documentId, String title})> items,
+  ) async {
     if (items.isEmpty) return const {};
 
     final total = items.length;
@@ -536,9 +535,7 @@ class DocumentTaskNotifier
     } else {
       base = '下载完成：成功 $ok 篇，失败 $fail 篇';
     }
-    handle.finish(
-      message: skipped > 0 ? '$base（$skipped 篇无 DOI 跳过）' : base,
-    );
+    handle.finish(message: base);
     notifier.dispose();
     return results;
   }

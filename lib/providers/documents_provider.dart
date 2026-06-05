@@ -12,8 +12,11 @@ import 'package:path/path.dart' as p;
 
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
+import '../services/chinese_metadata_extractor.dart';
+import '../services/chinese_text_detector.dart';
 import '../services/document_metadata_parser.dart';
 import '../services/identifier_resolver.dart';
+import '../services/metadata_search_service.dart';
 import '../services/pdf_identifier_extractor.dart';
 import '../services/pdf_metadata_extractor.dart';
 import '../services/pdf_thumbnail_service.dart';
@@ -40,7 +43,6 @@ class AddFileResult {
 class RebuildResult {
   final int addedCount;
   final int removedCount;
-  final int downloadedCount;
   final int repairedCount;
   final int unresolvedCount;
   final int noFileCount;
@@ -49,7 +51,6 @@ class RebuildResult {
   const RebuildResult({
     required this.addedCount,
     required this.removedCount,
-    required this.downloadedCount,
     required this.repairedCount,
     required this.unresolvedCount,
     required this.noFileCount,
@@ -250,7 +251,6 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     final docsDir = await getDocsDir();
     var addedCount = 0;
     var removedCount = 0;
-    var downloadedCount = 0;
     var repairedCount = 0;
 
     onProgress?.call(
@@ -308,39 +308,8 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     }
     state = validDocs;
 
-    final toDownload = state
-        .where((doc) => doc.contentHash == null && !_isBlank(doc.doi))
-        .toList();
-    if (toDownload.isNotEmpty) {
-      final updates = <String, Document>{};
-      for (var i = 0; i < toDownload.length; i++) {
-        if (cancelToken?.isCancelled == true) break;
-        final doc = toDownload[i];
-        onProgress?.call(
-          RebuildProgress(
-            current: i + 1,
-            total: toDownload.length,
-            fileName: doc.title,
-            status: '正在根据 DOI 补回 PDF...',
-          ),
-        );
-        final downloaded = await _downloadPdfIntoDocument(
-          doc,
-          cancelToken: cancelToken,
-        );
-        if (downloaded != null) {
-          updates[doc.id] = downloaded;
-          downloadedCount++;
-          unawaited(
-            PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(doc.id)),
-          );
-        }
-      }
-      if (updates.isNotEmpty) {
-        state = [for (final doc in state) updates[doc.id] ?? doc];
-      }
-    }
-
+    // 无文件条目不纳入重构：rebuild 只发现新 PDF、校验完整性、修复已有文件的元数据。
+    // 为无文件条目补回 PDF 由用户主动触发（无文件条目页多选下载 / 按标识符添加）。
     final toRepair = state.where(_needsMetadataRepair).toList();
     if (toRepair.isNotEmpty) {
       final updates = <String, Document>{};
@@ -376,7 +345,6 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     return RebuildResult(
       addedCount: addedCount,
       removedCount: removedCount,
-      downloadedCount: downloadedCount,
       repairedCount: repairedCount,
       unresolvedCount: unresolvedCount,
       noFileCount: noFileCount,
@@ -437,11 +405,37 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   }
 
   Future<bool> redownloadPdf(String docId, {CancelToken? cancelToken}) async {
-    final doc = state.cast<Document?>().firstWhere(
+    final found = state.cast<Document?>().firstWhere(
       (entry) => entry != null && entry.id == docId,
       orElse: () => null,
     );
-    if (doc == null || _isBlank(doc.doi)) return false;
+    if (found == null) return false;
+    // found 已被空检查提升为非空，var doc 因此推断为非空 Document，
+    // 后续条件块内的重新赋值不会丢失类型提升。
+    var doc = found;
+
+    // 无 DOI 时，用标题搜索补全元数据（可能拿到 DOI）
+    if (_isBlank(doc.doi) && !_looksLikePlaceholderTitle(doc)) {
+      try {
+        final searchResult =
+            await MetadataSearchService.instance.searchByTitle(
+          doc.title,
+          cancelToken: cancelToken,
+        );
+        if (searchResult != null) {
+          doc = _applyResolvedDocument(doc, searchResult);
+          state = [
+            for (final entry in state)
+              if (entry.id == docId) doc else entry,
+          ];
+          await _save();
+        }
+      } catch (e) {
+        debugPrint('标题搜索补全 DOI 失败: $e');
+      }
+    }
+
+    if (_isBlank(doc.doi)) return false;
 
     // 下载到 source.pdf.tmp 临时路径，绕开 IdentifierResolver._downloadPdf 的
     // "exists → skip" 短路；成功后再原子替换。失败时旧 PDF 与 derived 完整保留。
@@ -475,7 +469,15 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         await PdfThumbnailService.instance.deleteCacheEntry(pdfPath);
       }
 
-      final updated = doc.copyWith(contentHash: newHash);
+      var updated = doc.copyWith(contentHash: newHash);
+
+      // 下载后用 PDF 内容补全可能缺失的元数据
+      if (_needsMetadataRepair(updated)) {
+        updated =
+            (await _repairDocument(updated, cancelToken: cancelToken))
+                .document;
+      }
+
       state = [
         for (final entry in state)
           if (entry.id == docId) updated else entry,
@@ -586,21 +588,65 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     try {
       final fallbackMetadata = DocumentMetadataParser.parseFilePath(pdfPath);
       final pdfMetadata = await PdfMetadataExtractor.instance.extract(pdfPath);
-      final combinedMetadata = fallbackMetadata.merge(pdfMetadata);
+      var combinedMetadata = fallbackMetadata.merge(pdfMetadata);
       doc = _applyMetadata(doc, combinedMetadata);
 
+      // 修正历史遗留 / 未拆分的 CNKI 标题（title 形如 "标题_作者"）。
+      // _repairDocument 解析的是存储后的 source.pdf，拿不到原始文件名，
+      // 因此这里直接对当前 title 再跑一次拆分，让后续正文定位用纯标题。
+      final titleSplit = DocumentMetadataParser.parseText(doc.title);
+      if (titleSplit.title != null && titleSplit.authors.isNotEmpty) {
+        doc = doc.copyWith(title: titleSplit.title);
+        if (doc.authors.isEmpty) doc = doc.copyWith(authors: titleSplit.authors);
+      }
+
+      // 提取一次首页文本，供标识符提取与中文正文元数据提取复用
+      final pageText = await PdfIdentifierExtractor.instance.extractText(
+        pdfPath,
+      );
+
+      // 中文文献：从正文首页补全期刊 / 完整作者 / 年份 / DOI
+      final looksChinese =
+          ChineseTextDetector.isChinese(doc.title) ||
+          (pageText != null && ChineseTextDetector.isChinese(pageText));
+      if (looksChinese && pageText != null) {
+        final cn = ChineseMetadataExtractor.parseFromText(
+          pageText,
+          knownTitle: doc.title,
+        );
+        combinedMetadata = combinedMetadata.merge(cn);
+        doc = _applyMetadata(doc, combinedMetadata);
+      }
+
+      // 标识符解析：中文 DOI（如 10.13193）CrossRef 多解析不了，
+      // 单独容错——失败不回滚已从正文提取的期刊/作者/年份。
       final identifier =
           combinedMetadata.doi ??
-          (await PdfIdentifierExtractor.instance.extractIdentifier(
-            pdfPath,
-          ))?.value;
+          PdfIdentifierExtractor.extractIdentifierFromText(pageText)?.value;
       if (!_isBlank(identifier)) {
-        final resolved = await IdentifierResolver.instance.resolve(
-          identifier!,
-          metadataOnly: true,
-          cancelToken: cancelToken,
-        );
-        doc = _applyResolvedDocument(doc, resolved);
+        try {
+          final resolved = await IdentifierResolver.instance.resolve(
+            identifier!,
+            metadataOnly: true,
+            cancelToken: cancelToken,
+          );
+          doc = _applyResolvedDocument(doc, resolved);
+        } catch (e) {
+          debugPrint('标识符解析失败（保留已提取元数据）: $e');
+        }
+      }
+
+      // 标识符解析未完成时，用标题搜索回退
+      if (!_hasCompleteMetadata(doc) && !_looksLikePlaceholderTitle(doc)) {
+        try {
+          final searchResult = await MetadataSearchService.instance
+              .searchByTitle(doc.title, cancelToken: cancelToken);
+          if (searchResult != null) {
+            doc = _applyResolvedDocument(doc, searchResult);
+          }
+        } catch (e) {
+          debugPrint('标题搜索失败: $e');
+        }
       }
     } catch (error) {
       debugPrint('元数据修复失败: $error');
@@ -647,10 +693,20 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
   bool _needsMetadataRepair(Document doc) {
     if (doc.contentHash == null) return false;
-    return _looksLikePlaceholderTitle(doc) ||
+    // 字段缺失维度
+    if (_looksLikePlaceholderTitle(doc) ||
         doc.authors.isEmpty ||
         _isBlank(doc.year) ||
-        (_isBlank(doc.journal) && _isBlank(doc.doi));
+        (_isBlank(doc.journal) && _isBlank(doc.doi))) {
+      return true;
+    }
+    // 字段已填但内容可疑维度：字段填满≠正确，否则坏数据会骗过修复检测。
+    // 1) 标题仍是未拆分的 CNKI 命名 "标题_作者"（历史数据）
+    final titleSplit = DocumentMetadataParser.parseText(doc.title);
+    if (titleSplit.title != null && titleSplit.authors.isNotEmpty) return true;
+    // 2) 作者里混入「文章编号」等非人名词（此前正文误提取）
+    if (doc.authors.any(ChineseMetadataExtractor.isNonPersonName)) return true;
+    return false;
   }
 
   bool _hasCompleteMetadata(Document doc) {
