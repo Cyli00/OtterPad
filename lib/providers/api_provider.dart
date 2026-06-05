@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/storage.dart';
 import '../services/agent_model_capability.dart';
 
@@ -266,12 +267,13 @@ class AgentModelParams {
     final fresh = ThinkingLevel.fromId(json['thinkingLevel'] as String?);
     if (fresh != null) return fresh;
 
-    final mode = json['thinkingMode'] as String? ??
+    final mode =
+        json['thinkingMode'] as String? ??
         (json['thinkingEnabled'] == true
             ? 'enabled'
             : json['thinkingEnabled'] == false
-                ? 'disabled'
-                : null);
+            ? 'disabled'
+            : null);
     if (mode == 'disabled') return ThinkingLevel.off;
 
     final effort = json['reasoningEffort'] as String?;
@@ -534,7 +536,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   ) {
     final box = GStorage.setting;
     final baseUrl = box.get(_baseUrlKey(id), defaultValue: '') as String;
-    final apiKey = box.get(_apiKeyKey(id), defaultValue: '') as String;
+    final apiKey = SecureCredentialVault.read(_apiKeyKey(id));
     final models =
         (box.get(_modelsKey(id)) as List?)?.cast<String>().toList() ??
         <String>[];
@@ -632,7 +634,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       await box.put(_baseUrlKey(id), baseUrl);
     }
     if (apiKey != null && apiKey.isNotEmpty) {
-      await box.put(_apiKeyKey(id), apiKey);
+      await SecureCredentialVault.write(_apiKeyKey(id), apiKey);
     }
     await box.put(_idsKey, [..._loadIds(), id]);
     state = _load();
@@ -648,7 +650,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
     await box.delete(_nameKey(id));
     await box.delete(_protocolKey(id));
     await box.delete(_baseUrlKey(id));
-    await box.delete(_apiKeyKey(id));
+    await SecureCredentialVault.delete(_apiKeyKey(id));
     await box.delete(_modelsKey(id));
     await box.delete(_modelParamsKey(id));
     await box.delete(_modelCapsKey(id));
@@ -684,7 +686,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   }
 
   Future<void> setApiKey(String id, String key) async {
-    await GStorage.setting.put(_apiKeyKey(id), key);
+    await SecureCredentialVault.write(_apiKeyKey(id), key);
     state = _load();
   }
 
@@ -736,7 +738,10 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
     final inst = state.byId(id) ?? _loadAny(id);
     if (inst == null) return;
 
-    await box.put(_modelsKey(id), inst.models.where((m) => m != modelId).toList());
+    await box.put(
+      _modelsKey(id),
+      inst.models.where((m) => m != modelId).toList(),
+    );
     for (final key in [_globalDefaultKey, _globalFastKey, _globalImageKey]) {
       final (rid, rmodel) = _parseRole(box.get(key) as String?);
       if (rid == id && rmodel == modelId) await box.delete(key);
@@ -862,7 +867,9 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   // ── 全局角色（读，静态）────────────────────────────────────────────────
 
   static ({String? id, String? modelId}) get globalDefaultRole {
-    final (id, m) = _parseRole(GStorage.setting.get(_globalDefaultKey) as String?);
+    final (id, m) = _parseRole(
+      GStorage.setting.get(_globalDefaultKey) as String?,
+    );
     return (id: id, modelId: m);
   }
 
@@ -872,7 +879,9 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   }
 
   static ({String? id, String? modelId}) get globalImageRole {
-    final (id, m) = _parseRole(GStorage.setting.get(_globalImageKey) as String?);
+    final (id, m) = _parseRole(
+      GStorage.setting.get(_globalImageKey) as String?,
+    );
     return (id: id, modelId: m);
   }
 
@@ -954,14 +963,8 @@ const kDefaultIgnoreLabels = [
   'aside_text',
 ];
 
-
-
-
-
 class DocExtractApiState {
-
-
-    final String apiKey; // Access Token（异步 Job API 必填）
+  final String apiKey; // Access Token（异步 Job API 必填）
 
   // ── 提取选项 ──
   final bool useChartRecognition;
@@ -980,19 +983,7 @@ class DocExtractApiState {
 
   /// 异步 API 只需 token，是否已配置
 
-
-
-
-
-
-
-
-
-
-
-
-
-    bool get isConfigured => apiKey.isNotEmpty;
+  bool get isConfigured => apiKey.isNotEmpty;
 
   const DocExtractApiState({
     this.apiKey = '',
@@ -1009,10 +1000,7 @@ class DocExtractApiState {
     this.markdownIgnoreLabels = kDefaultIgnoreLabels,
   });
 
-
-
-
-    DocExtractApiState copyWith({
+  DocExtractApiState copyWith({
     String? apiKey,
     bool? useChartRecognition,
     bool? useDocOrientationClassify,
@@ -1026,12 +1014,8 @@ class DocExtractApiState {
     double? repetitionPenalty,
     List<String>? markdownIgnoreLabels,
   }) => DocExtractApiState(
-
-
-
-
-        apiKey: apiKey ?? this.apiKey,
-        useChartRecognition: useChartRecognition ?? this.useChartRecognition,
+    apiKey: apiKey ?? this.apiKey,
+    useChartRecognition: useChartRecognition ?? this.useChartRecognition,
     useDocOrientationClassify:
         useDocOrientationClassify ?? this.useDocOrientationClassify,
     useDocUnwarping: useDocUnwarping ?? this.useDocUnwarping,
@@ -1052,16 +1036,10 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
 
   DocExtractApiNotifier() : super(_load());
 
-
-
-
-
-
-    static DocExtractApiState _load() {
+  static DocExtractApiState _load() {
     final box = GStorage.setting;
 
-
-        final apiKey = box.get(_apiKeyKey, defaultValue: '') as String;
+    final apiKey = SecureCredentialVault.read(_apiKeyKey);
     final useChartRecognition =
         box.get('${_prefix}useChartRecognition', defaultValue: false) as bool;
     final useDocOrientationClassify =
@@ -1089,7 +1067,7 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         ? rawLabels.cast<String>().toList()
         : List<String>.from(kDefaultIgnoreLabels);
 
-        return DocExtractApiState(
+    return DocExtractApiState(
       apiKey: apiKey,
       useChartRecognition: useChartRecognition,
       useDocOrientationClassify: useDocOrientationClassify,
@@ -1105,14 +1083,9 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     );
   }
 
-
-
-
-
-
   Future<void> setApiKey(String key) async {
     state = state.copyWith(apiKey: key);
-    await GStorage.setting.put(_apiKeyKey, key);
+    await SecureCredentialVault.write(_apiKeyKey, key);
   }
 
   Future<void> setBool(String field, bool value) async {

@@ -5,6 +5,7 @@ import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import '../data/models/book/highlight.dart';
@@ -53,9 +54,7 @@ class BackupMergeService {
       for (final name in boxNames) {
         final src = File(p.join(extractedDataDir.path, '$name.hive'));
         if (await src.exists()) {
-          await src.copy(
-            p.join(mergeTempDir.path, '$_mergePrefix$name.hive'),
-          );
+          await src.copy(p.join(mergeTempDir.path, '$_mergePrefix$name.hive'));
         }
       }
 
@@ -137,14 +136,13 @@ class BackupMergeService {
     final currentBox = GStorage.documents;
 
     final currentRaw = currentBox.get('documents') as List<dynamic>? ?? [];
-    final currentDocs =
-        currentRaw
-            .map(
-              (e) => Document.fromJson(
-                Map<String, dynamic>.from(jsonDecode(e as String)),
-              ),
-            )
-            .toList();
+    final currentDocs = currentRaw
+        .map(
+          (e) => Document.fromJson(
+            Map<String, dynamic>.from(jsonDecode(e as String)),
+          ),
+        )
+        .toList();
 
     final currentById = {for (final d in currentDocs) d.id: d};
     final currentByDoi = <String, Document>{};
@@ -154,14 +152,13 @@ class BackupMergeService {
     }
 
     final backupRaw = backupBox.get('documents') as List<dynamic>? ?? [];
-    final backupDocs =
-        backupRaw
-            .map(
-              (e) => Document.fromJson(
-                Map<String, dynamic>.from(jsonDecode(e as String)),
-              ),
-            )
-            .toList();
+    final backupDocs = backupRaw
+        .map(
+          (e) => Document.fromJson(
+            Map<String, dynamic>.from(jsonDecode(e as String)),
+          ),
+        )
+        .toList();
 
     bool enriched = false;
     final additions = <Document>[];
@@ -178,7 +175,9 @@ class BackupMergeService {
       }
 
       final bdDoi = bd.doi?.trim().toLowerCase();
-      if (bdDoi != null && bdDoi.isNotEmpty && currentByDoi.containsKey(bdDoi)) {
+      if (bdDoi != null &&
+          bdDoi.isNotEmpty &&
+          currentByDoi.containsKey(bdDoi)) {
         continue;
       }
 
@@ -245,12 +244,12 @@ class BackupMergeService {
       final cYear = _normalizeKey(candidate.year);
       if (eYear.isNotEmpty && cYear.isNotEmpty && eYear == cYear) return true;
 
-      final eAuthor =
-          existing.authors.isEmpty ? '' : _normalizeKey(existing.authors.first);
-      final cAuthor =
-          candidate.authors.isEmpty
-              ? ''
-              : _normalizeKey(candidate.authors.first);
+      final eAuthor = existing.authors.isEmpty
+          ? ''
+          : _normalizeKey(existing.authors.first);
+      final cAuthor = candidate.authors.isEmpty
+          ? ''
+          : _normalizeKey(candidate.authors.first);
       if (eAuthor.isNotEmpty && cAuthor.isNotEmpty && eAuthor == cAuthor) {
         return true;
       }
@@ -268,10 +267,9 @@ class BackupMergeService {
       final backupRaw = backupBox.get(key) as String?;
       if (backupRaw == null) continue;
 
-      final backupHighlights =
-          (jsonDecode(backupRaw) as List<dynamic>)
-              .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
-              .toList();
+      final backupHighlights = (jsonDecode(backupRaw) as List<dynamic>)
+          .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
+          .toList();
 
       final currentRaw = currentBox.get(key) as String?;
       if (currentRaw == null) {
@@ -280,14 +278,14 @@ class BackupMergeService {
         continue;
       }
 
-      final currentHighlights =
-          (jsonDecode(currentRaw) as List<dynamic>)
-              .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
-              .toList();
+      final currentHighlights = (jsonDecode(currentRaw) as List<dynamic>)
+          .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
+          .toList();
       final currentIds = currentHighlights.map((h) => h.id).toSet();
 
-      final additions =
-          backupHighlights.where((h) => !currentIds.contains(h.id)).toList();
+      final additions = backupHighlights
+          .where((h) => !currentIds.contains(h.id))
+          .toList();
       if (additions.isEmpty) continue;
 
       final merged = [...currentHighlights, ...additions];
@@ -304,25 +302,23 @@ class BackupMergeService {
     final currentBox = GStorage.favorites;
 
     final currentRaw = currentBox.get('favorites') as List<dynamic>? ?? [];
-    final currentFavs =
-        currentRaw
-            .map(
-              (e) => Favorite.fromJson(
-                Map<String, dynamic>.from(jsonDecode(e as String)),
-              ),
-            )
-            .toList();
+    final currentFavs = currentRaw
+        .map(
+          (e) => Favorite.fromJson(
+            Map<String, dynamic>.from(jsonDecode(e as String)),
+          ),
+        )
+        .toList();
     final currentById = {for (final f in currentFavs) f.id: f};
 
     final backupRaw = backupBox.get('favorites') as List<dynamic>? ?? [];
-    final backupFavs =
-        backupRaw
-            .map(
-              (e) => Favorite.fromJson(
-                Map<String, dynamic>.from(jsonDecode(e as String)),
-              ),
-            )
-            .toList();
+    final backupFavs = backupRaw
+        .map(
+          (e) => Favorite.fromJson(
+            Map<String, dynamic>.from(jsonDecode(e as String)),
+          ),
+        )
+        .toList();
 
     bool changed = false;
     final additions = <Favorite>[];
@@ -331,8 +327,9 @@ class BackupMergeService {
       if (currentById.containsKey(bf.id)) {
         final cf = currentById[bf.id]!;
         final existingIds = cf.documentIds.toSet();
-        final newIds =
-            bf.documentIds.where((id) => !existingIds.contains(id)).toList();
+        final newIds = bf.documentIds
+            .where((id) => !existingIds.contains(id))
+            .toList();
         if (newIds.isNotEmpty) {
           currentById[bf.id] = cf.copyWith(
             documentIds: [...cf.documentIds, ...newIds],
@@ -363,23 +360,15 @@ class BackupMergeService {
     final currentBox = GStorage.history;
 
     final currentRaw = currentBox.get('entries') as List<dynamic>? ?? [];
-    final currentEntries =
-        currentRaw
-            .map(
-              (e) =>
-                  HistoryEntry.fromMap(Map<String, dynamic>.from(e as Map)),
-            )
-            .toList();
+    final currentEntries = currentRaw
+        .map((e) => HistoryEntry.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
     final byDocId = {for (final e in currentEntries) e.docId: e};
 
     final backupRaw = backupBox.get('entries') as List<dynamic>? ?? [];
-    final backupEntries =
-        backupRaw
-            .map(
-              (e) =>
-                  HistoryEntry.fromMap(Map<String, dynamic>.from(e as Map)),
-            )
-            .toList();
+    final backupEntries = backupRaw
+        .map((e) => HistoryEntry.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
 
     bool changed = false;
     for (final be in backupEntries) {
@@ -397,9 +386,8 @@ class BackupMergeService {
     }
 
     if (changed) {
-      final merged =
-          byDocId.values.toList()
-            ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
+      final merged = byDocId.values.toList()
+        ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
       if (merged.length > 500) merged.removeRange(500, merged.length);
       await currentBox.put('entries', merged.map((e) => e.toMap()).toList());
     }
@@ -414,6 +402,9 @@ class BackupMergeService {
     for (final key in backupBox.keys) {
       if (key is! String) continue;
       if (_localOnlySettingsKeys.contains(key)) continue;
+      // 凭据已迁出 Hive（见 SecureCredentialVault）：旧备份里可能残留明文 key，
+      // 一律不导入，与"凭据不随备份迁移"的策略保持一致。
+      if (SecureCredentialVault.isCredentialKey(key)) continue;
       if (currentBox.containsKey(key)) continue;
 
       await currentBox.put(key, backupBox.get(key));

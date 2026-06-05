@@ -1,6 +1,7 @@
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/storage.dart';
 
 /// Zotero 同步凭据。当前单向导入只需 API Key（userID 由 Key 自动反查）。
@@ -22,16 +23,13 @@ class ZoteroSyncNotifier extends StateNotifier<ZoteroSyncState> {
   ZoteroSyncNotifier() : super(_load());
 
   static ZoteroSyncState _load() {
-    final box = GStorage.setting;
-    return ZoteroSyncState(
-      apiKey: box.get(_apiKeyKey, defaultValue: '') as String,
-    );
+    return ZoteroSyncState(apiKey: SecureCredentialVault.read(_apiKeyKey));
   }
 
   Future<void> setApiKey(String apiKey) async {
     final trimmed = apiKey.trim();
     state = state.copyWith(apiKey: trimmed);
-    await GStorage.setting.put(_apiKeyKey, trimmed);
+    await SecureCredentialVault.write(_apiKeyKey, trimmed);
   }
 
   void reload() {

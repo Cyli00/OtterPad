@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 
+import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/storage.dart';
 
 enum BackupRemoteType {
@@ -61,8 +62,9 @@ class BackupWebDavState {
     final trimmed = value.trim().replaceAll('\\', '/');
     if (trimmed.isEmpty) return defaultRemoteDir;
     final normalized = trimmed.startsWith('/') ? trimmed : '/$trimmed';
-    final collapsed =
-        normalized.replaceAll(RegExp('/+'), '/').replaceFirst(RegExp(r'/$'), '');
+    final collapsed = normalized
+        .replaceAll(RegExp('/+'), '/')
+        .replaceFirst(RegExp(r'/$'), '');
     return collapsed.isEmpty ? '/' : collapsed;
   }
 }
@@ -140,8 +142,9 @@ class BackupRemoteTypeNotifier extends StateNotifier<BackupRemoteType> {
 
   static BackupRemoteType _load() {
     final box = GStorage.setting;
-    final saved = box.get(_remoteTypeKey, defaultValue: BackupRemoteType.s3.name)
-        as String;
+    final saved =
+        box.get(_remoteTypeKey, defaultValue: BackupRemoteType.s3.name)
+            as String;
     return BackupRemoteType.values.firstWhere(
       (type) => type.name == saved,
       orElse: () => BackupRemoteType.s3,
@@ -172,15 +175,16 @@ class BackupWebDavNotifier extends StateNotifier<BackupWebDavState> {
     return BackupWebDavState(
       serverUrl: box.get(_serverUrlKey, defaultValue: '') as String,
       username: box.get(_usernameKey, defaultValue: '') as String,
-      password: box.get(_passwordKey, defaultValue: '') as String,
-      remoteDir: box.get(
-        _remoteDirKey,
-        defaultValue: BackupWebDavState.defaultRemoteDir,
-      ) as String,
-      fileName: box.get(
-        _fileNameKey,
-        defaultValue: BackupWebDavState.defaultFileName,
-      ) as String,
+      password: SecureCredentialVault.read(_passwordKey),
+      remoteDir:
+          box.get(
+                _remoteDirKey,
+                defaultValue: BackupWebDavState.defaultRemoteDir,
+              )
+              as String,
+      fileName:
+          box.get(_fileNameKey, defaultValue: BackupWebDavState.defaultFileName)
+              as String,
     );
   }
 
@@ -195,7 +199,7 @@ class BackupWebDavNotifier extends StateNotifier<BackupWebDavState> {
     await Future.wait([
       GStorage.setting.put(_serverUrlKey, normalized.serverUrl.trim()),
       GStorage.setting.put(_usernameKey, normalized.username.trim()),
-      GStorage.setting.put(_passwordKey, normalized.password),
+      SecureCredentialVault.write(_passwordKey, normalized.password),
       GStorage.setting.put(_remoteDirKey, normalized.remoteDir),
       GStorage.setting.put(_fileNameKey, normalized.fileName),
     ]);
@@ -220,20 +224,19 @@ class BackupS3Notifier extends StateNotifier<BackupS3State> {
   static BackupS3State _load() {
     final box = GStorage.setting;
     return BackupS3State(
-      endpoint: box.get(_endpointKey, defaultValue: BackupS3State.defaultEndpoint)
-          as String,
-      region: box.get(_regionKey, defaultValue: BackupS3State.defaultRegion)
-          as String,
+      endpoint:
+          box.get(_endpointKey, defaultValue: BackupS3State.defaultEndpoint)
+              as String,
+      region:
+          box.get(_regionKey, defaultValue: BackupS3State.defaultRegion)
+              as String,
       bucket: box.get(_bucketKey, defaultValue: '') as String,
       accessKeyId: box.get(_accessKeyIdKey, defaultValue: '') as String,
-      secretAccessKey:
-          box.get(_secretAccessKeyKey, defaultValue: '') as String,
-      objectKey: box.get(
-        _objectKeyKey,
-        defaultValue: BackupS3State.defaultObjectKey,
-      ) as String,
-      usePathStyle:
-          box.get(_usePathStyleKey, defaultValue: true) as bool,
+      secretAccessKey: SecureCredentialVault.read(_secretAccessKeyKey),
+      objectKey:
+          box.get(_objectKeyKey, defaultValue: BackupS3State.defaultObjectKey)
+              as String,
+      usePathStyle: box.get(_usePathStyleKey, defaultValue: true) as bool,
     );
   }
 
@@ -253,7 +256,10 @@ class BackupS3Notifier extends StateNotifier<BackupS3State> {
       GStorage.setting.put(_regionKey, normalized.region),
       GStorage.setting.put(_bucketKey, normalized.bucket),
       GStorage.setting.put(_accessKeyIdKey, normalized.accessKeyId),
-      GStorage.setting.put(_secretAccessKeyKey, normalized.secretAccessKey),
+      SecureCredentialVault.write(
+        _secretAccessKeyKey,
+        normalized.secretAccessKey,
+      ),
       GStorage.setting.put(_objectKeyKey, normalized.objectKey),
       GStorage.setting.put(_usePathStyleKey, normalized.usePathStyle),
     ]);
@@ -274,10 +280,11 @@ final backupWebDavProvider =
       return BackupWebDavNotifier();
     });
 
-final backupS3Provider =
-    StateNotifierProvider<BackupS3Notifier, BackupS3State>((ref) {
-      return BackupS3Notifier();
-    });
+final backupS3Provider = StateNotifierProvider<BackupS3Notifier, BackupS3State>(
+  (ref) {
+    return BackupS3Notifier();
+  },
+);
 
 webdav.Client createBackupWebDavClient(BackupWebDavState state) {
   final client = webdav.newClient(
