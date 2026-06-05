@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/storage/storage.dart';
+import 'backup_merge_service.dart';
 
 enum BackupRestoreScope {
   full('完整恢复', '恢复 data 与 docs 目录'),
@@ -19,6 +21,16 @@ enum BackupRestoreScope {
 
   bool get restoreLibrary => this != BackupRestoreScope.settingsOnly;
   bool get restoreSettings => this != BackupRestoreScope.libraryOnly;
+}
+
+enum RestoreMode {
+  overwrite('覆盖恢复', '清除本地数据后用备份替换'),
+  merge('合并恢复', '保留本地数据，仅添加备份中不存在的内容');
+
+  const RestoreMode(this.label, this.description);
+
+  final String label;
+  final String description;
 }
 
 class BackupRestoreService {
@@ -84,21 +96,32 @@ class BackupRestoreService {
     return outputPath;
   }
 
-  static Future<void> restoreBackupArchive({
+  static Future<MergeResult?> restoreBackupArchive({
     required String archivePath,
     required BackupRestoreScope scope,
+    RestoreMode mode = RestoreMode.overwrite,
+    void Function(String)? onProgress,
   }) async {
-    final archiveBytes = await File(archivePath).readAsBytes();
-    final archive = ZipDecoder().decodeBytes(archiveBytes);
-    final docsDir = Directory(GStorage.libraryDirPath);
-    final dataDir = Directory(GStorage.dbDirPath);
+    onProgress?.call('正在解压备份文件...');
     final tempRoot = await _createRestoreTempRoot();
     final extractedDocsDir = Directory(p.join(tempRoot.path, 'docs'));
     final extractedDataDir = Directory(p.join(tempRoot.path, 'data'));
 
     try {
-      await _extractArchiveSection(archive, _docsDir, extractedDocsDir);
-      await _extractArchiveSection(archive, _dataDir, extractedDataDir);
+      await _extractArchiveToDirectory(archivePath, tempRoot.path);
+
+      if (mode == RestoreMode.merge) {
+        return await BackupMergeService.merge(
+          extractedDataDir: extractedDataDir,
+          extractedDocsDir: scope.restoreLibrary ? extractedDocsDir : null,
+          scope: scope,
+          onProgress: onProgress,
+        );
+      }
+
+      // ── Overwrite 原逻辑 ────────────────────────────────────────────
+      final docsDir = Directory(GStorage.libraryDirPath);
+      final dataDir = Directory(GStorage.dbDirPath);
 
       await GStorage.close();
 
@@ -119,11 +142,57 @@ class BackupRestoreService {
           boxNames: _settingsBoxNames,
         );
       }
+      return null;
     } finally {
       await GStorage.reopen();
       if (await tempRoot.exists()) {
         await tempRoot.delete(recursive: true);
       }
+    }
+  }
+
+  /// 在 Isolate 中解压 ZIP 到磁盘，避免主线程 OOM。
+  static Future<void> _extractArchiveToDirectory(
+    String archivePath,
+    String tempRootPath,
+  ) async {
+    await compute(_extractInIsolate, [archivePath, tempRootPath]);
+  }
+
+  static void _extractInIsolate(List<String> args) {
+    final archivePath = args[0];
+    final tempRootPath = args[1];
+    final archiveBytes = File(archivePath).readAsBytesSync();
+    final archive = ZipDecoder().decodeBytes(archiveBytes);
+
+    const docsPrefix = '$_archiveRoot/docs/';
+    const dataPrefix = '$_archiveRoot/data/';
+
+    for (final file in archive) {
+      String? relative;
+      String? subDir;
+      if (file.name.startsWith(docsPrefix)) {
+        relative = file.name.substring(docsPrefix.length);
+        subDir = 'docs';
+      } else if (file.name.startsWith(dataPrefix)) {
+        relative = file.name.substring(dataPrefix.length);
+        subDir = 'data';
+      }
+      if (relative == null || relative.isEmpty || subDir == null) continue;
+
+      final parts = relative.split('/');
+      final targetPath = p.joinAll([tempRootPath, subDir, ...parts]);
+
+      if (!p.isWithin(p.join(tempRootPath, subDir), targetPath)) continue;
+
+      if (!file.isFile) {
+        Directory(targetPath).createSync(recursive: true);
+        continue;
+      }
+
+      final targetFile = File(targetPath);
+      Directory(p.dirname(targetFile.path)).createSync(recursive: true);
+      targetFile.writeAsBytesSync(file.readBytes() ?? const <int>[]);
     }
   }
 
@@ -154,40 +223,6 @@ class BackupRestoreService {
           ..lastModTime =
               entity.lastModifiedSync().millisecondsSinceEpoch ~/ 1000,
       );
-    }
-  }
-
-  static Future<void> _extractArchiveSection(
-    Archive archive,
-    String archiveRoot,
-    Directory outputDir,
-  ) async {
-    if (await outputDir.exists()) {
-      await outputDir.delete(recursive: true);
-    }
-    await outputDir.create(recursive: true);
-
-    for (final file in archive) {
-      if (!file.name.startsWith('$archiveRoot/')) continue;
-      final relativePath = file.name.substring('$archiveRoot/'.length);
-      if (relativePath.isEmpty) continue;
-
-      final targetPath = p.normalize(
-        p.joinAll([outputDir.path, ...relativePath.split('/')]),
-      );
-      if (!p.isWithin(outputDir.path, targetPath) &&
-          targetPath != outputDir.path) {
-        throw StateError('备份包中包含非法路径：$relativePath');
-      }
-
-      if (!file.isFile) {
-        await Directory(targetPath).create(recursive: true);
-        continue;
-      }
-
-      final targetFile = File(targetPath);
-      await Directory(p.dirname(targetFile.path)).create(recursive: true);
-      await targetFile.writeAsBytes(file.readBytes() ?? const <int>[]);
     }
   }
 

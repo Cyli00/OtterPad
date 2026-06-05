@@ -19,6 +19,7 @@ import '../../providers/reader_settings_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/zotero_sync_provider.dart';
+import '../../services/backup_merge_service.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
 import '../../services/snackbar_service.dart';
@@ -799,8 +800,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   }
 
   Future<void> _restoreFromLocal() async {
-    final scope = await _pickRestoreScope();
-    if (scope == null) return;
+    final options = await _pickRestoreOptions();
+    if (options == null) return;
+    final (scope, mode) = options;
 
     final result = await FilePicker.platform.pickFiles(
       dialogTitle: '选择备份文件',
@@ -812,12 +814,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     if (archivePath == null) return;
 
     try {
-      await _restoreArchive(
+      final mergeResult = await _restoreArchive(
         archivePath: archivePath,
         scope: scope,
-        busyText: '正在恢复备份...',
+        mode: mode,
+        busyText: mode == RestoreMode.merge ? '正在合并备份...' : '正在恢复备份...',
       );
-      _showMessage('恢复完成，当前页面状态已同步刷新');
+      _showRestoreMessage(mode, mergeResult);
     } catch (e) {
       _showMessage('恢复失败：${_formatError(e)}');
     }
@@ -854,8 +857,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     BackupS3State s3,
     BackupWebDavState webDav,
   ) async {
-    final scope = await _pickRestoreScope();
-    if (scope == null) return;
+    final options = await _pickRestoreOptions();
+    if (options == null) return;
+    final (scope, mode) = options;
 
     String? tempArchivePath;
     try {
@@ -878,12 +882,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         }
       });
 
-      await _restoreArchive(
+      final mergeResult = await _restoreArchive(
         archivePath: archivePath,
         scope: scope,
-        busyText: '正在恢复远程备份...',
+        mode: mode,
+        busyText: mode == RestoreMode.merge ? '正在合并远程备份...' : '正在恢复远程备份...',
       );
-      _showMessage('远程恢复完成，当前页面状态已同步刷新');
+      _showRestoreMessage(mode, mergeResult, remote: true);
     } catch (e) {
       _showMessage('远程恢复失败：${_formatError(e)}');
     } finally {
@@ -891,18 +896,40 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
   }
 
-  Future<void> _restoreArchive({
+  Future<MergeResult?> _restoreArchive({
     required String archivePath,
     required BackupRestoreScope scope,
     required String busyText,
+    RestoreMode mode = RestoreMode.overwrite,
   }) async {
+    MergeResult? mergeResult;
     await _runBusy(busyText, () async {
-      await BackupRestoreService.restoreBackupArchive(
+      mergeResult = await BackupRestoreService.restoreBackupArchive(
         archivePath: archivePath,
         scope: scope,
+        mode: mode,
       );
       await _refreshAfterRestore(scope);
     });
+    return mergeResult;
+  }
+
+  void _showRestoreMessage(RestoreMode mode, MergeResult? result, {bool remote = false}) {
+    final prefix = remote ? '远程' : '';
+    if (mode == RestoreMode.overwrite || result == null) {
+      _showMessage('$prefix恢复完成，当前页面状态已同步刷新');
+      return;
+    }
+    if (!result.hasChanges) {
+      _showMessage('$prefix合并完成，本地数据已是最新');
+      return;
+    }
+    final parts = <String>[];
+    if (result.documentsAdded > 0) parts.add('新增 ${result.documentsAdded} 篇文献');
+    if (result.highlightsAdded > 0) parts.add('新增 ${result.highlightsAdded} 条标注');
+    if (result.filesCopied > 0) parts.add('复制 ${result.filesCopied} 个文件');
+    if (result.settingsAdded > 0) parts.add('新增 ${result.settingsAdded} 项设置');
+    _showMessage('$prefix合并完成：${parts.join('、')}');
   }
 
   Future<void> _refreshAfterRestore(BackupRestoreScope scope) async {
@@ -937,37 +964,66 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
   }
 
-  Future<BackupRestoreScope?> _pickRestoreScope() {
-    var current = BackupRestoreScope.full;
-    return showDialog<BackupRestoreScope>(
+  Future<(BackupRestoreScope, RestoreMode)?> _pickRestoreOptions() {
+    var scope = BackupRestoreScope.full;
+    var mode = RestoreMode.merge;
+    return showDialog<(BackupRestoreScope, RestoreMode)>(
       context: context,
       builder: (context) {
         final cs = Theme.of(context).colorScheme;
+        final ts = Theme.of(context).textTheme;
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('选择恢复范围'),
+              title: const Text('恢复设置'),
               content: SizedBox(
                 width: 420,
-                child: RadioGroup<BackupRestoreScope>(
-                  groupValue: current,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => current = value);
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final scope in BackupRestoreScope.values)
-                        RadioListTile<BackupRestoreScope>(
-                          value: scope,
-                          activeColor: cs.primary,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(scope.label),
-                          subtitle: Text(scope.description),
-                        ),
-                    ],
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('恢复方式', style: ts.titleSmall),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<RestoreMode>(
+                        segments: [
+                          for (final m in RestoreMode.values)
+                            ButtonSegment(value: m, label: Text(m.label)),
+                        ],
+                        selected: {mode},
+                        onSelectionChanged: (set) =>
+                            setState(() => mode = set.first),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      mode.description,
+                      style: ts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                    const Divider(height: 24),
+                    Text('恢复范围', style: ts.titleSmall),
+                    RadioGroup<BackupRestoreScope>(
+                      groupValue: scope,
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => scope = value);
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final s in BackupRestoreScope.values)
+                            RadioListTile<BackupRestoreScope>(
+                              value: s,
+                              activeColor: cs.primary,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(s.label),
+                              subtitle: Text(s.description),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
               actions: [
@@ -976,8 +1032,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   child: const Text('取消'),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(current),
-                  child: const Text('开始恢复'),
+                  onPressed: () => Navigator.of(context).pop((scope, mode)),
+                  child: Text(
+                    mode == RestoreMode.merge ? '开始合并' : '开始恢复',
+                  ),
                 ),
               ],
             );
