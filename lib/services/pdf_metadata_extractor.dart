@@ -272,17 +272,29 @@ class PdfMetadataExtractor {
     return String.fromCharCodes(codeUnits);
   }
 
+  // 知网/排版软件常把 /Author 写成数据库或软件标识（如 "CNKI"），这些不是真作者，
+  // 过滤后留空交给文件名解析 / 标题搜索补全。
+  static const _bogusAuthorMarkers = [
+    'cnki',
+    '中国知网',
+    'china academic journal',
+  ];
+
   List<String> _parseAuthors(String? rawAuthor) {
     final cleaned = _cleanText(rawAuthor);
     if (cleaned == null) return const [];
 
-    final authors = cleaned
+    return cleaned
         .split(RegExp(r'\s*(?:;|\band\b)\s*', caseSensitive: false))
         .map(_cleanText)
         .whereType<String>()
-        .where((author) => author.isNotEmpty)
+        .where((author) => author.isNotEmpty && !_isBogusAuthor(author))
         .toList();
-    return authors.isEmpty ? [cleaned] : authors;
+  }
+
+  static bool _isBogusAuthor(String author) {
+    final lower = author.toLowerCase();
+    return _bogusAuthorMarkers.any((marker) => lower.contains(marker));
   }
 
   String? _firstText(XmlDocument document, String localName) {

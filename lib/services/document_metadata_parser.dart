@@ -1,5 +1,6 @@
 import 'package:path/path.dart' as p;
 
+import 'chinese_text_detector.dart';
 import 'identifier_parser.dart';
 
 class DocumentMetadata {
@@ -117,10 +118,32 @@ class DocumentMetadataParser {
     final structured = _parseStructuredText(normalized);
     if (structured.hasAny) return structured;
 
+    final chinese = _parseChineseFilename(normalized);
+    if (chinese.hasAny) return chinese;
+
     return DocumentMetadata(
       doi: extractDoi(normalized),
       year: extractYear(normalized),
     );
+  }
+
+  // CNKI 等中文数据库下载的 PDF 命名为 {标题}_{第一作者}，作者段只保留一位、
+  // 为纯中文人名（2-4 字，含少数民族中点）。仅对中文文件名启用，英文文件名
+  // （如 attention_is_all_you_need.pdf）不受影响。
+  static final RegExp _cnkiAuthorPattern = RegExp(r'^[一-鿿·]{2,4}$');
+
+  static DocumentMetadata _parseChineseFilename(String text) {
+    if (!ChineseTextDetector.isChinese(text)) return const DocumentMetadata();
+
+    final idx = text.lastIndexOf('_');
+    if (idx <= 0 || idx >= text.length - 1) return const DocumentMetadata();
+
+    final title = text.substring(0, idx).trim();
+    final author = text.substring(idx + 1).trim();
+    if (title.isEmpty || !_cnkiAuthorPattern.hasMatch(author)) {
+      return const DocumentMetadata();
+    }
+    return DocumentMetadata(title: title, authors: [author]);
   }
 
   static String? extractDoi(String? text) {

@@ -40,7 +40,10 @@ class PdfIdentifierExtractor {
   );
 
   /// 从 PDF 前 2 页提取文本（带超时保护）
-  Future<String?> _extractText(String filePath) async {
+  ///
+  /// 公开以便标识符提取与中文正文元数据提取复用同一次文本读取，
+  /// 避免对同一 PDF 重复加锁打开。
+  Future<String?> extractText(String filePath) async {
     return PdfProcessLock.instance
         .run(() async {
           PdfDocument? document;
@@ -82,11 +85,12 @@ class PdfIdentifierExtractor {
 
   /// 从 PDF 前 2 页提取最佳标识符（DOI > arXiv > ISBN）
   Future<ParsedIdentifier?> extractIdentifier(String filePath) async {
-    final fullText = await _extractText(filePath);
+    final fullText = await extractText(filePath);
     return extractIdentifierFromText(fullText);
   }
 
-  @visibleForTesting
+  /// 从已提取的文本中识别标识符，供复用同一次文本读取的调用方使用
+  /// （例如元数据修复流程同时跑标识符提取与中文正文解析）。
   static ParsedIdentifier? extractIdentifierFromText(String? fullText) {
     if (fullText == null) return null;
 
