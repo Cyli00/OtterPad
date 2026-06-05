@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -48,6 +49,13 @@ class ReaderJsBridge {
   bool _contentReady = false;
 
   ReaderJsBridge(this._controller, this._listener);
+
+  /// 将 Dart 字符串转义为 JS 单引号字符串字面量的内容（不含外层引号）。
+  static String _jsLiteral(String s) => s
+      .replaceAll('\\', '\\\\')
+      .replaceAll("'", "\\'")
+      .replaceAll('\n', '\\n')
+      .replaceAll('\r', '');
 
   /// 注册所有 9 个 JS → Dart handler。必须在构造后立即调用。
   void attachHandlers() {
@@ -160,6 +168,18 @@ class ReaderJsBridge {
 
   void resumeTimers() => _controller.resumeTimers();
 
+  /// 暂停 WebView 的原生绘制（Android `WebView.onPause()`）——比 [pauseTimers]
+  /// 更进一步：让 WebView 的 chromium compositor 停转、Surface 冻结成静态帧。
+  /// HC 模式下键盘 insets 动画期间，Flutter compositor 不再每帧同步活跃 Surface，
+  /// 是消除「编辑笔记弹键盘卡顿」的关键。必须配对 [resumeRendering]。
+  void pauseRendering() => _controller.pause();
+
+  void resumeRendering() => _controller.resume();
+
+  /// 截取 WebView 当前可见帧——[WebViewMarkdownReaderState.freeze] 用作占位图，
+  /// 在原生 View detach 期间保持画面连续，避免「内容突变成空白」的闪烁。
+  Future<Uint8List?> takeScreenshot() => _controller.takeScreenshot();
+
   // ─── Dart → JS：主题/字体/翻页/翻译样式 ───
 
   /// 增量更新 palette + 字体相关 CSS 变量——直接 setProperty 改 :root vars。
@@ -194,9 +214,8 @@ class ReaderJsBridge {
     if (query == null || query.isEmpty) {
       _controller.evaluateJavascript(source: 'window.clearSearchHighlight()');
     } else {
-      final escaped = query.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
       _controller.evaluateJavascript(
-        source: "window.highlightSearch('$escaped')",
+        source: "window.highlightSearch('${_jsLiteral(query)}')",
       );
     }
   }
@@ -233,8 +252,9 @@ class ReaderJsBridge {
   // ─── Dart → JS：图片闪烁 ───
 
   void flashImage(String filename) {
-    final escaped = filename.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
-    _controller.evaluateJavascript(source: "window.flashImage('$escaped')");
+    _controller.evaluateJavascript(
+      source: "window.flashImage('${_jsLiteral(filename)}')",
+    );
   }
 
   // ─── Dart → JS：高亮 ───
@@ -267,36 +287,34 @@ class ReaderJsBridge {
     Set<String> skipNewIds = const {},
   }) {
     if (!_contentReady) return;
-    final oldIds = oldList.map((h) => h.id).toSet();
-    final newIds = newList.map((h) => h.id).toSet();
+    final oldMap = {for (final h in oldList) h.id: h};
+    final newMap = {for (final h in newList) h.id: h};
 
-    for (final id in oldIds.difference(newIds)) {
-      _controller.evaluateJavascript(source: "window.removeHighlight('$id')");
+    final remove = <String>[];
+    final add = <Map<String, String>>[];
+    final updateColor = <Map<String, String>>[];
+
+    for (final id in oldMap.keys) {
+      if (!newMap.containsKey(id)) remove.add(id);
     }
-
     for (final hl in newList) {
-      if (!oldIds.contains(hl.id)) {
+      if (!oldMap.containsKey(hl.id)) {
         if (skipNewIds.contains(hl.id)) continue;
-        _addHighlight(hl);
-      } else {
-        final old = oldList.firstWhere((h) => h.id == hl.id);
-        if (old.color != hl.color) {
-          _controller.evaluateJavascript(
-            source: "window.updateHighlightColor('${hl.id}','${hl.color}')",
-          );
-        }
+        add.add({'id': hl.id, 'text': hl.text, 'color': hl.color});
+      } else if (oldMap[hl.id]!.color != hl.color) {
+        updateColor.add({'id': hl.id, 'color': hl.color});
       }
     }
-  }
 
-  void _addHighlight(Highlight hl) {
-    final escapedText = hl.text
-        .replaceAll('\\', '\\\\')
-        .replaceAll("'", "\\'")
-        .replaceAll('\n', '\\n')
-        .replaceAll('\r', '');
+    if (remove.isEmpty && add.isEmpty && updateColor.isEmpty) return;
+
+    final payload = <String, dynamic>{};
+    if (remove.isNotEmpty) payload['remove'] = remove;
+    if (add.isNotEmpty) payload['add'] = add;
+    if (updateColor.isNotEmpty) payload['updateColor'] = updateColor;
+    final encoded = base64Encode(utf8.encode(jsonEncode(payload)));
     _controller.evaluateJavascript(
-      source: "window.addHighlight('${hl.id}','$escapedText','${hl.color}')",
+      source: "window.syncHighlightsBatch('$encoded')",
     );
   }
 

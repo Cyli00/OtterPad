@@ -658,6 +658,21 @@ window.updateHighlightColor = function(id, color) {
   if (window._overlayer) window._overlayer.updateColor(id, color);
 };
 
+// 批量同步高亮差异——payload 是 base64(utf8(JSON({remove, add, updateColor})))。
+// Dart 侧 syncHighlights 一次 IPC 发送完整 diff，替代逐条 evaluateJavascript。
+window.syncHighlightsBatch = function(b64Payload) {
+  if (!window._overlayer) return;
+  try {
+    const json = decodeURIComponent(escape(atob(b64Payload)));
+    const diff = JSON.parse(json);
+    if (diff.remove) for (const id of diff.remove) window._overlayer.remove(id);
+    if (diff.add) for (const h of diff.add) window._overlayer.addByText(h.id, h.text, h.color);
+    if (diff.updateColor) for (const u of diff.updateColor) window._overlayer.updateColor(u.id, u.color);
+  } catch(e) {
+    console.error('syncHighlightsBatch failed', e);
+  }
+};
+
 window.clearSelection = function() {
   window.getSelection()?.removeAllRanges();
   _currentSelectionRange = null;

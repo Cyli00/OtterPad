@@ -6,31 +6,13 @@ import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import 'reader_background.dart';
 
-/// 阅读器底部面板的局部主题包裹入口。
+/// 阅读器「主题色 + 背景」底部面板 body。
 ///
-/// [showModalBottomSheet] 走 root navigator，不继承阅读器页面的
-/// [Theme] 覆盖。这里在 builder 内用 [ReaderLocalTheme] 重新应用
-/// 阅读器亮度，使面板配色与阅读器一致。
-Widget _wrapLocalTheme(Widget child) => ReaderLocalTheme(child: child);
-
-/// 阅读器「主题色 + 背景」底部面板。
-///
-/// 结构：
-/// - **颜色**：复用 [themeProvider] 的 seed color（与设置页的色板对齐）；
-/// - **背景**：5 个固定选项 — 白色 / 羊皮 / 护眼 / 夜间 / 纯黑，落到
-///   [ReaderTheme] 枚举上。背景仅影响阅读器页面（局部主题），不改全局
-///   [ThemeMode]。
-Future<void> showReaderThemeSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.25),
-    builder: (_) => _wrapLocalTheme(const _ReaderThemeSheet()),
-  );
-}
-
-class _ReaderThemeSheet extends ConsumerWidget {
-  const _ReaderThemeSheet();
+/// 由 [ReaderSheetHost] 弹出，不再自带 [showModalBottomSheet] 包装。
+/// 颜色复用 [themeProvider] 的 seed color（与设置页的色板对齐）；
+/// 背景 5 选项落到 [ReaderTheme] 枚举，仅影响阅读器局部主题。
+class ReaderThemeSheetBody extends ConsumerWidget {
+  const ReaderThemeSheetBody({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

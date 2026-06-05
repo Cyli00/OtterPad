@@ -44,9 +44,11 @@ import 'widgets/reader_bottom_bar.dart';
 import 'widgets/reader_background.dart';
 import 'widgets/reader_document_info_sheet.dart';
 import 'widgets/reader_notes_sheet.dart';
+import 'widgets/reader_outline_sheet.dart';
 import 'widgets/reader_favorite_sheet.dart';
 import 'widgets/reader_search_bars.dart';
 import 'widgets/reader_search_navigator.dart';
+import 'widgets/reader_sheet_host.dart';
 import 'widgets/reader_text_sheet.dart';
 import 'widgets/reader_theme_sheet.dart';
 import 'widgets/reader_top_toolbar.dart';
@@ -67,6 +69,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _sheetHostKey = GlobalKey<ReaderSheetHostState>();
   late final ReaderSessionArgs _sessionArgs;
 
   // WebView 阅读器引用（通过 GlobalKey 暴露方法）
@@ -306,12 +309,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _scrollToCharOffset(offset);
-      Future.delayed(const Duration(milliseconds: 350), () {
-        if (mounted) {
-          _webViewReaderKey.currentState?.activateNearestSearchResult();
-        }
-      });
+      _scrollToSearchResult(offset);
     });
   }
 
@@ -321,19 +319,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _goToPrevResult() {
     final offset = _sessionNotifier.goToPreviousSearchResult();
-    if (offset == null) return;
-    _scrollToCharOffset(offset);
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (mounted) {
-        _webViewReaderKey.currentState?.activateNearestSearchResult();
-      }
-    });
+    if (offset != null) _scrollToSearchResult(offset);
   }
 
   void _goToNextResult() {
     final offset = _sessionNotifier.goToNextSearchResult();
-    if (offset == null) return;
-    _scrollToCharOffset(offset);
+    if (offset != null) _scrollToSearchResult(offset);
+  }
+
+  /// 跳转到搜索结果：scroll 到目标块 → 等 scroll 动画完成后激活最近匹配项。
+  void _scrollToSearchResult(int charOffset) {
+    _scrollToCharOffset(charOffset);
     Future.delayed(const Duration(milliseconds: 350), () {
       if (mounted) {
         _webViewReaderKey.currentState?.activateNearestSearchResult();
@@ -357,37 +353,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // ─── 底部面板（字体 / 主题 / 大纲） ───
 
-  /// 包围一次 sheet/dialog 弹出：暂停背景 WebView 的 JS timer + 动画，
-  /// 释放 CPU/GPU 给前景 IME 动画和 TextField。
-  ///
-  /// WebView 作为 Android Platform View 即使被 sheet 覆盖也持续渲染，
-  /// 每帧 Flutter compositor 都要等它——pause 期间 frame composition
-  /// 不再受 WebView 拖累，键盘弹出/输入显著流畅。
-  Future<T?> _withPausedWebView<T>(Future<T?> Function() body) async {
-    _webViewReaderKey.currentState?.pauseWebView();
-    try {
-      return await body();
-    } finally {
-      if (mounted) _webViewReaderKey.currentState?.resumeWebView();
-    }
-  }
+  void _pauseWebView() => _webViewReaderKey.currentState?.pauseWebView();
+  void _resumeWebView() => _webViewReaderKey.currentState?.resumeWebView();
 
   Future<void> _openTextSheet() async {
     if (_session.markdownContent == null) return;
-    _sessionNotifier.setSheetOpen(true);
-    await _withPausedWebView(() => showReaderTextSheet(context));
-    _sessionNotifier.setSheetOpen(false);
+    await _sheetHostKey.currentState!.show(
+      builder: (_) => const ReaderTextSheetBody(),
+      barrierAlpha: 0.25,
+      onPause: _pauseWebView,
+      onResume: _resumeWebView,
+    );
   }
 
   Future<void> _openThemeSheet() async {
-    _sessionNotifier.setSheetOpen(true);
-    await _withPausedWebView(() => showReaderThemeSheet(context));
-    _sessionNotifier.setSheetOpen(false);
+    await _sheetHostKey.currentState!.show(
+      builder: (_) => const ReaderThemeSheetBody(),
+      barrierAlpha: 0.25,
+      onPause: _pauseWebView,
+      onResume: _resumeWebView,
+    );
   }
 
   Future<void> _openNotesSheet() async {
-    await _withPausedWebView(
-      () => showReaderNotesSheet(context, documentId: widget.document.id),
+    await _sheetHostKey.currentState!.show(
+      builder: (_) => ReaderNotesSheetBody(
+        documentId: widget.document.id,
+        onEditStart: () async =>
+            _webViewReaderKey.currentState?.freeze(capture: false),
+        onEditEnd: () => _webViewReaderKey.currentState?.unfreeze(),
+      ),
     );
   }
 
@@ -406,79 +401,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final session = _session;
     if (session.markdownContent == null) return;
 
-    // 必须在 showModalBottomSheet 之前读：modal route 对 useSafeArea: false
-    // 会调 MediaQuery.removePadding(removeTop: true)，源码里同时把 viewPadding.top
-    // 也扣掉（viewPadding.top - padding.top），sheetContext 里读 viewPaddingOf().top
-    // 会得到 0，sheet 顶部就盖到状态栏上。
-    final topInset = MediaQuery.viewPaddingOf(context).top;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      // useSafeArea: false——让 sheet 容器自己控制顶部 padding，避免 Flutter
-      // 内置 SafeArea 在 sheet 之上留出"空白条"破坏堆叠卡片视觉。
-      useSafeArea: false,
-      // 加深底层遮罩到 alpha 0.45（默认约 0.32）：底层阅读器更暗，
-      // 上下两层呈现"前景卡片 + 后景卡片"的堆叠层次。
-      barrierColor: Colors.black.withValues(alpha: 0.45),
-      builder: (sheetContext) {
-        final localTheme = buildReaderThemeData(
-          Theme.of(sheetContext),
-          ref.read(readerSettingsProvider).theme,
-        );
-        final cs = localTheme.colorScheme;
-
-        return Theme(
-          data: localTheme,
-          child: Padding(
-            padding: EdgeInsets.only(top: topInset),
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                child: Container(
-                  color: cs.surface,
-                  child: Column(
-                    children: [
-                      Center(
-                        child: Container(
-                          margin: const EdgeInsets.only(top: 12, bottom: 4),
-                          width: 32,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: cs.onSurfaceVariant.withAlpha(80),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: OutlinePanel(
-                          key: ValueKey(session.markdownContent.hashCode),
-                          markdownContent: session.markdownContent!,
-                          documentId: widget.document.id,
-                          summaryImageState: _summaryImageState,
-                          inSheet: true,
-                          onNavigate: (offset) {
-                            Navigator.of(sheetContext).pop();
-                            _scrollToCharOffset(offset);
-                            _tryFlashImageAtOffset(offset);
-                          },
-                          onRegenerateSummary: () {
-                            _handleGenerateSummaryImage(openOutline: false);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+    await _sheetHostKey.currentState!.show(
+      barrierAlpha: 0.45,
+      builder: (_) => ReaderOutlineSheetBody(
+        markdownContent: session.markdownContent!,
+        documentId: widget.document.id,
+        summaryImageState: _summaryImageState,
+        onNavigate: (offset) {
+          _sheetHostKey.currentState!.close();
+          _scrollToCharOffset(offset);
+          _tryFlashImageAtOffset(offset);
+        },
+        onRegenerateSummary: () {
+          _handleGenerateSummaryImage(openOutline: false);
+        },
+      ),
     );
   }
 
@@ -653,26 +590,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     required String documentId,
     required ReaderFavoritePickerMode mode,
   }) {
-    return showReaderFavoritePickerSheet(
-      context: context,
-      title: title,
-      favorites: favorites,
-      documentId: documentId,
-      mode: mode,
-      onCreateFavorite: mode == ReaderFavoritePickerMode.add
-          ? _createFavoriteFromPicker
-          : null,
+    return _sheetHostKey.currentState!.show<ReaderFavoriteSelectionResult>(
+      builder: (_) => ReaderFavoritePickerContent(
+        title: title,
+        favorites: favorites,
+        documentId: documentId,
+        mode: mode,
+        onCreateFavorite: mode == ReaderFavoritePickerMode.add
+            ? _createFavoriteFromPicker
+            : null,
+      ),
     );
   }
 
   void _showDocumentInfo(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ReaderLocalTheme(
-        child: ReaderDocumentInfoSheet(document: widget.document),
-      ),
+    _sheetHostKey.currentState!.show(
+      builder: (_) => ReaderDocumentInfoSheet(document: widget.document),
     );
   }
 
@@ -931,6 +864,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                   : _buildToolbar(cs, extracting: extracting)),
                       ),
                     ),
+                  ),
+                ),
+                // ── 内嵌 sheet 宿主（z-order 低于底栏 → 底栏始终可见） ──
+                Positioned.fill(
+                  child: ReaderSheetHost(
+                    key: _sheetHostKey,
+                    onSheetOpen: () =>
+                        _sessionNotifier.setSheetOpen(true),
+                    onSheetClose: () =>
+                        _sessionNotifier.setSheetOpen(false),
                   ),
                 ),
                 // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──

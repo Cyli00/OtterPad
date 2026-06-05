@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../data/models/collection/favorite.dart';
-import 'reader_background.dart';
+import 'reader_sheet_host.dart';
 
 enum ReaderFavoritePickerMode { add, remove }
 
@@ -14,38 +14,19 @@ class ReaderFavoriteSelectionResult {
   const ReaderFavoriteSelectionResult(this.favorites);
 }
 
-Future<ReaderFavoriteSelectionResult?> showReaderFavoritePickerSheet({
-  required BuildContext context,
-  required String title,
-  required List<Favorite> favorites,
-  required String documentId,
-  required ReaderFavoritePickerMode mode,
-  Future<Favorite?> Function()? onCreateFavorite,
-}) {
-  return showModalBottomSheet<ReaderFavoriteSelectionResult>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => ReaderLocalTheme(
-      child: _ReaderFavoritePickerContent(
-        title: title,
-        favorites: favorites,
-        documentId: documentId,
-        mode: mode,
-        onCreateFavorite: onCreateFavorite,
-      ),
-    ),
-  );
-}
-
-class _ReaderFavoritePickerContent extends StatefulWidget {
+/// 收藏夹选择面板 body，由 [ReaderSheetHost] 弹出。
+///
+/// [onClose] 替代 [Navigator.pop]——sheet 不再是 modal route，
+/// 需要通过回调将结果传回宿主。
+class ReaderFavoritePickerContent extends StatefulWidget {
   final String title;
   final List<Favorite> favorites;
   final String documentId;
   final ReaderFavoritePickerMode mode;
   final Future<Favorite?> Function()? onCreateFavorite;
 
-  const _ReaderFavoritePickerContent({
+  const ReaderFavoritePickerContent({
+    super.key,
     required this.title,
     required this.favorites,
     required this.documentId,
@@ -54,12 +35,12 @@ class _ReaderFavoritePickerContent extends StatefulWidget {
   });
 
   @override
-  State<_ReaderFavoritePickerContent> createState() =>
+  State<ReaderFavoritePickerContent> createState() =>
       _ReaderFavoritePickerContentState();
 }
 
 class _ReaderFavoritePickerContentState
-    extends State<_ReaderFavoritePickerContent> {
+    extends State<ReaderFavoritePickerContent> {
   late List<Favorite> _favorites;
   final Set<String> _selectedIds = {};
   bool _creating = false;
@@ -104,7 +85,7 @@ class _ReaderFavoritePickerContentState
       for (final favorite in _favorites)
         if (_selectedIds.contains(favorite.id)) favorite,
     ];
-    Navigator.pop(context, ReaderFavoriteSelectionResult(selected));
+    ReaderSheetHost.closeOf(context, ReaderFavoriteSelectionResult(selected));
   }
 
   @override
@@ -175,7 +156,7 @@ class _ReaderFavoritePickerContentState
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => ReaderSheetHost.closeOf(context),
                     child: const Text('取消'),
                   ),
                   const SizedBox(width: 8),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
@@ -72,6 +73,13 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   ReaderJsBridge? _bridge;
   final _webViewKey = GlobalKey();
 
+  // 编辑笔记对话框期间，把 InAppWebView 从树中移除（keepAlive 保活原生实例，
+  // 恢复时不重载内容），原生 View 脱离 ViewRoot，键盘 insets 动画不再遍历它。
+  // 见 [freeze]/[unfreeze]。
+  final InAppWebViewKeepAlive _keepAlive = InAppWebViewKeepAlive();
+  bool _frozen = false;
+  Uint8List? _snapshot;
+
   // 覆盖滚动条状态：JS rAF 通道更新 metrics；UI 在 1.5s idle 后淡出。
   // _scrollbarVisible 通过 setState 直接驱动 AnimatedOpacity，不放 ValueNotifier
   // 里——metrics 是高频更新（rAF），visible 是低频两态（show/hide），分开走避免
@@ -121,6 +129,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   void dispose() {
     _scrollbarHideTimer?.cancel();
     _scrollMetrics.dispose();
+    // 释放 keepAlive 保活的原生 WebView，否则离开阅读器后原生实例泄漏。
+    InAppWebViewController.disposeKeepAlive(_keepAlive);
     super.dispose();
   }
 
@@ -248,10 +258,51 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   }
 
   /// 暂停背景 WebView——前景弹出 sheet/dialog 时调用，释放 CPU/GPU。
-  /// 必须配对 [resumeWebView] 调用，否则恢复后 WebView 静止。
+  /// 暂停背景 WebView 的 JS timer / 动画——主题/文本 sheet 弹出期间调用。
+  /// 这两个 sheet 需要 WebView **保持可见做实时预览**，所以只能轻暂停（不能
+  /// onPause/移除，否则改字号/主题看不到实时变化）。必须配对 [resumeWebView]。
   void pauseWebView() => _bridge?.pauseTimers();
 
   void resumeWebView() => _bridge?.resumeTimers();
+
+  /// 彻底冻结 WebView——编辑笔记对话框期间调用。onPause 停 compositor →
+  /// setState 把 InAppWebView 从树移除（keepAlive 保活），原生 View detach 出
+  /// ViewRoot，键盘 insets 动画不再遍历它。
+  /// [capture] 为 true 时先截当前帧做占位（sheet 半透出底层用）；对话框已盖满屏
+  /// 可传 false 跳过、省去截图延迟让对话框跟手弹出。必须配对 [unfreeze]。
+  Future<void> freeze({bool capture = true}) async {
+    if (_frozen) return;
+    Uint8List? shot;
+    if (capture) {
+      try {
+        shot = await _bridge?.takeScreenshot();
+      } catch (_) {}
+      if (!mounted) return;
+    }
+    _bridge?.pauseRendering();
+    setState(() {
+      _snapshot = shot;
+      _frozen = true;
+    });
+  }
+
+  void unfreeze() {
+    if (!_frozen) return;
+    _bridge?.resumeRendering();
+    if (mounted) {
+      setState(() => _frozen = false);
+    } else {
+      _frozen = false;
+    }
+  }
+
+  Widget _buildFrozenPlaceholder() {
+    final shot = _snapshot;
+    if (shot == null) return const SizedBox.expand();
+    return SizedBox.expand(
+      child: Image.memory(shot, fit: BoxFit.cover, gaplessPlayback: true),
+    );
+  }
 
   // ─── 坐标转换 ───
 
@@ -320,14 +371,16 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
     final webView = InAppWebView(
       key: _webViewKey,
+      keepAlive: _keepAlive,
       initialUrlRequest: URLRequest(url: WebUri(url)),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
         transparentBackground: false,
-        // 关掉 hybrid composition：本组件只读、无内嵌输入框，改走 texture 合成
-        // 后，键盘/对话框等 Flutter 侧动画期间不再逐帧强制 WebView 重合成，
-        // 消除 ART GC 抖动与掉帧。
-        useHybridComposition: false,
+        // 必须开 hybrid composition：VD 模式（false）下 WebView 的原生文本选择
+        // 手柄与放大镜（PopupWindow）无法叠加到 Flutter 纹理上——表现为手柄消失、
+        // 放大镜渲染成黑色圆角矩形。代价是键盘/对话框动画期间 WebView 会逐帧
+        // 重合成（ART GC 抖动/掉帧），但阅读器的文本选择是核心交互，优先保证。
+        useHybridComposition: true,
         disableContextMenu: true,
         supportZoom: false,
         // 必须允许 WebView 横向滚动：horizontal 模式下 #content 通过
@@ -345,12 +398,15 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       },
     );
 
+    // 冻结态：InAppWebView 不挂载（原生 View detach 出 ViewRoot），改用截图占位。
+    final Widget content = _frozen ? _buildFrozenPlaceholder() : webView;
+
     // horizontal 翻页模式不需要覆盖滚动条——那边有页号 / 边缘点击翻页 UI。
-    if (isHorizontal) return webView;
+    if (isHorizontal) return content;
 
     return Stack(
       children: [
-        webView,
+        content,
         Positioned(
           top: widget.topInset,
           bottom: widget.bottomInset,

@@ -7,29 +7,19 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../services/translation_style.dart';
-import 'reader_background.dart';
 
-/// 阅读器「字体/字号 + 翻页方式 + 译文样式」底部面板。
+/// 阅读器「字体/字号 + 翻页方式 + 译文样式」底部面板 body。
 ///
-/// 控件：字号 slider、字体族按钮组、翻页方式按钮组、译文样式按钮组。
-/// 边距 / 行距见 CLAUDE.md Todolist，后续阶段再加。
-Future<void> showReaderTextSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.25),
-    builder: (_) => const ReaderLocalTheme(child: _ReaderTextSheet()),
-  );
-}
-
-class _ReaderTextSheet extends ConsumerStatefulWidget {
-  const _ReaderTextSheet();
+/// 由 [ReaderSheetHost] 弹出，不再自带 [showModalBottomSheet] 包装。
+class ReaderTextSheetBody extends ConsumerStatefulWidget {
+  const ReaderTextSheetBody({super.key});
 
   @override
-  ConsumerState<_ReaderTextSheet> createState() => _ReaderTextSheetState();
+  ConsumerState<ReaderTextSheetBody> createState() =>
+      _ReaderTextSheetBodyState();
 }
 
-class _ReaderTextSheetState extends ConsumerState<_ReaderTextSheet> {
+class _ReaderTextSheetBodyState extends ConsumerState<ReaderTextSheetBody> {
   late double _localFontSize;
 
   @override

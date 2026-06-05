@@ -4,33 +4,42 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/highlight_provider.dart';
-import 'reader_background.dart';
 
-Future<void> showReaderNotesSheet(
-  BuildContext context, {
-  required String documentId,
-}) {
-  return showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (_) => ReaderLocalTheme(
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => _NotesSheetBody(
+/// 笔记面板 body（含 [DraggableScrollableSheet] 包装），
+/// 由 [ReaderSheetHost] 弹出。
+///
+/// [onEditStart]/[onEditEnd] 包裹单条笔记的编辑对话框：编辑期间 reader 冻结背景
+/// WebView，使对话框跟随键盘的动画不被 HC WebView 的 insets 遍历拖卡。
+class ReaderNotesSheetBody extends StatelessWidget {
+  final String documentId;
+  final Future<void> Function()? onEditStart;
+  final VoidCallback? onEditEnd;
+
+  const ReaderNotesSheetBody({
+    super.key,
+    required this.documentId,
+    this.onEditStart,
+    this.onEditEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 1.0,
+      minChildSize: 0.3,
+      maxChildSize: 1.0,
+      expand: false,
+      builder: (context, scrollController) => ColoredBox(
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        child: _NotesSheetBody(
           documentId: documentId,
           scrollController: scrollController,
+          onEditStart: onEditStart,
+          onEditEnd: onEditEnd,
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// 笔记 sheet 内容容器。
@@ -43,10 +52,14 @@ Future<void> showReaderNotesSheet(
 class _NotesSheetBody extends StatefulWidget {
   final String documentId;
   final ScrollController scrollController;
+  final Future<void> Function()? onEditStart;
+  final VoidCallback? onEditEnd;
 
   const _NotesSheetBody({
     required this.documentId,
     required this.scrollController,
+    this.onEditStart,
+    this.onEditEnd,
   });
 
   @override
@@ -64,6 +77,8 @@ class _NotesSheetBodyState extends State<_NotesSheetBody> {
     _listSubtree = _NotesList(
       documentId: widget.documentId,
       scrollController: widget.scrollController,
+      onEditStart: widget.onEditStart,
+      onEditEnd: widget.onEditEnd,
     );
   }
 
@@ -149,8 +164,15 @@ class _Header extends ConsumerWidget {
 class _NotesList extends ConsumerStatefulWidget {
   final String documentId;
   final ScrollController scrollController;
+  final Future<void> Function()? onEditStart;
+  final VoidCallback? onEditEnd;
 
-  const _NotesList({required this.documentId, required this.scrollController});
+  const _NotesList({
+    required this.documentId,
+    required this.scrollController,
+    this.onEditStart,
+    this.onEditEnd,
+  });
 
   @override
   ConsumerState<_NotesList> createState() => _NotesListState();
@@ -160,17 +182,24 @@ class _NotesListState extends ConsumerState<_NotesList> {
   /// 把 callback 提取为 instance method——itemBuilder 中使用 closure
   /// `() => method(hl)` 时 closure 每次 build 都新建，但 Tile 持有 callback
   /// 字段差异不会触发 didUpdateWidget 之外的开销；method 路径更稳。
-  void _onEdit(Highlight hl) {
-    showDialog<String>(
+  Future<void> _onEdit(Highlight hl) async {
+    // 编辑期间冻结背景 WebView：对话框跟随键盘上移时，背后不再有 HC WebView 被
+    // insets 动画逐帧遍历。解冻在对话框关闭时发生，此刻笔记 sheet 仍盖在上面，
+    // WebView 重挂载的刷新被遮住，用户不可见。
+    await widget.onEditStart?.call();
+    if (!mounted) {
+      widget.onEditEnd?.call(); // 已冻结则必须解冻，否则 WebView 卡死在冻结态
+      return;
+    }
+    final note = await showDialog<String>(
       context: context,
       builder: (_) => _EditNoteDialog(highlight: hl),
-    ).then((note) {
-      if (note == null) return;
-      if (!mounted) return;
-      ref
-          .read(highlightProvider(widget.documentId).notifier)
-          .updateNote(hl.id, note);
-    });
+    );
+    widget.onEditEnd?.call();
+    if (note == null || !mounted) return;
+    ref
+        .read(highlightProvider(widget.documentId).notifier)
+        .updateNote(hl.id, note);
   }
 
   void _onDelete(Highlight hl) {
