@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show ImageFilter;
-
 import 'package:animations/animations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -67,10 +65,52 @@ class ReaderPage extends ConsumerStatefulWidget {
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
 }
 
+/// 主 build 的 select 返回类型——Dart record 自带 structural ==。
+/// 排除 currentResultIndex（由 [_ResultNavigator] 独立消费），
+/// markdownContent 用 cacheKey 代替（避免大字符串逐字比较），
+/// searchResults 只保留 length，error/snapshot 只保留 nullity。
+typedef _MainBuildKey = (
+  bool initialized,
+  bool fileExists,
+  bool showPreview,
+  bool hasMarkdownContent,
+  String? markdownCacheKey,
+  bool toolbarsVisible,
+  bool searchActive,
+  bool isHighlightMode,
+  bool hasSearchSnapshot,
+  String? summaryImagePath,
+  String? highlightQuery,
+  int searchResultsLength,
+  bool markdownLoading,
+  bool hasMarkdownLoadError,
+  bool hasResult,
+  String? markdownPath,
+);
+
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _sheetHostKey = GlobalKey<ReaderSheetHostState>();
   late final ReaderSessionArgs _sessionArgs;
+
+  static _MainBuildKey _mainBuildSelector(ReaderSessionState s) => (
+    s.initialized,
+    s.fileExists,
+    s.showPreview,
+    s.markdownContent != null,
+    s.markdownCacheKey,
+    s.toolbarsVisible,
+    s.searchActive,
+    s.markdownHighlightMode,
+    s.searchSnapshot != null,
+    s.summaryImagePath,
+    s.highlightQuery,
+    s.searchResults.length,
+    s.markdownLoading,
+    s.markdownLoadError != null,
+    s.hasResult,
+    s.markdownPath,
+  );
 
   // WebView 阅读器引用（通过 GlobalKey 暴露方法）
   final _webViewReaderKey = GlobalKey<WebViewMarkdownReaderState>();
@@ -744,7 +784,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final readerSettings = ref.watch(readerSettingsProvider);
     final theme = buildReaderThemeData(Theme.of(context), readerSettings.theme);
     final cs = theme.colorScheme;
-    final session = ref.watch(readerSessionProvider(_sessionArgs));
+    // select 排除 currentResultIndex（由独立的 _ResultNavigator 消费）,
+    // 避免搜索导航时整页 rebuild。markdownContent 用 cacheKey 代替全文比较，
+    // searchResults 只比较 length，error/snapshot 只比较 nullity。
+    ref.watch(readerSessionProvider(_sessionArgs).select(_mainBuildSelector));
+    // ref.read 获取完整 state 用于数据访问——select 已覆盖所有 rebuild 场景，
+    // currentResultIndex 变化时 select 不触发、read 返回的值不被消费，安全。
+    final session = ref.read(readerSessionProvider(_sessionArgs));
     final extractTaskKey = DocumentTaskKey(
       type: DocumentTaskType.extractDocument,
       documentId: widget.document.id,
@@ -765,7 +811,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           body: SafeArea(
             child: Column(
               children: [
-                _buildToolbar(cs),
+                _buildToolbar(cs, session),
                 Expanded(
                   child: Center(
                     child: CircularProgressIndicator(
@@ -858,10 +904,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                           alpha: readerSettings.toolbarOpacity.value,
                         ),
                         child: isMarkdownHighlightMode
-                            ? _buildHighlightSearchBar()
+                            ? _buildHighlightSearchBar(session)
                             : (session.searchActive && !session.showPreview
                                   ? _buildPdfSearchBar()
-                                  : _buildToolbar(cs, extracting: extracting)),
+                                  : _buildToolbar(
+                                      cs, session, extracting: extracting,
+                                    )),
                       ),
                     ),
                   ),
@@ -901,7 +949,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   Positioned(
                     right: 16,
                     bottom: 32,
-                    child: _buildResultNavigator(),
+                    child: _ResultNavigator(
+                      sessionArgs: _sessionArgs,
+                      onPrevious: _goToPrevResult,
+                      onNext: _goToNextResult,
+                    ),
                   ),
                 if (showPdfNavigator)
                   Positioned(
@@ -942,8 +994,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 顶部工具栏：返回 / 搜索 / PDF↔MD 切换 / 重新提取 / 信息
   ///
   /// 大纲、外观（颜色/背景）、字体面板 3 个按钮已挪到 [_buildBottomBar]。
-  Widget _buildToolbar(ColorScheme cs, {bool extracting = false}) {
-    final session = ref.watch(readerSessionProvider(_sessionArgs));
+  Widget _buildToolbar(
+    ColorScheme cs,
+    ReaderSessionState session, {
+    bool extracting = false,
+  }) {
     final favorites = ref.watch(favoritesProvider);
     final inFavorite = _isInAnyFavorite(favorites);
     final translation = ref.watch(
@@ -962,7 +1017,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       extracting: extracting,
       canRetranslate: translation.hasResult && session.markdownContent != null,
       hasSummaryImage: File(summaryImagePath).existsSync(),
-      extractButton: _buildExtractButton(cs, extracting),
+      extractButton: _buildExtractButton(session, cs, extracting),
       onBack: () => context.pop(),
       onSearch: _openSearch,
       onGenerateSummaryImage: _handleGenerateSummaryImage,
@@ -990,9 +1045,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  /// 高亮浏览模式下的顶部搜索栏：显示当前查询词，点击可重新搜索，✕ 退出搜索
-  Widget _buildHighlightSearchBar() {
-    final session = ref.watch(readerSessionProvider(_sessionArgs));
+  Widget _buildHighlightSearchBar(ReaderSessionState session) {
     return ReaderHighlightSearchBar(
       query: session.highlightQuery ?? '',
       onBack: () => context.pop(),
@@ -1012,16 +1065,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  /// 右下角浮动导航器：上/下雪佛龙 + 当前/总数 计数器
-  Widget _buildResultNavigator() {
-    final session = ref.watch(readerSessionProvider(_sessionArgs));
-    return ReaderTextResultNavigator(
-      currentIndex: session.currentResultIndex,
-      total: session.searchResults.length,
-      onPrevious: _goToPrevResult,
-      onNext: _goToNextResult,
-    );
-  }
+  // _buildResultNavigator 已提取为独立的 [_ResultNavigator] ConsumerWidget，
+  // 只 watch (currentResultIndex, searchResults.length)，搜索导航不再触发整页 rebuild。
 
   /// 底部工具栏：大纲 / 笔记 / 主题面板 / 字体面板
   ///
@@ -1198,8 +1243,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  Widget _buildExtractButton(ColorScheme cs, bool extracting) {
-    final session = ref.watch(readerSessionProvider(_sessionArgs));
+  Widget _buildExtractButton(
+    ReaderSessionState session,
+    ColorScheme cs,
+    bool extracting,
+  ) {
     if (extracting) {
       return const Padding(
         padding: EdgeInsets.all(12),
@@ -1472,6 +1520,35 @@ class _PdfScrollThumbState extends State<_PdfScrollThumb> {
           borderRadius: BorderRadius.circular(width / 2),
         ),
       ),
+    );
+  }
+}
+
+/// 独立 rebuild 的搜索结果导航器——只 watch currentResultIndex 和 searchResults.length，
+/// 搜索导航（上/下箭头）不再触发 [_ReaderPageState] 的主 build。
+class _ResultNavigator extends ConsumerWidget {
+  final ReaderSessionArgs sessionArgs;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  const _ResultNavigator({
+    required this.sessionArgs,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (currentIndex, total) = ref.watch(
+      readerSessionProvider(sessionArgs).select(
+        (s) => (s.currentResultIndex, s.searchResults.length),
+      ),
+    );
+    return ReaderTextResultNavigator(
+      currentIndex: currentIndex,
+      total: total,
+      onPrevious: onPrevious,
+      onNext: onNext,
     );
   }
 }
