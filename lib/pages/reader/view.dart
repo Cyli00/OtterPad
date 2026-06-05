@@ -139,9 +139,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     const SummaryImageState(),
   );
 
-  // 翻译进度 SnackBar 句柄——点按"翻译"时 show，翻译结束 finish/dismiss。
-  SnackBarProgressHandle? _translationProgressHandle;
-
   // PDF 进度采集：上一次上报的 pageNumber 缓存，避免每次 controller 通知（包括
   // 滚动 / zoom / fit）都触发一次 reportProgress——只有 pageNumber 真变了才上报。
   int? _lastReportedPdfPage;
@@ -908,7 +905,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             : (session.searchActive && !session.showPreview
                                   ? _buildPdfSearchBar()
                                   : _buildToolbar(
-                                      cs, session, extracting: extracting,
+                                      cs,
+                                      session,
+                                      extracting: extracting,
                                     )),
                       ),
                     ),
@@ -918,10 +917,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 Positioned.fill(
                   child: ReaderSheetHost(
                     key: _sheetHostKey,
-                    onSheetOpen: () =>
-                        _sessionNotifier.setSheetOpen(true),
-                    onSheetClose: () =>
-                        _sessionNotifier.setSheetOpen(false),
+                    onSheetOpen: () => _sessionNotifier.setSheetOpen(true),
+                    onSheetClose: () => _sessionNotifier.setSheetOpen(false),
                   ),
                 ),
                 // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
@@ -1095,74 +1092,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final markdown = _session.markdownContent;
     if (markdown == null || markdown.isEmpty) return;
 
-    // **必须**在显示进度 SnackBar 前检查 AI 配置：否则配置缺失时
-    // provider 内 AiSettingsPrompt 弹的错误 SnackBar 会被即将出场的
-    // 进度 SnackBar 覆盖，用户感受到的是"点了毫无反应"。Provider 内的
-    // 同一检查保留作 defense in depth。
+    // **必须**在触发翻译前检查 AI 配置：否则配置缺失时 provider 内 AiSettingsPrompt
+    // 弹的错误 SnackBar 会被进度 SnackBar 覆盖，用户感受到的是"点了毫无反应"。
+    // Provider 内的同一检查保留作 defense in depth。
     if (!_ensureAgentConfigured()) return;
 
     final documentId = widget.document.id;
     final notifier = ref.read(documentTranslationProvider(documentId).notifier);
 
-    // 先显示 SnackBar 让用户立即看到反馈——translate 内部异步开始后才有第一次
-    // onProgress，避免短暂的"点了没反应"观感。
-    _translationProgressHandle?.dismiss();
-    _translationProgressHandle = ref
-        .read(snackBarServiceProvider)
-        .showListenableProgress(
-          listenable: _adaptProgress(notifier.progress),
-          onCancel: () {
-            notifier.cancel();
-            _translationProgressHandle?.dismiss();
-            _translationProgressHandle = null;
-          },
-        );
-
+    // 进度 SnackBar 由 notifier 自己 report 到 Task Activity（见
+    // DocumentTranslationNotifier.translate）；这里只负责翻完后的结果文案。
     final fullyCached = await notifier.translate(markdown);
     if (!mounted) return;
 
     final state = ref.read(documentTranslationProvider(documentId));
-    final handle = _translationProgressHandle;
-    _translationProgressHandle = null;
     if (state.status == DocTranslationStatus.done) {
       // 完全命中文件缓存：本次点击没有真的翻译（也没有花 API 配额），
       // 用户可能困惑"为什么这么快/翻得跟上次一样"——明确提示并指引
       // 重新翻译路径（顶栏省略号 → 重新翻译）。文案较长所以延长展示时间。
-      handle?.finish(
-        message: fullyCached ? '使用了之前的翻译缓存，如需重新翻译请点击右上角省略号里的重新翻译' : '翻译完成',
-        duration: fullyCached ? const Duration(seconds: 6) : null,
-      );
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(
+            message: fullyCached ? '使用了之前的翻译缓存，如需重新翻译请点击右上角省略号里的重新翻译' : '翻译完成',
+            duration: fullyCached
+                ? const Duration(seconds: 6)
+                : const Duration(seconds: 4),
+          );
     } else {
-      handle?.dismiss();
       _reportTranslationFailure(state);
     }
-  }
-
-  /// 把 `TranslationProgress` 的 ValueListenable 适配到 SnackBar 需要的
-  /// `ListenableProgress` 类型——让 snackbar_service 不必依赖业务类型。
-  ValueListenable<ListenableProgress> _adaptProgress(
-    ValueListenable<TranslationProgress> source,
-  ) {
-    final adapter = ValueNotifier<ListenableProgress>(
-      ListenableProgress(
-        current: source.value.current,
-        total: source.value.total,
-        status: source.value.status,
-      ),
-    );
-    void listener() {
-      final v = source.value;
-      adapter.value = ListenableProgress(
-        current: v.current,
-        total: v.total,
-        status: v.status,
-      );
-    }
-
-    source.addListener(listener);
-    // 适配器随翻译结束一起被 GC——SnackBar 关闭后 ValueListenableBuilder 不再
-    // 调用 build，listener 也不再被唤醒，无泄漏风险。
-    return adapter;
   }
 
   /// 三态循环：双语 → 原文 → 译文 → 双语。
@@ -1177,35 +1135,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final markdown = _session.markdownContent;
     if (markdown == null || markdown.isEmpty) return;
 
-    // 同 _handleTranslate：进度 SnackBar 会盖住 AiSettingsPrompt 的错误提醒，
-    // 必须在显示进度条之前检查配置。
+    // 同 _handleTranslate：必须在触发翻译前检查配置。
     if (!_ensureAgentConfigured()) return;
 
     final documentId = widget.document.id;
     final notifier = ref.read(documentTranslationProvider(documentId).notifier);
 
-    _translationProgressHandle?.dismiss();
-    _translationProgressHandle = ref
-        .read(snackBarServiceProvider)
-        .showListenableProgress(
-          listenable: _adaptProgress(notifier.progress),
-          onCancel: () {
-            notifier.cancel();
-            _translationProgressHandle?.dismiss();
-            _translationProgressHandle = null;
-          },
-        );
-
+    // 进度由 notifier 自报 Task Activity；retranslate 内部复用 translate()。
     await notifier.retranslate(markdown);
     if (!mounted) return;
 
     final state = ref.read(documentTranslationProvider(documentId));
-    final handle = _translationProgressHandle;
-    _translationProgressHandle = null;
     if (state.status == DocTranslationStatus.done) {
-      handle?.finish(message: '翻译完成');
+      ref.read(snackBarServiceProvider).showResult(message: '翻译完成');
     } else {
-      handle?.dismiss();
       _reportTranslationFailure(state);
     }
   }
@@ -1540,9 +1483,9 @@ class _ResultNavigator extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final (currentIndex, total) = ref.watch(
-      readerSessionProvider(sessionArgs).select(
-        (s) => (s.currentResultIndex, s.searchResults.length),
-      ),
+      readerSessionProvider(
+        sessionArgs,
+      ).select((s) => (s.currentResultIndex, s.searchResults.length)),
     );
     return ReaderTextResultNavigator(
       currentIndex: currentIndex,

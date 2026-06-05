@@ -51,22 +51,6 @@ class DocumentTranslationState {
   );
 }
 
-// ── 进度信息 ─────────────────────────────────────────────────────────
-
-class TranslationProgress {
-  final int current;
-  final int total;
-  final String status;
-
-  const TranslationProgress({
-    required this.current,
-    required this.total,
-    required this.status,
-  });
-
-  static const zero = TranslationProgress(current: 0, total: 0, status: '准备中');
-}
-
 // ── Notifier ─────────────────────────────────────────────────────────
 
 class DocumentTranslationNotifier
@@ -93,12 +77,13 @@ class DocumentTranslationNotifier
 
   TranslationCancelToken? _cancelToken;
 
-  /// 外部可订阅的进度——SnackBar 用 ValueListenableBuilder 绑定。
-  /// 高频更新只刷新 notifier.value，不触发 state 变更，避免文档级 rebuild。
-  final ValueNotifier<TranslationProgress> _progress = ValueNotifier(
-    TranslationProgress.zero,
+  /// 翻译进度——直接复用 Task Activity 的 [ListenableProgress]，由本 notifier
+  /// 在 [translate] 内 report 到 taskActivityProvider；所有呈现处（snackbar
+  /// surface / 多文档面板）共享同一真值。高频更新只刷新 value，不触发 state 变更。
+  final ValueNotifier<ListenableProgress> _progress = ValueNotifier(
+    const ListenableProgress(current: 0, total: 0, status: '准备中'),
   );
-  ValueListenable<TranslationProgress> get progress => _progress;
+  ValueListenable<ListenableProgress> get progress => _progress;
 
   /// 启动一次完整的文档翻译。
   ///
@@ -135,8 +120,8 @@ class DocumentTranslationNotifier
       return false;
     }
 
-    final cancel = TranslationCancelToken();
-    _cancelToken = cancel;
+    final token = TranslationCancelToken();
+    _cancelToken = token;
 
     // 初始态：loading + 默认进入双语模式（翻完无需二次点击就能看到结果）
     state = DocumentTranslationState(
@@ -145,11 +130,22 @@ class DocumentTranslationNotifier
       translations: const {},
       mode: DocTranslationMode.bilingual,
     );
-    _progress.value = TranslationProgress(
+    _progress.value = ListenableProgress(
       current: 0,
       total: paragraphs.length,
       status: '翻译中',
     );
+
+    // 登记进 Task Activity（单一真值源）：无论从哪个入口触发翻译，进度都进同一
+    // 活集合，由 snackbar surface 仲裁呈现（≥2 任务自动聚合）。完成/缓存/失败的
+    // 用户文案仍由调用方按需 showResult——本 notifier 只负责任务的注册与注销。
+    final handle = _ref
+        .read(snackBarServiceProvider)
+        .showListenableProgress(
+          listenable: _progress,
+          title: '翻译',
+          onCancel: cancel,
+        );
 
     final translations = <String, String>{};
 
@@ -159,13 +155,13 @@ class DocumentTranslationNotifier
         paragraphs: paragraphs,
         agentState: agentState,
         config: config,
-        cancelToken: cancel,
+        cancelToken: token,
         useCache: useCache,
         onResult: (hash, translation) {
           translations[hash] = translation;
         },
         onProgress: (done, total) {
-          _progress.value = TranslationProgress(
+          _progress.value = ListenableProgress(
             current: done,
             total: total,
             status: done >= total ? '翻译完成' : '翻译中',
@@ -182,7 +178,7 @@ class DocumentTranslationNotifier
       // 同款修复。
       await SchedulerBinding.instance.endOfFrame;
 
-      if (cancel.isCancelled) {
+      if (token.isCancelled) {
         state = state.copyWith(
           status: DocTranslationStatus.idle,
           translations: translations,
@@ -205,6 +201,8 @@ class DocumentTranslationNotifier
       return false;
     } finally {
       _cancelToken = null;
+      // 注销 Task Activity 任务（完成/缓存/失败的用户文案由调用方按需 showResult）。
+      handle.dismiss();
     }
   }
 
@@ -253,7 +251,11 @@ class DocumentTranslationNotifier
 
   void _reset() {
     state = const DocumentTranslationState();
-    _progress.value = TranslationProgress.zero;
+    _progress.value = const ListenableProgress(
+      current: 0,
+      total: 0,
+      status: '准备中',
+    );
   }
 
   @override
