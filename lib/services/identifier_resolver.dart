@@ -9,6 +9,7 @@ import 'package:xml/xml.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import 'identifier_parser.dart';
+import 'metadata_names.dart';
 
 /// 标识符解析过程中抛出的异常。
 class IdentifierResolveException implements Exception {
@@ -323,11 +324,7 @@ class IdentifierResolver {
             final given = (foreName != null && foreName.isNotEmpty)
                 ? foreName
                 : initials;
-            authors.add(
-              (given != null && given.isNotEmpty)
-                  ? '$given $lastName'
-                  : lastName,
-            );
+            authors.add(MetadataNames.formatPersonName(given, lastName));
           } else if (collective != null && collective.isNotEmpty) {
             authors.add(collective);
           }
@@ -963,9 +960,10 @@ class IdentifierResolver {
     return authorList
         .map((author) {
           final map = author as Map<String, dynamic>;
-          final given = map['given'] as String? ?? '';
-          final family = map['family'] as String? ?? '';
-          return '$given $family'.trim();
+          return MetadataNames.formatPersonName(
+            map['given'] as String?,
+            map['family'] as String?,
+          );
         })
         .where((name) => name.isNotEmpty)
         .toList();
@@ -988,12 +986,7 @@ class IdentifierResolver {
 
     if (authors.isNotEmpty) return authors;
     if (authorLine is! String || authorLine.trim().isEmpty) return authors;
-    return authorLine
-        .replaceAll('...', ',')
-        .split(',')
-        .map((author) => author.trim())
-        .where((author) => author.isNotEmpty)
-        .toList();
+    return MetadataNames.splitAuthorLine(authorLine);
   }
 
   List<String> _extractElifeKeywords(dynamic keywordList, dynamic subjectList) {
