@@ -24,6 +24,7 @@ import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/storage_cleanup_service.dart';
+import '../../utils/debounced_action.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
@@ -42,7 +43,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   String? _dataSizeText;
 
   late final TextEditingController _zoteroKeyCtrl;
-  Timer? _zoteroKeyTimer;
+  final _zoteroKeyDebounce = DebouncedAction();
   bool _zoteroKeyObscured = true;
 
   @override
@@ -56,7 +57,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
 
   @override
   void dispose() {
-    _zoteroKeyTimer?.cancel();
+    _zoteroKeyDebounce.cancel();
     _zoteroKeyCtrl.dispose();
     super.dispose();
   }
@@ -65,7 +66,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     StorageCleanupService.cacheSize().then((bytes) {
       if (mounted) {
         setState(
-          () => _cacheSizeText = '占用 ${StorageCleanupService.formatSize(bytes)}',
+          () =>
+              _cacheSizeText = '占用 ${StorageCleanupService.formatSize(bytes)}',
         );
       }
     });
@@ -176,7 +178,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       subtitle: _remoteConfigured(remoteType, s3, webDav)
                           ? '上传完整备份到${_remoteTargetLabel(remoteType, s3, webDav)}'
                           : '请先配置${remoteType.label}连接信息',
-                      enabled: _remoteConfigured(remoteType, s3, webDav) && !_busy,
+                      enabled:
+                          _remoteConfigured(remoteType, s3, webDav) && !_busy,
                       onTap: () => _backupToRemote(remoteType, s3, webDav),
                     ),
                     _buildDivider(context),
@@ -186,7 +189,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       subtitle: _remoteConfigured(remoteType, s3, webDav)
                           ? '下载${_remoteTargetLabel(remoteType, s3, webDav)}并恢复'
                           : '请先配置${remoteType.label}连接信息',
-                      enabled: _remoteConfigured(remoteType, s3, webDav) && !_busy,
+                      enabled:
+                          _remoteConfigured(remoteType, s3, webDav) && !_busy,
                       onTap: () => _restoreFromRemote(remoteType, s3, webDav),
                     ),
                   ],
@@ -385,9 +389,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 TextField(
                   controller: _zoteroKeyCtrl,
                   onChanged: (v) {
-                    _zoteroKeyTimer?.cancel();
-                    _zoteroKeyTimer = Timer(
-                      const Duration(milliseconds: 600),
+                    _zoteroKeyDebounce.run(
                       () => ref
                           .read(zoteroSyncProvider.notifier)
                           .setApiKey(v.trim()),
@@ -601,7 +603,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
           ),
           const SizedBox(width: 12),
           FilledButton.tonal(
-            onPressed: _busy ? null : () => _editRemoteConfig(remoteType, s3, webDav),
+            onPressed: _busy
+                ? null
+                : () => _editRemoteConfig(remoteType, s3, webDav),
             child: Text(configured ? '编辑' : '配置'),
           ),
         ],
@@ -633,7 +637,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     BackupS3State s3,
     BackupWebDavState webDav,
   ) {
-    return remoteType == BackupRemoteType.s3 ? s3.isConfigured : webDav.isConfigured;
+    return remoteType == BackupRemoteType.s3
+        ? s3.isConfigured
+        : webDav.isConfigured;
   }
 
   String _remoteTargetLabel(
@@ -914,7 +920,11 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     return mergeResult;
   }
 
-  void _showRestoreMessage(RestoreMode mode, MergeResult? result, {bool remote = false}) {
+  void _showRestoreMessage(
+    RestoreMode mode,
+    MergeResult? result, {
+    bool remote = false,
+  }) {
     final prefix = remote ? '远程' : '';
     if (mode == RestoreMode.overwrite || result == null) {
       _showMessage('$prefix恢复完成，当前页面状态已同步刷新');
@@ -926,7 +936,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
     final parts = <String>[];
     if (result.documentsAdded > 0) parts.add('新增 ${result.documentsAdded} 篇文献');
-    if (result.highlightsAdded > 0) parts.add('新增 ${result.highlightsAdded} 条标注');
+    if (result.highlightsAdded > 0)
+      parts.add('新增 ${result.highlightsAdded} 条标注');
     if (result.filesCopied > 0) parts.add('复制 ${result.filesCopied} 个文件');
     if (result.settingsAdded > 0) parts.add('新增 ${result.settingsAdded} 项设置');
     _showMessage('$prefix合并完成：${parts.join('、')}');
@@ -953,11 +964,17 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
 
     if (scope.restoreLibrary) {
-      final previousDocIds = ref.read(documentsProvider).map((doc) => doc.id).toSet();
+      final previousDocIds = ref
+          .read(documentsProvider)
+          .map((doc) => doc.id)
+          .toSet();
       ref.invalidate(documentsProvider);
       ref.invalidate(favoritesProvider);
       ref.invalidate(historyProvider);
-      final currentDocIds = ref.read(documentsProvider).map((doc) => doc.id).toSet();
+      final currentDocIds = ref
+          .read(documentsProvider)
+          .map((doc) => doc.id)
+          .toSet();
       for (final docId in {...previousDocIds, ...currentDocIds}) {
         ref.invalidate(highlightProvider(docId));
       }
@@ -1033,9 +1050,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop((scope, mode)),
-                  child: Text(
-                    mode == RestoreMode.merge ? '开始合并' : '开始恢复',
-                  ),
+                  child: Text(mode == RestoreMode.merge ? '开始合并' : '开始恢复'),
                 ),
               ],
             );
@@ -1241,9 +1256,7 @@ class _RemoteDialogScaffold extends StatelessWidget {
                     if (onClear != null)
                       TextButton(
                         onPressed: onClear,
-                        style: TextButton.styleFrom(
-                          foregroundColor: cs.error,
-                        ),
+                        style: TextButton.styleFrom(foregroundColor: cs.error),
                         child: const Text('清空'),
                       ),
                     TextButton(
@@ -1251,10 +1264,7 @@ class _RemoteDialogScaffold extends StatelessWidget {
                       child: const Text('取消'),
                     ),
                     const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: onSave,
-                      child: const Text('保存'),
-                    ),
+                    TextButton(onPressed: onSave, child: const Text('保存')),
                   ],
                 ),
               ],
@@ -1306,9 +1316,7 @@ class _ConfigField extends StatelessWidget {
           suffixIcon: suffixIcon,
           filled: true,
           fillColor: cs.surfaceContainerLow,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: cs.outline),
@@ -1398,9 +1406,7 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
               });
             },
             icon: Icon(
-              _obscurePassword
-                  ? Symbols.visibility
-                  : Symbols.visibility_off,
+              _obscurePassword ? Symbols.visibility : Symbols.visibility_off,
             ),
           ),
         ),
@@ -1434,12 +1440,15 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
     _endpointController = TextEditingController(text: widget.initial.endpoint);
     _regionController = TextEditingController(text: widget.initial.region);
     _bucketController = TextEditingController(text: widget.initial.bucket);
-    _accessKeyController =
-        TextEditingController(text: widget.initial.accessKeyId);
-    _secretKeyController =
-        TextEditingController(text: widget.initial.secretAccessKey);
-    _objectKeyController =
-        TextEditingController(text: widget.initial.objectKey);
+    _accessKeyController = TextEditingController(
+      text: widget.initial.accessKeyId,
+    );
+    _secretKeyController = TextEditingController(
+      text: widget.initial.secretAccessKey,
+    );
+    _objectKeyController = TextEditingController(
+      text: widget.initial.objectKey,
+    );
     _usePathStyle = widget.initial.usePathStyle;
   }
 
@@ -1508,9 +1517,7 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
               });
             },
             icon: Icon(
-              _obscureSecretKey
-                  ? Symbols.visibility
-                  : Symbols.visibility_off,
+              _obscureSecretKey ? Symbols.visibility : Symbols.visibility_off,
             ),
           ),
         ),

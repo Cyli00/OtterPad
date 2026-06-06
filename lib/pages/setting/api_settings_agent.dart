@@ -8,6 +8,7 @@ import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/snackbar_service.dart';
+import '../../utils/debounced_action.dart';
 import 'agent_model_list_tile.dart';
 import 'agent_model_capability_sheet.dart';
 import 'agent_model_manage_sheet.dart';
@@ -42,8 +43,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   String _currentId = '';
 
   bool _keyObscured = true;
-  Timer? _urlTimer;
-  Timer? _keyTimer;
+  final _keyDebounce = DebouncedAction();
+  final _urlDebounce = DebouncedAction();
 
   // key 在结果集中 → 已测过；value 为 null → 成功，非空 → 错误消息
   final _modelTestResults = <String, String?>{};
@@ -54,7 +55,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     super.initState();
     final instances = ref.read(agentApiProvider).instances;
     final lastId = GStorage.setting.get(_lastInstanceKey) as String?;
-    final inst = instances.where((i) => i.id == lastId).firstOrNull ??
+    final inst =
+        instances.where((i) => i.id == lastId).firstOrNull ??
         (instances.isNotEmpty ? instances.first : null);
     _currentId = inst?.id ?? '';
     _urlCtrl = TextEditingController(text: _urlText(inst));
@@ -65,8 +67,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   void dispose() {
     _urlCtrl.dispose();
     _keyCtrl.dispose();
-    _urlTimer?.cancel();
-    _keyTimer?.cancel();
+    _keyDebounce.cancel();
+    _urlDebounce.cancel();
     super.dispose();
   }
 
@@ -93,10 +95,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     if (protocol == null || !mounted) return;
 
     // 选完协议后填表确认——名称 / 地址 / Key 都填齐才能创建
-    final form = await showDialog<({String name, String baseUrl, String apiKey})>(
-      context: context,
-      builder: (_) => _AddProviderDialog(protocol: protocol),
-    );
+    final form =
+        await showDialog<({String name, String baseUrl, String apiKey})>(
+          context: context,
+          builder: (_) => _AddProviderDialog(protocol: protocol),
+        );
     if (form == null || !mounted) return;
 
     final id = await ref
@@ -228,7 +231,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               ),
               const SizedBox(height: 8),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 8,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -382,7 +388,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               ),
               const SizedBox(height: 8),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 8,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -464,17 +473,19 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   }
 
   void _showTestError(String modelId, String error) {
-    ref.read(snackBarServiceProvider).showResult(
-      message: '$modelId: $error',
-      duration: const Duration(seconds: 5),
-      action: SnackBarAction(
-        label: '重试',
-        onPressed: () {
-          final inst = ref.read(agentApiProvider).byId(_currentId);
-          if (inst != null) _testModel(inst, modelId);
-        },
-      ),
-    );
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(
+          message: '$modelId: $error',
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: '重试',
+            onPressed: () {
+              final inst = ref.read(agentApiProvider).byId(_currentId);
+              if (inst != null) _testModel(inst, modelId);
+            },
+          ),
+        );
   }
 
   Future<void> _openModelManageSheet(AgentProviderInstance inst) async {
@@ -585,8 +596,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           TextField(
             controller: _keyCtrl,
             onChanged: (v) {
-              _keyTimer?.cancel();
-              _keyTimer = Timer(const Duration(milliseconds: 600), () {
+              _keyDebounce.run(() {
                 ref
                     .read(agentApiProvider.notifier)
                     .setApiKey(current.id, v.trim());
@@ -617,8 +627,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           TextField(
             controller: _urlCtrl,
             onChanged: (v) {
-              _urlTimer?.cancel();
-              _urlTimer = Timer(const Duration(milliseconds: 600), () {
+              _urlDebounce.run(() {
                 ref
                     .read(agentApiProvider.notifier)
                     .setBaseUrl(current.id, v.trim());
@@ -1025,7 +1034,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                             Navigator.pop(ctx);
                             onClear();
                           },
-                          style: TextButton.styleFrom(foregroundColor: cs.error),
+                          style: TextButton.styleFrom(
+                            foregroundColor: cs.error,
+                          ),
                           child: const Text('清除'),
                         ),
                       TextButton(
@@ -1202,7 +1213,9 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
                   widget.protocol.apiKeyHint,
                   suffix: IconButton(
                     icon: Icon(
-                      _keyObscured ? Symbols.visibility_off : Symbols.visibility,
+                      _keyObscured
+                          ? Symbols.visibility_off
+                          : Symbols.visibility,
                       size: 20,
                     ),
                     onPressed: () =>
