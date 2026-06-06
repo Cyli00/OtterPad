@@ -14,6 +14,7 @@ import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import '../services/chinese_metadata_extractor.dart';
 import '../services/chinese_text_detector.dart';
+import '../services/document_metadata_checks.dart';
 import '../services/document_metadata_parser.dart';
 import '../services/identifier_resolver.dart';
 import '../services/metadata_search_service.dart';
@@ -187,14 +188,16 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       cancelToken: cancelToken,
     );
 
-    final duplicate = state.any((doc) => _isDuplicateDocument(doc, resolved));
+    final duplicate = state.any(
+      (doc) => DocumentMetadataChecks.isDuplicate(doc, resolved),
+    );
     if (duplicate) {
       return (resolved, AddByIdentifierResult.duplicate);
     }
 
     var doc = resolved.copyWith(id: _newDocumentId(), contentHash: null);
 
-    if (!_isBlank(doc.doi)) {
+    if (!DocumentMetadataChecks.isBlank(doc.doi)) {
       final downloaded = await _downloadPdfIntoDocument(
         doc,
         cancelToken: cancelToken,
@@ -225,7 +228,8 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     final additions = <Document>[];
     for (final candidate in incoming) {
       final existing = [...state, ...additions].cast<Document?>().firstWhere(
-        (doc) => doc != null && _isDuplicateDocument(doc, candidate),
+        (doc) =>
+            doc != null && DocumentMetadataChecks.isDuplicate(doc, candidate),
         orElse: () => null,
       );
       if (existing != null) {
@@ -310,7 +314,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
     // 无文件条目不纳入重构：rebuild 只发现新 PDF、校验完整性、修复已有文件的元数据。
     // 为无文件条目补回 PDF 由用户主动触发（无文件条目页多选下载 / 按标识符添加）。
-    final toRepair = state.where(_needsMetadataRepair).toList();
+    final toRepair = state.where(DocumentMetadataChecks.needsRepair).toList();
     if (toRepair.isNotEmpty) {
       final updates = <String, Document>{};
       for (var i = 0; i < toRepair.length; i++) {
@@ -340,7 +344,9 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     await _save();
 
     final noFileCount = state.where((doc) => doc.contentHash == null).length;
-    final unresolvedCount = state.where(_needsMetadataRepair).length;
+    final unresolvedCount = state
+        .where(DocumentMetadataChecks.needsRepair)
+        .length;
 
     return RebuildResult(
       addedCount: addedCount,
@@ -390,7 +396,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     await _writePdfForDocument(docId, sourceFile, clearDerived: true);
 
     var updated = existing.copyWith(contentHash: contentHash);
-    if (_needsMetadataRepair(updated)) {
+    if (DocumentMetadataChecks.needsRepair(updated)) {
       updated = (await _repairDocument(updated)).document;
     }
 
@@ -415,10 +421,10 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     var doc = found;
 
     // 无 DOI 时，用标题搜索补全元数据（可能拿到 DOI）
-    if (_isBlank(doc.doi) && !_looksLikePlaceholderTitle(doc)) {
+    if (DocumentMetadataChecks.isBlank(doc.doi) &&
+        !DocumentMetadataChecks.looksLikePlaceholderTitle(doc)) {
       try {
-        final searchResult =
-            await MetadataSearchService.instance.searchByTitle(
+        final searchResult = await MetadataSearchService.instance.searchByTitle(
           doc.title,
           cancelToken: cancelToken,
         );
@@ -435,7 +441,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       }
     }
 
-    if (_isBlank(doc.doi)) return false;
+    if (DocumentMetadataChecks.isBlank(doc.doi)) return false;
 
     // 下载到 source.pdf.tmp 临时路径，绕开 IdentifierResolver._downloadPdf 的
     // "exists → skip" 短路；成功后再原子替换。失败时旧 PDF 与 derived 完整保留。
@@ -472,10 +478,11 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       var updated = doc.copyWith(contentHash: newHash);
 
       // 下载后用 PDF 内容补全可能缺失的元数据
-      if (_needsMetadataRepair(updated)) {
-        updated =
-            (await _repairDocument(updated, cancelToken: cancelToken))
-                .document;
+      if (DocumentMetadataChecks.needsRepair(updated)) {
+        updated = (await _repairDocument(
+          updated,
+          cancelToken: cancelToken,
+        )).document;
       }
 
       state = [
@@ -521,7 +528,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     Document doc, {
     CancelToken? cancelToken,
   }) async {
-    if (_isBlank(doc.doi)) return null;
+    if (DocumentMetadataChecks.isBlank(doc.doi)) return null;
     final pdfPath = DocPaths.pdf(doc.id);
     final downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
       doi: doc.doi!,
@@ -597,7 +604,8 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       final titleSplit = DocumentMetadataParser.parseText(doc.title);
       if (titleSplit.title != null && titleSplit.authors.isNotEmpty) {
         doc = doc.copyWith(title: titleSplit.title);
-        if (doc.authors.isEmpty) doc = doc.copyWith(authors: titleSplit.authors);
+        if (doc.authors.isEmpty)
+          doc = doc.copyWith(authors: titleSplit.authors);
       }
 
       // 提取一次首页文本，供标识符提取与中文正文元数据提取复用
@@ -623,7 +631,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       final identifier =
           combinedMetadata.doi ??
           PdfIdentifierExtractor.extractIdentifierFromText(pageText)?.value;
-      if (!_isBlank(identifier)) {
+      if (!DocumentMetadataChecks.isBlank(identifier)) {
         try {
           final resolved = await IdentifierResolver.instance.resolve(
             identifier!,
@@ -637,7 +645,8 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       }
 
       // 标识符解析未完成时，用标题搜索回退
-      if (!_hasCompleteMetadata(doc) && !_looksLikePlaceholderTitle(doc)) {
+      if (!DocumentMetadataChecks.isComplete(doc) &&
+          !DocumentMetadataChecks.looksLikePlaceholderTitle(doc)) {
         try {
           final searchResult = await MetadataSearchService.instance
               .searchByTitle(doc.title, cancelToken: cancelToken);
@@ -677,10 +686,14 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
   }
 
   Document _applyMetadata(Document doc, DocumentMetadata metadata) {
-    final title = _normalizeMetadataValue(metadata.title);
-    final journal = _normalizeMetadataValue(metadata.journal);
-    final year = _normalizeMetadataValue(metadata.year);
-    final doi = _normalizeMetadataValue(metadata.doi)?.toLowerCase();
+    final title = DocumentMetadataChecks.normalizeMetadataValue(metadata.title);
+    final journal = DocumentMetadataChecks.normalizeMetadataValue(
+      metadata.journal,
+    );
+    final year = DocumentMetadataChecks.normalizeMetadataValue(metadata.year);
+    final doi = DocumentMetadataChecks.normalizeMetadataValue(
+      metadata.doi,
+    )?.toLowerCase();
 
     return doc.copyWith(
       title: title ?? doc.title,
@@ -691,117 +704,13 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     );
   }
 
-  bool _needsMetadataRepair(Document doc) {
-    if (doc.contentHash == null) return false;
-    // 字段缺失维度
-    if (_looksLikePlaceholderTitle(doc) ||
-        doc.authors.isEmpty ||
-        _isBlank(doc.year) ||
-        (_isBlank(doc.journal) && _isBlank(doc.doi))) {
-      return true;
-    }
-    // 字段已填但内容可疑维度：字段填满≠正确，否则坏数据会骗过修复检测。
-    // 1) 标题仍是未拆分的 CNKI 命名 "标题_作者"（历史数据）
-    final titleSplit = DocumentMetadataParser.parseText(doc.title);
-    if (titleSplit.title != null && titleSplit.authors.isNotEmpty) return true;
-    // 2) 作者里混入「文章编号」等非人名词（此前正文误提取）
-    if (doc.authors.any(ChineseMetadataExtractor.isNonPersonName)) return true;
-    return false;
-  }
-
-  bool _hasCompleteMetadata(Document doc) {
-    return !_looksLikePlaceholderTitle(doc) &&
-        doc.authors.isNotEmpty &&
-        !_isBlank(doc.year) &&
-        (!_isBlank(doc.journal) || !_isBlank(doc.doi));
-  }
-
   MetadataStatus _metadataStatus(Document before, Document after) {
-    if (_sameCoreMetadata(before, after)) return MetadataStatus.none;
-    return _hasCompleteMetadata(after)
+    if (DocumentMetadataChecks.sameCore(before, after)) {
+      return MetadataStatus.none;
+    }
+    return DocumentMetadataChecks.isComplete(after)
         ? MetadataStatus.complete
         : MetadataStatus.partial;
-  }
-
-  bool _sameCoreMetadata(Document left, Document right) {
-    if (_normalizeMetadataValue(left.title) !=
-        _normalizeMetadataValue(right.title)) {
-      return false;
-    }
-    if (_normalizeMetadataValue(left.journal) !=
-        _normalizeMetadataValue(right.journal)) {
-      return false;
-    }
-    if (_normalizeMetadataValue(left.year) !=
-        _normalizeMetadataValue(right.year)) {
-      return false;
-    }
-    if (_normalizeMetadataValue(left.doi) !=
-        _normalizeMetadataValue(right.doi)) {
-      return false;
-    }
-    if (left.authors.length != right.authors.length) return false;
-    for (var i = 0; i < left.authors.length; i++) {
-      if (_normalizeMetadataValue(left.authors[i]) !=
-          _normalizeMetadataValue(right.authors[i])) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  bool _isDuplicateDocument(Document existing, Document candidate) {
-    if (!_isBlank(existing.doi) && !_isBlank(candidate.doi)) {
-      return existing.doi!.toLowerCase() == candidate.doi!.toLowerCase();
-    }
-
-    final normalizedTitle = _normalizeComparisonKey(existing.title);
-    final candidateTitle = _normalizeComparisonKey(candidate.title);
-    if (normalizedTitle.isEmpty ||
-        candidateTitle.isEmpty ||
-        normalizedTitle != candidateTitle) {
-      return false;
-    }
-
-    final existingYear = _normalizeComparisonKey(existing.year);
-    final candidateYear = _normalizeComparisonKey(candidate.year);
-    if (existingYear.isNotEmpty &&
-        candidateYear.isNotEmpty &&
-        existingYear == candidateYear) {
-      return true;
-    }
-
-    final existingAuthor = existing.authors.isEmpty
-        ? ''
-        : _normalizeComparisonKey(existing.authors.first);
-    final candidateAuthor = candidate.authors.isEmpty
-        ? ''
-        : _normalizeComparisonKey(candidate.authors.first);
-    return existingAuthor.isNotEmpty && existingAuthor == candidateAuthor;
-  }
-
-  bool _looksLikePlaceholderTitle(Document doc) {
-    final normalizedTitle = _normalizeComparisonKey(doc.title);
-    if (normalizedTitle.isEmpty) return true;
-    if (normalizedTitle == _normalizeComparisonKey(doc.id)) return true;
-    // 文件路径 / LaTeX 中间产物 / Word 占位文本——这种 title 也算 placeholder，
-    // 让 rebuild 能继续尝试修复（例如 PDF 正文里的 DOI / arXiv ID）。
-    if (!DocumentMetadataParser.isPlausibleTitle(doc.title)) return true;
-    return false;
-  }
-
-  String _normalizeComparisonKey(String? value) {
-    return (value ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-  }
-
-  String? _normalizeMetadataValue(String? value) {
-    if (value == null) return null;
-    final normalized = value.trim();
-    return normalized.isEmpty ? null : normalized;
-  }
-
-  bool _isBlank(String? value) {
-    return value == null || value.trim().isEmpty;
   }
 
   String _newDocumentId() {
