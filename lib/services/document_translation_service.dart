@@ -100,7 +100,9 @@ class DocumentTranslationService {
         );
       }
     } catch (_) {}
-    debugPrint('[DocumentTranslation] cleared translations: lang="$targetLang"');
+    debugPrint(
+      '[DocumentTranslation] cleared translations: lang="$targetLang"',
+    );
   }
 
   // ── 核心入口 ─────────────────────────────────────────────────────────
@@ -143,66 +145,66 @@ class DocumentTranslationService {
     final cached = useCache
         ? loadTranslations(pdfPath, targetLang)
         : <String, String>{};
-    final all = Map<String, String>.from(cached);
-    final pending = <TranslatableParagraph>[];
-    int done = 0;
 
-    if (useCache) {
-      for (final p in paragraphs) {
-        final t = cached[p.hash];
-        if (t != null && t.isNotEmpty) {
-          onResult(p.hash, t);
-          done++;
-        } else {
-          pending.add(p);
-        }
-      }
-    } else {
-      pending.addAll(paragraphs);
-    }
+    // 接缝 1（缓存分流）：纯函数决定"哪些段要翻、哪些直接用缓存"。
+    final partition = partitionParagraphs(
+      paragraphs: paragraphs,
+      cached: cached,
+      useCache: useCache,
+    );
+
+    // all 从完整缓存起步（保留当前段集合之外的历史译文），逐段累积新译文。
+    final all = Map<String, String>.from(cached);
+    var done = 0;
+    partition.cachedHits.forEach((hash, translation) {
+      onResult(hash, translation);
+      done++;
+    });
     onProgress(done, total);
 
     // 全部命中文件缓存：直接返回 true，调用方据此提示"使用了缓存"。
-    // 此分支仅在 useCache=true 时可能成立（useCache=false 时 pending 必非空）。
-    if (pending.isEmpty) return true;
+    // 仅在 useCache=true 时可能成立（useCache=false 时 pending 必非空）。
+    if (partition.pending.isEmpty) return true;
 
-    // ── 并发翻译 ──
-    int nextIdx = 0;
-    int sinceLastSave = 0;
+    // ── 写盘节流 + 接缝 3（并发池）──
+    var sinceLastSave = 0;
     Future<void> saveLock = Future.value();
 
     // 触发一次"按当前 all 快照写盘"——通过 saveLock 链串行化。
-    // 用 `Map.from(all)` 拍快照；后续 worker 改 `all` 不影响这次写入内容。
-    // 用 catchError 把单次写盘异常隔离在链外——否则一次磁盘错会污染整条
-    // future 链，让最终 `await saveLock` 把无关错误抛给上层。
+    // 用 `Map.from(all)` 拍快照；后续 worker 改 `all` 不影响本次写入内容。
+    // catchError 把单次写盘异常隔离在链外，避免污染最终 `await saveLock`。
     void scheduleSave() {
       final snapshot = Map<String, String>.from(all);
       saveLock = saveLock
           .then((_) => _saveTranslations(pdfPath, targetLang, snapshot))
           .catchError((Object e) {
-        debugPrint('[DocumentTranslation] mid-save failed (ignored): $e');
-      });
+            debugPrint('[DocumentTranslation] mid-save failed (ignored): $e');
+          });
     }
 
-    Future<void> worker() async {
-      while (true) {
-        if (cancelToken?.isCancelled == true) return;
-        if (nextIdx >= pending.length) return;
-        final p = pending[nextIdx++];
+    Future<String> translateOne(String text) => TranslationService.translate(
+      text: text,
+      agentState: agentState,
+      translationConfig: config,
+      useCache: useCache,
+    );
 
-        final translation = await _translateOne(
-          paragraph: p,
-          agentState: agentState,
-          config: config,
-          useCache: useCache,
+    await runConcurrent<TranslatableParagraph>(
+      items: partition.pending,
+      concurrency: _kConcurrency,
+      isCancelled: () => cancelToken?.isCancelled == true,
+      task: (p) async {
+        // 接缝 2（重试策略）：单段失败重试 + 退避，最终失败仅丢该段、保留原文。
+        final translation = await translateWithRetry(
+          text: p.text,
+          translator: translateOne,
+          debugLabel: p.hash,
         );
-
         if (translation != null && translation.isNotEmpty) {
           all[p.hash] = translation;
           onResult(p.hash, translation);
         }
-        // 这一段无论翻成功与否都计入 done——失败的段会保留原文，
-        // 让用户看到的总进度跟段数对齐。
+        // 无论成功与否都计入 done——失败段保留原文，进度与段数对齐。
         done++;
         onProgress(done, total);
 
@@ -211,61 +213,109 @@ class DocumentTranslationService {
           sinceLastSave = 0;
           scheduleSave();
         }
-      }
-    }
+      },
+    );
 
-    final workers = List.generate(_kConcurrency, (_) => worker());
-    await Future.wait(workers);
-
-    // 等所有中间写盘任务清空，再做一次最终全量保存。
+    // 等所有中间写盘清空，再做一次最终全量保存（失败会上抛给调用方）。
     await saveLock;
     await _saveTranslations(pdfPath, targetLang, all);
     return false;
   }
 
-  // ── 单段翻译（含重试）────────────────────────────────────────────────
+  // ── 内部接缝（@visibleForTesting，可脱离 LLM / 磁盘单测）─────────────────
 
-  /// 单段翻译 + 指数退避重试。
-  ///
-  /// - 成功 → 返回译文（非空字符串）；
-  /// - 全部 [_kMaxRetries]+1 次都失败 → 返回 null（这一段保留原文，
-  ///   不抛出，避免连累其他并发 worker）。
-  ///
-  /// 退避：200ms × 2^attempt（200 / 400 ms）。失败原因仅 debugPrint，
-  /// 不向上抛——并发场景下任何单点抛错都会让 `Future.wait` 整体失败。
-  static Future<String?> _translateOne({
-    required TranslatableParagraph paragraph,
-    required AgentApiState agentState,
-    required TranslationConfig config,
-    bool useCache = true,
+  /// 接缝 1：缓存分流（纯函数）。useCache=false 时全部进 pending。
+  @visibleForTesting
+  static TranslationPartition partitionParagraphs({
+    required List<TranslatableParagraph> paragraphs,
+    required Map<String, String> cached,
+    required bool useCache,
+  }) {
+    if (!useCache) {
+      return TranslationPartition(
+        pending: List<TranslatableParagraph>.of(paragraphs),
+        cachedHits: const {},
+      );
+    }
+    final pending = <TranslatableParagraph>[];
+    final cachedHits = <String, String>{};
+    for (final p in paragraphs) {
+      final t = cached[p.hash];
+      if (t != null && t.isNotEmpty) {
+        cachedHits[p.hash] = t;
+      } else {
+        pending.add(p);
+      }
+    }
+    return TranslationPartition(pending: pending, cachedHits: cachedHits);
+  }
+
+  /// 接缝 2：单段翻译 + 指数退避重试。注入 [translator] 以便无 LLM 单测；
+  /// [backoff] 默认 200ms × 2^attempt，测试可注入 no-op 跳过等待。空译文按失败重试。
+  /// 全部尝试失败返回 null（保留原文，不抛，避免连累并发池里的其他 worker）。
+  @visibleForTesting
+  static Future<String?> translateWithRetry({
+    required String text,
+    required ParagraphTranslator translator,
+    int maxRetries = _kMaxRetries,
+    Future<void> Function(int attempt)? backoff,
+    String? debugLabel,
   }) async {
     Object? lastErr;
-    for (int attempt = 0; attempt <= _kMaxRetries; attempt++) {
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        final result = await TranslationService.translate(
-          text: paragraph.text,
-          agentState: agentState,
-          translationConfig: config,
-          useCache: useCache,
-        );
+        final result = await translator(text);
         if (result.trim().isNotEmpty) return result;
-        // 空译文也按失败处理，触发重试
         lastErr = Exception('empty translation result');
       } catch (e) {
         lastErr = e;
       }
-
-      if (attempt < _kMaxRetries) {
-        final backoffMs = 200 * (1 << attempt);
-        await Future.delayed(Duration(milliseconds: backoffMs));
+      if (attempt < maxRetries) {
+        await (backoff?.call(attempt) ??
+            Future<void>.delayed(Duration(milliseconds: 200 * (1 << attempt))));
       }
     }
     debugPrint(
-      '[DocumentTranslation] paragraph "${paragraph.hash}" failed '
-      'after ${_kMaxRetries + 1} attempts: $lastErr',
+      '[DocumentTranslation] paragraph "${debugLabel ?? ''}" failed '
+      'after ${maxRetries + 1} attempts: $lastErr',
     );
     return null;
   }
+
+  /// 接缝 3：N 协程并发池——worker 抢占 `nextIdx` 取 item，吃满 RPM 配额。
+  /// `nextIdx++` 与读取之间无 await，Dart 单线程下天然原子。
+  @visibleForTesting
+  static Future<void> runConcurrent<T>({
+    required List<T> items,
+    required int concurrency,
+    required Future<void> Function(T item) task,
+    bool Function()? isCancelled,
+  }) async {
+    var nextIdx = 0;
+    Future<void> worker() async {
+      while (true) {
+        if (isCancelled?.call() == true) return;
+        if (nextIdx >= items.length) return;
+        final item = items[nextIdx++];
+        await task(item);
+      }
+    }
+
+    await Future.wait(List.generate(concurrency, (_) => worker()));
+  }
+}
+
+// ── 内部接缝的值类型 ───────────────────────────────────────────────────
+
+/// 注入式单段翻译函数——生产用 [TranslationService.translate]，测试可注入桩。
+typedef ParagraphTranslator = Future<String> Function(String text);
+
+/// [DocumentTranslationService.partitionParagraphs] 的结果：
+/// `pending` = 需请求 LLM 的段；`cachedHits` = 命中文件缓存、直接复用的 hash→译文。
+class TranslationPartition {
+  final List<TranslatableParagraph> pending;
+  final Map<String, String> cachedHits;
+  const TranslationPartition({required this.pending, required this.cachedHits});
 }
 
 // ── 取消令牌 ───────────────────────────────────────────────────────────
