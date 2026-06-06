@@ -44,6 +44,7 @@ import 'widgets/reader_document_info_sheet.dart';
 import 'widgets/reader_notes_sheet.dart';
 import 'widgets/reader_outline_sheet.dart';
 import 'widgets/reader_favorite_sheet.dart';
+import 'widgets/reader_pdf_search_controller.dart';
 import 'widgets/reader_search_bars.dart';
 import 'widgets/reader_search_navigator.dart';
 import 'widgets/reader_sheet_host.dart';
@@ -117,11 +118,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // PDF 控制器（用于滚动滑条）
   final _pdfController = PdfViewerController();
-  PdfTextSearcher? _pdfSearcher;
-  VoidCallback? _disposePdfSearchListener;
-  final _pdfSearchController = TextEditingController();
-  final _pdfSearchFocusNode = FocusNode();
-  String _pdfSearchQuery = '';
+  final _pdfSearch = ReaderPdfSearchController();
 
   // 选择工具栏 Overlay（WebView 选择走 JS 桥接）
   OverlayEntry? _selectionToolbarEntry;
@@ -158,6 +155,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // 例的生命周期由 provider 管理、独立于 widget，cache 安全。
     _sessionNotifier = ref.read(readerSessionProvider(_sessionArgs).notifier);
     _pdfController.addListener(_onPdfControllerChanged);
+    // searcher / 查询变化即整页 rebuild，与重构前一致。
+    _pdfSearch.addListener(_onPdfSearchChanged);
+  }
+
+  void _onPdfSearchChanged() {
+    if (mounted) setState(() {});
   }
 
   /// PDF 控制器变化回调：仅在当前页号变化时上报。pdfrx 的 PdfViewerController
@@ -249,12 +252,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _togglePreview() {
     final enteringMarkdown = _sessionNotifier.togglePreview();
-    if (enteringMarkdown) {
-      _pdfSearchFocusNode.unfocus();
-      _pdfSearchController.clear();
-      _pdfSearcher?.resetTextSearch();
-      _pdfSearchQuery = '';
-    }
+    if (enteringMarkdown) _pdfSearch.clear();
   }
 
   // ─── 搜索 ───
@@ -267,16 +265,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
 
     if (!_sessionNotifier.openPdfSearch()) return;
-    if (_pdfSearchController.text != _pdfSearchQuery) {
-      _pdfSearchController.text = _pdfSearchQuery;
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _pdfSearchFocusNode.requestFocus();
-      _pdfSearchController.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: _pdfSearchController.text.length,
-      );
+      if (mounted) _pdfSearch.focusForSearch();
     });
   }
 
@@ -288,50 +278,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _clearPdfSearch();
   }
 
-  void _bindPdfSearcher(PdfDocument document, PdfViewerController controller) {
-    _disposePdfSearchListener?.call();
-    _pdfSearcher?.dispose();
-
-    final searcher = PdfTextSearcher(controller);
-    _disposePdfSearchListener = searcher.addListener(() {
-      if (mounted) setState(() {});
-    });
-    _pdfSearcher = searcher;
-
-    if (_pdfSearchQuery.isNotEmpty) {
-      searcher.startTextSearch(_pdfSearchQuery, searchImmediately: true);
-    }
-  }
-
-  void _performPdfSearch(String query, {bool searchImmediately = false}) {
-    final normalized = query.trim();
-    if (_pdfSearchQuery != normalized) {
-      setState(() => _pdfSearchQuery = normalized);
-    }
-
-    final searcher = _pdfSearcher;
-    if (searcher == null) return;
-
-    if (normalized.isEmpty) {
-      searcher.resetTextSearch();
-      return;
-    }
-
-    searcher.startTextSearch(
-      normalized,
-      goToFirstMatch: true,
-      searchImmediately: searchImmediately,
-    );
-  }
-
   void _clearPdfSearch() {
-    _pdfSearchController.clear();
-    _pdfSearchFocusNode.unfocus();
-    _pdfSearcher?.resetTextSearch();
+    _pdfSearch.clear();
     _sessionNotifier.closeSearch();
-    setState(() {
-      _pdfSearchQuery = '';
-    });
   }
 
   void _onSearchResultTap(
@@ -372,20 +321,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _webViewReaderKey.currentState?.activateNearestSearchResult();
       }
     });
-  }
-
-  Future<void> _goToPrevPdfResult() async {
-    final searcher = _pdfSearcher;
-    if (searcher == null || searcher.matches.isEmpty) return;
-    await searcher.goToPrevMatch();
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _goToNextPdfResult() async {
-    final searcher = _pdfSearcher;
-    if (searcher == null || searcher.matches.isEmpty) return;
-    await searcher.goToNextMatch();
-    if (mounted) setState(() {});
   }
 
   // ─── 底部面板（字体 / 主题 / 大纲） ───
@@ -765,10 +700,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // 强制把防抖窗口里的最后一次进度落盘；fire-and-forget——dispose 同步路径
     // 不能 await，但 HistoryNotifier 内部用 await _save()，下一帧前会完成。
     unawaited(_sessionNotifier.flushProgress());
-    _disposePdfSearchListener?.call();
-    _pdfSearcher?.dispose();
-    _pdfSearchController.dispose();
-    _pdfSearchFocusNode.dispose();
+    _pdfSearch.dispose();
     _summaryImageState.dispose();
     _selectionToolbarEntry?.remove();
     super.dispose();
@@ -831,8 +763,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         : cs.surface;
 
     final isMarkdownHighlightMode = session.markdownHighlightMode;
-    final pdfMatchCount = _pdfSearcher?.matches.length ?? 0;
-    final showPdfNavigator = !session.showPreview && _pdfSearchQuery.isNotEmpty;
+    final pdfMatchCount = _pdfSearch.searcher?.matches.length ?? 0;
+    final showPdfNavigator = !session.showPreview && _pdfSearch.hasQuery;
 
     return Theme(
       data: theme,
@@ -1030,15 +962,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Widget _buildPdfSearchBar() {
     return ReaderPdfSearchBar(
-      controller: _pdfSearchController,
-      focusNode: _pdfSearchFocusNode,
+      controller: _pdfSearch.textController,
+      focusNode: _pdfSearch.focusNode,
       onBack: () => context.pop(),
       onClear: _clearPdfSearch,
-      onSubmitted: (value) => _performPdfSearch(value, searchImmediately: true),
-      onChanged: (value) {
-        setState(() {});
-        _performPdfSearch(value);
-      },
+      onSubmitted: (value) => _pdfSearch.search(value, searchImmediately: true),
+      onChanged: (value) => _pdfSearch.search(value),
     );
   }
 
@@ -1053,12 +982,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Widget _buildPdfResultNavigator(int total) {
     return ReaderPdfResultNavigator(
-      currentIndex: _pdfSearcher?.currentIndex ?? -1,
+      currentIndex: _pdfSearch.searcher?.currentIndex ?? -1,
       total: total,
-      progress: _pdfSearcher?.searchProgress,
-      searching: _pdfSearcher?.isSearching ?? false,
-      onPrevious: _goToPrevPdfResult,
-      onNext: _goToNextPdfResult,
+      progress: _pdfSearch.searcher?.searchProgress,
+      searching: _pdfSearch.searcher?.isSearching ?? false,
+      onPrevious: _pdfSearch.goToPrev,
+      onNext: _pdfSearch.goToNext,
     );
   }
 
@@ -1267,10 +1196,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     backgroundColor: Colors.transparent,
                     matchTextColor: cs.primaryContainer.withAlpha(150),
                     activeMatchTextColor: cs.primary.withAlpha(72),
-                    onViewerReady: _bindPdfSearcher,
-                    pagePaintCallbacks: _pdfSearcher == null
+                    onViewerReady: (document, controller) =>
+                        _pdfSearch.bind(controller),
+                    pagePaintCallbacks: _pdfSearch.searcher == null
                         ? null
-                        : [_pdfSearcher!.pageTextMatchPaintCallback],
+                        : [_pdfSearch.searcher!.pageTextMatchPaintCallback],
                     viewerOverlayBuilder: (context, size, handleLinkTap) => [
                       PdfViewerScrollThumb(
                         controller: _pdfController,
