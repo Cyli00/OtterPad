@@ -13,6 +13,7 @@ import 'core/storage/storage.dart';
 import 'providers/proxy_provider.dart';
 import 'services/agent_model_capability.dart';
 import 'services/back_matter_detector.dart';
+import 'services/figure_extract_service.dart';
 import 'services/reader_localhost_server.dart';
 
 bool get _isDesktop =>
@@ -50,6 +51,9 @@ Future<void> main() async {
     GStorage.init(),
     AgentModelCapability.init(),
     BackMatterDetector.instance.init(),
+    // figure 提取的 caption 正则配置预热——避免 saveResult 路径里隐式首次
+    // init() 的加载延迟与“忘记初始化 → 运行时断言”隐患（init 内部幂等）。
+    FigureExtractService.instance.init(),
   ]);
 
   // 凭据安全存储：必须在 GStorage.init 之后（要从 Hive 迁移历史明文 secret）、
