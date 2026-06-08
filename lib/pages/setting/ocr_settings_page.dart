@@ -372,7 +372,10 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
         scrolledUnderElevation: 0,
       ),
       body: Listener(
-        onPointerDown: (_) => ScaffoldMessenger.of(context).clearSnackBars(),
+        onPointerDown: (_) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          ScaffoldMessenger.of(context).clearSnackBars();
+        },
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
               .copyWith(bottom: 40),

@@ -104,7 +104,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         backgroundColor: cs.surface,
         scrolledUnderElevation: 0,
       ),
-      body: Stack(
+      body: Listener(
+        onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+        child: Stack(
         children: [
           ListView(
             padding: const EdgeInsets.symmetric(
@@ -271,6 +273,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

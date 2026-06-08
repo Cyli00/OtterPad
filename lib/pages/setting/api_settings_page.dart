@@ -28,7 +28,10 @@ class ApiSettingsPage extends StatelessWidget {
         scrolledUnderElevation: 0,
       ),
       body: Listener(
-        onPointerDown: (_) => ScaffoldMessenger.of(context).clearSnackBars(),
+        onPointerDown: (_) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          ScaffoldMessenger.of(context).clearSnackBars();
+        },
         child: ListView(
           padding: const EdgeInsets.symmetric(
             horizontal: 16,

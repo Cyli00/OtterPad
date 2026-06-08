@@ -32,12 +32,15 @@ class NetworkSettingsPage extends StatelessWidget {
         backgroundColor: cs.surface,
         scrolledUnderElevation: 0,
       ),
-      body: ListView(
+      body: Listener(
+        onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+        child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
             .copyWith(bottom: 40),
         children: const [
           _ProxySettingsSection(),
         ],
+      ),
       ),
     );
   }
