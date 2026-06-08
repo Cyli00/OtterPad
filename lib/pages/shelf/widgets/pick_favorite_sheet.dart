@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/l10n.dart';
 
 import '../../../data/models/collection/favorite.dart';
 
@@ -108,7 +109,7 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '将 $total 篇文献加入…',
+                  context.l10n.addingDocumentsTo(total),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: cs.onSurface,
@@ -137,7 +138,7 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('取消'),
+                  child: Text(context.l10n.cancel),
                 ),
               ),
             ),
@@ -154,11 +155,12 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
         .length;
     final newCount = widget.selectedDocumentIds.length - overlap;
     final allIncluded = newCount == 0;
+    final l10n = context.l10n;
     final subtitle = allIncluded
-        ? '所选 ${widget.selectedDocumentIds.length} 篇已全部在此'
+        ? l10n.allSelectedAlreadyHere(widget.selectedDocumentIds.length)
         : overlap == 0
-        ? '当前 ${fav.documentIds.length} 篇文献'
-        : '已含 $overlap 篇 · 将新增 $newCount 篇';
+        ? l10n.currentDocumentCount(fav.documentIds.length)
+        : l10n.overlapAndNew(overlap, newCount);
 
     return _FavoriteItem(
       favorite: fav,
@@ -289,7 +291,7 @@ class _CreateFavoriteItem extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: Text(
-                '新建收藏夹',
+                context.l10n.createFavorite,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: cs.onSurface,

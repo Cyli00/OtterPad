@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/l10n.dart';
 import 'api_settings_agent.dart';
 import 'image_generation_settings_section.dart';
 import 'translation_settings_section.dart';
@@ -17,7 +18,7 @@ class ApiSettingsPage extends StatelessWidget {
       backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(
-          'AI 设置',
+          context.l10n.aiSettings,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -36,17 +37,17 @@ class ApiSettingsPage extends StatelessWidget {
           children: [
             _buildGroup(
               context,
-              title: '模型接口',
+              title: context.l10n.modelApi,
               child: const AgentApiSection(),
             ),
             _buildGroup(
               context,
-              title: '翻译设置',
+              title: context.l10n.translationSettings,
               child: const TranslationSettingsSection(),
             ),
             _buildGroup(
               context,
-              title: '生图设置',
+              title: context.l10n.imageGenSettings,
               child: const ImageGenerationSettingsSection(),
             ),
           ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/l10n.dart';
 import '../../services/agent_model_capability.dart';
 import '../../widgets/spring_dismissible.dart';
 import 'agent_role_widgets.dart';
@@ -63,7 +64,7 @@ class AgentModelListTile extends StatelessWidget {
               Icon(Symbols.delete_rounded, size: 22, color: cs.onErrorContainer),
               const SizedBox(height: 3),
               Text(
-                '移除',
+                context.l10n.remove,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: cs.onErrorContainer,
                   fontWeight: FontWeight.w700,
@@ -73,13 +74,13 @@ class AgentModelListTile extends StatelessWidget {
             ],
           ),
         ),
-        child: _buildCard(theme, cs, isOk, isErr),
+        child: _buildCard(context, theme, cs, isOk, isErr),
       ),
     );
   }
 
-  Widget _buildCard(ThemeData theme, ColorScheme cs, bool isOk, bool isErr) {
-    final badges = _badges(cs);
+  Widget _buildCard(BuildContext context, ThemeData theme, ColorScheme cs, bool isOk, bool isErr) {
+    final badges = _badges(context, cs);
     return Material(
       color: cs.surface,
       borderRadius: BorderRadius.circular(16),
@@ -152,7 +153,7 @@ class AgentModelListTile extends StatelessWidget {
                               : cs.onSurfaceVariant,
                         ),
                         padding: EdgeInsets.zero,
-                        tooltip: isErr ? errorMsg : '检测模型',
+                        tooltip: isErr ? errorMsg : context.l10n.detectModel,
                         onPressed: isErr ? onShowError : onTest,
                       ),
               ),
@@ -164,12 +165,13 @@ class AgentModelListTile extends StatelessWidget {
   }
 
   /// 由能力派生 badge 列表。嵌入模型只显示「嵌入」，其余按模态/能力展开。
-  List<Widget> _badges(ColorScheme cs) {
+  List<Widget> _badges(BuildContext context, ColorScheme cs) {
     final c = capability;
+    final l10n = context.l10n;
     if (c.embedding) {
       return [
         RoleBadge(
-          label: '嵌入',
+          label: l10n.roleBadgeEmbedding,
           bg: cs.tertiaryContainer,
           fg: cs.onTertiaryContainer,
         ),
@@ -178,25 +180,25 @@ class AgentModelListTile extends StatelessWidget {
     return [
       if (c.imageInput)
         RoleBadge(
-          label: '视觉',
+          label: l10n.roleBadgeVision,
           bg: cs.primaryContainer,
           fg: cs.onPrimaryContainer,
         ),
       if (c.imageOutput)
         RoleBadge(
-          label: '生图',
+          label: l10n.roleBadgeImageGen,
           bg: cs.secondaryContainer,
           fg: cs.onSecondaryContainer,
         ),
       if (c.tool)
         RoleBadge(
-          label: '工具',
+          label: l10n.roleBadgeTools,
           bg: cs.surfaceContainerHighest,
           fg: cs.onSurfaceVariant,
         ),
       if (c.reasoning)
         RoleBadge(
-          label: '推理',
+          label: l10n.roleBadgeReasoning,
           bg: cs.surfaceContainerHighest,
           fg: cs.onSurfaceVariant,
         ),

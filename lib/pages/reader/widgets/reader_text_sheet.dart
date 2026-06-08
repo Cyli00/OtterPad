@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../services/translation_style.dart';
@@ -36,6 +37,7 @@ class _ReaderTextSheetBodyState extends ConsumerState<ReaderTextSheetBody> {
     final notifier = ref.read(readerSettingsProvider.notifier);
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
+    final l10n = context.l10n;
     final translationCfg = ref.watch(translationConfigProvider);
     final currentStyle = resolveTranslationStyle(translationCfg.displayStyleId);
 
@@ -60,7 +62,7 @@ class _ReaderTextSheetBodyState extends ConsumerState<ReaderTextSheetBody> {
               theme,
               cs,
               Symbols.format_size_rounded,
-              '字号',
+              l10n.fontSize,
               '${_localFontSize.round()}px',
             ),
             const SizedBox(height: 8),
@@ -86,7 +88,7 @@ class _ReaderTextSheetBodyState extends ConsumerState<ReaderTextSheetBody> {
               theme,
               cs,
               Symbols.text_fields_rounded,
-              '字体',
+              l10n.fontFamily,
               settings.font.label,
             ),
             const SizedBox(height: 12),
@@ -99,7 +101,7 @@ class _ReaderTextSheetBodyState extends ConsumerState<ReaderTextSheetBody> {
               theme,
               cs,
               Symbols.menu_book_rounded,
-              '翻页方式',
+              l10n.paginationMode,
               settings.paginationMode.label,
             ),
             const SizedBox(height: 12),
@@ -115,7 +117,7 @@ class _ReaderTextSheetBodyState extends ConsumerState<ReaderTextSheetBody> {
               theme,
               cs,
               Symbols.translate_rounded,
-              '译文样式',
+              l10n.translationStyle,
               currentStyle.label,
             ),
             const SizedBox(height: 12),

@@ -2,13 +2,15 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
+
 /// 通过标识符添加条目对话框
 /// 返回用户输入的标识符字符串，取消返回 null
 Future<String?> showIdentifierDialog(BuildContext context) {
   return showGeneralDialog<String>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: '关闭',
+    barrierLabel: context.l10n.close,
     barrierColor: Colors.black54,
     transitionDuration: const Duration(milliseconds: 300),
     transitionBuilder: (context, animation, secondaryAnimation, child) {
@@ -106,7 +108,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    '通过标识符添加条目',
+                    context.l10n.addByIdentifierTitle,
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
@@ -130,7 +132,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
             const SizedBox(height: 16),
             // 说明文字
             Text(
-              '输入 ISBN、DOI、PMID、arXiv ID 或 ADS 条码来添加条目到您的文库：',
+              context.l10n.identifierInputHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -143,7 +145,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => _onConfirm(),
               decoration: InputDecoration(
-                hintText: '例如: 10.1038/s41586-021-03811-w',
+                hintText: context.l10n.identifierExample,
                 filled: true,
                 fillColor: colorScheme.surfaceContainerLow,
                 border: OutlineInputBorder(
@@ -170,14 +172,14 @@ class _IdentifierContentState extends State<_IdentifierContent> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  child: Text(context.l10n.cancel),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: _controller.text.trim().isEmpty
                       ? null
                       : _onConfirm,
-                  child: const Text('添加'),
+                  child: Text(context.l10n.add),
                 ),
               ],
             ),

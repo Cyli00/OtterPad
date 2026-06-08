@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/l10n.dart';
 import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
@@ -103,6 +104,11 @@ class DocumentTaskNotifier
   SnackBarService get _snackBar => _ref.read(snackBarServiceProvider);
   GoRouter get _router => _ref.read(routerProvider);
 
+  AppLocalizations? get _l10n {
+    final ctx = rootNavigatorKey.currentContext;
+    return ctx != null ? AppLocalizations.of(ctx) : null;
+  }
+
   bool isActive(DocumentTaskKey key) => state[key]?.isActive == true;
 
   bool hasActiveDocumentTask(String documentId) {
@@ -150,7 +156,7 @@ class DocumentTaskNotifier
       _snackBar.showResult(
         message: '请先在设置中配置文档提取 Access Token',
         action: SnackBarAction(
-          label: '前往设置',
+          label: _l10n?.goToSettings ?? '前往设置',
           onPressed: () => _router.push(AppRoutes.settingsExtract),
         ),
       );
@@ -165,11 +171,11 @@ class DocumentTaskNotifier
       title: title,
       initialStatus: '等待提取: $title',
       runningStatus: '正在提交任务: $title',
-      busyMessage: '该文献已有任务正在进行中',
+      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务正在进行中',
       showBusySnackBar: showBusySnackBar,
       showProgressSnackBar: showProgressSnackBar,
       showResultSnackBar: showResultSnackBar,
-      cancelledMessage: '已取消提取',
+      cancelledMessage: _l10n?.extractionCancelled ?? '已取消提取',
       body: (token, progress) async {
         final extractResult = await _extractAsync(
           filePath: filePath,
@@ -185,7 +191,11 @@ class DocumentTaskNotifier
           );
         }
         progress(
-          const ListenableProgress(current: 0, total: 0, status: '正在保存结果'),
+          ListenableProgress(
+            current: 0,
+            total: 0,
+            status: _l10n?.savingResult ?? '正在保存结果',
+          ),
         );
         final savedMdPath = await DocExtractService.instance
             .saveResult(
@@ -241,10 +251,10 @@ class DocumentTaskNotifier
           key: key,
           title: item.title,
           status: DocumentTaskStatus.queued,
-          progress: const ListenableProgress(
+          progress: ListenableProgress(
             current: 0,
             total: 0,
-            status: '等待提交',
+            status: _l10n?.waitingSubmit ?? '等待提交',
           ),
           cancelToken: cancelToken,
         ),
@@ -335,7 +345,7 @@ class DocumentTaskNotifier
           _finishTask(
             key,
             DocumentTaskStatus.failed,
-            error: jobStatus.error ?? '保存结果失败',
+            error: jobStatus.error ?? (_l10n?.saveResultFailed ?? '保存结果失败'),
           );
         }
 
@@ -343,7 +353,7 @@ class DocumentTaskNotifier
         _finishTask(
           key,
           DocumentTaskStatus.failed,
-          error: jobStatus.error ?? '提取失败',
+          error: jobStatus.error ?? (_l10n?.extractionFailed ?? '提取失败'),
         );
 
       case BatchJobState.cancelled:
@@ -386,17 +396,25 @@ class DocumentTaskNotifier
       title: document.title,
       initialStatus: '等待生成总结图: ${document.title}',
       runningStatus: '正在生成总结图: ${document.title}',
-      busyMessage: '该文献已有任务正在进行中',
+      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务正在进行中',
       showBusySnackBar: false,
       showProgressSnackBar: false,
-      cancelledMessage: '已取消总结图生成',
+      cancelledMessage: _l10n?.summaryCancelled ?? '已取消总结图生成',
       body: (token, progress) async {
         progress(
-          const ListenableProgress(current: 0, total: 0, status: '正在整理文献内容'),
+          ListenableProgress(
+            current: 0,
+            total: 0,
+            status: _l10n?.preparingContent ?? '正在整理文献内容',
+          ),
         );
         final config = _ref.read(imageGenerationConfigProvider);
         progress(
-          const ListenableProgress(current: 0, total: 0, status: '正在请求生图模型'),
+          ListenableProgress(
+            current: 0,
+            total: 0,
+            status: _l10n?.requestingImageModel ?? '正在请求生图模型',
+          ),
         );
         final language = _ref.read(translationConfigProvider).targetLanguage;
         return DocumentSummaryImageService.instance.generate(
@@ -411,7 +429,7 @@ class DocumentTaskNotifier
         unawaited(FileImage(File(result.imagePath)).evict());
         summaryNotifier.generated(result.imagePath);
         onSuccess(result.imagePath);
-        return TaskFinish.text('总结图已生成');
+        return TaskFinish.text(_l10n?.summaryGenerated ?? '总结图已生成');
       },
       onError: (e) {
         summaryNotifier.finishWithoutImage();
@@ -451,11 +469,11 @@ class DocumentTaskNotifier
       title: title,
       initialStatus: '等待下载: $title',
       runningStatus: '正在下载: $title',
-      busyMessage: '该文献已有任务正在进行中',
+      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务正在进行中',
       showBusySnackBar: showBusySnackBar,
       showProgressSnackBar: showProgressSnackBar,
       showResultSnackBar: showResultSnackBar,
-      cancelledMessage: '已取消下载',
+      cancelledMessage: _l10n?.downloadCancelled ?? '已取消下载',
       body: (token, _) => _ref
           .read(documentLifecycleProvider)
           .redownloadPdf(documentId, cancelToken: token),
@@ -773,7 +791,10 @@ class _QueuedDocumentTask<T> {
 
   void completeCancelled() {
     if (!token.isCancelled) token.cancel();
-    handle?.finish(message: cancelledMessage ?? '已取消');
+    final fallback = rootNavigatorKey.currentContext != null
+        ? AppLocalizations.of(rootNavigatorKey.currentContext!)?.cancelled
+        : null;
+    handle?.finish(message: cancelledMessage ?? fallback ?? '已取消');
     complete(null);
     dispose();
   }

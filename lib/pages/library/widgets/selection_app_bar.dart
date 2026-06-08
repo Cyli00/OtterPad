@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
+
 /// 多选模式操作栏
 ///
 /// 兼用于 Scaffold.appBar（shelf 页面）和 Column 内嵌（LibraryPage）。
@@ -58,12 +60,12 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                     onPressed: onClose,
                     icon: Icon(Symbols.close_rounded, size: iconSz),
                     padding: EdgeInsets.zero,
-                    tooltip: '退出多选',
+                    tooltip: context.l10n.exitMultiSelect,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  '已选 $selectedCount',
+                  context.l10n.selectedCount(selectedCount),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -76,7 +78,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                   sz: sz,
                   iconSz: iconSz,
                   onPressed: onSelectAll,
-                  tooltip: allSelected ? '取消全选' : '全选',
+                  tooltip: allSelected ? context.l10n.deselectAll : context.l10n.selectAll,
                   bg: cs.primaryContainer,
                   fg: cs.primary,
                 ),
@@ -87,7 +89,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                     sz: sz,
                     iconSz: iconSz,
                     onPressed: enabled ? onExtract : null,
-                    tooltip: '文本提取',
+                    tooltip: context.l10n.textExtraction,
                     bg: cs.primaryContainer,
                     fg: cs.primary,
                   ),
@@ -99,7 +101,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                     sz: sz,
                     iconSz: iconSz,
                     onPressed: enabled ? onDownload : null,
-                    tooltip: '下载 PDF',
+                    tooltip: context.l10n.downloadPdf,
                     bg: cs.primaryContainer,
                     fg: cs.primary,
                   ),
@@ -111,7 +113,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                     sz: sz,
                     iconSz: iconSz,
                     onPressed: enabled ? onAddToFavorite : null,
-                    tooltip: '加入收藏夹',
+                    tooltip: context.l10n.addToFavorite,
                     bg: cs.tertiaryContainer,
                     fg: cs.tertiary,
                   ),
@@ -123,7 +125,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                     sz: sz,
                     iconSz: iconSz,
                     onPressed: enabled ? onRemoveFromFavorite : null,
-                    tooltip: '移出收藏夹',
+                    tooltip: context.l10n.removeFromFavorite,
                     bg: cs.tertiaryContainer,
                     fg: cs.tertiary,
                   ),
@@ -134,7 +136,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                   sz: sz,
                   iconSz: iconSz,
                   onPressed: enabled ? onDelete : null,
-                  tooltip: '删除',
+                  tooltip: context.l10n.delete,
                   bg: cs.errorContainer,
                   fg: cs.error,
                 ),

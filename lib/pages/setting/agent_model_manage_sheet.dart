@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import 'agent_add_model_dialog.dart';
@@ -111,7 +112,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       );
       if (mounted) setState(() => _models = list);
     } catch (_) {
-      if (mounted) setState(() => _error = '获取模型列表失败');
+      if (mounted) setState(() => _error = context.l10n.fetchModelsFailed);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -252,7 +253,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
               children: [
                 Flexible(
                   child: Text(
-                    '${widget.providerLabel} 模型',
+                    context.l10n.providerModels(widget.providerLabel),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleLarge?.copyWith(
@@ -286,7 +287,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
               size: 20,
               color: cs.onSurfaceVariant,
             ),
-            tooltip: '刷新',
+            tooltip: context.l10n.refresh,
             onPressed: _fetchModels,
           ),
           IconButton(
@@ -295,7 +296,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
               size: 20,
               color: _imageOnly ? cs.primary : cs.onSurfaceVariant,
             ),
-            tooltip: _imageOnly ? '显示全部模型' : '仅显示生图模型',
+            tooltip: _imageOnly ? context.l10n.showAllModels : context.l10n.showImageModels,
             onPressed: () => setState(() => _imageOnly = !_imageOnly),
           ),
           IconButton(
@@ -304,7 +305,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
               size: 20,
               color: cs.onSurfaceVariant,
             ),
-            tooltip: '关闭',
+            tooltip: context.l10n.close,
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -320,7 +321,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         textAlignVertical: TextAlignVertical.center,
         style: theme.textTheme.bodyMedium,
         decoration: InputDecoration(
-          hintText: '搜索模型 ID 或名称',
+          hintText: context.l10n.searchModelHint,
           hintStyle: theme.textTheme.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant.withAlpha(120),
           ),
@@ -375,7 +376,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: _fetchModels,
-              child: const Text('重试'),
+              child: Text(context.l10n.retry),
             ),
           ],
         ),
@@ -385,7 +386,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       return Padding(
         padding: const EdgeInsets.all(48),
         child: Text(
-          _imageOnly ? '未检测到支持图片输出的模型' : '无匹配结果',
+          _imageOnly ? context.l10n.noImageModels : context.l10n.noResults,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant,
           ),
@@ -436,7 +437,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             if (isDefault) ...[
               const SizedBox(width: 6),
               RoleBadge(
-                label: '专家',
+                label: context.l10n.expert,
                 bg: cs.primaryContainer,
                 fg: cs.onPrimaryContainer,
               ),
@@ -444,7 +445,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             if (isFast) ...[
               const SizedBox(width: 4),
               RoleBadge(
-                label: '快速',
+                label: context.l10n.fast,
                 bg: cs.tertiaryContainer,
                 fg: cs.onTertiaryContainer,
               ),
@@ -452,7 +453,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             if (isImageModel) ...[
               const SizedBox(width: 4),
               RoleBadge(
-                label: '生图',
+                label: context.l10n.imageGen,
                 bg: cs.secondaryContainer,
                 fg: cs.onSecondaryContainer,
               ),
@@ -468,7 +469,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                   color: added ? cs.primary : cs.onSurfaceVariant,
                 ),
                 padding: EdgeInsets.zero,
-                tooltip: added ? '移除' : '添加',
+                tooltip: added ? context.l10n.removeModel : context.l10n.addModel,
                 onPressed: () {
                   if (added) {
                     _handleRemove(id);

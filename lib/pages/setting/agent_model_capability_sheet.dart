@@ -2,6 +2,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/builtin_tools.dart';
@@ -161,39 +162,39 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _segRow(theme, cs, '模型类型', [
-                      _Seg('聊天', !_embedding, () {
+                    _segRow(theme, cs, context.l10n.modelType, [
+                      _Seg(context.l10n.chat, !_embedding, () {
                         if (_embedding) _set(() => _embedding = false);
                       }),
-                      _Seg('嵌入', _embedding, () {
+                      _Seg(context.l10n.embedding, _embedding, () {
                         if (!_embedding) _set(() => _embedding = true);
                       }),
                     ]),
                     const SizedBox(height: 18),
-                    _segRow(theme, cs, '输入模式', [
-                      _Seg('文本', _textInput, () {
+                    _segRow(theme, cs, context.l10n.inputMode, [
+                      _Seg(context.l10n.text, _textInput, () {
                         _set(() => _textInput = !_textInput);
                       }),
-                      _Seg('图片', _imageInput, () {
+                      _Seg(context.l10n.image, _imageInput, () {
                         _set(() => _imageInput = !_imageInput);
                       }),
                     ]),
                     if (!_embedding) ...[
                       const SizedBox(height: 18),
-                      _segRow(theme, cs, '输出模式', [
-                        _Seg('文本', _textOutput, () {
+                      _segRow(theme, cs, context.l10n.outputMode, [
+                        _Seg(context.l10n.text, _textOutput, () {
                           _set(() => _textOutput = !_textOutput);
                         }),
-                        _Seg('图片', _imageOutput, () {
+                        _Seg(context.l10n.image, _imageOutput, () {
                           _set(() => _imageOutput = !_imageOutput);
                         }),
                       ]),
                       const SizedBox(height: 18),
-                      _segRow(theme, cs, '能力', [
-                        _Seg('工具', _tool, () {
+                      _segRow(theme, cs, context.l10n.capabilities, [
+                        _Seg(context.l10n.roleBadgeTools, _tool, () {
                           _set(() => _tool = !_tool);
                         }),
-                        _Seg('推理', _reasoning, () {
+                        _Seg(context.l10n.reasoning, _reasoning, () {
                           _set(() => _reasoning = !_reasoning);
                         }),
                       ]),
@@ -235,12 +236,12 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
                       widget.onBuiltInToolsChanged?.call({});
                       widget.onReset();
                     },
-                    child: const Text('重置为自动推断'),
+                    child: Text(context.l10n.resetToAuto),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('完成'),
+                    child: Text(context.l10n.done),
                   ),
                 ],
               ),
@@ -268,7 +269,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '内置工具',
+          context.l10n.builtInTools,
           style: theme.textTheme.titleSmall?.copyWith(
             color: cs.onSurfaceVariant,
             fontWeight: FontWeight.w600,
@@ -305,7 +306,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
             child: Row(
               children: [
                 Text(
-                  BuiltInToolNames.label(tool),
+                  BuiltInToolNames.label(tool, context.l10n),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: cs.onSurface,
@@ -323,7 +324,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '官方',
+                      context.l10n.official,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: cs.onPrimaryContainer,
                         fontWeight: FontWeight.w600,
@@ -355,17 +356,18 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
 
   /// 思考强度：6 个选项（默认 + 5 档），分两行每行 3 个。
   Widget _thinkingSection(ThemeData theme, ColorScheme cs) {
+    final l10n = context.l10n;
     final segs = [
-      _Seg('默认', _thinkingLevel == null, () => _setThinking(null)),
-      _Seg('关闭', _thinkingLevel == ThinkingLevel.off,
+      _Seg(l10n.defaultLevel, _thinkingLevel == null, () => _setThinking(null)),
+      _Seg(l10n.off, _thinkingLevel == ThinkingLevel.off,
           () => _setThinking(ThinkingLevel.off)),
-      _Seg('低', _thinkingLevel == ThinkingLevel.low,
+      _Seg(l10n.low, _thinkingLevel == ThinkingLevel.low,
           () => _setThinking(ThinkingLevel.low)),
-      _Seg('中等', _thinkingLevel == ThinkingLevel.medium,
+      _Seg(l10n.medium, _thinkingLevel == ThinkingLevel.medium,
           () => _setThinking(ThinkingLevel.medium)),
-      _Seg('高', _thinkingLevel == ThinkingLevel.high,
+      _Seg(l10n.high, _thinkingLevel == ThinkingLevel.high,
           () => _setThinking(ThinkingLevel.high)),
-      _Seg('超高', _thinkingLevel == ThinkingLevel.xhigh,
+      _Seg(l10n.ultraHigh, _thinkingLevel == ThinkingLevel.xhigh,
           () => _setThinking(ThinkingLevel.xhigh)),
     ];
     Widget row(int from, int to) => Row(
@@ -380,7 +382,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '思考强度',
+          context.l10n.thinkingIntensity,
           style: theme.textTheme.titleSmall?.copyWith(
             color: cs.onSurfaceVariant,
             fontWeight: FontWeight.w600,

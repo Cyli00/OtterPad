@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
 import '../../../data/models/collection/favorite.dart';
 import 'reader_sheet_host.dart';
 
@@ -94,7 +95,7 @@ class _ReaderFavoritePickerContentState
     final cs = theme.colorScheme;
     final maxH = MediaQuery.sizeOf(context).height * 0.7;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final confirmLabel = _isAddMode ? '添加' : '移出';
+    final confirmLabel = _isAddMode ? context.l10n.add : context.l10n.remove;
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
@@ -157,7 +158,7 @@ class _ReaderFavoritePickerContentState
                 children: [
                   TextButton(
                     onPressed: () => ReaderSheetHost.closeOf(context),
-                    child: const Text('取消'),
+                    child: Text(context.l10n.cancel),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
@@ -175,9 +176,9 @@ class _ReaderFavoritePickerContentState
 
   String _subtitleFor(Favorite favorite) {
     if (_isAddMode && favorite.documentIds.contains(widget.documentId)) {
-      return '已包含当前文献';
+      return context.l10n.alreadyInThisFavorite;
     }
-    return '${favorite.documentIds.length} 篇文献';
+    return context.l10n.favoriteDocumentCount(favorite.documentIds.length);
   }
 
   bool _checkedFor(Favorite favorite) {
@@ -237,7 +238,7 @@ class _CreateFavoriteSheetItem extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '新建收藏夹',
+                    context.l10n.createFavorite,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: cs.onSurface,
@@ -245,7 +246,7 @@ class _CreateFavoriteSheetItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '创建后可在下方勾选',
+                    context.l10n.createThenSelect,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),

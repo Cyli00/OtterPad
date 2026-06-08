@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/l10n.dart';
 import '../../../data/models/book/document.dart';
 
 class ReaderDocumentInfoSheet extends StatelessWidget {
@@ -78,7 +79,7 @@ class ReaderDocumentInfoSheet extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '文献信息',
+                  context.l10n.documentInfo,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: cs.onSurface,
@@ -100,9 +101,9 @@ class ReaderDocumentInfoSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _buildInfoRow(context, '作者', document.authors.join(', ')),
-                    _buildInfoRow(context, '期刊', document.journal ?? ''),
-                    _buildInfoRow(context, '年份', document.year ?? ''),
+                    _buildInfoRow(context, context.l10n.author, document.authors.join(', ')),
+                    _buildInfoRow(context, context.l10n.journal, document.journal ?? ''),
+                    _buildInfoRow(context, context.l10n.year, document.year ?? ''),
                     _buildInfoRow(context, 'DOI', document.doi ?? ''),
                     SizedBox(
                       height: MediaQuery.of(context).padding.bottom + 16,

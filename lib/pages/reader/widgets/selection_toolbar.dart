@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 
 /// 在选区附近显示阅读上下文菜单 Overlay（含可展开的笔记面板）。
@@ -231,7 +232,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
           children: [
             _ActionIcon(
               icon: Symbols.content_copy_rounded,
-              tooltip: '复制',
+              tooltip: context.l10n.copy,
               onTap: widget.onCopy,
             ),
             const _Divider(),
@@ -246,7 +247,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
               icon: _showNotePanel
                   ? Symbols.edit_note_rounded
                   : Symbols.edit_note_rounded,
-              tooltip: '笔记',
+              tooltip: context.l10n.notes,
               onTap: _handleNoteTap,
               color: _showNotePanel
                   ? const Color(0xFF4FC3F7)
@@ -254,14 +255,14 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
             ),
             _ActionIcon(
               icon: Symbols.translate_rounded,
-              tooltip: '翻译',
+              tooltip: context.l10n.translateText,
               onTap: widget.onTranslate,
             ),
             if (widget.onDelete != null) ...[
               const _Divider(),
               _ActionIcon(
                 icon: Symbols.delete_rounded,
-                tooltip: '删除高亮',
+                tooltip: context.l10n.deleteHighlight,
                 onTap: widget.onDelete!,
                 color: const Color(0xFFEF5350),
               ),
@@ -294,12 +295,12 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
                     color: Colors.white,
                     fontSize: 13,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     border: InputBorder.none,
-                    hintText: '写下你的想法...',
-                    hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
+                    hintText: context.l10n.writeYourThoughts,
+                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   onChanged: (_) {
                     if (!_noteDirty) setState(() => _noteDirty = true);
@@ -315,7 +316,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
                     size: 22,
                   ),
                   onPressed: _handleNoteSave,
-                  tooltip: '保存',
+                  tooltip: context.l10n.save,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
                     minWidth: 36,

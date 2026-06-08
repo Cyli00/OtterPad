@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../core/l10n.dart';
 import '../providers/api_provider.dart';
+import '../router/app_router.dart';
 import 'snackbar_service.dart';
 
 class AiSettingsPrompt {
@@ -90,7 +92,13 @@ class AiSettingsPrompt {
   }) {
     snackBar.showResult(
       message: message,
-      action: SnackBarAction(label: '前往设置', onPressed: onOpenSettings),
+      action: SnackBarAction(
+        label: rootNavigatorKey.currentContext != null
+            ? AppLocalizations.of(rootNavigatorKey.currentContext!)!
+                .goToSettings
+            : '前往设置',
+        onPressed: onOpenSettings,
+      ),
     );
   }
 

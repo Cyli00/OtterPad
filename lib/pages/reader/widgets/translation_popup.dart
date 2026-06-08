@@ -13,6 +13,7 @@ import '../../../router/app_router.dart';
 import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
 import '../../../services/snackbar_service.dart';
+import '../../../core/l10n.dart';
 import '../../../services/translation_service.dart';
 
 /// 打开一个流式翻译小窗口展示 [sourceText] 的译文。
@@ -248,7 +249,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         ),
         const SizedBox(width: 8),
         Text(
-          '翻译',
+          context.l10n.translateText,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -257,7 +258,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         IconButton(
           icon: const Icon(Symbols.close_rounded, size: 20),
           color: cs.onSurfaceVariant,
-          tooltip: '关闭',
+          tooltip: context.l10n.close,
           onPressed: () => Navigator.of(context).pop(),
           visualDensity: VisualDensity.compact,
         ),
@@ -336,7 +337,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '翻译失败：$_errorText',
+                    context.l10n.translationFailed(_errorText),
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: cs.error,
                     ),
@@ -446,7 +447,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '流式接收中',
+                  context.l10n.streaming,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: cs.onSurfaceVariant,
                   ),
@@ -460,7 +461,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
               size: 20,
               color: cs.onSurfaceVariant,
             ),
-            tooltip: '复制',
+            tooltip: context.l10n.copy,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -475,22 +476,22 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
               ref
                   .read(snackBarServiceProvider)
                   .showResult(
-                    message: '已复制',
+                    message: context.l10n.copied,
                     duration: const Duration(seconds: 1),
                   );
             },
             itemBuilder: (_) => [
               PopupMenuItem(
                 value: 'translation',
-                child: Text('复制译文', style: theme.textTheme.bodyMedium),
+                child: Text(context.l10n.copyTranslation, style: theme.textTheme.bodyMedium),
               ),
               PopupMenuItem(
                 value: 'source',
-                child: Text('复制原文', style: theme.textTheme.bodyMedium),
+                child: Text(context.l10n.copyOriginal, style: theme.textTheme.bodyMedium),
               ),
               PopupMenuItem(
                 value: 'all',
-                child: Text('全部复制', style: theme.textTheme.bodyMedium),
+                child: Text(context.l10n.copyAll, style: theme.textTheme.bodyMedium),
               ),
             ],
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/history_provider.dart';
 import 'widgets/doc_card_actions.dart';
@@ -69,7 +70,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       focusNode: _focusNode,
                       onChanged: (v) => setState(() => _query = v.trim()),
                       decoration: InputDecoration(
-                        hintText: '搜索文献、作者、关键词...',
+                        hintText: context.l10n.searchDocumentsHintDesktop,
                         filled: true,
                         fillColor: colorScheme.surfaceContainerHighest
                             .withAlpha(150),
@@ -117,7 +118,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            '输入关键词搜索文献',
+                            context.l10n.enterKeywordToSearch,
                             style: theme.textTheme.bodyLarge?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -128,7 +129,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   : filtered.isEmpty
                   ? Center(
                       child: Text(
-                        '未找到匹配的文献',
+                        context.l10n.noDocumentsFound,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),

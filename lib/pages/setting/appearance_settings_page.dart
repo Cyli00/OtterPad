@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/theme_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -14,6 +15,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final l10n = context.l10n;
     final themeState = ref.watch(themeProvider);
     final settings = ref.watch(readerSettingsProvider);
 
@@ -21,7 +23,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
       backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(
-          '外观设置',
+          l10n.appearanceSettings,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -39,27 +41,27 @@ class AppearanceSettingsPage extends ConsumerWidget {
           // ── 主题模式 ──
           _buildGroup(
             context,
-            title: '主题模式',
+            title: l10n.themeMode,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: SizedBox(
                 width: double.infinity,
                 child: SegmentedButton<ThemeMode>(
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: ThemeMode.system,
-                      label: Text('自动'),
-                      icon: Icon(Symbols.brightness_auto),
+                      label: Text(l10n.autoMode),
+                      icon: const Icon(Symbols.brightness_auto),
                     ),
                     ButtonSegment(
                       value: ThemeMode.light,
-                      label: Text('浅色'),
-                      icon: Icon(Symbols.wb_sunny),
+                      label: Text(l10n.lightMode),
+                      icon: const Icon(Symbols.wb_sunny),
                     ),
                     ButtonSegment(
                       value: ThemeMode.dark,
-                      label: Text('深色'),
-                      icon: Icon(Symbols.dark_mode),
+                      label: Text(l10n.darkMode),
+                      icon: const Icon(Symbols.dark_mode),
                     ),
                   ],
                   selected: {themeState.mode},
@@ -83,7 +85,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
           // ── 主题色彩 ──
           _buildGroup(
             context,
-            title: '主题色彩',
+            title: l10n.themeColor,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: _buildColorGrid(context, ref, themeState),
@@ -93,14 +95,14 @@ class AppearanceSettingsPage extends ConsumerWidget {
           // ── 阅读设置 ──
           _buildGroup(
             context,
-            title: '阅读设置',
+            title: l10n.readingSettings,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '默认阅读模式',
+                    l10n.defaultReadingMode,
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
@@ -137,7 +139,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '选择 Markdown 时，若文档无提取结果将自动回退到 PDF 视图',
+                    l10n.defaultReadingModeHint,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),
@@ -150,14 +152,14 @@ class AppearanceSettingsPage extends ConsumerWidget {
           // ── 文字大小 ──
           _buildGroup(
             context,
-            title: '文字大小',
+            title: l10n.textSize,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '系统文字缩放',
+                    l10n.systemTextScale,
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
@@ -167,10 +169,10 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: SegmentedButton<double>(
-                      segments: const [
-                        ButtonSegment(value: 1.0, label: Text('标准')),
-                        ButtonSegment(value: 1.15, label: Text('大')),
-                        ButtonSegment(value: 1.3, label: Text('特大')),
+                      segments: [
+                        ButtonSegment(value: 1.0, label: Text(l10n.textSizeStandard)),
+                        ButtonSegment(value: 1.15, label: Text(l10n.textSizeLarge)),
+                        ButtonSegment(value: 1.3, label: Text(l10n.textSizeExtraLarge)),
                       ],
                       selected: {_closestPreset(themeState.textScale)},
                       onSelectionChanged: (set) => ref
@@ -187,7 +189,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '影响整个应用的文字显示大小，重启后仍保留',
+                    l10n.textSizeHint,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),

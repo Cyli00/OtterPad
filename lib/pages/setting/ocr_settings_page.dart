@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_picker.dart';
@@ -17,40 +18,40 @@ class OcrSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
-  static const _layoutShapeModes = <(String, String)>[
-    ('auto', '自动'),
-    ('rect', '矩形'),
-    ('quad', '四边形'),
-    ('poly', '多边形'),
+  List<(String, String)> _layoutShapeModes(AppLocalizations l10n) => [
+    ('auto', l10n.ocrAuto),
+    ('rect', l10n.ocrRectangle),
+    ('quad', l10n.ocrQuadrilateral),
+    ('poly', l10n.ocrPolygon),
   ];
 
-  static const _recognitionDefs = <(String, String, String)>[
-    ('useChartRecognition', '图表识别', '将图表解析为表格'),
-    ('useSealRecognition', '印章识别', '识别文档中的印章'),
-    ('useOcrForImageBlock', '图片区 OCR', '对图片区域执行文字识别'),
+  List<(String, String, String)> _recognitionDefs(AppLocalizations l10n) => [
+    ('useChartRecognition', l10n.chartRecognition, l10n.ocrChartRecognitionDesc),
+    ('useSealRecognition', l10n.stampRecognition, l10n.ocrStampRecognitionDesc),
+    ('useOcrForImageBlock', l10n.imageAreaOcr, l10n.ocrImageAreaDesc),
   ];
 
-  static const _correctionDefs = <(String, String, String)>[
-    ('useDocOrientationClassify', '方向校正', '自动纠正 0°/90°/180°/270° 旋转'),
-    ('useDocUnwarping', '弯曲校正', '校正弯曲或褶皱的文档'),
+  List<(String, String, String)> _correctionDefs(AppLocalizations l10n) => [
+    ('useDocOrientationClassify', l10n.orientationCorrection, l10n.ocrOrientationDesc),
+    ('useDocUnwarping', l10n.curvatureCorrection, l10n.ocrCurvatureDesc),
   ];
 
-  static const _layoutDefs = <(String, String, String)>[
-    ('layoutNms', '去重叠检测框', '移除重叠的版面检测框'),
+  List<(String, String, String)> _layoutDefs(AppLocalizations l10n) => [
+    ('layoutNms', l10n.deduplicateBoxes, l10n.ocrDeduplicateDesc),
   ];
 
-  static const _outputDefs = <(String, String, String)>[
-    ('restructurePages', '多页重构', '重构多页文档结构'),
+  List<(String, String, String)> _outputDefs(AppLocalizations l10n) => [
+    ('restructurePages', l10n.multiPageReconstruction, l10n.ocrMultiPageDesc),
   ];
 
-  static const _labelNames = <String, String>{
-    'header': '页眉',
-    'header_image': '页眉图片',
-    'footer': '页脚',
-    'footer_image': '页脚图片',
-    'number': '页码',
-    'footnote': '脚注',
-    'aside_text': '旁注',
+  Map<String, String> _labelNames(AppLocalizations l10n) => {
+    'header': l10n.ocrHeader,
+    'header_image': l10n.ocrHeaderImage,
+    'footer': l10n.ocrFooter,
+    'footer_image': l10n.ocrFooterImage,
+    'number': l10n.ocrPageNumber,
+    'footnote': l10n.ocrFootnote,
+    'aside_text': l10n.ocrSideNote,
   };
 
 
@@ -271,7 +272,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
               IconButton(
                 onPressed: isSet ? onReset : null,
                 icon: const Icon(Symbols.refresh_rounded, size: 20),
-                tooltip: '恢复默认',
+                tooltip: context.l10n.restoreDefaults,
                 color: cs.onSurfaceVariant,
               ),
             ],
@@ -290,7 +291,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
       children: kAllIgnoreLabels.map((label) {
         final isSelected = selected.contains(label);
         return FilterChip(
-          label: Text(_labelNames[label] ?? label),
+          label: Text(_labelNames(context.l10n)[label] ?? label),
           selected: isSelected,
           showCheckmark: false,
           color: WidgetStateProperty.resolveWith((states) {
@@ -361,7 +362,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
       backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(
-          'OCR 设置',
+          context.l10n.ocrSettings,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -378,7 +379,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           children: [
             // ── OCR 接口设置 ──
             _buildGroup(
-              title: 'OCR 接口',
+              title: context.l10n.ocrInterface,
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -401,7 +402,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                           ),
                           icon: Icon(Symbols.arrow_outward_rounded,
                               size: 16, color: cs.onSurfaceVariant),
-                          tooltip: '获取 Token',
+                          tooltip: context.l10n.getToken,
                           visualDensity: VisualDensity.compact,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(
@@ -446,12 +447,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
 
             // ── 版面分析 ──
             _buildGroup(
-              title: '版面分析',
+              title: context.l10n.layoutAnalysis,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  ..._switchGroup(docState, _layoutDefs),
+                  ..._switchGroup(docState, _layoutDefs(context.l10n)),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 20, vertical: 12),
@@ -461,20 +462,20 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('版面几何形状',
+                            Text(context.l10n.layoutGeometry,
                                 style: theme.textTheme.titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w600)),
                             const SizedBox(width: 4),
-                            _helpIcon('版面检测框的几何形状表示'),
+                            _helpIcon(context.l10n.layoutGeometryHelp),
                           ],
                         ),
                         const SizedBox(height: 12),
                         SettingPicker<String>(
                           current: docState.layoutShapeMode,
-                          options: _layoutShapeModes.map((m) => m.$1).toList(),
+                          options: _layoutShapeModes(context.l10n).map((m) => m.$1).toList(),
                           labelFor: (id) =>
-                              _layoutShapeModes.firstWhere((m) => m.$1 == id).$2,
-                          sheetTitle: '版面几何形状',
+                              _layoutShapeModes(context.l10n).firstWhere((m) => m.$1 == id).$2,
+                          sheetTitle: context.l10n.layoutGeometry,
                           onChanged: (v) {
                             if (docState.layoutShapeMode != v) {
                               ref
@@ -487,8 +488,8 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     ),
                   ),
                   _sliderTile(
-                    title: '版面检测阈值',
-                    subtitle: '区域过滤的阈值，值越高保留的区域越少',
+                    title: context.l10n.layoutDetectionThreshold,
+                    subtitle: context.l10n.ocrThresholdHelp,
                     value: docState.layoutThreshold,
                     min: 0.0, max: 1.0, divisions: 20, defaultValue: 0.5,
                     formatter: (v) => v.toStringAsFixed(2),
@@ -506,15 +507,15 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
 
             // ── 输出控制 ──
             _buildGroup(
-              title: '输出控制',
+              title: context.l10n.outputControl,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  ..._switchGroup(docState, _outputDefs),
+                  ..._switchGroup(docState, _outputDefs(context.l10n)),
                   _sliderTile(
-                    title: '重复惩罚',
-                    subtitle: '出现重复文字或表格内容时适当调高',
+                    title: context.l10n.repetitionPenalty,
+                    subtitle: context.l10n.repetitionPenaltyHint,
                     value: docState.repetitionPenalty,
                     min: 1.0, max: 2.0, divisions: 20, defaultValue: 1.0,
                     formatter: (v) => v.toStringAsFixed(2),
@@ -532,12 +533,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
 
             // ── 识别增强 ──
             _buildGroup(
-              title: '识别增强',
+              title: context.l10n.recognitionEnhancement,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  ..._switchGroup(docState, _recognitionDefs),
+                  ..._switchGroup(docState, _recognitionDefs(context.l10n)),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                     child: Column(
@@ -546,14 +547,14 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('Markdown 忽略标签',
+                            Text(context.l10n.markdownIgnoreLabels,
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: cs.onSurface,
                                 )),
                             const SizedBox(width: 4),
                             _helpIcon(
-                                '勾选的标签区域将不会输出到 Markdown 结果中，默认全忽略。'),
+                                context.l10n.ocrFilterHelp),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -568,12 +569,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
 
             // ── 文档校正 ──
             _buildGroup(
-              title: '文档校正',
+              title: context.l10n.documentCorrection,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  ..._switchGroup(docState, _correctionDefs),
+                  ..._switchGroup(docState, _correctionDefs(context.l10n)),
                   const SizedBox(height: 8),
                 ],
               ),

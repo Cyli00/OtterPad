@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'l10n/app_localizations.dart';
+import 'providers/locale_provider.dart';
 import 'providers/task_activity_provider.dart';
 import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
@@ -25,6 +27,7 @@ class OtterPadApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeState = ref.watch(themeProvider);
+    final locale = ref.watch(localeProvider);
     final router = ref.watch(routerProvider);
 
     // snackbar surface：Task Activity 变化时把单槽同步到当前活集合。
@@ -63,6 +66,9 @@ class OtterPadApp extends ConsumerWidget {
           scaffoldMessengerKey: scaffoldMessengerKey,
           title: '獭祭鱼 OtterPad',
           debugShowCheckedModeBanner: false,
+          locale: locale,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           themeMode: themeState.mode,
           theme: ThemeData(
             colorScheme: lightScheme,

@@ -4,18 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/image_generation_config_provider.dart';
 import 'setting_picker.dart';
 
 /// 画幅比例用户场景副标题——帮用户从"数字"映射到"使用场景"。
-const _kAspectRatioHints = <String, String>{
-  '1:1': '方形 · 社交配图',
-  '4:3': '传统打印 · 文档版面',
-  '3:2': '经典摄影',
-  '16:9': '横屏视频 · 桌面壁纸',
-  '21:9': '超宽屏 · 电影',
-  '9:16': '竖屏 · 手机壁纸',
+/// 含中文的 hint 在 build 内通过 l10n 解析，其余技术描述保持原样。
+Map<String, String> _kAspectRatioHints(AppLocalizations l10n) => <String, String>{
+  '1:1': l10n.aspectSquare,
+  '4:3': l10n.aspectClassic,
+  '16:9': l10n.aspectWide,
+  '21:9': l10n.aspectUltraWide,
+  '9:16': l10n.aspectTall,
 };
 
 class ImageGenerationSettingsSection extends ConsumerStatefulWidget {
@@ -128,7 +129,7 @@ class _ImageGenerationSettingsSectionState
     return IconButton(
       onPressed: onPressed,
       icon: Icon(Symbols.refresh_rounded, size: 18, color: cs.onSurfaceVariant),
-      tooltip: '恢复默认',
+      tooltip: context.l10n.restoreDefaults,
       visualDensity: VisualDensity.compact,
     );
   }
@@ -146,8 +147,8 @@ class _ImageGenerationSettingsSectionState
           children: [
             Expanded(
               child: _titleRow(
-                '参考图数量',
-                '从文献提取的 figure 中按顺序选择参考图；不同模型会按自身上限自动裁剪。',
+                context.l10n.referenceImageCount,
+                context.l10n.imageRefCountHint,
               ),
             ),
             const SizedBox(width: 12),
@@ -200,16 +201,16 @@ class _ImageGenerationSettingsSectionState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _titleRow(
-            '画幅比例',
-            'Gemini 映射为 imageConfig.aspectRatio；OpenAI 会映射到最接近的输出尺寸，并在 prompt 中保留比例要求。',
+            context.l10n.aspectRatio,
+            context.l10n.aspectRatioHint,
           ),
           const SizedBox(height: 12),
           SettingPicker<String>(
             current: cfg.aspectRatio,
             options: kSummaryAspectRatios,
             labelFor: (v) => v,
-            subtitleFor: (v) => _kAspectRatioHints[v] ?? '',
-            sheetTitle: '画幅比例',
+            subtitleFor: (v) => v == '3:2' ? context.l10n.classicPhotography : (_kAspectRatioHints(context.l10n)[v] ?? ''),
+            sheetTitle: context.l10n.aspectRatio,
             onChanged: notifier.setAspectRatio,
           ),
           const SizedBox(height: 24),
@@ -217,8 +218,8 @@ class _ImageGenerationSettingsSectionState
             children: [
               Expanded(
                 child: _titleRow(
-                  '清晰度',
-                  'OpenAI 映射为 quality；Gemini 映射为 imageSize。gpt-image-2 的输入图保真度由模型自动高保真处理。',
+                  context.l10n.resolution,
+                  context.l10n.resolutionHint,
                 ),
               ),
               if (_costLabel(cfg) case final label?)
@@ -251,8 +252,8 @@ class _ImageGenerationSettingsSectionState
             children: [
               Expanded(
                 child: _titleRow(
-                  '总结图 Prompt',
-                  '用于控制文献总结图的视觉风格和信息组织方式；运行时会自动追加文献标题、元数据、Markdown 和参考 figure。',
+                  context.l10n.summaryPromptLabel,
+                  context.l10n.summaryPromptHint,
                 ),
               ),
               if (!cfg.isPromptDefault)
@@ -270,7 +271,7 @@ class _ImageGenerationSettingsSectionState
             minLines: 5,
             maxLines: 12,
             style: theme.textTheme.bodyMedium,
-            decoration: _fieldDeco(theme, cs, hint: '描述文献总结图的版式、颜色、信息密度和风格要求'),
+            decoration: _fieldDeco(theme, cs, hint: context.l10n.summaryPromptFieldHint),
             onChanged: (v) => _debounceSavePrompt(v.trim()),
           ),
         ],
@@ -289,7 +290,7 @@ class _ImageGenerationSettingsSectionState
       fidelity: cfg.fidelity,
     );
     if (cost == null) return null;
-    return '预估 \$${cost.toStringAsFixed(3)}';
+    return context.l10n.estimatedCostShort('\$', cost.toStringAsFixed(3));
   }
 
   Widget _segmented<T>({

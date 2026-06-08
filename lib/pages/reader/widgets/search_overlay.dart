@@ -8,6 +8,7 @@ import 'reader_background.dart';
 import 'md_widget/nr_markdown_config.dart';
 import 'md_widget/nr_search_highlight_builder.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/l10n.dart';
 
 /// 全屏搜索遮罩层
 ///
@@ -143,7 +144,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 size: 28,
                 color: cs.onSurface,
               ),
-              tooltip: '返回',
+              tooltip: context.l10n.back,
               onPressed: widget.onDismiss,
             ),
             const SizedBox(width: 4),
@@ -156,7 +157,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                   textAlignVertical: TextAlignVertical.center,
                   style: TextStyle(color: cs.onSurface, fontSize: 15),
                   decoration: InputDecoration(
-                    hintText: '搜索正文内容',
+                    hintText: context.l10n.searchContent,
                     hintStyle: TextStyle(
                       color: cs.onSurfaceVariant.withAlpha(160),
                       fontSize: 15,
@@ -203,7 +204,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 size: 22,
                 color: cs.onSurfaceVariant,
               ),
-              tooltip: '退出搜索',
+              tooltip: context.l10n.exitSearch,
               onPressed: widget.onDismiss,
             ),
           ],
@@ -218,7 +219,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
     if (_results.isEmpty) {
       return Center(
         child: Text(
-          '未找到匹配内容',
+          context.l10n.noMatchFound,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
         ),
       );
@@ -232,7 +233,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              '找到 ${_results.length} 条匹配',
+              context.l10n.searchMatchesFound(_results.length),
               style: TextStyle(
                 color: cs.onSurfaceVariant,
                 fontSize: 13,

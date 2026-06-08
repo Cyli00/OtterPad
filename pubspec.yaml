@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # 状态管理
   flutter_riverpod: ^3.2.1
@@ -118,6 +120,7 @@ dev_dependencies:
   flutter_native_splash: ^2.4.6
 
 flutter:
+  generate: true
   uses-material-design: true
 
   assets:

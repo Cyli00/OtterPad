@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/l10n.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/document_task_provider.dart';
 import '../../../services/batch_extract_service.dart';
@@ -156,13 +157,14 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
     final failed = progress.failed;
     final isRunning = completed < total;
 
+    final l10n = context.l10n;
     final statusText = isRunning
         ? (progress.currentTitle.isEmpty
-              ? '等待任务启动...'
-              : '正在处理「${progress.currentTitle}」')
+              ? l10n.waitingSubmit
+              : '${l10n.processing}「${progress.currentTitle}」')
         : (failed == 0
-              ? '全部提取完成，共 $succeeded 篇'
-              : '提取完成：成功 $succeeded 篇，失败 $failed 篇');
+              ? l10n.extractionComplete
+              : '${l10n.extractionDone}: $succeeded, ${l10n.failedCount(failed)}');
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
@@ -196,7 +198,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isRunning ? '批量提取中' : '提取完成',
+                          isRunning ? l10n.batchExtracting : l10n.extractionDone,
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -316,7 +318,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                           Navigator.pop(context);
                         },
                         icon: const Icon(Symbols.cancel),
-                        label: const Text('取消提取'),
+                        label: Text(l10n.cancelExtraction),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 48),
                           shape: RoundedRectangleBorder(
@@ -327,7 +329,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                     : FilledButton.icon(
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Symbols.check_rounded),
-                        label: Text(failed == 0 ? '完成' : '关闭（$failed 篇失败）'),
+                        label: Text(failed == 0 ? l10n.done : '${l10n.close}（${l10n.failedCount(failed)}）'),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(double.infinity, 48),
                           shape: RoundedRectangleBorder(
@@ -375,6 +377,7 @@ class JobStatusTile extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final l10n = context.l10n;
     final (
       Widget leading,
       String subtitle,
@@ -386,12 +389,12 @@ class JobStatusTile extends StatelessWidget {
           color: colorScheme.onSurfaceVariant,
           size: 20,
         ),
-        statusText ?? '等待提交',
+        statusText ?? l10n.waitingSubmit,
         colorScheme.onSurfaceVariant,
       ),
       BatchJobState.submitted => (
         Icon(Symbols.cloud_upload, color: colorScheme.primary, size: 20),
-        '已提交，等待处理',
+        l10n.waitingSubmit,
         colorScheme.onSurfaceVariant,
       ),
       BatchJobState.running => (
@@ -405,7 +408,7 @@ class JobStatusTile extends StatelessWidget {
           ),
         ),
         statusText ??
-            (totalPages > 0 ? '提取中 $extractedPages / $totalPages 页' : '提取中...'),
+            (totalPages > 0 ? l10n.extractionCompletePages(totalPages) : l10n.processing),
         colorScheme.onSurfaceVariant,
       ),
       BatchJobState.done => (
@@ -414,12 +417,12 @@ class JobStatusTile extends StatelessWidget {
           color: colorScheme.primary,
           size: 20,
         ),
-        totalPages > 0 ? '完成（共 $totalPages 页）' : '提取完成',
+        totalPages > 0 ? l10n.extractionCompletePages(totalPages) : l10n.extractionComplete,
         colorScheme.onSurfaceVariant,
       ),
       BatchJobState.failed => (
         Icon(Symbols.error_rounded, color: colorScheme.error, size: 20),
-        error ?? '提取失败',
+        error ?? l10n.extractionFailed,
         colorScheme.error,
       ),
       BatchJobState.cancelled => (
@@ -428,7 +431,7 @@ class JobStatusTile extends StatelessWidget {
           color: colorScheme.onSurfaceVariant,
           size: 20,
         ),
-        '已取消',
+        l10n.extractionCancelled,
         colorScheme.onSurfaceVariant,
       ),
     };

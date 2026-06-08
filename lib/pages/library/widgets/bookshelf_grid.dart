@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/l10n.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/history_provider.dart';
 import '../../../providers/selection_provider.dart';
@@ -38,10 +39,10 @@ class BookshelfGrid extends ConsumerWidget {
         selection.isActive && selection.sourceContext == 'library';
 
     if (docs.isEmpty) {
-      return const SliverToBoxAdapter(
+      return SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.all(32.0),
-          child: Center(child: Text('暂无文献，请添加 PDF 文件到文库')),
+          padding: const EdgeInsets.all(32.0),
+          child: Center(child: Text(context.l10n.noDocumentsInLibrary)),
         ),
       );
     }

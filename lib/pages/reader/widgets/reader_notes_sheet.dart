@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/highlight_provider.dart';
 
@@ -137,7 +138,7 @@ class _Header extends ConsumerWidget {
           Icon(Symbols.bookmark_rounded, color: cs.primary, size: 22),
           const SizedBox(width: 8),
           Text(
-            '标注与笔记',
+            context.l10n.highlightsAndNotes,
             style: theme.textTheme.titleMedium?.copyWith(
               color: cs.primary,
               fontWeight: FontWeight.bold,
@@ -145,7 +146,7 @@ class _Header extends ConsumerWidget {
           ),
           const Spacer(),
           Text(
-            '$count 条',
+            context.l10n.highlightCount(count),
             style: theme.textTheme.bodySmall?.copyWith(
               color: cs.onSurfaceVariant,
             ),
@@ -219,14 +220,14 @@ class _NotesListState extends ConsumerState<_NotesList> {
             Icon(Symbols.highlight_rounded, size: 48, color: cs.outlineVariant),
             const SizedBox(height: 12),
             Text(
-              '还没有标注',
+              context.l10n.noHighlights,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              '选中文本后点击颜色圆点即可创建',
+              context.l10n.noHighlightsHint,
               style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
             ),
           ],
@@ -293,7 +294,7 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
       title: Text(
-        '编辑笔记',
+        context.l10n.editNoteTitle,
         style: theme.textTheme.titleLarge?.copyWith(
           fontWeight: FontWeight.bold,
         ),
@@ -337,7 +338,7 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(color: cs.primary, width: 2),
               ),
-              hintText: '写下你的想法...',
+              hintText: context.l10n.writeYourThoughts,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 14,
@@ -349,11 +350,11 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(context.l10n.cancel),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, _controller.text),
-          child: const Text('保存'),
+          child: Text(context.l10n.save),
         ),
       ],
     );
@@ -450,7 +451,7 @@ class _HighlightTileState extends State<_HighlightTile> {
                   Row(
                     children: [
                       Text(
-                        _formatTime(hl.createdAt),
+                        _formatTime(context, hl.createdAt),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: cs.outline,
                         ),
@@ -458,13 +459,13 @@ class _HighlightTileState extends State<_HighlightTile> {
                       const Spacer(),
                       _MiniButton(
                         icon: Symbols.edit_note_rounded,
-                        tooltip: '编辑笔记',
+                        tooltip: context.l10n.editNote,
                         onTap: widget.onEditNote,
                       ),
                       const SizedBox(width: 4),
                       _MiniButton(
                         icon: Symbols.delete_rounded,
-                        tooltip: '删除',
+                        tooltip: context.l10n.delete,
                         onTap: widget.onDelete,
                       ),
                     ],
@@ -478,13 +479,14 @@ class _HighlightTileState extends State<_HighlightTile> {
     );
   }
 
-  String _formatTime(DateTime dt) {
+  String _formatTime(BuildContext context, DateTime dt) {
+    final l10n = context.l10n;
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return '刚刚';
-    if (diff.inHours < 1) return '${diff.inMinutes} 分钟前';
-    if (diff.inDays < 1) return '${diff.inHours} 小时前';
-    if (diff.inDays < 30) return '${diff.inDays} 天前';
+    if (diff.inMinutes < 1) return l10n.justNow;
+    if (diff.inHours < 1) return l10n.minutesAgo(diff.inMinutes);
+    if (diff.inDays < 1) return l10n.hoursAgo(diff.inHours);
+    if (diff.inDays < 30) return l10n.daysAgo(diff.inDays);
     return '${dt.month}/${dt.day}';
   }
 }

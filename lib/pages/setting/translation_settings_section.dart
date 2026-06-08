@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../services/translation_skip_sections.dart';
 import '../../services/translation_style.dart';
@@ -193,7 +194,7 @@ class _TranslationSettingsSectionState
             IconButton(
               onPressed: isSet ? onReset : null,
               icon: const Icon(Symbols.refresh_rounded, size: 20),
-              tooltip: '恢复默认',
+              tooltip: context.l10n.restoreDefaults,
               color: cs.onSurfaceVariant,
             ),
           ],
@@ -216,21 +217,21 @@ class _TranslationSettingsSectionState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── 目标语言 ──
-          _buildTitleRow('目标语言', '翻译提示词中 {{targetLanguage}} 的实际值'),
+          _buildTitleRow(context.l10n.targetLanguage, context.l10n.translationTargetLangDesc),
           const SizedBox(height: 12),
           _buildLanguagePicker(theme, cs, cfg.targetLanguage),
 
           const SizedBox(height: 24),
 
           // ── 译文样式 ──
-          _buildTitleRow('译文样式', '文档全文翻译时译文的视觉区分方式'),
+          _buildTitleRow(context.l10n.translationStyleSetting, context.l10n.translationStyleDesc),
           const SizedBox(height: 12),
           _buildStylePicker(theme, cs, cfg.displayStyleId),
 
           const SizedBox(height: 24),
 
           // ── 翻译忽略内容 ──
-          _buildTitleRow('翻译忽略内容', '勾选的区域翻译时跳过，取消勾选则合并为整段翻译'),
+          _buildTitleRow(context.l10n.translationIgnore, context.l10n.translationIgnoreDesc),
           const SizedBox(height: 12),
           _buildIgnoreSectionChips(cs, cfg.ignoreSections),
 
@@ -240,8 +241,8 @@ class _TranslationSettingsSectionState
           _sliderRow(
             theme: theme,
             cs: cs,
-            title: '温度',
-            tooltip: '越低越稳重，越高越发散',
+            title: context.l10n.temperature,
+            tooltip: context.l10n.temperatureDesc,
             value: cfg.temperature,
             fallback: 0.0,
             min: 0.0,
@@ -260,8 +261,8 @@ class _TranslationSettingsSectionState
           Row(
             children: [
               Expanded(child: _buildTitleRow(
-                '系统提示词',
-                '翻译 System Prompt，支持 {{targetLanguage}} 占位符',
+                context.l10n.systemPrompt,
+                context.l10n.systemPromptDesc,
               )),
               if (!cfg.isSystemPromptDefault)
                 _resetButton(onPressed: () {
@@ -279,7 +280,7 @@ class _TranslationSettingsSectionState
             maxLines: 8,
             style: theme.textTheme.bodyMedium,
             decoration: _fieldDeco(theme, cs,
-                hint: '例如：You are a professional translator…'),
+                hint: context.l10n.systemPromptHint),
             onChanged: (v) => _debounceSaveSystem(v.trim()),
           ),
 
@@ -289,8 +290,8 @@ class _TranslationSettingsSectionState
           Row(
             children: [
               Expanded(child: _buildTitleRow(
-                '用户提示词',
-                '翻译 User Prompt，支持 {{targetLanguage}} 和 {{input}} 占位符',
+                context.l10n.userPrompt,
+                context.l10n.userPromptDesc,
               )),
               if (!cfg.isUserPromptDefault)
                 _resetButton(onPressed: () {
@@ -340,7 +341,7 @@ class _TranslationSettingsSectionState
     return IconButton(
       onPressed: onPressed,
       icon: Icon(Symbols.refresh_rounded, size: 18, color: cs.onSurfaceVariant),
-      tooltip: '恢复默认',
+      tooltip: context.l10n.restoreDefaults,
       visualDensity: VisualDensity.compact,
     );
   }
@@ -550,7 +551,7 @@ class _TranslationSettingsSectionState
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      '目标语言',
+                      context.l10n.targetLanguage,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: cs.onSurface,

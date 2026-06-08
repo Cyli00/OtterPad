@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/l10n.dart';
 
 // 常用 emoji 列表，按类别分组
 const List<String> _emojis = [
@@ -36,7 +37,7 @@ Future<Map<String, String>?> showCreateFavoriteDialog(
   return showGeneralDialog<Map<String, String>>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: '关闭',
+    barrierLabel: context.l10n.close,
     barrierColor: Colors.black54,
     transitionDuration: const Duration(milliseconds: 300),
     transitionBuilder: (context, animation, secondaryAnimation, child) {
@@ -145,7 +146,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
               child: Row(
                 children: [
                   Text(
-                    _isEditing ? '编辑收藏夹' : '新建收藏夹',
+                    _isEditing ? context.l10n.editFavorite : context.l10n.createFavorite,
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
@@ -184,7 +185,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '选择图标',
+                            context.l10n.selectIcon,
                             style: theme.textTheme.labelLarge?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -275,7 +276,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '收藏夹名称',
+                            context.l10n.favoriteName,
                             style: theme.textTheme.labelLarge?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -313,7 +314,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                 // 名称预览
                                 Text(
                                   _nameController.text.isEmpty
-                                      ? '未命名'
+                                      ? context.l10n.unnamed
                                       : _nameController.text,
                                   style: theme.textTheme.titleMedium
                                       ?.copyWith(
@@ -338,7 +339,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                             onSubmitted: (_) => _onConfirm(),
                             maxLength: 20,
                             decoration: InputDecoration(
-                              hintText: '输入收藏夹名称',
+                              hintText: context.l10n.enterFavoriteName,
                               counterText: '',
                               filled: true,
                               fillColor:
@@ -379,7 +380,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
+                    child: Text(context.l10n.cancel),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
@@ -387,7 +388,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                         _nameController.text.trim().isEmpty
                             ? null
                             : _onConfirm,
-                    child: Text(_isEditing ? '保存' : '创建'),
+                    child: Text(_isEditing ? context.l10n.save : context.l10n.create),
                   ),
                 ],
               ),

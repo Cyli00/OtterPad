@@ -3,8 +3,17 @@ import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/l10n.dart';
+import '../router/app_router.dart';
 import '../services/snackbar_service.dart';
 import 'task_types.dart';
+
+String _resolvedCancelled(String? message) {
+  if (message != null) return message;
+  final ctx = rootNavigatorKey.currentContext;
+  if (ctx != null) return AppLocalizations.of(ctx)?.cancelled ?? '已取消';
+  return '已取消';
+}
 
 // ── 共享的任务执行生命周期 ──
 
@@ -35,7 +44,7 @@ Future<T?> executeTaskBody<T>({
 
     if (token.isCancelled) {
       onCancelled();
-      onFinished(TaskFinish.text(cancelledMessage ?? '已取消'));
+      onFinished(TaskFinish.text(_resolvedCancelled(cancelledMessage)));
       return null;
     }
 
@@ -46,7 +55,7 @@ Future<T?> executeTaskBody<T>({
   } catch (e, st) {
     if (isCancellation(e, token)) {
       onCancelled();
-      onFinished(TaskFinish.text(cancelledMessage ?? '已取消'));
+      onFinished(TaskFinish.text(_resolvedCancelled(cancelledMessage)));
     } else {
       onFailed(e);
       final finish = onError?.call(e) ?? TaskFinish(message: '任务失败: $e');
@@ -124,7 +133,7 @@ mixin TaskRunner<S> on StateNotifier<S> {
     body,
     required TaskFinish Function(T result) onSuccess,
     TaskFinish Function(Object error)? onError,
-    String? cancelledMessage = '已取消',
+    String? cancelledMessage,
   }) async {
     if (isTaskRunning(type)) {
       if (showBusySnackBar) {

@@ -22,6 +22,7 @@ import '../../../router/app_routes.dart';
 import '../../../services/document_summary_image_service.dart';
 import '../../../services/figure_extract_service.dart';
 import '../../../services/snackbar_service.dart';
+import '../../../core/l10n.dart';
 import '../../../utils/doc_paths.dart';
 import '../widgets/figure_viewer.dart';
 
@@ -66,9 +67,9 @@ class ReaderSummaryImageCoordinator {
       ref
           .read(snackBarServiceProvider)
           .showResult(
-            message: '请先在「AI 设置」中选择生图模型',
+            message: context.l10n.selectImageModelFirst,
             action: SnackBarAction(
-              label: '前往设置',
+              label: context.l10n.goToSettings,
               onPressed: () => context.push(AppRoutes.settingsApi),
             ),
           );
@@ -129,7 +130,7 @@ class ReaderSummaryImageCoordinator {
     final path =
         imagePath ?? DocumentSummaryImageService.imagePathFor(document.id);
     if (!await File(path).exists()) {
-      ref.read(snackBarServiceProvider).showResult(message: '总结图文件不存在');
+      ref.read(snackBarServiceProvider).showResult(message: context.l10n.summaryNotFound);
       return;
     }
     if (!context.mounted) return;
@@ -157,7 +158,7 @@ class ReaderSummaryImageCoordinator {
           )
         : null;
     final costLine = cost != null
-        ? '当前设置预估费用约 \$${cost.toStringAsFixed(3)} / 张'
+        ? context.l10n.estimatedCost('\$', cost.toStringAsFixed(3))
         : '';
 
     return showDialog<_SummaryImageChoice>(
@@ -173,7 +174,7 @@ class ReaderSummaryImageCoordinator {
           contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           title: Text(
-            '生成总结图',
+            context.l10n.generateSummaryTitle,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -183,7 +184,7 @@ class ReaderSummaryImageCoordinator {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '总结图由第三方生图模型生成，可能产生 API 调用费用。',
+                context.l10n.summaryApiCostHint,
                 style: theme.textTheme.bodyMedium,
               ),
               if (costLine.isNotEmpty) ...[
@@ -198,7 +199,7 @@ class ReaderSummaryImageCoordinator {
               ],
               const SizedBox(height: 8),
               Text(
-                '若希望使用 App 生图，请点击 App 生图，手动上传素材。',
+                context.l10n.useAppImageGen,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: cs.onSurfaceVariant,
                 ),
@@ -209,18 +210,18 @@ class ReaderSummaryImageCoordinator {
             TextButton(
               onPressed: () =>
                   Navigator.of(ctx).pop(_SummaryImageChoice.cancel),
-              child: const Text('取消'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () =>
                   Navigator.of(ctx).pop(_SummaryImageChoice.official),
-              child: const Text('App 生图'),
+              child: Text(context.l10n.appImageGen),
             ),
             TextButton(
               onPressed: hasImageRole
                   ? () => Navigator.of(ctx).pop(_SummaryImageChoice.confirm)
                   : null,
-              child: const Text('确定'),
+              child: Text(context.l10n.confirm),
             ),
           ],
         );
@@ -258,7 +259,7 @@ class ReaderSummaryImageCoordinator {
     // 2. 必须有 markdown,否则没有正文可导出
     final mdFile = File(DocPaths.md(document.id));
     if (!await mdFile.exists()) {
-      return '未找到 Markdown 文件，请先完成文档提取';
+      return context.l10n.markdownNotFound;
     }
 
     // 3. 生成生图 prompt（含文献元数据 + Markdown + figure 索引）
@@ -279,7 +280,7 @@ class ReaderSummaryImageCoordinator {
     } on DocumentSummaryImageException catch (e) {
       return e.message;
     } catch (e) {
-      return '生成 prompt 失败：$e';
+      return context.l10n.promptGenerationFailed('$e');
     }
 
     // 4. 平台分流
@@ -288,7 +289,7 @@ class ReaderSummaryImageCoordinator {
         // 桌面：打包 ZIP（全平铺：根目录直接放 figure / article.md / prompt.md，
         // 用户解压后一次框选拖到 ChatGPT 网页版即可）
         final targetPath = await FilePicker.platform.saveFile(
-          dialogTitle: '保存导出 ZIP',
+          dialogTitle: context.l10n.saveExportZip,
           fileName: '${_safeFileStem(document.title)}.zip',
           lockParentWindow: true,
         );
@@ -307,7 +308,7 @@ class ReaderSummaryImageCoordinator {
         await File(targetPath).writeAsBytes(bytes, flush: true);
 
         await Clipboard.setData(ClipboardData(text: prompt));
-        return '已导出到 ${p.basename(targetPath)}，prompt 已复制';
+        return context.l10n.exportedWithPromptCopied(p.basename(targetPath));
       } else {
         // 移动：share sheet 多文件 + 剪贴板。markdown 放在 list 第一位让目标
         // app 的附件列表把 .md 排在最显眼位置。
@@ -320,7 +321,7 @@ class ReaderSummaryImageCoordinator {
         return null; // share sheet 自带反馈,不另加 toast
       }
     } catch (e) {
-      return '导出失败：$e';
+      return context.l10n.exportFailed('$e');
     }
   }
 
@@ -390,7 +391,7 @@ class _OfficialGenDialogState extends State<_OfficialGenDialog> {
       contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       title: Text(
-        '导出至 App 生图',
+        context.l10n.exportToAppImageGen,
         style: theme.textTheme.titleLarge?.copyWith(
           fontWeight: FontWeight.bold,
         ),
@@ -400,7 +401,7 @@ class _OfficialGenDialogState extends State<_OfficialGenDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '将文献素材导出后，到 ChatGPT / Gemini 等官方 App 中手动上传以生图。',
+            context.l10n.exportToAppImageGenHint,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: cs.onSurfaceVariant,
             ),
@@ -408,10 +409,10 @@ class _OfficialGenDialogState extends State<_OfficialGenDialog> {
           const SizedBox(height: 16),
           _OfficialGenAction(
             icon: Symbols.ios_share_rounded,
-            label: '一键导出',
+            label: context.l10n.exportAll,
             description: Platform.isAndroid || Platform.isIOS
-                ? '同时分享 figures + Markdown，prompt 自动复制到剪贴板'
-                : '打包 figures + article.md + prompt.md 为 ZIP，prompt 自动复制到剪贴板',
+                ? context.l10n.exportShareHint
+                : context.l10n.exportZipHint,
             enabled: !_running,
             onTap: () => _run(widget.onExportAll),
           ),
@@ -459,7 +460,7 @@ class _OfficialGenDialogState extends State<_OfficialGenDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('关闭'),
+          child: Text(context.l10n.close),
         ),
       ],
     );

@@ -19,6 +19,7 @@ import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../core/l10n.dart';
 
 /// 收藏夹详情页：展示书单内所有文献
 class FavoriteDetailPage extends ConsumerWidget {
@@ -98,7 +99,7 @@ class FavoriteDetailPage extends ConsumerWidget {
                       currentFavorite,
                     ),
                     icon: const Icon(Symbols.bookmark_add_rounded),
-                    tooltip: '添加文献',
+                    tooltip: context.l10n.addDocument,
                   ),
                   const SizedBox(width: 4),
                 ],
@@ -118,7 +119,7 @@ class FavoriteDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        '暂无文献',
+                        context.l10n.noDocuments,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -128,7 +129,7 @@ class FavoriteDetailPage extends ConsumerWidget {
                         onPressed: () =>
                             _openAddDocumentsPage(context, currentFavorite),
                         icon: const Icon(Symbols.bookmark_add_rounded, size: 20),
-                        label: const Text('添加文献'),
+                        label: Text(context.l10n.addDocument),
                       ),
                     ],
                   ),
@@ -193,7 +194,7 @@ class FavoriteDetailPage extends ConsumerWidget {
         count++;
       }
     }
-    ref.read(snackBarServiceProvider).showResult(message: '已从收藏夹移除 $count 篇文献');
+    ref.read(snackBarServiceProvider).showResult(message: context.l10n.removedFromFavoriteCount(count));
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -208,17 +209,17 @@ class FavoriteDetailPage extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('批量删除'),
-        content: Text('确定要删除 $count 篇文献吗？此操作不可撤销。'),
+        title: Text(context.l10n.batchDelete),
+        content: Text(context.l10n.confirmDeleteDocuments(count)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: cs.error),
-            child: const Text('删除'),
+            child: Text(context.l10n.delete),
           ),
         ],
       ),
@@ -228,7 +229,7 @@ class FavoriteDetailPage extends ConsumerWidget {
     for (final id in selection.selectedIds.toList()) {
       await DocCardActions.delete(ref, id);
     }
-    ref.read(snackBarServiceProvider).showResult(message: '已删除 $count 篇文献');
+    ref.read(snackBarServiceProvider).showResult(message: context.l10n.deletedDocuments(count));
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -243,7 +244,7 @@ class FavoriteDetailPage extends ConsumerWidget {
     if (!apiState.isConfigured) {
       ref
           .read(snackBarServiceProvider)
-          .showResult(message: '请先在设置中配置文档提取 Access Token');
+          .showResult(message: context.l10n.configureExtractToken);
       return;
     }
 
@@ -256,7 +257,7 @@ class FavoriteDetailPage extends ConsumerWidget {
     if (selectedDocs.isEmpty) {
       ref
           .read(snackBarServiceProvider)
-          .showResult(message: '所选文献中无本地 PDF 文件，无法提取');
+          .showResult(message: context.l10n.noPdfFilesSelected);
       return;
     }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../library/widgets/pdf_cover.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/l10n.dart';
 
 class FavoriteCard extends StatelessWidget {
   final String title;
@@ -102,7 +103,7 @@ class FavoriteCard extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      '查看文库 · 共 $totalCount 篇',
+                      context.l10n.viewLibraryTotal(totalCount),
                       style: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: cs.primary,
@@ -145,7 +146,7 @@ class FavoriteCard extends StatelessWidget {
               children: [
                 Icon(Symbols.edit_rounded, size: 20, color: cs.onSurfaceVariant),
                 const SizedBox(width: 14),
-                Text('编辑',
+                Text(context.l10n.edit,
                     style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 14,
@@ -161,7 +162,7 @@ class FavoriteCard extends StatelessWidget {
               children: [
                 Icon(Symbols.delete_rounded, size: 20, color: cs.error),
                 const SizedBox(width: 14),
-                Text('删除',
+                Text(context.l10n.delete,
                     style: TextStyle(
                         color: cs.error,
                         fontSize: 14,

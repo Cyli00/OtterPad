@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/proxy_provider.dart';
 import '../../services/identifier_resolver.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -22,7 +23,7 @@ class NetworkSettingsPage extends StatelessWidget {
       backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(
-          '网络设置',
+          context.l10n.networkSettings,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -102,18 +103,18 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
       if (!mounted) return;
       setState(() {
         _testStatus = _TestStatus.success;
-        _testResult = '连接成功，耗时 $ms ms';
+        _testResult = context.l10n.connectionOkMs(ms.toString());
       });
     } on DioException catch (e) {
       if (!mounted) return;
       String msg;
       if (e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout) {
-        msg = '连接超时';
+        msg = context.l10n.connectionTimeout;
       } else if (e.type == DioExceptionType.connectionError) {
-        msg = '无法连接，请检查代理设置';
+        msg = context.l10n.cannotConnectCheckProxy;
       } else {
-        msg = '请求失败：${e.message ?? e.type.name}';
+        msg = context.l10n.requestFailed(e.message ?? e.type.name);
       }
       setState(() {
         _testStatus = _TestStatus.failed;
@@ -123,7 +124,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
       if (!mounted) return;
       setState(() {
         _testStatus = _TestStatus.failed;
-        _testResult = '测试失败：$e';
+        _testResult = context.l10n.testFailed(e.toString());
       });
     }
   }
@@ -212,7 +213,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
         // ── 代理设置 ──
         _buildGroup(
           context,
-          title: '代理',
+          title: context.l10n.proxy,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: RadioGroup<ProxyMode>(
@@ -223,10 +224,10 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
               child: Column(
                 children: [
                   RadioListTile<ProxyMode>(
-                    title: Text('自定义代理',
+                    title: Text(context.l10n.customProxy,
                         style: theme.textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w600)),
-                    subtitle: Text('手动指定代理地址',
+                    subtitle: Text(context.l10n.customProxySubtitle,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant)),
                     value: ProxyMode.custom,
@@ -261,7 +262,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                               decoration: _fieldDeco(
                                 context,
                                 hint: '127.0.0.1',
-                                label: '主机地址',
+                                label: context.l10n.hostAddress,
                               ),
                               onChanged: (_) => _onAddressChanged(),
                             ),
@@ -274,7 +275,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                               decoration: _fieldDeco(
                                 context,
                                 hint: '7890',
-                                label: '端口',
+                                label: context.l10n.port,
                               ),
                               keyboardType: TextInputType.number,
                               inputFormatters: [
@@ -289,19 +290,19 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     ),
                   ),
                   RadioListTile<ProxyMode>(
-                    title: Text('系统代理',
+                    title: Text(context.l10n.systemProxy,
                         style: theme.textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w600)),
-                    subtitle: Text('使用系统环境变量中的代理设置',
+                    subtitle: Text(context.l10n.systemProxySubtitle,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant)),
                     value: ProxyMode.system,
                   ),
                   RadioListTile<ProxyMode>(
-                    title: Text('不使用代理',
+                    title: Text(context.l10n.noProxy,
                         style: theme.textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w600)),
-                    subtitle: Text('直接连接网络',
+                    subtitle: Text(context.l10n.noProxySubtitle,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant)),
                     value: ProxyMode.none,
@@ -315,14 +316,14 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
         // ── 连通性测试 ──
         _buildGroup(
           context,
-          title: '连通性测试',
+          title: context.l10n.connectivityTest,
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '测试地址',
+                  context.l10n.testAddress,
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -354,7 +355,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                               ),
                             )
                           : const Icon(Symbols.network_ping_rounded),
-                      label: const Text('测试'),
+                      label: Text(context.l10n.test),
                     ),
                   ],
                 ),

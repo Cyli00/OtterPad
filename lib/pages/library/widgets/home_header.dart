@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/l10n.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../router/app_routes.dart';
@@ -87,7 +88,7 @@ class HomeHeader extends ConsumerWidget {
                     const SizedBox(width: 8.0),
                     Expanded(
                       child: Text(
-                        isMobile ? '搜索文献...' : '搜索文献、作者、关键词...',
+                        isMobile ? context.l10n.searchDocumentsHint : context.l10n.searchDocumentsHintDesktop,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           fontSize: isMobile ? 14 : 15,
@@ -103,7 +104,7 @@ class HomeHeader extends ConsumerWidget {
           const SizedBox(width: 8.0),
           _HeaderButton(
             icon: isGrid ? Symbols.view_list_rounded : Symbols.grid_view_rounded,
-            tooltip: isGrid ? '列表视图' : '网格视图',
+            tooltip: isGrid ? context.l10n.listView : context.l10n.gridView,
             size: isMobile ? 36 : 40,
             onPressed: () {
               ref.read(viewModeProvider.notifier).state = !isGrid;
@@ -112,7 +113,7 @@ class HomeHeader extends ConsumerWidget {
           const SizedBox(width: 8.0),
           _HeaderButton(
             icon: Symbols.note_add_rounded,
-            tooltip: '工具',
+            tooltip: context.l10n.tools,
             size: isMobile ? 36 : 40,
             onPressed: () async {
               final action = await showToolbarSheet(context);

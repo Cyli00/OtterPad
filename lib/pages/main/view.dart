@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/l10n.dart';
 import '../../widgets/layout/adaptive_scaffold.dart';
 import '../../widgets/layout/adaptive_navigation.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -19,24 +20,25 @@ class MainShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AdaptiveScaffold(
       selectedIndex: navigationShell.currentIndex,
       onDestinationSelected: _onDestinationSelected,
-      destinations: const [
+      destinations: [
         AdaptiveDestination(
-          icon: Icon(Symbols.auto_awesome_mosaic, weight: 600, fill: 1),
-          selectedIcon: Icon(Symbols.auto_awesome_mosaic, weight: 600, fill: 1),
-          label: '首页',
+          icon: const Icon(Symbols.auto_awesome_mosaic, weight: 600, fill: 1),
+          selectedIcon: const Icon(Symbols.auto_awesome_mosaic, weight: 600, fill: 1),
+          label: l10n.home,
         ),
         AdaptiveDestination(
-          icon: Icon(Symbols.folder_copy, weight: 600, fill: 1),
-          selectedIcon: Icon(Symbols.folder_copy, weight: 600, fill: 1),
-          label: '库',
+          icon: const Icon(Symbols.folder_copy, weight: 600, fill: 1),
+          selectedIcon: const Icon(Symbols.folder_copy, weight: 600, fill: 1),
+          label: l10n.library,
         ),
         AdaptiveDestination(
-          icon: Icon(Symbols.construction, weight: 600, fill: 1),
-          selectedIcon: Icon(Symbols.construction, weight: 600, fill: 1),
-          label: '设置',
+          icon: const Icon(Symbols.construction, weight: 600, fill: 1),
+          selectedIcon: const Icon(Symbols.construction, weight: 600, fill: 1),
+          label: l10n.settings,
         ),
       ],
       body: navigationShell,

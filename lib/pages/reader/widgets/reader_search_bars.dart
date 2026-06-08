@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/l10n.dart';
 
 class ReaderPdfSearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -36,7 +37,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
                 fill: 1,
                 color: cs.onSurface,
               ),
-              tooltip: '返回',
+              tooltip: context.l10n.back,
               onPressed: onBack,
             ),
             const SizedBox(width: 4),
@@ -49,7 +50,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
                   textAlignVertical: TextAlignVertical.center,
                   style: TextStyle(color: cs.onSurface, fontSize: 15),
                   decoration: InputDecoration(
-                    hintText: '搜索 PDF 内容',
+                    hintText: context.l10n.searchPdfContentHint,
                     hintStyle: TextStyle(
                       color: cs.onSurfaceVariant.withAlpha(160),
                       fontSize: 15,
@@ -93,7 +94,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
                 fill: 1,
                 color: cs.onSurfaceVariant,
               ),
-              tooltip: '退出搜索',
+              tooltip: context.l10n.exitSearch,
               onPressed: onClear,
             ),
           ],
@@ -134,7 +135,7 @@ class ReaderHighlightSearchBar extends StatelessWidget {
                 fill: 1,
                 color: cs.onSurface,
               ),
-              tooltip: '返回',
+              tooltip: context.l10n.back,
               onPressed: onBack,
             ),
             const SizedBox(width: 4),
@@ -177,7 +178,7 @@ class ReaderHighlightSearchBar extends StatelessWidget {
                 fill: 1,
                 color: cs.onSurfaceVariant,
               ),
-              tooltip: '退出搜索',
+              tooltip: context.l10n.exitSearch,
               onPressed: onClear,
             ),
           ],

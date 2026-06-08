@@ -56,6 +56,7 @@ import 'widgets/selection_toolbar.dart';
 import 'widgets/translation_popup.dart';
 import '../shelf/widgets/create_favorite_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../core/l10n.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
   final Document document;
@@ -198,7 +199,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void _onExtractPressed() {
     final filePath = DocPaths.pdf(widget.document.id);
     if (widget.document.contentHash == null || !File(filePath).existsSync()) {
-      ref.read(snackBarServiceProvider).showResult(message: 'PDF 文件不存在');
+      ref.read(snackBarServiceProvider).showResult(message: context.l10n.pdfNotFound);
       return;
     }
 
@@ -223,11 +224,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _onReprocessPressed() async {
     final filePath = DocPaths.pdf(widget.document.id);
     if (widget.document.contentHash == null || !File(filePath).existsSync()) {
-      ref.read(snackBarServiceProvider).showResult(message: 'PDF 文件不存在');
+      ref.read(snackBarServiceProvider).showResult(message: context.l10n.pdfNotFound);
       return;
     }
 
-    ref.read(snackBarServiceProvider).showResult(message: '正在重新排版…');
+    ref.read(snackBarServiceProvider).showResult(message: context.l10n.reformatting);
     try {
       final (mdPath, content) = await DocExtractService.instance
           .reprocessMarkdown(pdfPath: filePath, title: widget.document.title);
@@ -243,11 +244,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           markdownContent: content,
         );
         _figuresFuture = null;
-        ref.read(snackBarServiceProvider).showResult(message: '重新排版完成');
+        ref.read(snackBarServiceProvider).showResult(message: context.l10n.reformatDone);
       });
     } catch (e) {
       if (!mounted) return;
-      ref.read(snackBarServiceProvider).showResult(message: '排版失败: $e');
+      ref.read(snackBarServiceProvider).showResult(message: context.l10n.reformatFailed('$e'));
     }
   }
 
@@ -517,7 +518,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final documentId = widget.document.id;
 
     final result = await _showFavoritePickerSheet(
-      title: '移入收藏夹',
+      title: context.l10n.moveToFavorite,
       favorites: ref.read(favoritesProvider),
       documentId: documentId,
       mode: ReaderFavoritePickerMode.add,
@@ -536,8 +537,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     if (!mounted) return;
     final message = selected.length == 1
-        ? '已添加到「${selected.single.name}」'
-        : '已添加到 ${selected.length} 个收藏夹';
+        ? context.l10n.addedToFavorite(selected.single.name)
+        : context.l10n.addedToFavorites(selected.length);
     ref.read(snackBarServiceProvider).showResult(message: message);
   }
 
@@ -555,12 +556,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final favorites = _favoritesContainingDoc(ref.read(favoritesProvider));
     if (favorites.isEmpty) {
-      ref.read(snackBarServiceProvider).showResult(message: '此文献不在收藏夹中');
+      ref.read(snackBarServiceProvider).showResult(message: context.l10n.documentNotInFavorite);
       return;
     }
 
     final result = await _showFavoritePickerSheet(
-      title: '移出收藏夹',
+      title: context.l10n.removeFromFavorite,
       favorites: favorites,
       documentId: documentId,
       mode: ReaderFavoritePickerMode.remove,
@@ -576,8 +577,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     if (!mounted) return;
     final message = selected.length == 1
-        ? '已从「${selected.single.name}」移出'
-        : '已从 ${selected.length} 个收藏夹移出';
+        ? context.l10n.removedFromFavoriteSingle(selected.single.name)
+        : context.l10n.removedFromFavorites(selected.length);
     ref.read(snackBarServiceProvider).showResult(message: message);
   }
 
@@ -641,7 +642,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ref
             .read(snackBarServiceProvider)
             .showResult(
-              message: '已复制到剪贴板',
+              message: context.l10n.copiedToClipboard,
               duration: const Duration(seconds: 1),
             );
       },
@@ -673,7 +674,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ref
             .read(snackBarServiceProvider)
             .showResult(
-              message: '已复制到剪贴板',
+              message: context.l10n.copiedToClipboard,
               duration: const Duration(seconds: 1),
             );
       },
@@ -1071,7 +1072,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       ref
           .read(snackBarServiceProvider)
           .showResult(
-            message: fullyCached ? '使用了之前的翻译缓存，如需重新翻译请点击右上角省略号里的重新翻译' : '翻译完成',
+            message: fullyCached ? context.l10n.translationCacheUsed : context.l10n.translationDone,
             duration: fullyCached
                 ? const Duration(seconds: 6)
                 : const Duration(seconds: 4),
@@ -1105,7 +1106,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final state = ref.read(documentTranslationProvider(documentId));
     if (state.status == DocTranslationStatus.done) {
-      ref.read(snackBarServiceProvider).showResult(message: '翻译完成');
+      ref.read(snackBarServiceProvider).showResult(message: context.l10n.translationDone);
     } else {
       _reportTranslationFailure(state);
     }
@@ -1140,7 +1141,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onOpenSettings: () => context.push(AppRoutes.settingsApi),
     );
     if (!handled) {
-      snackBar.showResult(message: '翻译失败：$error');
+      snackBar.showResult(message: context.l10n.translationFailed(error.toString()));
     }
   }
 
@@ -1170,7 +1171,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           fill: 1,
           color: cs.onSurfaceVariant,
         ),
-        tooltip: session.showPreview ? '查看 PDF' : '查看提取结果',
+        tooltip: session.showPreview ? context.l10n.viewPdf : context.l10n.viewExtractResult,
         onPressed: _togglePreview,
       );
     }
@@ -1182,7 +1183,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         fill: 1,
         color: cs.onSurfaceVariant,
       ),
-      tooltip: '文档提取',
+      tooltip: context.l10n.documentExtract,
       onPressed: _onExtractPressed,
     );
   }
@@ -1257,7 +1258,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (session.markdownLoadError != null) {
       return Center(
         child: Text(
-          '加载失败',
+          context.l10n.loadFailed,
           style: theme.textTheme.bodyLarge?.copyWith(
             color: theme.colorScheme.error,
           ),
@@ -1370,7 +1371,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         children: [
           Icon(Symbols.error_rounded, size: 48, color: cs.error),
           const SizedBox(height: 16),
-          Text('找不到该文献的 PDF 文件', style: theme.textTheme.titleMedium),
+          Text(context.l10n.pdfFileNotFoundTitle, style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32.0),

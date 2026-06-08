@@ -14,6 +14,7 @@ import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../core/l10n.dart';
 
 /// 无文件条目详情页
 class NoFileEntriesPage extends ConsumerWidget {
@@ -57,7 +58,7 @@ class NoFileEntriesPage extends ConsumerWidget {
             : AppBar(
                 backgroundColor: colorScheme.surface,
                 title: Text(
-                  '无文件条目',
+                  context.l10n.noFileEntries,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -82,7 +83,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        '所有文献都有对应文件',
+                        context.l10n.allDocumentsHaveFiles,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -126,7 +127,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                                       _handleAttachFile(context, ref, doc.id),
                                   icon: const Icon(Symbols.attach_file_rounded),
                                   iconSize: 18,
-                                  tooltip: '附加文件',
+                                  tooltip: context.l10n.attachFile,
                                   style: IconButton.styleFrom(
                                     minimumSize: const Size(36, 36),
                                     padding: EdgeInsets.zero,
@@ -138,7 +139,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                                     onPressed: () => _handleOpenDoi(doc.doi!),
                                     icon: const Icon(Symbols.language_rounded),
                                     iconSize: 18,
-                                    tooltip: '在浏览器中查看',
+                                    tooltip: context.l10n.viewInBrowser,
                                     style: IconButton.styleFrom(
                                       minimumSize: const Size(36, 36),
                                       padding: EdgeInsets.zero,
@@ -153,7 +154,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                                     ),
                                     icon: const Icon(Symbols.download_rounded),
                                     iconSize: 18,
-                                    tooltip: '重新下载',
+                                    tooltip: context.l10n.redownload,
                                     style: IconButton.styleFrom(
                                       minimumSize: const Size(36, 36),
                                       padding: EdgeInsets.zero,
@@ -169,13 +170,14 @@ class NoFileEntriesPage extends ConsumerWidget {
                     if (isSelectionMode) return card;
 
                     final cs = Theme.of(context).colorScheme;
+                    final entryDeletedMsg = context.l10n.entryDeleted;
                     return SpringDismissible(
                       key: ValueKey(doc.id),
                       onDismissed: () async {
                         await DocCardActions.delete(ref, doc.id);
                         ref
                             .read(snackBarServiceProvider)
-                            .showResult(message: '已删除条目');
+                            .showResult(message: entryDeletedMsg);
                       },
                       background: Container(
                         decoration: BoxDecoration(
@@ -194,7 +196,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              '删除',
+                              context.l10n.delete,
                               style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
                                     color: cs.onErrorContainer,
@@ -228,17 +230,17 @@ class NoFileEntriesPage extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('批量删除'),
-        content: Text('确定要删除 $count 个无文件条目吗？'),
+        title: Text(context.l10n.batchDelete),
+        content: Text(context.l10n.confirmDeleteEntries(count)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: cs.error),
-            child: const Text('删除'),
+            child: Text(context.l10n.delete),
           ),
         ],
       ),
@@ -248,7 +250,7 @@ class NoFileEntriesPage extends ConsumerWidget {
     for (final id in selection.selectedIds.toList()) {
       await DocCardActions.delete(ref, id);
     }
-    ref.read(snackBarServiceProvider).showResult(message: '已删除 $count 个条目');
+    ref.read(snackBarServiceProvider).showResult(message: context.l10n.deletedEntries(count));
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -285,9 +287,10 @@ class NoFileEntriesPage extends ConsumerWidget {
       await ref
           .read(documentLifecycleProvider)
           .attachPdf(docId, result.files.first.path!);
-      snackBar.showResult(message: '文件附加成功');
+      if (!context.mounted) return;
+      snackBar.showResult(message: context.l10n.fileAttached);
     } catch (e) {
-      snackBar.showResult(message: '附加文件失败: $e');
+      snackBar.showResult(message: context.l10n.attachFileFailed('$e'));
     }
   }
 

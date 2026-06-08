@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../core/l10n.dart';
 import '../providers/task_activity_provider.dart';
+import '../router/app_router.dart';
 
 export '../providers/task_activity_provider.dart' show ListenableProgress;
 
@@ -32,6 +34,11 @@ class SnackBarService {
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _transient;
 
   ScaffoldMessengerState? get _messenger => _key.currentState;
+
+  AppLocalizations? get _l10n {
+    final ctx = rootNavigatorKey.currentContext;
+    return ctx != null ? AppLocalizations.of(ctx) : null;
+  }
 
   bool get _isMobile {
     final ctx = _key.currentContext;
@@ -87,7 +94,7 @@ class SnackBarService {
                       children: [
                         Expanded(
                           child: Text(
-                            status ?? '处理中...',
+                            status ?? (_l10n?.processing ?? '处理中...'),
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
@@ -121,7 +128,10 @@ class SnackBarService {
               ),
             ],
           ),
-          action: SnackBarAction(label: '取消', onPressed: onCancel),
+          action: SnackBarAction(
+            label: _l10n?.cancel ?? '取消',
+            onPressed: onCancel,
+          ),
           duration: duration,
         ),
       );
@@ -299,7 +309,10 @@ class SnackBarService {
           ),
           action: onCancel == null
               ? null
-              : SnackBarAction(label: '取消', onPressed: onCancel),
+              : SnackBarAction(
+                  label: _l10n?.cancel ?? '取消',
+                  onPressed: onCancel,
+                ),
           duration: const Duration(hours: 1),
         ),
       );
@@ -346,7 +359,7 @@ class SnackBarService {
             ],
           ),
           action: SnackBarAction(
-            label: '取消全部',
+            label: _l10n?.cancelAll ?? '取消全部',
             onPressed: () {
               for (final task in tasks) {
                 task.onCancel?.call();

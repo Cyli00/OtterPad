@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/l10n.dart';
 
 class ReaderTopToolbar extends StatelessWidget {
   final bool showPreview;
@@ -48,6 +49,7 @@ class ReaderTopToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -62,7 +64,7 @@ class ReaderTopToolbar extends StatelessWidget {
                 fill: 1,
                 color: cs.onSurface,
               ),
-              tooltip: '返回',
+              tooltip: l10n.back,
               onPressed: onBack,
             ),
             const Spacer(),
@@ -74,7 +76,7 @@ class ReaderTopToolbar extends StatelessWidget {
                   fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
-                tooltip: '搜索',
+                tooltip: l10n.search,
                 onPressed: onSearch,
               ),
             extractButton,
@@ -86,7 +88,7 @@ class ReaderTopToolbar extends StatelessWidget {
                   fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
-                tooltip: '生成总结图',
+                tooltip: l10n.generateSummary,
                 onPressed: onGenerateSummaryImage,
               ),
             if (!showPreview && fileExists)
@@ -99,7 +101,7 @@ class ReaderTopToolbar extends StatelessWidget {
                   fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
-                tooltip: inFavorite ? '移出收藏夹' : '移入收藏夹',
+                tooltip: inFavorite ? l10n.removeFromFavorite : l10n.moveToFavorite,
                 onPressed: inFavorite ? onRemoveFavorite : onAddFavorite,
               ),
             if (hasResult && !extracting)
@@ -110,7 +112,7 @@ class ReaderTopToolbar extends StatelessWidget {
                   fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
-                tooltip: '重新提取',
+                tooltip: l10n.reExtract,
                 onPressed: onExtract,
               ),
             if (!showPreview)
@@ -121,7 +123,7 @@ class ReaderTopToolbar extends StatelessWidget {
                   fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
-                tooltip: '文献信息',
+                tooltip: l10n.documentInfo,
                 onPressed: onShowInfo,
               )
             else
@@ -132,7 +134,7 @@ class ReaderTopToolbar extends StatelessWidget {
                   fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
-                tooltip: '更多',
+                tooltip: l10n.more,
                 color: cs.surfaceContainerHigh,
                 elevation: 3,
                 shape: RoundedRectangleBorder(
@@ -160,36 +162,36 @@ class ReaderTopToolbar extends StatelessWidget {
                     _popupItem(
                       'view_summary_image',
                       Symbols.image_rounded,
-                      '查看总结图',
+                      l10n.viewSummary,
                       cs,
                     ),
-                  _popupItem('info', Symbols.info_rounded, '文献信息', cs),
+                  _popupItem('info', Symbols.info_rounded, l10n.documentInfo, cs),
                   if (inFavorite)
                     _popupItem(
                       'favorite_remove',
                       Symbols.bookmark_remove_rounded,
-                      '移出收藏夹',
+                      l10n.removeFromFavorite,
                       cs,
                     )
                   else
                     _popupItem(
                       'favorite_add',
                       Symbols.bookmark_add_rounded,
-                      '移入收藏夹',
+                      l10n.moveToFavorite,
                       cs,
                     ),
                   if (hasResult)
                     _popupItem(
                       'reprocess',
                       Symbols.refresh_rounded,
-                      '重新排版',
+                      l10n.reformat,
                       cs,
                     ),
                   if (canRetranslate)
                     _popupItem(
                       'retranslate',
                       Symbols.translate_rounded,
-                      '重新翻译',
+                      l10n.reTranslate,
                       cs,
                     ),
                 ],

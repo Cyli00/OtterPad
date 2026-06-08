@@ -22,7 +22,7 @@ import '../pages/shelf/reading_history_page.dart';
 import '../pages/shelf/view.dart';
 import 'app_routes.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// 统一路由转场：FadeThroughTransition（旧页淡出 → 新页淡入）
 CustomTransitionPage<T> _buildAnimatedPage<T>({
@@ -46,13 +46,13 @@ CustomTransitionPage<T> _buildAnimatedPage<T>({
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.library,
     routes: [
       // 全屏页面（不含底部/侧边导航栏）
       GoRoute(
         path: AppRoutes.reader,
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         pageBuilder: (context, state) => _buildAnimatedPage(
           state: state,
           child: ReaderPage(document: state.extra! as Document),
@@ -73,7 +73,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'search',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const SearchPage(),
@@ -93,7 +93,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'favorite',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: FavoriteDetailPage(
@@ -103,7 +103,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                     routes: [
                       GoRoute(
                         path: 'add-documents',
-                        parentNavigatorKey: _rootNavigatorKey,
+                        parentNavigatorKey: rootNavigatorKey,
                         pageBuilder: (context, state) => _buildAnimatedPage(
                           state: state,
                           child: AddDocumentsToFavoritePage(
@@ -115,7 +115,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'history',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const ReadingHistoryPage(),
@@ -123,7 +123,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'no-file-entries',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const NoFileEntriesPage(),
@@ -143,7 +143,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'network',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const NetworkSettingsPage(),
@@ -151,7 +151,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'api',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const ApiSettingsPage(),
@@ -159,7 +159,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'extract',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const OcrSettingsPage(),
@@ -167,7 +167,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'appearance',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const AppearanceSettingsPage(),
@@ -175,7 +175,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'backup',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const BackupSettingsPage(),
@@ -183,7 +183,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'backupHome',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) => _buildAnimatedPage(
                       state: state,
                       child: const BackupSettingsPage(),

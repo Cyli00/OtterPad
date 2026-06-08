@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/l10n.dart';
 import 'agent_role_widgets.dart';
 
 /// 用户在"添加模型"对话框中做出的角色选择。
@@ -58,7 +59,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      '添加模型',
+                      ctx.l10n.addModelTitle,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: cs.onSurface,
@@ -67,7 +68,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '为此模型分配场景角色（可选）',
+                      ctx.l10n.assignRoleHint,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurfaceVariant,
                         height: 1.4,
@@ -76,24 +77,24 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                     const SizedBox(height: 22),
                     RoleToggleTile(
                       icon: Symbols.gavel_rounded,
-                      label: '专家模型',
+                      label: ctx.l10n.expertModel,
                       containerColor: cs.primaryContainer,
                       onContainerColor: cs.onPrimaryContainer,
                       value: setAsDefault,
                       onChanged: (v) => setLocal(() => setAsDefault = v),
                       replacingText:
-                          defaultReplaces ? '将替换 $currentDefault' : null,
+                          defaultReplaces ? ctx.l10n.willReplace(currentDefault) : null,
                     ),
                     const SizedBox(height: 10),
                     RoleToggleTile(
                       icon: Symbols.bolt_rounded,
-                      label: '快速模型',
+                      label: ctx.l10n.fastModel,
                       containerColor: cs.tertiaryContainer,
                       onContainerColor: cs.onTertiaryContainer,
                       value: setAsFast,
                       onChanged: (v) => setLocal(() => setAsFast = v),
                       replacingText:
-                          fastReplaces ? '将替换 $currentFast' : null,
+                          fastReplaces ? ctx.l10n.willReplace(currentFast) : null,
                     ),
                     const SizedBox(height: 24),
                     Row(
@@ -101,7 +102,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                       children: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
-                          child: const Text('取消'),
+                          child: Text(ctx.l10n.cancel),
                         ),
                         const SizedBox(width: 8),
                         TextButton(
@@ -112,7 +113,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                               setAsFast: setAsFast,
                             ),
                           ),
-                          child: const Text('添加'),
+                          child: Text(ctx.l10n.add),
                         ),
                       ],
                     ),

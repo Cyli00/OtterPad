@@ -18,6 +18,7 @@ import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
 import '../../../services/figure_extract_service.dart';
 import '../../../services/snackbar_service.dart';
+import '../../../core/l10n.dart';
 import '../../../services/translation_service.dart';
 
 /// 以 fade 转场打开 [FigureViewer]。
@@ -252,7 +253,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
               icon: const Icon(Symbols.close_rounded),
               color: Colors.white70,
               onPressed: () => Navigator.of(context).pop(),
-              tooltip: '关闭',
+              tooltip: context.l10n.closeImage,
             ),
           ),
         ],
@@ -306,16 +307,16 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         overlay.size.width - globalPosition.dx,
         overlay.size.height - globalPosition.dy,
       ),
-      items: const [
+      items: [
         PopupMenuItem<String>(
           value: 'copy',
           height: 40,
           child: Row(
             children: [
-              Icon(Symbols.content_copy_rounded, size: 18, color: Colors.white70),
-              SizedBox(width: 12),
-              Text('复制图片',
-                  style: TextStyle(color: Colors.white, fontSize: 14)),
+              const Icon(Symbols.content_copy_rounded, size: 18, color: Colors.white70),
+              const SizedBox(width: 12),
+              Text(context.l10n.copyImage,
+                  style: const TextStyle(color: Colors.white, fontSize: 14)),
             ],
           ),
         ),
@@ -324,10 +325,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           height: 40,
           child: Row(
             children: [
-              Icon(Symbols.download_rounded, size: 18, color: Colors.white70),
-              SizedBox(width: 12),
-              Text('保存图片',
-                  style: TextStyle(color: Colors.white, fontSize: 14)),
+              const Icon(Symbols.download_rounded, size: 18, color: Colors.white70),
+              const SizedBox(width: 12),
+              Text(context.l10n.saveImage,
+                  style: const TextStyle(color: Colors.white, fontSize: 14)),
             ],
           ),
         ),
@@ -341,15 +342,15 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final snackBar = ref.read(snackBarServiceProvider);
     final source = File(fig.imagePath);
     if (!await source.exists()) {
-      snackBar.showResult(message: '图片文件不存在');
+      snackBar.showResult(message: context.l10n.imageNotFound);
       return;
     }
     try {
       final bytes = await source.readAsBytes();
       await Pasteboard.writeImage(bytes);
-      snackBar.showResult(message: '已复制到剪贴板');
+      snackBar.showResult(message: context.l10n.copiedToClipboard);
     } catch (e) {
-      snackBar.showResult(message: '复制失败：$e');
+      snackBar.showResult(message: context.l10n.copyFailed('$e'));
     }
   }
 
@@ -357,7 +358,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final snackBar = ref.read(snackBarServiceProvider);
     final source = File(fig.imagePath);
     if (!await source.exists()) {
-      snackBar.showResult(message: '图片文件不存在');
+      snackBar.showResult(message: context.l10n.imageNotFound);
       return;
     }
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
@@ -366,7 +367,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
         // 桌面：系统保存对话框 + File.copy
         final targetPath = await FilePicker.platform.saveFile(
-          dialogTitle: '保存图片',
+          dialogTitle: context.l10n.saveImageTitle,
           fileName: fileName,
           type: FileType.image,
           lockParentWindow: true,
@@ -375,7 +376,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         final target = File(targetPath);
         if (await target.exists()) await target.delete();
         await source.copy(target.path);
-        snackBar.showResult(message: '已保存到 ${target.path}');
+        snackBar.showResult(message: context.l10n.savedToPath(target.path));
       } else {
         // 移动：交给系统分享面板，用户从中选"保存到相册"/"保存到文件"
         await Share.shareXFiles(
@@ -384,7 +385,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         );
       }
     } catch (e) {
-      snackBar.showResult(message: '保存失败：$e');
+      snackBar.showResult(message: context.l10n.saveFailed('$e'));
     }
   }
 
@@ -513,8 +514,8 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                   padding: EdgeInsets.zero,
                 ),
                 tooltip: _translations.containsKey(idx)
-                    ? (isTranslated ? '显示原文' : '显示翻译')
-                    : '翻译',
+                    ? (isTranslated ? context.l10n.showOriginal : context.l10n.showTranslation)
+                    : context.l10n.translateText,
                 onPressed: () => _handleTranslate(idx, fig),
               ),
       ),

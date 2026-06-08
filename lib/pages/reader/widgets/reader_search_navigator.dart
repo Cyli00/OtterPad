@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/l10n.dart';
 
 class ReaderPdfResultNavigator extends StatelessWidget {
   final int currentIndex;
@@ -35,7 +36,7 @@ class ReaderPdfResultNavigator extends StatelessWidget {
           _navButton(
             cs,
             icon: Symbols.expand_less_rounded,
-            tooltip: '上一个结果',
+            tooltip: context.l10n.previousResult,
             onPressed: total > 0 ? onPrevious : null,
           ),
           Padding(
@@ -69,7 +70,7 @@ class ReaderPdfResultNavigator extends StatelessWidget {
           _navButton(
             cs,
             icon: Symbols.expand_more_rounded,
-            tooltip: '下一个结果',
+            tooltip: context.l10n.nextResult,
             onPressed: total > 0 ? onNext : null,
           ),
         ],
@@ -108,7 +109,7 @@ class ReaderTextResultNavigator extends StatelessWidget {
           _navButton(
             cs,
             icon: Symbols.expand_less_rounded,
-            tooltip: '上一个结果',
+            tooltip: context.l10n.previousResult,
             onPressed: onPrevious,
           ),
           Padding(
@@ -125,7 +126,7 @@ class ReaderTextResultNavigator extends StatelessWidget {
           _navButton(
             cs,
             icon: Symbols.expand_more_rounded,
-            tooltip: '下一个结果',
+            tooltip: context.l10n.nextResult,
             onPressed: onNext,
           ),
         ],

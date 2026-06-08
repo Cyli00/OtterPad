@@ -1,27 +1,32 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/l10n.dart';
+import '../../providers/locale_provider.dart';
 import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 bool get _isDesktop =>
     Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
-class SettingPage extends StatelessWidget {
+class SettingPage extends ConsumerWidget {
   const SettingPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final l10n = context.l10n;
+    final locale = ref.watch(localeProvider);
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          '设置',
+          l10n.settings,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -38,38 +43,139 @@ class SettingPage extends StatelessWidget {
               if (_isDesktop)
                 _SettingsTile(
                   icon: Symbols.dns,
-                  title: '网络设置',
-                  subtitle: '代理 · 连通性测试',
+                  title: l10n.networkSettings,
+                  subtitle: l10n.networkSettingsSubtitle,
                   onTap: () => context.push(AppRoutes.settingsNetwork),
                 ),
               _SettingsTile(
                 icon: Symbols.memory,
-                title: 'AI 设置',
-                subtitle: '模型接口 · 翻译设置 · 生图设置',
+                title: l10n.aiSettings,
+                subtitle: l10n.aiSettingsSubtitle,
                 onTap: () => context.push(AppRoutes.settingsApi),
               ),
               _SettingsTile(
                 icon: Symbols.document_scanner,
-                title: 'OCR 设置',
-                subtitle: 'OCR 接口 · 识别参数',
+                title: l10n.ocrSettings,
+                subtitle: l10n.ocrSettingsSubtitle,
                 onTap: () => context.push(AppRoutes.settingsExtract),
               ),
               _SettingsTile(
                 icon: Symbols.palette,
-                title: '外观设置',
-                subtitle: '主题模式 · 主题色彩 · 阅读设置 · 文字大小',
+                title: l10n.appearanceSettings,
+                subtitle: l10n.appearanceSettingsSubtitle,
                 onTap: () => context.push(AppRoutes.settingsAppearance),
               ),
               _SettingsTile(
                 icon: Symbols.backup_table_rounded,
-                title: '数据管理',
-                subtitle: '远程备份 · 本地备份 · Zotero 同步',
+                title: l10n.dataManagement,
+                subtitle: l10n.dataManagementSubtitle,
                 onTap: () => context.push(AppRoutes.settingsBackup),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.only(left: 16, bottom: 8),
+            child: Text(
+              l10n.systemSettings,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          _SettingsCard(
+            children: [
+              _SettingsTile(
+                icon: Symbols.language_rounded,
+                title: l10n.language,
+                subtitle: _localeName(l10n, locale),
+                onTap: () => _showLanguageSheet(context, ref),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  String _localeName(AppLocalizations l10n, Locale? locale) {
+    if (locale == null) return l10n.languageSystem;
+    return switch (locale.languageCode) {
+      'zh' => l10n.languageChinese,
+      'en' => l10n.languageEnglish,
+      _ => locale.languageCode,
+    };
+  }
+
+  void _showLanguageSheet(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final current = ref.read(localeProvider);
+
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _LanguageOption(
+              label: l10n.languageSystem,
+              selected: current == null,
+              onTap: () {
+                ref.read(localeProvider.notifier).setLocale(null);
+                Navigator.pop(context);
+              },
+            ),
+            _LanguageOption(
+              label: l10n.languageChinese,
+              selected: current?.languageCode == 'zh',
+              onTap: () {
+                ref.read(localeProvider.notifier).setLocale(const Locale('zh'));
+                Navigator.pop(context);
+              },
+            ),
+            _LanguageOption(
+              label: l10n.languageEnglish,
+              selected: current?.languageCode == 'en',
+              onTap: () {
+                ref.read(localeProvider.notifier).setLocale(const Locale('en'));
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LanguageOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _LanguageOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListTile(
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          color: selected ? cs.primary : cs.onSurface,
+        ),
+      ),
+      trailing: selected
+          ? Icon(Symbols.check_rounded, color: cs.primary)
+          : null,
+      onTap: onTap,
     );
   }
 }

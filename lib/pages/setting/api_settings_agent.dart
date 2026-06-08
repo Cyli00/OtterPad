@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/l10n.dart';
 import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
@@ -15,11 +16,11 @@ import 'agent_model_manage_sheet.dart';
 import 'agent_model_tester.dart';
 
 /// 协议副标题——给用户一个"选它能做什么"的简短提示。
-String _protocolSubtitle(AgentApiProvider p) => switch (p) {
-  AgentApiProvider.openai => 'gpt / o 系列 · 生图支持 gpt-image',
-  AgentApiProvider.anthropic => 'Claude 系列',
-  AgentApiProvider.gemini => 'Google AI · 多模态',
-  AgentApiProvider.openAICompatible => 'DeepSeek / 自部署等 OpenAI 兼容 API',
+String _protocolSubtitle(AgentApiProvider p, AppLocalizations l10n) => switch (p) {
+  AgentApiProvider.openai => l10n.providerDescOpenai,
+  AgentApiProvider.anthropic => l10n.providerDescAnthropic,
+  AgentApiProvider.gemini => l10n.providerDescGemini,
+  AgentApiProvider.openAICompatible => l10n.providerDescOpenaiCompatible,
 };
 
 /// 文档助手 Agent API 配置区块。
@@ -127,21 +128,21 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             borderRadius: BorderRadius.circular(28),
           ),
           title: Text(
-            '删除服务商',
+            context.l10n.deleteProvider,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
-          content: Text('确定删除「${inst.name}」？将清除其 API Key、地址和模型。'),
+          content: Text(context.l10n.confirmDeleteProvider(inst.name)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: TextButton.styleFrom(foregroundColor: cs.error),
-              child: const Text('删除'),
+              child: Text(context.l10n.delete),
             ),
           ],
         );
@@ -238,7 +239,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '服务商',
+                    context.l10n.providers,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: cs.onSurface,
@@ -324,7 +325,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                   size: 20,
                   color: cs.onSurfaceVariant.withAlpha(160),
                 ),
-                tooltip: '删除',
+                tooltip: context.l10n.delete,
                 onPressed: () => _deleteInstance(inst),
               ),
           ],
@@ -346,7 +347,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             Icon(Symbols.add_rounded, size: 22, color: cs.primary),
             const SizedBox(width: 12),
             Text(
-              '添加服务商',
+              context.l10n.addProvider,
               style: theme.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: cs.primary,
@@ -395,7 +396,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '选择协议',
+                    context.l10n.selectProtocol,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: cs.onSurface,
@@ -425,7 +426,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _protocolSubtitle(p),
+                          _protocolSubtitle(p, context.l10n),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
                           ),
@@ -466,7 +467,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     });
     final snackBar = ref.read(snackBarServiceProvider);
     if (err == null) {
-      snackBar.showResult(message: '$modelId 连接成功');
+      snackBar.showResult(message: context.l10n.modelConnected(modelId));
     } else {
       _showTestError(modelId, err);
     }
@@ -479,7 +480,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           message: '$modelId: $error',
           duration: const Duration(seconds: 5),
           action: SnackBarAction(
-            label: '重试',
+            label: context.l10n.retry,
             onPressed: () {
               final inst = ref.read(agentApiProvider).byId(_currentId);
               if (inst != null) _testModel(inst, modelId);
@@ -585,13 +586,13 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── 服务商（点开 sheet 切换 / 添加 / 删除）──
-          _sectionLabel(theme, cs, '服务商'),
+          _sectionLabel(theme, cs, context.l10n.providers),
           const SizedBox(height: 12),
           _providerTile(theme, cs, current),
           const SizedBox(height: 24),
 
           // ── API Key ──
-          _sectionLabel(theme, cs, 'API Key'),
+          _sectionLabel(theme, cs, context.l10n.apiKey),
           const SizedBox(height: 12),
           TextField(
             controller: _keyCtrl,
@@ -622,7 +623,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           const SizedBox(height: 24),
 
           // ── API 地址 ──
-          _sectionLabel(theme, cs, 'API 地址'),
+          _sectionLabel(theme, cs, context.l10n.apiAddress),
           const SizedBox(height: 12),
           TextField(
             controller: _urlCtrl,
@@ -645,7 +646,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                       ? cs.primary
                       : cs.onSurfaceVariant.withAlpha(80),
                 ),
-                tooltip: '管理模型',
+                tooltip: context.l10n.manageModels,
                 onPressed: current.apiKey.isNotEmpty
                     ? () => _openModelManageSheet(current)
                     : null,
@@ -658,7 +659,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           Padding(
             padding: const EdgeInsets.only(left: 4, top: 6),
             child: Text(
-              '预览: ${current.effectiveBaseUrl}${current.protocol.chatPath}',
+              context.l10n.previewUrl('${current.effectiveBaseUrl}${current.protocol.chatPath}'),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: cs.onSurfaceVariant.withAlpha(120),
               ),
@@ -670,7 +671,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           // ── 模型列表 ──
           if (current.models.isNotEmpty) ...[
             const SizedBox(height: 24),
-            _sectionLabel(theme, cs, '模型'),
+            _sectionLabel(theme, cs, context.l10n.models),
             const SizedBox(height: 12),
             ...current.models.map((modelId) {
               final hasTested = _modelTestResults.containsKey(modelId);
@@ -697,7 +698,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
 
           // ── 全局模型角色 ──
           const SizedBox(height: 24),
-          _sectionLabel(theme, cs, '全局模型角色'),
+          _sectionLabel(theme, cs, context.l10n.globalModelRoles),
           const SizedBox(height: 12),
           _buildGlobalRoles(theme, cs),
         ],
@@ -733,11 +734,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             icon: Symbols.gavel_rounded,
             iconBg: cs.primaryContainer,
             iconFg: cs.onPrimaryContainer,
-            label: '专家模型',
+            label: context.l10n.expertModel,
             instanceId: defaultRole.id,
             modelId: defaultRole.modelId,
             onTap: () => _showRolePickerDialog(
-              roleLabel: '专家模型',
+              roleLabel: context.l10n.expertModel,
               currentInstanceId: defaultRole.id,
               currentModelId: defaultRole.modelId,
               onSelect: (instId, id) => ref
@@ -755,11 +756,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             icon: Symbols.bolt_rounded,
             iconBg: cs.tertiaryContainer,
             iconFg: cs.onTertiaryContainer,
-            label: '快速模型',
+            label: context.l10n.fastModel,
             instanceId: fastRole.id,
             modelId: fastRole.modelId,
             onTap: () => _showRolePickerDialog(
-              roleLabel: '快速模型',
+              roleLabel: context.l10n.fastModel,
               currentInstanceId: fastRole.id,
               currentModelId: fastRole.modelId,
               onSelect: (instId, id) => ref
@@ -777,11 +778,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             icon: Symbols.palette_rounded,
             iconBg: cs.secondaryContainer,
             iconFg: cs.onSecondaryContainer,
-            label: '生图模型',
+            label: context.l10n.imageModel,
             instanceId: imageRole.id,
             modelId: imageRole.modelId,
             onTap: () => _showRolePickerDialog(
-              roleLabel: '生图模型',
+              roleLabel: context.l10n.imageModel,
               currentInstanceId: imageRole.id,
               currentModelId: imageRole.modelId,
               imageOnly: true,
@@ -859,7 +860,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                       )
                     else
                       Text(
-                        '未设置',
+                        context.l10n.notSet,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: cs.onSurfaceVariant.withAlpha(120),
                         ),
@@ -919,7 +920,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '选择$roleLabel',
+                    context.l10n.selectRole(roleLabel),
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -930,7 +931,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(
                         child: Text(
-                          imageOnly ? '请先添加支持图片输出的模型' : '请先在各服务商下添加模型',
+                          imageOnly ? ctx.l10n.pleaseAddImageModel : ctx.l10n.pleaseAddModels,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: cs.onSurfaceVariant.withAlpha(160),
                           ),
@@ -1037,11 +1038,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                           style: TextButton.styleFrom(
                             foregroundColor: cs.error,
                           ),
-                          child: const Text('清除'),
+                          child: Text(ctx.l10n.clearField),
                         ),
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('取消'),
+                        child: Text(ctx.l10n.cancel),
                       ),
                     ],
                   ),
@@ -1182,20 +1183,20 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '添加 ${widget.protocol.label}',
+                context.l10n.addProtocol(widget.protocol.label),
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              fieldLabel('名称'),
+              fieldLabel(context.l10n.nameField),
               TextField(
                 controller: _nameCtrl,
                 onChanged: (_) => setState(() {}),
-                decoration: deco('服务商名称'),
+                decoration: deco(context.l10n.providerName),
                 autocorrect: false,
                 style: theme.textTheme.bodyMedium,
               ),
-              fieldLabel('API 地址'),
+              fieldLabel(context.l10n.apiAddress),
               TextField(
                 controller: _urlCtrl,
                 onChanged: (_) => setState(() {}),
@@ -1204,7 +1205,7 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
                 autocorrect: false,
                 style: theme.textTheme.bodyMedium,
               ),
-              fieldLabel('API Key'),
+              fieldLabel(context.l10n.apiKey),
               TextField(
                 controller: _keyCtrl,
                 onChanged: (_) => setState(() {}),
@@ -1232,7 +1233,7 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
+                    child: Text(context.l10n.cancel),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
@@ -1243,7 +1244,7 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
                             apiKey: _keyCtrl.text.trim(),
                           ))
                         : null,
-                    child: const Text('添加'),
+                    child: Text(context.l10n.add),
                   ),
                 ],
               ),

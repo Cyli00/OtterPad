@@ -10,6 +10,7 @@ import '../../services/reader/markdown_document_cache_service.dart';
 import '../../services/snackbar_service.dart';
 import 'widgets/md_widget/nr_markdown_config.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../core/l10n.dart';
 
 /// Markdown 提取结果展示页
 ///
@@ -61,12 +62,12 @@ class ExtractResultPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Symbols.content_copy_rounded, size: 20),
-            tooltip: '复制全部',
+            tooltip: context.l10n.copyAll,
             onPressed: () async {
               final content = await _loadContent();
               await Clipboard.setData(ClipboardData(text: content));
               ref.read(snackBarServiceProvider).showResult(
-                    message: '已复制到剪贴板',
+                    message: context.l10n.copiedToClipboard,
                     duration: const Duration(seconds: 2),
                   );
             },
@@ -74,7 +75,7 @@ class ExtractResultPage extends ConsumerWidget {
           if (sharePath != null)
             IconButton(
               icon: const Icon(Symbols.share_rounded, size: 20),
-              tooltip: '分享',
+              tooltip: context.l10n.share,
               onPressed: () {
                 Share.shareXFiles([XFile(sharePath)]);
               },
@@ -95,7 +96,7 @@ class ExtractResultPage extends ConsumerWidget {
                 children: [
                   Icon(Symbols.error_rounded, size: 48, color: cs.error),
                   const SizedBox(height: 16),
-                  Text('加载失败', style: theme.textTheme.titleMedium),
+                  Text(context.l10n.loadFailed, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   Text(
                     snapshot.error.toString(),
@@ -113,7 +114,7 @@ class ExtractResultPage extends ConsumerWidget {
           if (content.isEmpty) {
             return Center(
               child: Text(
-                '提取结果为空',
+                context.l10n.extractResultEmpty,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: cs.onSurfaceVariant,
                 ),

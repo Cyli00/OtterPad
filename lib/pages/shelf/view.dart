@@ -11,6 +11,7 @@ import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../core/l10n.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
@@ -45,19 +46,19 @@ class ShelfPage extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除收藏夹'),
-        content: Text('确定要删除「${fav.name}」吗？收藏夹内的文献不会被删除。'),
+        title: Text(context.l10n.deleteFavorite),
+        content: Text(context.l10n.confirmDeleteFavorite(fav.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(
               foregroundColor: theme.colorScheme.error,
             ),
-            child: const Text('删除'),
+            child: Text(context.l10n.delete),
           ),
         ],
       ),
@@ -91,7 +92,7 @@ class ShelfPage extends ConsumerWidget {
                 const SizedBox(height: 16),
                 // 页面大标题
                 Text(
-                  '我的库',
+                  context.l10n.myLibrary,
                   style: theme.textTheme.headlineLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.onSurface,
@@ -102,12 +103,12 @@ class ShelfPage extends ConsumerWidget {
                 // 菜单列表项
                 LibraryMenuItem(
                   icon: Symbols.cloud_sync,
-                  title: '已同步',
+                  title: context.l10n.synced,
                   onTap: () {},
                 ),
                 LibraryMenuItem(
                   icon: Symbols.history,
-                  title: '阅读历史',
+                  title: context.l10n.readingHistory,
                   trailing: historyCount > 0
                       ? Container(
                           padding: const EdgeInsets.symmetric(
@@ -131,7 +132,7 @@ class ShelfPage extends ConsumerWidget {
                 ),
                 LibraryMenuItem(
                   icon: Symbols.description,
-                  title: '无文件条目',
+                  title: context.l10n.noFileEntries,
                   trailing: noFileCount > 0
                       ? Container(
                           padding: const EdgeInsets.symmetric(
@@ -167,7 +168,7 @@ class ShelfPage extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      '收藏夹',
+                      context.l10n.favorites,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.onSurface,
@@ -209,7 +210,7 @@ class ShelfPage extends ConsumerWidget {
                       ];
                       return FavoriteCard(
                         title: fav.name,
-                        subtitle: '${fav.documentIds.length} 篇文献',
+                        subtitle: context.l10n.favoriteDocumentCount(fav.documentIds.length),
                         subtitleIcon: Container(
                           width: 24,
                           height: 24,

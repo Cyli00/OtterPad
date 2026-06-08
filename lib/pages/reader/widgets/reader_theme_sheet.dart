@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import 'reader_background.dart';
@@ -39,7 +40,7 @@ class ReaderThemeSheetBody extends ConsumerWidget {
             const SizedBox(height: 4),
 
             // ── 颜色（主题色） ──
-            _sectionLabel(theme, cs, Symbols.palette_rounded, '颜色'),
+            _sectionLabel(theme, cs, Symbols.palette_rounded, context.l10n.color),
             const SizedBox(height: 12),
             _SeedColorRow(
               selected: themeState.useDynamicColor
@@ -54,7 +55,7 @@ class ReaderThemeSheetBody extends ConsumerWidget {
             const SizedBox(height: 20),
 
             // ── 背景 ──
-            _sectionLabel(theme, cs, Symbols.wallpaper_rounded, '背景'),
+            _sectionLabel(theme, cs, Symbols.wallpaper_rounded, context.l10n.background),
             const SizedBox(height: 12),
             _BackgroundRow(
               current: readerSettings.theme,
@@ -66,7 +67,7 @@ class ReaderThemeSheetBody extends ConsumerWidget {
             const SizedBox(height: 20),
 
             // ── 工具栏透明度 ──
-            _sectionLabel(theme, cs, Symbols.blur_on_rounded, '工具栏透明度'),
+            _sectionLabel(theme, cs, Symbols.blur_on_rounded, context.l10n.toolbarOpacity),
             const SizedBox(height: 12),
             _OpacityRow(
               current: readerSettings.toolbarOpacity,

@@ -7,6 +7,7 @@ import '../../../providers/summary_image_provider.dart';
 import '../../../services/figure_extract_service.dart';
 import 'figure_viewer.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/l10n.dart';
 
 // ─── 数据模型 ───
 
@@ -303,9 +304,9 @@ class _FiguresTab extends StatelessWidget {
     final hasFigures = figures != null && figures!.isNotEmpty;
 
     if (!summaryState.generating && !hasSummary && !hasFigures) {
-      return const _EmptyState(
+      return _EmptyState(
         icon: Symbols.image_not_supported,
-        message: '未找到图表\n请先提取文档',
+        message: context.l10n.figuresNotFoundHint,
       );
     }
 
@@ -379,14 +380,14 @@ class _FiguresTab extends StatelessWidget {
               children: [
                 _ActionLink(
                   icon: Symbols.article,
-                  label: '在文中查看',
+                  label: context.l10n.viewInDocument,
                   onTap: () => _navigateToFigure(fig),
                 ),
                 const SizedBox(width: 16),
                 if (imageExists)
                   _ActionLink(
                     icon: Symbols.open_in_full_rounded,
-                    label: '查看原图',
+                    label: context.l10n.viewOriginalImage,
                     onTap: () => showFigureViewer(
                       context,
                       figures!,
@@ -486,7 +487,7 @@ class _FiguresTab extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text(
-              summaryState.generating ? '正在生成总结图…' : '暂无总结图',
+              summaryState.generating ? context.l10n.generatingSummary : context.l10n.noSummary,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -513,9 +514,9 @@ class _ReferencesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (references.isEmpty) {
-      return const _EmptyState(
+      return _EmptyState(
         icon: Symbols.menu_book_rounded,
-        message: '未找到参考文献',
+        message: context.l10n.referencesNotFound,
       );
     }
 
@@ -551,7 +552,7 @@ class _ReferencesTab extends StatelessWidget {
                   elevation: 6,
                   duration: const Duration(seconds: 2),
                   content: Text(
-                    '已复制参考文献 ${item.number}',
+                    context.l10n.copiedReferenceNumber(item.number),
                     style: const TextStyle(fontSize: 14),
                   ),
                 ),

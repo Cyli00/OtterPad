@@ -7,6 +7,7 @@ import '../../providers/history_provider.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
+import '../../core/l10n.dart';
 import '../library/widgets/doc_list_card.dart';
 
 /// 阅读历史页面：按日期桶分组展示所有已阅读文献
@@ -33,7 +34,7 @@ class ReadingHistoryPage extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
         title: Text(
-          '阅读历史',
+          context.l10n.readingHistory,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -45,14 +46,14 @@ class ReadingHistoryPage extends ConsumerWidget {
         actions: [
           if (totalCount > 0)
             IconButton(
-              tooltip: '清空历史',
+              tooltip: context.l10n.clearHistory,
               icon: const Icon(Symbols.delete_sweep_rounded),
               onPressed: () => _confirmClear(context, ref),
             ),
         ],
       ),
       body: sections.isEmpty
-          ? _buildEmpty(theme)
+          ? _buildEmpty(context, theme)
           : CustomScrollView(
               slivers: [
                 for (int i = 0; i < sections.length; i++)
@@ -71,7 +72,7 @@ class ReadingHistoryPage extends ConsumerWidget {
 
   // ─── 空状态 ─────────────────────────────────────────────
 
-  Widget _buildEmpty(ThemeData theme) {
+  Widget _buildEmpty(BuildContext context, ThemeData theme) {
     final cs = theme.colorScheme;
     return Center(
       child: Column(
@@ -84,14 +85,14 @@ class ReadingHistoryPage extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            '暂无阅读记录',
+            context.l10n.noReadingHistory,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: cs.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            '打开任意文献后，这里会按日期显示浏览顺序',
+            context.l10n.noReadingHistoryHint,
             style: theme.textTheme.bodySmall?.copyWith(
               color: cs.onSurfaceVariant.withAlpha(160),
             ),
@@ -133,7 +134,7 @@ class ReadingHistoryPage extends ConsumerWidget {
                 ref.read(historyProvider.notifier).removeDoc(doc.id);
                 ref
                     .read(snackBarServiceProvider)
-                    .showResult(message: '已从历史移除');
+                    .showResult(message: context.l10n.removedFromHistory);
               },
               background: Container(
                 decoration: BoxDecoration(
@@ -149,7 +150,7 @@ class ReadingHistoryPage extends ConsumerWidget {
                         size: 22, color: cs.onErrorContainer),
                     const SizedBox(height: 3),
                     Text(
-                      '移除',
+                      context.l10n.remove,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: cs.onErrorContainer,
                         fontWeight: FontWeight.w700,
@@ -181,26 +182,27 @@ class ReadingHistoryPage extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('清空阅读历史'),
-        content: const Text('将清除所有阅读记录，文献本身不会被删除。此操作不可撤销。'),
+        title: Text(context.l10n.clearReadingHistory),
+        content: Text(context.l10n.clearReadingHistoryConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
               foregroundColor: cs.error,
             ),
-            child: const Text('清空'),
+            child: Text(context.l10n.clearHistory),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
     ref.read(historyProvider.notifier).clear();
-    ref.read(snackBarServiceProvider).showResult(message: '已清空阅读历史');
+    if (!context.mounted) return;
+    ref.read(snackBarServiceProvider).showResult(message: context.l10n.readingHistoryCleared);
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../utils/markdown_translation_weaver.dart';
@@ -34,6 +35,7 @@ class ReaderBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
 
     return Container(
       decoration: BoxDecoration(
@@ -53,29 +55,29 @@ class ReaderBottomBar extends StatelessWidget {
             _bottomButton(
               cs,
               icon: Symbols.menu_rounded,
-              tooltip: '大纲',
+              tooltip: l10n.outline,
               active: activeSheet == ReaderSheetType.outline,
               onTap: onOpenOutline,
             ),
-            _buildTranslationBottomButton(cs),
+            _buildTranslationBottomButton(context, cs),
             _bottomButton(
               cs,
               icon: Symbols.stylus_note_rounded,
-              tooltip: '笔记',
+              tooltip: l10n.notes,
               active: activeSheet == ReaderSheetType.notes,
               onTap: onOpenNotes,
             ),
             _bottomButton(
               cs,
               icon: Symbols.palette_rounded,
-              tooltip: '外观',
+              tooltip: l10n.appearance,
               active: activeSheet == ReaderSheetType.theme,
               onTap: onOpenTheme,
             ),
             _bottomButton(
               cs,
               icon: Symbols.custom_typography_rounded,
-              tooltip: '字体',
+              tooltip: l10n.font,
               active: activeSheet == ReaderSheetType.text,
               onTap: onOpenText,
             ),
@@ -85,7 +87,8 @@ class ReaderBottomBar extends StatelessWidget {
     );
   }
 
-  Widget _buildTranslationBottomButton(ColorScheme cs) {
+  Widget _buildTranslationBottomButton(BuildContext context, ColorScheme cs) {
+    final l10n = context.l10n;
     if (translation.status == DocTranslationStatus.loading) {
       return const SizedBox(
         width: 48,
@@ -102,7 +105,7 @@ class ReaderBottomBar extends StatelessWidget {
       return _bottomButton(
         cs,
         icon: _modeIcon(next),
-        tooltip: _modeLabel(next),
+        tooltip: _modeLabel(l10n, next),
         onTap: onCycleTranslationMode,
       );
     }
@@ -111,8 +114,8 @@ class ReaderBottomBar extends StatelessWidget {
       cs,
       icon: Symbols.translate_rounded,
       tooltip: translation.status == DocTranslationStatus.failed
-          ? '重试翻译'
-          : '翻译',
+          ? l10n.retryTranslation
+          : l10n.translate,
       onTap: onTranslate,
     );
   }
@@ -149,9 +152,10 @@ class ReaderBottomBar extends StatelessWidget {
     DocTranslationMode.translated => Symbols.language_rounded,
   };
 
-  static String _modeLabel(DocTranslationMode mode) => switch (mode) {
-    DocTranslationMode.bilingual => '双语',
-    DocTranslationMode.off => '原文',
-    DocTranslationMode.translated => '译文',
-  };
+  static String _modeLabel(AppLocalizations l10n, DocTranslationMode mode) =>
+      switch (mode) {
+        DocTranslationMode.bilingual => l10n.bilingual,
+        DocTranslationMode.off => l10n.original,
+        DocTranslationMode.translated => l10n.translated,
+      };
 }

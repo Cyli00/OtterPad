@@ -10,6 +10,7 @@ import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../services/snackbar_service.dart';
+import '../../core/l10n.dart';
 import '../library/widgets/doc_list_card.dart';
 
 /// 收藏夹"添加文献"页面。
@@ -82,7 +83,7 @@ class _AddDocumentsToFavoritePageState
         .read(documentLifecycleProvider)
         .addToFavoriteBatch(widget.favorite.id, _selectedIds);
     if (!mounted) return;
-    ref.read(snackBarServiceProvider).showResult(message: '已添加 $added 篇文献');
+    ref.read(snackBarServiceProvider).showResult(message: context.l10n.addedDocumentsToFavorite(added));
     context.pop();
   }
 
@@ -139,7 +140,7 @@ class _AddDocumentsToFavoritePageState
                   ? Symbols.deselect_rounded
                   : Symbols.select_all_rounded,
             ),
-            tooltip: allSelected ? '取消全选' : '全选',
+            tooltip: allSelected ? context.l10n.deselectAll : context.l10n.selectAll,
           ),
           const SizedBox(width: 4),
         ],
@@ -153,7 +154,7 @@ class _AddDocumentsToFavoritePageState
                 child: Padding(
                   padding: const EdgeInsets.all(32),
                   child: Text(
-                    docs.isEmpty ? '文献库为空' : '未找到匹配文献',
+                    docs.isEmpty ? context.l10n.libraryEmpty : context.l10n.noDocumentsFound,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),
@@ -225,7 +226,7 @@ class _SearchField extends StatelessWidget {
         decoration: InputDecoration(
           isDense: true,
           prefixIcon: const Icon(Symbols.search_rounded, size: 20),
-          hintText: '搜索文献标题 / 作者 / 期刊',
+          hintText: context.l10n.searchDocumentHint,
           filled: true,
           fillColor: cs.surfaceContainerHighest,
           contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -256,7 +257,7 @@ class _IncludedBadge extends StatelessWidget {
           Icon(Symbols.bookmark_rounded, size: 14, color: cs.onSecondaryContainer),
           const SizedBox(width: 4),
           Text(
-            '已在收藏夹',
+            context.l10n.alreadyInThisFavorite,
             style: theme.textTheme.labelSmall?.copyWith(
               color: cs.onSecondaryContainer,
               fontWeight: FontWeight.w600,
@@ -295,7 +296,7 @@ class _BottomActions extends StatelessWidget {
           children: [
             TextButton(
               onPressed: submitting ? null : onCancel,
-              child: const Text('取消'),
+              child: Text(context.l10n.cancel),
             ),
             const SizedBox(width: 4),
             FilledButton.icon(
@@ -310,7 +311,7 @@ class _BottomActions extends StatelessWidget {
                       ),
                     )
                   : const Icon(Symbols.check_rounded, size: 18),
-              label: Text(selectedCount == 0 ? '确认' : '确认 ($selectedCount)'),
+              label: Text(selectedCount == 0 ? context.l10n.confirm : context.l10n.selectedCount(selectedCount)),
             ),
           ],
         ),

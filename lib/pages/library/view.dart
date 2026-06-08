@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
@@ -75,9 +76,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
         .read(documentLifecycleProvider)
         .addToFavoriteBatch(result.favoriteId, selectedIds);
     final skipped = selectedIds.length - added;
+    final l10n = context.l10n;
     final msg = skipped == 0
-        ? '已加入 $added 篇文献'
-        : '已加入 $added 篇文献，$skipped 篇已存在已跳过';
+        ? l10n.documentsAddedCount(added)
+        : l10n.documentsAddedSkipped(added, skipped);
     ref.read(snackBarServiceProvider).showResult(message: msg);
     ref.read(selectionProvider.notifier).exit();
   }
@@ -89,20 +91,21 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
     final count = selection.selectedIds.length;
     final cs = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('批量删除'),
-        content: Text('确定要删除 $count 篇文献吗？此操作不可撤销。'),
+        title: Text(l10n.batchDelete),
+        content: Text(l10n.confirmDeleteDocuments(count)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: cs.error),
-            child: const Text('删除'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -113,7 +116,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
       await DocCardActions.delete(ref, id);
     }
 
-    ref.read(snackBarServiceProvider).showResult(message: '已删除 $count 篇文献');
+    ref.read(snackBarServiceProvider).showResult(message: l10n.deletedDocuments(count));
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -126,7 +129,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     if (!apiState.isConfigured) {
       ref
           .read(snackBarServiceProvider)
-          .showResult(message: '请先在设置中配置文档提取 Access Token');
+          .showResult(message: context.l10n.configureExtractToken);
       return;
     }
 
@@ -140,7 +143,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     if (selectedDocs.isEmpty) {
       ref
           .read(snackBarServiceProvider)
-          .showResult(message: '所选文献中无本地 PDF 文件，无法提取');
+          .showResult(message: context.l10n.noPdfFilesSelected);
       return;
     }
 
@@ -257,9 +260,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
       labelStyle: const TextStyle(fontWeight: FontWeight.bold),
       unselectedLabelColor: cs.onSurfaceVariant,
       dividerColor: Colors.transparent,
-      tabs: const [
-        Tab(text: '推荐'),
-        Tab(text: '文献库'),
+      tabs: [
+        Tab(text: context.l10n.recommend),
+        Tab(text: context.l10n.documentLibrary),
       ],
     );
   }
@@ -268,7 +271,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     return TabBarView(
       controller: _tabController,
       children: [
-        const Center(child: Text('推荐内容')),
+        Center(child: Text(context.l10n.recommendContent)),
         CustomScrollView(
           slivers: [
             if (isGrid) const BookshelfGrid() else const BookshelfList(),

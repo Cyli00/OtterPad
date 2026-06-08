@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/l10n.dart';
+
 enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
 Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
@@ -41,7 +43,7 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '工具',
+                    context.l10n.tools,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
@@ -51,21 +53,21 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
               ),
               _SheetItem(
                 icon: Symbols.note_add,
-                title: '添加文件',
-                subtitle: '导入本地 PDF，并提取标题、作者、期刊、年份与 DOI',
+                title: context.l10n.addFiles,
+                subtitle: context.l10n.addFilesSubtitle,
                 onTap: () => Navigator.pop(context, ToolbarAction.addFile),
               ),
               _SheetItem(
                 icon: Symbols.travel_explore_rounded,
-                title: '通过标识符添加',
-                subtitle: '输入 DOI、PMID、arXiv ID 或 ISBN 直接创建条目',
+                title: context.l10n.addByIdentifier,
+                subtitle: context.l10n.addByIdentifierSubtitle,
                 onTap: () =>
                     Navigator.pop(context, ToolbarAction.addByIdentifier),
               ),
               _SheetItem(
                 icon: Symbols.refresh_rounded,
-                title: '重构文库',
-                subtitle: '重新扫描目录，补回 PDF 并重试提取核心元数据',
+                title: context.l10n.rebuildLibrary,
+                subtitle: context.l10n.rebuildLibrarySubtitle,
                 onTap: () =>
                     Navigator.pop(context, ToolbarAction.rebuildLibrary),
               ),

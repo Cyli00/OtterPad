@@ -25,6 +25,7 @@ import '../../services/backup_s3_service.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/storage_cleanup_service.dart';
 import '../../utils/debounced_action.dart';
+import '../../core/l10n.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
@@ -67,14 +68,14 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       if (mounted) {
         setState(
           () =>
-              _cacheSizeText = '占用 ${StorageCleanupService.formatSize(bytes)}',
+              _cacheSizeText = context.l10n.storageUsage(StorageCleanupService.formatSize(bytes)),
         );
       }
     });
     StorageCleanupService.dataSize().then((bytes) {
       if (mounted) {
         setState(
-          () => _dataSizeText = '占用 ${StorageCleanupService.formatSize(bytes)}',
+          () => _dataSizeText = context.l10n.storageUsage(StorageCleanupService.formatSize(bytes)),
         );
       }
     });
@@ -94,7 +95,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(
-          '数据管理',
+          context.l10n.dataManagement,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -113,7 +114,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             children: [
               _buildGroup(
                 context,
-                title: '远程备份',
+                title: context.l10n.remoteBackup,
                 child: Column(
                   children: [
                     Padding(
@@ -122,7 +123,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '备份方式',
+                            context.l10n.backupMethod,
                             style: theme.textTheme.titleSmall?.copyWith(
                               color: cs.onSurfaceVariant,
                               fontWeight: FontWeight.w600,
@@ -174,10 +175,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     _buildDivider(context),
                     _ActionTile(
                       icon: Symbols.cloud_upload_rounded,
-                      title: '备份到${remoteType.label}',
+                      title: context.l10n.backupTo(remoteType.label),
                       subtitle: _remoteConfigured(remoteType, s3, webDav)
-                          ? '上传完整备份到${_remoteTargetLabel(remoteType, s3, webDav)}'
-                          : '请先配置${remoteType.label}连接信息',
+                          ? context.l10n.uploadBackupTo(_remoteTargetLabel(remoteType, s3, webDav))
+                          : context.l10n.pleaseConfigureFirst(remoteType.label),
                       enabled:
                           _remoteConfigured(remoteType, s3, webDav) && !_busy,
                       onTap: () => _backupToRemote(remoteType, s3, webDav),
@@ -185,10 +186,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     _buildDivider(context),
                     _ActionTile(
                       icon: Symbols.cloud_download_rounded,
-                      title: '从${remoteType.label}恢复',
+                      title: context.l10n.restoreFromRemote(remoteType.label),
                       subtitle: _remoteConfigured(remoteType, s3, webDav)
-                          ? '下载${_remoteTargetLabel(remoteType, s3, webDav)}并恢复'
-                          : '请先配置${remoteType.label}连接信息',
+                          ? context.l10n.downloadAndRestore(_remoteTargetLabel(remoteType, s3, webDav))
+                          : context.l10n.pleaseConfigureFirst(remoteType.label),
                       enabled:
                           _remoteConfigured(remoteType, s3, webDav) && !_busy,
                       onTap: () => _restoreFromRemote(remoteType, s3, webDav),
@@ -199,21 +200,21 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
               _buildZoteroGroup(context, zotero),
               _buildGroup(
                 context,
-                title: '本地备份',
+                title: context.l10n.localBackup,
                 child: Column(
                   children: [
                     _ActionTile(
                       icon: Symbols.download_rounded,
-                      title: '导出备份文件',
-                      subtitle: '生成 zip 备份并保存到本地',
+                      title: context.l10n.exportBackup,
+                      subtitle: context.l10n.generateZipAndSave,
                       enabled: !_busy,
                       onTap: _exportBackupToLocal,
                     ),
                     _buildDivider(context),
                     _ActionTile(
                       icon: Symbols.restore_page_rounded,
-                      title: '从备份文件恢复',
-                      subtitle: '选择本地 zip 备份文件进行恢复',
+                      title: context.l10n.restoreFromBackup,
+                      subtitle: context.l10n.selectLocalZipRestore,
                       enabled: !_busy,
                       onTap: _restoreFromLocal,
                     ),
@@ -222,13 +223,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
               ),
               _buildGroup(
                 context,
-                title: '存储',
+                title: context.l10n.storage,
                 child: Column(
                   children: [
                     _ActionTile(
                       icon: Symbols.mop_rounded,
-                      title: '清除缓存',
-                      subtitle: _cacheSizeText ?? '缩略图、临时文件等',
+                      title: context.l10n.clearCache,
+                      subtitle: _cacheSizeText ?? context.l10n.thumbnailsAndTemp,
                       enabled: !_busy,
                       onTap: _clearCache,
                     ),
@@ -238,8 +239,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       _buildDivider(context),
                       _ActionTile(
                         icon: Symbols.delete_forever_rounded,
-                        title: '清除所有数据',
-                        subtitle: _dataSizeText ?? '文献库、数据库将全部删除',
+                        title: context.l10n.clearAllData,
+                        subtitle: _dataSizeText ?? context.l10n.allDataWillBeDeleted,
                         enabled: !_busy,
                         onTap: _clearData,
                       ),
@@ -347,7 +348,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
 
     return _buildGroup(
       context,
-      title: 'Zotero 同步',
+      title: context.l10n.zoteroSync,
       child: Column(
         children: [
           Padding(
@@ -375,7 +376,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                         size: 16,
                         color: cs.onSurfaceVariant,
                       ),
-                      tooltip: '获取 Token',
+                      tooltip: context.l10n.getToken,
                       visualDensity: VisualDensity.compact,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(
@@ -445,12 +446,12 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
           _buildDivider(context),
           _ActionTile(
             icon: Symbols.sync_rounded,
-            title: '同步 Zotero 文库',
+            title: context.l10n.syncZoteroLibrary,
             subtitle: zotero.isConfigured
                 ? (importedCount > 0
-                      ? '已导入 $importedCount 篇 · 拉取新增条目'
-                      : '从 Zotero 个人库导入文献')
-                : '请先填写 API Key',
+                      ? context.l10n.zoteroImportedPull(importedCount)
+                      : context.l10n.zoteroImportHint)
+                : context.l10n.pleaseFillApiKey,
             enabled: zotero.isConfigured && !_busy,
             onTap: () => _syncZotero(zotero),
           ),
@@ -458,8 +459,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             _buildDivider(context),
             _ActionTile(
               icon: Symbols.restart_alt_rounded,
-              title: '重置并全量重新导入',
-              subtitle: '清除导入记录，从 Zotero 重新拉取（找回已删除条目）',
+              title: context.l10n.fullResync,
+              subtitle: context.l10n.zoteroResetHint,
               enabled: !_busy,
               onTap: () => _syncZotero(zotero, fullResync: true),
             ),
@@ -497,23 +498,23 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             borderRadius: BorderRadius.circular(28),
           ),
           title: Text(
-            '重置 Zotero 同步',
+            ctx.l10n.resetZoteroSync,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
           content: Text(
-            '将清除本地的 Zotero 导入记录并从文库全量重新拉取：已删除的条目会重新出现，仍在库中的不会重复。继续吗？',
+            ctx.l10n.resetZoteroConfirm,
             style: theme.textTheme.bodyMedium,
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('取消'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('重新导入'),
+              child: Text(context.l10n.reimport),
             ),
           ],
         );
@@ -530,7 +531,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final configured = _remoteConfigured(remoteType, s3, webDav);
-    final title = remoteType == BackupRemoteType.s3 ? 'S3 配置' : 'WebDAV 配置';
+    final title = remoteType == BackupRemoteType.s3 ? context.l10n.s3Config : context.l10n.webDavConfig;
     final icon = remoteType == BackupRemoteType.s3
         ? Symbols.cloud_circle_rounded
         : Symbols.cloud_sync_rounded;
@@ -564,7 +565,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 const SizedBox(height: 4),
                 if (!configured)
                   Text(
-                    '未配置${remoteType.label}远程备份信息',
+                    context.l10n.remoteNotConfigured(remoteType.label),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),
@@ -592,8 +593,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                           ? cs.tertiary
                           : (success ? Colors.green : cs.error);
                       final label = waiting
-                          ? '正在检测连接'
-                          : (success ? '连接正常' : '连接失败');
+                          ? context.l10n.detecting
+                          : (success ? context.l10n.connectionOk : context.l10n.connectionFailed);
                       return _StatusBadge(color: color, label: label);
                     },
                   ),
@@ -606,7 +607,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             onPressed: _busy
                 ? null
                 : () => _editRemoteConfig(remoteType, s3, webDav),
-            child: Text(configured ? '编辑' : '配置'),
+            child: Text(configured ? context.l10n.edit : context.l10n.configure),
           ),
         ],
       ),
@@ -621,14 +622,14 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     if (remoteType == BackupRemoteType.s3) {
       return [
         s3.normalizedEndpoint,
-        'Bucket：${s3.bucket}  ·  区域：${s3.region}',
-        '对象：${s3.normalizedObjectKey}',
+        context.l10n.s3BucketInfo(s3.bucket, s3.region),
+        context.l10n.s3ObjectInfo(s3.normalizedObjectKey),
       ];
     }
     return [
       webDav.serverUrl,
-      '账号：${webDav.username}',
-      '路径：${webDav.remoteFilePath}',
+      context.l10n.webDavAccountInfo(webDav.username),
+      context.l10n.webDavPathInfo(webDav.remoteFilePath),
     ];
   }
 
@@ -722,10 +723,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   }
 
   Future<void> _clearCache() async {
-    await _runBusy('正在清除缓存...', StorageCleanupService.clearCache);
+    await _runBusy(context.l10n.clearingCache, StorageCleanupService.clearCache);
     if (!mounted) return;
     _refreshSizeLabels();
-    ref.read(snackBarServiceProvider).showResult(message: '缓存已清除');
+    ref.read(snackBarServiceProvider).showResult(message: context.l10n.cacheCleared);
   }
 
   Future<void> _clearData() async {
@@ -740,24 +741,24 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             borderRadius: BorderRadius.circular(28),
           ),
           title: Text(
-            '清除所有数据',
+            context.l10n.clearAllData,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
           content: Text(
-            '此操作将删除所有文献文件和数据库，且无法恢复。确定继续吗？',
+            context.l10n.confirmDeleteAllDataBody,
             style: theme.textTheme.bodyMedium,
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('取消'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(true),
               style: TextButton.styleFrom(foregroundColor: cs.error),
-              child: const Text('清除'),
+              child: Text(context.l10n.clearField),
             ),
           ],
         );
@@ -765,26 +766,26 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     );
     if (confirmed != true) return;
 
-    await _runBusy('正在清除数据...', StorageCleanupService.clearData);
+    await _runBusy(context.l10n.clearingData, StorageCleanupService.clearData);
     if (!mounted) return;
     ref.read(documentsProvider.notifier).reload();
     ref.read(favoritesProvider.notifier).reload();
     ref.invalidate(historyProvider);
     _refreshSizeLabels();
-    ref.read(snackBarServiceProvider).showResult(message: '所有数据已清除');
+    ref.read(snackBarServiceProvider).showResult(message: context.l10n.allDataCleared);
   }
 
   Future<void> _exportBackupToLocal() async {
     String? tempArchivePath;
 
     try {
-      await _runBusy('正在生成本地备份...', () async {
+      await _runBusy(context.l10n.generatingLocalBackup, () async {
         tempArchivePath = await BackupRestoreService.createBackupArchive();
       });
       if (!mounted || tempArchivePath == null) return;
 
       final targetPath = await FilePicker.platform.saveFile(
-        dialogTitle: '保存备份文件',
+        dialogTitle: context.l10n.saveBackupFile,
         fileName: BackupRestoreService.buildBackupFileName(),
         type: FileType.custom,
         allowedExtensions: const ['zip'],
@@ -797,21 +798,22 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         await targetFile.delete();
       }
       await File(tempArchivePath!).copy(targetFile.path);
-      _showMessage('备份已导出到 ${targetFile.path}');
+      _showMessage(context.l10n.backupExportedTo(targetFile.path));
     } catch (e) {
-      _showMessage('导出备份失败：${_formatError(e)}');
+      _showMessage(context.l10n.exportBackupFailed(_formatError(e)));
     } finally {
       await _deleteTempFile(tempArchivePath);
     }
   }
 
   Future<void> _restoreFromLocal() async {
+    final l10n = context.l10n;
     final options = await _pickRestoreOptions();
     if (options == null) return;
     final (scope, mode) = options;
 
     final result = await FilePicker.platform.pickFiles(
-      dialogTitle: '选择备份文件',
+      dialogTitle: l10n.selectBackupFile,
       type: FileType.custom,
       allowedExtensions: const ['zip'],
       lockParentWindow: true,
@@ -824,11 +826,11 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         archivePath: archivePath,
         scope: scope,
         mode: mode,
-        busyText: mode == RestoreMode.merge ? '正在合并备份...' : '正在恢复备份...',
+        busyText: mode == RestoreMode.merge ? context.l10n.mergingBackup : context.l10n.restoringBackup,
       );
       _showRestoreMessage(mode, mergeResult);
     } catch (e) {
-      _showMessage('恢复失败：${_formatError(e)}');
+      _showMessage(context.l10n.restoreFailed(_formatError(e)));
     }
   }
 
@@ -840,7 +842,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     String? tempArchivePath;
 
     try {
-      await _runBusy('正在生成并上传远程备份...', () async {
+      await _runBusy(context.l10n.generatingAndUploading, () async {
         tempArchivePath = await BackupRestoreService.createBackupArchive();
         if (remoteType == BackupRemoteType.s3) {
           await BackupS3Service.instance.uploadFile(s3, tempArchivePath!);
@@ -850,9 +852,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
           await client.writeFromFile(tempArchivePath!, webDav.remoteFilePath);
         }
       });
-      _showMessage('远程备份已上传到 ${_remoteTargetLabel(remoteType, s3, webDav)}');
+      _showMessage(context.l10n.remoteBackupUploaded(_remoteTargetLabel(remoteType, s3, webDav)));
     } catch (e) {
-      _showMessage('上传远程备份失败：${_formatError(e)}');
+      _showMessage(context.l10n.uploadRemoteFailed(_formatError(e)));
     } finally {
       await _deleteTempFile(tempArchivePath);
     }
@@ -879,7 +881,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       tempArchivePath = archivePath;
       await Directory(p.dirname(archivePath)).create(recursive: true);
 
-      await _runBusy('正在下载远程备份...', () async {
+      await _runBusy(context.l10n.downloadingRemoteBackup, () async {
         if (remoteType == BackupRemoteType.s3) {
           await BackupS3Service.instance.downloadFile(s3, archivePath);
         } else {
@@ -892,11 +894,11 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         archivePath: archivePath,
         scope: scope,
         mode: mode,
-        busyText: mode == RestoreMode.merge ? '正在合并远程备份...' : '正在恢复远程备份...',
+        busyText: mode == RestoreMode.merge ? context.l10n.mergingRemoteBackup : context.l10n.restoringRemoteBackup,
       );
       _showRestoreMessage(mode, mergeResult, remote: true);
     } catch (e) {
-      _showMessage('远程恢复失败：${_formatError(e)}');
+      _showMessage(context.l10n.remoteRestoreFailed(_formatError(e)));
     } finally {
       await _deleteTempFile(tempArchivePath);
     }
@@ -925,22 +927,23 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     MergeResult? result, {
     bool remote = false,
   }) {
-    final prefix = remote ? '远程' : '';
+    final l10n = context.l10n;
+    final prefix = remote ? l10n.remote : '';
     if (mode == RestoreMode.overwrite || result == null) {
-      _showMessage('$prefix恢复完成，当前页面状态已同步刷新');
+      _showMessage(l10n.restoreCompleteRefreshed(prefix));
       return;
     }
     if (!result.hasChanges) {
-      _showMessage('$prefix合并完成，本地数据已是最新');
+      _showMessage(l10n.mergeCompleteUpToDate(prefix));
       return;
     }
     final parts = <String>[];
-    if (result.documentsAdded > 0) parts.add('新增 ${result.documentsAdded} 篇文献');
+    if (result.documentsAdded > 0) parts.add(l10n.mergeDocumentsAdded(result.documentsAdded));
     if (result.highlightsAdded > 0)
-      parts.add('新增 ${result.highlightsAdded} 条标注');
-    if (result.filesCopied > 0) parts.add('复制 ${result.filesCopied} 个文件');
-    if (result.settingsAdded > 0) parts.add('新增 ${result.settingsAdded} 项设置');
-    _showMessage('$prefix合并完成：${parts.join('、')}');
+      parts.add(l10n.mergeHighlightsAdded(result.highlightsAdded));
+    if (result.filesCopied > 0) parts.add(l10n.mergeFilesCopied(result.filesCopied));
+    if (result.settingsAdded > 0) parts.add(l10n.mergeSettingsAdded(result.settingsAdded));
+    _showMessage(l10n.mergeCompleteSummary(prefix, parts.join('、')));
   }
 
   Future<void> _refreshAfterRestore(BackupRestoreScope scope) async {
@@ -992,14 +995,14 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('恢复设置'),
+              title: Text(context.l10n.restoreSettingsTitle),
               content: SizedBox(
                 width: 420,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('恢复方式', style: ts.titleSmall),
+                    Text(context.l10n.restoreMethod, style: ts.titleSmall),
                     const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
@@ -1019,7 +1022,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       style: ts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                     const Divider(height: 24),
-                    Text('恢复范围', style: ts.titleSmall),
+                    Text(context.l10n.restoreScope, style: ts.titleSmall),
                     RadioGroup<BackupRestoreScope>(
                       groupValue: scope,
                       onChanged: (value) {
@@ -1046,11 +1049,11 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  child: Text(context.l10n.cancel),
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop((scope, mode)),
-                  child: Text(mode == RestoreMode.merge ? '开始合并' : '开始恢复'),
+                  child: Text(mode == RestoreMode.merge ? context.l10n.startMerge : context.l10n.startRestore),
                 ),
               ],
             );
@@ -1257,14 +1260,14 @@ class _RemoteDialogScaffold extends StatelessWidget {
                       TextButton(
                         onPressed: onClear,
                         style: TextButton.styleFrom(foregroundColor: cs.error),
-                        child: const Text('清空'),
+                        child: Text(context.l10n.clearField),
                       ),
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
+                      child: Text(context.l10n.cancel),
                     ),
                     const SizedBox(width: 8),
-                    TextButton(onPressed: onSave, child: const Text('保存')),
+                    TextButton(onPressed: onSave, child: Text(context.l10n.save)),
                   ],
                 ),
               ],
@@ -1369,7 +1372,7 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return _RemoteDialogScaffold(
-      title: 'WebDAV 配置',
+      title: context.l10n.webDavConfig,
       onClear: widget.initial.isConfigured
           ? () => Navigator.of(context).pop(const BackupWebDavState())
           : null,
@@ -1386,18 +1389,18 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
         _ConfigField(
           controller: _serverController,
           icon: Symbols.link_rounded,
-          label: '地址',
-          helperText: 'WebDAV服务器地址',
+          label: context.l10n.address,
+          helperText: context.l10n.webDavServerAddress,
         ),
         _ConfigField(
           controller: _userController,
           icon: Symbols.account_circle_rounded,
-          label: '账号',
+          label: context.l10n.account,
         ),
         _ConfigField(
           controller: _passwordController,
           icon: Symbols.password_rounded,
-          label: '密码',
+          label: context.l10n.password,
           obscureText: _obscurePassword,
           suffixIcon: IconButton(
             onPressed: () {
@@ -1466,7 +1469,7 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return _RemoteDialogScaffold(
-      title: 'S3 配置',
+      title: context.l10n.s3Config,
       onClear: widget.initial.isConfigured
           ? () => Navigator.of(context).pop(const BackupS3State())
           : null,
@@ -1487,13 +1490,13 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
         _ConfigField(
           controller: _endpointController,
           icon: Symbols.link_rounded,
-          label: '地址',
-          helperText: 'S3 / R2 / MinIO Endpoint',
+          label: context.l10n.address,
+          helperText: context.l10n.s3Endpoint,
         ),
         _ConfigField(
           controller: _regionController,
           icon: Symbols.public_rounded,
-          label: '区域',
+          label: context.l10n.region,
         ),
         _ConfigField(
           controller: _bucketController,
@@ -1524,14 +1527,14 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
         _ConfigField(
           controller: _objectKeyController,
           icon: Symbols.description,
-          label: '对象路径',
-          helperText: '默认可用 otter-pad/otter_pad_backup.zip',
+          label: context.l10n.objectPath,
+          helperText: context.l10n.s3ObjectPathDefault,
         ),
         SwitchListTile(
           value: _usePathStyle,
           contentPadding: EdgeInsets.zero,
-          title: const Text('使用路径式地址'),
-          subtitle: const Text('MinIO / R2 等 S3 兼容服务通常建议开启'),
+          title: Text(context.l10n.usePathStyle),
+          subtitle: Text(context.l10n.s3PathStyleHint),
           onChanged: (value) {
             setState(() {
               _usePathStyle = value;

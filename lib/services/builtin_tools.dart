@@ -1,3 +1,4 @@
+import '../core/l10n.dart';
 import '../providers/api_provider.dart';
 
 /// 内置工具名常量（snake_case，与各厂 API 字段名对齐）。
@@ -14,23 +15,24 @@ abstract class BuiltInToolNames {
   static const codeInterpreter = 'code_interpreter';
   static const imageGeneration = 'image_generation';
 
-  static String label(String tool) => switch (tool) {
-    search => '搜索',
-    codeExecution => '代码执行',
-    urlContext => 'URL 上下文',
-    youtube => 'YouTube',
-    codeInterpreter => '代码解释器',
-    imageGeneration => '图片生成',
+  static String label(String tool, [AppLocalizations? l10n]) => switch (tool) {
+    search => l10n?.searchToolLabel ?? '搜索',
+    codeExecution => l10n?.codeExecutionLabel ?? '代码执行',
+    urlContext => l10n?.urlContextLabel ?? 'URL 上下文',
+    youtube => l10n?.youtubeLabel ?? 'YouTube',
+    codeInterpreter => l10n?.codeInterpreterLabel ?? '代码解释器',
+    imageGeneration => l10n?.imageGenerationLabel ?? '图片生成',
     _ => tool,
   };
 
-  static String description(String tool) => switch (tool) {
-    search => '使用网络搜索获取最新信息',
-    codeExecution => '在沙箱中执行代码并返回结果',
-    urlContext => '读取 URL 内容作为上下文',
-    youtube => '自动识别并提取 YouTube 视频信息',
-    codeInterpreter => '在沙箱中运行代码、处理文件',
-    imageGeneration => '在对话中生成图片',
+  static String description(String tool, [AppLocalizations? l10n]) =>
+      switch (tool) {
+    search => l10n?.searchToolDesc ?? '使用网络搜索获取最新信息',
+    codeExecution => l10n?.codeExecutionDesc ?? '在沙箱中执行代码并返回结果',
+    urlContext => l10n?.urlContextDesc ?? '读取 URL 内容作为上下文',
+    youtube => l10n?.youtubeDesc ?? '自动识别并提取 YouTube 视频信息',
+    codeInterpreter => l10n?.codeInterpreterDesc ?? '在沙箱中运行代码、处理文件',
+    imageGeneration => l10n?.imageGenerationDesc ?? '在对话中生成图片',
     _ => '',
   };
 
