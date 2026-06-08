@@ -96,6 +96,7 @@ abstract class AppLocalizations {
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
     Locale('zh'),
+    Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
   ];
 
   /// No description provided for @appTitle.
@@ -347,13 +348,13 @@ abstract class AppLocalizations {
   /// No description provided for @appearanceSettings.
   ///
   /// In en, this message translates to:
-  /// **'Appearance'**
+  /// **'Display'**
   String get appearanceSettings;
 
   /// No description provided for @appearanceSettingsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Theme · Colors · Reading · Text Size'**
+  /// **'Theme · Colors · Reading · Font'**
   String get appearanceSettingsSubtitle;
 
   /// No description provided for @dataManagement.
@@ -437,8 +438,20 @@ abstract class AppLocalizations {
   /// No description provided for @textSize.
   ///
   /// In en, this message translates to:
-  /// **'Text Size'**
+  /// **'Font'**
   String get textSize;
+
+  /// No description provided for @appLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'App Language'**
+  String get appLanguage;
+
+  /// No description provided for @appLanguageDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Override the display language of the app interface'**
+  String get appLanguageDesc;
 
   /// No description provided for @systemTextScale.
   ///
@@ -709,6 +722,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'English'**
   String get languageEnglish;
+
+  /// No description provided for @languageTraditionalChinese.
+  ///
+  /// In en, this message translates to:
+  /// **'Chinese (Traditional)'**
+  String get languageTraditionalChinese;
 
   /// No description provided for @recommend.
   ///
@@ -3369,6 +3388,18 @@ class _AppLocalizationsDelegate
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
+  // Lookup logic when language+script codes are specified.
+  switch (locale.languageCode) {
+    case 'zh':
+      {
+        switch (locale.scriptCode) {
+          case 'Hant':
+            return AppLocalizationsZhHant();
+        }
+        break;
+      }
+  }
+
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
     case 'en':

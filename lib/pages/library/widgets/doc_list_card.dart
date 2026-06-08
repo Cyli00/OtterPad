@@ -44,8 +44,8 @@ class DocListCard extends StatelessWidget {
   // 右列文字高度跟它对齐，年份行顶到缩略图底边。
   static const double _thumbWidthCompact = 88;
   static const double _thumbHeightCompact = 124;
-  static const double _thumbWidthFull = 120;
-  static const double _thumbHeightFull = 170;
+  static const double _thumbWidthFull = 100;
+  static const double _thumbHeightFull = 142;
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +170,7 @@ class DocListCard extends StatelessWidget {
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                 ),
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],

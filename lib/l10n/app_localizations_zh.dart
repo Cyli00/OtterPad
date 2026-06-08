@@ -132,10 +132,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ocrSettingsSubtitle => 'OCR 接口 · 识别参数';
 
   @override
-  String get appearanceSettings => '外观设置';
+  String get appearanceSettings => '显示设置';
 
   @override
-  String get appearanceSettingsSubtitle => '主题模式 · 主题色彩 · 阅读设置 · 文字大小';
+  String get appearanceSettingsSubtitle => '主题模式 · 主题色彩 · 阅读设置 · 字体';
 
   @override
   String get dataManagement => '数据管理';
@@ -177,7 +177,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get defaultReadingModeHint => '选择 Markdown 时，若文档无提取结果将自动回退到 PDF 视图';
 
   @override
-  String get textSize => '文字大小';
+  String get textSize => '字体';
+
+  @override
+  String get appLanguage => '应用语言';
+
+  @override
+  String get appLanguageDesc => '覆盖应用界面的显示语言';
 
   @override
   String get systemTextScale => '系统文字缩放';
@@ -321,6 +327,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get languageEnglish => 'English';
+
+  @override
+  String get languageTraditionalChinese => '繁體中文';
 
   @override
   String get recommend => '推荐';
@@ -1783,6 +1792,1799 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get fidelityStandard => '标准';
+
+  @override
+  String get fidelityHigh => '高';
+}
+
+/// The translations for Chinese, using the Han script (`zh_Hant`).
+class AppLocalizationsZhHant extends AppLocalizationsZh {
+  AppLocalizationsZhHant() : super('zh_Hant');
+
+  @override
+  String get appTitle => '獺祭魚 OtterPad';
+
+  @override
+  String get home => '首頁';
+
+  @override
+  String get library => '文獻庫';
+
+  @override
+  String get outline => '大綱';
+
+  @override
+  String get notes => '筆記';
+
+  @override
+  String get appearance => '外觀';
+
+  @override
+  String get font => '字體';
+
+  @override
+  String get translate => '翻譯';
+
+  @override
+  String get retryTranslation => '重試翻譯';
+
+  @override
+  String get bilingual => '雙語';
+
+  @override
+  String get original => '原文';
+
+  @override
+  String get translated => '譯文';
+
+  @override
+  String get cancel => '取消';
+
+  @override
+  String get save => '儲存';
+
+  @override
+  String get delete => '刪除';
+
+  @override
+  String get confirm => '確認';
+
+  @override
+  String get retry => '重試';
+
+  @override
+  String get close => '關閉';
+
+  @override
+  String get back => '返回';
+
+  @override
+  String get copy => '複製';
+
+  @override
+  String get more => '更多';
+
+  @override
+  String get add => '新增';
+
+  @override
+  String get edit => '編輯';
+
+  @override
+  String get remove => '移除';
+
+  @override
+  String get done => '完成';
+
+  @override
+  String get search => '搜尋';
+
+  @override
+  String get test => '測試';
+
+  @override
+  String get create => '建立';
+
+  @override
+  String get refresh => '重新整理';
+
+  @override
+  String get processing => '處理中...';
+
+  @override
+  String get cancelAll => '取消全部';
+
+  @override
+  String get goToSettings => '前往設定';
+
+  @override
+  String get cancelled => '已取消';
+
+  @override
+  String get copiedToClipboard => '已複製到剪貼簿';
+
+  @override
+  String get settings => '設定';
+
+  @override
+  String get networkSettings => '網路設定';
+
+  @override
+  String get networkSettingsSubtitle => '代理 · 連通性測試';
+
+  @override
+  String get aiSettings => 'AI 設定';
+
+  @override
+  String get aiSettingsSubtitle => '模型介面 · 翻譯設定 · 生圖設定';
+
+  @override
+  String get ocrSettings => 'OCR 設定';
+
+  @override
+  String get ocrSettingsSubtitle => 'OCR 介面 · 辨識參數';
+
+  @override
+  String get appearanceSettings => '顯示設定';
+
+  @override
+  String get appearanceSettingsSubtitle => '主題模式 · 主題色彩 · 閱讀設定 · 字體';
+
+  @override
+  String get dataManagement => '資料管理';
+
+  @override
+  String get dataManagementSubtitle => '遠端備份 · 本地備份 · Zotero 同步';
+
+  @override
+  String get systemSettings => '系統設定';
+
+  @override
+  String get about => '關於';
+
+  @override
+  String get themeMode => '主題模式';
+
+  @override
+  String get autoMode => '自動';
+
+  @override
+  String get lightMode => '淺色';
+
+  @override
+  String get darkMode => '深色';
+
+  @override
+  String get systemMode => '跟隨系統';
+
+  @override
+  String get themeColor => '主題色彩';
+
+  @override
+  String get readingSettings => '閱讀設定';
+
+  @override
+  String get defaultReadingMode => '預設閱讀模式';
+
+  @override
+  String get defaultReadingModeHint => '選擇 Markdown 時，若文件無擷取結果將自動回退到 PDF 檢視';
+
+  @override
+  String get textSize => '字體';
+
+  @override
+  String get appLanguage => '應用語言';
+
+  @override
+  String get appLanguageDesc => '覆蓋應用介面的顯示語言';
+
+  @override
+  String get systemTextScale => '系統文字縮放';
+
+  @override
+  String get textSizeStandard => '標準';
+
+  @override
+  String get textSizeLarge => '大';
+
+  @override
+  String get textSizeExtraLarge => '特大';
+
+  @override
+  String get textSizeHint => '影響整個應用的文字顯示大小，重啟後仍保留';
+
+  @override
+  String get readerThemeWhite => '白色';
+
+  @override
+  String get readerThemeSepia => '羊皮紙';
+
+  @override
+  String get readerThemeGreen => '護眼綠';
+
+  @override
+  String get readerThemeNight => '夜間';
+
+  @override
+  String get readerThemeDark => '純黑';
+
+  @override
+  String get readerThemeWhiteShort => '白色';
+
+  @override
+  String get readerThemeSepiaShort => '羊皮';
+
+  @override
+  String get readerThemeGreenShort => '護眼';
+
+  @override
+  String get readerThemeNightShort => '夜間';
+
+  @override
+  String get readerThemeDarkShort => '純黑';
+
+  @override
+  String get fontSize => '字號';
+
+  @override
+  String get fontFamily => '字體';
+
+  @override
+  String get paginationMode => '翻頁方式';
+
+  @override
+  String get verticalPagination => '上下翻頁';
+
+  @override
+  String get horizontalPagination => '左右翻頁';
+
+  @override
+  String get translationStyle => '譯文樣式';
+
+  @override
+  String get toolbarOpacityOpaque => '不透明';
+
+  @override
+  String get toolbarOpacitySlight => '微透明';
+
+  @override
+  String get toolbarOpacityGlass => '毛玻璃';
+
+  @override
+  String get toolbarOpacityHalf => '半透明';
+
+  @override
+  String get highlightsAndNotes => '標註與筆記';
+
+  @override
+  String get noHighlights => '還沒有標註';
+
+  @override
+  String get noHighlightsHint => '選取文字後點擊顏色圓點即可建立';
+
+  @override
+  String get editNote => '編輯筆記';
+
+  @override
+  String get editNoteTitle => '編輯筆記';
+
+  @override
+  String get writeYourThoughts => '寫下你的想法...';
+
+  @override
+  String highlightCount(int count) {
+    return '$count 條';
+  }
+
+  @override
+  String get justNow => '剛剛';
+
+  @override
+  String minutesAgo(int count) {
+    return '$count 分鐘前';
+  }
+
+  @override
+  String hoursAgo(int count) {
+    return '$count 小時前';
+  }
+
+  @override
+  String daysAgo(int count) {
+    return '$count 天前';
+  }
+
+  @override
+  String get color => '顏色';
+
+  @override
+  String get background => '背景';
+
+  @override
+  String get toolbarOpacity => '工具列透明度';
+
+  @override
+  String get translationDone => '翻譯完成';
+
+  @override
+  String get translationCacheUsed => '使用了先前的翻譯快取，如需重新翻譯請點擊右上角省略號裡的重新翻譯';
+
+  @override
+  String get language => '語言';
+
+  @override
+  String get languageSystem => '跟隨系統';
+
+  @override
+  String get languageChinese => '簡體中文';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageTraditionalChinese => '繁體中文';
+
+  @override
+  String get recommend => '推薦';
+
+  @override
+  String get documentLibrary => '文獻庫';
+
+  @override
+  String get recommendContent => '推薦內容';
+
+  @override
+  String get batchDelete => '批次刪除';
+
+  @override
+  String get searchDocumentsHint => '搜尋文獻...';
+
+  @override
+  String get searchDocumentsHintDesktop => '搜尋文獻、作者、關鍵字...';
+
+  @override
+  String get enterKeywordToSearch => '輸入關鍵字搜尋文獻';
+
+  @override
+  String get noDocumentsFound => '未找到相符的文獻';
+
+  @override
+  String get noDocuments => '暫無文獻';
+
+  @override
+  String get listView => '列表檢視';
+
+  @override
+  String get gridView => '網格檢視';
+
+  @override
+  String get tools => '工具';
+
+  @override
+  String get addFiles => '新增檔案';
+
+  @override
+  String get addByIdentifier => '透過識別碼新增';
+
+  @override
+  String get rebuildLibrary => '重建文庫';
+
+  @override
+  String get addByIdentifierTitle => '透過識別碼新增條目';
+
+  @override
+  String get batchExtracting => '批次擷取中';
+
+  @override
+  String get extractionDone => '擷取完成';
+
+  @override
+  String get cancelExtraction => '取消擷取';
+
+  @override
+  String get waitingSubmit => '等待提交';
+
+  @override
+  String get extractionComplete => '擷取完成';
+
+  @override
+  String extractionCompletePages(int totalPages) {
+    return '完成（共 $totalPages 頁）';
+  }
+
+  @override
+  String get extractionFailed => '擷取失敗';
+
+  @override
+  String get extractionCancelled => '已取消擷取';
+
+  @override
+  String failedCount(int failed) {
+    return '完成（$failed 篇失敗）';
+  }
+
+  @override
+  String get exitMultiSelect => '退出多選';
+
+  @override
+  String get deselectAll => '取消全選';
+
+  @override
+  String get selectAll => '全選';
+
+  @override
+  String get textExtraction => '文字擷取';
+
+  @override
+  String get addToFavorite => '加入收藏夾';
+
+  @override
+  String get removeFromFavorite => '移出收藏夾';
+
+  @override
+  String get deleteFavorite => '刪除收藏夾';
+
+  @override
+  String get myLibrary => '我的庫';
+
+  @override
+  String get synced => '已同步';
+
+  @override
+  String get readingHistory => '閱讀歷史';
+
+  @override
+  String get noFileEntries => '無檔案條目';
+
+  @override
+  String get favorites => '收藏夾';
+
+  @override
+  String get addDocument => '新增文獻';
+
+  @override
+  String get addDocuments => '新增文獻';
+
+  @override
+  String get allDocumentsHaveFiles => '所有文獻都有對應檔案';
+
+  @override
+  String get attachFile => '附加檔案';
+
+  @override
+  String get viewInBrowser => '在瀏覽器中檢視';
+
+  @override
+  String get redownload => '重新下載';
+
+  @override
+  String get entryDeleted => '已刪除條目';
+
+  @override
+  String get fileAttached => '檔案附加成功';
+
+  @override
+  String get clearHistory => '清空歷史';
+
+  @override
+  String get noReadingHistory => '暫無閱讀記錄';
+
+  @override
+  String get removedFromHistory => '已從歷史移除';
+
+  @override
+  String get clearReadingHistory => '清空閱讀歷史';
+
+  @override
+  String get readingHistoryCleared => '已清空閱讀歷史';
+
+  @override
+  String get alreadyInFavorite => '已包含目前文獻';
+
+  @override
+  String get createFavorite => '新建收藏夾';
+
+  @override
+  String get createThenSelect => '建立後可在下方勾選';
+
+  @override
+  String get editFavorite => '編輯收藏夾';
+
+  @override
+  String get selectIcon => '選擇圖示';
+
+  @override
+  String get favoriteName => '收藏夾名稱';
+
+  @override
+  String get unnamed => '未命名';
+
+  @override
+  String get enterFavoriteName => '輸入收藏夾名稱';
+
+  @override
+  String get documentNotInFavorite => '此文獻不在收藏夾中';
+
+  @override
+  String get moveToFavorite => '移入收藏夾';
+
+  @override
+  String get libraryEmpty => '文獻庫為空';
+
+  @override
+  String selectedCount(int count) {
+    return '確認 ($count)';
+  }
+
+  @override
+  String get alreadyInThisFavorite => '已在收藏夾';
+
+  @override
+  String get reformatDone => '重新排版完成';
+
+  @override
+  String get viewPdf => '檢視 PDF';
+
+  @override
+  String get viewExtractResult => '檢視擷取結果';
+
+  @override
+  String get documentExtract => '文件擷取';
+
+  @override
+  String get loadFailed => '載入失敗';
+
+  @override
+  String get extractResultEmpty => '擷取結果為空';
+
+  @override
+  String get copyAll => '複製全部';
+
+  @override
+  String get share => '分享';
+
+  @override
+  String get generateSummary => '產生摘要圖';
+
+  @override
+  String get reExtract => '重新擷取';
+
+  @override
+  String get documentInfo => '文獻資訊';
+
+  @override
+  String get viewSummary => '檢視摘要圖';
+
+  @override
+  String get reformat => '重新排版';
+
+  @override
+  String get reTranslate => '重新翻譯';
+
+  @override
+  String get searchContent => '搜尋正文內容';
+
+  @override
+  String get exitSearch => '退出搜尋';
+
+  @override
+  String get noMatchFound => '未找到相符內容';
+
+  @override
+  String get previousResult => '上一個結果';
+
+  @override
+  String get nextResult => '下一個結果';
+
+  @override
+  String get translateText => '翻譯';
+
+  @override
+  String get deleteHighlight => '刪除醒目提示';
+
+  @override
+  String get saveNote => '儲存';
+
+  @override
+  String get streaming => '串流接收中';
+
+  @override
+  String get copied => '已複製';
+
+  @override
+  String get copyTranslation => '複製譯文';
+
+  @override
+  String get copyOriginal => '複製原文';
+
+  @override
+  String get closeImage => '關閉';
+
+  @override
+  String get copyImage => '複製圖片';
+
+  @override
+  String get saveImage => '儲存圖片';
+
+  @override
+  String get imageNotFound => '圖片檔案不存在';
+
+  @override
+  String get saveImageTitle => '儲存圖片';
+
+  @override
+  String get showOriginal => '顯示原文';
+
+  @override
+  String get showTranslation => '顯示翻譯';
+
+  @override
+  String get viewInDocument => '在文中檢視';
+
+  @override
+  String get viewOriginalImage => '檢視原圖';
+
+  @override
+  String get generatingSummary => '正在產生摘要圖…';
+
+  @override
+  String get noSummary => '暫無摘要圖';
+
+  @override
+  String get referencesNotFound => '未找到參考文獻';
+
+  @override
+  String get author => '作者';
+
+  @override
+  String get journal => '期刊';
+
+  @override
+  String get year => '年份';
+
+  @override
+  String get modelApi => '模型介面';
+
+  @override
+  String get translationSettings => '翻譯設定';
+
+  @override
+  String get imageGenSettings => '生圖設定';
+
+  @override
+  String get deleteProvider => '刪除服務商';
+
+  @override
+  String get providers => '服務商';
+
+  @override
+  String get addProvider => '新增服務商';
+
+  @override
+  String get selectProtocol => '選擇協定';
+
+  @override
+  String get manageModels => '管理模型';
+
+  @override
+  String get models => '模型';
+
+  @override
+  String get globalModelRoles => '全域模型角色';
+
+  @override
+  String get expertModel => '專家模型';
+
+  @override
+  String get fastModel => '快速模型';
+
+  @override
+  String get imageModel => '生圖模型';
+
+  @override
+  String get notSet => '未設定';
+
+  @override
+  String get pleaseAddImageModel => '請先新增支援圖片輸出的模型';
+
+  @override
+  String get pleaseAddModels => '請先在各服務商下新增模型';
+
+  @override
+  String get providerName => '服務商名稱';
+
+  @override
+  String get nameField => '名稱';
+
+  @override
+  String get detectModel => '偵測模型';
+
+  @override
+  String get modelType => '模型類型';
+
+  @override
+  String get chat => '聊天';
+
+  @override
+  String get embedding => '嵌入';
+
+  @override
+  String get inputMode => '輸入模式';
+
+  @override
+  String get text => '文字';
+
+  @override
+  String get image => '圖片';
+
+  @override
+  String get outputMode => '輸出模式';
+
+  @override
+  String get capabilities => '能力';
+
+  @override
+  String get reasoning => '推理';
+
+  @override
+  String get resetToAuto => '重設為自動推斷';
+
+  @override
+  String get builtInTools => '內建工具';
+
+  @override
+  String get official => '官方';
+
+  @override
+  String get defaultLevel => '預設';
+
+  @override
+  String get off => '關閉';
+
+  @override
+  String get low => '低';
+
+  @override
+  String get medium => '中等';
+
+  @override
+  String get high => '高';
+
+  @override
+  String get ultraHigh => '超高';
+
+  @override
+  String get thinkingIntensity => '思考強度';
+
+  @override
+  String get fetchModelsFailed => '取得模型清單失敗';
+
+  @override
+  String get showAllModels => '顯示全部模型';
+
+  @override
+  String get showImageModels => '僅顯示生圖模型';
+
+  @override
+  String get noImageModels => '未偵測到支援圖片輸出的模型';
+
+  @override
+  String get noResults => '無相符結果';
+
+  @override
+  String get expert => '專家';
+
+  @override
+  String get fast => '快速';
+
+  @override
+  String get imageGen => '生圖';
+
+  @override
+  String get addModel => '新增';
+
+  @override
+  String get removeModel => '移除';
+
+  @override
+  String get addModelTitle => '新增模型';
+
+  @override
+  String get restoreDefaults => '恢復預設';
+
+  @override
+  String get targetLanguage => '目標語言';
+
+  @override
+  String get translationStyleSetting => '譯文樣式';
+
+  @override
+  String get translationIgnore => '翻譯忽略內容';
+
+  @override
+  String get temperature => '溫度';
+
+  @override
+  String get systemPrompt => '系統提示詞';
+
+  @override
+  String get userPrompt => '使用者提示詞';
+
+  @override
+  String get classicPhotography => '經典攝影';
+
+  @override
+  String get referenceImageCount => '參考圖數量';
+
+  @override
+  String get aspectRatio => '畫幅比例';
+
+  @override
+  String get resolution => '清晰度';
+
+  @override
+  String get proxy => '代理';
+
+  @override
+  String get customProxy => '自訂代理';
+
+  @override
+  String get customProxySubtitle => '手動指定代理位址';
+
+  @override
+  String get hostAddress => '主機位址';
+
+  @override
+  String get port => '連接埠';
+
+  @override
+  String get systemProxy => '系統代理';
+
+  @override
+  String get systemProxySubtitle => '使用系統環境變數中的代理設定';
+
+  @override
+  String get noProxy => '不使用代理';
+
+  @override
+  String get noProxySubtitle => '直接連線網路';
+
+  @override
+  String get connectivityTest => '連通性測試';
+
+  @override
+  String get testAddress => '測試位址';
+
+  @override
+  String get connectionTimeout => '連線逾時';
+
+  @override
+  String get connectionOk => '連線正常';
+
+  @override
+  String get connectionFailed => '連線失敗';
+
+  @override
+  String get remoteBackup => '遠端備份';
+
+  @override
+  String get backupMethod => '備份方式';
+
+  @override
+  String get localBackup => '本地備份';
+
+  @override
+  String get exportBackup => '匯出備份檔案';
+
+  @override
+  String get restoreFromBackup => '從備份檔案還原';
+
+  @override
+  String get storage => '儲存空間';
+
+  @override
+  String get clearCache => '清除快取';
+
+  @override
+  String get clearAllData => '清除所有資料';
+
+  @override
+  String get resetAndReimport => '重設並全量重新匯入';
+
+  @override
+  String get reimport => '重新匯入';
+
+  @override
+  String get detecting => '正在偵測連線';
+
+  @override
+  String get configure => '設定';
+
+  @override
+  String get cacheCleared => '快取已清除';
+
+  @override
+  String get allDataCleared => '所有資料已清除';
+
+  @override
+  String get saveBackupFile => '儲存備份檔案';
+
+  @override
+  String get selectBackupFile => '選擇備份檔案';
+
+  @override
+  String get restoreSettingsTitle => '還原設定';
+
+  @override
+  String get restoreMethod => '還原方式';
+
+  @override
+  String get restoreScope => '還原範圍';
+
+  @override
+  String get startMerge => '開始合併';
+
+  @override
+  String get startRestore => '開始還原';
+
+  @override
+  String get clearField => '清空';
+
+  @override
+  String get address => '位址';
+
+  @override
+  String get account => '帳號';
+
+  @override
+  String get password => '密碼';
+
+  @override
+  String get region => '區域';
+
+  @override
+  String get objectPath => '物件路徑';
+
+  @override
+  String get usePathStyle => '使用路徑式位址';
+
+  @override
+  String get remote => '遠端';
+
+  @override
+  String get zoteroSync => 'Zotero 同步';
+
+  @override
+  String get fullResync => '重設並全量重新匯入';
+
+  @override
+  String get layoutAnalysis => '版面分析';
+
+  @override
+  String get layoutGeometry => '版面幾何形狀';
+
+  @override
+  String get layoutGeometryHelp => '版面偵測框的幾何形狀表示';
+
+  @override
+  String get layoutDetectionThreshold => '版面偵測閾值';
+
+  @override
+  String get outputControl => '輸出控制';
+
+  @override
+  String get repetitionPenalty => '重複懲罰';
+
+  @override
+  String get repetitionPenaltyHint => '出現重複文字或表格內容時適當調高';
+
+  @override
+  String get recognitionEnhancement => '辨識增強';
+
+  @override
+  String get documentCorrection => '文件校正';
+
+  @override
+  String get ocrAuto => '自動';
+
+  @override
+  String get ocrRectangle => '矩形';
+
+  @override
+  String get ocrQuadrilateral => '四邊形';
+
+  @override
+  String get ocrPolygon => '多邊形';
+
+  @override
+  String get chartRecognition => '圖表辨識';
+
+  @override
+  String get stampRecognition => '印章辨識';
+
+  @override
+  String get imageAreaOcr => '圖片區 OCR';
+
+  @override
+  String get orientationCorrection => '方向校正';
+
+  @override
+  String get curvatureCorrection => '彎曲校正';
+
+  @override
+  String get deduplicateBoxes => '去重疊偵測框';
+
+  @override
+  String get multiPageReconstruction => '多頁重構';
+
+  @override
+  String get ocrHeader => '頁首';
+
+  @override
+  String get ocrHeaderImage => '頁首圖片';
+
+  @override
+  String get ocrFooter => '頁尾';
+
+  @override
+  String get ocrFooterImage => '頁尾圖片';
+
+  @override
+  String get ocrPageNumber => '頁碼';
+
+  @override
+  String get ocrFootnote => '腳註';
+
+  @override
+  String get ocrSideNote => '旁註';
+
+  @override
+  String get searchToolLabel => '搜尋';
+
+  @override
+  String get codeExecutionLabel => '程式碼執行';
+
+  @override
+  String get urlContextLabel => 'URL 上下文';
+
+  @override
+  String get youtubeLabel => 'YouTube';
+
+  @override
+  String get codeInterpreterLabel => '程式碼直譯器';
+
+  @override
+  String get imageGenerationLabel => '圖片產生';
+
+  @override
+  String get searchToolDesc => '使用網路搜尋取得最新資訊';
+
+  @override
+  String get codeExecutionDesc => '在沙箱中執行程式碼並回傳結果';
+
+  @override
+  String get urlContextDesc => '讀取 URL 內容作為上下文';
+
+  @override
+  String get youtubeDesc => '自動辨識並擷取 YouTube 影片資訊';
+
+  @override
+  String get codeInterpreterDesc => '在沙箱中執行程式碼、處理檔案';
+
+  @override
+  String get imageGenerationDesc => '在對話中產生圖片';
+
+  @override
+  String get taskInProgress => '該文獻已有工作正在進行中';
+
+  @override
+  String get savingResult => '正在儲存結果';
+
+  @override
+  String get saveResultFailed => '儲存結果失敗';
+
+  @override
+  String get summaryCancelled => '已取消摘要圖產生';
+
+  @override
+  String get preparingContent => '正在整理文獻內容';
+
+  @override
+  String get requestingImageModel => '正在請求生圖模型';
+
+  @override
+  String get summaryGenerated => '摘要圖已產生';
+
+  @override
+  String get downloadCancelled => '已取消下載';
+
+  @override
+  String get summaryNotFound => '摘要圖檔案不存在';
+
+  @override
+  String get generateSummaryTitle => '產生摘要圖';
+
+  @override
+  String get exportAll => '一鍵匯出';
+
+  @override
+  String get roleBadgeEmbedding => '嵌入';
+
+  @override
+  String get roleBadgeVision => '視覺';
+
+  @override
+  String get roleBadgeImageGen => '生圖';
+
+  @override
+  String get roleBadgeTools => '工具';
+
+  @override
+  String get roleBadgeReasoning => '推理';
+
+  @override
+  String storageUsage(String size) {
+    return '佔用 $size';
+  }
+
+  @override
+  String backupTo(String target) {
+    return '備份到$target';
+  }
+
+  @override
+  String uploadBackupTo(String target) {
+    return '上傳完整備份到$target';
+  }
+
+  @override
+  String pleaseConfigureFirst(String target) {
+    return '請先設定$target連線資訊';
+  }
+
+  @override
+  String restoreFromRemote(String target) {
+    return '從$target還原';
+  }
+
+  @override
+  String downloadAndRestore(String target) {
+    return '下載$target並還原';
+  }
+
+  @override
+  String get generateZipAndSave => '產生 zip 備份並儲存到本地';
+
+  @override
+  String get selectLocalZipRestore => '選擇本地 zip 備份檔案進行還原';
+
+  @override
+  String get thumbnailsAndTemp => '縮圖、暫存檔案等';
+
+  @override
+  String get allDataWillBeDeleted => '文獻庫、資料庫將全部刪除';
+
+  @override
+  String get getToken => '取得 Token';
+
+  @override
+  String get syncZoteroLibrary => '同步 Zotero 文庫';
+
+  @override
+  String zoteroImportedPull(int count) {
+    return '已匯入 $count 篇 · 拉取新增條目';
+  }
+
+  @override
+  String get pleaseFillApiKey => '請先填寫 API Key';
+
+  @override
+  String get zoteroImportHint => '從 Zotero 個人庫匯入文獻';
+
+  @override
+  String get zoteroResetHint => '清除匯入記錄，從 Zotero 重新拉取（找回已刪除條目）';
+
+  @override
+  String get resetZoteroSync => '重設 Zotero 同步';
+
+  @override
+  String get resetZoteroConfirm =>
+      '將清除本地的 Zotero 匯入記錄並從文庫全量重新拉取：已刪除的條目會重新出現，仍在庫中的不會重複。繼續嗎？';
+
+  @override
+  String get s3Config => 'S3 設定';
+
+  @override
+  String get webDavConfig => 'WebDAV 設定';
+
+  @override
+  String remoteNotConfigured(String target) {
+    return '未設定$target遠端備份資訊';
+  }
+
+  @override
+  String s3BucketInfo(String bucket, String region) {
+    return 'Bucket：$bucket  ·  區域：$region';
+  }
+
+  @override
+  String s3ObjectInfo(String key) {
+    return '物件：$key';
+  }
+
+  @override
+  String webDavAccountInfo(String username) {
+    return '帳號：$username';
+  }
+
+  @override
+  String webDavPathInfo(String path) {
+    return '路徑：$path';
+  }
+
+  @override
+  String get clearingCache => '正在清除快取...';
+
+  @override
+  String get confirmDeleteAllDataBody => '此操作將刪除所有文獻檔案和資料庫，且無法復原。確定繼續嗎？';
+
+  @override
+  String get clearingData => '正在清除資料...';
+
+  @override
+  String get generatingLocalBackup => '正在產生本地備份...';
+
+  @override
+  String backupExportedTo(String path) {
+    return '備份已匯出到 $path';
+  }
+
+  @override
+  String exportBackupFailed(String error) {
+    return '匯出備份失敗：$error';
+  }
+
+  @override
+  String get mergingBackup => '正在合併備份...';
+
+  @override
+  String get restoringBackup => '正在還原備份...';
+
+  @override
+  String restoreFailed(String error) {
+    return '還原失敗：$error';
+  }
+
+  @override
+  String get generatingAndUploading => '正在產生並上傳遠端備份...';
+
+  @override
+  String remoteBackupUploaded(String target) {
+    return '遠端備份已上傳到 $target';
+  }
+
+  @override
+  String uploadRemoteFailed(String error) {
+    return '上傳遠端備份失敗：$error';
+  }
+
+  @override
+  String get downloadingRemoteBackup => '正在下載遠端備份...';
+
+  @override
+  String get mergingRemoteBackup => '正在合併遠端備份...';
+
+  @override
+  String get restoringRemoteBackup => '正在還原遠端備份...';
+
+  @override
+  String remoteRestoreFailed(String error) {
+    return '遠端還原失敗：$error';
+  }
+
+  @override
+  String restoreCompleteRefreshed(String prefix) {
+    return '$prefix還原完成，目前頁面狀態已同步重新整理';
+  }
+
+  @override
+  String mergeCompleteUpToDate(String prefix) {
+    return '$prefix合併完成，本地資料已是最新';
+  }
+
+  @override
+  String mergeDocumentsAdded(int count) {
+    return '新增 $count 篇文獻';
+  }
+
+  @override
+  String mergeHighlightsAdded(int count) {
+    return '新增 $count 條標註';
+  }
+
+  @override
+  String mergeFilesCopied(int count) {
+    return '複製 $count 個檔案';
+  }
+
+  @override
+  String mergeSettingsAdded(int count) {
+    return '新增 $count 項設定';
+  }
+
+  @override
+  String mergeCompleteSummary(String prefix, String details) {
+    return '$prefix合併完成：$details';
+  }
+
+  @override
+  String get webDavServerAddress => 'WebDAV 伺服器位址';
+
+  @override
+  String get s3Endpoint => 'S3 / R2 / MinIO Endpoint';
+
+  @override
+  String get s3ObjectPathDefault => '預設可用 otter-pad/otter_pad_backup.zip';
+
+  @override
+  String get s3PathStyleHint => 'MinIO / R2 等 S3 相容服務通常建議開啟';
+
+  @override
+  String get selectImageModelFirst => '請先在「AI 設定」中選擇生圖模型';
+
+  @override
+  String get summaryApiCostHint => '摘要圖由第三方生圖模型產生，可能產生 API 呼叫費用。';
+
+  @override
+  String estimatedCost(String dollar, String cost) {
+    return '目前設定預估費用約 $dollar$cost / 張';
+  }
+
+  @override
+  String get useAppImageGen => '若希望使用 App 生圖，請點擊 App 生圖，手動上傳素材。';
+
+  @override
+  String get appImageGen => 'App 生圖';
+
+  @override
+  String get markdownNotFound => '未找到 Markdown 檔案，請先完成文件擷取';
+
+  @override
+  String promptGenerationFailed(String error) {
+    return '產生 prompt 失敗：$error';
+  }
+
+  @override
+  String get saveExportZip => '儲存匯出 ZIP';
+
+  @override
+  String exportedWithPromptCopied(String name) {
+    return '已匯出到 $name，prompt 已複製';
+  }
+
+  @override
+  String exportFailed(String error) {
+    return '匯出失敗：$error';
+  }
+
+  @override
+  String get exportToAppImageGen => '匯出至 App 生圖';
+
+  @override
+  String get exportToAppImageGenHint =>
+      '將文獻素材匯出後，到 ChatGPT / Gemini 等官方 App 中手動上傳以生圖。';
+
+  @override
+  String get exportShareHint => '同時分享 figures + Markdown，prompt 自動複製到剪貼簿';
+
+  @override
+  String get exportZipHint =>
+      '打包 figures + article.md + prompt.md 為 ZIP，prompt 自動複製到剪貼簿';
+
+  @override
+  String get ocrChartRecognitionDesc => '將圖表解析為表格';
+
+  @override
+  String get ocrStampRecognitionDesc => '辨識文件中的印章';
+
+  @override
+  String get ocrImageAreaDesc => '對圖片區域執行文字辨識';
+
+  @override
+  String get ocrOrientationDesc => '自動校正 0°/90°/180°/270° 旋轉';
+
+  @override
+  String get ocrCurvatureDesc => '校正彎曲或皺褶的文件';
+
+  @override
+  String get ocrDeduplicateDesc => '移除重疊的版面偵測框';
+
+  @override
+  String get ocrMultiPageDesc => '重構多頁文件結構';
+
+  @override
+  String get ocrThresholdHelp => '區域過濾的閾值，值越高保留的區域越少';
+
+  @override
+  String get ocrFilterHelp => '勾選的標籤區域將不會輸出到 Markdown 結果中，預設全忽略。';
+
+  @override
+  String get ocrInterface => 'OCR 介面';
+
+  @override
+  String get aspectSquare => '方形 · 社群配圖';
+
+  @override
+  String get aspectClassic => '經典攝影';
+
+  @override
+  String get aspectWide => '橫屏影片 · 桌面桌布';
+
+  @override
+  String get aspectUltraWide => '超寬螢幕 · 電影';
+
+  @override
+  String get aspectTall => '直屏 · 手機桌布';
+
+  @override
+  String get imageRefCountHint => '從文獻擷取的 figure 中按順序選擇參考圖；不同模型會按自身上限自動裁剪。';
+
+  @override
+  String get aspectRatioHint => 'OpenAI 會對應到最接近的輸出尺寸，並在 prompt 中保留比例要求。';
+
+  @override
+  String get summaryPromptHint =>
+      '用於控制文獻摘要圖的視覺風格和資訊組織方式；執行時會自動追加文獻標題、中繼資料、Markdown 和參考 figure。';
+
+  @override
+  String get summaryPromptLabel => '摘要圖 Prompt';
+
+  @override
+  String get summaryPromptFieldHint => '描述文獻摘要圖的版式、顏色、資訊密度和風格要求';
+
+  @override
+  String estimatedCostShort(String dollar, String cost) {
+    return '預估 $dollar$cost';
+  }
+
+  @override
+  String get translationTargetLangDesc => '翻譯提示詞中 targetLanguage 變數的實際值';
+
+  @override
+  String get translationStyleDesc => '文件全文翻譯時譯文的視覺區分方式';
+
+  @override
+  String get translationIgnoreDesc => '勾選的區域翻譯時跳過，取消勾選則合併為整段翻譯';
+
+  @override
+  String get temperatureDesc => '越低越穩重，越高越發散';
+
+  @override
+  String get systemPromptDesc => '翻譯 System Prompt，支援 targetLanguage 佔位符';
+
+  @override
+  String get systemPromptHint => '例如：You are a professional translator…';
+
+  @override
+  String get userPromptDesc => '翻譯 User Prompt，支援 targetLanguage 和 input 佔位符';
+
+  @override
+  String documentsAddedCount(int added) {
+    return '已加入 $added 篇文獻';
+  }
+
+  @override
+  String documentsAddedSkipped(int added, int skipped) {
+    return '已加入 $added 篇文獻，$skipped 篇已存在已跳過';
+  }
+
+  @override
+  String confirmDeleteDocuments(int count) {
+    return '確定要刪除 $count 篇文獻嗎？此操作不可復原。';
+  }
+
+  @override
+  String deletedDocuments(int count) {
+    return '已刪除 $count 篇文獻';
+  }
+
+  @override
+  String get configureExtractToken => '請先在設定中配置文件擷取 Access Token';
+
+  @override
+  String get noPdfFilesSelected => '所選文獻中無本地 PDF 檔案，無法擷取';
+
+  @override
+  String get pdfNotFound => 'PDF 檔案不存在';
+
+  @override
+  String get reformatting => '正在重新排版…';
+
+  @override
+  String reformatFailed(String error) {
+    return '排版失敗: $error';
+  }
+
+  @override
+  String addedToFavorite(String name) {
+    return '已新增到「$name」';
+  }
+
+  @override
+  String addedToFavorites(int count) {
+    return '已新增到 $count 個收藏夾';
+  }
+
+  @override
+  String removedFromFavoriteSingle(String name) {
+    return '已從「$name」移出';
+  }
+
+  @override
+  String removedFromFavorites(int count) {
+    return '已從 $count 個收藏夾移出';
+  }
+
+  @override
+  String translationFailed(String error) {
+    return '翻譯失敗：$error';
+  }
+
+  @override
+  String get pdfFileNotFoundTitle => '找不到該文獻的 PDF 檔案';
+
+  @override
+  String removedFromFavoriteCount(int count) {
+    return '已從收藏夾移除 $count 篇文獻';
+  }
+
+  @override
+  String confirmDeleteEntries(int count) {
+    return '確定要刪除 $count 個無檔案條目嗎？';
+  }
+
+  @override
+  String deletedEntries(int count) {
+    return '已刪除 $count 個條目';
+  }
+
+  @override
+  String attachFileFailed(String error) {
+    return '附加檔案失敗: $error';
+  }
+
+  @override
+  String addingDocumentsTo(int total) {
+    return '將 $total 篇文獻加入…';
+  }
+
+  @override
+  String allSelectedAlreadyHere(int count) {
+    return '所選 $count 篇已全部在此';
+  }
+
+  @override
+  String currentDocumentCount(int count) {
+    return '目前 $count 篇文獻';
+  }
+
+  @override
+  String overlapAndNew(int overlap, int newCount) {
+    return '已含 $overlap 篇 · 將新增 $newCount 篇';
+  }
+
+  @override
+  String confirmDeleteFavorite(String name) {
+    return '確定要刪除「$name」嗎？收藏夾內的文獻不會被刪除。';
+  }
+
+  @override
+  String favoriteDocumentCount(int count) {
+    return '$count 篇文獻';
+  }
+
+  @override
+  String get clearReadingHistoryConfirm => '將清除所有閱讀記錄，文獻本身不會被刪除。此操作不可復原。';
+
+  @override
+  String get noReadingHistoryHint => '開啟任意文獻後，這裡會按日期顯示瀏覽順序';
+
+  @override
+  String get identifierInputHint =>
+      '輸入 ISBN、DOI、PMID、arXiv ID 或 ADS 條碼來新增條目到您的文庫：';
+
+  @override
+  String get identifierExample => '例如: 10.1038/s41586-021-03811-w';
+
+  @override
+  String get addFilesSubtitle => '匯入本地 PDF，並擷取標題、作者、期刊、年份與 DOI';
+
+  @override
+  String get addByIdentifierSubtitle => '輸入 DOI、PMID、arXiv ID 或 ISBN 直接建立條目';
+
+  @override
+  String get rebuildLibrarySubtitle => '重新掃描目錄，補回 PDF 並重試擷取核心中繼資料';
+
+  @override
+  String get downloadPdf => '下載 PDF';
+
+  @override
+  String viewLibraryTotal(int count) {
+    return '檢視文庫 · 共 $count 篇';
+  }
+
+  @override
+  String addedDocumentsToFavorite(int count) {
+    return '已新增 $count 篇文獻';
+  }
+
+  @override
+  String get searchDocumentHint => '搜尋文獻標題 / 作者 / 期刊';
+
+  @override
+  String get noDocumentsInLibrary => '暫無文獻，請新增 PDF 檔案到文庫';
+
+  @override
+  String get providerDescOpenai => 'gpt / o 系列 · 生圖支援 gpt-image';
+
+  @override
+  String get providerDescAnthropic => 'Claude 系列';
+
+  @override
+  String get providerDescGemini => 'Google AI · 多模態';
+
+  @override
+  String get providerDescOpenaiCompatible => 'DeepSeek / 自部署等 OpenAI 相容 API';
+
+  @override
+  String confirmDeleteProvider(String name) {
+    return '確定刪除「$name」？將清除其 API Key、位址和模型。';
+  }
+
+  @override
+  String modelConnected(String modelId) {
+    return '$modelId 連線成功';
+  }
+
+  @override
+  String get apiAddress => 'API 位址';
+
+  @override
+  String get apiKey => 'API Key';
+
+  @override
+  String previewUrl(String url) {
+    return '預覽: $url';
+  }
+
+  @override
+  String selectRole(String role) {
+    return '選擇$role';
+  }
+
+  @override
+  String addProtocol(String protocol) {
+    return '新增 $protocol';
+  }
+
+  @override
+  String get assignRoleHint => '為此模型分配場景角色（可選）';
+
+  @override
+  String willReplace(String current) {
+    return '將取代 $current';
+  }
+
+  @override
+  String providerModels(String provider) {
+    return '$provider 模型';
+  }
+
+  @override
+  String get searchModelHint => '搜尋模型 ID 或名稱';
+
+  @override
+  String connectionOkMs(String ms) {
+    return '連線正常，$ms ms';
+  }
+
+  @override
+  String get cannotConnectCheckProxy => '無法連線，請檢查代理設定';
+
+  @override
+  String requestFailed(String error) {
+    return '請求失敗：$error';
+  }
+
+  @override
+  String testFailed(String error) {
+    return '測試失敗：$error';
+  }
+
+  @override
+  String copyFailed(String error) {
+    return '複製失敗：$error';
+  }
+
+  @override
+  String saveFailed(String error) {
+    return '儲存失敗：$error';
+  }
+
+  @override
+  String savedToPath(String path) {
+    return '已儲存到 $path';
+  }
+
+  @override
+  String get figuresNotFoundHint => '未找到圖表\n請先擷取文件';
+
+  @override
+  String copiedReferenceNumber(int number) {
+    return '已複製參考文獻 $number';
+  }
+
+  @override
+  String searchMatchesFound(int count) {
+    return '找到 $count 條相符';
+  }
+
+  @override
+  String get searchPdfContentHint => '搜尋 PDF 內容';
+
+  @override
+  String get markdownIgnoreLabels => 'Markdown 忽略標籤';
+
+  @override
+  String get resolutionHint => 'OpenAI 對應為 quality；Gemini 對應為 imageSize。';
+
+  @override
+  String get translationStyleThemed => '主題色';
+
+  @override
+  String get translationStyleBold => '粗體';
+
+  @override
+  String get translationStyleItalic => '斜體';
+
+  @override
+  String get translationStyleWeakened => '弱化';
+
+  @override
+  String get translationStyleDashed => '虛線底線';
+
+  @override
+  String get translationStyleHighlight => '背景色';
+
+  @override
+  String get translationStyleBlur => '模糊';
+
+  @override
+  String get translationStyleQuote => '引用';
+
+  @override
+  String get skipSectionReferences => '參考文獻';
+
+  @override
+  String get skipSectionAcknowledgments => '致謝';
+
+  @override
+  String get skipSectionAuthorsContributions => '作者貢獻/利益衝突';
+
+  @override
+  String get skipSectionFundingData => '資助/資料聲明';
+
+  @override
+  String get skipSectionSupplementaryAppendix => '附錄/補充材料';
+
+  @override
+  String get skipSectionEthicsLegends => '倫理聲明/圖表說明';
+
+  @override
+  String get fidelityAuto => '自動';
+
+  @override
+  String get fidelityStandard => '標準';
 
   @override
   String get fidelityHigh => '高';

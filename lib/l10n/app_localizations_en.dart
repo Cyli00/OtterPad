@@ -132,11 +132,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ocrSettingsSubtitle => 'OCR API · Recognition Settings';
 
   @override
-  String get appearanceSettings => 'Appearance';
+  String get appearanceSettings => 'Display';
 
   @override
-  String get appearanceSettingsSubtitle =>
-      'Theme · Colors · Reading · Text Size';
+  String get appearanceSettingsSubtitle => 'Theme · Colors · Reading · Font';
 
   @override
   String get dataManagement => 'Data Management';
@@ -180,7 +179,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'When Markdown is selected, documents without extraction results will fall back to PDF view';
 
   @override
-  String get textSize => 'Text Size';
+  String get textSize => 'Font';
+
+  @override
+  String get appLanguage => 'App Language';
+
+  @override
+  String get appLanguageDesc =>
+      'Override the display language of the app interface';
 
   @override
   String get systemTextScale => 'System Text Scale';
@@ -327,6 +333,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageEnglish => 'English';
+
+  @override
+  String get languageTraditionalChinese => 'Chinese (Traditional)';
 
   @override
   String get recommend => 'Discover';
