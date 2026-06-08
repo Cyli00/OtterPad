@@ -30,7 +30,7 @@ class ReaderNotesSheetBody extends StatelessWidget {
       maxChildSize: 1.0,
       expand: false,
       builder: (context, scrollController) => ColoredBox(
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        color: Theme.of(context).colorScheme.surface,
         child: _NotesSheetBody(
           documentId: documentId,
           scrollController: scrollController,

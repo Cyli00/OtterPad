@@ -5,9 +5,12 @@ import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../utils/markdown_translation_weaver.dart';
 
+enum ReaderSheetType { outline, notes, theme, text }
+
 class ReaderBottomBar extends StatelessWidget {
   final ReaderSettingsState readerSettings;
   final DocumentTranslationState translation;
+  final ReaderSheetType? activeSheet;
   final VoidCallback onOpenOutline;
   final VoidCallback onTranslate;
   final VoidCallback onCycleTranslationMode;
@@ -19,6 +22,7 @@ class ReaderBottomBar extends StatelessWidget {
     super.key,
     required this.readerSettings,
     required this.translation,
+    this.activeSheet,
     required this.onOpenOutline,
     required this.onTranslate,
     required this.onCycleTranslationMode,
@@ -50,6 +54,7 @@ class ReaderBottomBar extends StatelessWidget {
               cs,
               icon: Symbols.menu_rounded,
               tooltip: '大纲',
+              active: activeSheet == ReaderSheetType.outline,
               onTap: onOpenOutline,
             ),
             _buildTranslationBottomButton(cs),
@@ -57,18 +62,21 @@ class ReaderBottomBar extends StatelessWidget {
               cs,
               icon: Symbols.stylus_note_rounded,
               tooltip: '笔记',
+              active: activeSheet == ReaderSheetType.notes,
               onTap: onOpenNotes,
             ),
             _bottomButton(
               cs,
               icon: Symbols.palette_rounded,
               tooltip: '外观',
+              active: activeSheet == ReaderSheetType.theme,
               onTap: onOpenTheme,
             ),
             _bottomButton(
               cs,
               icon: Symbols.custom_typography_rounded,
               tooltip: '字体',
+              active: activeSheet == ReaderSheetType.text,
               onTap: onOpenText,
             ),
           ],
@@ -114,9 +122,15 @@ class ReaderBottomBar extends StatelessWidget {
     required IconData icon,
     required String tooltip,
     required VoidCallback onTap,
+    bool active = false,
   }) {
     return IconButton(
-      icon: Icon(icon, size: 24, fill: 1, color: cs.onSurfaceVariant),
+      icon: Icon(
+        icon,
+        size: 24,
+        fill: 1,
+        color: active ? cs.primary : cs.onSurfaceVariant,
+      ),
       tooltip: tooltip,
       onPressed: onTap,
     );

@@ -93,6 +93,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _sheetHostKey = GlobalKey<ReaderSheetHostState>();
   late final ReaderSessionArgs _sessionArgs;
+  ReaderSheetType? _activeSheet;
 
   static _MainBuildKey _mainBuildSelector(ReaderSessionState s) => (
     s.initialized,
@@ -330,25 +331,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<void> _openTextSheet() async {
     if (_session.markdownContent == null) return;
-    await _sheetHostKey.currentState!.show(
+    if (_activeSheet == ReaderSheetType.text) {
+      _sheetHostKey.currentState!.close();
+      return;
+    }
+    final future = _sheetHostKey.currentState!.show(
       builder: (_) => const ReaderTextSheetBody(),
       barrierAlpha: 0.25,
       onPause: _pauseWebView,
       onResume: _resumeWebView,
     );
+    setState(() => _activeSheet = ReaderSheetType.text);
+    await future;
   }
 
   Future<void> _openThemeSheet() async {
-    await _sheetHostKey.currentState!.show(
+    if (_activeSheet == ReaderSheetType.theme) {
+      _sheetHostKey.currentState!.close();
+      return;
+    }
+    final future = _sheetHostKey.currentState!.show(
       builder: (_) => const ReaderThemeSheetBody(),
       barrierAlpha: 0.25,
       onPause: _pauseWebView,
       onResume: _resumeWebView,
     );
+    setState(() => _activeSheet = ReaderSheetType.theme);
+    await future;
   }
 
   Future<void> _openNotesSheet() async {
-    await _sheetHostKey.currentState!.show(
+    if (_activeSheet == ReaderSheetType.notes) {
+      _sheetHostKey.currentState!.close();
+      return;
+    }
+    final future = _sheetHostKey.currentState!.show(
       builder: (_) => ReaderNotesSheetBody(
         documentId: widget.document.id,
         onEditStart: () async =>
@@ -356,6 +373,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onEditEnd: () => _webViewReaderKey.currentState?.unfreeze(),
       ),
     );
+    setState(() => _activeSheet = ReaderSheetType.notes);
+    await future;
   }
 
   void _openOutlineSheet() {
@@ -365,6 +384,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (_isDesktop) {
       _scaffoldKey.currentState?.openEndDrawer();
     } else {
+      if (_activeSheet == ReaderSheetType.outline) {
+        _sheetHostKey.currentState!.close();
+        return;
+      }
       _showOutlineBottomSheet();
     }
   }
@@ -373,7 +396,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final session = _session;
     if (session.markdownContent == null) return;
 
-    await _sheetHostKey.currentState!.show(
+    final future = _sheetHostKey.currentState!.show(
       barrierAlpha: 0.45,
       builder: (_) => ReaderOutlineSheetBody(
         markdownContent: session.markdownContent!,
@@ -389,6 +412,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         },
       ),
     );
+    setState(() => _activeSheet = ReaderSheetType.outline);
+    await future;
   }
 
   // ─── 沉浸式 ───
@@ -850,7 +875,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   child: ReaderSheetHost(
                     key: _sheetHostKey,
                     onSheetOpen: () => _sessionNotifier.setSheetOpen(true),
-                    onSheetClose: () => _sessionNotifier.setSheetOpen(false),
+                    onSheetClose: () {
+                      _sessionNotifier.setSheetOpen(false);
+                      setState(() => _activeSheet = null);
+                    },
                   ),
                 ),
                 // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
@@ -1006,6 +1034,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return ReaderBottomBar(
       readerSettings: readerSettings,
       translation: translation,
+      activeSheet: _activeSheet,
       onOpenOutline: _openOutlineSheet,
       onTranslate: _handleTranslate,
       onCycleTranslationMode: _handleCycleTranslationMode,

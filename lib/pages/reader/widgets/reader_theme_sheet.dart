@@ -24,7 +24,7 @@ class ReaderThemeSheetBody extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
+        color: cs.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
