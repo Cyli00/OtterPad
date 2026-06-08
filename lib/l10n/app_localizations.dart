@@ -461,7 +461,7 @@ abstract class AppLocalizations {
   /// No description provided for @textSizeExtraLarge.
   ///
   /// In en, this message translates to:
-  /// **'Extra Large'**
+  /// **'xLarge'**
   String get textSizeExtraLarge;
 
   /// No description provided for @textSizeHint.
@@ -3247,6 +3247,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'OpenAI maps to quality; Gemini maps to imageSize.'**
   String get resolutionHint;
+
+  /// No description provided for @translationStyleThemed.
+  ///
+  /// In en, this message translates to:
+  /// **'Themed'**
+  String get translationStyleThemed;
+
+  /// No description provided for @translationStyleBold.
+  ///
+  /// In en, this message translates to:
+  /// **'Bold'**
+  String get translationStyleBold;
+
+  /// No description provided for @translationStyleItalic.
+  ///
+  /// In en, this message translates to:
+  /// **'Italic'**
+  String get translationStyleItalic;
+
+  /// No description provided for @translationStyleWeakened.
+  ///
+  /// In en, this message translates to:
+  /// **'Weakened'**
+  String get translationStyleWeakened;
+
+  /// No description provided for @translationStyleDashed.
+  ///
+  /// In en, this message translates to:
+  /// **'Dashed Underline'**
+  String get translationStyleDashed;
+
+  /// No description provided for @translationStyleHighlight.
+  ///
+  /// In en, this message translates to:
+  /// **'Highlight'**
+  String get translationStyleHighlight;
+
+  /// No description provided for @translationStyleBlur.
+  ///
+  /// In en, this message translates to:
+  /// **'Blur'**
+  String get translationStyleBlur;
+
+  /// No description provided for @translationStyleQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote'**
+  String get translationStyleQuote;
+
+  /// No description provided for @skipSectionReferences.
+  ///
+  /// In en, this message translates to:
+  /// **'References'**
+  String get skipSectionReferences;
+
+  /// No description provided for @skipSectionAcknowledgments.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledgments'**
+  String get skipSectionAcknowledgments;
+
+  /// No description provided for @skipSectionAuthorsContributions.
+  ///
+  /// In en, this message translates to:
+  /// **'Authors / Conflicts'**
+  String get skipSectionAuthorsContributions;
+
+  /// No description provided for @skipSectionFundingData.
+  ///
+  /// In en, this message translates to:
+  /// **'Funding / Data'**
+  String get skipSectionFundingData;
+
+  /// No description provided for @skipSectionSupplementaryAppendix.
+  ///
+  /// In en, this message translates to:
+  /// **'Appendix / Supplements'**
+  String get skipSectionSupplementaryAppendix;
+
+  /// No description provided for @skipSectionEthicsLegends.
+  ///
+  /// In en, this message translates to:
+  /// **'Ethics / Legends'**
+  String get skipSectionEthicsLegends;
+
+  /// No description provided for @fidelityAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get fidelityAuto;
+
+  /// No description provided for @fidelityStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get fidelityStandard;
+
+  /// No description provided for @fidelityHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get fidelityHigh;
 }
 
 class _AppLocalizationsDelegate

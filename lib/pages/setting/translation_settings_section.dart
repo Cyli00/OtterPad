@@ -354,7 +354,7 @@ class _TranslationSettingsSectionState
       children: kAllTranslationSkipSections.map((section) {
         final isSelected = selected.contains(section.id);
         return FilterChip(
-          label: Text(section.label),
+          label: Text(_skipSectionLabel(context.l10n, section.id)),
           selected: isSelected,
           showCheckmark: false,
           color: WidgetStateProperty.resolveWith((states) {
@@ -425,7 +425,7 @@ class _TranslationSettingsSectionState
               .setDisplayStyleId(style.id),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: _buildStyledLabel(style.id, style.label, cs, theme),
+            child: _buildStyledLabel(style.id, _translationStyleLabel(context.l10n, style.id), cs, theme),
           ),
         ),
       ),
@@ -607,3 +607,25 @@ class _TranslationSettingsSectionState
     }
   }
 }
+
+String _translationStyleLabel(AppLocalizations l10n, String id) => switch (id) {
+  'themed' => l10n.translationStyleThemed,
+  'bold' => l10n.translationStyleBold,
+  'italic' => l10n.translationStyleItalic,
+  'weakened' => l10n.translationStyleWeakened,
+  'dashed' => l10n.translationStyleDashed,
+  'highlight' => l10n.translationStyleHighlight,
+  'blur' => l10n.translationStyleBlur,
+  'quote' => l10n.translationStyleQuote,
+  _ => id,
+};
+
+String _skipSectionLabel(AppLocalizations l10n, String id) => switch (id) {
+  'references' => l10n.skipSectionReferences,
+  'acknowledgments' => l10n.skipSectionAcknowledgments,
+  'authors_contributions' => l10n.skipSectionAuthorsContributions,
+  'funding_data' => l10n.skipSectionFundingData,
+  'supplementary_appendix' => l10n.skipSectionSupplementaryAppendix,
+  'ethics_legends' => l10n.skipSectionEthicsLegends,
+  _ => id,
+};

@@ -131,6 +131,11 @@
 - **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — 复制图片用 `Pasteboard.writeImage()`，禁止用 `Clipboard.setData`。
 - **底部面板** — 禁止直接访问 `settings.backgroundColor`，用 `resolveReaderPalette()`。
 
+### 国际化
+
+- **LocaleNotifier** (`lib/providers/locale_provider.dart`) — App locale 状态（null = 跟随系统）。持久化到 GStorage，`MaterialApp.router` 的 `locale` 字段绑定此 provider。禁止在 UI 层自行切换 locale。
+- **L10nExtension** (`lib/core/l10n.dart`) — `BuildContext.l10n` 简写 extension，同时 re-export `AppLocalizations`。新文件只需 `import 'core/l10n.dart'` 即可获得完整 l10n 访问能力。禁止直接 import `app_localizations.dart` 或手写 `AppLocalizations.of(context)!`。
+
 ### 其他
 
 - **Material Symbols** (`package:material_symbols_icons/symbols.dart`) — 全项目唯一图标集。禁止使用 `Icons.xxx`。
@@ -146,6 +151,17 @@
 ## UI 组件范式
 
 组件视觉参数定义在 [flutter-design](.claude/skills/flutter-design/SKILL.md) skill 中，编码前必须查阅。
+
+## 多语言 (i18n)
+
+- 所有用户可见字符串必须通过 ARB 国际化，禁止在 UI 层硬编码中文或英文。
+- 翻译源文件在 `lib/l10n/app_en.arb`（模板）和 `lib/l10n/app_zh.arb`。新增字符串两个文件都要加。
+- 新增或修改 ARB 后运行 `flutter gen-l10n` 重新生成 `lib/l10n/app_localizations*.dart`。
+- Widget 层通过 `import '../../core/l10n.dart'` 引入，用 `context.l10n.keyName` 访问。
+- 服务层无 BuildContext 时通过 `rootNavigatorKey.currentContext` 获取（定义在 `lib/router/app_router.dart`）。
+- 含插值的字符串在 ARB 中用 `{placeholder}` 定义参数，生成方法签名如 `l10n.deletedDocuments(count)`。
+- Locale 状态由 **LocaleNotifier** (`lib/providers/locale_provider.dart`) 管理，持久化到 GStorage。
+- 不需要国际化的内容：AI prompt、正则模式、代码注释、内部技术标识符。
 
 ## Dependency 更新
 

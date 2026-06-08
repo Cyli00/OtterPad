@@ -1774,4 +1774,55 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get resolutionHint =>
       'OpenAI maps to quality; Gemini maps to imageSize.';
+
+  @override
+  String get translationStyleThemed => 'Themed';
+
+  @override
+  String get translationStyleBold => 'Bold';
+
+  @override
+  String get translationStyleItalic => 'Italic';
+
+  @override
+  String get translationStyleWeakened => 'Weakened';
+
+  @override
+  String get translationStyleDashed => 'Dashed Underline';
+
+  @override
+  String get translationStyleHighlight => 'Highlight';
+
+  @override
+  String get translationStyleBlur => 'Blur';
+
+  @override
+  String get translationStyleQuote => 'Quote';
+
+  @override
+  String get skipSectionReferences => 'References';
+
+  @override
+  String get skipSectionAcknowledgments => 'Acknowledgments';
+
+  @override
+  String get skipSectionAuthorsContributions => 'Authors / Conflicts';
+
+  @override
+  String get skipSectionFundingData => 'Funding / Data';
+
+  @override
+  String get skipSectionSupplementaryAppendix => 'Appendix / Supplements';
+
+  @override
+  String get skipSectionEthicsLegends => 'Ethics / Legends';
+
+  @override
+  String get fidelityAuto => 'Auto';
+
+  @override
+  String get fidelityStandard => 'Standard';
+
+  @override
+  String get fidelityHigh => 'High';
 }

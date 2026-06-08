@@ -19,11 +19,7 @@ const kSummaryAspectRatios = <String>[
   '9:16',
 ];
 
-const kSummaryFidelityOptions = <String, String>{
-  'auto': '自动',
-  'standard': '标准',
-  'high': '高',
-};
+const kSummaryFidelityKeys = <String>['auto', 'standard', 'high'];
 
 class ImageGenerationConfig {
   final String aspectRatio;
@@ -82,7 +78,7 @@ class ImageGenerationConfigNotifier
       aspectRatio: kSummaryAspectRatios.contains(aspectRatio)
           ? aspectRatio
           : kDefaultSummaryAspectRatio,
-      fidelity: kSummaryFidelityOptions.containsKey(fidelity)
+      fidelity: kSummaryFidelityKeys.contains(fidelity)
           ? fidelity
           : kDefaultSummaryFidelity,
       prompt: prompt,
@@ -97,7 +93,7 @@ class ImageGenerationConfigNotifier
   }
 
   Future<void> setFidelity(String value) async {
-    if (!kSummaryFidelityOptions.containsKey(value)) return;
+    if (!kSummaryFidelityKeys.contains(value)) return;
     state = state.copyWith(fidelity: value);
     await GStorage.setting.put(_kFidelity, value);
   }

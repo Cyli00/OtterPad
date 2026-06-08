@@ -235,9 +235,9 @@ class _ImageGenerationSettingsSectionState
           _segmented<String>(
             theme: theme,
             cs: cs,
-            values: kSummaryFidelityOptions.keys.toList(),
+            values: kSummaryFidelityKeys,
             selected: cfg.fidelity,
-            labelFor: (v) => kSummaryFidelityOptions[v] ?? v,
+            labelFor: (v) => _fidelityLabel(context.l10n, v),
             onSelected: notifier.setFidelity,
           ),
           const SizedBox(height: 24),
@@ -330,3 +330,10 @@ class _ImageGenerationSettingsSectionState
     );
   }
 }
+
+String _fidelityLabel(AppLocalizations l10n, String key) => switch (key) {
+  'auto' => l10n.fidelityAuto,
+  'standard' => l10n.fidelityStandard,
+  'high' => l10n.fidelityHigh,
+  _ => key,
+};

@@ -1735,4 +1735,55 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get resolutionHint => 'OpenAI 映射为 quality；Gemini 映射为 imageSize。';
+
+  @override
+  String get translationStyleThemed => '主题色';
+
+  @override
+  String get translationStyleBold => '加粗';
+
+  @override
+  String get translationStyleItalic => '斜体';
+
+  @override
+  String get translationStyleWeakened => '弱化';
+
+  @override
+  String get translationStyleDashed => '虚线下划线';
+
+  @override
+  String get translationStyleHighlight => '背景色';
+
+  @override
+  String get translationStyleBlur => '模糊';
+
+  @override
+  String get translationStyleQuote => '引用';
+
+  @override
+  String get skipSectionReferences => '参考文献';
+
+  @override
+  String get skipSectionAcknowledgments => '致谢';
+
+  @override
+  String get skipSectionAuthorsContributions => '作者贡献/利益冲突';
+
+  @override
+  String get skipSectionFundingData => '资助/数据声明';
+
+  @override
+  String get skipSectionSupplementaryAppendix => '附录/补充材料';
+
+  @override
+  String get skipSectionEthicsLegends => '伦理声明/图表说明';
+
+  @override
+  String get fidelityAuto => '自动';
+
+  @override
+  String get fidelityStandard => '标准';
+
+  @override
+  String get fidelityHigh => '高';
 }

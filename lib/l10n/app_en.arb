@@ -646,5 +646,25 @@
   "@searchMatchesFound": { "placeholders": { "count": { "type": "int" } } },
   "searchPdfContentHint": "Search PDF content",
   "markdownIgnoreLabels": "Markdown Ignore Labels",
-  "resolutionHint": "OpenAI maps to quality; Gemini maps to imageSize."
+  "resolutionHint": "OpenAI maps to quality; Gemini maps to imageSize.",
+
+  "translationStyleThemed": "Themed",
+  "translationStyleBold": "Bold",
+  "translationStyleItalic": "Italic",
+  "translationStyleWeakened": "Weakened",
+  "translationStyleDashed": "Dashed Underline",
+  "translationStyleHighlight": "Highlight",
+  "translationStyleBlur": "Blur",
+  "translationStyleQuote": "Quote",
+
+  "skipSectionReferences": "References",
+  "skipSectionAcknowledgments": "Acknowledgments",
+  "skipSectionAuthorsContributions": "Authors / Conflicts",
+  "skipSectionFundingData": "Funding / Data",
+  "skipSectionSupplementaryAppendix": "Appendix / Supplements",
+  "skipSectionEthicsLegends": "Ethics / Legends",
+
+  "fidelityAuto": "Auto",
+  "fidelityStandard": "Standard",
+  "fidelityHigh": "High"
 }

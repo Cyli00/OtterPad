@@ -572,5 +572,25 @@
   "copiedReferenceNumber": "已复制参考文献 {number}",
   "searchMatchesFound": "找到 {count} 条匹配",
   "searchPdfContentHint": "搜索 PDF 内容",
-  "resolutionHint": "OpenAI 映射为 quality；Gemini 映射为 imageSize。"
+  "resolutionHint": "OpenAI 映射为 quality；Gemini 映射为 imageSize。",
+
+  "translationStyleThemed": "主题色",
+  "translationStyleBold": "加粗",
+  "translationStyleItalic": "斜体",
+  "translationStyleWeakened": "弱化",
+  "translationStyleDashed": "虚线下划线",
+  "translationStyleHighlight": "背景色",
+  "translationStyleBlur": "模糊",
+  "translationStyleQuote": "引用",
+
+  "skipSectionReferences": "参考文献",
+  "skipSectionAcknowledgments": "致谢",
+  "skipSectionAuthorsContributions": "作者贡献/利益冲突",
+  "skipSectionFundingData": "资助/数据声明",
+  "skipSectionSupplementaryAppendix": "附录/补充材料",
+  "skipSectionEthicsLegends": "伦理声明/图表说明",
+
+  "fidelityAuto": "自动",
+  "fidelityStandard": "标准",
+  "fidelityHigh": "高"
 }
