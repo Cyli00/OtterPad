@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/l10n.dart';
-import '../../providers/locale_provider.dart';
 import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -20,7 +19,6 @@ class SettingPage extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final l10n = context.l10n;
-    final locale = ref.watch(localeProvider);
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -73,111 +71,11 @@ class SettingPage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.only(left: 16, bottom: 8),
-            child: Text(
-              l10n.systemSettings,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          _SettingsCard(
-            children: [
-              _SettingsTile(
-                icon: Symbols.language_rounded,
-                title: l10n.language,
-                subtitle: _localeName(l10n, locale),
-                onTap: () => _showLanguageSheet(context, ref),
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
-  String _localeName(AppLocalizations l10n, Locale? locale) {
-    if (locale == null) return l10n.languageSystem;
-    return switch (locale.languageCode) {
-      'zh' => l10n.languageChinese,
-      'en' => l10n.languageEnglish,
-      _ => locale.languageCode,
-    };
-  }
-
-  void _showLanguageSheet(BuildContext context, WidgetRef ref) {
-    final l10n = context.l10n;
-    final current = ref.read(localeProvider);
-
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _LanguageOption(
-              label: l10n.languageSystem,
-              selected: current == null,
-              onTap: () {
-                ref.read(localeProvider.notifier).setLocale(null);
-                Navigator.pop(context);
-              },
-            ),
-            _LanguageOption(
-              label: l10n.languageChinese,
-              selected: current?.languageCode == 'zh',
-              onTap: () {
-                ref.read(localeProvider.notifier).setLocale(const Locale('zh'));
-                Navigator.pop(context);
-              },
-            ),
-            _LanguageOption(
-              label: l10n.languageEnglish,
-              selected: current?.languageCode == 'en',
-              onTap: () {
-                ref.read(localeProvider.notifier).setLocale(const Locale('en'));
-                Navigator.pop(context);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LanguageOption extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _LanguageOption({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return ListTile(
-      title: Text(
-        label,
-        style: TextStyle(
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          color: selected ? cs.primary : cs.onSurface,
-        ),
-      ),
-      trailing: selected
-          ? Icon(Symbols.check_rounded, color: cs.primary)
-          : null,
-      onTap: onTap,
-    );
-  }
 }
 
 // ── 设置项卡片 ──

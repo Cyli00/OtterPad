@@ -19,7 +19,7 @@ class BookshelfList extends ConsumerWidget {
   static const _kTwoColumnBreakpoint = 900; // ← 双栏触发宽度
   static const _kThreeColumnBreakpoint = 1800; // ← 三栏触发宽度
   static const _kMaxContentWidth = 2700; // ← 内容区最大宽度
-  static const _kCardHeight = 208.0; // ← 预留选中态边框后的多栏模式卡片高度
+  static const _kCardHeight = 174.0; // ← padding(16×2) + thumbHeightFull(142)
   // └──────────────────────────────────────────────────────────┘
 
   @override

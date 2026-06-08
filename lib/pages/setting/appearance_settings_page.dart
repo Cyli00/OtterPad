@@ -1,9 +1,12 @@
 import 'dart:math';
 
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n.dart';
+import '../../providers/locale_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/theme_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -149,7 +152,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
             ),
           ),
 
-          // ── 文字大小 ──
+          // ── 字体设置 ──
           _buildGroup(
             context,
             title: l10n.textSize,
@@ -194,6 +197,8 @@ class AppearanceSettingsPage extends ConsumerWidget {
                       color: cs.onSurfaceVariant,
                     ),
                   ),
+                  const SizedBox(height: 24),
+                  _AppLanguagePicker(ref: ref),
                 ],
               ),
             ),
@@ -403,4 +408,197 @@ class _PieChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PieChartPainter old) => old.scheme != scheme;
+}
+
+// ── 应用语言选择器（视觉参照翻译设置目标语言 picker）──
+
+class _AppLanguagePicker extends ConsumerWidget {
+  final WidgetRef ref;
+  const _AppLanguagePicker({required this.ref});
+
+  static final _options = <(Locale?, String Function(AppLocalizations))>[
+    (null, _systemLabel),
+    (const Locale('zh'), _zhLabel),
+    (const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'), _zhHantLabel),
+    (const Locale('en'), _enLabel),
+  ];
+
+  static String _systemLabel(AppLocalizations l10n) => l10n.languageSystem;
+  static String _zhLabel(AppLocalizations l10n) => l10n.languageChinese;
+  static String _zhHantLabel(AppLocalizations l10n) => l10n.languageTraditionalChinese;
+  static String _enLabel(AppLocalizations l10n) => l10n.languageEnglish;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final l10n = context.l10n;
+    final current = ref.watch(localeProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                l10n.appLanguage,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message: l10n.appLanguageDesc,
+              triggerMode: TooltipTriggerMode.tap,
+              showDuration: const Duration(seconds: 5),
+              preferBelow: true,
+              verticalOffset: 16,
+              decoration: BoxDecoration(
+                color: cs.inverseSurface,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Symbols.help_rounded,
+                    size: 16, color: cs.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _showSheet(context, ref, current),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _displayName(l10n, current),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Icon(Symbols.expand_more_rounded,
+                    size: 20, color: cs.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _displayName(AppLocalizations l10n, Locale? locale) {
+    if (locale == null) return l10n.languageSystem;
+    if (locale.languageCode == 'zh' && locale.scriptCode == 'Hant') {
+      return l10n.languageTraditionalChinese;
+    }
+    return switch (locale.languageCode) {
+      'zh' => l10n.languageChinese,
+      'en' => l10n.languageEnglish,
+      _ => locale.languageCode,
+    };
+  }
+
+  void _showSheet(BuildContext context, WidgetRef ref, Locale? current) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+        final l10n = ctx.l10n;
+        final maxH = MediaQuery.sizeOf(ctx).height * 0.5;
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+          child: Container(
+            constraints: BoxConstraints(maxHeight: maxH),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 32,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.onSurfaceVariant.withAlpha(80),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      l10n.appLanguage,
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ..._options.map((opt) {
+                  final (locale, labelFn) = opt;
+                  final isSelected = current == locale;
+                  return InkWell(
+                    onTap: () {
+                      ref.read(localeProvider.notifier).setLocale(locale);
+                      Navigator.pop(ctx);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              labelFn(l10n),
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color:
+                                    isSelected ? cs.primary : cs.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (isSelected)
+                            Icon(Symbols.check_rounded,
+                                color: cs.primary, size: 22),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
