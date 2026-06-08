@@ -36,12 +36,8 @@ enum RestoreMode {
 class BackupRestoreService {
   static const _archiveRoot = 'otter_pad_backup';
   static const _manifestPath = '$_archiveRoot/manifest.json';
-  // 归档内子目录名**故意保持旧名 `docs` / `data`**——磁盘上虽改成
-  // `library/` / `db/`，但归档是文件交换格式，新版本要能恢复旧版本备份
-  // 必须保留兼容键名。新备份与旧备份内部结构一致，restore 时统一映射到
-  // 磁盘新位置（library/ / db/）。
-  static const _docsDir = '$_archiveRoot/docs';
-  static const _dataDir = '$_archiveRoot/data';
+  static const _libraryDir = '$_archiveRoot/library';
+  static const _dbDir = '$_archiveRoot/db';
   static const _formatVersion = 2;
 
   static const _settingsBoxNames = {'settings'};
@@ -67,8 +63,8 @@ class BackupRestoreService {
       'app': 'OtterPad',
       'formatVersion': _formatVersion,
       'createdAt': createdAt.toIso8601String(),
-      'docsRoot': docsDir.path,
-      'dataRoot': dataDir.path,
+      'libraryRoot': docsDir.path,
+      'dbRoot': dataDir.path,
     };
 
     archive.add(
@@ -81,12 +77,12 @@ class BackupRestoreService {
     await _addDirectoryToArchive(
       archive,
       sourceDir: docsDir,
-      archiveRoot: _docsDir,
+      archiveRoot: _libraryDir,
     );
     await _addDirectoryToArchive(
       archive,
       sourceDir: dataDir,
-      archiveRoot: _dataDir,
+      archiveRoot: _dbDir,
     );
 
     final tempDir = await _getBackupTempDir();
@@ -104,8 +100,8 @@ class BackupRestoreService {
   }) async {
     onProgress?.call('正在解压备份文件...');
     final tempRoot = await _createRestoreTempRoot();
-    final extractedDocsDir = Directory(p.join(tempRoot.path, 'docs'));
-    final extractedDataDir = Directory(p.join(tempRoot.path, 'data'));
+    final extractedDocsDir = Directory(p.join(tempRoot.path, 'library'));
+    final extractedDataDir = Directory(p.join(tempRoot.path, 'db'));
 
     try {
       await _extractArchiveToDirectory(archivePath, tempRoot.path);
@@ -165,18 +161,18 @@ class BackupRestoreService {
     final archiveBytes = File(archivePath).readAsBytesSync();
     final archive = ZipDecoder().decodeBytes(archiveBytes);
 
-    const docsPrefix = '$_archiveRoot/docs/';
-    const dataPrefix = '$_archiveRoot/data/';
+    const libraryPrefix = '$_archiveRoot/library/';
+    const dbPrefix = '$_archiveRoot/db/';
 
     for (final file in archive) {
       String? relative;
       String? subDir;
-      if (file.name.startsWith(docsPrefix)) {
-        relative = file.name.substring(docsPrefix.length);
-        subDir = 'docs';
-      } else if (file.name.startsWith(dataPrefix)) {
-        relative = file.name.substring(dataPrefix.length);
-        subDir = 'data';
+      if (file.name.startsWith(libraryPrefix)) {
+        relative = file.name.substring(libraryPrefix.length);
+        subDir = 'library';
+      } else if (file.name.startsWith(dbPrefix)) {
+        relative = file.name.substring(dbPrefix.length);
+        subDir = 'db';
       }
       if (relative == null || relative.isEmpty || subDir == null) continue;
 

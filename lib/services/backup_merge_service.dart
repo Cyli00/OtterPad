@@ -5,7 +5,6 @@ import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import '../data/models/book/highlight.dart';
@@ -402,9 +401,6 @@ class BackupMergeService {
     for (final key in backupBox.keys) {
       if (key is! String) continue;
       if (_localOnlySettingsKeys.contains(key)) continue;
-      // 凭据已迁出 Hive（见 SecureCredentialVault）：旧备份里可能残留明文 key，
-      // 一律不导入，与"凭据不随备份迁移"的策略保持一致。
-      if (SecureCredentialVault.isCredentialKey(key)) continue;
       if (currentBox.containsKey(key)) continue;
 
       await currentBox.put(key, backupBox.get(key));

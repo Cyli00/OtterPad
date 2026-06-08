@@ -56,8 +56,8 @@ Future<void> main() async {
     FigureExtractService.instance.init(),
   ]);
 
-  // 凭据安全存储：必须在 GStorage.init 之后（要从 Hive 迁移历史明文 secret）、
-  // 任何 provider 读取凭据之前完成——同步 read() 依赖此处填充的内存缓存。
+  // 凭据安全存储：必须在 GStorage.init 之后、任何 provider 读取凭据之前完成——
+  // 同步 read() 依赖此处填充的内存缓存。
   await SecureCredentialVault.init();
 
   // 阅读器本地静态文件服务——必须在 GStorage.init 后启动

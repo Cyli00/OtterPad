@@ -244,7 +244,7 @@ class AgentModelParams {
         maxTokens: (json['maxTokens'] as num?)?.toInt(),
         systemPrompt: json['systemPrompt'] as String?,
         topK: (json['topK'] as num?)?.toInt(),
-        thinkingLevel: _migrateThinkingLevel(json),
+        thinkingLevel: ThinkingLevel.fromId(json['thinkingLevel'] as String?),
         verbosity: json['verbosity'] as String?,
         parallelToolCalls: json['parallelToolCalls'] as bool?,
         truncation: json['truncation'] as String?,
@@ -254,51 +254,6 @@ class AgentModelParams {
         frequencyPenalty: (json['frequencyPenalty'] as num?)?.toDouble(),
       );
 
-  /// 反序列化时把旧字段自动迁移到 [thinkingLevel]。
-  ///
-  /// **优先级**：新字段 `thinkingLevel` > 旧 `thinkingMode='disabled'` 直接 off >
-  /// 旧 `reasoningEffort` 字符串映射 > 旧 `thinkingBudget` 数字按区间反推 >
-  /// 仅有 `thinkingMode='enabled'/'adaptive'` 但无具体值 → 用 medium 兜底。
-  ///
-  /// 数字反推阈值参考各 provider 默认 budget 取整：1024（low 上限）/ 8192
-  /// （medium 上限）/ 16384（high 上限）；阈值不严格对应"原始 budget 的最佳
-  /// 还原"，只保证旧高 budget 用户升级后仍落在 high/xhigh 档。
-  static ThinkingLevel? _migrateThinkingLevel(Map<String, dynamic> json) {
-    final fresh = ThinkingLevel.fromId(json['thinkingLevel'] as String?);
-    if (fresh != null) return fresh;
-
-    final mode =
-        json['thinkingMode'] as String? ??
-        (json['thinkingEnabled'] == true
-            ? 'enabled'
-            : json['thinkingEnabled'] == false
-            ? 'disabled'
-            : null);
-    if (mode == 'disabled') return ThinkingLevel.off;
-
-    final effort = json['reasoningEffort'] as String?;
-    if (effort != null) {
-      return switch (effort) {
-        'minimal' || 'low' => ThinkingLevel.low,
-        'medium' => ThinkingLevel.medium,
-        'high' => ThinkingLevel.high,
-        'max' || 'xhigh' => ThinkingLevel.xhigh,
-        _ => null,
-      };
-    }
-
-    final budget = (json['thinkingBudget'] as num?)?.toInt();
-    if (budget != null) {
-      if (budget == 0) return ThinkingLevel.off;
-      if (budget < 1024) return ThinkingLevel.low;
-      if (budget < 8192) return ThinkingLevel.medium;
-      if (budget < 16384) return ThinkingLevel.high;
-      return ThinkingLevel.xhigh;
-    }
-
-    if (mode == 'enabled' || mode == 'adaptive') return ThinkingLevel.medium;
-    return null;
-  }
 }
 
 /// 单个服务商实例（注册表条目）。

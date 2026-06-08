@@ -57,8 +57,8 @@
 
 ### 数据存储
 
-- **GStorage** (`lib/core/storage/storage.dart`) — Hive box 统一访问 + 文件系统根目录。禁止直接调用 `Hive.openBox()` 或 `getApplicationDocumentsDirectory()` 拼路径。
-- **SecureCredentialVault** (`lib/core/storage/secure_credential_vault.dart`) — 所有 API key / secret / 密码的唯一存取接缝（同步读内存缓存 + 异步写各平台 Keystore/Keychain/DPAPI/libsecret）。`main` 启动时 `init()` 从 Hive 迁移历史明文。禁止把 secret 写进 `GStorage`；凭据不随备份迁移（`BackupMergeService` 按 `isCredentialKey` 跳过）。
+- **GStorage** (`lib/core/storage/storage.dart`) — Hive box 统一访问 + 文件系统根目录。禁止直接调用 `Hive.openBox()` 或 `getApplicationSupportDirectory()` 拼路径。
+- **SecureCredentialVault** (`lib/core/storage/secure_credential_vault.dart`) — 所有 API key / secret / 密码的唯一存取接缝（同步读内存缓存 + 异步写各平台 Keystore/Keychain/DPAPI/libsecret）。禁止把 secret 写进 `GStorage`。
 - **DocPaths** (`lib/utils/doc_paths.dart`) — 文献文件路径中心工具。禁止用 `p.basenameWithoutExtension` 或持久化绝对路径自行拼接。
 - **StorageCleanupService** (`lib/services/storage_cleanup_service.dart`) — 禁止在 UI 层直接删除缓存目录。
 - **BackupProvider** (`lib/providers/backup_provider.dart`) — 禁止在设置页或服务里散落保存备份凭据。

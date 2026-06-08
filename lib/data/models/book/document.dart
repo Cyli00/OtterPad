@@ -80,7 +80,6 @@ class Document {
               .map((e) => e.toString().trim())
               .where((e) => e.isNotEmpty)
               .toList();
-    final legacyPublisher = (json['publisher'] as String?)?.trim();
     final journal = (json['journal'] as String?)?.trim();
     final contentHash = (json['contentHash'] as String?)?.trim();
 
@@ -88,11 +87,7 @@ class Document {
       id: json['id'] as String,
       title: (json['title'] as String? ?? '').trim(),
       authors: authors,
-      journal: (journal != null && journal.isNotEmpty)
-          ? journal
-          : (legacyPublisher != null && legacyPublisher.isNotEmpty
-                ? legacyPublisher
-                : null),
+      journal: (journal != null && journal.isNotEmpty) ? journal : null,
       year: (json['year'] as String?)?.trim(),
       doi: (json['doi'] as String?)?.trim(),
       keywords: keywords,

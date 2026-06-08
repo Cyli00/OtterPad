@@ -38,41 +38,13 @@ class Favorite {
   };
 
   factory Favorite.fromJson(Map<String, dynamic> json) {
-    final documentIdsRaw = json['documentIds'];
-    final legacyDocPaths = json['docPaths'];
-    final List<String> documentIds;
-    if (documentIdsRaw is List) {
-      documentIds = documentIdsRaw.cast<String>();
-    } else if (legacyDocPaths is List) {
-      // 旧 schema：docPaths 形如 `<root>/(docs|library)/<documentId>/source.pdf`。
-      // 取倒数第二段即为目录名，等同于今天 Document.id（rebuild 时
-      // documentId = basename(entity.path) 已保证迁移幂等）。
-      documentIds = _docPathsToDocumentIds(legacyDocPaths.cast<String>());
-    } else {
-      documentIds = const [];
-    }
+    final raw = json['documentIds'];
     return Favorite(
       id: json['id'] as String,
       emoji: json['emoji'] as String,
       name: json['name'] as String,
-      documentIds: documentIds,
+      documentIds: raw is List ? raw.cast<String>() : const [],
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
-  }
-
-  static List<String> _docPathsToDocumentIds(List<String> paths) {
-    final ids = <String>[];
-    for (final raw in paths) {
-      final normalized = raw.replaceAll('\\', '/');
-      final trimmed = normalized.endsWith('/')
-          ? normalized.substring(0, normalized.length - 1)
-          : normalized;
-      final parts = trimmed
-          .split('/')
-          .where((s) => s.isNotEmpty)
-          .toList();
-      if (parts.length >= 2) ids.add(parts[parts.length - 2]);
-    }
-    return ids;
   }
 }
