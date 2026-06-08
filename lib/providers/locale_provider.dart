@@ -26,6 +26,9 @@ class LocaleNotifier extends StateNotifier<Locale?> {
   }
 
   static String _toTag(Locale locale) {
+    if (locale.scriptCode != null) {
+      return '${locale.languageCode}_${locale.scriptCode}';
+    }
     if (locale.countryCode != null) {
       return '${locale.languageCode}_${locale.countryCode}';
     }
@@ -35,7 +38,13 @@ class LocaleNotifier extends StateNotifier<Locale?> {
   static Locale? _parseTag(String? tag) {
     if (tag == null || tag.isEmpty) return null;
     final parts = tag.split('_');
-    if (parts.length >= 2) return Locale(parts[0], parts[1]);
+    if (parts.length >= 2) {
+      if (parts[1].length == 4) {
+        return Locale.fromSubtags(
+            languageCode: parts[0], scriptCode: parts[1]);
+      }
+      return Locale(parts[0], parts[1]);
+    }
     return Locale(parts[0]);
   }
 }
