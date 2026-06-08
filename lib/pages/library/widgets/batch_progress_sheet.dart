@@ -50,7 +50,9 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
   void initState() {
     super.initState();
     _taskNotifier = ref.read(documentTaskProvider.notifier);
-    unawaited(_run());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_run());
+    });
   }
 
   @override

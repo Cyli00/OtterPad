@@ -132,6 +132,37 @@ class BatchExtractService {
   static const _jobApiUrl =
       'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs';
 
+  /// API 返回 `extractedPages`/`totalPages` 可能是 String 或 int。
+  static int _toInt(Object? v) {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  /// 从 DioException.response?.data 安全提取 Map（可能是 String/null）。
+  static Map<String, dynamic>? _safeResponseMap(Object? data) {
+    if (data is Map<String, dynamic>) return data;
+    return null;
+  }
+
+  /// 检查 API 响应的业务错误码，非 0 时抛出含人类可读描述的异常。
+  static void _checkApiResponse(Map<String, dynamic>? body) {
+    if (body == null) return;
+    final code = body['code'];
+    if (code == null || code == 0) return;
+    final msg = body['msg'] as String? ?? '';
+    final desc = switch (code) {
+      10003 => '文件超过大小限制 (上传 50MB / URL 200MB)',
+      10006 => '页数超过限制 (最多 1000 页)',
+      10009 => '同一 batchId 最多 100 个任务',
+      10010 => '服务队列已满，请稍后重试',
+      12001 => '今日页数配额已用完',
+      12002 => '请求频率过高',
+      _ => msg,
+    };
+    throw BatchExtractException('[$code] $desc');
+  }
+
   BatchExtractProgress _buildProgress(
     List<BatchJobStatus> statuses,
     String currentTitle,
@@ -204,13 +235,19 @@ class BatchExtractService {
       );
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) rethrow;
+      _checkApiResponse(_safeResponseMap(e.response?.data));
       throw BatchExtractException('提交任务失败: ${e.message ?? e.type.name}');
     }
 
+    debugPrint('[BatchExtract] submit response: code=${response.data?['code']}, msg=${response.data?['msg']}');
+    _checkApiResponse(response.data);
     final jobId = response.data?['data']?['jobId'] as String?;
     if (jobId == null) {
-      throw const BatchExtractException('提交任务失败: 响应中无 jobId');
+      final msg = response.data?['msg'] as String? ?? '响应中无 jobId';
+      debugPrint('[BatchExtract] submit failed: no jobId, full response=${response.data}');
+      throw BatchExtractException('提交任务失败: $msg');
     }
+    debugPrint('[BatchExtract] submit ok: jobId=$jobId');
     return jobId;
   }
 
@@ -227,9 +264,12 @@ class BatchExtractService {
         options: Options(headers: {'Authorization': 'bearer $token'}),
       );
     } on DioException catch (e) {
+      if (e.response?.statusCode == 429) rethrow;
+      _checkApiResponse(_safeResponseMap(e.response?.data));
       throw BatchExtractException('查询任务状态失败: ${e.message ?? e.type.name}');
     }
 
+    _checkApiResponse(response.data);
     final data = response.data?['data'] as Map<String, dynamic>?;
     if (data == null) throw const BatchExtractException('轮询响应中无 data 字段');
     return data;
@@ -248,19 +288,22 @@ class BatchExtractService {
         options: Options(headers: {'Authorization': 'bearer $token'}),
       );
     } on DioException catch (e) {
+      if (e.response?.statusCode == 429) rethrow;
+      _checkApiResponse(_safeResponseMap(e.response?.data));
       throw BatchExtractException('批量查询状态失败: ${e.message ?? e.type.name}');
     }
 
+    _checkApiResponse(response.data);
     final data = response.data?['data'];
+    debugPrint('[BatchExtract] pollBatch response data type=${data.runtimeType}, keys=${data is Map<String, dynamic> ? data.keys.toList() : 'N/A'}');
+    if (data is Map<String, dynamic>) {
+      final results = data['extractResult'];
+      if (results is List) {
+        return results.whereType<Map<String, dynamic>>().toList();
+      }
+    }
     if (data is List) {
       return data.whereType<Map<String, dynamic>>().toList();
-    }
-    if (data is Map<String, dynamic>) {
-      // 兼容 {jobs: [...]} 格式
-      final jobs = data['jobs'];
-      if (jobs is List) {
-        return jobs.whereType<Map<String, dynamic>>().toList();
-      }
     }
     return [];
   }
@@ -330,8 +373,8 @@ class BatchExtractService {
       case 'running':
         status.state = BatchJobState.running;
         final prog = data['extractProgress'] as Map?;
-        status.extractedPages = (prog?['extractedPages'] as int?) ?? 0;
-        status.totalPages = (prog?['totalPages'] as int?) ?? 0;
+        status.extractedPages = _toInt(prog?['extractedPages']);
+        status.totalPages = _toInt(prog?['totalPages']);
 
       case 'done':
         final resultUrl = data['resultUrl'] as Map?;
@@ -443,8 +486,8 @@ class BatchExtractService {
           onProgress?.call('排队中…', 0, 0);
         case 'running':
           final prog = data['extractProgress'] as Map?;
-          final extracted = (prog?['extractedPages'] as int?) ?? 0;
-          final total = (prog?['totalPages'] as int?) ?? 0;
+          final extracted = _toInt(prog?['extractedPages']);
+          final total = _toInt(prog?['totalPages']);
           onProgress?.call('正在提取…', extracted, total);
         case 'done':
           final resultUrl = data['resultUrl'] as Map?;
@@ -500,6 +543,7 @@ class BatchExtractService {
     final jobUrl = _jobApiUrl;
     final batchId = 'nr_${DateTime.now().millisecondsSinceEpoch}';
 
+    debugPrint('[BatchExtract] === extractBatch start: ${items.length} items, batchId=$batchId ===');
     // Phase 1：并发提交 Job（每组最多 _maxConcurrent 个）
     for (int i = 0; i < items.length; i += _maxConcurrent) {
       if (cancelToken?.isCancelled == true) break;
@@ -556,6 +600,12 @@ class BatchExtractService {
     }
 
     // Phase 2：轮询所有 Job 直到全部结束（优先使用 batchId 批量查询）
+    final submitted = jobStatuses.where((s) => s.jobId != null).length;
+    final failedSubmit = jobStatuses.where((s) => s.state == BatchJobState.failed).length;
+    debugPrint('[BatchExtract] === Phase 1 done: $submitted submitted, $failedSubmit failed ===');
+    for (final s in jobStatuses) {
+      debugPrint('[BatchExtract]   ${s.documentId}: state=${s.state.name}, jobId=${s.jobId}, error=${s.error}');
+    }
     int pollDelayMs = 5000;
     bool useBatchPoll = true;
 
@@ -568,13 +618,16 @@ class BatchExtractService {
           )
           .toList();
       if (activeStatuses.isEmpty) break;
+      debugPrint('[BatchExtract] poll tick: ${activeStatuses.length} active, mode=${useBatchPoll ? "batch" : "individual"}');
 
       try {
         if (useBatchPoll) {
           // 批量查询：1 次请求获取所有 Job 状态
           final jobDataList = await _pollBatch(batchId, jobUrl, token);
+          debugPrint('[BatchExtract] pollBatch returned ${jobDataList.length} items');
           if (jobDataList.isEmpty && activeStatuses.isNotEmpty) {
             // 端点返回空列表，回退到逐个查询
+            debugPrint('[BatchExtract] batch returned empty, falling back to individual');
             useBatchPoll = false;
             continue;
           }
@@ -600,6 +653,9 @@ class BatchExtractService {
               final data = await _pollOnce(status.jobId!, jobUrl, token);
               await _updateStatusFromData(status, data, items, results);
               onJobUpdate?.call(status);
+            } on DioException catch (e) {
+              if (e.response?.statusCode == 429) rethrow;
+              debugPrint('[BatchExtract] 轮询出错 (${status.documentId}): $e');
             } catch (e) {
               debugPrint('[BatchExtract] 轮询出错 (${status.documentId}): $e');
             }
