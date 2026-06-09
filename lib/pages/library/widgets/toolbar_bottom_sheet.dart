@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 
 enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
@@ -14,6 +15,7 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
   return showModalBottomSheet<ToolbarAction>(
     context: context,
     backgroundColor: Colors.transparent,
+    isScrollControlled: true,
     builder: (context) {
       return BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
@@ -51,25 +53,35 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                   ),
                 ),
               ),
-              _SheetItem(
-                icon: Symbols.note_add_rounded,
-                title: context.l10n.addFiles,
-                subtitle: context.l10n.addFilesSubtitle,
-                onTap: () => Navigator.pop(context, ToolbarAction.addFile),
-              ),
-              _SheetItem(
-                icon: Symbols.travel_explore_rounded,
-                title: context.l10n.addByIdentifier,
-                subtitle: context.l10n.addByIdentifierSubtitle,
-                onTap: () =>
-                    Navigator.pop(context, ToolbarAction.addByIdentifier),
-              ),
-              _SheetItem(
-                icon: Symbols.refresh_rounded,
-                title: context.l10n.rebuildLibrary,
-                subtitle: context.l10n.rebuildLibrarySubtitle,
-                onTap: () =>
-                    Navigator.pop(context, ToolbarAction.rebuildLibrary),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _SheetItem(
+                        icon: Symbols.note_add_rounded,
+                        title: context.l10n.addFiles,
+                        subtitle: context.l10n.addFilesSubtitle,
+                        onTap: () =>
+                            Navigator.pop(context, ToolbarAction.addFile),
+                      ),
+                      _SheetItem(
+                        icon: Symbols.travel_explore_rounded,
+                        title: context.l10n.addByIdentifier,
+                        subtitle: context.l10n.addByIdentifierSubtitle,
+                        onTap: () =>
+                            Navigator.pop(context, ToolbarAction.addByIdentifier),
+                      ),
+                      _SheetItem(
+                        icon: Symbols.refresh_rounded,
+                        title: context.l10n.rebuildLibrary,
+                        subtitle: context.l10n.rebuildLibrarySubtitle,
+                        onTap: () =>
+                            Navigator.pop(context, ToolbarAction.rebuildLibrary),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
             ],
@@ -99,7 +111,10 @@ class _SheetItem extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        Haptics.soft();
+        onTap();
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         child: Row(

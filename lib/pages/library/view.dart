@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
+import '../../services/haptics.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
@@ -31,8 +33,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  static const _kAnimDuration = Duration(milliseconds: 300);
-  static const _kAnimCurve = Curves.easeOutCubic;
+  static const _kAnimDuration = kAnimSlow;
+  static const _kAnimCurve = kAnimCurve;
 
   @override
   void initState() {
@@ -99,11 +101,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
         content: Text(l10n.confirmDeleteDocuments(count)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, false);
+            },
             child: Text(l10n.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, true);
+            },
             style: TextButton.styleFrom(foregroundColor: cs.error),
             child: Text(l10n.delete),
           ),

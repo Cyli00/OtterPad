@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../providers/proxy_provider.dart';
+import '../../services/haptics.dart';
 import '../../services/identifier_resolver.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -222,6 +224,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
             child: RadioGroup<ProxyMode>(
               groupValue: proxy.mode,
               onChanged: (v) {
+                Haptics.soft();
                 if (v != null) ref.read(proxyProvider.notifier).setMode(v);
               },
               child: Column(
@@ -238,9 +241,9 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                   Animate(
                     target: proxy.mode == ProxyMode.custom ? 1 : 0,
                     effects: [
-                      FadeEffect(duration: 200.ms),
+                      FadeEffect(duration: kAnim),
                       CustomEffect(
-                        duration: 200.ms,
+                        duration: kAnim,
                         curve: Curves.easeOut,
                         builder: (context, value, child) => ClipRect(
                           child: Align(
@@ -347,7 +350,10 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     const SizedBox(width: 12),
                     FilledButton.tonalIcon(
                       onPressed:
-                          _testStatus == _TestStatus.testing ? null : _runTest,
+                          _testStatus == _TestStatus.testing ? null : () {
+                            Haptics.soft();
+                            _runTest();
+                          },
                       icon: _testStatus == _TestStatus.testing
                           ? SizedBox(
                               width: 18,

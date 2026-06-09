@@ -3,8 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
+import '../../../services/haptics.dart';
 
 /// 在选区附近显示阅读上下文菜单 Overlay（含可展开的笔记面板）。
 OverlayEntry showReaderContextMenu({
@@ -190,8 +192,8 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
           ),
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOutCubic,
+            duration: kAnimFast,
+            curve: kAnimCurve,
             builder: (context, value, child) {
               return Opacity(
                 opacity: value,
@@ -315,7 +317,10 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
                     color: Color(0xFF4FC3F7),
                     size: 22,
                   ),
-                  onPressed: _handleNoteSave,
+                  onPressed: () {
+                    Haptics.soft();
+                    _handleNoteSave();
+                  },
                   tooltip: context.l10n.save,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
@@ -350,7 +355,10 @@ class _ColorDot extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          Haptics.soft();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(10),
         child: Container(
           width: 22,
@@ -390,7 +398,10 @@ class _ActionIcon extends StatelessWidget {
       message: tooltip,
       preferBelow: false,
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          Haptics.soft();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.all(8),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/collection/favorite.dart';
+import '../../services/haptics.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
@@ -50,11 +51,17 @@ class ShelfPage extends ConsumerWidget {
         content: Text(context.l10n.confirmDeleteFavorite(fav.name)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.of(context).pop(false);
+            },
             child: Text(context.l10n.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.of(context).pop(true);
+            },
             style: TextButton.styleFrom(
               foregroundColor: theme.colorScheme.error,
             ),
@@ -102,12 +109,12 @@ class ShelfPage extends ConsumerWidget {
 
                 // 菜单列表项
                 LibraryMenuItem(
-                  icon: Symbols.cloud_sync,
+                  icon: Symbols.cloud_sync_rounded,
                   title: context.l10n.synced,
                   onTap: () {},
                 ),
                 LibraryMenuItem(
-                  icon: Symbols.history,
+                  icon: Symbols.history_rounded,
                   title: context.l10n.readingHistory,
                   trailing: historyCount > 0
                       ? Container(
@@ -131,7 +138,7 @@ class ShelfPage extends ConsumerWidget {
                   onTap: () => context.push(AppRoutes.shelfHistory),
                 ),
                 LibraryMenuItem(
-                  icon: Symbols.description,
+                  icon: Symbols.description_rounded,
                   title: context.l10n.noFileEntries,
                   trailing: noFileCount > 0
                       ? Container(
@@ -176,9 +183,10 @@ class ShelfPage extends ConsumerWidget {
                     ),
                     const Spacer(),
                     IconButton(
-                      icon: const Icon(Symbols.add),
+                      icon: const Icon(Symbols.add_rounded),
                       color: theme.colorScheme.onSurfaceVariant,
                       onPressed: () async {
+                        Haptics.soft();
                         final result = await showCreateFavoriteDialog(context);
                         if (result != null) {
                           ref

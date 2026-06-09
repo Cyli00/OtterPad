@@ -1,5 +1,7 @@
 import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
+
+import '../core/animation_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -32,8 +34,8 @@ CustomTransitionPage<T> _buildAnimatedPage<T>({
   return CustomTransitionPage<T>(
     key: state.pageKey,
     child: child,
-    transitionDuration: const Duration(milliseconds: 300),
-    reverseTransitionDuration: const Duration(milliseconds: 300),
+    transitionDuration: kAnimSlow,
+    reverseTransitionDuration: kAnimSlow,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       return FadeThroughTransition(
         animation: animation,

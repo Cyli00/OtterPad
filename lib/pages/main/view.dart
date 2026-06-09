@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/l10n.dart';
+import '../../services/haptics.dart';
 import '../../widgets/layout/adaptive_scaffold.dart';
 import '../../widgets/layout/adaptive_navigation.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -12,6 +13,7 @@ class MainShell extends StatelessWidget {
   const MainShell({super.key, required this.navigationShell});
 
   void _onDestinationSelected(int index) {
+    Haptics.soft();
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,
@@ -26,18 +28,18 @@ class MainShell extends StatelessWidget {
       onDestinationSelected: _onDestinationSelected,
       destinations: [
         AdaptiveDestination(
-          icon: const Icon(Symbols.auto_awesome_mosaic, weight: 600, fill: 1),
-          selectedIcon: const Icon(Symbols.auto_awesome_mosaic, weight: 600, fill: 1),
+          icon: const Icon(Symbols.auto_awesome_mosaic_rounded, weight: 600, fill: 1),
+          selectedIcon: const Icon(Symbols.auto_awesome_mosaic_rounded, weight: 600, fill: 1),
           label: l10n.home,
         ),
         AdaptiveDestination(
-          icon: const Icon(Symbols.folder_copy, weight: 600, fill: 1),
-          selectedIcon: const Icon(Symbols.folder_copy, weight: 600, fill: 1),
+          icon: const Icon(Symbols.folder_copy_rounded, weight: 600, fill: 1),
+          selectedIcon: const Icon(Symbols.folder_copy_rounded, weight: 600, fill: 1),
           label: l10n.library,
         ),
         AdaptiveDestination(
-          icon: const Icon(Symbols.construction, weight: 600, fill: 1),
-          selectedIcon: const Icon(Symbols.construction, weight: 600, fill: 1),
+          icon: const Icon(Symbols.construction_rounded, weight: 600, fill: 1),
+          selectedIcon: const Icon(Symbols.construction_rounded, weight: 600, fill: 1),
           label: l10n.settings,
         ),
       ],

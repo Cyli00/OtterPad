@@ -22,6 +22,7 @@ import '../../providers/zotero_sync_provider.dart';
 import '../../services/backup_merge_service.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
+import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/storage_cleanup_service.dart';
 import '../../utils/debounced_action.dart';
@@ -138,17 +139,18 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                               segments: const [
                                 ButtonSegment(
                                   value: BackupRemoteType.s3,
-                                  icon: Icon(Symbols.cloud_circle),
+                                  icon: Icon(Symbols.cloud_circle_rounded),
                                   label: Text('S3'),
                                 ),
                                 ButtonSegment(
                                   value: BackupRemoteType.webdav,
-                                  icon: Icon(Symbols.cloud_sync),
+                                  icon: Icon(Symbols.cloud_sync_rounded),
                                   label: Text('WebDAV'),
                                 ),
                               ],
                               selected: {remoteType},
                               onSelectionChanged: (value) {
+                                Haptics.soft();
                                 ref
                                     .read(backupRemoteTypeProvider.notifier)
                                     .setRemoteType(value.first);
@@ -370,10 +372,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     ),
                     const Spacer(),
                     IconButton(
-                      onPressed: () => launchUrl(
-                        Uri.parse('https://www.zotero.org/settings/keys/new'),
-                        mode: LaunchMode.externalApplication,
-                      ),
+                      onPressed: () {
+                        Haptics.soft();
+                        launchUrl(
+                          Uri.parse('https://www.zotero.org/settings/keys/new'),
+                          mode: LaunchMode.externalApplication,
+                        );
+                      },
                       icon: Icon(
                         Symbols.arrow_outward_rounded,
                         size: 16,
@@ -433,13 +438,16 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     suffixIcon: IconButton(
                       icon: Icon(
                         _zoteroKeyObscured
-                            ? Symbols.visibility_off
-                            : Symbols.visibility,
+                            ? Symbols.visibility_off_rounded
+                            : Symbols.visibility_rounded,
                         size: 20,
                       ),
-                      onPressed: () => setState(
-                        () => _zoteroKeyObscured = !_zoteroKeyObscured,
-                      ),
+                      onPressed: () {
+                        Haptics.soft();
+                        setState(
+                          () => _zoteroKeyObscured = !_zoteroKeyObscured,
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -609,7 +617,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
           FilledButton.tonal(
             onPressed: _busy
                 ? null
-                : () => _editRemoteConfig(remoteType, s3, webDav),
+                : () {
+                    Haptics.soft();
+                    _editRemoteConfig(remoteType, s3, webDav);
+                  },
             child: Text(configured ? context.l10n.edit : context.l10n.configure),
           ),
         ],
@@ -1015,8 +1026,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                             ButtonSegment(value: m, label: Text(m.label)),
                         ],
                         selected: {mode},
-                        onSelectionChanged: (set) =>
-                            setState(() => mode = set.first),
+                        onSelectionChanged: (set) {
+                          Haptics.soft();
+                          setState(() => mode = set.first);
+                        },
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1124,7 +1137,10 @@ class _ActionTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: enabled ? onTap : null,
+        onTap: enabled ? () {
+          Haptics.soft();
+          onTap();
+        } : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Row(
@@ -1407,12 +1423,13 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
           obscureText: _obscurePassword,
           suffixIcon: IconButton(
             onPressed: () {
+              Haptics.soft();
               setState(() {
                 _obscurePassword = !_obscurePassword;
               });
             },
             icon: Icon(
-              _obscurePassword ? Symbols.visibility : Symbols.visibility_off,
+              _obscurePassword ? Symbols.visibility_rounded : Symbols.visibility_off_rounded,
             ),
           ),
         ),
@@ -1518,18 +1535,19 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
           obscureText: _obscureSecretKey,
           suffixIcon: IconButton(
             onPressed: () {
+              Haptics.soft();
               setState(() {
                 _obscureSecretKey = !_obscureSecretKey;
               });
             },
             icon: Icon(
-              _obscureSecretKey ? Symbols.visibility : Symbols.visibility_off,
+              _obscureSecretKey ? Symbols.visibility_rounded : Symbols.visibility_off_rounded,
             ),
           ),
         ),
         _ConfigField(
           controller: _objectKeyController,
-          icon: Symbols.description,
+          icon: Symbols.description_rounded,
           label: context.l10n.objectPath,
           helperText: context.l10n.s3ObjectPathDefault,
         ),
@@ -1539,6 +1557,7 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
           title: Text(context.l10n.usePathStyle),
           subtitle: Text(context.l10n.s3PathStyleHint),
           onChanged: (value) {
+            Haptics.soft();
             setState(() {
               _usePathStyle = value;
             });

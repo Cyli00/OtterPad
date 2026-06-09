@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/animation_constants.dart';
 import 'reader_background.dart';
 
 /// 阅读器内嵌 bottom sheet 宿主。
@@ -66,7 +67,7 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 340),
+      duration: kAnimSlow,
     );
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 1),
@@ -118,8 +119,8 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
     setState(() {});
     _controller.animateTo(
       1.0,
-      duration: const Duration(milliseconds: 340),
-      curve: Curves.easeOutCubic,
+      duration: kAnimSlow,
+      curve: kAnimCurve,
     );
 
     return completer.future;
@@ -132,8 +133,8 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
     _pendingResult = result;
     _controller.animateBack(
       0.0,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeInCubic,
+      duration: kAnim,
+      curve: kAnimCurveReverse,
     );
   }
 
@@ -179,8 +180,8 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
     } else {
       _controller.animateTo(
         1.0,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
+        duration: kAnimFast,
+        curve: kAnimCurve,
       );
     }
   }

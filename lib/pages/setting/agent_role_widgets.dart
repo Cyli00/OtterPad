@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/animation_constants.dart';
+import '../../services/haptics.dart';
+
 /// 小圆角标签：用于标注"默认 / 快速"等模型角色。
 class RoleBadge extends StatelessWidget {
   final String label;
@@ -67,7 +70,7 @@ class RoleToggleTile extends StatelessWidget {
     final showWarn = value && replacingText != null;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
+      duration: kAnim,
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         color: value
@@ -84,7 +87,10 @@ class RoleToggleTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () => onChanged(!value),
+          onTap: () {
+            Haptics.soft();
+            onChanged(!value);
+          },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             child: Column(
@@ -93,7 +99,7 @@ class RoleToggleTile extends StatelessWidget {
                 Row(
                   children: [
                     AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
+                      duration: kAnim,
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
@@ -118,11 +124,14 @@ class RoleToggleTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Switch(value: value, onChanged: onChanged),
+                    Switch(value: value, onChanged: (v) {
+                      Haptics.soft();
+                      onChanged(v);
+                    }),
                   ],
                 ),
                 AnimatedSize(
-                  duration: const Duration(milliseconds: 220),
+                  duration: kAnim,
                   curve: Curves.easeOut,
                   child: showWarn
                       ? Padding(

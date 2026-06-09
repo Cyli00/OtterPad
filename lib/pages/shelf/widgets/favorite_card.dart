@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../library/widgets/pdf_cover.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
+import '../../../widgets/tactile_press.dart';
+import '../../library/widgets/pdf_cover.dart';
 
 class FavoriteCard extends StatelessWidget {
   final String title;
@@ -51,11 +54,12 @@ class FavoriteCard extends StatelessWidget {
               ),
             ],
           ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: onTap,
-              child: Padding(
+          child: TactilePress(
+            baseColor: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+            pressedScale: 0.98,
+            onTap: onTap,
+            child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,7 +96,10 @@ class FavoriteCard extends StatelessWidget {
               Expanded(child: _buildCoverArea(context)),
               const SizedBox(height: 16),
               InkWell(
-                onTap: onTap,
+                onTap: () {
+                  Haptics.soft();
+                  onTap();
+                },
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   width: double.infinity,
@@ -118,7 +125,6 @@ class FavoriteCard extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -192,7 +198,7 @@ class FavoriteCard extends StatelessWidget {
     return Container(
       color: cs.surfaceContainerHighest,
       child: Center(
-        child: Icon(Symbols.picture_as_pdf,
+        child: Icon(Symbols.picture_as_pdf_rounded,
             color: cs.onSurfaceVariant.withAlpha(100), size: 24),
       ),
     );

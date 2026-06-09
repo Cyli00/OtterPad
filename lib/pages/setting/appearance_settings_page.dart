@@ -9,6 +9,7 @@ import '../../core/l10n.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../services/haptics.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
@@ -54,21 +55,22 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     ButtonSegment(
                       value: ThemeMode.system,
                       label: Text(l10n.autoMode),
-                      icon: const Icon(Symbols.brightness_auto),
+                      icon: const Icon(Symbols.brightness_auto_rounded),
                     ),
                     ButtonSegment(
                       value: ThemeMode.light,
                       label: Text(l10n.lightMode),
-                      icon: const Icon(Symbols.wb_sunny),
+                      icon: const Icon(Symbols.wb_sunny_rounded),
                     ),
                     ButtonSegment(
                       value: ThemeMode.dark,
                       label: Text(l10n.darkMode),
-                      icon: const Icon(Symbols.dark_mode),
+                      icon: const Icon(Symbols.dark_mode_rounded),
                     ),
                   ],
                   selected: {themeState.mode},
                   onSelectionChanged: (set) {
+                    Haptics.soft();
                     final mode = set.first;
                     ref.read(themeProvider.notifier).setThemeMode(mode);
                   },
@@ -128,9 +130,12 @@ class AppearanceSettingsPage extends ConsumerWidget {
                               )
                               .toList(),
                       selected: {settings.defaultReadingMode},
-                      onSelectionChanged: (set) => ref
-                          .read(readerSettingsProvider.notifier)
-                          .setDefaultReadingMode(set.first),
+                      onSelectionChanged: (set) {
+                        Haptics.soft();
+                        ref
+                            .read(readerSettingsProvider.notifier)
+                            .setDefaultReadingMode(set.first);
+                      },
                       style: SegmentedButton.styleFrom(
                         backgroundColor: cs.surface,
                         selectedBackgroundColor: cs.primaryContainer,
@@ -161,40 +166,86 @@ class AppearanceSettingsPage extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    l10n.systemTextScale,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: SegmentedButton<double>(
-                      segments: [
-                        ButtonSegment(value: 1.0, label: Text(l10n.textSizeStandard)),
-                        ButtonSegment(value: 1.15, label: Text(l10n.textSizeLarge)),
-                        ButtonSegment(value: 1.3, label: Text(l10n.textSizeExtraLarge)),
-                      ],
-                      selected: {_closestPreset(themeState.textScale)},
-                      onSelectionChanged: (set) => ref
-                          .read(themeProvider.notifier)
-                          .setTextScale(set.first),
-                      style: SegmentedButton.styleFrom(
-                        backgroundColor: cs.surface,
-                        selectedBackgroundColor: cs.primaryContainer,
-                        side: BorderSide(
-                          color: cs.outlineVariant.withAlpha(100),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.systemTextScale,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _scaleLabel(
+                            l10n,
+                            _closestPreset(themeState.textScale),
+                          ),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: cs.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 8,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 16,
+                      ),
+                      trackHeight: 3,
+                    ),
+                    child: Slider(
+                      value: _closestPreset(themeState.textScale),
+                      min: 1.0,
+                      max: 1.3,
+                      divisions: 2,
+                      onChanged: (v) {
+                        Haptics.soft();
+                        ref.read(themeProvider.notifier).setTextScale(v);
+                      },
+                      padding: EdgeInsets.zero,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    l10n.textSizeHint,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          l10n.textSizeStandard,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          l10n.textSizeLarge,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          l10n.textSizeExtraLarge,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -208,7 +259,12 @@ class AppearanceSettingsPage extends ConsumerWidget {
     );
   }
 
-  /// 把任意 textScale 吸附到最接近的预设值，避免 SegmentedButton 出现"无选中"状态
+  String _scaleLabel(AppLocalizations l10n, double scale) {
+    if (scale <= 1.0) return l10n.textSizeStandard;
+    if (scale >= 1.3) return l10n.textSizeExtraLarge;
+    return l10n.textSizeLarge;
+  }
+
   double _closestPreset(double current) {
     final presets = ThemeNotifier.textScalePresets;
     double best = presets.first;
@@ -315,7 +371,10 @@ class _ColorCircle extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        Haptics.soft();
+        onTap();
+      },
       child: Container(
         width: 48,
         height: 48,
@@ -353,7 +412,7 @@ class _ColorCircle extends StatelessWidget {
                   ),
                 ),
                 child: const Icon(
-                  Symbols.auto_awesome,
+                  Symbols.auto_awesome_rounded,
                   color: Colors.white,
                   size: 20,
                 ),
@@ -474,7 +533,10 @@ class _AppLanguagePicker extends ConsumerWidget {
         const SizedBox(height: 12),
         InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _showSheet(context, ref, current),
+          onTap: () {
+            Haptics.soft();
+            _showSheet(context, ref, current);
+          },
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -565,6 +627,7 @@ class _AppLanguagePicker extends ConsumerWidget {
                   final isSelected = current == locale;
                   return InkWell(
                     onTap: () {
+                      Haptics.soft();
                       ref.read(localeProvider.notifier).setLocale(locale);
                       Navigator.pop(ctx);
                     },

@@ -1,8 +1,11 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
+import '../../../widgets/app_dialog.dart';
 
 // 常用 emoji 列表，按类别分组
 const List<String> _emojis = [
@@ -34,40 +37,13 @@ Future<Map<String, String>?> showCreateFavoriteDialog(
   String? initialName,
 }) {
   final isEditing = initialName != null;
-  return showGeneralDialog<Map<String, String>>(
+  return showAppDialog<Map<String, String>>(
     context: context,
-    barrierDismissible: true,
     barrierLabel: context.l10n.close,
-    barrierColor: Colors.black54,
-    transitionDuration: const Duration(milliseconds: 300),
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final curvedAnimation = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: 8.0 * curvedAnimation.value,
-          sigmaY: 8.0 * curvedAnimation.value,
-        ),
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.85, end: 1.0).animate(curvedAnimation),
-          child: FadeTransition(
-            opacity: curvedAnimation,
-            child: child,
-          ),
-        ),
-      );
-    },
-    pageBuilder: (context, animation, secondaryAnimation) {
-      return Center(
-        child: _CreateFavoriteContent(
-          initialEmoji: initialEmoji,
-          initialName: isEditing ? initialName : null,
-        ),
-      );
-    },
+    builder: (_) => _CreateFavoriteContent(
+      initialEmoji: initialEmoji,
+      initialName: isEditing ? initialName : null,
+    ),
   );
 }
 
@@ -154,7 +130,10 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                   ),
                   const Spacer(),
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      Haptics.soft();
+                      Navigator.of(context).pop();
+                    },
                     icon: Icon(
                       Symbols.close_rounded,
                       color: colorScheme.onSurfaceVariant,
@@ -215,8 +194,8 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                     final isSelected =
                                         emoji == _selectedEmoji;
                                     return AnimatedContainer(
-                                      duration: 200.ms,
-                                      curve: Curves.easeOutCubic,
+                                      duration: kAnim,
+                                      curve: kAnimCurve,
                                       decoration: BoxDecoration(
                                         color: isSelected
                                             ? colorScheme.primaryContainer
@@ -229,6 +208,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                         type: MaterialType.transparency,
                                         child: InkWell(
                                           onTap: () {
+                                            Haptics.soft();
                                             setState(() {
                                               _selectedEmoji = emoji;
                                             });
@@ -251,7 +231,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                                 .scaleXY(
                                                   begin: 1,
                                                   end: 1.15,
-                                                  duration: 150.ms,
+                                                  duration: kAnimFast,
                                                   curve: Curves.easeOutBack,
                                                 ),
                                           ),
@@ -379,7 +359,10 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      Haptics.soft();
+                      Navigator.of(context).pop();
+                    },
                     child: Text(context.l10n.cancel),
                   ),
                   const SizedBox(width: 8),
@@ -387,7 +370,10 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                     onPressed:
                         _nameController.text.trim().isEmpty
                             ? null
-                            : _onConfirm,
+                            : () {
+                                Haptics.soft();
+                                _onConfirm();
+                              },
                     child: Text(_isEditing ? context.l10n.save : context.l10n.create),
                   ),
                 ],

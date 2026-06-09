@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:material_symbols_icons/symbols.dart';
+
+import '../../../core/animation_constants.dart';
+import '../../../widgets/tactile_press.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 /// 文献网格卡片
 ///
@@ -54,7 +56,7 @@ class DocumentCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return AnimatedContainer(
-      duration: 150.ms,
+      duration: kAnimFast,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
@@ -77,20 +79,13 @@ class DocumentCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(15),
-            onTap: isSelectionMode ? onSelectionTap : onTap,
-            onLongPress: isSelectionMode
-                ? null
-                : onLongPress != null
-                    ? () {
-                        HapticFeedback.mediumImpact();
-                        onLongPress!();
-                      }
-                    : null,
-            child: Column(
+        child: TactilePress(
+          baseColor: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(15),
+          pressedScale: 0.98,
+          onTap: isSelectionMode ? onSelectionTap : onTap,
+          onLongPress: isSelectionMode ? null : onLongPress,
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 封面缩略图：A4 槽位 + BoxFit.cover + 顶部对齐。
@@ -116,7 +111,7 @@ class DocumentCard extends StatelessWidget {
                               )
                             : Center(
                                 child: Icon(
-                                  Symbols.article,
+                                  Symbols.article_rounded,
                                   color: colorScheme.onSurfaceVariant
                                       .withAlpha(80),
                                   size: 48,
@@ -142,7 +137,7 @@ class DocumentCard extends StatelessWidget {
                             ).animate().scaleXY(
                                   begin: 0.6,
                                   end: 1,
-                                  duration: 200.ms,
+                                  duration: kAnim,
                                   curve: Curves.easeOutBack,
                                 ),
                           ),
@@ -204,7 +199,6 @@ class DocumentCard extends StatelessWidget {
               ],
             ),
           ),
-        ),
       ),
     );
   }

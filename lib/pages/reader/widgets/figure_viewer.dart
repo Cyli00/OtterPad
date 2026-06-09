@@ -11,7 +11,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/animation_constants.dart';
 import '../../../providers/api_provider.dart';
+import '../../../services/haptics.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../router/app_router.dart';
 import '../../../router/app_routes.dart';
@@ -53,8 +55,8 @@ Future<void> showFigureViewer(
   Navigator.of(context, rootNavigator: true).push(
     PageRouteBuilder<void>(
       opaque: false,
-      transitionDuration: const Duration(milliseconds: 250),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionDuration: kAnimSlow,
+      reverseTransitionDuration: kAnim,
       pageBuilder: (_, __, ___) => FigureViewer(
         figures: figures,
         initialIndex: initialIndex,
@@ -119,7 +121,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     _pageController = ExtendedPageController(initialPage: _currentIndex);
     _doubleTapController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
+      duration: kAnim,
     );
   }
 
@@ -187,12 +189,12 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                         ),
                         if (_isGallery && _currentIndex > 0)
                           _buildArrow(true, () => _pageController.previousPage(
-                              duration: const Duration(milliseconds: 300),
+                              duration: kAnimSlow,
                               curve: Curves.easeInOut)),
                         if (_isGallery &&
                             _currentIndex < widget.figures.length - 1)
                           _buildArrow(false, () => _pageController.nextPage(
-                              duration: const Duration(milliseconds: 300),
+                              duration: kAnimSlow,
                               curve: Curves.easeInOut)),
                       ],
                     ),
@@ -252,7 +254,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
             child: IconButton(
               icon: const Icon(Symbols.close_rounded),
               color: Colors.white70,
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                Haptics.soft();
+                Navigator.of(context).pop();
+              },
               tooltip: context.l10n.closeImage,
             ),
           ),
@@ -397,7 +402,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       bottom: 0,
       child: Center(
         child: GestureDetector(
-          onTap: onTap,
+          onTap: () {
+            Haptics.soft();
+            onTap();
+          },
           child: Container(
             width: 40,
             height: 40,
@@ -516,7 +524,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                 tooltip: _translations.containsKey(idx)
                     ? (isTranslated ? context.l10n.showOriginal : context.l10n.showTranslation)
                     : context.l10n.translateText,
-                onPressed: () => _handleTranslate(idx, fig),
+                onPressed: () {
+                  Haptics.soft();
+                  _handleTranslate(idx, fig);
+                },
               ),
       ),
     );

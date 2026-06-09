@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
+import '../../../services/haptics.dart';
 import '../../../services/translation_style.dart';
 
 /// 阅读器「字体/字号 + 翻页方式 + 译文样式」底部面板 body。
@@ -202,9 +204,12 @@ class _FontFamilyRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => onChanged(f),
+                onTap: () {
+                  Haptics.soft();
+                  onChanged(f);
+                },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: kAnim,
                   curve: Curves.easeOut,
                   height: 56,
                   decoration: BoxDecoration(
@@ -261,9 +266,12 @@ class _PaginationModeRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => onChanged(m),
+                onTap: () {
+                  Haptics.soft();
+                  onChanged(m);
+                },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: kAnim,
                   curve: Curves.easeOut,
                   height: 56,
                   decoration: BoxDecoration(
@@ -391,11 +399,14 @@ class _TranslationStyleRowState extends ConsumerState<_TranslationStyleRow> {
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => ref
-                    .read(translationConfigProvider.notifier)
-                    .setDisplayStyleId(s.id),
+                onTap: () {
+                  Haptics.soft();
+                  ref
+                      .read(translationConfigProvider.notifier)
+                      .setDisplayStyleId(s.id);
+                },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: kAnim,
                   curve: Curves.easeOut,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(

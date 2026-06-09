@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:material_symbols_icons/symbols.dart';
+
+import '../../../core/animation_constants.dart';
 import '../../../data/models/book/document.dart';
+import '../../../widgets/tactile_press.dart';
 import '../../../utils/doc_paths.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 /// 文献列表卡片（文献库列表视图 + 收藏夹详情页共用）
 ///
@@ -55,7 +57,7 @@ class DocListCard extends StatelessWidget {
     final thumbHeight = compact ? _thumbHeightCompact : _thumbHeightFull;
 
     return AnimatedContainer(
-      duration: 150.ms,
+      duration: kAnimFast,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: isSelected
@@ -76,20 +78,15 @@ class DocListCard extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: isSelectionMode ? onSelectionTap : onTap,
-          onLongPress: isSelectionMode
-              ? null
-              : onLongPress != null
-              ? () {
-                  HapticFeedback.mediumImpact();
-                  onLongPress!();
-                }
-              : null,
-          child: Padding(
+      child: TactilePress(
+        baseColor: isSelected
+            ? colorScheme.primaryContainer.withAlpha(80)
+            : colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        pressedScale: 0.98,
+        onTap: isSelectionMode ? onSelectionTap : onTap,
+        onLongPress: isSelectionMode ? null : onLongPress,
+        child: Padding(
             padding: EdgeInsets.all(compact ? 12 : 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,7 +129,7 @@ class DocListCard extends StatelessWidget {
                                         ).animate().scaleXY(
                                           begin: 0.6,
                                           end: 1,
-                                          duration: 200.ms,
+                                          duration: kAnim,
                                           curve: Curves.easeOutBack,
                                         ),
                                   ),
@@ -252,7 +249,6 @@ class DocListCard extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }

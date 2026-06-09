@@ -1,41 +1,17 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
+import '../../../widgets/app_dialog.dart';
 
 /// 通过标识符添加条目对话框
 /// 返回用户输入的标识符字符串，取消返回 null
 Future<String?> showIdentifierDialog(BuildContext context) {
-  return showGeneralDialog<String>(
+  return showAppDialog<String>(
     context: context,
-    barrierDismissible: true,
     barrierLabel: context.l10n.close,
-    barrierColor: Colors.black54,
-    transitionDuration: const Duration(milliseconds: 300),
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: 8.0 * curved.value,
-          sigmaY: 8.0 * curved.value,
-        ),
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.1),
-            end: Offset.zero,
-          ).animate(curved),
-          child: FadeTransition(opacity: curved, child: child),
-        ),
-      );
-    },
-    pageBuilder: (context, animation, secondaryAnimation) {
-      return const Center(child: _IdentifierContent());
-    },
+    builder: (_) => const _IdentifierContent(),
   );
 }
 
@@ -116,7 +92,10 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                   ),
                 ),
                 IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    Haptics.soft();
+                    Navigator.of(context).pop();
+                  },
                   icon: Icon(
                     Symbols.close_rounded,
                     color: colorScheme.onSurfaceVariant,
@@ -171,14 +150,20 @@ class _IdentifierContentState extends State<_IdentifierContent> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    Haptics.soft();
+                    Navigator.of(context).pop();
+                  },
                   child: Text(context.l10n.cancel),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: _controller.text.trim().isEmpty
                       ? null
-                      : _onConfirm,
+                      : () {
+                          Haptics.soft();
+                          _onConfirm();
+                        },
                   child: Text(context.l10n.add),
                 ),
               ],

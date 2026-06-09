@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../core/animation_constants.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -132,7 +134,7 @@ class _BtnState extends State<_Btn> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+          duration: kAnimFast,
           width: 40,
           height: WindowChrome.height,
           color: bg,

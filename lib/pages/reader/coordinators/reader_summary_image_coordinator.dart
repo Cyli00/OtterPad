@@ -11,6 +11,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/animation_constants.dart';
 import '../../../data/models/book/document.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/document_task_provider.dart';
@@ -417,7 +418,7 @@ class _OfficialGenDialogState extends State<_OfficialGenDialog> {
             onTap: () => _run(widget.onExportAll),
           ),
           AnimatedSize(
-            duration: const Duration(milliseconds: 200),
+            duration: kAnim,
             curve: Curves.easeOut,
             alignment: Alignment.topCenter,
             child: _notice == null

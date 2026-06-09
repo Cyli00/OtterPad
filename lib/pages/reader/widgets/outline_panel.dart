@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../providers/summary_image_provider.dart';
 import '../../../services/figure_extract_service.dart';
+import '../../../services/haptics.dart';
 import 'figure_viewer.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
@@ -305,7 +306,7 @@ class _FiguresTab extends StatelessWidget {
 
     if (!summaryState.generating && !hasSummary && !hasFigures) {
       return _EmptyState(
-        icon: Symbols.image_not_supported,
+        icon: Symbols.image_not_supported_rounded,
         message: context.l10n.figuresNotFoundHint,
       );
     }
@@ -345,8 +346,10 @@ class _FiguresTab extends StatelessWidget {
             const SizedBox(height: 10),
             if (imageExists)
               GestureDetector(
-                onTap: () =>
-                    showFigureViewer(context, figures!, initialIndex: figIndex),
+                onTap: () {
+                  Haptics.soft();
+                  showFigureViewer(context, figures!, initialIndex: figIndex);
+                },
                 child: Hero(
                   tag: 'figure_${fig.imagePath}',
                   child: ClipRRect(
@@ -369,7 +372,7 @@ class _FiguresTab extends StatelessWidget {
                 ),
                 child: Center(
                   child: Icon(
-                    Symbols.broken_image,
+                    Symbols.broken_image_rounded,
                     color: cs.onSurfaceVariant.withAlpha(120),
                     size: 32,
                   ),
@@ -379,7 +382,7 @@ class _FiguresTab extends StatelessWidget {
             Row(
               children: [
                 _ActionLink(
-                  icon: Symbols.article,
+                  icon: Symbols.article_rounded,
                   label: context.l10n.viewInDocument,
                   onTap: () => _navigateToFigure(fig),
                 ),
@@ -438,7 +441,10 @@ class _FiguresTab extends StatelessWidget {
             ],
             if (onRegenerateSummary != null)
               GestureDetector(
-                onTap: summaryState.generating ? null : onRegenerateSummary,
+                onTap: summaryState.generating ? null : () {
+                  Haptics.soft();
+                  onRegenerateSummary!();
+                },
                 child: Padding(
                   padding: const EdgeInsets.all(4),
                   child: Icon(
@@ -456,6 +462,7 @@ class _FiguresTab extends StatelessWidget {
         if (hasSummary && imagePath != null)
           GestureDetector(
             onTap: () {
+              Haptics.soft();
               final entry = FigureManifestEntry(
                 imagePath: imagePath,
                 captionText: 'Graphical Summary',
@@ -533,6 +540,7 @@ class _ReferencesTab extends StatelessWidget {
 
         return InkWell(
           onTap: () {
+            Haptics.soft();
             final text = item.isNumbered
                 ? '[${item.number}] ${item.text}'
                 : item.text;
@@ -637,7 +645,10 @@ class _ActionLink extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        Haptics.soft();
+        onTap();
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(

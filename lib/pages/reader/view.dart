@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:animations/animations.dart';
 import 'package:flutter/foundation.dart';
+
+import '../../core/animation_constants.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -31,6 +33,7 @@ import '../../services/figure_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
 import '../../data/models/book/highlight.dart';
 import '../../providers/highlight_provider.dart';
+import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/doc_paths.dart';
 import '../../utils/markdown_translation_weaver.dart';
@@ -211,12 +214,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           title: widget.document.title,
           apiState: ref.read(docExtractApiProvider),
           onSuccess: (mdPath, markdownContent) {
-            if (!mounted) return;
             _sessionNotifier.useExtractedMarkdown(
               markdownPath: mdPath,
               markdownContent: markdownContent,
             );
-            _figuresFuture = null;
+            if (mounted) _figuresFuture = null;
           },
         );
   }
@@ -831,7 +833,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
                 Positioned.fill(
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
+                    duration: kAnim,
                     curve: Curves.easeInOut,
                     color: contentBg,
                     child: fileExists
@@ -849,7 +851,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   right: 0,
                   child: ClipRect(
                     child: AnimatedSlide(
-                      duration: const Duration(milliseconds: 220),
+                      duration: kAnim,
                       curve: Curves.easeOut,
                       offset: session.toolbarsVisible
                           ? Offset.zero
@@ -893,7 +895,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     right: 0,
                     child: ClipRect(
                       child: AnimatedSlide(
-                        duration: const Duration(milliseconds: 220),
+                        duration: kAnim,
                         curve: Curves.easeOut,
                         offset: session.toolbarsVisible
                             ? Offset.zero
@@ -1172,7 +1174,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           color: cs.onSurfaceVariant,
         ),
         tooltip: session.showPreview ? context.l10n.viewPdf : context.l10n.viewExtractResult,
-        onPressed: _togglePreview,
+        onPressed: () {
+          Haptics.soft();
+          _togglePreview();
+        },
       );
     }
 
@@ -1184,7 +1189,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         color: cs.onSurfaceVariant,
       ),
       tooltip: context.l10n.documentExtract,
-      onPressed: _onExtractPressed,
+      onPressed: () {
+        Haptics.soft();
+        _onExtractPressed();
+      },
     );
   }
 
@@ -1202,7 +1210,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onPointerSignal: _handlePdfPointerSignal,
         onPointerMove: _handlePdfPointerMove,
         child: PageTransitionSwitcher(
-          duration: const Duration(milliseconds: 300),
+          duration: kAnimSlow,
           reverse: !showMarkdown,
           transitionBuilder: (child, animation, secondaryAnimation) {
             return SharedAxisTransition(
@@ -1415,7 +1423,7 @@ class _PdfScrollThumbState extends State<_PdfScrollThumb> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: kAnimFast,
         width: width,
         height: widget.size.height,
         decoration: BoxDecoration(

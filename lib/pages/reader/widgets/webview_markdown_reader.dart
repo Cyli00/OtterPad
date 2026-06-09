@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../core/animation_constants.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/reader_localhost_server.dart';
@@ -416,7 +417,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
           child: IgnorePointer(
             ignoring: !_scrollbarVisible,
             child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
+              duration: kAnim,
               opacity: _scrollbarVisible ? 1 : 0,
               child: _OverlayScrollbar(
                 metrics: _scrollMetrics,

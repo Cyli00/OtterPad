@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
+import '../../../services/haptics.dart';
 import 'reader_background.dart';
 
 /// 阅读器「主题色 + 背景」底部面板 body。
@@ -177,7 +179,10 @@ class _ColorDot extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        Haptics.soft();
+        onTap();
+      },
       child: Container(
         width: 40,
         height: 40,
@@ -204,7 +209,7 @@ class _ColorDot extends StatelessWidget {
                   ),
                 ),
                 child: const Icon(
-                  Symbols.auto_awesome,
+                  Symbols.auto_awesome_rounded,
                   color: Colors.white,
                   size: 16,
                 ),
@@ -241,11 +246,14 @@ class _OpacityRow extends StatelessWidget {
               right: o != ToolbarOpacity.values.last ? 10 : 0,
             ),
             child: GestureDetector(
-              onTap: () => onChanged(o),
+              onTap: () {
+                Haptics.soft();
+                onChanged(o);
+              },
               child: Column(
                 children: [
                   AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
+                    duration: kAnimFast,
                     curve: Curves.easeOut,
                     height: 56,
                     decoration: BoxDecoration(
@@ -377,11 +385,14 @@ class _BackgroundCard extends StatelessWidget {
     final previewBg = palette.background;
     final previewLine = palette.text.withAlpha(120);
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        Haptics.soft();
+        onTap();
+      },
       child: Column(
         children: [
           AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+            duration: kAnimFast,
             curve: Curves.easeOut,
             height: 56,
             decoration: BoxDecoration(

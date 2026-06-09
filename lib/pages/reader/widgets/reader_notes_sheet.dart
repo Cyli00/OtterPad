@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/highlight_provider.dart';
+import '../../../services/haptics.dart';
 
 /// 笔记面板 body（含 [DraggableScrollableSheet] 包装），
 /// 由 [ReaderSheetHost] 弹出。
@@ -349,11 +351,17 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Haptics.soft();
+            Navigator.pop(context);
+          },
           child: Text(context.l10n.cancel),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(context, _controller.text),
+          onPressed: () {
+            Haptics.soft();
+            Navigator.pop(context, _controller.text);
+          },
           child: Text(context.l10n.save),
         ),
       ],
@@ -405,9 +413,12 @@ class _HighlightTileState extends State<_HighlightTile> {
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap: () {
+            Haptics.soft();
+            setState(() => _expanded = !_expanded);
+          },
           child: AnimatedSize(
-            duration: const Duration(milliseconds: 200),
+            duration: kAnim,
             curve: Curves.easeOut,
             alignment: Alignment.topCenter,
             child: Padding(
@@ -508,7 +519,10 @@ class _MiniButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          Haptics.soft();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.all(4),

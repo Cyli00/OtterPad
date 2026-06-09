@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
+import '../core/animation_constants.dart';
+import '../services/haptics.dart';
+
 /// 向左滑动超过 [threshold] 比例（或快速猛划）则删除；否则以弹簧动画回弹。
 ///
 /// 使用 [SpringSimulation] 驱动回弹，产生真实的欠阻尼弹跳感。
@@ -74,11 +77,12 @@ class _SpringDismissibleState extends State<SpringDismissible>
 
     if (fraction >= widget.threshold || velocity < -widget.dismissVelocity) {
       _dismissed = true;
+      Haptics.medium();
       _controller.value = _offset;
       _controller
           .animateTo(
             -_width * 1.5,
-            duration: const Duration(milliseconds: 220),
+            duration: kAnim,
             curve: Curves.easeIn,
           )
           .then((_) {
