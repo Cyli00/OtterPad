@@ -8,18 +8,24 @@ import 'snackbar_service.dart';
 class AiSettingsPrompt {
   AiSettingsPrompt._();
 
+  static AppLocalizations? get _l10n {
+    final ctx = rootNavigatorKey.currentContext;
+    return ctx != null ? AppLocalizations.of(ctx) : null;
+  }
+
   static bool ensureTextModelConfigured({
     required AgentApiState agentState,
     required SnackBarService snackBar,
     required VoidCallback onOpenSettings,
   }) {
+    final l10n = _l10n;
     final hasModel =
         (agentState.fastModelId?.isNotEmpty ?? false) ||
         (agentState.defaultModelId?.isNotEmpty ?? false);
     if (!hasModel) {
       _show(
         snackBar,
-        message: '请先在「AI 设置」中选择快速模型或专家模型',
+        message: l10n?.aiSettingsSelectTextModel ?? '请先在「AI 设置」中选择快速模型或专家模型',
         onOpenSettings: onOpenSettings,
       );
       return false;
@@ -27,7 +33,7 @@ class AiSettingsPrompt {
     if (agentState.apiKey.trim().isEmpty) {
       _show(
         snackBar,
-        message: '请先在「AI 设置」中填写 API Key',
+        message: l10n?.aiSettingsFillApiKey ?? '请先在「AI 设置」中填写 API Key',
         onOpenSettings: onOpenSettings,
       );
       return false;
@@ -43,7 +49,7 @@ class AiSettingsPrompt {
     if (imageRole.id != null && imageRole.modelId != null) return true;
     _show(
       snackBar,
-      message: '请先在「AI 设置」中选择生图模型',
+      message: _l10n?.selectImageModelFirst ?? '请先在「AI 设置」中选择生图模型',
       onOpenSettings: onOpenSettings,
     );
     return false;
@@ -54,11 +60,12 @@ class AiSettingsPrompt {
     required SnackBarService snackBar,
     required VoidCallback onOpenSettings,
   }) {
+    final l10n = _l10n;
     final hasModel = agentState.imageModelId?.isNotEmpty ?? false;
     if (!hasModel) {
       _show(
         snackBar,
-        message: '请先在「AI 设置」中选择生图模型',
+        message: l10n?.selectImageModelFirst ?? '请先在「AI 设置」中选择生图模型',
         onOpenSettings: onOpenSettings,
       );
       return false;
@@ -66,7 +73,7 @@ class AiSettingsPrompt {
     if (agentState.apiKey.trim().isEmpty) {
       _show(
         snackBar,
-        message: '请先在「AI 设置」中填写生图模型 API Key',
+        message: l10n?.aiSettingsFillImageApiKey ?? '请先在「AI 设置」中填写生图模型 API Key',
         onOpenSettings: onOpenSettings,
       );
       return false;

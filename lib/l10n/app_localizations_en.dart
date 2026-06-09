@@ -1834,4 +1834,300 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fidelityHigh => 'High';
+
+  @override
+  String tasksInProgress(int count) {
+    return '$count tasks in progress';
+  }
+
+  @override
+  String get aiSettingsSelectTextModel =>
+      'Please select a fast or expert model in AI Settings';
+
+  @override
+  String get aiSettingsFillApiKey => 'Please fill in API Key in AI Settings';
+
+  @override
+  String get aiSettingsFillImageApiKey =>
+      'Please fill in image model API Key in AI Settings';
+
+  @override
+  String get targetLanguageChangedRetranslate =>
+      'Target language changed, please re-translate';
+
+  @override
+  String get preparingTranslation => 'Preparing';
+
+  @override
+  String get noTranslatableParagraphs => 'No translatable paragraphs detected';
+
+  @override
+  String waitingExtractTitle(String title) {
+    return 'Waiting to extract: $title';
+  }
+
+  @override
+  String submittingTaskTitle(String title) {
+    return 'Submitting task: $title';
+  }
+
+  @override
+  String extractionCompleteTitle(String title) {
+    return 'Extraction complete: $title';
+  }
+
+  @override
+  String networkError(String message) {
+    return 'Network error: $message';
+  }
+
+  @override
+  String extractionFailedDetail(String error) {
+    return 'Extraction failed: $error';
+  }
+
+  @override
+  String waitingSubmitTitle(String title) {
+    return 'Waiting to submit: $title';
+  }
+
+  @override
+  String submittedWaitingTitle(String title) {
+    return 'Submitted, waiting: $title';
+  }
+
+  @override
+  String extractingTitle(String title) {
+    return 'Extracting… · $title';
+  }
+
+  @override
+  String waitingSummaryTitle(String title) {
+    return 'Waiting to generate summary: $title';
+  }
+
+  @override
+  String generatingSummaryTitle(String title) {
+    return 'Generating summary: $title';
+  }
+
+  @override
+  String summaryGenerationFailed(String error) {
+    return 'Summary generation failed: $error';
+  }
+
+  @override
+  String waitingDownloadTitle(String title) {
+    return 'Waiting to download: $title';
+  }
+
+  @override
+  String downloadingTitle(String title) {
+    return 'Downloading: $title';
+  }
+
+  @override
+  String downloadSuccessTitle(String title) {
+    return 'Download complete: $title';
+  }
+
+  @override
+  String get downloadFailedNoSource =>
+      'Download failed, no available PDF source';
+
+  @override
+  String downloadFailed(String error) {
+    return 'Download failed: $error';
+  }
+
+  @override
+  String get downloadingPdf => 'Downloading PDF';
+
+  @override
+  String downloadCancelledPartial(int count) {
+    return 'Download cancelled, $count succeeded';
+  }
+
+  @override
+  String downloadCompleteAll(int count) {
+    return 'Download complete, $count succeeded';
+  }
+
+  @override
+  String downloadCompletePartial(int ok, int fail) {
+    return 'Download complete: $ok succeeded, $fail failed';
+  }
+
+  @override
+  String get preparingImport => 'Preparing to import files...';
+
+  @override
+  String get importingFilesBusy => 'Importing files, please wait';
+
+  @override
+  String extractingMetadataFile(String fileName) {
+    return 'Extracting metadata: $fileName';
+  }
+
+  @override
+  String get documentAlreadyExists => 'This document already exists in library';
+
+  @override
+  String addedDocumentNoPdf(String title) {
+    return 'Added \"$title\", but no associated PDF found';
+  }
+
+  @override
+  String get goAdd => 'Go add';
+
+  @override
+  String addedDocumentTitle(String title) {
+    return 'Added: $title';
+  }
+
+  @override
+  String get networkRequestFailedRetry =>
+      'Network request failed, please try again later';
+
+  @override
+  String addFailedError(String error) {
+    return 'Add failed: $error';
+  }
+
+  @override
+  String resolvingIdentifier(String identifier) {
+    return 'Resolving identifier: $identifier';
+  }
+
+  @override
+  String get resolvingIdentifierBusy => 'Resolving identifier, please wait';
+
+  @override
+  String get preparingRebuild => 'Preparing to rebuild library...';
+
+  @override
+  String get rebuildInProgress => 'Library rebuild in progress';
+
+  @override
+  String get rebuildCancelled => 'Library rebuild cancelled';
+
+  @override
+  String get rebuildComplete => 'Library rebuild complete';
+
+  @override
+  String rebuildAdded(int count) {
+    return 'Added $count';
+  }
+
+  @override
+  String rebuildRemoved(int count) {
+    return 'Removed $count';
+  }
+
+  @override
+  String rebuildRepaired(int count) {
+    return 'Repaired metadata for $count';
+  }
+
+  @override
+  String rebuildUnresolved(int count) {
+    return '$count still need metadata';
+  }
+
+  @override
+  String rebuildNoFile(int count) {
+    return '$count entries without files';
+  }
+
+  @override
+  String get rebuildNormal => ', library status normal';
+
+  @override
+  String get fetchingZoteroItems => 'Fetching Zotero items...';
+
+  @override
+  String get zoteroSyncInProgress => 'Zotero sync in progress';
+
+  @override
+  String get zoteroSyncCancelled => 'Zotero sync cancelled';
+
+  @override
+  String get fetchingZoteroProgress => 'Fetching Zotero items';
+
+  @override
+  String get importingDocuments => 'Importing documents...';
+
+  @override
+  String zoteroSyncCompleteAdded(int count) {
+    return 'Zotero sync complete, added $count';
+  }
+
+  @override
+  String get zoteroSyncCompleteNoNew => 'Zotero sync complete, no new items';
+
+  @override
+  String zoteroSyncFailed(String error) {
+    return 'Zotero sync failed: $error';
+  }
+
+  @override
+  String get zoteroSyncNetworkFailed =>
+      'Zotero sync failed: network request failed';
+
+  @override
+  String existsInLibrary(String title) {
+    return 'Already in library: $title';
+  }
+
+  @override
+  String importedWithFullMetadata(String title) {
+    return 'Imported with full metadata: $title';
+  }
+
+  @override
+  String importedPartialMetadata(String title) {
+    return 'Imported $title, only partial metadata';
+  }
+
+  @override
+  String importedNoMetadata(String title) {
+    return 'Imported $title, no metadata recognized';
+  }
+
+  @override
+  String importedCountPart(int count) {
+    return 'Imported $count';
+  }
+
+  @override
+  String duplicateCountPart(int count) {
+    return 'Duplicate $count';
+  }
+
+  @override
+  String fullMetadataCountPart(int count) {
+    return 'Full metadata $count';
+  }
+
+  @override
+  String partialMetadataCountPart(int count) {
+    return 'Partial metadata $count';
+  }
+
+  @override
+  String unrecognizedMetadataCountPart(int count) {
+    return 'Unrecognized metadata $count';
+  }
+
+  @override
+  String get importCancelledLabel => 'Import cancelled';
+
+  @override
+  String get noFilesImported => 'No files imported';
+
+  @override
+  String get importCompleteLabel => 'Import complete';
+
+  @override
+  String get taskBusy => 'A task is already running';
 }

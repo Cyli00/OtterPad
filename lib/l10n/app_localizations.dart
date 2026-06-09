@@ -3368,6 +3368,426 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'High'**
   String get fidelityHigh;
+
+  /// No description provided for @tasksInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tasks in progress'**
+  String tasksInProgress(int count);
+
+  /// No description provided for @aiSettingsSelectTextModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select a fast or expert model in AI Settings'**
+  String get aiSettingsSelectTextModel;
+
+  /// No description provided for @aiSettingsFillApiKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Please fill in API Key in AI Settings'**
+  String get aiSettingsFillApiKey;
+
+  /// No description provided for @aiSettingsFillImageApiKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Please fill in image model API Key in AI Settings'**
+  String get aiSettingsFillImageApiKey;
+
+  /// No description provided for @targetLanguageChangedRetranslate.
+  ///
+  /// In en, this message translates to:
+  /// **'Target language changed, please re-translate'**
+  String get targetLanguageChangedRetranslate;
+
+  /// No description provided for @preparingTranslation.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing'**
+  String get preparingTranslation;
+
+  /// No description provided for @noTranslatableParagraphs.
+  ///
+  /// In en, this message translates to:
+  /// **'No translatable paragraphs detected'**
+  String get noTranslatableParagraphs;
+
+  /// No description provided for @waitingExtractTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to extract: {title}'**
+  String waitingExtractTitle(String title);
+
+  /// No description provided for @submittingTaskTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitting task: {title}'**
+  String submittingTaskTitle(String title);
+
+  /// No description provided for @extractionCompleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Extraction complete: {title}'**
+  String extractionCompleteTitle(String title);
+
+  /// No description provided for @networkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Network error: {message}'**
+  String networkError(String message);
+
+  /// No description provided for @extractionFailedDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Extraction failed: {error}'**
+  String extractionFailedDetail(String error);
+
+  /// No description provided for @waitingSubmitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to submit: {title}'**
+  String waitingSubmitTitle(String title);
+
+  /// No description provided for @submittedWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted, waiting: {title}'**
+  String submittedWaitingTitle(String title);
+
+  /// No description provided for @extractingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting… · {title}'**
+  String extractingTitle(String title);
+
+  /// No description provided for @waitingSummaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to generate summary: {title}'**
+  String waitingSummaryTitle(String title);
+
+  /// No description provided for @generatingSummaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating summary: {title}'**
+  String generatingSummaryTitle(String title);
+
+  /// No description provided for @summaryGenerationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary generation failed: {error}'**
+  String summaryGenerationFailed(String error);
+
+  /// No description provided for @waitingDownloadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to download: {title}'**
+  String waitingDownloadTitle(String title);
+
+  /// No description provided for @downloadingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading: {title}'**
+  String downloadingTitle(String title);
+
+  /// No description provided for @downloadSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download complete: {title}'**
+  String downloadSuccessTitle(String title);
+
+  /// No description provided for @downloadFailedNoSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed, no available PDF source'**
+  String get downloadFailedNoSource;
+
+  /// No description provided for @downloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed: {error}'**
+  String downloadFailed(String error);
+
+  /// No description provided for @downloadingPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading PDF'**
+  String get downloadingPdf;
+
+  /// No description provided for @downloadCancelledPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Download cancelled, {count} succeeded'**
+  String downloadCancelledPartial(int count);
+
+  /// No description provided for @downloadCompleteAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Download complete, {count} succeeded'**
+  String downloadCompleteAll(int count);
+
+  /// No description provided for @downloadCompletePartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Download complete: {ok} succeeded, {fail} failed'**
+  String downloadCompletePartial(int ok, int fail);
+
+  /// No description provided for @preparingImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to import files...'**
+  String get preparingImport;
+
+  /// No description provided for @importingFilesBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing files, please wait'**
+  String get importingFilesBusy;
+
+  /// No description provided for @extractingMetadataFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting metadata: {fileName}'**
+  String extractingMetadataFile(String fileName);
+
+  /// No description provided for @documentAlreadyExists.
+  ///
+  /// In en, this message translates to:
+  /// **'This document already exists in library'**
+  String get documentAlreadyExists;
+
+  /// No description provided for @addedDocumentNoPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Added \"{title}\", but no associated PDF found'**
+  String addedDocumentNoPdf(String title);
+
+  /// No description provided for @goAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Go add'**
+  String get goAdd;
+
+  /// No description provided for @addedDocumentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Added: {title}'**
+  String addedDocumentTitle(String title);
+
+  /// No description provided for @networkRequestFailedRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Network request failed, please try again later'**
+  String get networkRequestFailedRetry;
+
+  /// No description provided for @addFailedError.
+  ///
+  /// In en, this message translates to:
+  /// **'Add failed: {error}'**
+  String addFailedError(String error);
+
+  /// No description provided for @resolvingIdentifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolving identifier: {identifier}'**
+  String resolvingIdentifier(String identifier);
+
+  /// No description provided for @resolvingIdentifierBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolving identifier, please wait'**
+  String get resolvingIdentifierBusy;
+
+  /// No description provided for @preparingRebuild.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to rebuild library...'**
+  String get preparingRebuild;
+
+  /// No description provided for @rebuildInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Library rebuild in progress'**
+  String get rebuildInProgress;
+
+  /// No description provided for @rebuildCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Library rebuild cancelled'**
+  String get rebuildCancelled;
+
+  /// No description provided for @rebuildComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Library rebuild complete'**
+  String get rebuildComplete;
+
+  /// No description provided for @rebuildAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {count}'**
+  String rebuildAdded(int count);
+
+  /// No description provided for @rebuildRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed {count}'**
+  String rebuildRemoved(int count);
+
+  /// No description provided for @rebuildRepaired.
+  ///
+  /// In en, this message translates to:
+  /// **'Repaired metadata for {count}'**
+  String rebuildRepaired(int count);
+
+  /// No description provided for @rebuildUnresolved.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} still need metadata'**
+  String rebuildUnresolved(int count);
+
+  /// No description provided for @rebuildNoFile.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} entries without files'**
+  String rebuildNoFile(int count);
+
+  /// No description provided for @rebuildNormal.
+  ///
+  /// In en, this message translates to:
+  /// **', library status normal'**
+  String get rebuildNormal;
+
+  /// No description provided for @fetchingZoteroItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetching Zotero items...'**
+  String get fetchingZoteroItems;
+
+  /// No description provided for @zoteroSyncInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Zotero sync in progress'**
+  String get zoteroSyncInProgress;
+
+  /// No description provided for @zoteroSyncCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Zotero sync cancelled'**
+  String get zoteroSyncCancelled;
+
+  /// No description provided for @fetchingZoteroProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetching Zotero items'**
+  String get fetchingZoteroProgress;
+
+  /// No description provided for @importingDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing documents...'**
+  String get importingDocuments;
+
+  /// No description provided for @zoteroSyncCompleteAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Zotero sync complete, added {count}'**
+  String zoteroSyncCompleteAdded(int count);
+
+  /// No description provided for @zoteroSyncCompleteNoNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Zotero sync complete, no new items'**
+  String get zoteroSyncCompleteNoNew;
+
+  /// No description provided for @zoteroSyncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Zotero sync failed: {error}'**
+  String zoteroSyncFailed(String error);
+
+  /// No description provided for @zoteroSyncNetworkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Zotero sync failed: network request failed'**
+  String get zoteroSyncNetworkFailed;
+
+  /// No description provided for @existsInLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Already in library: {title}'**
+  String existsInLibrary(String title);
+
+  /// No description provided for @importedWithFullMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported with full metadata: {title}'**
+  String importedWithFullMetadata(String title);
+
+  /// No description provided for @importedPartialMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {title}, only partial metadata'**
+  String importedPartialMetadata(String title);
+
+  /// No description provided for @importedNoMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {title}, no metadata recognized'**
+  String importedNoMetadata(String title);
+
+  /// No description provided for @importedCountPart.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count}'**
+  String importedCountPart(int count);
+
+  /// No description provided for @duplicateCountPart.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate {count}'**
+  String duplicateCountPart(int count);
+
+  /// No description provided for @fullMetadataCountPart.
+  ///
+  /// In en, this message translates to:
+  /// **'Full metadata {count}'**
+  String fullMetadataCountPart(int count);
+
+  /// No description provided for @partialMetadataCountPart.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial metadata {count}'**
+  String partialMetadataCountPart(int count);
+
+  /// No description provided for @unrecognizedMetadataCountPart.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognized metadata {count}'**
+  String unrecognizedMetadataCountPart(int count);
+
+  /// No description provided for @importCancelledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Import cancelled'**
+  String get importCancelledLabel;
+
+  /// No description provided for @noFilesImported.
+  ///
+  /// In en, this message translates to:
+  /// **'No files imported'**
+  String get noFilesImported;
+
+  /// No description provided for @importCompleteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Import complete'**
+  String get importCompleteLabel;
+
+  /// No description provided for @taskBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'A task is already running'**
+  String get taskBusy;
 }
 
 class _AppLocalizationsDelegate

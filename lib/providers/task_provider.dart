@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/l10n.dart';
 import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
@@ -27,6 +28,11 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   final Ref _ref;
 
   TaskNotifier(this._ref) : super({});
+
+  AppLocalizations? get _l10n {
+    final ctx = rootNavigatorKey.currentContext;
+    return ctx != null ? AppLocalizations.of(ctx) : null;
+  }
 
   // ── TaskRunner hooks ──
 
@@ -83,8 +89,8 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
 
     await runTask<void>(
       type: TaskType.addFiles,
-      initialStatus: '准备导入文件...',
-      busyMessage: '正在导入文件，请稍候',
+      initialStatus: _l10n?.preparingImport ?? '准备导入文件...',
+      busyMessage: _l10n?.importingFilesBusy ?? '正在导入文件，请稍候',
       cancelledMessage: null, // 取消时用 _buildAddFileMessage 出更完整的摘要
       body: (token, progress) async {
         for (int i = 0; i < paths.length; i++) {
@@ -94,7 +100,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ListenableProgress(
               current: i + 1,
               total: paths.length,
-              status: '正在提取元数据: ${p.basename(paths[i])}',
+              status: _l10n?.extractingMetadataFile(p.basename(paths[i])) ?? '正在提取元数据: ${p.basename(paths[i])}',
             ),
           );
 
@@ -136,31 +142,31 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   Future<void> addByIdentifier(String identifier) async {
     await runTask<(dynamic, AddByIdentifierResult)>(
       type: TaskType.addByIdentifier,
-      initialStatus: '正在解析标识符: $identifier',
-      busyMessage: '正在解析标识符，请稍候',
+      initialStatus: _l10n?.resolvingIdentifier(identifier) ?? '正在解析标识符: $identifier',
+      busyMessage: _l10n?.resolvingIdentifierBusy ?? '正在解析标识符，请稍候',
       body: (token, _) async =>
           await _lifecycle.createByIdentifier(identifier, cancelToken: token),
       onSuccess: (r) {
         final (doc, addResult) = r;
         if (addResult == AddByIdentifierResult.duplicate) {
-          return const TaskFinish.text('该文献已存在于文库中');
+          return TaskFinish.text(_l10n?.documentAlreadyExists ?? '该文献已存在于文库中');
         }
         if (doc.contentHash == null) {
           return TaskFinish(
-            message: '已添加「${doc.title}」，但未获取到关联 PDF',
+            message: _l10n?.addedDocumentNoPdf(doc.title) ?? '已添加「${doc.title}」，但未获取到关联 PDF',
             duration: const Duration(seconds: 6),
             action: SnackBarAction(
-              label: '去添加',
+              label: _l10n?.goAdd ?? '去添加',
               onPressed: () => _router.push(AppRoutes.shelfNoFileEntries),
             ),
           );
         }
-        return TaskFinish.text('已添加: ${doc.title}');
+        return TaskFinish.text(_l10n?.addedDocumentTitle(doc.title) ?? '已添加: ${doc.title}');
       },
       onError: (e) {
         if (e is IdentifierResolveException) return TaskFinish.text(e.message);
-        if (e is DioException) return const TaskFinish.text('网络请求失败，请稍后重试');
-        return TaskFinish.text('添加失败: $e');
+        if (e is DioException) return TaskFinish.text(_l10n?.networkRequestFailedRetry ?? '网络请求失败，请稍后重试');
+        return TaskFinish.text(_l10n?.addFailedError('$e') ?? '添加失败: $e');
       },
     );
   }
@@ -170,9 +176,9 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   Future<void> rebuildLibrary() async {
     await runTask<RebuildResult?>(
       type: TaskType.rebuild,
-      initialStatus: '准备重构文库...',
-      busyMessage: '文库重构正在进行中',
-      cancelledMessage: '已取消重构文库',
+      initialStatus: _l10n?.preparingRebuild ?? '准备重构文库...',
+      busyMessage: _l10n?.rebuildInProgress ?? '文库重构正在进行中',
+      cancelledMessage: _l10n?.rebuildCancelled ?? '已取消重构文库',
       body: (token, progress) async {
         try {
           return await _lifecycle.rebuildLibrary(
@@ -195,22 +201,22 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         }
       },
       onSuccess: (result) {
-        var message = '文库重构完成';
+        var message = _l10n?.rebuildComplete ?? '文库重构完成';
         if (result != null) {
           final parts = <String>[];
-          if (result.addedCount > 0) parts.add('新增 ${result.addedCount} 篇');
-          if (result.removedCount > 0) parts.add('清理 ${result.removedCount} 篇');
+          if (result.addedCount > 0) parts.add(_l10n?.rebuildAdded(result.addedCount) ?? '新增 ${result.addedCount} 篇');
+          if (result.removedCount > 0) parts.add(_l10n?.rebuildRemoved(result.removedCount) ?? '清理 ${result.removedCount} 篇');
           if (result.repairedCount > 0) {
-            parts.add('修复元数据 ${result.repairedCount} 篇');
+            parts.add(_l10n?.rebuildRepaired(result.repairedCount) ?? '修复元数据 ${result.repairedCount} 篇');
           }
           if (result.unresolvedCount > 0) {
-            parts.add('仍有 ${result.unresolvedCount} 篇待补全元数据');
+            parts.add(_l10n?.rebuildUnresolved(result.unresolvedCount) ?? '仍有 ${result.unresolvedCount} 篇待补全元数据');
           }
           if (result.noFileCount > 0) {
-            parts.add('${result.noFileCount} 个无文件条目');
+            parts.add(_l10n?.rebuildNoFile(result.noFileCount) ?? '${result.noFileCount} 个无文件条目');
           }
           if (parts.isEmpty) {
-            message += '，文库状态正常';
+            message += _l10n?.rebuildNormal ?? '，文库状态正常';
           } else {
             message += '：${parts.join('，')}';
           }
@@ -227,9 +233,9 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   Future<void> syncZotero(String apiKey, {bool fullResync = false}) async {
     await runTask<int>(
       type: TaskType.zoteroSync,
-      initialStatus: '正在拉取 Zotero 条目...',
-      busyMessage: 'Zotero 同步正在进行中',
-      cancelledMessage: '已取消 Zotero 同步',
+      initialStatus: _l10n?.fetchingZoteroItems ?? '正在拉取 Zotero 条目...',
+      busyMessage: _l10n?.zoteroSyncInProgress ?? 'Zotero 同步正在进行中',
+      cancelledMessage: _l10n?.zoteroSyncCancelled ?? '已取消 Zotero 同步',
       body: (token, progress) async {
         if (fullResync) await ZoteroSyncStore.clear();
 
@@ -241,13 +247,13 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ListenableProgress(
               current: fetched,
               total: total,
-              status: '正在拉取 Zotero 条目',
+              status: _l10n?.fetchingZoteroProgress ?? '正在拉取 Zotero 条目',
             ),
           ),
         );
 
         progress(
-          const ListenableProgress(current: 0, total: 0, status: '正在导入文献...'),
+          ListenableProgress(current: 0, total: 0, status: _l10n?.importingDocuments ?? '正在导入文献...'),
         );
 
         // 跳过已导入的 zoteroKey 与非文献条目，映射出待导入的 Document。
@@ -273,12 +279,12 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         return imported.where((d) => !before.contains(d.id)).length;
       },
       onSuccess: (addedCount) => TaskFinish.text(
-        addedCount > 0 ? 'Zotero 同步完成，新增 $addedCount 篇' : 'Zotero 同步完成，暂无新增条目',
+        addedCount > 0 ? _l10n?.zoteroSyncCompleteAdded(addedCount) ?? 'Zotero 同步完成，新增 $addedCount 篇' : _l10n?.zoteroSyncCompleteNoNew ?? 'Zotero 同步完成，暂无新增条目',
       ),
       onError: (e) {
-        if (e is ZoteroSyncException) return TaskFinish.text('Zotero 同步失败：$e');
-        if (e is DioException) return const TaskFinish.text('Zotero 同步失败：网络请求失败');
-        return TaskFinish.text('Zotero 同步失败：$e');
+        if (e is ZoteroSyncException) return TaskFinish.text(_l10n?.zoteroSyncFailed('$e') ?? 'Zotero 同步失败：$e');
+        if (e is DioException) return TaskFinish.text(_l10n?.zoteroSyncNetworkFailed ?? 'Zotero 同步失败：网络请求失败');
+        return TaskFinish.text(_l10n?.zoteroSyncFailed('$e') ?? 'Zotero 同步失败：$e');
       },
     );
   }
@@ -298,34 +304,34 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
     if (totalFiles == 1 && lastResult?.document != null) {
       final doc = lastResult!.document!;
       if (lastResult.type == AddFileResultType.duplicate) {
-        return '文库中已存在: ${doc.title}';
+        return _l10n?.existsInLibrary(doc.title) ?? '文库中已存在: ${doc.title}';
       }
       switch (lastResult.metadataStatus) {
         case MetadataStatus.complete:
-          return '已导入并提取元数据: ${doc.title}';
+          return _l10n?.importedWithFullMetadata(doc.title) ?? '已导入并提取元数据: ${doc.title}';
         case MetadataStatus.partial:
-          return '已导入 ${doc.title}，仅提取到部分元数据';
+          return _l10n?.importedPartialMetadata(doc.title) ?? '已导入 ${doc.title}，仅提取到部分元数据';
         case MetadataStatus.none:
-          return '已导入 ${doc.title}，未识别到可用元数据';
+          return _l10n?.importedNoMetadata(doc.title) ?? '已导入 ${doc.title}，未识别到可用元数据';
       }
     }
 
     final parts = <String>[];
-    if (importedCount > 0) parts.add('导入 $importedCount 篇');
-    if (duplicateCount > 0) parts.add('重复 $duplicateCount 篇');
+    if (importedCount > 0) parts.add(_l10n?.importedCountPart(importedCount) ?? '导入 $importedCount 篇');
+    if (duplicateCount > 0) parts.add(_l10n?.duplicateCountPart(duplicateCount) ?? '重复 $duplicateCount 篇');
     if (completeMetadataCount > 0) {
-      parts.add('完整元数据 $completeMetadataCount 篇');
+      parts.add(_l10n?.fullMetadataCountPart(completeMetadataCount) ?? '完整元数据 $completeMetadataCount 篇');
     }
     if (partialMetadataCount > 0) {
-      parts.add('部分元数据 $partialMetadataCount 篇');
+      parts.add(_l10n?.partialMetadataCountPart(partialMetadataCount) ?? '部分元数据 $partialMetadataCount 篇');
     }
     if (unresolvedMetadataCount > 0) {
-      parts.add('未识别元数据 $unresolvedMetadataCount 篇');
+      parts.add(_l10n?.unrecognizedMetadataCountPart(unresolvedMetadataCount) ?? '未识别元数据 $unresolvedMetadataCount 篇');
     }
     if (parts.isEmpty) {
-      return cancelled ? '已取消导入' : '未导入任何文件';
+      return cancelled ? _l10n?.importCancelledLabel ?? '已取消导入' : _l10n?.noFilesImported ?? '未导入任何文件';
     }
-    final prefix = cancelled ? '已取消导入' : '导入完成';
+    final prefix = cancelled ? _l10n?.importCancelledLabel ?? '已取消导入' : _l10n?.importCompleteLabel ?? '导入完成';
     return '$prefix：${parts.join('，')}';
   }
 }

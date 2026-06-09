@@ -1795,6 +1795,296 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get fidelityHigh => '高';
+
+  @override
+  String tasksInProgress(int count) {
+    return '$count 个任务进行中';
+  }
+
+  @override
+  String get aiSettingsSelectTextModel => '请先在「AI 设置」中选择快速模型或专家模型';
+
+  @override
+  String get aiSettingsFillApiKey => '请先在「AI 设置」中填写 API Key';
+
+  @override
+  String get aiSettingsFillImageApiKey => '请先在「AI 设置」中填写生图模型 API Key';
+
+  @override
+  String get targetLanguageChangedRetranslate => '目标语言已变更，请重新翻译';
+
+  @override
+  String get preparingTranslation => '准备中';
+
+  @override
+  String get noTranslatableParagraphs => '未检测到可翻译段落';
+
+  @override
+  String waitingExtractTitle(String title) {
+    return '等待提取: $title';
+  }
+
+  @override
+  String submittingTaskTitle(String title) {
+    return '正在提交任务: $title';
+  }
+
+  @override
+  String extractionCompleteTitle(String title) {
+    return '文档提取完成：$title';
+  }
+
+  @override
+  String networkError(String message) {
+    return '网络错误: $message';
+  }
+
+  @override
+  String extractionFailedDetail(String error) {
+    return '提取失败: $error';
+  }
+
+  @override
+  String waitingSubmitTitle(String title) {
+    return '等待提交: $title';
+  }
+
+  @override
+  String submittedWaitingTitle(String title) {
+    return '已提交，等待处理: $title';
+  }
+
+  @override
+  String extractingTitle(String title) {
+    return '正在提取… · $title';
+  }
+
+  @override
+  String waitingSummaryTitle(String title) {
+    return '等待生成总结图: $title';
+  }
+
+  @override
+  String generatingSummaryTitle(String title) {
+    return '正在生成总结图: $title';
+  }
+
+  @override
+  String summaryGenerationFailed(String error) {
+    return '总结图生成失败: $error';
+  }
+
+  @override
+  String waitingDownloadTitle(String title) {
+    return '等待下载: $title';
+  }
+
+  @override
+  String downloadingTitle(String title) {
+    return '正在下载: $title';
+  }
+
+  @override
+  String downloadSuccessTitle(String title) {
+    return '下载成功：$title';
+  }
+
+  @override
+  String get downloadFailedNoSource => '下载失败，未找到可用的 PDF 源';
+
+  @override
+  String downloadFailed(String error) {
+    return '下载失败: $error';
+  }
+
+  @override
+  String get downloadingPdf => '正在下载 PDF';
+
+  @override
+  String downloadCancelledPartial(int count) {
+    return '已取消下载，已成功 $count 篇';
+  }
+
+  @override
+  String downloadCompleteAll(int count) {
+    return '下载完成，成功 $count 篇';
+  }
+
+  @override
+  String downloadCompletePartial(int ok, int fail) {
+    return '下载完成：成功 $ok 篇，失败 $fail 篇';
+  }
+
+  @override
+  String get preparingImport => '准备导入文件...';
+
+  @override
+  String get importingFilesBusy => '正在导入文件，请稍候';
+
+  @override
+  String extractingMetadataFile(String fileName) {
+    return '正在提取元数据: $fileName';
+  }
+
+  @override
+  String get documentAlreadyExists => '该文献已存在于文库中';
+
+  @override
+  String addedDocumentNoPdf(String title) {
+    return '已添加「$title」，但未获取到关联 PDF';
+  }
+
+  @override
+  String get goAdd => '去添加';
+
+  @override
+  String addedDocumentTitle(String title) {
+    return '已添加: $title';
+  }
+
+  @override
+  String get networkRequestFailedRetry => '网络请求失败，请稍后重试';
+
+  @override
+  String addFailedError(String error) {
+    return '添加失败: $error';
+  }
+
+  @override
+  String resolvingIdentifier(String identifier) {
+    return '正在解析标识符: $identifier';
+  }
+
+  @override
+  String get resolvingIdentifierBusy => '正在解析标识符，请稍候';
+
+  @override
+  String get preparingRebuild => '准备重构文库...';
+
+  @override
+  String get rebuildInProgress => '文库重构正在进行中';
+
+  @override
+  String get rebuildCancelled => '已取消重构文库';
+
+  @override
+  String get rebuildComplete => '文库重构完成';
+
+  @override
+  String rebuildAdded(int count) {
+    return '新增 $count 篇';
+  }
+
+  @override
+  String rebuildRemoved(int count) {
+    return '清理 $count 篇';
+  }
+
+  @override
+  String rebuildRepaired(int count) {
+    return '修复元数据 $count 篇';
+  }
+
+  @override
+  String rebuildUnresolved(int count) {
+    return '仍有 $count 篇待补全元数据';
+  }
+
+  @override
+  String rebuildNoFile(int count) {
+    return '$count 个无文件条目';
+  }
+
+  @override
+  String get rebuildNormal => '，文库状态正常';
+
+  @override
+  String get fetchingZoteroItems => '正在拉取 Zotero 条目...';
+
+  @override
+  String get zoteroSyncInProgress => 'Zotero 同步正在进行中';
+
+  @override
+  String get zoteroSyncCancelled => '已取消 Zotero 同步';
+
+  @override
+  String get fetchingZoteroProgress => '正在拉取 Zotero 条目';
+
+  @override
+  String get importingDocuments => '正在导入文献...';
+
+  @override
+  String zoteroSyncCompleteAdded(int count) {
+    return 'Zotero 同步完成，新增 $count 篇';
+  }
+
+  @override
+  String get zoteroSyncCompleteNoNew => 'Zotero 同步完成，暂无新增条目';
+
+  @override
+  String zoteroSyncFailed(String error) {
+    return 'Zotero 同步失败：$error';
+  }
+
+  @override
+  String get zoteroSyncNetworkFailed => 'Zotero 同步失败：网络请求失败';
+
+  @override
+  String existsInLibrary(String title) {
+    return '文库中已存在: $title';
+  }
+
+  @override
+  String importedWithFullMetadata(String title) {
+    return '已导入并提取元数据: $title';
+  }
+
+  @override
+  String importedPartialMetadata(String title) {
+    return '已导入 $title，仅提取到部分元数据';
+  }
+
+  @override
+  String importedNoMetadata(String title) {
+    return '已导入 $title，未识别到可用元数据';
+  }
+
+  @override
+  String importedCountPart(int count) {
+    return '导入 $count 篇';
+  }
+
+  @override
+  String duplicateCountPart(int count) {
+    return '重复 $count 篇';
+  }
+
+  @override
+  String fullMetadataCountPart(int count) {
+    return '完整元数据 $count 篇';
+  }
+
+  @override
+  String partialMetadataCountPart(int count) {
+    return '部分元数据 $count 篇';
+  }
+
+  @override
+  String unrecognizedMetadataCountPart(int count) {
+    return '未识别元数据 $count 篇';
+  }
+
+  @override
+  String get importCancelledLabel => '已取消导入';
+
+  @override
+  String get noFilesImported => '未导入任何文件';
+
+  @override
+  String get importCompleteLabel => '导入完成';
+
+  @override
+  String get taskBusy => '任务正在进行中';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).

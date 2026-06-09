@@ -347,7 +347,7 @@ class SnackBarService {
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
-                  '${tasks.length} 个任务进行中',
+                  _l10n?.tasksInProgress(tasks.length) ?? '${tasks.length} 个任务进行中',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,

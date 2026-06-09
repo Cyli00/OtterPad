@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/l10n.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
 import '../services/ai_settings_prompt.dart';
@@ -66,7 +67,7 @@ class DocumentTranslationNotifier
           _reset();
           _ref
               .read(snackBarServiceProvider)
-              .showResult(message: '目标语言已变更，请重新翻译');
+              .showResult(message: _l10n?.targetLanguageChangedRetranslate ?? '目标语言已变更，请重新翻译');
         }
       },
     );
@@ -75,13 +76,18 @@ class DocumentTranslationNotifier
   final Ref _ref;
   final String documentId;
 
+  AppLocalizations? get _l10n {
+    final ctx = rootNavigatorKey.currentContext;
+    return ctx != null ? AppLocalizations.of(ctx) : null;
+  }
+
   TranslationCancelToken? _cancelToken;
 
   /// 翻译进度——直接复用 Task Activity 的 [ListenableProgress]，由本 notifier
   /// 在 [translate] 内 report 到 taskActivityProvider；所有呈现处（snackbar
   /// surface / 多文档面板）共享同一真值。高频更新只刷新 value，不触发 state 变更。
   final ValueNotifier<ListenableProgress> _progress = ValueNotifier(
-    const ListenableProgress(current: 0, total: 0, status: '准备中'),
+    const ListenableProgress(current: 0, total: 0, status: ''),
   );
   ValueListenable<ListenableProgress> get progress => _progress;
 
@@ -116,7 +122,7 @@ class DocumentTranslationNotifier
       ignoreSections: config.ignoreSections,
     );
     if (paragraphs.isEmpty) {
-      snackBar.showResult(message: '未检测到可翻译段落');
+      snackBar.showResult(message: _l10n?.noTranslatableParagraphs ?? '未检测到可翻译段落');
       return false;
     }
 

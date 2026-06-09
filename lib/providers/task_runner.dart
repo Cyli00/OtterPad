@@ -124,7 +124,7 @@ mixin TaskRunner<S> on StateNotifier<S> {
   Future<T?> runTask<T>({
     required TaskType type,
     required String initialStatus,
-    String busyMessage = '任务正在进行中',
+    String? busyMessage,
     bool showBusySnackBar = true,
     bool showProgressSnackBar = true,
     required Future<T> Function(
@@ -138,7 +138,9 @@ mixin TaskRunner<S> on StateNotifier<S> {
   }) async {
     if (isTaskRunning(type)) {
       if (showBusySnackBar) {
-        snackBar.showResult(message: busyMessage);
+        final ctx = rootNavigatorKey.currentContext;
+        final l10n = ctx != null ? AppLocalizations.of(ctx) : null;
+        snackBar.showResult(message: busyMessage ?? l10n?.taskBusy ?? '任务正在进行中');
       }
       return null;
     }
