@@ -8,7 +8,7 @@
 PRODUCT_NAME = OtterPad
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.otterPad
+PRODUCT_BUNDLE_IDENTIFIER = io.github.cyli00.otterpad
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 io.github.cyli00. All rights reserved.

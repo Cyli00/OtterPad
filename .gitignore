@@ -51,6 +51,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Signing
+/android/key.properties
+/android/app/release.jks
 .ace-tool/
 
 # PDB debug files
