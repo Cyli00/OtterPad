@@ -74,12 +74,27 @@ description: 构建符合项目设计规范的 Flutter UI 组件。在创建新�
 
 ### 1.5 动画
 
-| 场景 | 方案 | 时长 |
+所有动画时长和曲线来自 `lib/core/animation_constants.dart`，禁止硬编码 Duration 魔法数字。
+
+**全局常量**：
+
+| 常量 | 值 | 用途 |
 |---|---|---|
-| 路由转场 | `FadeThroughTransition`（`package:animations`） | 300ms easeOut |
-| 页内视图切换 | `SharedAxisTransition` 水平 | 300ms |
-| 选中态 | `AnimatedContainer` + 缩放 `easeOutBack` | 150 + 200ms |
-| 工具栏滑出 | `AnimatedSlide` | 220ms easeOut |
+| `kAnimFast` | 180ms | 微交互（hover、选择切换、按压态、工具栏） |
+| `kAnim` | 240ms | 标准过渡（状态变化、内容切换、面板收起） |
+| `kAnimSlow` | 320ms | 大转场（路由、弹窗、面板展开） |
+| `kAnimCurve` | `Curves.easeOutCubic` | 统一正向缓动 |
+| `kAnimCurveReverse` | `Curves.easeInCubic` | 统一反向缓动 |
+
+**场景对照**：
+
+| 场景 | 方案 | 时长 | 曲线 |
+|---|---|---|---|
+| 路由转场 | `FadeThroughTransition`（`package:animations`） | `kAnimSlow` | FadeThrough 内置 |
+| 页内视图切换（如 PDF↔Markdown） | `SharedAxisTransition` 水平 | `kAnimSlow` | SharedAxis 内置 |
+| 对话框转场 | `showAppDialog()` Scale+Fade+Blur | `kAnimSlow` | `kAnimCurve` / `kAnimCurveReverse` |
+| 选中态 / 按压态 | `AnimatedContainer` / `AnimatedScale` | `kAnimFast` | `kAnimCurve` |
+| 工具栏 / 面板滑出 | `AnimatedSlide` | `kAnim` | `kAnimCurve` |
 
 禁止路由级使用 `flutter_animate` 的 `slideY()` / `fade()`。
 
@@ -89,34 +104,51 @@ description: 构建符合项目设计规范的 Flutter UI 组件。在创建新�
 
 ### 2.1 点击反馈
 
-所有可点击 Card / Tile 必须使用 `Material(type: transparency) + InkWell`。禁止裸 `GestureDetector`。
+> 参考：`TactilePress`（lib/widgets/tactile_press.dart）
 
-容器结构：
+所有可点击 Card / Tile / 列表项使用 `TactilePress`。禁止裸 `GestureDetector`。
+
+```dart
+TactilePress(
+  onTap: ...,
+  onLongPress: ...,        // 可选，自动触发 Haptics.medium()
+  borderRadius: ...,       // 默认 12
+  baseColor: ...,          // 默认 dark=Colors.white10, light=cs.surface
+  pressedScale: 0.98,      // 可选，卡片推荐加，列表项可省略
+  haptics: true,           // 默认 true，tap 触发 Haptics.soft()
+  child: ...,
+)
 ```
-Container(clipBehavior: antiAlias, decoration) → Material → InkWell → Padding → child
-```
 
-- `Padding` 放在 InkWell 内部：确保 ripple 覆盖整卡
-- `clipBehavior` 放在外层 Container：裁剪 ripple 到圆角范围
+**反馈层次**：ColorTween 按压态（即时色变） + 可选 micro-scale（`kAnimFast` `kAnimCurve`） + 触觉反馈（`Haptics`）。
 
-需要 `onLongPressStart(details)` 位置信息时：外层 `GestureDetector` 只注册 longPress，内层 InkWell 管 hover/tap（手势类型不同，不抢 gesture arena）。
+**分层指引**：
+
+| 场景 | 方案 |
+|---|---|
+| Card / 大面积可点击区域 | `TactilePress`（pressedScale: 0.98） |
+| 列表项 / Sheet item | `TactilePress`（省略 pressedScale） |
+| 底部面板内工具按钮 | `TactilePress` |
+| 纯图标按钮 | `IconButton`（保留 Material 默认） |
+
+需要 `onLongPressStart(details)` 位置信息时：外层 `GestureDetector` 只注册 longPress，内层 `TactilePress` 管 tap（手势类型不同，不抢 gesture arena）。
 
 ### 2.2 滑动删除（Swipe to Dismiss）
 
-> 参考：`_SpringDismissible`（agent_model_list_tile.dart）
+> 参考：`SpringDismissible`（lib/widgets/spring_dismissible.dart）
 
-禁止使用 Flutter 内置 `Dismissible` 或第三方 `flutter_slidable`。统一使用项目内 `_SpringDismissible`，提供弹簧回弹和防误删阈值。
+禁止使用 Flutter 内置 `Dismissible` 或第三方 `flutter_slidable`。统一使用项目内 `SpringDismissible`，提供弹簧回弹和防误删阈值。
 
 | 属性 | 值 |
 |---|---|
 | 方向 | `endToStart`（右→左） |
 | 确认阈值 | 滑动距离 ≥ 55% 卡片宽度，**或**速度 ≥ 1200 px/s |
 | 回弹弹簧 | `SpringDescription(mass:1, stiffness:500, damping:28)`，ζ ≈ 0.63（欠阻尼，1–2 次弹跳） |
-| 确认动画 | 220ms `Curves.easeIn` 飞出屏幕，完成后触发 `onDismissed` |
+| 确认动画 | `kAnim`（240ms）`Curves.easeIn` 飞出屏幕，触发 `Haptics.medium()` + `onDismissed` |
 | 背景配色 | `errorContainer` 背景 · `onErrorContainer` 图标 + 标签 · 右侧 padding 20 |
 | 背景渐显 | `Curves.easeIn.transform(reveal)`，随拖拽深度加深 |
 
-**必须配 `ValueKey`**：列表中凡包含 `_SpringDismissible` 的 tile，调用处必须加 `key: ValueKey(uniqueId)`，防止删除后 Flutter 按位置复用 State 导致残留动画污染相邻 tile。
+**必须配 `ValueKey`**：列表中凡包含 `SpringDismissible` 的 tile，调用处必须加 `key: ValueKey(uniqueId)`，防止删除后 Flutter 按位置复用 State 导致残留动画污染相邻 tile。
 
 ### 2.3 预览卡语义
 
@@ -128,7 +160,22 @@ Container(clipBehavior: antiAlias, decoration) → Material → InkWell → Padd
 
 ### 3.1 Dialog
 
-> 参考：`_RemoteDialogScaffold`（backup_settings_page）· `showCreateFavoriteDialog`（create_favorite_dialog）
+> 参考：`showAppDialog`（lib/widgets/app_dialog.dart）· `_RemoteDialogScaffold`（backup_settings_page）· `showCreateFavoriteDialog`（create_favorite_dialog）
+
+**入口**：统一使用 `showAppDialog()` 弹出对话框。禁止直接调用 `showDialog()` 或 `showGeneralDialog()`。
+
+**转场**（`showAppDialog` 内置）：
+
+| 属性 | 值 |
+|---|---|
+| 时长 | `kAnimSlow`（320ms） |
+| 缩放 | 0.92 → 1.0 |
+| 透明度 | 0 → 1 |
+| 背景模糊 | sigma 0 → 8 |
+| 曲线 | `kAnimCurve` / `kAnimCurveReverse` |
+| 遮罩色 | `Colors.black54` |
+
+**Dialog 视觉**：
 
 | 属性 | 值 |
 |---|---|
@@ -179,7 +226,8 @@ Container(clipBehavior: antiAlias, decoration) → Material → InkWell → Padd
 | 标题 | `titleMedium` bold |
 | 阴影 | `BoxShadow(black.withAlpha(13), blur: 10, offset: (0, 4))` |
 | 选中边框 | `primary.withAlpha(160)` width 2 |
-| 选中动画 | `AnimatedContainer` 150ms + 勾选缩放 200ms `easeOutBack` |
+| 点击反馈 | `TactilePress`（pressedScale: 0.98） |
+| 选中动画 | `AnimatedContainer` `kAnimFast` `kAnimCurve` + 勾选缩放 `easeOutBack` |
 
 ### 3.4 TextField
 

@@ -141,11 +141,29 @@
 - **Material Symbols** (`package:material_symbols_icons/symbols.dart`) — 全项目唯一图标集。禁止使用 `Icons.xxx`。
 - **SpringDismissible** (`lib/widgets/spring_dismissible.dart`) — 弹性滑动删除组件。
 - **WindowChrome** (`lib/widgets/window_chrome.dart`) — 禁止在页面级 Scaffold 挂 chrome，窗口装饰只属于 app 外层。
+- **TactilePress** (`lib/widgets/tactile_press.dart`) — 统一按压态交互组件（ColorTween + micro-scale + Haptics 集成）。替代 InkWell 涟漪。新增可点击卡片/列表项应优先使用。
+- **showAppDialog** (`lib/widgets/app_dialog.dart`) — 统一对话框转场（Scale+Fade+BackdropFilter blur）。禁止在 dialog 中自行编写 `showGeneralDialog` 转场。
+
+### 动画时序
+
+- **AnimationConstants** (`lib/core/animation_constants.dart`) — 全局三档动画时序常量。禁止在 Widget 中硬编码 Duration 魔法数字。
+  - `kAnimFast`（180ms）：微交互（hover、选择切换、勾选、工具栏）
+  - `kAnim`（240ms）：标准过渡（状态变化、内容切换、面板收起）
+  - `kAnimSlow`（320ms）：大转场（路由、弹窗、面板展开）
+  - `kAnimCurve`（easeOutCubic）/ `kAnimCurveReverse`（easeInCubic）：统一缓动曲线
+
+### 触觉反馈
+
+- **Haptics** (`lib/services/haptics.dart`) — 集中式触觉反馈（平台自适应、全局开关、fire-and-forget）。禁止直接调用 `HapticFeedback.*`。
+  - `Haptics.soft()`：日常点击反馈
+  - `Haptics.light()`：轻量确认
+  - `Haptics.medium()`：破坏性操作（删除、长按进入模式）
 
 ## 转场动画
 
-- 路由转场：`FadeThroughTransition`，300ms `Curves.easeOut`，统一通过 `_buildAnimatedPage()` 封装
-- 页内切换（如 PDF↔Markdown）：`SharedAxisTransition` horizontal，300ms
+- 路由转场：`FadeThroughTransition`，`kAnimSlow`，统一通过 `_buildAnimatedPage()` 封装
+- 页内切换（如 PDF↔Markdown）：`SharedAxisTransition` horizontal，`kAnimSlow`
+- 对话框转场：`showAppDialog()`，Scale(0.92→1)+Fade+BackdropFilter blur
 - 禁止用 `flutter_animate` 的 `.slideY()` / `.fade()` 做路由级转场
 
 ## UI 组件范式
