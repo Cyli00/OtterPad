@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/l10n.dart';
+import '../../services/haptics.dart';
 import 'agent_role_widgets.dart';
 
 /// 用户在"添加模型"对话框中做出的角色选择。
@@ -81,7 +82,10 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                       containerColor: cs.primaryContainer,
                       onContainerColor: cs.onPrimaryContainer,
                       value: setAsDefault,
-                      onChanged: (v) => setLocal(() => setAsDefault = v),
+                      onChanged: (v) {
+                        Haptics.soft();
+                        setLocal(() => setAsDefault = v);
+                      },
                       replacingText:
                           defaultReplaces ? ctx.l10n.willReplace(currentDefault) : null,
                     ),
@@ -92,7 +96,10 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                       containerColor: cs.tertiaryContainer,
                       onContainerColor: cs.onTertiaryContainer,
                       value: setAsFast,
-                      onChanged: (v) => setLocal(() => setAsFast = v),
+                      onChanged: (v) {
+                        Haptics.soft();
+                        setLocal(() => setAsFast = v);
+                      },
                       replacingText:
                           fastReplaces ? ctx.l10n.willReplace(currentFast) : null,
                     ),
@@ -101,18 +108,24 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton(
-                          onPressed: () => Navigator.pop(ctx),
+                          onPressed: () {
+                            Haptics.soft();
+                            Navigator.pop(ctx);
+                          },
                           child: Text(ctx.l10n.cancel),
                         ),
                         const SizedBox(width: 8),
                         TextButton(
-                          onPressed: () => Navigator.pop(
-                            ctx,
-                            AddModelChoice(
-                              setAsDefault: setAsDefault,
-                              setAsFast: setAsFast,
-                            ),
-                          ),
+                          onPressed: () {
+                            Haptics.soft();
+                            Navigator.pop(
+                              ctx,
+                              AddModelChoice(
+                                setAsDefault: setAsDefault,
+                                setAsFast: setAsFast,
+                              ),
+                            );
+                          },
                           child: Text(ctx.l10n.add),
                         ),
                       ],

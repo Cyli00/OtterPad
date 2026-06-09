@@ -12,6 +12,7 @@ import '../../../providers/translation_config_provider.dart';
 import '../../../router/app_router.dart';
 import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
+import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
 import '../../../services/translation_service.dart';
@@ -259,7 +260,10 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
           icon: const Icon(Symbols.close_rounded, size: 20),
           color: cs.onSurfaceVariant,
           tooltip: context.l10n.close,
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            Haptics.soft();
+            Navigator.of(context).pop();
+          },
           visualDensity: VisualDensity.compact,
         ),
       ],
@@ -466,6 +470,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
               borderRadius: BorderRadius.circular(12),
             ),
             onSelected: (value) {
+              Haptics.soft();
               final text = switch (value) {
                 'translation' => copyTranslation,
                 'source' => copySource,

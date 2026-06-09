@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../services/haptics.dart';
+
 /// 导航目标项配置
 class AdaptiveDestination {
   const AdaptiveDestination({
@@ -66,7 +68,10 @@ class AdaptiveNavigationRail extends StatelessWidget {
                   selected: selected,
                   extended: extended,
                   colorScheme: colorScheme,
-                  onTap: () => onDestinationSelected(index),
+                  onTap: () {
+                    Haptics.soft();
+                    onDestinationSelected(index);
+                  },
                 );
               }),
               const Spacer(),
@@ -81,7 +86,10 @@ class AdaptiveNavigationRail extends StatelessWidget {
                   selected: selected,
                   extended: extended,
                   colorScheme: colorScheme,
-                  onTap: () => onDestinationSelected(index),
+                  onTap: () {
+                    Haptics.soft();
+                    onDestinationSelected(index);
+                  },
                 );
               }),
               const SizedBox(height: 16),
@@ -179,7 +187,10 @@ class AdaptiveBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     return NavigationBar(
       selectedIndex: selectedIndex,
-      onDestinationSelected: onDestinationSelected,
+      onDestinationSelected: (index) {
+        Haptics.soft();
+        onDestinationSelected(index);
+      },
       destinations: destinations.map((d) {
         return NavigationDestination(
           icon: d.icon,

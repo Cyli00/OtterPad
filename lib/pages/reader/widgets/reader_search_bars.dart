@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 
 class ReaderPdfSearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -38,7 +39,10 @@ class ReaderPdfSearchBar extends StatelessWidget {
                 color: cs.onSurface,
               ),
               tooltip: context.l10n.back,
-              onPressed: onBack,
+              onPressed: () {
+                Haptics.soft();
+                onBack();
+              },
             ),
             const SizedBox(width: 4),
             Expanded(
@@ -69,7 +73,10 @@ class ReaderPdfSearchBar extends StatelessWidget {
                               fill: 1,
                               color: cs.onSurfaceVariant,
                             ),
-                            onPressed: onClear,
+                            onPressed: () {
+                              Haptics.soft();
+                              onClear();
+                            },
                           )
                         : null,
                     filled: true,
@@ -95,7 +102,10 @@ class ReaderPdfSearchBar extends StatelessWidget {
                 color: cs.onSurfaceVariant,
               ),
               tooltip: context.l10n.exitSearch,
-              onPressed: onClear,
+              onPressed: () {
+                Haptics.soft();
+                onClear();
+              },
             ),
           ],
         ),
@@ -136,12 +146,18 @@ class ReaderHighlightSearchBar extends StatelessWidget {
                 color: cs.onSurface,
               ),
               tooltip: context.l10n.back,
-              onPressed: onBack,
+              onPressed: () {
+                Haptics.soft();
+                onBack();
+              },
             ),
             const SizedBox(width: 4),
             Expanded(
               child: GestureDetector(
-                onTap: onOpenSearch,
+                onTap: () {
+                  Haptics.soft();
+                  onOpenSearch();
+                },
                 child: Container(
                   height: 40,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -179,7 +195,10 @@ class ReaderHighlightSearchBar extends StatelessWidget {
                 color: cs.onSurfaceVariant,
               ),
               tooltip: context.l10n.exitSearch,
-              onPressed: onClear,
+              onPressed: () {
+                Haptics.soft();
+                onClear();
+              },
             ),
           ],
         ),

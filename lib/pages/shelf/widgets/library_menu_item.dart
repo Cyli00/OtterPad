@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/haptics.dart';
+
 class LibraryMenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -19,7 +21,12 @@ class LibraryMenuItem extends StatelessWidget {
     final theme = Theme.of(context);
     
     return InkWell(
-      onTap: onTap,
+      onTap: onTap == null
+          ? null
+          : () {
+              Haptics.soft();
+              onTap!();
+            },
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10.0),

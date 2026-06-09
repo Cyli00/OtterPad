@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/book/document.dart';
+import '../../services/haptics.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/document_lifecycle_provider.dart';
@@ -89,15 +90,21 @@ class FavoriteDetailPage extends ConsumerWidget {
                   ),
                 ),
                 leading: IconButton(
-                  onPressed: () => context.pop(),
+                  onPressed: () {
+                    Haptics.soft();
+                    context.pop();
+                  },
                   icon: const Icon(Symbols.arrow_back_rounded),
                 ),
                 actions: [
                   IconButton(
-                    onPressed: () => _openAddDocumentsPage(
-                      context,
-                      currentFavorite,
-                    ),
+                    onPressed: () {
+                      Haptics.soft();
+                      _openAddDocumentsPage(
+                        context,
+                        currentFavorite,
+                      );
+                    },
                     icon: const Icon(Symbols.bookmark_add_rounded),
                     tooltip: context.l10n.addDocument,
                   ),
@@ -126,8 +133,10 @@ class FavoriteDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       FilledButton.tonalIcon(
-                        onPressed: () =>
-                            _openAddDocumentsPage(context, currentFavorite),
+                        onPressed: () {
+                          Haptics.soft();
+                          _openAddDocumentsPage(context, currentFavorite);
+                        },
                         icon: const Icon(Symbols.bookmark_add_rounded, size: 20),
                         label: Text(context.l10n.addDocument),
                       ),
@@ -213,11 +222,17 @@ class FavoriteDetailPage extends ConsumerWidget {
         content: Text(context.l10n.confirmDeleteDocuments(count)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, false);
+            },
             child: Text(context.l10n.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, true);
+            },
             style: TextButton.styleFrom(foregroundColor: cs.error),
             child: Text(context.l10n.delete),
           ),

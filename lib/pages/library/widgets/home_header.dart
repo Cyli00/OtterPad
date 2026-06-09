@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../router/app_routes.dart';
@@ -66,7 +67,10 @@ class HomeHeader extends ConsumerWidget {
         children: [
           Expanded(
             child: GestureDetector(
-              onTap: () => context.push(AppRoutes.librarySearch),
+              onTap: () {
+                Haptics.soft();
+                context.push(AppRoutes.librarySearch);
+              },
               child: Container(
                 height: isMobile ? 44 : 48,
                 decoration: BoxDecoration(
@@ -107,6 +111,7 @@ class HomeHeader extends ConsumerWidget {
             tooltip: isGrid ? context.l10n.listView : context.l10n.gridView,
             size: isMobile ? 36 : 40,
             onPressed: () {
+              Haptics.soft();
               ref.read(viewModeProvider.notifier).state = !isGrid;
             },
           ),
@@ -116,6 +121,7 @@ class HomeHeader extends ConsumerWidget {
             tooltip: context.l10n.tools,
             size: isMobile ? 36 : 40,
             onPressed: () async {
+              Haptics.soft();
               final action = await showToolbarSheet(context);
               if (action != null && context.mounted) {
                 _handleToolbarAction(context, ref, action);

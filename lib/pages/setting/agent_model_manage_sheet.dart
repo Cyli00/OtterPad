@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
+import '../../services/haptics.dart';
 import 'agent_add_model_dialog.dart';
 import 'agent_model_tester.dart';
 import 'agent_role_widgets.dart';
@@ -288,7 +289,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
               color: cs.onSurfaceVariant,
             ),
             tooltip: context.l10n.refresh,
-            onPressed: _fetchModels,
+            onPressed: () {
+              Haptics.soft();
+              _fetchModels();
+            },
           ),
           IconButton(
             icon: Icon(
@@ -297,7 +301,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
               color: _imageOnly ? cs.primary : cs.onSurfaceVariant,
             ),
             tooltip: _imageOnly ? context.l10n.showAllModels : context.l10n.showImageModels,
-            onPressed: () => setState(() => _imageOnly = !_imageOnly),
+            onPressed: () {
+              Haptics.soft();
+              setState(() => _imageOnly = !_imageOnly);
+            },
           ),
           IconButton(
             icon: Icon(
@@ -306,7 +313,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
               color: cs.onSurfaceVariant,
             ),
             tooltip: context.l10n.close,
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context);
+            },
           ),
         ],
       ),
@@ -375,7 +385,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             ),
             const SizedBox(height: 16),
             FilledButton.tonal(
-              onPressed: _fetchModels,
+              onPressed: () {
+                Haptics.soft();
+                _fetchModels();
+              },
               child: Text(context.l10n.retry),
             ),
           ],
@@ -471,6 +484,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                 padding: EdgeInsets.zero,
                 tooltip: added ? context.l10n.removeModel : context.l10n.addModel,
                 onPressed: () {
+                  Haptics.soft();
                   if (added) {
                     _handleRemove(id);
                   } else {

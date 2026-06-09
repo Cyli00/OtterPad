@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/l10n.dart';
 import '../../providers/translation_config_provider.dart';
+import '../../services/haptics.dart';
 import '../../services/translation_skip_sections.dart';
 import '../../services/translation_style.dart';
 
@@ -186,7 +187,10 @@ class _TranslationSettingsSectionState
                   min: min,
                   max: max,
                   divisions: divisions,
-                  onChanged: onChanged,
+                  onChanged: (v) {
+                    Haptics.soft();
+                    onChanged(v);
+                  },
                   padding: EdgeInsets.zero,
                 ),
               ),
@@ -249,10 +253,14 @@ class _TranslationSettingsSectionState
             max: 2.0,
             divisions: 40,
             formatter: (v) => v.toStringAsFixed(2),
-            onChanged: (v) =>
-                ref.read(translationConfigProvider.notifier).setTemperature(v),
-            onReset: () =>
-                ref.read(translationConfigProvider.notifier).setTemperature(null),
+            onChanged: (v) {
+              Haptics.soft();
+              ref.read(translationConfigProvider.notifier).setTemperature(v);
+            },
+            onReset: () {
+              Haptics.soft();
+              ref.read(translationConfigProvider.notifier).setTemperature(null);
+            },
           ),
 
           const SizedBox(height: 24),
@@ -266,6 +274,7 @@ class _TranslationSettingsSectionState
               )),
               if (!cfg.isSystemPromptDefault)
                 _resetButton(onPressed: () {
+                  Haptics.soft();
                   ref
                       .read(translationConfigProvider.notifier)
                       .resetSystemPrompt();
@@ -295,6 +304,7 @@ class _TranslationSettingsSectionState
               )),
               if (!cfg.isUserPromptDefault)
                 _resetButton(onPressed: () {
+                  Haptics.soft();
                   ref
                       .read(translationConfigProvider.notifier)
                       .resetUserPrompt();
@@ -372,6 +382,7 @@ class _TranslationSettingsSectionState
             borderRadius: BorderRadius.circular(12),
           ),
           onSelected: (v) {
+            Haptics.soft();
             final updated = List<String>.from(selected);
             if (v) {
               if (!updated.contains(section.id)) updated.add(section.id);
@@ -420,9 +431,12 @@ class _TranslationSettingsSectionState
         type: MaterialType.transparency,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => ref
-              .read(translationConfigProvider.notifier)
-              .setDisplayStyleId(style.id),
+          onTap: () {
+            Haptics.soft();
+            ref
+                .read(translationConfigProvider.notifier)
+                .setDisplayStyleId(style.id);
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: _buildStyledLabel(style.id, _translationStyleLabel(context.l10n, style.id), cs, theme),
@@ -487,7 +501,10 @@ class _TranslationSettingsSectionState
       ThemeData theme, ColorScheme cs, String current) {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _showLanguageSheet(current),
+      onTap: () {
+        Haptics.soft();
+        _showLanguageSheet(current);
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -567,7 +584,10 @@ class _TranslationSettingsSectionState
                     children: kTargetLanguages.map((lang) {
                       final isSelected = lang == current;
                       return InkWell(
-                        onTap: () => Navigator.pop(ctx, lang),
+                        onTap: () {
+                          Haptics.soft();
+                          Navigator.pop(ctx, lang);
+                        },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 12),

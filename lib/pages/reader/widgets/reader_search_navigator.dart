@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 
 class ReaderPdfResultNavigator extends StatelessWidget {
   final int currentIndex;
@@ -147,7 +148,10 @@ Widget _navButton(
     child: IconButton(
       icon: Icon(icon, size: 24, fill: 1, color: cs.onSurface),
       tooltip: tooltip,
-      onPressed: onPressed,
+      onPressed: onPressed != null ? () {
+        Haptics.soft();
+        onPressed();
+      } : null,
     ),
   );
 }

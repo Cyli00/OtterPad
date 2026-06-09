@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../data/models/book/document.dart';
+import '../../services/haptics.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
@@ -122,7 +123,10 @@ class _AddDocumentsToFavoritePageState
       appBar: AppBar(
         backgroundColor: cs.surface,
         leading: IconButton(
-          onPressed: _onCancel,
+          onPressed: () {
+            Haptics.soft();
+            _onCancel();
+          },
           icon: const Icon(Symbols.arrow_back_rounded),
         ),
         titleSpacing: 0,
@@ -134,7 +138,10 @@ class _AddDocumentsToFavoritePageState
           IconButton(
             onPressed: selectableIds.isEmpty
                 ? null
-                : () => _toggleSelectAll(selectableIds),
+                : () {
+                    Haptics.soft();
+                    _toggleSelectAll(selectableIds);
+                  },
             icon: Icon(
               allSelected
                   ? Symbols.deselect_rounded
@@ -295,12 +302,22 @@ class _BottomActions extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextButton(
-              onPressed: submitting ? null : onCancel,
+              onPressed: submitting
+                  ? null
+                  : () {
+                      Haptics.soft();
+                      onCancel();
+                    },
               child: Text(context.l10n.cancel),
             ),
             const SizedBox(width: 4),
             FilledButton.icon(
-              onPressed: submitting ? null : onConfirm,
+              onPressed: submitting || onConfirm == null
+                  ? null
+                  : () {
+                      Haptics.soft();
+                      onConfirm!();
+                    },
               icon: submitting
                   ? SizedBox(
                       width: 16,

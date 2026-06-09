@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../utils/markdown_translation_weaver.dart';
@@ -135,7 +136,10 @@ class ReaderBottomBar extends StatelessWidget {
         color: active ? cs.primary : cs.onSurfaceVariant,
       ),
       tooltip: tooltip,
-      onPressed: onTap,
+      onPressed: () {
+        Haptics.soft();
+        onTap();
+      },
     );
   }
 

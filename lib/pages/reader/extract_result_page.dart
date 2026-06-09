@@ -7,6 +7,7 @@ import '../../providers/reader_settings_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../services/reader/markdown_document_cache_service.dart';
+import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import 'widgets/md_widget/nr_markdown_config.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -64,6 +65,7 @@ class ExtractResultPage extends ConsumerWidget {
             icon: const Icon(Symbols.content_copy_rounded, size: 20),
             tooltip: context.l10n.copyAll,
             onPressed: () async {
+              Haptics.soft();
               final content = await _loadContent();
               await Clipboard.setData(ClipboardData(text: content));
               ref.read(snackBarServiceProvider).showResult(
@@ -77,6 +79,7 @@ class ExtractResultPage extends ConsumerWidget {
               icon: const Icon(Symbols.share_rounded, size: 20),
               tooltip: context.l10n.share,
               onPressed: () {
+                Haptics.soft();
                 Share.shareXFiles([XFile(sharePath)]);
               },
             ),

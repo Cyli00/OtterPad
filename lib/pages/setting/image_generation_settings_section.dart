@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/image_generation_config_provider.dart';
+import '../../services/haptics.dart';
 import 'setting_picker.dart';
 
 /// 画幅比例用户场景副标题——帮用户从"数字"映射到"使用场景"。
@@ -180,7 +181,10 @@ class _ImageGenerationSettingsSectionState
             min: 1,
             max: 14,
             divisions: 13,
-            onChanged: (v) => onChanged(v.round()),
+            onChanged: (v) {
+              Haptics.soft();
+              onChanged(v.round());
+            },
             padding: EdgeInsets.zero,
           ),
         ),
@@ -211,7 +215,10 @@ class _ImageGenerationSettingsSectionState
             labelFor: (v) => v,
             subtitleFor: (v) => v == '3:2' ? context.l10n.classicPhotography : (_kAspectRatioHints(context.l10n)[v] ?? ''),
             sheetTitle: context.l10n.aspectRatio,
-            onChanged: notifier.setAspectRatio,
+            onChanged: (v) {
+              Haptics.soft();
+              notifier.setAspectRatio(v);
+            },
           ),
           const SizedBox(height: 24),
           Row(
@@ -259,6 +266,7 @@ class _ImageGenerationSettingsSectionState
               if (!cfg.isPromptDefault)
                 _resetButton(
                   onPressed: () {
+                    Haptics.soft();
                     notifier.resetPrompt();
                     _promptCtrl.text = kDefaultSummaryImagePrompt;
                   },
@@ -325,7 +333,10 @@ class _ImageGenerationSettingsSectionState
             )
             .toList(),
         selected: {selected},
-        onSelectionChanged: (set) => onSelected(set.first),
+        onSelectionChanged: (set) {
+          Haptics.soft();
+          onSelected(set.first);
+        },
       ),
     );
   }

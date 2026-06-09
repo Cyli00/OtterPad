@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 
 import '../../../data/models/collection/favorite.dart';
 
@@ -137,7 +138,10 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
               child: Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Haptics.soft();
+                    Navigator.pop(context);
+                  },
                   child: Text(context.l10n.cancel),
                 ),
               ),
@@ -191,7 +195,12 @@ class _FavoriteItem extends StatelessWidget {
     final titleColor = disabled ? cs.onSurfaceVariant : cs.onSurface;
 
     return InkWell(
-      onTap: disabled ? null : onTap,
+      onTap: disabled
+          ? null
+          : () {
+              Haptics.soft();
+              onTap();
+            },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         child: Row(
@@ -259,7 +268,12 @@ class _CreateFavoriteItem extends StatelessWidget {
     final cs = theme.colorScheme;
 
     return InkWell(
-      onTap: creating ? null : onTap,
+      onTap: creating
+          ? null
+          : () {
+              Haptics.soft();
+              onTap();
+            },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         child: Row(

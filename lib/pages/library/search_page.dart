@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/l10n.dart';
+import '../../services/haptics.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/history_provider.dart';
 import 'widgets/doc_card_actions.dart';
@@ -60,7 +61,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: () => context.pop(),
+                    onPressed: () {
+                      Haptics.soft();
+                      context.pop();
+                    },
                     icon: const Icon(Symbols.arrow_back_rounded),
                   ),
                   const SizedBox(width: 4),
@@ -89,6 +93,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                         suffixIcon: _query.isNotEmpty
                             ? IconButton(
                                 onPressed: () {
+                                  Haptics.soft();
                                   _controller.clear();
                                   setState(() => _query = '');
                                 },

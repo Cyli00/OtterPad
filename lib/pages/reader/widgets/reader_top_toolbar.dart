@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 
 class ReaderTopToolbar extends StatelessWidget {
   final bool showPreview;
@@ -65,7 +66,10 @@ class ReaderTopToolbar extends StatelessWidget {
                 color: cs.onSurface,
               ),
               tooltip: l10n.back,
-              onPressed: onBack,
+              onPressed: () {
+                Haptics.soft();
+                onBack();
+              },
             ),
             const Spacer(),
             if ((showPreview && hasResult) || (!showPreview && fileExists))
@@ -77,7 +81,10 @@ class ReaderTopToolbar extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
                 tooltip: l10n.search,
-                onPressed: onSearch,
+                onPressed: () {
+                  Haptics.soft();
+                  onSearch();
+                },
               ),
             extractButton,
             if (showPreview && hasResult && hasMarkdownContent)
@@ -89,7 +96,10 @@ class ReaderTopToolbar extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
                 tooltip: l10n.generateSummary,
-                onPressed: onGenerateSummaryImage,
+                onPressed: () {
+                  Haptics.soft();
+                  onGenerateSummaryImage();
+                },
               ),
             if (!showPreview && fileExists)
               IconButton(
@@ -102,7 +112,10 @@ class ReaderTopToolbar extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
                 tooltip: inFavorite ? l10n.removeFromFavorite : l10n.moveToFavorite,
-                onPressed: inFavorite ? onRemoveFavorite : onAddFavorite,
+                onPressed: () {
+                  Haptics.soft();
+                  (inFavorite ? onRemoveFavorite : onAddFavorite)();
+                },
               ),
             if (hasResult && !extracting)
               IconButton(
@@ -113,7 +126,10 @@ class ReaderTopToolbar extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
                 tooltip: l10n.reExtract,
-                onPressed: onExtract,
+                onPressed: () {
+                  Haptics.soft();
+                  onExtract();
+                },
               ),
             if (!showPreview)
               IconButton(
@@ -124,7 +140,10 @@ class ReaderTopToolbar extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
                 tooltip: l10n.documentInfo,
-                onPressed: onShowInfo,
+                onPressed: () {
+                  Haptics.soft();
+                  onShowInfo();
+                },
               )
             else
               PopupMenuButton<String>(
@@ -142,6 +161,7 @@ class ReaderTopToolbar extends StatelessWidget {
                 ),
                 position: PopupMenuPosition.under,
                 onSelected: (value) {
+                  Haptics.soft();
                   switch (value) {
                     case 'info':
                       onShowInfo();

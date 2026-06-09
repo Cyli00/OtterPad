@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 
 /// 多选模式操作栏
 ///
@@ -57,7 +58,10 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                   width: sz,
                   height: sz,
                   child: IconButton(
-                    onPressed: onClose,
+                    onPressed: () {
+                      Haptics.soft();
+                      onClose();
+                    },
                     icon: Icon(Symbols.close_rounded, size: iconSz),
                     padding: EdgeInsets.zero,
                     tooltip: context.l10n.exitMultiSelect,
@@ -161,7 +165,12 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
       width: sz,
       height: sz,
       child: IconButton.filled(
-        onPressed: onPressed,
+        onPressed: onPressed == null
+            ? null
+            : () {
+                Haptics.soft();
+                onPressed();
+              },
         icon: Icon(icon, size: iconSz),
         tooltip: tooltip,
         style: IconButton.styleFrom(

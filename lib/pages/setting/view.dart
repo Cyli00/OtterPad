@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/l10n.dart';
 import '../../router/app_routes.dart';
+import '../../services/haptics.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 bool get _isDesktop =>
@@ -139,7 +140,10 @@ class _SettingsTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: onTap != null ? () {
+          Haptics.soft();
+          onTap!();
+        } : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Row(

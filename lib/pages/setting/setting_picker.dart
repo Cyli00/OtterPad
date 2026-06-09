@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../services/haptics.dart';
+
 /// 设置页单选 picker：折叠态一行 + bottom sheet 列出全部选项。
 ///
 /// 决策见 `flutter-design` skill §3.6 / §3.8：
@@ -30,7 +32,10 @@ class SettingPicker<T> extends StatelessWidget {
     final cs = theme.colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _showSheet(context),
+      onTap: () {
+        Haptics.soft();
+        _showSheet(context);
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -115,7 +120,10 @@ class SettingPicker<T> extends StatelessWidget {
                     final isSelected = opt == current;
                     final subtitle = subtitleFor?.call(opt);
                     return InkWell(
-                      onTap: () => Navigator.pop(ctx, opt),
+                      onTap: () {
+                        Haptics.soft();
+                        Navigator.pop(ctx, opt);
+                      },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,

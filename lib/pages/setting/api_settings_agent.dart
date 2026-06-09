@@ -8,6 +8,7 @@ import '../../core/l10n.dart';
 import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
+import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/debounced_action.dart';
 import 'agent_model_list_tile.dart';
@@ -168,7 +169,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   ) {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: _showProviderSwitcher,
+      onTap: () {
+        Haptics.soft();
+        _showProviderSwitcher();
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -283,6 +287,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     final isCustom = !AgentApiNotifier.isBuiltin(inst.id);
     return InkWell(
       onTap: () {
+        Haptics.soft();
         Navigator.pop(sheetCtx);
         _switchTo(inst);
       },
@@ -326,7 +331,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                   color: cs.onSurfaceVariant.withAlpha(160),
                 ),
                 tooltip: context.l10n.delete,
-                onPressed: () => _deleteInstance(inst),
+                onPressed: () {
+                  Haptics.soft();
+                  _deleteInstance(inst);
+                },
               ),
           ],
         ),
@@ -337,6 +345,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   Widget _addRow(BuildContext sheetCtx, ThemeData theme, ColorScheme cs) {
     return InkWell(
       onTap: () {
+        Haptics.soft();
         Navigator.pop(sheetCtx);
         _addProvider();
       },
@@ -407,7 +416,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               // 每行撑满整宽 → 标题/副标题统一左对齐
               ...AgentApiProvider.values.map((p) {
                 return InkWell(
-                  onTap: () => Navigator.pop(ctx, p),
+                  onTap: () {
+                    Haptics.soft();
+                    Navigator.pop(ctx, p);
+                  },
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
@@ -613,7 +625,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                   _keyObscured ? Symbols.visibility_off_rounded : Symbols.visibility_rounded,
                   size: 20,
                 ),
-                onPressed: () => setState(() => _keyObscured = !_keyObscured),
+                onPressed: () {
+                  Haptics.soft();
+                  setState(() => _keyObscured = !_keyObscured);
+                },
               ),
             ),
             autocorrect: false,
@@ -648,7 +663,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 ),
                 tooltip: context.l10n.manageModels,
                 onPressed: current.apiKey.isNotEmpty
-                    ? () => _openModelManageSheet(current)
+                    ? () {
+                        Haptics.soft();
+                        _openModelManageSheet(current);
+                      }
                     : null,
               ),
             ),
@@ -816,7 +834,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          Haptics.soft();
+          onTap();
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
@@ -976,6 +997,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                                       child: InkWell(
                                         borderRadius: BorderRadius.circular(12),
                                         onTap: () {
+                                          Haptics.soft();
                                           Navigator.pop(ctx);
                                           onSelect(entry.id, modelId);
                                         },
@@ -1032,6 +1054,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                       if (isSet)
                         TextButton(
                           onPressed: () {
+                            Haptics.soft();
                             Navigator.pop(ctx);
                             onClear();
                           },
@@ -1219,8 +1242,10 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
                           : Symbols.visibility_rounded,
                       size: 20,
                     ),
-                    onPressed: () =>
-                        setState(() => _keyObscured = !_keyObscured),
+                    onPressed: () {
+                      Haptics.soft();
+                      setState(() => _keyObscured = !_keyObscured);
+                    },
                   ),
                 ),
                 autocorrect: false,
@@ -1232,17 +1257,23 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      Haptics.soft();
+                      Navigator.pop(context);
+                    },
                     child: Text(context.l10n.cancel),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
                     onPressed: _canAdd
-                        ? () => Navigator.pop(context, (
-                            name: _nameCtrl.text.trim(),
-                            baseUrl: _urlCtrl.text.trim(),
-                            apiKey: _keyCtrl.text.trim(),
-                          ))
+                        ? () {
+                            Haptics.soft();
+                            Navigator.pop(context, (
+                              name: _nameCtrl.text.trim(),
+                              baseUrl: _urlCtrl.text.trim(),
+                              apiKey: _keyCtrl.text.trim(),
+                            ));
+                          }
                         : null,
                     child: Text(context.l10n.add),
                   ),

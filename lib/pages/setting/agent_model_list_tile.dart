@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/l10n.dart';
 import '../../services/agent_model_capability.dart';
+import '../../services/haptics.dart';
 import '../../widgets/spring_dismissible.dart';
 import 'agent_role_widgets.dart';
 
@@ -86,7 +87,10 @@ class AgentModelListTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: onEdit,
+        onTap: () {
+          Haptics.soft();
+          onEdit();
+        },
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
@@ -154,7 +158,10 @@ class AgentModelListTile extends StatelessWidget {
                         ),
                         padding: EdgeInsets.zero,
                         tooltip: isErr ? errorMsg : context.l10n.detectModel,
-                        onPressed: isErr ? onShowError : onTest,
+                        onPressed: () {
+                          Haptics.soft();
+                          (isErr ? onShowError : onTest)();
+                        },
                       ),
               ),
             ],

@@ -6,6 +6,7 @@ import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/builtin_tools.dart';
+import '../../services/haptics.dart';
 
 /// 打开「模型能力」编辑 sheet（照搬 kelivo 基础页：类型 + 模态 + 能力）。
 ///
@@ -221,6 +222,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
                 children: [
                   TextButton(
                     onPressed: () {
+                      Haptics.soft();
                       final c = widget.inferred;
                       setState(() {
                         _embedding = c.embedding;
@@ -240,7 +242,10 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
                   ),
                   const SizedBox(width: 8),
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      Haptics.soft();
+                      Navigator.pop(context);
+                    },
                     child: Text(context.l10n.done),
                   ),
                 ],
@@ -340,7 +345,10 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
             child: FittedBox(
               child: Switch.adaptive(
                 value: value,
-                onChanged: (_) => _toggleTool(tool),
+                onChanged: (_) {
+                Haptics.soft();
+                _toggleTool(tool);
+              },
               ),
             ),
           ),
@@ -433,7 +441,10 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: seg.onTap,
+        onTap: () {
+          Haptics.soft();
+          seg.onTap();
+        },
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),

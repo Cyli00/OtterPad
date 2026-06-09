@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/document_lifecycle_provider.dart';
+import '../../services/haptics.dart';
 import '../../providers/document_task_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/selection_provider.dart';
@@ -64,7 +65,10 @@ class NoFileEntriesPage extends ConsumerWidget {
                   ),
                 ),
                 leading: IconButton(
-                  onPressed: () => context.pop(),
+                  onPressed: () {
+                    Haptics.soft();
+                    context.pop();
+                  },
                   icon: const Icon(Symbols.arrow_back_rounded),
                 ),
               ),
@@ -123,8 +127,10 @@ class NoFileEntriesPage extends ConsumerWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton.filledTonal(
-                                  onPressed: () =>
-                                      _handleAttachFile(context, ref, doc.id),
+                                  onPressed: () {
+                                    Haptics.soft();
+                                    _handleAttachFile(context, ref, doc.id);
+                                  },
                                   icon: const Icon(Symbols.attach_file_rounded),
                                   iconSize: 18,
                                   tooltip: context.l10n.attachFile,
@@ -136,7 +142,10 @@ class NoFileEntriesPage extends ConsumerWidget {
                                 if (hasDoi) ...[
                                   const SizedBox(width: 4),
                                   IconButton.filledTonal(
-                                    onPressed: () => _handleOpenDoi(doc.doi!),
+                                    onPressed: () {
+                                      Haptics.soft();
+                                      _handleOpenDoi(doc.doi!);
+                                    },
                                     icon: const Icon(Symbols.language_rounded),
                                     iconSize: 18,
                                     tooltip: context.l10n.viewInBrowser,
@@ -147,11 +156,14 @@ class NoFileEntriesPage extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 4),
                                   IconButton.filledTonal(
-                                    onPressed: () => _handleRedownload(
-                                      ref,
-                                      doc.id,
-                                      doc.title,
-                                    ),
+                                    onPressed: () {
+                                      Haptics.soft();
+                                      _handleRedownload(
+                                        ref,
+                                        doc.id,
+                                        doc.title,
+                                      );
+                                    },
                                     icon: const Icon(Symbols.download_rounded),
                                     iconSize: 18,
                                     tooltip: context.l10n.redownload,
@@ -234,11 +246,17 @@ class NoFileEntriesPage extends ConsumerWidget {
         content: Text(context.l10n.confirmDeleteEntries(count)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, false);
+            },
             child: Text(context.l10n.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, true);
+            },
             style: TextButton.styleFrom(foregroundColor: cs.error),
             child: Text(context.l10n.delete),
           ),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../providers/history_provider.dart';
+import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
@@ -40,7 +41,10 @@ class ReadingHistoryPage extends ConsumerWidget {
           ),
         ),
         leading: IconButton(
-          onPressed: () => context.pop(),
+          onPressed: () {
+            Haptics.soft();
+            context.pop();
+          },
           icon: const Icon(Symbols.arrow_back_rounded),
         ),
         actions: [
@@ -48,7 +52,10 @@ class ReadingHistoryPage extends ConsumerWidget {
             IconButton(
               tooltip: context.l10n.clearHistory,
               icon: const Icon(Symbols.delete_sweep_rounded),
-              onPressed: () => _confirmClear(context, ref),
+              onPressed: () {
+                Haptics.soft();
+                _confirmClear(context, ref);
+              },
             ),
         ],
       ),
@@ -186,11 +193,17 @@ class ReadingHistoryPage extends ConsumerWidget {
         content: Text(context.l10n.clearReadingHistoryConfirm),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, false);
+            },
             child: Text(context.l10n.cancel),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, true);
+            },
             style: TextButton.styleFrom(
               foregroundColor: cs.error,
             ),

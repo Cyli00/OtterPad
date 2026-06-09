@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../providers/reader_settings_provider.dart';
+import '../../../services/haptics.dart';
 import '../../../services/reader/markdown_document_cache_service.dart';
 import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
@@ -145,7 +146,10 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 color: cs.onSurface,
               ),
               tooltip: context.l10n.back,
-              onPressed: widget.onDismiss,
+              onPressed: () {
+                Haptics.soft();
+                widget.onDismiss();
+              },
             ),
             const SizedBox(width: 4),
             Expanded(
@@ -175,6 +179,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                               color: cs.onSurfaceVariant,
                             ),
                             onPressed: () {
+                              Haptics.soft();
                               _controller.clear();
                               setState(() {
                                 _results = [];
@@ -205,7 +210,10 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 color: cs.onSurfaceVariant,
               ),
               tooltip: context.l10n.exitSearch,
-              onPressed: widget.onDismiss,
+              onPressed: () {
+                Haptics.soft();
+                widget.onDismiss();
+              },
             ),
           ],
         ),
@@ -306,7 +314,10 @@ class _ResultCard extends StatelessWidget {
         color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          onTap: onTap,
+          onTap: () {
+            Haptics.soft();
+            onTap();
+          },
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(
             width: double.infinity,

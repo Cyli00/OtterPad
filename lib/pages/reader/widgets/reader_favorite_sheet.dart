@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
 import '../../../data/models/collection/favorite.dart';
+import '../../../services/haptics.dart';
 import 'reader_sheet_host.dart';
 
 enum ReaderFavoritePickerMode { add, remove }
@@ -157,12 +158,18 @@ class _ReaderFavoritePickerContentState
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => ReaderSheetHost.closeOf(context),
+                    onPressed: () {
+                      Haptics.soft();
+                      ReaderSheetHost.closeOf(context);
+                    },
                     child: Text(context.l10n.cancel),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
-                    onPressed: _selectedIds.isEmpty ? null : _submit,
+                    onPressed: _selectedIds.isEmpty ? null : () {
+                      Haptics.soft();
+                      _submit();
+                    },
                     child: Text(confirmLabel),
                   ),
                 ],
@@ -203,7 +210,10 @@ class _CreateFavoriteSheetItem extends StatelessWidget {
     final cs = theme.colorScheme;
 
     return InkWell(
-      onTap: creating ? null : onTap,
+      onTap: creating ? null : () {
+        Haptics.soft();
+        onTap();
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         child: Row(
@@ -287,7 +297,10 @@ class _FavoritePickerSheetItem extends StatelessWidget {
     final activeColor = enabled ? cs.onSurface : cs.onSurfaceVariant;
 
     return InkWell(
-      onTap: enabled ? onTap : null,
+      onTap: enabled ? () {
+        Haptics.soft();
+        onTap();
+      } : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         child: Row(
@@ -333,7 +346,10 @@ class _FavoritePickerSheetItem extends StatelessWidget {
             ),
             Checkbox(
               value: checked,
-              onChanged: enabled ? (_) => onTap() : null,
+              onChanged: enabled ? (_) {
+                Haptics.soft();
+                onTap();
+              } : null,
             ),
           ],
         ),

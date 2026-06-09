@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
+import '../../services/haptics.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_picker.dart';
 
@@ -174,6 +175,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 child: Switch(
                   value: value,
                   onChanged: (v) {
+                    Haptics.soft();
                     if (value != v) {
                       ref
                           .read(docExtractApiProvider.notifier)
@@ -264,13 +266,20 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                   ),
                   child: Slider(
                     value: value, min: min, max: max,
-                    divisions: divisions, onChanged: onChanged,
+                    divisions: divisions,
+                    onChanged: (v) {
+                      Haptics.soft();
+                      onChanged(v);
+                    },
                     padding: EdgeInsets.zero,
                   ),
                 ),
               ),
               IconButton(
-                onPressed: isSet ? onReset : null,
+                onPressed: isSet ? () {
+                  Haptics.soft();
+                  onReset();
+                } : null,
                 icon: const Icon(Symbols.refresh_rounded, size: 20),
                 tooltip: context.l10n.restoreDefaults,
                 color: cs.onSurfaceVariant,
@@ -308,6 +317,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12)),
           onSelected: (v) {
+            Haptics.soft();
             final updated = List<String>.from(selected);
             if (v) {
               if (!updated.contains(label)) updated.add(label);
@@ -398,11 +408,14 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                             )),
                         const Spacer(),
                         IconButton(
-                          onPressed: () => launchUrl(
-                            Uri.parse(
-                                'https://aistudio.baidu.com/paddleocr'),
-                            mode: LaunchMode.externalApplication,
-                          ),
+                          onPressed: () {
+                            Haptics.soft();
+                            launchUrl(
+                              Uri.parse(
+                                  'https://aistudio.baidu.com/paddleocr'),
+                              mode: LaunchMode.externalApplication,
+                            );
+                          },
                           icon: Icon(Symbols.arrow_outward_rounded,
                               size: 16, color: cs.onSurfaceVariant),
                           tooltip: context.l10n.getToken,
@@ -435,8 +448,10 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                                 : Symbols.visibility_rounded,
                             size: 20,
                           ),
-                          onPressed: () =>
-                              setState(() => _keyObscured = !_keyObscured),
+                          onPressed: () {
+                            Haptics.soft();
+                            setState(() => _keyObscured = !_keyObscured);
+                          },
                         ),
                       ),
                       autocorrect: false,
@@ -480,6 +495,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                               _layoutShapeModes(context.l10n).firstWhere((m) => m.$1 == id).$2,
                           sheetTitle: context.l10n.layoutGeometry,
                           onChanged: (v) {
+                            Haptics.soft();
                             if (docState.layoutShapeMode != v) {
                               ref
                                   .read(docExtractApiProvider.notifier)
