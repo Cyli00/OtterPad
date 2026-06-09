@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/app_logger.dart';
 
 /// 凭据安全保险库——所有 API key / secret / 密码的唯一存取接缝。
 ///
@@ -25,7 +25,7 @@ class SecureCredentialVault {
     try {
       _cache.addAll(await _storage.readAll());
     } catch (e) {
-      debugPrint('[SecureCredentialVault] readAll 失败：$e');
+      log.d('[SecureCredentialVault] readAll 失败：$e');
     }
   }
 

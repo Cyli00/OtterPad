@@ -6,6 +6,7 @@ import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/models/book/document.dart';
+import '../core/app_logger.dart';
 
 /// 元数据搜索源的抽象接口。
 ///
@@ -97,7 +98,7 @@ class MetadataSearchService {
         final best = _findBestMatch(normalizedQuery, results);
         if (best != null) return best;
       } catch (e) {
-        debugPrint('${source.name} 标题搜索失败: $e');
+        log.d('${source.name} 标题搜索失败: $e');
       }
     }
     return null;

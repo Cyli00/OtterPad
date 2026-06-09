@@ -3,12 +3,12 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import 'pdf_process_lock.dart';
+import '../core/app_logger.dart';
 
 /// PDF 缩略图服务：首次渲染 PDF 首页为 PNG 存入磁盘，后续直接返回文件路径。
 ///
@@ -105,7 +105,7 @@ class PdfThumbnailService {
         await File(cachePath).writeAsBytes(byteData.buffer.asUint8List());
         return cachePath;
       } catch (e) {
-        debugPrint('渲染 PDF 首页失败 ($filePath): $e');
+        log.d('渲染 PDF 首页失败 ($filePath): $e');
         return null;
       } finally {
         document?.dispose();
@@ -113,7 +113,7 @@ class PdfThumbnailService {
     }).timeout(
       _renderTimeout,
       onTimeout: () {
-        debugPrint('渲染 PDF 首页超时 ($filePath)');
+        log.d('渲染 PDF 首页超时 ($filePath)');
         return null;
       },
     );
@@ -125,7 +125,7 @@ class PdfThumbnailService {
       final cache = File(p.join(await _cacheDir, _cacheKey(filePath)));
       if (await cache.exists()) await cache.delete();
     } catch (e) {
-      debugPrint('删除缩略图缓存失败: $e');
+      log.d('删除缩略图缓存失败: $e');
     }
   }
 
@@ -140,7 +140,7 @@ class PdfThumbnailService {
         await oldCache.rename(newCache);
       }
     } catch (e) {
-      debugPrint('迁移缩略图缓存失败: $e');
+      log.d('迁移缩略图缓存失败: $e');
     }
   }
 
@@ -153,7 +153,7 @@ class PdfThumbnailService {
         await dir.create(recursive: true);
       }
     } catch (e) {
-      debugPrint('清除缓存失败: $e');
+      log.d('清除缓存失败: $e');
     }
   }
 }

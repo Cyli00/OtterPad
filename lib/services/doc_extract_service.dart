@@ -4,13 +4,13 @@ import 'dart:math' show min;
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../providers/api_provider.dart';
 import '../utils/doc_paths.dart';
 import '../utils/markdown_preprocessor.dart';
 import 'figure_extract_service.dart';
+import '../core/app_logger.dart';
 
 /// 文档提取异常
 class DocExtractException implements Exception {
@@ -229,7 +229,7 @@ class DocExtractService {
           mdDir: dir,
         );
       } catch (e) {
-        debugPrint('[DocExtract] Figure 提取/替换失败，回退原始 Markdown: $e');
+        log.d('[DocExtract] Figure 提取/替换失败，回退原始 Markdown: $e');
       }
     }
 
@@ -292,7 +292,7 @@ class DocExtractService {
           mdDir: dir,
         );
       } catch (e) {
-        debugPrint('[DocExtract] 重新排版: Figure 提取失败，回退原始 Markdown: $e');
+        log.d('[DocExtract] 重新排版: Figure 提取失败，回退原始 Markdown: $e');
       }
     }
 
@@ -445,7 +445,7 @@ class DocExtractService {
     for (final fig in pageFigures) {
       final plan = _planFigureLines(lines, blockMap, fig, claimed);
       if (plan == null) {
-        debugPrint(
+        log.d(
           '[DocExtract] 未定位到 '
           '"${fig.captionText.substring(0, min(30, fig.captionText.length))}…"',
         );

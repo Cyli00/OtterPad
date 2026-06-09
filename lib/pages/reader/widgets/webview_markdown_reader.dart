@@ -16,6 +16,7 @@ import 'reader_background.dart';
 import 'reader_js_bridge.dart';
 import 'reader_update_plan.dart';
 import 'webview_reader_html.dart';
+import '../../../core/app_logger.dart';
 
 class WebViewMarkdownReader extends StatefulWidget {
   final String markdownData;
@@ -219,7 +220,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       if (!mounted) return;
       final url = _readerUrl(cacheBust: true);
       if (url == null) {
-        debugPrint(
+        log.d(
           '[WebViewMarkdownReader] localhost server not running or '
           'document outside server root: $_htmlFilePath',
         );

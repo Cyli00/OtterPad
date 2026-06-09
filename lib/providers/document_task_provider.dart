@@ -25,6 +25,7 @@ import 'image_generation_config_provider.dart';
 import 'summary_image_provider.dart';
 import 'task_runner.dart';
 import 'translation_config_provider.dart';
+import '../core/app_logger.dart';
 
 enum DocumentTaskType { extractDocument, generateSummaryImage, redownloadPdf }
 
@@ -684,7 +685,8 @@ class DocumentTaskNotifier
           debugTag: 'DocumentTask:${request.key.type}',
         );
         request.complete(result);
-      } catch (_) {
+      } catch (e, st) {
+        log.e('[DocumentTask:${request.key.type}] unexpected', error: e, stackTrace: st);
         request.complete(null);
       } finally {
         _runningCount--;

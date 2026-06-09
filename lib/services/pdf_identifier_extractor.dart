@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import 'identifier_parser.dart';
 import 'pdf_process_lock.dart';
+import '../core/app_logger.dart';
 
 /// 从 PDF 正文中提取标识符的服务
 ///
@@ -68,7 +68,7 @@ class PdfIdentifierExtractor {
 
             return buffer.toString();
           } catch (e) {
-            debugPrint('提取 PDF 文本失败 ($filePath): $e');
+            log.d('提取 PDF 文本失败 ($filePath): $e');
             return null;
           } finally {
             document?.dispose();
@@ -77,7 +77,7 @@ class PdfIdentifierExtractor {
         .timeout(
           _extractTimeout,
           onTimeout: () {
-            debugPrint('提取 PDF 文本超时 ($filePath)');
+            log.d('提取 PDF 文本超时 ($filePath)');
             return null;
           },
         );

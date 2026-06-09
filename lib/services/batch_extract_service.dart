@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../providers/api_provider.dart';
 import 'doc_extract_service.dart';
+import '../core/app_logger.dart';
 
 // ─── 数据模型 ─────────────────────────────────────────────────────────────────
 
@@ -239,15 +239,15 @@ class BatchExtractService {
       throw BatchExtractException('提交任务失败: ${e.message ?? e.type.name}');
     }
 
-    debugPrint('[BatchExtract] submit response: code=${response.data?['code']}, msg=${response.data?['msg']}');
+    log.d('[BatchExtract] submit response: code=${response.data?['code']}, msg=${response.data?['msg']}');
     _checkApiResponse(response.data);
     final jobId = response.data?['data']?['jobId'] as String?;
     if (jobId == null) {
       final msg = response.data?['msg'] as String? ?? '响应中无 jobId';
-      debugPrint('[BatchExtract] submit failed: no jobId, full response=${response.data}');
+      log.d('[BatchExtract] submit failed: no jobId, full response=${response.data}');
       throw BatchExtractException('提交任务失败: $msg');
     }
-    debugPrint('[BatchExtract] submit ok: jobId=$jobId');
+    log.d('[BatchExtract] submit ok: jobId=$jobId');
     return jobId;
   }
 
@@ -295,7 +295,7 @@ class BatchExtractService {
 
     _checkApiResponse(response.data);
     final data = response.data?['data'];
-    debugPrint('[BatchExtract] pollBatch response data type=${data.runtimeType}, keys=${data is Map<String, dynamic> ? data.keys.toList() : 'N/A'}');
+    log.d('[BatchExtract] pollBatch response data type=${data.runtimeType}, keys=${data is Map<String, dynamic> ? data.keys.toList() : 'N/A'}');
     if (data is Map<String, dynamic>) {
       final results = data['extractResult'];
       if (results is List) {
@@ -348,7 +348,7 @@ class BatchExtractService {
           }
         }
       } catch (e) {
-        debugPrint('[BatchExtract] 解析结果行失败: $e');
+        log.d('[BatchExtract] 解析结果行失败: $e');
       }
     }
 
@@ -543,7 +543,7 @@ class BatchExtractService {
     final jobUrl = _jobApiUrl;
     final batchId = 'nr_${DateTime.now().millisecondsSinceEpoch}';
 
-    debugPrint('[BatchExtract] === extractBatch start: ${items.length} items, batchId=$batchId ===');
+    log.d('[BatchExtract] === extractBatch start: ${items.length} items, batchId=$batchId ===');
     // Phase 1：并发提交 Job（每组最多 _maxConcurrent 个）
     for (int i = 0; i < items.length; i += _maxConcurrent) {
       if (cancelToken?.isCancelled == true) break;
@@ -602,9 +602,9 @@ class BatchExtractService {
     // Phase 2：轮询所有 Job 直到全部结束（优先使用 batchId 批量查询）
     final submitted = jobStatuses.where((s) => s.jobId != null).length;
     final failedSubmit = jobStatuses.where((s) => s.state == BatchJobState.failed).length;
-    debugPrint('[BatchExtract] === Phase 1 done: $submitted submitted, $failedSubmit failed ===');
+    log.d('[BatchExtract] === Phase 1 done: $submitted submitted, $failedSubmit failed ===');
     for (final s in jobStatuses) {
-      debugPrint('[BatchExtract]   ${s.documentId}: state=${s.state.name}, jobId=${s.jobId}, error=${s.error}');
+      log.d('[BatchExtract]   ${s.documentId}: state=${s.state.name}, jobId=${s.jobId}, error=${s.error}');
     }
     int pollDelayMs = 5000;
     bool useBatchPoll = true;
@@ -618,16 +618,16 @@ class BatchExtractService {
           )
           .toList();
       if (activeStatuses.isEmpty) break;
-      debugPrint('[BatchExtract] poll tick: ${activeStatuses.length} active, mode=${useBatchPoll ? "batch" : "individual"}');
+      log.d('[BatchExtract] poll tick: ${activeStatuses.length} active, mode=${useBatchPoll ? "batch" : "individual"}');
 
       try {
         if (useBatchPoll) {
           // 批量查询：1 次请求获取所有 Job 状态
           final jobDataList = await _pollBatch(batchId, jobUrl, token);
-          debugPrint('[BatchExtract] pollBatch returned ${jobDataList.length} items');
+          log.d('[BatchExtract] pollBatch returned ${jobDataList.length} items');
           if (jobDataList.isEmpty && activeStatuses.isNotEmpty) {
             // 端点返回空列表，回退到逐个查询
-            debugPrint('[BatchExtract] batch returned empty, falling back to individual');
+            log.d('[BatchExtract] batch returned empty, falling back to individual');
             useBatchPoll = false;
             continue;
           }
@@ -655,9 +655,9 @@ class BatchExtractService {
               onJobUpdate?.call(status);
             } on DioException catch (e) {
               if (e.response?.statusCode == 429) rethrow;
-              debugPrint('[BatchExtract] 轮询出错 (${status.documentId}): $e');
+              log.d('[BatchExtract] 轮询出错 (${status.documentId}): $e');
             } catch (e) {
-              debugPrint('[BatchExtract] 轮询出错 (${status.documentId}): $e');
+              log.d('[BatchExtract] 轮询出错 (${status.documentId}): $e');
             }
           }
         }
@@ -666,15 +666,15 @@ class BatchExtractService {
         if (e.response?.statusCode == 429) {
           // 限流 → 指数退避
           pollDelayMs = (pollDelayMs * 1.5).toInt().clamp(5000, 30000);
-          debugPrint('[BatchExtract] 触发限流 (429)，退避 ${pollDelayMs}ms');
+          log.d('[BatchExtract] 触发限流 (429)，退避 ${pollDelayMs}ms');
         } else if (useBatchPoll) {
           // 批量端点不可用 → 回退到逐个轮询
           useBatchPoll = false;
-          debugPrint('[BatchExtract] 批量查询失败，回退到逐个轮询');
+          log.d('[BatchExtract] 批量查询失败，回退到逐个轮询');
           continue;
         }
       } catch (e) {
-        debugPrint('[BatchExtract] 轮询出错: $e');
+        log.d('[BatchExtract] 轮询出错: $e');
       }
 
       onProgress?.call(_buildProgress(jobStatuses, ''));

@@ -7,6 +7,7 @@ import '../core/l10n.dart';
 import '../router/app_router.dart';
 import '../services/snackbar_service.dart';
 import 'task_types.dart';
+import '../core/app_logger.dart';
 
 String _resolvedCancelled(String? message) {
   if (message != null) return message;
@@ -60,7 +61,7 @@ Future<T?> executeTaskBody<T>({
       onFailed(e);
       final finish = onError?.call(e) ?? TaskFinish(message: '任务失败: $e');
       onFinished(finish);
-      if (debugTag != null) debugPrint('[$debugTag] failed: $e\n$st');
+      if (debugTag != null) log.e('[$debugTag] failed', error: e, stackTrace: st);
     }
     return null;
   }

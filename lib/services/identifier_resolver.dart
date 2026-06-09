@@ -10,6 +10,7 @@ import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import 'identifier_parser.dart';
 import 'metadata_names.dart';
+import '../core/app_logger.dart';
 
 /// 标识符解析过程中抛出的异常。
 class IdentifierResolveException implements Exception {
@@ -127,7 +128,7 @@ class IdentifierResolver {
           cancelToken: cancelToken,
         );
       } catch (e) {
-        debugPrint('eLife API 解析失败，回退 Crossref: $e');
+        log.d('eLife API 解析失败，回退 Crossref: $e');
       }
     }
 
@@ -160,7 +161,7 @@ class IdentifierResolver {
             cancelToken: cancelToken,
           );
         } catch (e) {
-          debugPrint('出版商 PDF 下载失败: $e');
+          log.d('出版商 PDF 下载失败: $e');
         }
 
         if (filePath.isEmpty) {
@@ -186,7 +187,7 @@ class IdentifierResolver {
               );
             }
           } catch (e) {
-            debugPrint('Unpaywall PDF 下载失败: $e');
+            log.d('Unpaywall PDF 下载失败: $e');
           }
         }
       }
@@ -203,7 +204,7 @@ class IdentifierResolver {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e, st) {
-      debugPrint('DOI 解析失败: $e\n$st');
+      log.e('DOI 解析失败', error: e, stackTrace: st);
       throw IdentifierResolveException('解析 DOI 时发生错误: $e');
     }
   }
@@ -242,7 +243,7 @@ class IdentifierResolver {
             cancelToken: cancelToken,
           );
         } catch (e) {
-          debugPrint('eLife PDF 下载失败: $e');
+          log.d('eLife PDF 下载失败: $e');
         }
       }
     }
@@ -418,7 +419,7 @@ class IdentifierResolver {
               cancelToken: cancelToken,
             );
           } catch (e) {
-            debugPrint('出版商 PDF 下载失败: $e');
+            log.d('出版商 PDF 下载失败: $e');
           }
         }
 
@@ -434,7 +435,7 @@ class IdentifierResolver {
               cancelToken: cancelToken,
             );
           } catch (e) {
-            debugPrint('PMC PDF 下载失败: $e');
+            log.d('PMC PDF 下载失败: $e');
           }
         }
 
@@ -463,7 +464,7 @@ class IdentifierResolver {
               );
             }
           } catch (e) {
-            debugPrint('Unpaywall PDF 下载失败: $e');
+            log.d('Unpaywall PDF 下载失败: $e');
           }
         }
       }
@@ -483,7 +484,7 @@ class IdentifierResolver {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e, st) {
-      debugPrint('PMID 解析失败: $e\n$st');
+      log.e('PMID 解析失败', error: e, stackTrace: st);
       throw IdentifierResolveException('解析 PMID 时发生错误: $e');
     }
   }
@@ -554,7 +555,7 @@ class IdentifierResolver {
             cancelToken: cancelToken,
           );
         } catch (e) {
-          debugPrint('arXiv PDF 下载失败: $e');
+          log.d('arXiv PDF 下载失败: $e');
         }
       }
 
@@ -572,7 +573,7 @@ class IdentifierResolver {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e, st) {
-      debugPrint('arXiv 解析失败: $e\n$st');
+      log.e('arXiv 解析失败', error: e, stackTrace: st);
       throw IdentifierResolveException('解析 arXiv 时发生错误: $e');
     }
   }
@@ -624,7 +625,7 @@ class IdentifierResolver {
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e, st) {
-      debugPrint('ISBN 解析失败: $e\n$st');
+      log.e('ISBN 解析失败', error: e, stackTrace: st);
       throw IdentifierResolveException('解析 ISBN 时发生错误: $e');
     }
   }
@@ -654,7 +655,7 @@ class IdentifierResolver {
         cancelToken: cancelToken,
       );
     } catch (e) {
-      debugPrint('出版商 PDF 下载失败: $e');
+      log.d('出版商 PDF 下载失败: $e');
     }
     if (filePath.isNotEmpty) return filePath;
 
@@ -680,7 +681,7 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
-      debugPrint('Unpaywall PDF 下载失败: $e');
+      log.d('Unpaywall PDF 下载失败: $e');
     }
     if (filePath.isNotEmpty) return filePath;
 
@@ -720,7 +721,7 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
-      debugPrint('Sci-Hub PDF 下载失败: $e');
+      log.d('Sci-Hub PDF 下载失败: $e');
     }
 
     return filePath;
@@ -766,7 +767,7 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
-      debugPrint('DOI 重定向失败: $e');
+      log.d('DOI 重定向失败: $e');
     }
 
     // 根据出版商域名构造 PDF 直链
@@ -785,7 +786,7 @@ class IdentifierResolver {
           );
           if (path.isNotEmpty) return path;
         } catch (e) {
-          debugPrint('出版商 URL 模式下载失败: $e');
+          log.d('出版商 URL 模式下载失败: $e');
         }
       }
     }

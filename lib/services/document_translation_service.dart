@@ -8,6 +8,7 @@ import '../providers/translation_config_provider.dart';
 import '../utils/doc_paths.dart';
 import 'markdown_paragraph_extractor.dart';
 import 'translation_service.dart';
+import '../core/app_logger.dart';
 
 /// 文档级翻译服务（**单段并发**版）。
 ///
@@ -100,7 +101,7 @@ class DocumentTranslationService {
         );
       }
     } catch (_) {}
-    debugPrint(
+    log.d(
       '[DocumentTranslation] cleared translations: lang="$targetLang"',
     );
   }
@@ -178,7 +179,7 @@ class DocumentTranslationService {
       saveLock = saveLock
           .then((_) => _saveTranslations(pdfPath, targetLang, snapshot))
           .catchError((Object e) {
-            debugPrint('[DocumentTranslation] mid-save failed (ignored): $e');
+            log.d('[DocumentTranslation] mid-save failed (ignored): $e');
           });
     }
 
@@ -275,7 +276,7 @@ class DocumentTranslationService {
             Future<void>.delayed(Duration(milliseconds: 200 * (1 << attempt))));
       }
     }
-    debugPrint(
+    log.d(
       '[DocumentTranslation] paragraph "${debugLabel ?? ''}" failed '
       'after ${maxRetries + 1} attempts: $lastErr',
     );

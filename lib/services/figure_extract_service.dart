@@ -10,6 +10,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../utils/doc_paths.dart';
 import 'pdf_process_lock.dart';
+import '../core/app_logger.dart';
 
 // ─── 诊断枚举 ─────────────────────────────────────────────
 
@@ -482,7 +483,7 @@ class FigureExtractService {
           _parsePage(list[i] as Map<String, dynamic>, i),
       ];
     } catch (e) {
-      debugPrint('[FigureExtract] 解析 JSON 失败: $e');
+      log.d('[FigureExtract] 解析 JSON 失败: $e');
       return const [];
     }
   }
@@ -834,7 +835,7 @@ class FigureExtractService {
       segments.add(
         _buildSegmentFromBlocks(cluster.blocks, caption, PairMethod.crossPage),
       );
-      debugPrint(
+      log.d(
         '[FigureExtract] cross-page paired: "${caption.captionName}" '
         'page ${caption.pageIndex} ↔ cluster page ${cluster.pageIndex}',
       );
@@ -873,7 +874,7 @@ class FigureExtractService {
       segments.add(
         _buildSegmentFromBlocks(cluster.blocks, attached, PairMethod.lateBound),
       );
-      debugPrint(
+      log.d(
         '[FigureExtract] late-bound caption: "${attached.captionName}" '
         'on page ${cluster.pageIndex}',
       );
@@ -924,7 +925,7 @@ class FigureExtractService {
             PairMethod.ordinalMatch,
           ),
         );
-        debugPrint(
+        log.d(
           '[FigureExtract] ordinal-matched: "${caption.captionName}" '
           'caption page ${caption.pageIndex} ↔ '
           'cluster page ${cluster.pageIndex}',
@@ -940,7 +941,7 @@ class FigureExtractService {
         'block_count': cluster.blocks.length,
         'reason': 'uncaptioned',
       });
-      debugPrint(
+      log.d(
         '[FigureExtract] dropped uncaptioned cluster on page '
         '${cluster.pageIndex} (${cluster.blocks.length} blocks)',
       );
@@ -1910,7 +1911,7 @@ class FigureExtractService {
         for (final entry in byPage.entries) {
           final pageIdx = entry.key;
           if (pageIdx >= document.pages.length) {
-            debugPrint('[FigureExtract] 页 $pageIdx 超出 PDF 页数,跳过');
+            log.d('[FigureExtract] 页 $pageIdx 超出 PDF 页数,跳过');
             for (final (idx, _) in entry.value) {
               onProgress?.call(idx + 1, totalSegments);
             }
@@ -1920,7 +1921,7 @@ class FigureExtractService {
           final page = document.pages[pageIdx];
           final fullImage = await _renderFullPage(page);
           if (fullImage == null) {
-            debugPrint('[FigureExtract] 页 $pageIdx 渲染失败');
+            log.d('[FigureExtract] 页 $pageIdx 渲染失败');
             for (final (idx, _) in entry.value) {
               onProgress?.call(idx + 1, totalSegments);
             }
@@ -1940,7 +1941,7 @@ class FigureExtractService {
 
               final pngBytes = await _cropRegion(fullImage, renderBbox);
               if (pngBytes == null) {
-                debugPrint('[FigureExtract] 页 $pageIdx 裁剪失败');
+                log.d('[FigureExtract] 页 $pageIdx 裁剪失败');
                 onProgress?.call(idx + 1, totalSegments);
                 continue;
               }
@@ -2010,7 +2011,7 @@ class FigureExtractService {
       }),
     );
 
-    debugPrint(
+    log.d(
       '[FigureExtract] 共提取 $figureIndex 个 figure → $outputDir '
       '(captions=${inv.captions.length}, clusters=${pairResult.totalClusters}, '
       'dropped=${pairResult.dropped.length})',
@@ -2044,7 +2045,7 @@ class FigureExtractService {
           .map((e) => FigureManifestEntry.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      debugPrint('[FigureExtract] 加载 manifest 失败: $e');
+      log.d('[FigureExtract] 加载 manifest 失败: $e');
       return null;
     }
   }

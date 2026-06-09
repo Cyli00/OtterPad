@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
@@ -22,6 +21,7 @@ import '../services/pdf_identifier_extractor.dart';
 import '../services/pdf_metadata_extractor.dart';
 import '../services/pdf_thumbnail_service.dart';
 import '../utils/doc_paths.dart';
+import '../core/app_logger.dart';
 
 enum AddByIdentifierResult { success, duplicate }
 
@@ -437,7 +437,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
           await _save();
         }
       } catch (e) {
-        debugPrint('标题搜索补全 DOI 失败: $e');
+        log.d('标题搜索补全 DOI 失败: $e');
       }
     }
 
@@ -493,7 +493,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       unawaited(PdfThumbnailService.instance.getThumbnailPath(pdfPath));
       return true;
     } catch (error) {
-      debugPrint('重新下载 PDF 失败: $error');
+      log.d('重新下载 PDF 失败: $error');
       if (await tempFile.exists()) {
         try {
           await tempFile.delete();
@@ -516,7 +516,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         }
         await PdfThumbnailService.instance.deleteCacheEntry(DocPaths.pdf(id));
       } catch (error) {
-        debugPrint('删除文件失败: $error');
+        log.d('删除文件失败: $error');
       }
     }
 
@@ -576,7 +576,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
           await entity.delete();
         }
       } catch (e) {
-        debugPrint('清理派生文件失败 ${entity.path}: $e');
+        log.d('清理派生文件失败 ${entity.path}: $e');
       }
     }
   }
@@ -640,7 +640,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
           );
           doc = _applyResolvedDocument(doc, resolved);
         } catch (e) {
-          debugPrint('标识符解析失败（保留已提取元数据）: $e');
+          log.d('标识符解析失败（保留已提取元数据）: $e');
         }
       }
 
@@ -654,11 +654,11 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
             doc = _applyResolvedDocument(doc, searchResult);
           }
         } catch (e) {
-          debugPrint('标题搜索失败: $e');
+          log.d('标题搜索失败: $e');
         }
       }
     } catch (error) {
-      debugPrint('元数据修复失败: $error');
+      log.d('元数据修复失败: $error');
       doc = _applyMetadata(doc, DocumentMetadataParser.parseFilePath(pdfPath));
     }
 

@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 
 import '../core/storage/storage.dart';
+import '../core/app_logger.dart';
 
 /// 阅读器本地静态文件服务（单例，跨平台一致）。
 ///
@@ -59,10 +59,10 @@ class ReaderLocalhostServer {
     server.listen(
       _handleRequest,
       onError: (Object e) {
-        debugPrint('[ReaderLocalhostServer] connection error: $e');
+        log.d('[ReaderLocalhostServer] connection error: $e');
       },
     );
-    debugPrint(
+    log.d(
       '[ReaderLocalhostServer] started on http://127.0.0.1:${server.port} '
       '(root=$_root)',
     );
@@ -82,7 +82,7 @@ class ReaderLocalhostServer {
     final rel = p.relative(normAbs, from: _root);
     // p.relative 在路径不在 _root 下时会返回 `..` 开头的相对路径
     if (rel.startsWith('..') || p.isAbsolute(rel)) {
-      debugPrint(
+      log.d(
         '[ReaderLocalhostServer] urlForPath rejected (out of root): $absPath',
       );
       return null;
@@ -119,7 +119,7 @@ class ReaderLocalhostServer {
 
       await _serveFile(req, urlPath);
     } catch (e) {
-      debugPrint('[ReaderLocalhostServer] handler error: $e');
+      log.d('[ReaderLocalhostServer] handler error: $e');
       try {
         req.response.statusCode = HttpStatus.internalServerError;
         await req.response.close();
@@ -213,7 +213,7 @@ class ReaderLocalhostServer {
       req.response.add(bytes);
       await req.response.close();
     } catch (e) {
-      debugPrint('[ReaderLocalhostServer] asset not found: $assetKey ($e)');
+      log.d('[ReaderLocalhostServer] asset not found: $assetKey ($e)');
       req.response.statusCode = HttpStatus.notFound;
       await req.response.close();
     }
