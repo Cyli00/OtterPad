@@ -52,7 +52,7 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                 ),
               ),
               _SheetItem(
-                icon: Symbols.note_add,
+                icon: Symbols.note_add_rounded,
                 title: context.l10n.addFiles,
                 subtitle: context.l10n.addFilesSubtitle,
                 onTap: () => Navigator.pop(context, ToolbarAction.addFile),

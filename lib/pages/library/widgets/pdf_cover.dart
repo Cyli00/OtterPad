@@ -96,7 +96,7 @@ class _PdfCoverRenderState extends State<PdfCoverRender> {
         height: widget.height,
         color: theme.colorScheme.surfaceContainerHighest,
         child: Icon(
-          Symbols.picture_as_pdf,
+          Symbols.picture_as_pdf_rounded,
           color: theme.colorScheme.onSurfaceVariant.withAlpha(100),
           size: 48,
         ),

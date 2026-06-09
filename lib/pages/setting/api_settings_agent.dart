@@ -610,7 +610,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               hint: current.protocol.apiKeyHint,
               suffix: IconButton(
                 icon: Icon(
-                  _keyObscured ? Symbols.visibility_off : Symbols.visibility,
+                  _keyObscured ? Symbols.visibility_off_rounded : Symbols.visibility_rounded,
                   size: 20,
                 ),
                 onPressed: () => setState(() => _keyObscured = !_keyObscured),
@@ -1215,8 +1215,8 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
                   suffix: IconButton(
                     icon: Icon(
                       _keyObscured
-                          ? Symbols.visibility_off
-                          : Symbols.visibility,
+                          ? Symbols.visibility_off_rounded
+                          : Symbols.visibility_rounded,
                       size: 20,
                     ),
                     onPressed: () =>

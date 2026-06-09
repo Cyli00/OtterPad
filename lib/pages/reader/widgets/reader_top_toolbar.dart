@@ -83,7 +83,7 @@ class ReaderTopToolbar extends StatelessWidget {
             if (showPreview && hasResult && hasMarkdownContent)
               IconButton(
                 icon: Icon(
-                  Symbols.mindfulness,
+                  Symbols.mindfulness_rounded,
                   size: 22,
                   fill: 1,
                   color: cs.onSurfaceVariant,

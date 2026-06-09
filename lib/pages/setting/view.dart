@@ -40,25 +40,25 @@ class SettingPage extends ConsumerWidget {
             children: [
               if (_isDesktop)
                 _SettingsTile(
-                  icon: Symbols.dns,
+                  icon: Symbols.dns_rounded,
                   title: l10n.networkSettings,
                   subtitle: l10n.networkSettingsSubtitle,
                   onTap: () => context.push(AppRoutes.settingsNetwork),
                 ),
               _SettingsTile(
-                icon: Symbols.memory,
+                icon: Symbols.memory_rounded,
                 title: l10n.aiSettings,
                 subtitle: l10n.aiSettingsSubtitle,
                 onTap: () => context.push(AppRoutes.settingsApi),
               ),
               _SettingsTile(
-                icon: Symbols.document_scanner,
+                icon: Symbols.document_scanner_rounded,
                 title: l10n.ocrSettings,
                 subtitle: l10n.ocrSettingsSubtitle,
                 onTap: () => context.push(AppRoutes.settingsExtract),
               ),
               _SettingsTile(
-                icon: Symbols.palette,
+                icon: Symbols.palette_rounded,
                 title: l10n.appearanceSettings,
                 subtitle: l10n.appearanceSettingsSubtitle,
                 onTap: () => context.push(AppRoutes.settingsAppearance),

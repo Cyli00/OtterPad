@@ -113,7 +113,7 @@ class FavoriteDetailPage extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Symbols.menu_book,
+                        Symbols.menu_book_rounded,
                         size: 64,
                         color: colorScheme.onSurfaceVariant.withAlpha(80),
                       ),

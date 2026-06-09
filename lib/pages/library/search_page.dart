@@ -83,7 +83,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           vertical: 12,
                         ),
                         prefixIcon: Icon(
-                          Symbols.search,
+                          Symbols.search_rounded,
                           color: colorScheme.onSurfaceVariant,
                         ),
                         suffixIcon: _query.isNotEmpty

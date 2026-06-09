@@ -431,8 +431,8 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                         suffix: IconButton(
                           icon: Icon(
                             _keyObscured
-                                ? Symbols.visibility_off
-                                : Symbols.visibility,
+                                ? Symbols.visibility_off_rounded
+                                : Symbols.visibility_rounded,
                             size: 20,
                           ),
                           onPressed: () =>

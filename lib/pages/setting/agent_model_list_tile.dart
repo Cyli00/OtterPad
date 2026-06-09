@@ -144,7 +144,7 @@ class AgentModelListTile extends StatelessWidget {
                       )
                     : IconButton(
                         icon: Icon(
-                          Symbols.vital_signs,
+                          Symbols.vital_signs_rounded,
                           size: 20,
                           color: isOk
                               ? cs.primary

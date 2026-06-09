@@ -319,7 +319,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                           }
                           Navigator.pop(context);
                         },
-                        icon: const Icon(Symbols.cancel),
+                        icon: const Icon(Symbols.cancel_rounded),
                         label: Text(l10n.cancelExtraction),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 48),
@@ -395,7 +395,7 @@ class JobStatusTile extends StatelessWidget {
         colorScheme.onSurfaceVariant,
       ),
       BatchJobState.submitted => (
-        Icon(Symbols.cloud_upload, color: colorScheme.primary, size: 20),
+        Icon(Symbols.cloud_upload_rounded, color: colorScheme.primary, size: 20),
         l10n.waitingSubmit,
         colorScheme.onSurfaceVariant,
       ),
