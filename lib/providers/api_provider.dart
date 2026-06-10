@@ -46,6 +46,47 @@ extension AgentApiProviderExt on AgentApiProvider {
     AgentApiProvider.gemini => '/v1beta',
     AgentApiProvider.openAICompatible => '/v1/chat/completions',
   };
+
+  /// chat 端点完整 URL。baseUrl 末尾已带版本段（/v1、/v3、/v4、/v1beta…）时
+  /// 不再追加默认版本、直接接资源路径——兼容 Zhipu(/api/paas/v4)、
+  /// Doubao(/api/v3) 等非 /v1 版本段的厂商，以及用户填带版本反代地址的场景。
+  /// Gemini 返回值不含 `/models/{model}:generateContent`，由调用方追加。
+  String chatUrl(String baseUrl) {
+    final base = _trimTrailingSlash(baseUrl);
+    if (!_versionTailRe.hasMatch(base)) return '$base$chatPath';
+    return switch (this) {
+      AgentApiProvider.openai => '$base/responses',
+      AgentApiProvider.anthropic => '$base/messages',
+      AgentApiProvider.gemini => base,
+      AgentApiProvider.openAICompatible => '$base/chat/completions',
+    };
+  }
+
+  /// 模型列表端点完整 URL，版本段处理同 [chatUrl]。
+  String modelsUrl(String baseUrl) {
+    final base = _trimTrailingSlash(baseUrl);
+    if (!_versionTailRe.hasMatch(base)) return '$base$modelsPath';
+    return '$base/models';
+  }
+}
+
+/// URL 末尾版本段（/v1、/v3、/v4、/v1beta、/v1beta2 等）
+final _versionTailRe = RegExp(r'/v[\da-z.]+$');
+
+String _trimTrailingSlash(String url) =>
+    url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+
+/// 内置服务商预设条目：常驻实例、不可删除、名字锁定。
+/// [baseUrl] 为空表示用协议默认地址；非空（厂商预设）作为该实例的默认地址，
+/// 用户在设置页改过后以用户值为准。[keyHint] 为空时用协议默认提示。
+class AgentVendorPreset {
+  final String id;
+  final String label;
+  final AgentApiProvider protocol;
+  final String baseUrl;
+  final String keyHint;
+  const AgentVendorPreset(this.id, this.label, this.protocol,
+      [this.baseUrl = '', this.keyHint = '']);
 }
 
 // ─── Agent API ───────────────────────────────────────────────────────────────
@@ -428,16 +469,41 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   static const _globalFastKey = 'agent_api_fast_model_global';
   static const _globalImageKey = 'agent_api_image_model_global';
 
-  /// 内置三家——永远常驻列表、不可删除、名字锁定，id 固定为协议名。
-  static const _builtinProtocols = [
-    AgentApiProvider.openai,
-    AgentApiProvider.anthropic,
-    AgentApiProvider.gemini,
+  /// 内置服务商——永远常驻列表、不可删除、名字锁定。前三家直连各自协议，
+  /// id 固定为协议名（兼容历史数据）；其余为主流 OpenAI 兼容厂商预设
+  /// （提供 Chat Completions / Anthropic 双接口的厂商统一走 Chat Completions）。
+  /// 各家 base URL 与 key 格式均按官方文档核实；Zhipu / Doubao 无 OpenAI
+  /// 兼容的 GET /models 列表端点，模型靠管理弹窗的手动添加行录入。
+  static const _builtinPresets = [
+    AgentVendorPreset('openai', 'OpenAI', AgentApiProvider.openai),
+    AgentVendorPreset('anthropic', 'Anthropic', AgentApiProvider.anthropic),
+    AgentVendorPreset('gemini', 'Gemini', AgentApiProvider.gemini),
+    AgentVendorPreset('qwen', 'Qwen', AgentApiProvider.openAICompatible,
+        'https://dashscope.aliyuncs.com/compatible-mode/v1', 'sk-...'),
+    AgentVendorPreset('zhipu', 'Zhipu GLM', AgentApiProvider.openAICompatible,
+        'https://open.bigmodel.cn/api/paas/v4', '{id}.{secret}'),
+    AgentVendorPreset('kimi', 'Kimi', AgentApiProvider.openAICompatible,
+        'https://api.moonshot.cn/v1', 'sk-...'),
+    AgentVendorPreset('doubao', 'Doubao', AgentApiProvider.openAICompatible,
+        'https://ark.cn-beijing.volces.com/api/v3', 'API Key (UUID)'),
+    AgentVendorPreset('mimo', 'MiMo', AgentApiProvider.openAICompatible,
+        'https://api.xiaomimimo.com/v1', 'API Key'),
+    AgentVendorPreset('grok', 'Grok', AgentApiProvider.openAICompatible,
+        'https://api.x.ai/v1', 'xai-...'),
   ];
 
-  /// 该 id 是否为内置三家（内置不进 _idsKey、不可删、名字锁定）。
+  /// 该 id 是否为内置预设（内置不进 _idsKey、不可删、名字锁定）。
   static bool isBuiltin(String id) =>
-      _builtinProtocols.any((p) => p.name == id);
+      _builtinPresets.any((p) => p.id == id);
+
+  /// 内置厂商预设的 API key 提示；非预设实例或预设未配置时返回 null
+  /// （调用方回落到协议默认提示）。
+  static String? presetKeyHint(String id) {
+    for (final p in _builtinPresets) {
+      if (p.id == id) return p.keyHint.isEmpty ? null : p.keyHint;
+    }
+    return null;
+  }
 
   AgentApiNotifier() : super(_load());
 
@@ -449,10 +515,11 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
         <String>[];
   }
 
-  /// 列表 = 内置三家（恒在，id=协议名）+ _idsKey 里的自定义实例（按序）。
+  /// 列表 = 内置预设（恒在）+ _idsKey 里的自定义实例（按序）。
   static AgentProvidersState _load() {
     final instances = <AgentProviderInstance>[
-      for (final p in _builtinProtocols) _loadConfig(p.name, p, p.label),
+      for (final p in _builtinPresets)
+        _loadConfig(p.id, p.protocol, p.label, defaultBaseUrl: p.baseUrl),
     ];
     for (final id in _loadIds()) {
       final inst = _loadCustom(id);
@@ -463,9 +530,10 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
 
   /// 按 id 加载任意实例（内置或自定义）；自定义协议键缺失返回 null。
   static AgentProviderInstance? _loadAny(String id) {
-    if (isBuiltin(id)) {
-      final p = _builtinProtocols.firstWhere((p) => p.name == id);
-      return _loadConfig(id, p, p.label);
+    for (final p in _builtinPresets) {
+      if (p.id == id) {
+        return _loadConfig(id, p.protocol, p.label, defaultBaseUrl: p.baseUrl);
+      }
     }
     return _loadCustom(id);
   }
@@ -484,13 +552,16 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   }
 
   /// 读取一个实例的 url/key/models/params（协议与名字由调用方给定）。
+  /// [defaultBaseUrl]：厂商预设的默认地址，用户未填时生效。
   static AgentProviderInstance _loadConfig(
     String id,
     AgentApiProvider protocol,
-    String name,
-  ) {
+    String name, {
+    String defaultBaseUrl = '',
+  }) {
     final box = GStorage.setting;
-    final baseUrl = box.get(_baseUrlKey(id), defaultValue: '') as String;
+    var baseUrl = box.get(_baseUrlKey(id), defaultValue: '') as String;
+    if (baseUrl.isEmpty) baseUrl = defaultBaseUrl;
     final apiKey = SecureCredentialVault.read(_apiKeyKey(id));
     final models =
         (box.get(_modelsKey(id)) as List?)?.cast<String>().toList() ??
@@ -621,7 +692,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   /// 内置三家的固定名与已有自定义名都算占用，避免与「OpenAI」等重名。
   String _uniqueName(String base) {
     final taken = <String>{
-      for (final p in _builtinProtocols) p.label.toLowerCase(),
+      for (final p in _builtinPresets) p.label.toLowerCase(),
     };
     for (final id in _loadIds()) {
       final n = GStorage.setting.get(_nameKey(id)) as String?;

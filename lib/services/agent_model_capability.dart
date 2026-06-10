@@ -163,26 +163,31 @@ class AgentModelCapability {
         RegExp(r'(^|[-_/])embed(?:dings?)?([-.]|$)').hasMatch(id);
   }
 
+  /// 视觉（图片输入）识别。除通用 vl/vision 关键字外补充各厂命名：
+  /// GLM-4.5V/4.6V/5V、Doubao Seed 1.6+（原生多模态）、Kimi k2.5/k2.6、
+  /// Grok 4、MiMo V2.5 系列（均为多模态，依据各家官方 API 文档）。
   static bool _isKnownVisionModel(String id) {
     return RegExp(
-      r'(gpt-4o|gpt-4\.1|gpt-5|gemini|claude|qwen-vl|vision|vl)',
+      r'(gpt-4o|gpt-4\.1|gpt-5|gemini|claude|qwen-vl|vision|vl|'
+      r'glm-[\d.]+v\b|doubao-seed|kimi-k2\.[5-9]|grok-4|mimo)',
       caseSensitive: false,
     ).hasMatch(id);
   }
 
-  // ─── 能力识别（工具 / 推理）—— 正则移植自 kelivo ModelRegistry ───
+  // ─── 能力识别（工具 / 推理）—— 正则移植自 kelivo ModelRegistry，
+  //     并按各厂 API 文档补充 MiMo / Doubao Seed ───
 
   static final RegExp _toolRe = RegExp(
     r'(gpt-4o|gpt-4\.1|gpt-oss|gpt-5(?!-chat)|o\d|gemini|claude|qwen-?3|'
-    r'grok-4|kimi-k2|glm-4[-.](?:5|6|7)|glm-5|minimax-m2|'
+    r'grok-4|kimi-k2|glm-4[-.](?:5|6|7)|glm-5|minimax-m2|mimo|doubao-seed|'
     r'deepseek-(?:chat|r1|reasoner|v3|v3\.1|v3\.2|v4))',
     caseSensitive: false,
   );
 
   static final RegExp _reasoningRe = RegExp(
     r'(gpt-oss|gpt-5(?!-chat)|o\d|gemini-(?:2\.5|3)|gemma[-_]?4|claude|'
-    r'qwen-?3|grok-4|kimi-k2|glm-4[-.](?:5|6|7)|glm-5|minimax-m2|'
-    r'deepseek-(?:r1|reasoner|v3\.1|v3\.2|v4))',
+    r'qwen-?3|grok-4|kimi-k2|glm-4[-.](?:5|6|7)|glm-5|minimax-m2|mimo|'
+    r'doubao-seed|deepseek-(?:r1|reasoner|v3\.1|v3\.2|v4))',
     caseSensitive: false,
   );
 
@@ -217,13 +222,31 @@ class AgentModelCapability {
   static int gemini25MaxBudget(String modelId) =>
       isGemini25Pro(modelId) ? 32768 : 24576;
 
-  /// Claude 是否走 adaptive thinking 模型（Opus 4.7+）。
+  /// OpenAI gpt-5 系列代际（用于 reasoning.effort 合法值判断）：
+  /// `null`=非 gpt-5；`0`=初代（gpt-5/-mini/-nano，effort ∈ minimal..high）；
+  /// `1`=gpt-5.1（none..high）；`>=2`=gpt-5.2+（none..xhigh）。
+  static int? gpt5Minor(String modelId) {
+    final m = RegExp(r'(?:^|[/-])gpt-5(?:\.(\d+))?(?:[.-]|$)')
+        .firstMatch(modelId.toLowerCase());
+    if (m == null) return null;
+    return int.tryParse(m.group(1) ?? '0') ?? 0;
+  }
+
+  /// Qwen VL 系列（DashScope 专属参数 `vl_high_resolution_images` 等适用，
+  /// 该参数把单图 token 上限从 1280 提到 16384，密集文档页需要）。
+  static bool isQwenVl(String modelId) {
+    final id = modelId.toLowerCase();
+    return RegExp(r'qwen[\w.-]*-vl').hasMatch(id);
+  }
+
+  /// Claude 是否走 adaptive thinking 模型（Opus 4.7+ / Fable）。
+  /// 这些模型上 `budget_tokens` 已移除（发送会 400），只能用 adaptive。
   /// 其余 Claude 模型用旧 `thinking.type:disabled/enabled` + budget。
   ///
-  /// 识别策略：opus-4-7+ 全部归为 adaptive；后续 Sonnet/Haiku 4.7 / Opus 5 等
-  /// 上来后在此处追加正则。Anthropic 的 model id 形如 `claude-opus-4-7`。
+  /// 识别策略：opus-4-7/4-8/4-9 与 fable 系列归为 adaptive；后续新系列
+  /// 上来后在此处追加正则。Anthropic 的 model id 形如 `claude-opus-4-8`。
   static bool isClaudeAdaptive(String modelId) {
     final id = modelId.toLowerCase();
-    return RegExp(r'claude-opus-4-7(?:\b|-)').hasMatch(id);
+    return RegExp(r'claude-(?:opus-4-[789]|fable)(?:\b|-)').hasMatch(id);
   }
 }
