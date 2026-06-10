@@ -10,6 +10,7 @@ import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
+import '../../widgets/tactile_press.dart';
 import '../../utils/debounced_action.dart';
 import 'agent_model_list_tile.dart';
 import 'agent_model_capability_sheet.dart';
@@ -67,10 +68,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
 
   @override
   void dispose() {
+    _flushEditsDeferred();
     _urlCtrl.dispose();
     _keyCtrl.dispose();
-    _keyDebounce.cancel();
-    _urlDebounce.cancel();
     super.dispose();
   }
 
@@ -79,8 +79,52 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       ? ''
       : (inst.baseUrl.isNotEmpty ? inst.baseUrl : inst.protocol.defaultBaseUrl);
 
+  /// 当前输入框相对已落盘实例的未保存编辑；无当前实例返回 null。
+  ({String id, String? url, String? key})? _pendingEdits() {
+    final inst = ref.read(agentApiProvider).byId(_currentId);
+    if (inst == null) return null;
+    final urlText = _urlCtrl.text.trim();
+    final keyText = _keyCtrl.text.trim();
+    return (
+      id: inst.id,
+      url: urlText != _urlText(inst) ? urlText : null,
+      key: keyText != inst.apiKey ? keyText : null,
+    );
+  }
+
+  /// 把尚未过防抖期的 URL/Key 编辑立即落盘，返回落盘后的最新实例。
+  /// 打开模型管理 / 连通性测试前必须调用——这些路径会把 URL/Key 冻结
+  /// 进调用参数，拿旧值会导致请求打到错误地址。
+  Future<AgentProviderInstance?> _commitPendingEdits() async {
+    _urlDebounce.cancel();
+    _keyDebounce.cancel();
+    final edits = _pendingEdits();
+    if (edits == null) return null;
+    final notifier = ref.read(agentApiProvider.notifier);
+    if (edits.url != null) await notifier.setBaseUrl(edits.id, edits.url!);
+    if (edits.key != null) await notifier.setApiKey(edits.id, edits.key!);
+    return ref.read(agentApiProvider).byId(edits.id);
+  }
+
+  /// 退出页面 / 切换实例时兜底落盘（原实现直接 cancel 会丢失 600ms 内的
+  /// 编辑）。推迟到微任务执行，避免在元素卸载过程中同步触发 provider 通知。
+  void _flushEditsDeferred() {
+    _urlDebounce.cancel();
+    _keyDebounce.cancel();
+    final edits = _pendingEdits();
+    if (edits == null || (edits.url == null && edits.key == null)) return;
+    final notifier = ref.read(agentApiProvider.notifier);
+    Future.microtask(() async {
+      try {
+        if (edits.url != null) await notifier.setBaseUrl(edits.id, edits.url!);
+        if (edits.key != null) await notifier.setApiKey(edits.id, edits.key!);
+      } catch (_) {}
+    });
+  }
+
   /// 切换当前编辑的实例，同步输入框并持久化选择。
   void _switchTo(AgentProviderInstance inst) {
+    _flushEditsDeferred(); // 旧实例的未落盘编辑
     setState(() {
       _currentId = inst.id;
       _keyCtrl.text = inst.apiKey;
@@ -167,39 +211,30 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     ColorScheme cs,
     AgentProviderInstance current,
   ) {
-    return InkWell(
+    return TactilePress(
       borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        Haptics.soft();
-        _showProviderSwitcher();
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cs.outlineVariant.withAlpha(100)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                current.name,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+      baseColor: cs.surface,
+      border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      onTap: _showProviderSwitcher,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              current.name,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            Icon(
-              Symbols.expand_more_rounded,
-              size: 20,
-              color: cs.onSurfaceVariant,
-            ),
-          ],
-        ),
+          ),
+          Icon(
+            Symbols.expand_more_rounded,
+            size: 20,
+            color: cs.onSurfaceVariant,
+          ),
+        ],
       ),
     );
   }
@@ -285,85 +320,81 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   ) {
     final selected = inst.id == _currentId;
     final isCustom = !AgentApiNotifier.isBuiltin(inst.id);
-    return InkWell(
+    return TactilePress(
       onTap: () {
-        Haptics.soft();
         Navigator.pop(sheetCtx);
         _switchTo(inst);
       },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    inst.name,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                      color: selected ? cs.primary : cs.onSurface,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  inst.name,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    color: selected ? cs.primary : cs.onSurface,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    inst.protocol.label,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (selected)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Icon(Symbols.check_rounded, size: 20, color: cs.primary),
-              ),
-            if (isCustom)
-              IconButton(
-                icon: Icon(
-                  Symbols.delete_rounded,
-                  size: 20,
-                  color: cs.onSurfaceVariant.withAlpha(160),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                tooltip: context.l10n.delete,
-                onPressed: () {
-                  Haptics.soft();
-                  _deleteInstance(inst);
-                },
+                const SizedBox(height: 2),
+                Text(
+                  inst.protocol.label,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (selected)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Icon(Symbols.check_rounded, size: 20, color: cs.primary),
+            ),
+          if (isCustom)
+            IconButton(
+              icon: Icon(
+                Symbols.delete_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant.withAlpha(160),
               ),
-          ],
-        ),
+              tooltip: context.l10n.delete,
+              onPressed: () {
+                Haptics.soft();
+                _deleteInstance(inst);
+              },
+            ),
+        ],
       ),
     );
   }
 
   Widget _addRow(BuildContext sheetCtx, ThemeData theme, ColorScheme cs) {
-    return InkWell(
+    return TactilePress(
       onTap: () {
-        Haptics.soft();
         Navigator.pop(sheetCtx);
         _addProvider();
       },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          children: [
-            Icon(Symbols.add_rounded, size: 22, color: cs.primary),
-            const SizedBox(width: 12),
-            Text(
-              context.l10n.addProvider,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: cs.primary,
-              ),
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        children: [
+          Icon(Symbols.add_rounded, size: 22, color: cs.primary),
+          const SizedBox(width: 12),
+          Text(
+            context.l10n.addProvider,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: cs.primary,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -384,6 +415,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
                 child: Container(
@@ -402,49 +434,40 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                   horizontal: 24,
                   vertical: 8,
                 ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    context.l10n.selectProtocol,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: cs.onSurface,
-                    ),
+                child: Text(
+                  context.l10n.selectProtocol,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
-              // 每行撑满整宽 → 标题/副标题统一左对齐
               ...AgentApiProvider.values.map((p) {
-                return InkWell(
-                  onTap: () {
-                    Haptics.soft();
-                    Navigator.pop(ctx, p);
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          p.label,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: cs.onSurface,
-                          ),
+                return TactilePress(
+                  onTap: () => Navigator.pop(ctx, p),
+                  baseColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.label,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: cs.onSurface,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _protocolSubtitle(p, context.l10n),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _protocolSubtitle(p, context.l10n),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 );
               }),
@@ -460,15 +483,17 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
 
   Future<void> _testModel(AgentProviderInstance inst, String modelId) async {
     if (_modelTesting.contains(modelId)) return;
+    final fresh = await _commitPendingEdits() ?? inst;
+    if (!mounted) return;
     setState(() {
       _modelTesting.add(modelId);
       _modelTestResults.remove(modelId);
     });
 
     final err = await testAgentModel(
-      provider: inst.protocol,
-      baseUrl: inst.effectiveBaseUrl,
-      apiKey: inst.apiKey,
+      provider: fresh.protocol,
+      baseUrl: fresh.effectiveBaseUrl,
+      apiKey: fresh.apiKey,
       modelId: modelId,
     );
 
@@ -502,7 +527,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   }
 
   Future<void> _openModelManageSheet(AgentProviderInstance inst) async {
-    if (inst.apiKey.isEmpty) return;
+    // sheet 一打开就把 URL/Key 冻结进参数，必须先落盘未过防抖的编辑
+    inst = await _commitPendingEdits() ?? inst;
+    if (!mounted || inst.apiKey.isEmpty) return;
     final notifier = ref.read(agentApiProvider.notifier);
     final id = inst.id;
     await showAgentModelManageSheet(
@@ -609,6 +636,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           TextField(
             controller: _keyCtrl,
             onChanged: (v) {
+              // setState 让「管理模型」按钮的启用态跟随输入实时刷新
+              setState(() {});
               _keyDebounce.run(() {
                 ref
                     .read(agentApiProvider.notifier)
@@ -619,7 +648,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             decoration: _fieldDeco(
               theme,
               cs,
-              hint: current.protocol.apiKeyHint,
+              hint: AgentApiNotifier.presetKeyHint(current.id) ??
+                  current.protocol.apiKeyHint,
               suffix: IconButton(
                 icon: Icon(
                   _keyObscured ? Symbols.visibility_off_rounded : Symbols.visibility_rounded,
@@ -643,6 +673,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           TextField(
             controller: _urlCtrl,
             onChanged: (v) {
+              // setState 让下方预览地址跟随输入实时刷新（落盘仍走防抖）
+              setState(() {});
               _urlDebounce.run(() {
                 ref
                     .read(agentApiProvider.notifier)
@@ -657,12 +689,13 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 icon: Icon(
                   Symbols.tune_rounded,
                   size: 20,
-                  color: current.apiKey.isNotEmpty
+                  // 读输入框现值而非已落盘状态：刚输完 Key（防抖未到期）也能点
+                  color: _keyCtrl.text.trim().isNotEmpty
                       ? cs.primary
                       : cs.onSurfaceVariant.withAlpha(80),
                 ),
                 tooltip: context.l10n.manageModels,
-                onPressed: current.apiKey.isNotEmpty
+                onPressed: _keyCtrl.text.trim().isNotEmpty
                     ? () {
                         Haptics.soft();
                         _openModelManageSheet(current);
@@ -677,7 +710,12 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           Padding(
             padding: const EdgeInsets.only(left: 4, top: 6),
             child: Text(
-              context.l10n.previewUrl('${current.effectiveBaseUrl}${current.protocol.chatPath}'),
+              // 预览跟随输入框现值实时变化；清空时回落到当前生效地址
+              context.l10n.previewUrl(current.protocol.chatUrl(
+                _urlCtrl.text.trim().isNotEmpty
+                    ? _urlCtrl.text.trim()
+                    : current.effectiveBaseUrl,
+              )),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: cs.onSurfaceVariant.withAlpha(120),
               ),
@@ -831,67 +869,60 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     final instName = ref.read(agentApiProvider).byId(instanceId)?.name;
     final isSet = instanceId != null && modelId != null && instName != null;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Haptics.soft();
-          onTap();
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: isSet
-                      ? iconBg
-                      : cs.surfaceContainerHighest.withAlpha(120),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: isSet ? iconFg : cs.onSurfaceVariant.withAlpha(120),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    if (isSet)
-                      Text(
-                        '$modelId · $instName',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    else
-                      Text(
-                        context.l10n.notSet,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant.withAlpha(120),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+    return TactilePress(
+      onTap: onTap,
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isSet
+                  ? iconBg
+                  : cs.surfaceContainerHighest.withAlpha(120),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: 20,
+              color: isSet ? iconFg : cs.onSurfaceVariant.withAlpha(120),
+            ),
           ),
-        ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                if (isSet)
+                  Text(
+                    '$modelId · $instName',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                else
+                  Text(
+                    context.l10n.notSet,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant.withAlpha(120),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -988,54 +1019,48 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                                       modelId == currentModelId;
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
-                                    child: Material(
-                                      color: selected
+                                    child: TactilePress(
+                                      borderRadius: BorderRadius.circular(12),
+                                      baseColor: selected
                                           ? cs.primaryContainer
                                           : cs.surfaceContainerHighest
                                                 .withAlpha(80),
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(12),
-                                        onTap: () {
-                                          Haptics.soft();
-                                          Navigator.pop(ctx);
-                                          onSelect(entry.id, modelId);
-                                        },
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 14,
-                                            vertical: 12,
+                                      onTap: () {
+                                        Navigator.pop(ctx);
+                                        onSelect(entry.id, modelId);
+                                      },
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              modelId,
+                                              style: theme
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    fontWeight: selected
+                                                        ? FontWeight.w600
+                                                        : null,
+                                                    color: selected
+                                                        ? cs.onPrimaryContainer
+                                                        : cs.onSurface,
+                                                  ),
+                                              maxLines: 1,
+                                              overflow:
+                                                  TextOverflow.ellipsis,
+                                            ),
                                           ),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  modelId,
-                                                  style: theme
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.copyWith(
-                                                        fontWeight: selected
-                                                            ? FontWeight.w600
-                                                            : null,
-                                                        color: selected
-                                                            ? cs.onPrimaryContainer
-                                                            : cs.onSurface,
-                                                      ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              if (selected)
-                                                Icon(
-                                                  Symbols.check_rounded,
-                                                  size: 18,
-                                                  color: cs.onPrimaryContainer,
-                                                ),
-                                            ],
-                                          ),
-                                        ),
+                                          if (selected)
+                                            Icon(
+                                              Symbols.check_rounded,
+                                              size: 18,
+                                              color: cs.onPrimaryContainer,
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   );

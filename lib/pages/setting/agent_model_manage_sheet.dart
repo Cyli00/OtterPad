@@ -1,5 +1,6 @@
 import 'dart:ui' show ImageFilter;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -7,6 +8,7 @@ import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/haptics.dart';
+import '../../widgets/tactile_press.dart';
 import 'agent_add_model_dialog.dart';
 import 'agent_model_tester.dart';
 import 'agent_role_widgets.dart';
@@ -112,6 +114,12 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         apiKey: widget.apiKey,
       );
       if (mounted) setState(() => _models = list);
+    } on DioException catch (e) {
+      // 透出真实失败原因（401 / 404 无该端点 / 网络错误），便于区分排查
+      if (mounted) {
+        setState(() => _error =
+            '${context.l10n.fetchModelsFailed}\n${describeDioError(e)}');
+      }
     } catch (_) {
       if (mounted) setState(() => _error = context.l10n.fetchModelsFailed);
     } finally {
@@ -154,11 +162,16 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       return;
     }
 
+    final cap = AgentModelCapability.infer(
+      provider: widget.providerType,
+      modelId: id,
+    );
     final choice = await showAgentAddModelDialog(
       context: context,
       modelId: id,
       currentDefault: _localDefault,
       currentFast: _localFast,
+      isMultimodal: cap.imageInput,
     );
     if (choice == null) return;
 
@@ -367,35 +380,54 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
+
+    // 手动添加行：搜索框输入的 id 不在拉取列表中且未添加时出现。
+    // 兜底 Zhipu / Doubao 等无 /models 列表端点的服务商，以及自建反代。
+    final manualId = _query.trim();
+    final showManual = manualId.isNotEmpty &&
+        !_isAdded(manualId) &&
+        !(_models?.contains(manualId) ?? false);
+
     if (_error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(48),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Symbols.cloud_off_rounded,
-              size: 40,
-              color: cs.error.withAlpha(160),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: theme.textTheme.bodyMedium?.copyWith(color: cs.error),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.tonal(
-              onPressed: () {
-                Haptics.soft();
-                _fetchModels();
-              },
-              child: Text(context.l10n.retry),
-            ),
-          ],
+      return ListView(
+        padding: EdgeInsets.only(
+          left: 12,
+          right: 12,
+          top: 4,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
         ),
+        children: [
+          if (showManual) _buildManualAddRow(theme, cs, manualId),
+          Padding(
+            padding: const EdgeInsets.all(48),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Symbols.cloud_off_rounded,
+                  size: 40,
+                  color: cs.error.withAlpha(160),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: cs.error),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.tonal(
+                  onPressed: () {
+                    Haptics.soft();
+                    _fetchModels();
+                  },
+                  child: Text(context.l10n.retry),
+                ),
+              ],
+            ),
+          ),
+        ],
       );
     }
-    if (filtered.isEmpty) {
+    if (filtered.isEmpty && !showManual) {
       return Padding(
         padding: const EdgeInsets.all(48),
         child: Text(
@@ -406,6 +438,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         ),
       );
     }
+    final manualOffset = showManual ? 1 : 0;
     return ListView.separated(
       padding: EdgeInsets.only(
         left: 12,
@@ -413,10 +446,41 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         top: 4,
         bottom: MediaQuery.of(context).padding.bottom + 16,
       ),
-      itemCount: filtered.length,
+      itemCount: filtered.length + manualOffset,
       separatorBuilder: (_, _) => const SizedBox(height: 4),
-      itemBuilder: (context, index) =>
-          _buildCandidateRow(theme, cs, filtered[index]),
+      itemBuilder: (context, index) {
+        if (showManual && index == 0) {
+          return _buildManualAddRow(theme, cs, manualId);
+        }
+        return _buildCandidateRow(theme, cs, filtered[index - manualOffset]);
+      },
+    );
+  }
+
+  /// 手动添加搜索框中输入的模型 id
+  Widget _buildManualAddRow(ThemeData theme, ColorScheme cs, String id) {
+    return TactilePress(
+      onTap: () => _showAddConfirm(id),
+      baseColor: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Icon(Symbols.add_circle_rounded, size: 20, color: cs.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              context.l10n.addModelById(id),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: cs.primary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -425,6 +489,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     final isDefault = _localDefault == id;
     final isFast = _localFast == id;
     final isImageModel = AgentModelCapability.isImageGenerationModel(
+      provider: widget.providerType,
+      modelId: id,
+    );
+    final cap = AgentModelCapability.infer(
       provider: widget.providerType,
       modelId: id,
     );
@@ -447,6 +515,27 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (cap.imageInput) ...[
+              const SizedBox(width: 4),
+              _CapDot(
+                icon: Symbols.visibility_rounded,
+                tooltip: context.l10n.image,
+              ),
+            ],
+            if (cap.tool) ...[
+              const SizedBox(width: 4),
+              _CapDot(
+                icon: Symbols.gavel_rounded,
+                tooltip: context.l10n.roleBadgeTools,
+              ),
+            ],
+            if (cap.reasoning) ...[
+              const SizedBox(width: 4),
+              _CapDot(
+                icon: Symbols.psychology_rounded,
+                tooltip: context.l10n.reasoning,
+              ),
+            ],
             if (isDefault) ...[
               const SizedBox(width: 6),
               RoleBadge(
@@ -495,6 +584,31 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 模型能力角标：22px 圆形图标盒（视觉 / 工具 / 推理）
+class _CapDot extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  const _CapDot({required this.icon, required this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        width: 22,
+        height: 22,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: cs.primaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, size: 14, fill: 1, color: cs.onPrimaryContainer),
       ),
     );
   }
