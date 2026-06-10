@@ -122,13 +122,23 @@ TactilePress(
 
 **反馈层次**：ColorTween 按压态（即时色变） + 可选 micro-scale（`kAnimFast` `kAnimCurve`） + 触觉反馈（`Haptics`）。
 
+**baseColor 规则**：TactilePress 始终渲染带色圆角背景，必须根据上下文显式指定。
+
+| 上下文 | baseColor | 说明 |
+|---|---|---|
+| 独立容器（Card、picker collapsed） | 显式颜色（如 `cs.surfaceContainerLow`） | 自带背景 |
+| 选中态（chip、segment） | 条件色（如 `selected ? cs.primaryContainer : cs.surfaceContainerLow`） | 状态驱动 |
+| 内嵌项（section 列表项、sheet item、toolbar 按钮） | `Colors.transparent` | 父容器已有背景，仅保留 hover/press 色变 |
+
+禁止省略 baseColor 让默认值（`cs.surface`）在 section / sheet 内渲染多余背景层。
+
 **分层指引**：
 
 | 场景 | 方案 |
 |---|---|
-| Card / 大面积可点击区域 | `TactilePress`（pressedScale: 0.98） |
-| 列表项 / Sheet item | `TactilePress`（省略 pressedScale） |
-| 底部面板内工具按钮 | `TactilePress` |
+| Card / 大面积可点击区域 | `TactilePress`（pressedScale: 0.98 · 显式 baseColor） |
+| 列表项 / Sheet item | `TactilePress`（baseColor: transparent · 省略 pressedScale） |
+| 底部面板内工具按钮 | `TactilePress`（baseColor: transparent） |
 | 纯图标按钮 | `IconButton`（保留 Material 默认） |
 
 需要 `onLongPressStart(details)` 位置信息时：外层 `GestureDetector` 只注册 longPress，内层 `TactilePress` 管 tap（手势类型不同，不抢 gesture arena）。
