@@ -198,6 +198,7 @@
 
   "generateSummary": "生成总结图",
   "reExtract": "重新提取",
+  "aiLayoutFix": "AI 排版修复",
   "documentInfo": "文献信息",
   "viewSummary": "查看总结图",
   "reformat": "重新排版",
@@ -285,6 +286,8 @@
   "fast": "快速",
   "imageGen": "生图",
   "addModel": "添加",
+  "addModelById": "添加「{id}」",
+  "@addModelById": { "placeholders": { "id": { "type": "String" } } },
   "removeModel": "移除",
   "addModelTitle": "添加模型",
 
@@ -670,5 +673,22 @@
   "importCancelledLabel": "已取消导入",
   "noFilesImported": "未导入任何文件",
   "importCompleteLabel": "导入完成",
-  "taskBusy": "任务正在进行中"
+  "taskBusy": "任务正在进行中",
+
+  "aiLayoutFixConfirmMessage": "AI 排版修复将使用专家模型修正公式排版和图片提取，预计消耗约 {tokens} Token",
+  "@aiLayoutFixConfirmMessage": { "placeholders": { "tokens": { "type": "String" } } },
+  "aiLayoutFixAnalyzing": "正在分析文档…",
+  "aiLayoutFixRendering": "正在渲染 PDF 页面…",
+  "aiLayoutFixCalling": "正在调用 AI 模型…",
+  "aiLayoutFixApplying": "正在应用修复…",
+  "aiLayoutFixCropping": "正在重新裁剪图片…",
+  "aiLayoutFixComplete": "排版修复完成",
+  "aiLayoutFixSummary": "已修复 {paragraphs} 个段落 · 调整 {figures} 张图片",
+  "@aiLayoutFixSummary": { "placeholders": { "paragraphs": { "type": "int" }, "figures": { "type": "int" } } },
+  "aiLayoutFixFailed": "排版修复失败: {error}",
+  "@aiLayoutFixFailed": { "placeholders": { "error": { "type": "String" } } },
+  "aiLayoutFixNoContent": "未找到需要修复的公式段落或图片",
+  "aiLayoutFixRevertHint": "如需还原，可通过「重新提取」恢复",
+  "expertModelNotSet": "请先配置专家模型",
+  "expertRequiresVision": "专家模型需要支持图片输入"
 }

@@ -205,6 +205,7 @@
 
   "generateSummary": "產生摘要圖",
   "reExtract": "重新擷取",
+  "aiLayoutFix": "AI 排版修復",
   "documentInfo": "文獻資訊",
   "viewSummary": "檢視摘要圖",
   "reformat": "重新排版",
@@ -292,6 +293,8 @@
   "fast": "快速",
   "imageGen": "生圖",
   "addModel": "新增",
+  "addModelById": "新增「{id}」",
+  "@addModelById": { "placeholders": { "id": { "type": "String" } } },
   "removeModel": "移除",
   "addModelTitle": "新增模型",
 
@@ -669,5 +672,22 @@
 
   "fidelityAuto": "自動",
   "fidelityStandard": "標準",
-  "fidelityHigh": "高"
+  "fidelityHigh": "高",
+
+  "aiLayoutFixConfirmMessage": "AI 排版修復將使用專家模型修正公式排版和圖片擷取，預計消耗約 {tokens} Token",
+  "@aiLayoutFixConfirmMessage": { "placeholders": { "tokens": { "type": "String" } } },
+  "aiLayoutFixAnalyzing": "正在分析文檔…",
+  "aiLayoutFixRendering": "正在渲染 PDF 頁面…",
+  "aiLayoutFixCalling": "正在呼叫 AI 模型…",
+  "aiLayoutFixApplying": "正在套用修復…",
+  "aiLayoutFixCropping": "正在重新裁剪圖片…",
+  "aiLayoutFixComplete": "排版修復完成",
+  "aiLayoutFixSummary": "已修復 {paragraphs} 個段落 · 調整 {figures} 張圖片",
+  "@aiLayoutFixSummary": { "placeholders": { "paragraphs": { "type": "int" }, "figures": { "type": "int" } } },
+  "aiLayoutFixFailed": "排版修復失敗: {error}",
+  "@aiLayoutFixFailed": { "placeholders": { "error": { "type": "String" } } },
+  "aiLayoutFixNoContent": "未找到需要修復的公式段落或圖片",
+  "aiLayoutFixRevertHint": "如需還原，可透過「重新擷取」恢復",
+  "expertModelNotSet": "請先設定專家模型",
+  "expertRequiresVision": "專家模型需要支援圖片輸入"
 }

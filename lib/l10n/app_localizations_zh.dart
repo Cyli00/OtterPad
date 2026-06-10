@@ -557,6 +557,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get reExtract => '重新提取';
 
   @override
+  String get aiLayoutFix => 'AI 排版修复';
+
+  @override
   String get documentInfo => '文献信息';
 
   @override
@@ -789,6 +792,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get addModel => '添加';
+
+  @override
+  String addModelById(String id) {
+    return '添加「$id」';
+  }
 
   @override
   String get removeModel => '移除';
@@ -2085,6 +2093,51 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get taskBusy => '任务正在进行中';
+
+  @override
+  String aiLayoutFixConfirmMessage(String tokens) {
+    return 'AI 排版修复将使用专家模型修正公式排版和图片提取，预计消耗约 $tokens Token';
+  }
+
+  @override
+  String get aiLayoutFixAnalyzing => '正在分析文档…';
+
+  @override
+  String get aiLayoutFixRendering => '正在渲染 PDF 页面…';
+
+  @override
+  String get aiLayoutFixCalling => '正在调用 AI 模型…';
+
+  @override
+  String get aiLayoutFixApplying => '正在应用修复…';
+
+  @override
+  String get aiLayoutFixCropping => '正在重新裁剪图片…';
+
+  @override
+  String get aiLayoutFixComplete => '排版修复完成';
+
+  @override
+  String aiLayoutFixSummary(int paragraphs, int figures) {
+    return '已修复 $paragraphs 个段落 · 调整 $figures 张图片';
+  }
+
+  @override
+  String aiLayoutFixFailed(String error) {
+    return '排版修复失败: $error';
+  }
+
+  @override
+  String get aiLayoutFixNoContent => '未找到需要修复的公式段落或图片';
+
+  @override
+  String get aiLayoutFixRevertHint => '如需还原，可通过「重新提取」恢复';
+
+  @override
+  String get expertModelNotSet => '请先配置专家模型';
+
+  @override
+  String get expertRequiresVision => '专家模型需要支持图片输入';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -2640,6 +2693,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get reExtract => '重新擷取';
 
   @override
+  String get aiLayoutFix => 'AI 排版修復';
+
+  @override
   String get documentInfo => '文獻資訊';
 
   @override
@@ -2872,6 +2928,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get addModel => '新增';
+
+  @override
+  String addModelById(String id) {
+    return '新增「$id」';
+  }
 
   @override
   String get removeModel => '移除';
@@ -3878,4 +3939,49 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get fidelityHigh => '高';
+
+  @override
+  String aiLayoutFixConfirmMessage(String tokens) {
+    return 'AI 排版修復將使用專家模型修正公式排版和圖片擷取，預計消耗約 $tokens Token';
+  }
+
+  @override
+  String get aiLayoutFixAnalyzing => '正在分析文檔…';
+
+  @override
+  String get aiLayoutFixRendering => '正在渲染 PDF 頁面…';
+
+  @override
+  String get aiLayoutFixCalling => '正在呼叫 AI 模型…';
+
+  @override
+  String get aiLayoutFixApplying => '正在套用修復…';
+
+  @override
+  String get aiLayoutFixCropping => '正在重新裁剪圖片…';
+
+  @override
+  String get aiLayoutFixComplete => '排版修復完成';
+
+  @override
+  String aiLayoutFixSummary(int paragraphs, int figures) {
+    return '已修復 $paragraphs 個段落 · 調整 $figures 張圖片';
+  }
+
+  @override
+  String aiLayoutFixFailed(String error) {
+    return '排版修復失敗: $error';
+  }
+
+  @override
+  String get aiLayoutFixNoContent => '未找到需要修復的公式段落或圖片';
+
+  @override
+  String get aiLayoutFixRevertHint => '如需還原，可透過「重新擷取」恢復';
+
+  @override
+  String get expertModelNotSet => '請先設定專家模型';
+
+  @override
+  String get expertRequiresVision => '專家模型需要支援圖片輸入';
 }

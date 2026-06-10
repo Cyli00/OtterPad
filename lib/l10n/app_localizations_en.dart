@@ -564,6 +564,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reExtract => 'Re-extract';
 
   @override
+  String get aiLayoutFix => 'AI Layout Fix';
+
+  @override
   String get documentInfo => 'Document Info';
 
   @override
@@ -797,6 +800,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addModel => 'Add';
+
+  @override
+  String addModelById(String id) {
+    return 'Add \"$id\"';
+  }
 
   @override
   String get removeModel => 'Remove';
@@ -2130,4 +2138,49 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get taskBusy => 'A task is already running';
+
+  @override
+  String aiLayoutFixConfirmMessage(String tokens) {
+    return 'AI layout fix will use the expert model to correct formula formatting and figure extraction. Estimated token usage: ~$tokens';
+  }
+
+  @override
+  String get aiLayoutFixAnalyzing => 'Analyzing document...';
+
+  @override
+  String get aiLayoutFixRendering => 'Rendering PDF pages...';
+
+  @override
+  String get aiLayoutFixCalling => 'Calling AI model...';
+
+  @override
+  String get aiLayoutFixApplying => 'Applying fixes...';
+
+  @override
+  String get aiLayoutFixCropping => 'Re-cropping figures...';
+
+  @override
+  String get aiLayoutFixComplete => 'Layout fix complete';
+
+  @override
+  String aiLayoutFixSummary(int paragraphs, int figures) {
+    return '$paragraphs paragraphs fixed · $figures figures adjusted';
+  }
+
+  @override
+  String aiLayoutFixFailed(String error) {
+    return 'Layout fix failed: $error';
+  }
+
+  @override
+  String get aiLayoutFixNoContent => 'No formula paragraphs or figures to fix';
+
+  @override
+  String get aiLayoutFixRevertHint => 'Revert via \"Re-extract\" if needed';
+
+  @override
+  String get expertModelNotSet => 'Please set up the expert model first';
+
+  @override
+  String get expertRequiresVision => 'Expert model must support image input';
 }

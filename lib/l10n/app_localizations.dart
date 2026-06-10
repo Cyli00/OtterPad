@@ -1167,6 +1167,12 @@ abstract class AppLocalizations {
   /// **'Re-extract'**
   String get reExtract;
 
+  /// No description provided for @aiLayoutFix.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Layout Fix'**
+  String get aiLayoutFix;
+
   /// No description provided for @documentInfo.
   ///
   /// In en, this message translates to:
@@ -1634,6 +1640,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add'**
   String get addModel;
+
+  /// No description provided for @addModelById.
+  ///
+  /// In en, this message translates to:
+  /// **'Add \"{id}\"'**
+  String addModelById(String id);
 
   /// No description provided for @removeModel.
   ///
@@ -3788,6 +3800,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A task is already running'**
   String get taskBusy;
+
+  /// No description provided for @aiLayoutFixConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'AI layout fix will use the expert model to correct formula formatting and figure extraction. Estimated token usage: ~{tokens}'**
+  String aiLayoutFixConfirmMessage(String tokens);
+
+  /// No description provided for @aiLayoutFixAnalyzing.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyzing document...'**
+  String get aiLayoutFixAnalyzing;
+
+  /// No description provided for @aiLayoutFixRendering.
+  ///
+  /// In en, this message translates to:
+  /// **'Rendering PDF pages...'**
+  String get aiLayoutFixRendering;
+
+  /// No description provided for @aiLayoutFixCalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Calling AI model...'**
+  String get aiLayoutFixCalling;
+
+  /// No description provided for @aiLayoutFixApplying.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying fixes...'**
+  String get aiLayoutFixApplying;
+
+  /// No description provided for @aiLayoutFixCropping.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-cropping figures...'**
+  String get aiLayoutFixCropping;
+
+  /// No description provided for @aiLayoutFixComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout fix complete'**
+  String get aiLayoutFixComplete;
+
+  /// No description provided for @aiLayoutFixSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{paragraphs} paragraphs fixed · {figures} figures adjusted'**
+  String aiLayoutFixSummary(int paragraphs, int figures);
+
+  /// No description provided for @aiLayoutFixFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout fix failed: {error}'**
+  String aiLayoutFixFailed(String error);
+
+  /// No description provided for @aiLayoutFixNoContent.
+  ///
+  /// In en, this message translates to:
+  /// **'No formula paragraphs or figures to fix'**
+  String get aiLayoutFixNoContent;
+
+  /// No description provided for @aiLayoutFixRevertHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert via \"Re-extract\" if needed'**
+  String get aiLayoutFixRevertHint;
+
+  /// No description provided for @expertModelNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Please set up the expert model first'**
+  String get expertModelNotSet;
+
+  /// No description provided for @expertRequiresVision.
+  ///
+  /// In en, this message translates to:
+  /// **'Expert model must support image input'**
+  String get expertRequiresVision;
 }
 
 class _AppLocalizationsDelegate
