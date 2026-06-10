@@ -26,9 +26,6 @@ class BookshelfList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final docs = ref.watch(validDocsProvider);
     final selection = ref.watch(selectionProvider);
-    // 顶层一次 watch，派生进度 Map 下推给每张卡——避免 500 张卡各自订阅。
-    final history = ref.watch(historyProvider);
-    final progressByDoc = {for (final e in history) e.docId: e.progress};
     final isSelectionMode =
         selection.isActive && selection.sourceContext == 'library';
 
@@ -43,16 +40,20 @@ class BookshelfList extends ConsumerWidget {
 
     Widget buildCard(int index) {
       final doc = docs[index];
-      return DocListCard(
-        doc: doc,
-        progress: progressByDoc[doc.id] ?? 0.0,
-        isSelectionMode: isSelectionMode,
-        isSelected: selection.selectedIds.contains(doc.id),
-        onTap: () => DocCardActions.openReader(context, ref, doc),
-        onLongPress: () =>
-            ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
-        onSelectionTap: () =>
-            ref.read(selectionProvider.notifier).toggle(doc.id),
+      // 进度走单卡片粒度订阅（docProgressProvider）——阅读器每 500ms 的
+      // setProgress 只重建对应卡片，不再整列表 rebuild。
+      return Consumer(
+        builder: (context, ref, _) => DocListCard(
+          doc: doc,
+          progress: ref.watch(docProgressProvider(doc.id)),
+          isSelectionMode: isSelectionMode,
+          isSelected: selection.selectedIds.contains(doc.id),
+          onTap: () => DocCardActions.openReader(context, ref, doc),
+          onLongPress: () =>
+              ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
+          onSelectionTap: () =>
+              ref.read(selectionProvider.notifier).toggle(doc.id),
+        ),
       );
     }
 

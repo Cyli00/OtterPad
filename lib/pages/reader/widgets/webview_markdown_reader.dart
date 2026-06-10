@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -121,10 +122,19 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     return '/$segments/';
   }
 
+  /// 首次 HTML 是否已写好——写好前 WebView 不挂载（initialUrlRequest 会
+  /// 立即加载，HTML 必须先落盘），build 用纸张底色占位。
+  bool _htmlReady = false;
+
   @override
   void initState() {
     super.initState();
-    _writeHtmlFileSync();
+    _prepareInitialHtml();
+  }
+
+  Future<void> _prepareInitialHtml() async {
+    await _writeHtmlFile();
+    if (mounted) setState(() => _htmlReady = true);
   }
 
   @override
@@ -158,18 +168,35 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   /// Flutter 拖动覆盖条 → JS scrollTo。ratio ∈ [0,1]。
   void _scrollToRatio(double ratio) => _bridge?.scrollToRatio(ratio);
 
-  void _writeHtmlFileSync() {
-    final html = _buildHtml();
-    final file = File(_htmlFilePath);
-    file.parent.createSync(recursive: true);
-    file.writeAsStringSync(html);
-  }
-
+  /// HTML 生成（整篇 markdown 解析 + 全文正则后处理）与写盘都在后台
+  /// isolate 执行——大文献的同步转换此前直接跑在 initState 里，卡住打开
+  /// 阅读器的首帧与路由转场（「打开就卡一下」的来源）。
+  ///
+  /// Isolate 闭包不能捕获 `this`（State 持有 controller 等不可发送对象），
+  /// 全部输入先提为局部变量。
   Future<void> _writeHtmlFile() async {
-    final html = _buildHtml();
-    final file = File(_htmlFilePath);
-    await file.parent.create(recursive: true);
-    await file.writeAsString(html);
+    final markdown = widget.markdownData;
+    final palette = widget.palette;
+    final settings = widget.settings;
+    final styleId = widget.translationStyleId;
+    final baseHref = _docBaseHref;
+    final buster = _figuresCacheBuster();
+    final inset = widget.topInset;
+    final path = _htmlFilePath;
+    await Isolate.run(() {
+      final html = buildReaderHtml(
+        markdownContent: markdown,
+        palette: palette,
+        settings: settings,
+        baseHref: baseHref,
+        translationStyleId: styleId,
+        imageCacheBuster: buster,
+        topInset: inset,
+      );
+      final file = File(path);
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(html);
+    });
   }
 
   @override
@@ -336,18 +363,6 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     );
   }
 
-  String _buildHtml() {
-    return buildReaderHtml(
-      markdownContent: widget.markdownData,
-      palette: widget.palette,
-      settings: widget.settings,
-      baseHref: _docBaseHref,
-      translationStyleId: widget.translationStyleId,
-      imageCacheBuster: _figuresCacheBuster(),
-      topInset: widget.topInset,
-    );
-  }
-
   /// 用 figures.json 的 mtime 当 figure 路径的 cache buster.
   /// localhost server 给 PNG 设了 max-age=300,重新提取后同 URL 5 分钟内拿旧字节;
   /// mtime 变化时 URL 加的 `?v=` 也变,自然 cache miss → 新 PNG.
@@ -365,6 +380,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   @override
   Widget build(BuildContext context) {
+    // HTML 还在后台 isolate 生成——先铺纸张底色占位，避免 WebView 加载到
+    // 半截文件，也避免占位闪白/闪黑。
+    if (!_htmlReady) {
+      return ColoredBox(color: widget.palette.background);
+    }
+
     // 走 localhost server，所有平台同 origin 加载——
     // 不再需要 allowFileAccessFromFileURLs / allowUniversalAccessFromFileURLs。
     // server 未启动时退化到 about:blank（理论上不应发生：main.dart 启动时已 start）。

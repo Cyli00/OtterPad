@@ -156,6 +156,20 @@ final historyProvider =
   return HistoryNotifier(GStorage.history);
 });
 
+/// 派生：docId → 阅读进度。中间层隔离高频 progress 更新——
+/// 卡片经 [docProgressProvider] 按 docId select 订阅，只在自己那一条进度
+/// 变化时重建；书架顶层不再 watch 整个 historyProvider（此前阅读器每
+/// 500ms 的 setProgress 会让导航栈下层的书架页全列表 rebuild）。
+final _progressByDocProvider = Provider<Map<String, double>>((ref) {
+  final history = ref.watch(historyProvider);
+  return {for (final e in history) e.docId: e.progress};
+});
+
+/// 单文档阅读进度（无记录 = 0.0）。select 在值未变时抑制重建。
+final docProgressProvider = Provider.family<double, String>((ref, docId) {
+  return ref.watch(_progressByDocProvider.select((m) => m[docId] ?? 0.0));
+});
+
 /// 历史分组区段：一个日期桶及其下属文档列表。
 class HistorySection {
   final String label;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -749,19 +750,31 @@ class TranslationService {
     return 'tr_${targetLang}_${normalized.hashCode}';
   }
 
+  // ── 缓存：内存单一真值 + 防抖落盘 ──
+  //
+  // 旧实现每次 get/put 都对整个缓存 map（可达数 MB、上千条）全量
+  // jsonDecode/jsonEncode——文档翻译 8 worker 高频 put 时主 isolate 反复
+  // 同步序列化，表现为翻译进行中 UI 掉帧。改为：首次访问 decode 一次进
+  // 内存，读写全打内存 map（O(1)），落盘走 2s 防抖批量。进程被杀最多丢
+  // 最近 2s 的新缓存条目——缓存可重建，可接受。过期清理也移到落盘时做。
+  static Map<String, dynamic>? _cacheMap;
+  static Timer? _cacheSaveDebounce;
+
   static Map<String, dynamic> _loadCacheMap() {
+    final loaded = _cacheMap;
+    if (loaded != null) return loaded;
+    Map<String, dynamic> map = {};
     final raw = GStorage.setting.get(_cacheBoxKey);
     if (raw is String) {
       try {
-        return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+        map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       } catch (_) {}
     }
-    return {};
+    return _cacheMap = map;
   }
 
   static String? _getCache(String key) {
-    final map = _loadCacheMap();
-    final entryRaw = map[key];
+    final entryRaw = _loadCacheMap()[key];
     if (entryRaw is Map<String, dynamic>) {
       final entry = _CacheEntry.fromJson(entryRaw);
       if (!entry.isExpired) return entry.translation;
@@ -770,22 +783,25 @@ class TranslationService {
   }
 
   static void _putCache(String key, String translation) {
-    final map = _loadCacheMap();
-
-    // 写入新条目
-    map[key] = _CacheEntry(
+    _loadCacheMap()[key] = _CacheEntry(
       translation: translation,
       timestampMs: DateTime.now().millisecondsSinceEpoch,
     ).toJson();
+    _scheduleCacheSave();
+  }
 
-    // 顺便清除过期条目
-    map.removeWhere((_, v) {
-      if (v is Map<String, dynamic>) {
-        return _CacheEntry.fromJson(v).isExpired;
-      }
-      return true;
+  static void _scheduleCacheSave() {
+    _cacheSaveDebounce?.cancel();
+    _cacheSaveDebounce = Timer(const Duration(seconds: 2), () {
+      final map = _cacheMap;
+      if (map == null) return;
+      map.removeWhere((_, v) {
+        if (v is Map<String, dynamic>) {
+          return _CacheEntry.fromJson(v).isExpired;
+        }
+        return true;
+      });
+      GStorage.setting.put(_cacheBoxKey, jsonEncode(map));
     });
-
-    GStorage.setting.put(_cacheBoxKey, jsonEncode(map));
   }
 }
