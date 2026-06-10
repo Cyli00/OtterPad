@@ -8,8 +8,8 @@ import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
-import '../../../services/haptics.dart';
 import '../../../services/translation_style.dart';
+import '../../../widgets/tactile_press.dart';
 
 /// 阅读器「字体/字号 + 翻页方式 + 译文样式」底部面板 body。
 ///
@@ -199,38 +199,32 @@ class _FontFamilyRow extends StatelessWidget {
             padding: EdgeInsets.only(
               right: f != ReaderFont.values.last ? 8 : 0,
             ),
-            child: Material(
-              color: selected ? cs.primaryContainer : cs.surfaceContainerLow,
+            child: TactilePress(
+              baseColor: selected ? cs.primaryContainer : cs.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  Haptics.soft();
-                  onChanged(f);
-                },
-                child: AnimatedContainer(
-                  duration: kAnim,
-                  curve: Curves.easeOut,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: selected ? cs.primary : Colors.transparent,
-                      width: 2,
-                    ),
+              onTap: () => onChanged(f),
+              child: AnimatedContainer(
+                duration: kAnim,
+                curve: kAnimCurve,
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? cs.primary : Colors.transparent,
+                    width: 2,
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    f.label,
-                    style: TextStyle(
-                      fontFamily: f.fontFamily,
-                      fontFamilyFallback: f.fontFamilyFallback,
-                      fontSize: 15,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                      color: selected
-                          ? cs.onPrimaryContainer
-                          : cs.onSurfaceVariant,
-                    ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  f.label,
+                  style: TextStyle(
+                    fontFamily: f.fontFamily,
+                    fontFamilyFallback: f.fontFamilyFallback,
+                    fontSize: 15,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: selected
+                        ? cs.onPrimaryContainer
+                        : cs.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -261,54 +255,48 @@ class _PaginationModeRow extends StatelessWidget {
             padding: EdgeInsets.only(
               right: m != ReaderPaginationMode.values.last ? 8 : 0,
             ),
-            child: Material(
-              color: selected ? cs.primaryContainer : cs.surfaceContainerLow,
+            child: TactilePress(
+              baseColor: selected ? cs.primaryContainer : cs.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  Haptics.soft();
-                  onChanged(m);
-                },
-                child: AnimatedContainer(
-                  duration: kAnim,
-                  curve: Curves.easeOut,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: selected ? cs.primary : Colors.transparent,
-                      width: 2,
-                    ),
+              onTap: () => onChanged(m),
+              child: AnimatedContainer(
+                duration: kAnim,
+                curve: kAnimCurve,
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? cs.primary : Colors.transparent,
+                    width: 2,
                   ),
-                  alignment: Alignment.center,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        m == ReaderPaginationMode.vertical
-                            ? Symbols.swap_vert_rounded
-                            : Symbols.swap_horiz_rounded,
-                        size: 18,
+                ),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      m == ReaderPaginationMode.vertical
+                          ? Symbols.swap_vert_rounded
+                          : Symbols.swap_horiz_rounded,
+                      size: 18,
+                      color: selected
+                          ? cs.onPrimaryContainer
+                          : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      m.label,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                         color: selected
                             ? cs.onPrimaryContainer
                             : cs.onSurfaceVariant,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        m.label,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: selected
-                              ? cs.onPrimaryContainer
-                              : cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -394,31 +382,25 @@ class _TranslationStyleRowState extends ConsumerState<_TranslationStyleRow> {
           itemBuilder: (_, i) {
             final s = kTranslationStyles[i];
             final selected = s.id == widget.currentId;
-            return Material(
-              color: selected ? cs.primaryContainer : cs.surfaceContainerLow,
+            return TactilePress(
+              baseColor: selected ? cs.primaryContainer : cs.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  Haptics.soft();
-                  ref
-                      .read(translationConfigProvider.notifier)
-                      .setDisplayStyleId(s.id);
-                },
-                child: AnimatedContainer(
-                  duration: kAnim,
-                  curve: Curves.easeOut,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: selected ? cs.primary : Colors.transparent,
-                      width: 2,
-                    ),
+              onTap: () => ref
+                  .read(translationConfigProvider.notifier)
+                  .setDisplayStyleId(s.id),
+              child: AnimatedContainer(
+                duration: kAnim,
+                curve: kAnimCurve,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? cs.primary : Colors.transparent,
+                    width: 2,
                   ),
-                  alignment: Alignment.center,
-                  child: _styledLabel(s.id, s.label, cs, theme),
                 ),
+                alignment: Alignment.center,
+                child: _styledLabel(s.id, s.label, cs, theme),
               ),
             );
           },

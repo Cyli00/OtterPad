@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../services/haptics.dart';
+import '../../widgets/app_dialog.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
@@ -44,9 +45,12 @@ class ShelfPage extends ConsumerWidget {
     Favorite fav,
   ) async {
     final theme = Theme.of(context);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: theme.colorScheme.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.deleteFavorite),
         content: Text(context.l10n.confirmDeleteFavorite(fav.name)),
         actions: [

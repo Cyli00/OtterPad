@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/document_lifecycle_provider.dart';
 import '../../services/haptics.dart';
+import '../../widgets/app_dialog.dart';
 import '../../providers/document_task_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/selection_provider.dart';
@@ -239,9 +240,12 @@ class NoFileEntriesPage extends ConsumerWidget {
   ) async {
     final count = selection.selectedIds.length;
     final cs = Theme.of(context).colorScheme;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: cs.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.batchDelete),
         content: Text(context.l10n.confirmDeleteEntries(count)),
         actions: [

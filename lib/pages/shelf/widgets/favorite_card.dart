@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
-import '../../../services/haptics.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../library/widgets/pdf_cover.dart';
 
@@ -95,26 +94,17 @@ class FavoriteCard extends StatelessWidget {
               const SizedBox(height: 16),
               Expanded(child: _buildCoverArea(context)),
               const SizedBox(height: 16),
-              InkWell(
-                onTap: () {
-                  Haptics.soft();
-                  onTap();
-                },
+              TactilePress(
+                onTap: onTap,
                 borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withAlpha(128),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(
-                      context.l10n.viewLibraryTotal(totalCount),
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: cs.primary,
-                      ),
+                baseColor: cs.surfaceContainerHighest.withAlpha(128),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: Text(
+                    context.l10n.viewLibraryTotal(totalCount),
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: cs.primary,
                     ),
                   ),
                 ),

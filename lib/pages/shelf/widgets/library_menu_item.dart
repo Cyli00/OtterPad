@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/haptics.dart';
+import '../../../widgets/tactile_press.dart';
 
 class LibraryMenuItem extends StatelessWidget {
   final IconData icon;
@@ -20,17 +20,12 @@ class LibraryMenuItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     
-    return InkWell(
-      onTap: onTap == null
-          ? null
-          : () {
-              Haptics.soft();
-              onTap!();
-            },
+    return TactilePress(
+      onTap: onTap,
+      baseColor: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10.0),
-        child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Row(
           children: [
             Container(
               width: 36,
@@ -58,7 +53,6 @@ class LibraryMenuItem extends StatelessWidget {
             ?trailing,
           ],
         ),
-      ),
     );
   }
 }

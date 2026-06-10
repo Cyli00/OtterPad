@@ -6,6 +6,7 @@ import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/app_dialog.dart';
+import '../../../widgets/tactile_press.dart';
 
 // 常用 emoji 列表，按类别分组
 const List<String> _emojis = [
@@ -204,37 +205,34 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                             BorderRadius.circular(10),
                                       ),
                                       clipBehavior: Clip.antiAlias,
-                                      child: Material(
-                                        type: MaterialType.transparency,
-                                        child: InkWell(
-                                          onTap: () {
-                                            Haptics.soft();
-                                            setState(() {
-                                              _selectedEmoji = emoji;
-                                            });
-                                          },
-                                          child: Center(
-                                            child: Text(
-                                              emoji,
-                                              style: const TextStyle(
-                                                fontSize: 20,
-                                                height: 1.0,
+                                      child: TactilePress(
+                                        baseColor: Colors.transparent,
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedEmoji = emoji;
+                                          });
+                                        },
+                                        child: Center(
+                                          child: Text(
+                                            emoji,
+                                            style: const TextStyle(
+                                              fontSize: 20,
+                                              height: 1.0,
+                                            ),
+                                            strutStyle: const StrutStyle(
+                                              forceStrutHeight: true,
+                                              height: 1.0,
+                                            ),
+                                          )
+                                              .animate(
+                                                  target:
+                                                      isSelected ? 1 : 0)
+                                              .scaleXY(
+                                                begin: 1,
+                                                end: 1.15,
+                                                duration: kAnimFast,
+                                                curve: Curves.easeOutBack,
                                               ),
-                                              strutStyle: const StrutStyle(
-                                                forceStrutHeight: true,
-                                                height: 1.0,
-                                              ),
-                                            )
-                                                .animate(
-                                                    target:
-                                                        isSelected ? 1 : 0)
-                                                .scaleXY(
-                                                  begin: 1,
-                                                  end: 1.15,
-                                                  duration: kAnimFast,
-                                                  curve: Curves.easeOutBack,
-                                                ),
-                                          ),
                                         ),
                                       ),
                                     );

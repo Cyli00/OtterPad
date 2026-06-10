@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import '../../../core/animation_constants.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -81,7 +82,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
             ctx,
             alignment: 0.3,
             duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
+            curve: kAnimCurve,
           );
         }
       });
@@ -194,7 +195,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
                 ctx,
                 alignment: 0.3,
                 duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
+                curve: kAnimCurve,
               );
             }
           });

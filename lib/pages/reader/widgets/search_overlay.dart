@@ -3,6 +3,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/haptics.dart';
+import '../../../widgets/tactile_press.dart';
 import '../../../services/reader/markdown_document_cache_service.dart';
 import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
@@ -310,29 +311,23 @@ class _ResultCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: cs.surfaceContainerHigh,
+      child: TactilePress(
+        baseColor: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: () {
-            Haptics.soft();
-            onTap();
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            width: double.infinity,
-            height: 120,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: ClipRect(
-                child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  child: MarkdownBlock(
-                    data: processed,
-                    selectable: false,
-                    config: config,
-                    generator: generator,
-                  ),
+        onTap: onTap,
+        child: SizedBox(
+          width: double.infinity,
+          height: 120,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: ClipRect(
+              child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: MarkdownBlock(
+                  data: processed,
+                  selectable: false,
+                  config: config,
+                  generator: generator,
                 ),
               ),
             ),

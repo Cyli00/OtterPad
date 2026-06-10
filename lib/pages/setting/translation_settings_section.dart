@@ -10,6 +10,7 @@ import '../../providers/translation_config_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/translation_skip_sections.dart';
 import '../../services/translation_style.dart';
+import '../../widgets/tactile_press.dart';
 
 /// 翻译设置区块——嵌入 api_settings_page 的 _buildGroup 内。
 class TranslationSettingsSection extends ConsumerStatefulWidget {
@@ -416,33 +417,21 @@ class _TranslationSettingsSectionState
     String currentId,
   ) {
     final isSelected = style.id == currentId;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: isSelected ? cs.primaryContainer : cs.surfaceContainerLow,
-        border: Border.all(
-          color: isSelected
-              ? Colors.transparent
-              : cs.outlineVariant.withAlpha(100),
-        ),
+    return TactilePress(
+      borderRadius: BorderRadius.circular(12),
+      baseColor: isSelected ? cs.primaryContainer : cs.surfaceContainerLow,
+      border: Border.all(
+        color: isSelected
+            ? Colors.transparent
+            : cs.outlineVariant.withAlpha(100),
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            Haptics.soft();
-            ref
-                .read(translationConfigProvider.notifier)
-                .setDisplayStyleId(style.id);
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: _buildStyledLabel(style.id, _translationStyleLabel(context.l10n, style.id), cs, theme),
-          ),
-        ),
-      ),
+      onTap: () {
+        ref
+            .read(translationConfigProvider.notifier)
+            .setDisplayStyleId(style.id);
+      },
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: _buildStyledLabel(style.id, _translationStyleLabel(context.l10n, style.id), cs, theme),
     );
   }
 
@@ -499,12 +488,9 @@ class _TranslationSettingsSectionState
   /// 点击后弹出底部语言选择面板（视觉参照 toolbar_bottom_sheet）
   Widget _buildLanguagePicker(
       ThemeData theme, ColorScheme cs, String current) {
-    return InkWell(
+    return TactilePress(
       borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        Haptics.soft();
-        _showLanguageSheet(current);
-      },
+      onTap: () => _showLanguageSheet(current),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -583,34 +569,30 @@ class _TranslationSettingsSectionState
                         bottom: MediaQuery.of(ctx).padding.bottom + 16),
                     children: kTargetLanguages.map((lang) {
                       final isSelected = lang == current;
-                      return InkWell(
-                        onTap: () {
-                          Haptics.soft();
-                          Navigator.pop(ctx, lang);
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  lang,
-                                  style: theme.textTheme.bodyLarge?.copyWith(
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: isSelected
-                                        ? cs.primary
-                                        : cs.onSurface,
-                                  ),
+                      return TactilePress(
+                        baseColor: Colors.transparent,
+                        onTap: () => Navigator.pop(ctx, lang),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                lang,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? cs.primary
+                                      : cs.onSurface,
                                 ),
                               ),
-                              if (isSelected)
-                                Icon(Symbols.check_rounded,
-                                    color: cs.primary, size: 22),
-                            ],
-                          ),
+                            ),
+                            if (isSelected)
+                              Icon(Symbols.check_rounded,
+                                  color: cs.primary, size: 22),
+                          ],
                         ),
                       );
                     }).toList(),

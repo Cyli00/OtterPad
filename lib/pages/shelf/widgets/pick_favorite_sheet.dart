@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../widgets/tactile_press.dart';
 
 import '../../../data/models/collection/favorite.dart';
 
@@ -194,63 +195,57 @@ class _FavoriteItem extends StatelessWidget {
     final cs = theme.colorScheme;
     final titleColor = disabled ? cs.onSurfaceVariant : cs.onSurface;
 
-    return InkWell(
-      onTap: disabled
-          ? null
-          : () {
-              Haptics.soft();
-              onTap();
-            },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withAlpha(disabled ? 80 : 255),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                favorite.emoji,
-                style: const TextStyle(fontSize: 22, height: 1.0),
-              ),
+    return TactilePress(
+      onTap: disabled ? null : onTap,
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withAlpha(disabled ? 80 : 255),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    favorite.name,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: titleColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+            alignment: Alignment.center,
+            child: Text(
+              favorite.emoji,
+              style: const TextStyle(fontSize: 22, height: 1.0),
             ),
-            if (!disabled)
-              Icon(
-                Symbols.chevron_right_rounded,
-                color: cs.onSurfaceVariant.withAlpha(120),
-              ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  favorite.name,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: titleColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          if (!disabled)
+            Icon(
+              Symbols.chevron_right_rounded,
+              color: cs.onSurfaceVariant.withAlpha(120),
+            ),
+        ],
       ),
     );
   }
@@ -267,57 +262,51 @@ class _CreateFavoriteItem extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    return InkWell(
-      onTap: creating
-          ? null
-          : () {
-              Haptics.soft();
-              onTap();
-            },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: creating
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.primary,
-                      ),
-                    )
-                  : Icon(
-                      Symbols.add_rounded,
+    return TactilePress(
+      onTap: creating ? null : onTap,
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: creating
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
                       color: cs.primary,
-                      size: 22,
-                      fill: 1,
                     ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                context.l10n.createFavorite,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
+                  )
+                : Icon(
+                    Symbols.add_rounded,
+                    color: cs.primary,
+                    size: 22,
+                    fill: 1,
+                  ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              context.l10n.createFavorite,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
               ),
             ),
-            Icon(
-              Symbols.chevron_right_rounded,
-              color: cs.onSurfaceVariant.withAlpha(120),
-            ),
-          ],
-        ),
+          ),
+          Icon(
+            Symbols.chevron_right_rounded,
+            color: cs.onSurfaceVariant.withAlpha(120),
+          ),
+        ],
       ),
     );
   }

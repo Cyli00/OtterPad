@@ -25,6 +25,7 @@ import '../../../services/figure_extract_service.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
 import '../../../utils/doc_paths.dart';
+import '../../../widgets/tactile_press.dart';
 import '../widgets/figure_viewer.dart';
 
 class ReaderSummaryImageCoordinator {
@@ -419,7 +420,7 @@ class _OfficialGenDialogState extends State<_OfficialGenDialog> {
           ),
           AnimatedSize(
             duration: kAnim,
-            curve: Curves.easeOut,
+            curve: kAnimCurve,
             alignment: Alignment.topCenter,
             child: _notice == null
                 ? const SizedBox(width: double.infinity)
@@ -487,48 +488,43 @@ class _OfficialGenAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return Material(
-      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+    return TactilePress(
+      baseColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
       borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Opacity(
-            opacity: enabled ? 1 : 0.5,
-            child: Row(
-              children: [
-                Icon(icon, color: cs.primary, size: 22),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        description,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+      onTap: enabled ? onTap : null,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: Row(
+          children: [
+            Icon(icon, color: cs.primary, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                Icon(
-                  Symbols.chevron_right_rounded,
-                  color: cs.onSurfaceVariant,
-                  size: 20,
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            Icon(
+              Symbols.chevron_right_rounded,
+              color: cs.onSurfaceVariant,
+              size: 20,
+            ),
+          ],
         ),
       ),
     );

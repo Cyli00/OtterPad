@@ -7,6 +7,7 @@ import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/builtin_tools.dart';
 import '../../services/haptics.dart';
+import '../../widgets/tactile_press.dart';
 
 /// 打开「模型能力」编辑 sheet（照搬 kelivo 基础页：类型 + 模态 + 能力）。
 ///
@@ -436,32 +437,26 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
 
   Widget _segButton(ThemeData theme, ColorScheme cs, _Seg seg) {
     final selected = seg.selected;
-    return Material(
-      color: selected ? cs.primaryContainer : cs.surface,
+    return TactilePress(
+      baseColor: selected ? cs.primaryContainer : cs.surface,
       borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Haptics.soft();
-          seg.onTap();
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? Colors.transparent
-                  : cs.outlineVariant.withAlpha(80),
-            ),
+      onTap: seg.onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? Colors.transparent
+                : cs.outlineVariant.withAlpha(80),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          alignment: Alignment.center,
-          child: Text(
-            seg.label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-            ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        alignment: Alignment.center,
+        child: Text(
+          seg.label,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
           ),
         ),
       ),

@@ -33,6 +33,7 @@ class ReaderDocumentInfoSheet extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 4.0),
       child: TactilePress(
         onTap: () => _copy(context, ref, value),
+        baseColor: Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
@@ -111,6 +112,7 @@ class ReaderDocumentInfoSheet extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TactilePress(
+                    baseColor: Colors.transparent,
                     onTap: () => _copy(context, ref, document.title),
                     borderRadius: BorderRadius.circular(10),
                     padding: const EdgeInsets.symmetric(

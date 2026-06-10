@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../services/haptics.dart';
+import '../../widgets/app_dialog.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
@@ -94,9 +95,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     final count = selection.selectedIds.length;
     final cs = Theme.of(context).colorScheme;
     final l10n = context.l10n;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: cs.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(l10n.batchDelete),
         content: Text(l10n.confirmDeleteDocuments(count)),
         actions: [

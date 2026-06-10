@@ -10,6 +10,7 @@ import '../../providers/locale_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/haptics.dart';
+import '../../widgets/tactile_press.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
@@ -43,44 +44,50 @@ class AppearanceSettingsPage extends ConsumerWidget {
         ).copyWith(bottom: 40),
         children: [
           // ── 主题模式 ──
-          _buildGroup(
-            context,
-            title: l10n.themeMode,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<ThemeMode>(
-                  segments: [
-                    ButtonSegment(
-                      value: ThemeMode.system,
-                      label: Text(l10n.autoMode),
-                      icon: const Icon(Symbols.brightness_auto_rounded),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.light,
-                      label: Text(l10n.lightMode),
-                      icon: const Icon(Symbols.wb_sunny_rounded),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.dark,
-                      label: Text(l10n.darkMode),
-                      icon: const Icon(Symbols.dark_mode_rounded),
-                    ),
-                  ],
-                  selected: {themeState.mode},
-                  onSelectionChanged: (set) {
-                    Haptics.soft();
-                    final mode = set.first;
-                    ref.read(themeProvider.notifier).setThemeMode(mode);
-                  },
-                  style: SegmentedButton.styleFrom(
-                    backgroundColor: cs.surface,
-                    selectedBackgroundColor: cs.primaryContainer,
-                    side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+          Padding(
+            padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
+            child: Text(
+              l10n.themeMode,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: cs.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<ThemeMode>(
+                segments: [
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    label: Text(l10n.autoMode),
+                    icon: const Icon(Symbols.brightness_auto_rounded),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    label: Text(l10n.lightMode),
+                    icon: const Icon(Symbols.wb_sunny_rounded),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    label: Text(l10n.darkMode),
+                    icon: const Icon(Symbols.dark_mode_rounded),
+                  ),
+                ],
+                selected: {themeState.mode},
+                onSelectionChanged: (set) {
+                  Haptics.soft();
+                  final mode = set.first;
+                  ref.read(themeProvider.notifier).setThemeMode(mode);
+                },
+                style: SegmentedButton.styleFrom(
+                  backgroundColor: cs.surface,
+                  selectedBackgroundColor: cs.primaryContainer,
+                  side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
@@ -142,6 +149,9 @@ class AppearanceSettingsPage extends ConsumerWidget {
                         side: BorderSide(
                           color: cs.outlineVariant.withAlpha(100),
                         ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -152,20 +162,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                       color: cs.onSurfaceVariant,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── 字体设置 ──
-          _buildGroup(
-            context,
-            title: l10n.textSize,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  const SizedBox(height: 24),
                   Row(
                     children: [
                       Expanded(
@@ -531,12 +528,9 @@ class _AppLanguagePicker extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 12),
-        InkWell(
+        TactilePress(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            Haptics.soft();
-            _showSheet(context, ref, current);
-          },
+          onTap: () => _showSheet(context, ref, current),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -625,34 +619,32 @@ class _AppLanguagePicker extends ConsumerWidget {
                 ..._options.map((opt) {
                   final (locale, labelFn) = opt;
                   final isSelected = current == locale;
-                  return InkWell(
+                  return TactilePress(
+                    baseColor: Colors.transparent,
                     onTap: () {
-                      Haptics.soft();
                       ref.read(localeProvider.notifier).setLocale(locale);
                       Navigator.pop(ctx);
                     },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              labelFn(l10n),
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontWeight: isSelected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color:
-                                    isSelected ? cs.primary : cs.onSurface,
-                              ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            labelFn(l10n),
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color:
+                                  isSelected ? cs.primary : cs.onSurface,
                             ),
                           ),
-                          if (isSelected)
-                            Icon(Symbols.check_rounded,
-                                color: cs.primary, size: 22),
-                        ],
-                      ),
+                        ),
+                        if (isSelected)
+                          Icon(Symbols.check_rounded,
+                              color: cs.primary, size: 22),
+                      ],
                     ),
                   );
                 }),

@@ -254,7 +254,7 @@ class _OpacityRow extends StatelessWidget {
                 children: [
                   AnimatedContainer(
                     duration: kAnimFast,
-                    curve: Curves.easeOut,
+                    curve: kAnimCurve,
                     height: 56,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
@@ -393,7 +393,7 @@ class _BackgroundCard extends StatelessWidget {
         children: [
           AnimatedContainer(
             duration: kAnimFast,
-            curve: Curves.easeOut,
+            curve: kAnimCurve,
             height: 56,
             decoration: BoxDecoration(
               color: previewBg,

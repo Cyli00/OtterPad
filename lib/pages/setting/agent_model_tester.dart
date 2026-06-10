@@ -15,10 +15,6 @@ Future<String?> testAgentModel({
   required String apiKey,
   required String modelId,
 }) async {
-  final url = baseUrl.endsWith('/')
-      ? baseUrl.substring(0, baseUrl.length - 1)
-      : baseUrl;
-
   final dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 30),
@@ -28,7 +24,7 @@ Future<String?> testAgentModel({
     switch (provider) {
       case AgentApiProvider.openai:
         await dio.post(
-          '$url${provider.chatPath}',
+          provider.chatUrl(baseUrl),
           data: {
             'model': modelId,
             'input': 'hi',
@@ -40,7 +36,7 @@ Future<String?> testAgentModel({
         );
       case AgentApiProvider.anthropic:
         await dio.post(
-          '$url${provider.chatPath}',
+          provider.chatUrl(baseUrl),
           data: {
             'model': modelId,
             'max_tokens': 1,
@@ -56,7 +52,7 @@ Future<String?> testAgentModel({
         );
       case AgentApiProvider.gemini:
         await dio.post(
-          '$url${provider.chatPath}/models/$modelId:generateContent',
+          '${provider.chatUrl(baseUrl)}/models/$modelId:generateContent',
           queryParameters: {'key': apiKey},
           data: {
             'contents': [
@@ -71,7 +67,7 @@ Future<String?> testAgentModel({
         );
       case AgentApiProvider.openAICompatible:
         await dio.post(
-          '$url${provider.chatPath}',
+          provider.chatUrl(baseUrl),
           data: {
             'model': modelId,
             'messages': [
@@ -92,13 +88,14 @@ Future<String?> testAgentModel({
         e.response?.statusCode == 400) {
       return null;
     }
-    return _extractErrorMessage(e);
+    return describeDioError(e);
   } catch (e) {
     return '$e';
   }
 }
 
-String _extractErrorMessage(DioException e) {
+/// 把 Dio 异常压成一行可展示的错误消息（API error body 优先，其次状态码）。
+String describeDioError(DioException e) {
   final body = e.response?.data;
   if (body is Map<String, dynamic>) {
     final apiErr = body['error'];
@@ -130,7 +127,7 @@ Future<List<String>> fetchAvailableModels({
     case AgentApiProvider.openai:
     case AgentApiProvider.openAICompatible:
       final response = await dio.get<Map<String, dynamic>>(
-        '$baseUrl${provider.modelsPath}',
+        provider.modelsUrl(baseUrl),
         options: Options(
           headers: {'Authorization': 'Bearer $apiKey'},
         ),
@@ -145,7 +142,7 @@ Future<List<String>> fetchAvailableModels({
 
     case AgentApiProvider.anthropic:
       final response = await dio.get<Map<String, dynamic>>(
-        '$baseUrl${provider.modelsPath}',
+        provider.modelsUrl(baseUrl),
         queryParameters: {'limit': 100},
         options: Options(
           headers: {
@@ -164,7 +161,7 @@ Future<List<String>> fetchAvailableModels({
 
     case AgentApiProvider.gemini:
       final response = await dio.get<Map<String, dynamic>>(
-        '$baseUrl${provider.modelsPath}',
+        provider.modelsUrl(baseUrl),
         queryParameters: {'key': apiKey},
       );
       final list = response.data?['models'] as List<dynamic>? ?? [];

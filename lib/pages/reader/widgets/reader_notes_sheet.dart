@@ -7,6 +7,7 @@ import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/highlight_provider.dart';
 import '../../../services/haptics.dart';
+import '../../../widgets/tactile_press.dart';
 
 /// 笔记面板 body（含 [DraggableScrollableSheet] 包装），
 /// 由 [ReaderSheetHost] 弹出。
@@ -410,79 +411,75 @@ class _HighlightTileState extends State<_HighlightTile> {
           ),
         ],
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: () {
-            Haptics.soft();
-            setState(() => _expanded = !_expanded);
-          },
-          child: AnimatedSize(
-            duration: kAnim,
-            curve: Curves.easeOut,
-            alignment: Alignment.topCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    hl.text.trim(),
-                    style: theme.textTheme.bodyMedium,
-                    maxLines: _expanded ? null : 1,
-                    overflow: _expanded ? null : TextOverflow.ellipsis,
-                  ),
-                  if (hasNote) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 中性引用线：仅作"笔记块"的视觉层级标记，
-                        // 不携带高亮颜色——避免列表卡片整体色彩噪音。
-                        Container(
-                          width: 2,
-                          constraints: const BoxConstraints(minHeight: 16),
-                          margin: const EdgeInsets.only(right: 10),
-                          color: cs.outlineVariant,
-                        ),
-                        Expanded(
-                          child: Text(
-                            hl.note!,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: _expanded ? null : 2,
-                            overflow: _expanded ? null : TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+      child: TactilePress(
+        onTap: () => setState(() => _expanded = !_expanded),
+        baseColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedSize(
+          duration: kAnim,
+          curve: kAnimCurve,
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hl.text.trim(),
+                  style: theme.textTheme.bodyMedium,
+                  maxLines: _expanded ? null : 1,
+                  overflow: _expanded ? null : TextOverflow.ellipsis,
+                ),
+                if (hasNote) ...[
                   const SizedBox(height: 8),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _formatTime(context, hl.createdAt),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: cs.outline,
+                      // 中性引用线：仅作"笔记块"的视觉层级标记，
+                      // 不携带高亮颜色——避免列表卡片整体色彩噪音。
+                      Container(
+                        width: 2,
+                        constraints: const BoxConstraints(minHeight: 16),
+                        margin: const EdgeInsets.only(right: 10),
+                        color: cs.outlineVariant,
+                      ),
+                      Expanded(
+                        child: Text(
+                          hl.note!,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: _expanded ? null : 2,
+                          overflow: _expanded ? null : TextOverflow.ellipsis,
                         ),
-                      ),
-                      const Spacer(),
-                      _MiniButton(
-                        icon: Symbols.edit_note_rounded,
-                        tooltip: context.l10n.editNote,
-                        onTap: widget.onEditNote,
-                      ),
-                      const SizedBox(width: 4),
-                      _MiniButton(
-                        icon: Symbols.delete_rounded,
-                        tooltip: context.l10n.delete,
-                        onTap: widget.onDelete,
                       ),
                     ],
                   ),
                 ],
-              ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      _formatTime(context, hl.createdAt),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: cs.outline,
+                      ),
+                    ),
+                    const Spacer(),
+                    _MiniButton(
+                      icon: Symbols.edit_note_rounded,
+                      tooltip: context.l10n.editNote,
+                      onTap: widget.onEditNote,
+                    ),
+                    const SizedBox(width: 4),
+                    _MiniButton(
+                      icon: Symbols.delete_rounded,
+                      tooltip: context.l10n.delete,
+                      onTap: widget.onDelete,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -518,16 +515,12 @@ class _MiniButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Tooltip(
       message: tooltip,
-      child: InkWell(
-        onTap: () {
-          Haptics.soft();
-          onTap();
-        },
+      child: TactilePress(
+        onTap: onTap,
+        baseColor: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Icon(icon, size: 18, color: cs.onSurfaceVariant),
-        ),
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon, size: 18, color: cs.onSurfaceVariant),
       ),
     );
   }

@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/l10n.dart';
 import '../../router/app_routes.dart';
-import '../../services/haptics.dart';
+import '../../widgets/tactile_press.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 bool get _isDesktop =>
@@ -137,16 +137,11 @@ class _SettingsTile extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap != null ? () {
-          Haptics.soft();
-          onTap!();
-        } : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Row(
+    return TactilePress(
+        onTap: onTap,
+        baseColor: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
             children: [
               Container(
                 width: 44,
@@ -187,8 +182,6 @@ class _SettingsTile extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 }

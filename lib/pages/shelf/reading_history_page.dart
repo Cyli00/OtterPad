@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../providers/history_provider.dart';
 import '../../services/haptics.dart';
+import '../../widgets/app_dialog.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
@@ -186,9 +187,12 @@ class ReadingHistoryPage extends ConsumerWidget {
 
   Future<void> _confirmClear(BuildContext context, WidgetRef ref) async {
     final cs = Theme.of(context).colorScheme;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: cs.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.clearReadingHistory),
         content: Text(context.l10n.clearReadingHistoryConfirm),
         actions: [

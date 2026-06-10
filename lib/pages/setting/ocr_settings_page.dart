@@ -339,32 +339,32 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     final cs = theme.colorScheme;
     final docState = ref.watch(docExtractApiProvider);
 
-    InputDecoration fieldDeco({required String hint, Widget? suffix}) =>
+    InputDecoration fieldDeco({required String hint, String? label, Widget? suffix}) =>
         InputDecoration(
+          labelText: label,
           hintText: hint,
           hintStyle: theme.textTheme.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant.withAlpha(120),
           ),
           filled: true,
-          fillColor: cs.surface,
+          fillColor: cs.surfaceContainerLow,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
               color: cs.outlineVariant.withAlpha(100),
               width: 1,
             ),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: cs.primary, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 16),
-          isDense: true,
+              horizontal: 16, vertical: 14),
           suffixIcon: suffix,
         );
 
@@ -391,75 +391,68 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
               .copyWith(bottom: 40),
           children: [
             // ── OCR 接口设置 ──
-            _buildGroup(
-              title: context.l10n.ocrInterface,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── API Key ──
-                    Row(
-                      children: [
-                        Text('API Key',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            )),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: () {
-                            Haptics.soft();
-                            launchUrl(
-                              Uri.parse(
-                                  'https://aistudio.baidu.com/paddleocr'),
-                              mode: LaunchMode.externalApplication,
-                            );
-                          },
-                          icon: Icon(Symbols.arrow_outward_rounded,
-                              size: 16, color: cs.onSurfaceVariant),
-                          tooltip: context.l10n.getToken,
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                              minWidth: 28, minHeight: 28),
-                        ),
-                      ],
+            // ── OCR 接口 ──
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 4, top: 24, bottom: 12),
+              child: Row(
+                children: [
+                  Text(
+                    context.l10n.ocrInterface,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _keyCtrl,
-                      onChanged: (v) {
-                        _keyTimer?.cancel();
-                        _keyTimer =
-                            Timer(const Duration(milliseconds: 600), () {
-                          ref
-                              .read(docExtractApiProvider.notifier)
-                              .setApiKey(v.trim());
-                        });
-                      },
-                      obscureText: _keyObscured,
-                      decoration: fieldDeco(
-                        hint: 'token ...',
-                        suffix: IconButton(
-                          icon: Icon(
-                            _keyObscured
-                                ? Symbols.visibility_off_rounded
-                                : Symbols.visibility_rounded,
-                            size: 20,
-                          ),
-                          onPressed: () {
-                            Haptics.soft();
-                            setState(() => _keyObscured = !_keyObscured);
-                          },
-                        ),
-                      ),
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      style: theme.textTheme.bodyMedium,
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () {
+                      Haptics.soft();
+                      launchUrl(
+                        Uri.parse('https://aistudio.baidu.com/paddleocr'),
+                        mode: LaunchMode.externalApplication,
+                      );
+                    },
+                    icon: Icon(Symbols.arrow_outward_rounded,
+                        size: 16, color: cs.onSurfaceVariant),
+                    tooltip: context.l10n.getToken,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _keyCtrl,
+                onChanged: (v) {
+                  _keyTimer?.cancel();
+                  _keyTimer =
+                      Timer(const Duration(milliseconds: 600), () {
+                    ref
+                        .read(docExtractApiProvider.notifier)
+                        .setApiKey(v.trim());
+                  });
+                },
+                obscureText: _keyObscured,
+                decoration: fieldDeco(
+                  hint: 'token ...',
+                  label: 'API Key',
+                  suffix: IconButton(
+                    icon: Icon(
+                      _keyObscured
+                          ? Symbols.visibility_off_rounded
+                          : Symbols.visibility_rounded,
+                      size: 20,
                     ),
-                  ],
+                    onPressed: () {
+                      Haptics.soft();
+                      setState(() => _keyObscured = !_keyObscured);
+                    },
+                  ),
                 ),
+                autocorrect: false,
+                enableSuggestions: false,
+                style: theme.textTheme.bodyMedium,
               ),
             ),
 

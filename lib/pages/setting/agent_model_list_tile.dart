@@ -5,6 +5,7 @@ import '../../core/l10n.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/haptics.dart';
 import '../../widgets/spring_dismissible.dart';
+import '../../widgets/tactile_press.dart';
 import 'agent_role_widgets.dart';
 
 /// 模型列表中单条记录的渲染——左滑可移除，点按编辑能力。
@@ -82,90 +83,84 @@ class AgentModelListTile extends StatelessWidget {
 
   Widget _buildCard(BuildContext context, ThemeData theme, ColorScheme cs, bool isOk, bool isErr) {
     final badges = _badges(context, cs);
-    return Material(
-      color: cs.surface,
+    return TactilePress(
+      baseColor: cs.surface,
       borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Haptics.soft();
-          onEdit();
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isOk
-                  ? cs.primary.withAlpha(100)
-                  : isErr
-                  ? cs.error.withAlpha(100)
-                  : cs.outlineVariant.withAlpha(60),
+      onTap: onEdit,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isOk
+                ? cs.primary.withAlpha(100)
+                : isErr
+                ? cs.error.withAlpha(100)
+                : cs.outlineVariant.withAlpha(60),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isOk
+                    ? cs.primary
+                    : isErr
+                    ? cs.error
+                    : cs.outlineVariant,
+              ),
             ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isOk
-                      ? cs.primary
-                      : isErr
-                      ? cs.error
-                      : cs.outlineVariant,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      modelId,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    modelId,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
                     ),
-                    if (badges.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Wrap(spacing: 4, runSpacing: 4, children: badges),
-                    ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (badges.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(spacing: 4, runSpacing: 4, children: badges),
                   ],
-                ),
+                ],
               ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 32,
-                height: 32,
-                child: isTesting
-                    ? const Padding(
-                        padding: EdgeInsets.all(6),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : IconButton(
-                        icon: Icon(
-                          Symbols.vital_signs_rounded,
-                          size: 20,
-                          color: isOk
-                              ? cs.primary
-                              : isErr
-                              ? cs.error
-                              : cs.onSurfaceVariant,
-                        ),
-                        padding: EdgeInsets.zero,
-                        tooltip: isErr ? errorMsg : context.l10n.detectModel,
-                        onPressed: () {
-                          Haptics.soft();
-                          (isErr ? onShowError : onTest)();
-                        },
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: isTesting
+                  ? const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      icon: Icon(
+                        Symbols.vital_signs_rounded,
+                        size: 20,
+                        color: isOk
+                            ? cs.primary
+                            : isErr
+                            ? cs.error
+                            : cs.onSurfaceVariant,
                       ),
-              ),
-            ],
-          ),
+                      padding: EdgeInsets.zero,
+                      tooltip: isErr ? errorMsg : context.l10n.detectModel,
+                      onPressed: () {
+                        Haptics.soft();
+                        (isErr ? onShowError : onTest)();
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );

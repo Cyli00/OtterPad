@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/book/document.dart';
 import '../../services/haptics.dart';
+import '../../widgets/app_dialog.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/document_lifecycle_provider.dart';
@@ -215,9 +216,12 @@ class FavoriteDetailPage extends ConsumerWidget {
   ) async {
     final count = selection.selectedIds.length;
     final cs = Theme.of(context).colorScheme;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: cs.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.batchDelete),
         content: Text(context.l10n.confirmDeleteDocuments(count)),
         actions: [

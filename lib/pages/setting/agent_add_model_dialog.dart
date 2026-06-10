@@ -26,6 +26,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
   required String modelId,
   required String? currentDefault,
   required String? currentFast,
+  bool isMultimodal = true,
 }) {
   bool setAsDefault = false;
   bool setAsFast = false;
@@ -82,12 +83,17 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                       containerColor: cs.primaryContainer,
                       onContainerColor: cs.onPrimaryContainer,
                       value: setAsDefault,
-                      onChanged: (v) {
-                        Haptics.soft();
-                        setLocal(() => setAsDefault = v);
-                      },
-                      replacingText:
-                          defaultReplaces ? ctx.l10n.willReplace(currentDefault) : null,
+                      onChanged: isMultimodal
+                          ? (v) {
+                              Haptics.soft();
+                              setLocal(() => setAsDefault = v);
+                            }
+                          : null,
+                      replacingText: !isMultimodal
+                          ? ctx.l10n.expertRequiresVision
+                          : defaultReplaces
+                              ? ctx.l10n.willReplace(currentDefault)
+                              : null,
                     ),
                     const SizedBox(height: 10),
                     RoleToggleTile(

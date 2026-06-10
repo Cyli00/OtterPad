@@ -2,6 +2,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../services/snackbar_service.dart';
+import '../../../widgets/tactile_press.dart';
 
 import '../../../providers/summary_image_provider.dart';
 import '../../../services/figure_extract_service.dart';
@@ -513,13 +516,13 @@ class _FiguresTab extends StatelessWidget {
 
 // ─── References Tab ───
 
-class _ReferencesTab extends StatelessWidget {
+class _ReferencesTab extends ConsumerWidget {
   final List<ReferenceItem> references;
 
   const _ReferencesTab({required this.references});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (references.isEmpty) {
       return _EmptyState(
         icon: Symbols.menu_book_rounded,
@@ -538,38 +541,21 @@ class _ReferencesTab extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = references[index];
 
-        return InkWell(
+        return TactilePress(
+          baseColor: Colors.transparent,
           onTap: () {
-            Haptics.soft();
             final text = item.isNumbered
                 ? '[${item.number}] ${item.text}'
                 : item.text;
             Clipboard.setData(ClipboardData(text: text));
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                SnackBar(
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  elevation: 6,
-                  duration: const Duration(seconds: 2),
-                  content: Text(
-                    context.l10n.copiedReferenceNumber(item.number),
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-              );
+            ref.read(snackBarServiceProvider).showResult(
+              message: context.l10n.copiedReferenceNumber(item.number),
+              duration: const Duration(seconds: 2),
+            );
           },
           borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
@@ -595,7 +581,6 @@ class _ReferencesTab extends StatelessWidget {
                 ),
               ],
             ),
-          ),
         );
       },
     );

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
-import '../../../services/haptics.dart';
+import '../../../widgets/tactile_press.dart';
 
 enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
@@ -110,14 +110,11 @@ class _SheetItem extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return InkWell(
-      onTap: () {
-        Haptics.soft();
-        onTap();
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
+    return TactilePress(
+      onTap: onTap,
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
           children: [
             Container(
               width: 44,
@@ -156,7 +153,6 @@ class _SheetItem extends StatelessWidget {
             ),
           ],
         ),
-      ),
     );
   }
 }

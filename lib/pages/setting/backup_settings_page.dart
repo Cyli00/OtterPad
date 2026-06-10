@@ -23,6 +23,7 @@ import '../../services/backup_merge_service.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
 import '../../services/haptics.dart';
+import '../../widgets/tactile_press.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/storage_cleanup_service.dart';
 import '../../utils/debounced_action.dart';
@@ -1134,16 +1135,11 @@ class _ActionTile extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? () {
-          Haptics.soft();
-          onTap();
-        } : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Row(
+    return TactilePress(
+        onTap: enabled ? onTap : null,
+        baseColor: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
             children: [
               Container(
                 width: 44,
@@ -1189,8 +1185,6 @@ class _ActionTile extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 }
