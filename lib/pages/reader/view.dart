@@ -26,8 +26,10 @@ import '../../providers/reader_session_provider.dart';
 import '../../providers/summary_image_provider.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../router/app_routes.dart';
+import '../../services/agent_model_capability.dart';
 import '../../services/ai_settings_prompt.dart';
 import '../../services/doc_extract_service.dart';
+import '../../widgets/app_dialog.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
 import '../../services/reader/markdown_document_cache_service.dart';
@@ -53,6 +55,7 @@ import 'widgets/reader_search_navigator.dart';
 import 'widgets/reader_sheet_host.dart';
 import 'widgets/reader_text_sheet.dart';
 import 'widgets/reader_theme_sheet.dart';
+import 'widgets/ai_layout_fix_dialog.dart';
 import 'widgets/reader_top_toolbar.dart';
 import 'widgets/search_overlay.dart';
 import 'widgets/selection_toolbar.dart';
@@ -252,6 +255,50 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (!mounted) return;
       ref.read(snackBarServiceProvider).showResult(message: context.l10n.reformatFailed('$e'));
     }
+  }
+
+  void _handleAiLayoutFix(BuildContext context) {
+    final agentState = ref.read(effectiveAgentApiProvider);
+    final modelId = agentState.defaultModelId;
+    if (modelId == null) {
+      ref.read(snackBarServiceProvider).showResult(
+            message: context.l10n.expertModelNotSet,
+          );
+      return;
+    }
+    final cap = AgentModelCapability.infer(
+      provider: agentState.provider,
+      modelId: modelId,
+    );
+    if (!cap.imageInput) {
+      ref.read(snackBarServiceProvider).showResult(
+            message: context.l10n.expertRequiresVision,
+          );
+      return;
+    }
+    showAppDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AiLayoutFixDialog(
+        documentId: widget.document.id,
+        agentState: agentState,
+        onComplete: () {
+          final mdPath = DocPaths.md(widget.document.id);
+          final mdFile = File(mdPath);
+          if (mdFile.existsSync()) {
+            final content = mdFile.readAsStringSync();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _sessionNotifier.useExtractedMarkdown(
+                markdownPath: mdPath,
+                markdownContent: content,
+              );
+              _figuresFuture = null;
+            });
+          }
+        },
+      ),
+    );
   }
 
   void _togglePreview() {
@@ -852,7 +899,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   child: ClipRect(
                     child: AnimatedSlide(
                       duration: kAnim,
-                      curve: Curves.easeOut,
+                      curve: kAnimCurve,
                       offset: session.toolbarsVisible
                           ? Offset.zero
                           : const Offset(0, -1),
@@ -896,7 +943,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     child: ClipRect(
                       child: AnimatedSlide(
                         duration: kAnim,
-                        curve: Curves.easeOut,
+                        curve: kAnimCurve,
                         offset: session.toolbarsVisible
                             ? Offset.zero
                             : const Offset(0, 1),
@@ -984,6 +1031,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onAddFavorite: _showFavoritePicker,
       onRemoveFavorite: _showFavoriteRemovalPicker,
       onExtract: _onExtractPressed,
+      onAiLayoutFix: () => _handleAiLayoutFix(context),
       onShowInfo: () => _showDocumentInfo(context),
       onReprocess: _onReprocessPressed,
       onRetranslate: _handleRetranslate,

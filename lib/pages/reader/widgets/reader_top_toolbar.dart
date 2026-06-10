@@ -19,6 +19,7 @@ class ReaderTopToolbar extends StatelessWidget {
   final VoidCallback onAddFavorite;
   final VoidCallback onRemoveFavorite;
   final VoidCallback onExtract;
+  final VoidCallback onAiLayoutFix;
   final VoidCallback onShowInfo;
   final VoidCallback onReprocess;
   final VoidCallback onRetranslate;
@@ -41,6 +42,7 @@ class ReaderTopToolbar extends StatelessWidget {
     required this.onAddFavorite,
     required this.onRemoveFavorite,
     required this.onExtract,
+    required this.onAiLayoutFix,
     required this.onShowInfo,
     required this.onReprocess,
     required this.onRetranslate,
@@ -117,7 +119,21 @@ class ReaderTopToolbar extends StatelessWidget {
                   (inFavorite ? onRemoveFavorite : onAddFavorite)();
                 },
               ),
-            if (hasResult && !extracting)
+            if (showPreview && hasResult && !extracting)
+              IconButton(
+                icon: Icon(
+                  Symbols.automation_rounded,
+                  size: 22,
+                  fill: 1,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: l10n.aiLayoutFix,
+                onPressed: () {
+                  Haptics.soft();
+                  onAiLayoutFix();
+                },
+              ),
+            if (!showPreview && hasResult && !extracting)
               IconButton(
                 icon: Icon(
                   Symbols.sync_rounded,
@@ -169,6 +185,8 @@ class ReaderTopToolbar extends StatelessWidget {
                       onAddFavorite();
                     case 'favorite_remove':
                       onRemoveFavorite();
+                    case 're_extract':
+                      onExtract();
                     case 'reprocess':
                       onReprocess();
                     case 'retranslate':
@@ -198,6 +216,13 @@ class ReaderTopToolbar extends StatelessWidget {
                       'favorite_add',
                       Symbols.bookmark_add_rounded,
                       l10n.moveToFavorite,
+                      cs,
+                    ),
+                  if (hasResult && !extracting)
+                    _popupItem(
+                      're_extract',
+                      Symbols.sync_rounded,
+                      l10n.reExtract,
                       cs,
                     ),
                   if (hasResult)
