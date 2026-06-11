@@ -71,6 +71,7 @@
 - **AgentApiProvider** (`lib/providers/api_provider.dart`) — API 配置中心，现为**多实例**（`AgentProviderInstance` 有序列表，同协议可多开、按 `instanceId` 寻址）。专家/快速/生图三个全局角色仍唯一，持久化为 `"instanceId:modelId"`。调用层读已解析视图 `effectiveAgentApiProvider`（`AgentApiState`），禁止在调用点自行猜 provider/实例。
 - **AgentModelParams** (`lib/providers/api_provider.dart`) — 禁止用散落字符串 key 在 UI 和服务间传参。
 - **AgentModelCapability** (`lib/services/agent_model_capability.dart`) — 禁止硬编码模型能力判断。
+- **AgentChatService** (`lib/services/agent_chat_service.dart`) — 非流式多模态对话唯一出口（4 provider 请求构造 / 响应提取 / 结构化输出降级阶梯 / 瞬时重试）。禁止在 service 里自写 `switch(provider)` 拼请求体或逐家提取响应。注：`TranslationService` 的流式 SSE 仍各自实现，暂未收敛。
 - **BuiltInToolNames** (`lib/services/builtin_tools.dart`) — 各厂内置工具名常量（snake_case，对齐 API 字段）与 `forProvider` 可用集。禁止在请求构造 / 设置 UI 里硬编码工具名字符串。
 - **AiSettingsPrompt** (`lib/services/ai_settings_prompt.dart`) — 禁止各调用点自写 AI 设置错误文案。
 - **Prompts / PromptDef** (`lib/services/prompts.dart`) — 全代码库 LLM prompt 的唯一文本源：可定制 prompt 是 `PromptDef` 声明（id / storageKey / 默认文本 / 必需占位符），不可定制 prompt（如排版修复的 yFirst 变体）是同文件函数；占位符插值统一走 `renderPrompt`。改 prompt 措辞只碰这个文件。禁止在 service / provider 里硬编码 prompt 文本或自写 `{{}}` 替换。
@@ -83,6 +84,7 @@
 - **DocumentTranslationProvider** (`lib/providers/document_translation_provider.dart`) — 每文档翻译状态机，Family provider 以 `documentId` 为 key。
 - **BackMatterDetector** (`lib/services/back_matter_detector.dart`) — 后置区域检测单一数据源。禁止新增硬编码 References 正则。
 - **TranslationStyle** (`lib/services/translation_style.dart`) — 使用 `[[tr]]...[[/tr]]` 自定义标记。
+- **ProtectedSpans** (`lib/services/translation_protected_spans.dart`) — 翻译行内公式（`$…$` / `\(…\)` / `\[…\]`）与行内代码的占位符往返唯一实现：译前 `mask` 换 `[[mN]]`、译后 `restore`。划词高亮标记 `⟪⟫` 是硬边界。禁止在译路自写公式/代码保护正则。
 - 其他翻译模块：`TranslationConfigProvider`、`MarkdownParagraphExtractor`、`TranslationSkipSections`、`MarkdownTranslationWeaver`。
 
 ### 图像生成
@@ -119,6 +121,7 @@
 - **BatchExtractService** (`lib/services/batch_extract_service.dart`) — 主提取路径（异步 Job API）。
 - **DocExtractService** (`lib/services/doc_extract_service.dart`) — 同步 fallback + `saveResult()` 保存入口（内部自动调用 FigureExtractService）。
 - **FigureExtractService** (`lib/services/figure_extract_service.dart`) — 由 `saveResult()` 内部调用，独立调用前须 `init()`。
+- **DocumentStructure** (`lib/services/document_structure.dart`) — `extract.json`（PaddleOCR `parsing_res_list`：`block_label` / `block_bbox` / `block_content`）的唯一防腐层与类型化视图（`LayoutBlock` / `StructurePage`），容忍数组根与 `layoutParsingResults` 对象根。禁止在调用点 `jsonDecode` 后直挖 `parsing_res_list`。
 
 ### 阅读器
 
@@ -128,7 +131,8 @@
 - **webview_reader_html** (`lib/pages/reader/widgets/webview_reader_html.dart`) — 只生成每文档动态 HTML + 注入 `:root` CSS 变量（含工具栏让位的 `--top-inset`）；静态样式/脚本已外置到 `assets/reader/reader.css`、`assets/reader/reader.js`，经 localhost `/_assets/*` 提供。KaTeX 走本地 `assets/katex/`。禁止把样式/脚本内联回 Dart 字符串、禁止依赖 CDN。
 - **ReaderSheetHost** (`lib/pages/reader/widgets/reader_sheet_host.dart`) — 阅读器内嵌 bottom sheet 宿主（z-order 低于底栏，弹出时底栏仍可见可交互）。阅读器内所有 sheet（信息/大纲/笔记/主题/字体/收藏）走 host 的 `show()`，关闭用 `ReaderSheetHost.closeOf(context)`。禁止在阅读器内用 `showModalBottomSheet`。
 - **ReaderTopToolbar / ReaderBottomBar** — 禁止把新按钮直接堆回 `ReaderPage` 的 build 里。
-- **搜索** — PDF 走 `pdfrx` PdfTextSearcher；Markdown 走 `MarkdownDocumentCacheService` 搜索快照。禁止每次输入全量解析。
+- **搜索** — PDF 走 `pdfrx` PdfTextSearcher；Markdown 走 `MarkdownDocumentCacheService` 搜索快照。禁止每次输入全量解析。结果卡展示「以匹配为中心的摘要窗口」，匹配判定与高亮共用同一 `RegExp`（支持 Match Case / Whole Word）。
+- **MajorSectionMatcher** (`lib/services/major_section_matcher.dart`) — 主章节标题判定单一数据源（配置 `assets/config/major_sections.json`），与 `BackMatterDetector` 同接缝的两个 adapter。搜索结果分组仅认主章节标题，全文零命中时回退全 `##` 分组。禁止自写章节标题正则。
 - **双路径高亮** — 新建走精确 Range（`addHighlightFromSelection`），恢复走文本搜索（`addByText`）。
 - **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — 复制图片用 `Pasteboard.writeImage()`，禁止用 `Clipboard.setData`。
 - **底部面板** — 禁止直接访问 `settings.backgroundColor`，用 `resolveReaderPalette()`。
