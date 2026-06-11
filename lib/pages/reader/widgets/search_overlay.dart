@@ -1,21 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../../services/reader/markdown_document_cache_service.dart';
-import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
-import 'md_widget/nr_markdown_config.dart';
-import 'md_widget/nr_search_highlight_builder.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 
 /// 全屏搜索遮罩层
 ///
-/// 用户输入搜索词并确认后，以段落为单位展示匹配结果。
-/// 搜索结果使用与阅读器正文相同的 Markdown 渲染管线（LaTeX、高亮等）。
+/// 以段落为单位匹配；结果卡展示**以匹配为中心的摘要窗口**（前后各取一段
+/// 上下文，纯文本 + 高亮 span），保证高亮必然可见——不再渲染整段 Markdown。
+/// 支持 Match Case / Match Whole Word 两个会话级开关。
 class SearchOverlay extends StatefulWidget {
   final ReaderSettingsState readerSettings;
   final void Function(List<SearchResult> results, int tappedIndex, String query)
@@ -43,9 +40,13 @@ class _SearchOverlayState extends State<SearchOverlay> {
   List<SearchResult> _results = [];
   bool _hasSearched = false;
 
-  // 搜索结果渲染资源（与正文共用同一套管线）
-  MarkdownConfig? _mdConfig;
-  MarkdownGenerator? _mdGenerator;
+  // 搜索选项（会话级，不持久化）
+  bool _matchCase = false;
+  bool _wholeWord = false;
+
+  /// 当前结果对应的匹配正则——摘要窗口高亮与命中判定共用，
+  /// 保证「搜得到的必高亮」。
+  RegExp? _searchRegex;
 
   @override
   void initState() {
@@ -70,49 +71,55 @@ class _SearchOverlayState extends State<SearchOverlay> {
     super.dispose();
   }
 
+  /// 按当前开关构造匹配正则。Whole word 用「两侧非字母数字」断言而非 \b
+  /// ——\b 对 CJK 与重音字符不可靠。
+  RegExp _buildSearchRegex(String query) {
+    final escaped = RegExp.escape(query);
+    final pattern = _wholeWord
+        ? '(?<![A-Za-z0-9])$escaped(?![A-Za-z0-9])'
+        : escaped;
+    return RegExp(pattern, caseSensitive: _matchCase, unicode: true);
+  }
+
   void _performSearch(String query) {
     if (query.isEmpty) {
       setState(() {
         _results = [];
         _hasSearched = false;
-        _mdConfig = null;
-        _mdGenerator = null;
+        _searchRegex = null;
       });
       return;
     }
 
-    final lowerQuery = query.toLowerCase();
-    final results = widget.searchSnapshot.blocks
-        .where((block) => block.plainText.toLowerCase().contains(lowerQuery))
-        .map(
-          (block) => SearchResult(
-            heading: block.heading,
-            plainText: block.plainText,
-            charOffset: block.charOffset,
-          ),
-        )
-        .toList(growable: false);
-
-    // 构建与正文相同的渲染管线，附加搜索高亮
-    final cs = Theme.of(context).colorScheme;
-    final searchBuilder = SearchHighlightBuilder(searchQuery: query, cs: cs);
-
-    _mdConfig = buildReaderMarkdownConfig(
-      settings: widget.readerSettings,
-      colorScheme: cs,
-      highlightQuery: query,
-    );
-    _mdGenerator = buildReaderMarkdownGenerator(
-      settings: widget.readerSettings,
-      searchRichTextBuilder: searchBuilder.hasHighlights
-          ? searchBuilder.call
-          : null,
-    );
+    final regex = _buildSearchRegex(query);
+    final results = <SearchResult>[];
+    for (final block in widget.searchSnapshot.blocks) {
+      final m = regex.firstMatch(block.plainText);
+      if (m == null) continue;
+      results.add(
+        SearchResult(
+          heading: block.heading,
+          plainText: block.plainText,
+          charOffset: block.charOffset,
+          matchStart: m.start,
+          matchLength: m.end - m.start,
+        ),
+      );
+    }
 
     setState(() {
+      _searchRegex = regex;
       _results = results;
       _hasSearched = true;
     });
+  }
+
+  void _toggleOption(void Function() flip) {
+    Haptics.soft();
+    setState(flip);
+    if (_controller.text.isNotEmpty) {
+      _performSearch(_controller.text);
+    }
   }
 
   @override
@@ -185,6 +192,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                               setState(() {
                                 _results = [];
                                 _hasSearched = false;
+                                _searchRegex = null;
                               });
                             },
                           )
@@ -203,19 +211,22 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 ),
               ),
             ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: Icon(
-                Symbols.close_rounded,
-                size: 22,
-                color: cs.onSurfaceVariant,
-              ),
-              tooltip: context.l10n.exitSearch,
-              onPressed: () {
-                Haptics.soft();
-                widget.onDismiss();
-              },
+            const SizedBox(width: 2),
+            _OptionToggle(
+              icon: Symbols.match_case_rounded,
+              tooltip: context.l10n.matchCase,
+              active: _matchCase,
+              cs: cs,
+              onTap: () => _toggleOption(() => _matchCase = !_matchCase),
             ),
+            _OptionToggle(
+              icon: Symbols.match_word_rounded,
+              tooltip: context.l10n.matchWholeWord,
+              active: _wholeWord,
+              cs: cs,
+              onTap: () => _toggleOption(() => _wholeWord = !_wholeWord),
+            ),
+            const SizedBox(width: 2),
           ],
         ),
       ),
@@ -273,9 +284,8 @@ class _SearchOverlayState extends State<SearchOverlay> {
                 ),
               ),
             _ResultCard(
-              markdownText: result.plainText,
-              config: _mdConfig!,
-              generator: _mdGenerator!,
+              result: result,
+              regex: _searchRegex!,
               cs: cs,
               onTap: () =>
                   widget.onResultTap(_results, index - 1, _controller.text),
@@ -287,27 +297,113 @@ class _SearchOverlayState extends State<SearchOverlay> {
   }
 }
 
-// ─── 搜索结果卡片（复用正文 Markdown 渲染管线） ───
+// ─── 搜索选项开关钮 ───
 
-class _ResultCard extends StatelessWidget {
-  final String markdownText;
-  final MarkdownConfig config;
-  final MarkdownGenerator generator;
+class _OptionToggle extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool active;
   final ColorScheme cs;
   final VoidCallback onTap;
 
-  const _ResultCard({
-    required this.markdownText,
-    required this.config,
-    required this.generator,
+  const _OptionToggle({
+    required this.icon,
+    required this.tooltip,
+    required this.active,
     required this.cs,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    // 与正文相同的预处理：裸 LaTeX 包裹 $...$、上标转 Unicode 等
-    final processed = MarkdownPreprocessor.process(markdownText);
+    return IconButton(
+      icon: Icon(
+        icon,
+        size: 22,
+        color: active ? cs.primary : cs.onSurfaceVariant,
+      ),
+      tooltip: tooltip,
+      isSelected: active,
+      style: IconButton.styleFrom(
+        backgroundColor: active
+            ? cs.primaryContainer.withAlpha(120)
+            : Colors.transparent,
+        minimumSize: const Size(36, 36),
+        padding: EdgeInsets.zero,
+      ),
+      onPressed: onTap,
+    );
+  }
+}
+
+// ─── 搜索结果卡片：以匹配为中心的摘要窗口 ───
+
+class _ResultCard extends StatelessWidget {
+  final SearchResult result;
+  final RegExp regex;
+  final ColorScheme cs;
+  final VoidCallback onTap;
+
+  const _ResultCard({
+    required this.result,
+    required this.regex,
+    required this.cs,
+    required this.onTap,
+  });
+
+  /// 匹配前保留的上下文字符数 / 窗口总长上限
+  static const _kLeadContext = 60;
+  static const _kWindowLength = 220;
+
+  /// 截取以首个匹配为中心的窗口；起止尽量贴到空格边界（±12 字内）。
+  String _snippetWindow() {
+    final text = result.plainText;
+    final start = result.matchStart < 0 ? 0 : result.matchStart;
+
+    var winStart = (start - _kLeadContext).clamp(0, text.length);
+    var winEnd = (winStart + _kWindowLength).clamp(0, text.length);
+
+    // 贴词边界：避免窗口边缘切出半个单词
+    if (winStart > 0) {
+      final sp = text.indexOf(' ', winStart);
+      if (sp >= 0 && sp - winStart <= 12) winStart = sp + 1;
+    }
+    if (winEnd < text.length) {
+      final sp = text.lastIndexOf(' ', winEnd);
+      if (sp > winStart && winEnd - sp <= 12) winEnd = sp;
+    }
+
+    final prefix = winStart > 0 ? '…' : '';
+    final suffix = winEnd < text.length ? '…' : '';
+    return '$prefix${text.substring(winStart, winEnd)}$suffix';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final snippet = _snippetWindow();
+
+    // 在窗口文本内高亮所有命中（与搜索共用同一 RegExp）
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final m in regex.allMatches(snippet)) {
+      if (m.start > cursor) {
+        spans.add(TextSpan(text: snippet.substring(cursor, m.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: snippet.substring(m.start, m.end),
+          style: TextStyle(
+            backgroundColor: cs.primary.withAlpha(70),
+            color: cs.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+      cursor = m.end;
+    }
+    if (cursor < snippet.length) {
+      spans.add(TextSpan(text: snippet.substring(cursor)));
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -317,18 +413,16 @@ class _ResultCard extends StatelessWidget {
         onTap: onTap,
         child: SizedBox(
           width: double.infinity,
-          height: 120,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: ClipRect(
-              child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                child: MarkdownBlock(
-                  data: processed,
-                  selectable: false,
-                  config: config,
-                  generator: generator,
-                ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Text.rich(
+              TextSpan(children: spans),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 14.5,
+                height: 1.5,
               ),
             ),
           ),

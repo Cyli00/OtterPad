@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import '../major_section_matcher.dart';
+
 class MarkdownResolvedDocument {
   final String cacheKey;
   final String content;
@@ -35,10 +37,17 @@ class SearchResult {
   final String plainText;
   final int charOffset;
 
+  /// 首个匹配在 [plainText] 中的位置与长度（构建摘要窗口用）。
+  /// matchStart < 0 = 未定位（不应出现于正常搜索结果）。
+  final int matchStart;
+  final int matchLength;
+
   const SearchResult({
     required this.heading,
     required this.plainText,
     required this.charOffset,
+    this.matchStart = -1,
+    this.matchLength = 0,
   });
 }
 
@@ -94,8 +103,11 @@ class MarkdownDocumentCacheService {
     final cached = _readSearchSnapshotCache(cacheKey);
     if (cached != null) return cached;
 
+    // 主章节模式串在主 isolate 加载（rootBundle 不可跨 isolate），
+    // 以源串形式传入、isolate 内编译。null = 资产缺失，回退全标题分组。
+    final majorPattern = await MajorSectionMatcher.instance.patternSource();
     final blocksData = await Isolate.run(
-      () => _buildSearchBlocks(markdownContent),
+      () => _buildSearchBlocks(markdownContent, majorPattern),
     );
     final snapshot = MarkdownSearchSnapshot(
       blocks: blocksData
@@ -203,13 +215,31 @@ const _latexUnicode = <String, String>{
 /// saveResult 已将 paragraph_title 归一化为 ##，直接匹配二级标题
 final _h2Regex = RegExp(r'^\s{0,3}##\s+(.+?)(?:\s+#+\s*)?$');
 
-List<Map<String, Object>> _buildSearchBlocks(String markdown) {
+/// 分组标签只认**主章节**标题（[MajorSectionMatcher]）：提取管线把所有
+/// paragraph_title 都归一化成 ##，级别信息不可靠，按标题语义过滤。
+/// 全文一个主章节都没有（非学术文档）或模式资产缺失时，回退到
+/// 「所有 ## 都算组」的旧行为，保证仍有分组可用。
+List<Map<String, Object>> _buildSearchBlocks(
+  String markdown,
+  String? majorPatternSource,
+) {
   final blocks = <Map<String, Object>>[];
   final lines = markdown.split('\n');
   var currentHeading = '';
   var blockBuffer = StringBuffer();
   var blockStartOffset = 0;
   var currentOffset = 0;
+
+  RegExp? majorRe;
+  if (majorPatternSource != null) {
+    majorRe = RegExp(majorPatternSource, caseSensitive: false, unicode: true);
+    // 预扫：全文标题无一命中 → 放弃分级，回退旧行为
+    final anyMajor = lines.any((line) {
+      final m = _h2Regex.firstMatch(line);
+      return m != null && majorRe!.hasMatch(m.group(1)!.trim());
+    });
+    if (!anyMajor) majorRe = null;
+  }
 
   void flushBlock() {
     if (blockBuffer.isEmpty) return;
@@ -237,9 +267,14 @@ List<Map<String, Object>> _buildSearchBlocks(String markdown) {
 
     final h2Match = _h2Regex.firstMatch(line);
     if (h2Match != null) {
-      flushBlock();
-      currentHeading = h2Match.group(1)!.trim();
-      blockStartOffset = currentOffset;
+      final headingText = h2Match.group(1)!.trim();
+      if (majorRe == null || majorRe.hasMatch(headingText)) {
+        // 主章节（或回退模式下任意标题）→ 更新组标签
+        flushBlock();
+        currentHeading = headingText;
+        blockStartOffset = currentOffset;
+      }
+      // 非主章节标题：不改组标签，标题行本身作为普通内容入块（仍可搜索）
     }
 
     if (blockBuffer.isEmpty) {
