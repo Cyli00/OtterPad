@@ -37,11 +37,6 @@ class MainShell extends StatelessWidget {
           selectedIcon: const Icon(Symbols.folder_copy_rounded, weight: 600, fill: 1),
           label: l10n.library,
         ),
-        AdaptiveDestination(
-          icon: const Icon(Symbols.construction_rounded, weight: 600, fill: 1),
-          selectedIcon: const Icon(Symbols.construction_rounded, weight: 600, fill: 1),
-          label: l10n.settings,
-        ),
       ],
       body: navigationShell,
     );

@@ -130,6 +130,16 @@ class HomeHeader extends ConsumerWidget {
               }
             },
           ),
+          const SizedBox(width: 8.0),
+          _HeaderButton(
+            icon: Symbols.settings_rounded,
+            tooltip: context.l10n.settings,
+            size: isMobile ? 36 : 40,
+            onPressed: () {
+              Haptics.soft();
+              context.push(AppRoutes.settings);
+            },
+          ),
         ],
       ),
     );

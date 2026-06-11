@@ -151,10 +151,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'search',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _forward(
-                      state: state,
-                      child: const SearchPage(),
-                    ),
+                    pageBuilder: (context, state) =>
+                        _forward(state: state, child: const SearchPage()),
                   ),
                 ],
               ),
@@ -210,65 +208,51 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+        ],
+      ),
 
-          // ── Tab 2: 设置 ──
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoutes.settings,
-                builder: (context, state) => const SettingPage(),
-                routes: [
-                  GoRoute(
-                    path: 'network',
-                    parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _lateral(
-                      state: state,
-                      child: const NetworkSettingsPage(),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'api',
-                    parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _lateral(
-                      state: state,
-                      child: const ApiSettingsPage(),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'extract',
-                    parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _lateral(
-                      state: state,
-                      child: const OcrSettingsPage(),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'appearance',
-                    parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _lateral(
-                      state: state,
-                      child: const AppearanceSettingsPage(),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'backup',
-                    parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _lateral(
-                      state: state,
-                      child: const BackupSettingsPage(),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'backupHome',
-                    parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _lateral(
-                      state: state,
-                      child: const BackupSettingsPage(),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+      // 设置：从首页头部按钮推入的全屏页（不再是导航 Tab）
+      GoRoute(
+        path: AppRoutes.settings,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            _forward(state: state, child: const SettingPage()),
+        routes: [
+          GoRoute(
+            path: 'network',
+            parentNavigatorKey: rootNavigatorKey,
+            pageBuilder: (context, state) =>
+                _lateral(state: state, child: const NetworkSettingsPage()),
+          ),
+          GoRoute(
+            path: 'api',
+            parentNavigatorKey: rootNavigatorKey,
+            pageBuilder: (context, state) =>
+                _lateral(state: state, child: const ApiSettingsPage()),
+          ),
+          GoRoute(
+            path: 'extract',
+            parentNavigatorKey: rootNavigatorKey,
+            pageBuilder: (context, state) =>
+                _lateral(state: state, child: const OcrSettingsPage()),
+          ),
+          GoRoute(
+            path: 'appearance',
+            parentNavigatorKey: rootNavigatorKey,
+            pageBuilder: (context, state) =>
+                _lateral(state: state, child: const AppearanceSettingsPage()),
+          ),
+          GoRoute(
+            path: 'backup',
+            parentNavigatorKey: rootNavigatorKey,
+            pageBuilder: (context, state) =>
+                _lateral(state: state, child: const BackupSettingsPage()),
+          ),
+          GoRoute(
+            path: 'backupHome',
+            parentNavigatorKey: rootNavigatorKey,
+            pageBuilder: (context, state) =>
+                _lateral(state: state, child: const BackupSettingsPage()),
           ),
         ],
       ),
