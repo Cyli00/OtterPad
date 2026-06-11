@@ -11,6 +11,7 @@ import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
+import '../../widgets/selection_pop_scope.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/doc_paths.dart';
@@ -204,13 +205,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     final allSelected =
         allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
-    return PopScope(
-      canPop: !isSelectionMode,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
-          ref.read(selectionProvider.notifier).exit();
-        }
-      },
+    return SelectionPopScope(
+      sourceContext: 'library',
       child: Scaffold(
         backgroundColor: cs.surface,
         body: SafeArea(

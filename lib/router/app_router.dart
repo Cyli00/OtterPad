@@ -26,8 +26,8 @@ import 'app_routes.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
-/// 统一路由转场：FadeThroughTransition（旧页淡出 → 新页淡入）
-CustomTransitionPage<T> _buildAnimatedPage<T>({
+/// 平级切换：FadeThroughTransition（旧页淡出 → 新页淡入）
+CustomTransitionPage<T> _lateral<T>({
   required Widget child,
   required GoRouterState state,
 }) {
@@ -46,6 +46,81 @@ CustomTransitionPage<T> _buildAnimatedPage<T>({
   );
 }
 
+/// 纵向钻入：SharedAxisTransition vertical（进入↑ / 返回↓）
+CustomTransitionPage<T> _drillIn<T>({
+  required Widget child,
+  required GoRouterState state,
+}) {
+  return CustomTransitionPage<T>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: kAnimSlow,
+    reverseTransitionDuration: kAnimSlow,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return SharedAxisTransition(
+        animation: animation,
+        secondaryAnimation: secondaryAnimation,
+        transitionType: SharedAxisTransitionType.vertical,
+        child: child,
+      );
+    },
+  );
+}
+
+/// 阅读器入场：Scale + Fade + 微上移，模拟 Container Transform 的「展开」感
+CustomTransitionPage<T> _readerEntry<T>({
+  required Widget child,
+  required GoRouterState state,
+}) {
+  return CustomTransitionPage<T>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: kAnimSlow,
+    reverseTransitionDuration: kAnimSlow,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: kAnimCurve,
+        reverseCurve: kAnimCurveReverse,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.04),
+            end: Offset.zero,
+          ).animate(curved),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+            child: child,
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// 横向前进：SharedAxisTransition horizontal（前进→ / 返回←）
+CustomTransitionPage<T> _forward<T>({
+  required Widget child,
+  required GoRouterState state,
+}) {
+  return CustomTransitionPage<T>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: kAnimSlow,
+    reverseTransitionDuration: kAnimSlow,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return SharedAxisTransition(
+        animation: animation,
+        secondaryAnimation: secondaryAnimation,
+        transitionType: SharedAxisTransitionType.horizontal,
+        child: child,
+      );
+    },
+  );
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
@@ -55,7 +130,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.reader,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) => _buildAnimatedPage(
+        pageBuilder: (context, state) => _readerEntry(
           state: state,
           child: ReaderPage(document: state.extra! as Document),
         ),
@@ -76,7 +151,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'search',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _forward(
                       state: state,
                       child: const SearchPage(),
                     ),
@@ -96,7 +171,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'favorite',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _drillIn(
                       state: state,
                       child: FavoriteDetailPage(
                         favorite: state.extra! as Favorite,
@@ -106,7 +181,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                       GoRoute(
                         path: 'add-documents',
                         parentNavigatorKey: rootNavigatorKey,
-                        pageBuilder: (context, state) => _buildAnimatedPage(
+                        pageBuilder: (context, state) => _forward(
                           state: state,
                           child: AddDocumentsToFavoritePage(
                             favorite: state.extra! as Favorite,
@@ -118,7 +193,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'history',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _drillIn(
                       state: state,
                       child: const ReadingHistoryPage(),
                     ),
@@ -126,7 +201,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'no-file-entries',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _drillIn(
                       state: state,
                       child: const NoFileEntriesPage(),
                     ),
@@ -146,7 +221,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'network',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _lateral(
                       state: state,
                       child: const NetworkSettingsPage(),
                     ),
@@ -154,7 +229,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'api',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _lateral(
                       state: state,
                       child: const ApiSettingsPage(),
                     ),
@@ -162,7 +237,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'extract',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _lateral(
                       state: state,
                       child: const OcrSettingsPage(),
                     ),
@@ -170,7 +245,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'appearance',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _lateral(
                       state: state,
                       child: const AppearanceSettingsPage(),
                     ),
@@ -178,7 +253,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'backup',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _lateral(
                       state: state,
                       child: const BackupSettingsPage(),
                     ),
@@ -186,7 +261,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'backupHome',
                     parentNavigatorKey: rootNavigatorKey,
-                    pageBuilder: (context, state) => _buildAnimatedPage(
+                    pageBuilder: (context, state) => _lateral(
                       state: state,
                       child: const BackupSettingsPage(),
                     ),

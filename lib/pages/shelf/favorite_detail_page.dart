@@ -12,6 +12,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
+import '../../widgets/selection_pop_scope.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/doc_paths.dart';
@@ -60,13 +61,8 @@ class FavoriteDetailPage extends ConsumerWidget {
     final allSelected =
         allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
-    return PopScope(
-      canPop: !isSelectionMode,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
-          ref.read(selectionProvider.notifier).exit();
-        }
-      },
+    return SelectionPopScope(
+      sourceContext: _sourceContext,
       child: Scaffold(
         backgroundColor: colorScheme.surface,
         appBar: isSelectionMode

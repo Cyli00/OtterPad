@@ -10,6 +10,7 @@ import '../../widgets/app_dialog.dart';
 import '../../providers/document_task_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/selection_provider.dart';
+import '../../widgets/selection_pop_scope.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
@@ -37,13 +38,8 @@ class NoFileEntriesPage extends ConsumerWidget {
     final allSelected =
         allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
-    return PopScope(
-      canPop: !isSelectionMode,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
-          ref.read(selectionProvider.notifier).exit();
-        }
-      },
+    return SelectionPopScope(
+      sourceContext: _sourceContext,
       child: Scaffold(
         backgroundColor: colorScheme.surface,
         appBar: isSelectionMode
