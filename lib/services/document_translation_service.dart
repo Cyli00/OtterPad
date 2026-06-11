@@ -58,8 +58,28 @@ class DocumentTranslationService {
       if (langMap == null) return {};
       return langMap.map((k, v) => MapEntry(k, v as String));
     } catch (_) {
+      // 文件损坏：改名留档而非静默吞掉——里面是用户付费翻译的唯一副本，
+      // 留档至少还有人工恢复的余地。
+      try {
+        file.renameSync('${file.path}.corrupt');
+      } catch (_) {}
       return {};
     }
+  }
+
+  /// 原子写 JSON：先写 `.tmp`（flush 落盘）再 rename 覆盖。写入中途进程
+  /// 被杀时旧文件完好，不会留下半截 JSON 让 [loadTranslations] 解析失败、
+  /// 全部已翻译内容静默归零。
+  static Future<void> _writeJsonAtomic(
+    File file,
+    Map<String, dynamic> root,
+  ) async {
+    final tmp = File('${file.path}.tmp');
+    await tmp.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(root),
+      flush: true,
+    );
+    await tmp.rename(file.path);
   }
 
   /// 保存翻译结果到文件，保留其他语言的已有翻译。
@@ -78,7 +98,7 @@ class DocumentTranslationService {
       } catch (_) {}
     }
     root[targetLang] = translations;
-    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(root));
+    await _writeJsonAtomic(file, root);
   }
 
   /// 清除指定语言的翻译。文件中无其他语言时删除整个文件。
@@ -96,9 +116,7 @@ class DocumentTranslationService {
       if (root.isEmpty) {
         await file.delete();
       } else {
-        await file.writeAsString(
-          const JsonEncoder.withIndent('  ').convert(root),
-        );
+        await _writeJsonAtomic(file, root);
       }
     } catch (_) {}
     log.d(

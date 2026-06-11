@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -115,8 +116,8 @@ class TranslationService {
   /// 流式翻译：按 token 增量累加返回完整译文。
   ///
   /// 每个 emit 是"从开始到当前的完整文本"——消费者直接显示 snapshot.data
-  /// 即可，无需自己累加。流结束后写入缓存；流式 API 失败时 fallback 到
-  /// 非流式 [translate] 一次性 emit。
+  /// 即可，无需自己累加。成功结束后写入缓存；流式失败（含收到部分增量后
+  /// 中途断流）时 fallback 到非流式 [translate] 一次性 emit，残缺增量不缓存。
   ///
   /// [translationThinkingLevel] 语义与 [translate] 同：默认 [ThinkingLevel.off]，
   /// 不可关闭的模型自动 fallback 到该服务商最低档；传 `null` 沿用用户配置。
@@ -184,8 +185,11 @@ class TranslationService {
       streamErr = e;
     }
 
-    // 流式完全失败（无任何增量）→ fallback 非流式一次性返回
-    if (streamErr != null && accumulated.isEmpty) {
+    // 流式失败（含已收到部分增量的中途断流）→ fallback 非流式一次性返回。
+    // 部分增量不可信：断流可能截在句子中间，残缺译文一旦进缓存会在 TTL 内
+    // 反复命中——宁可重发一次完整请求，fallback 也失败则把原始错误抛给调用方。
+    if (streamErr != null) {
+      final err = streamErr;
       try {
         final result = await _callApi(
           provider: agentState.provider,
@@ -198,13 +202,15 @@ class TranslationService {
           modelParams: modelParams,
         );
         accumulated = result;
+        streamErr = null;
         yield result;
       } catch (_) {
-        throw streamErr;
+        throw err;
       }
     }
 
-    if (accumulated.isNotEmpty) {
+    // 仅在确认无错误时写缓存——残缺译文不得持久化。
+    if (streamErr == null && accumulated.isNotEmpty) {
       _putCache(cacheKey, accumulated);
     }
   }
@@ -751,19 +757,31 @@ class TranslationService {
     return 'tr_${targetLang}_${normalized.hashCode}';
   }
 
+  // ── 缓存：内存单一真值 + 防抖落盘 ──
+  //
+  // 旧实现每次 get/put 都对整个缓存 map（可达数 MB、上千条）全量
+  // jsonDecode/jsonEncode——文档翻译 8 worker 高频 put 时主 isolate 反复
+  // 同步序列化，表现为翻译进行中 UI 掉帧。改为：首次访问 decode 一次进
+  // 内存，读写全打内存 map（O(1)），落盘走 2s 防抖批量。进程被杀最多丢
+  // 最近 2s 的新缓存条目——缓存可重建，可接受。过期清理也移到落盘时做。
+  static Map<String, dynamic>? _cacheMap;
+  static Timer? _cacheSaveDebounce;
+
   static Map<String, dynamic> _loadCacheMap() {
+    final loaded = _cacheMap;
+    if (loaded != null) return loaded;
+    Map<String, dynamic> map = {};
     final raw = GStorage.setting.get(_cacheBoxKey);
     if (raw is String) {
       try {
-        return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+        map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       } catch (_) {}
     }
-    return {};
+    return _cacheMap = map;
   }
 
   static String? _getCache(String key) {
-    final map = _loadCacheMap();
-    final entryRaw = map[key];
+    final entryRaw = _loadCacheMap()[key];
     if (entryRaw is Map<String, dynamic>) {
       final entry = _CacheEntry.fromJson(entryRaw);
       if (!entry.isExpired) return entry.translation;
@@ -772,22 +790,25 @@ class TranslationService {
   }
 
   static void _putCache(String key, String translation) {
-    final map = _loadCacheMap();
-
-    // 写入新条目
-    map[key] = _CacheEntry(
+    _loadCacheMap()[key] = _CacheEntry(
       translation: translation,
       timestampMs: DateTime.now().millisecondsSinceEpoch,
     ).toJson();
+    _scheduleCacheSave();
+  }
 
-    // 顺便清除过期条目
-    map.removeWhere((_, v) {
-      if (v is Map<String, dynamic>) {
-        return _CacheEntry.fromJson(v).isExpired;
-      }
-      return true;
+  static void _scheduleCacheSave() {
+    _cacheSaveDebounce?.cancel();
+    _cacheSaveDebounce = Timer(const Duration(seconds: 2), () {
+      final map = _cacheMap;
+      if (map == null) return;
+      map.removeWhere((_, v) {
+        if (v is Map<String, dynamic>) {
+          return _CacheEntry.fromJson(v).isExpired;
+        }
+        return true;
+      });
+      GStorage.setting.put(_cacheBoxKey, jsonEncode(map));
     });
-
-    GStorage.setting.put(_cacheBoxKey, jsonEncode(map));
   }
 }

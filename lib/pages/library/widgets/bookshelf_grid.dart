@@ -29,12 +29,6 @@ class BookshelfGrid extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final docs = ref.watch(validDocsProvider);
     final selection = ref.watch(selectionProvider);
-    // 监听 historyProvider 让每张卡片在进度更新后实时 rebuild——若 grid 顶层
-    // 不 watch，HistoryNotifier setProgress() 触发的 state 变更不会下沉到 card.
-    final history = ref.watch(historyProvider);
-    final progressByDoc = {
-      for (final e in history) e.docId: e.progress,
-    };
     final isSelectionMode =
         selection.isActive && selection.sourceContext == 'library';
 
@@ -69,23 +63,27 @@ class BookshelfGrid extends ConsumerWidget {
             ),
             delegate: SliverChildBuilderDelegate((context, index) {
               final doc = docs[index];
-              return DocumentCard(
-                docId: doc.id,
-                coverAsset:
-                    doc.contentHash == null ? '' : DocPaths.pdf(doc.id),
-                name: doc.title,
-                authors: doc.authors.join(', '),
-                journalName: doc.journal ?? '',
-                year: doc.year ?? '',
-                progress: progressByDoc[doc.id] ?? 0.0,
-                isSelectionMode: isSelectionMode,
-                isSelected: selection.selectedIds.contains(doc.id),
-                onTap: () => DocCardActions.openReader(context, ref, doc),
-                onLongPress: () => ref
-                    .read(selectionProvider.notifier)
-                    .enter(doc.id, 'library'),
-                onSelectionTap: () =>
-                    ref.read(selectionProvider.notifier).toggle(doc.id),
+              // 进度走单卡片粒度订阅（docProgressProvider）——阅读器每
+              // 500ms 的 setProgress 只重建对应卡片，不再整 grid rebuild。
+              return Consumer(
+                builder: (context, ref, _) => DocumentCard(
+                  docId: doc.id,
+                  coverAsset:
+                      doc.contentHash == null ? '' : DocPaths.pdf(doc.id),
+                  name: doc.title,
+                  authors: doc.authors.join(', '),
+                  journalName: doc.journal ?? '',
+                  year: doc.year ?? '',
+                  progress: ref.watch(docProgressProvider(doc.id)),
+                  isSelectionMode: isSelectionMode,
+                  isSelected: selection.selectedIds.contains(doc.id),
+                  onTap: () => DocCardActions.openReader(context, ref, doc),
+                  onLongPress: () => ref
+                      .read(selectionProvider.notifier)
+                      .enter(doc.id, 'library'),
+                  onSelectionTap: () =>
+                      ref.read(selectionProvider.notifier).toggle(doc.id),
+                ),
               );
             }, childCount: docs.length),
           ),

@@ -16,6 +16,7 @@ import '../../providers/highlight_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/reader_settings_provider.dart';
+import '../../providers/task_activity_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/zotero_sync_provider.dart';
@@ -919,6 +920,20 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
   }
 
+  /// 恢复会 close 全部 Hive box（overwrite）或整批读写 box（merge）——
+  /// 先取消所有 Active Task 并等活集合清空，避免在飞任务（翻译写盘、
+  /// 提取 saveResult 等）撞上 close 窗口炸出 "Box has already been closed"。
+  /// 取消是协作式的，已在飞的网络请求要跑完才退出，超时后尽力而为继续。
+  Future<void> _drainActiveTasks() async {
+    final notifier = ref.read(taskActivityProvider.notifier);
+    notifier.cancelAll();
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    while (ref.read(taskActivityProvider).isNotEmpty &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
   Future<MergeResult?> _restoreArchive({
     required String archivePath,
     required BackupRestoreScope scope,
@@ -927,6 +942,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   }) async {
     MergeResult? mergeResult;
     await _runBusy(busyText, () async {
+      await _drainActiveTasks();
       mergeResult = await BackupRestoreService.restoreBackupArchive(
         archivePath: archivePath,
         scope: scope,

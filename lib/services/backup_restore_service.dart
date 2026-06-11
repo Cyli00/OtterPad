@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -52,10 +52,7 @@ class BackupRestoreService {
   }
 
   static Future<String> createBackupArchive() async {
-    final archive = Archive();
     final createdAt = DateTime.now();
-    final docsDir = Directory(GStorage.libraryDirPath);
-    final dataDir = Directory(GStorage.dbDirPath);
 
     await GStorage.flush();
 
@@ -63,33 +60,66 @@ class BackupRestoreService {
       'app': 'OtterPad',
       'formatVersion': _formatVersion,
       'createdAt': createdAt.toIso8601String(),
-      'libraryRoot': docsDir.path,
-      'dbRoot': dataDir.path,
+      'libraryRoot': GStorage.libraryDirPath,
+      'dbRoot': GStorage.dbDirPath,
     };
-
-    archive.add(
-      ArchiveFile.string(
-        _manifestPath,
-        const JsonEncoder.withIndent('  ').convert(manifest),
-      ),
-    );
-
-    await _addDirectoryToArchive(
-      archive,
-      sourceDir: docsDir,
-      archiveRoot: _libraryDir,
-    );
-    await _addDirectoryToArchive(
-      archive,
-      sourceDir: dataDir,
-      archiveRoot: _dbDir,
-    );
 
     final tempDir = await _getBackupTempDir();
     final outputPath = p.join(tempDir.path, buildBackupFileName(createdAt));
-    final bytes = ZipEncoder().encodeBytes(archive);
-    await File(outputPath).writeAsBytes(bytes, flush: true);
+
+    // 打包在后台 isolate 流式进行：旧实现把整库 readAsBytes 进 Archive、
+    // encodeBytes 再生成第二份完整字节（1GB 库瞬时内存 2GB+），且同步压缩
+    // 期间 UI 完全冻结。ZipFileEncoder 逐文件流式读写，内存 O(单文件)；
+    // 解压方向（_extractInIsolate）早已用 compute，此处对齐。
+    await compute(_createArchiveInIsolate, <String>[
+      outputPath,
+      GStorage.libraryDirPath,
+      GStorage.dbDirPath,
+      const JsonEncoder.withIndent('  ').convert(manifest),
+    ]);
     return outputPath;
+  }
+
+  static Future<void> _createArchiveInIsolate(List<String> args) async {
+    final outputPath = args[0];
+    final libraryDir = Directory(args[1]);
+    final dbDir = Directory(args[2]);
+    final manifestJson = args[3];
+
+    final encoder = ZipFileEncoder();
+    encoder.create(outputPath);
+    try {
+      // manifest 经临时文件加入（ZipFileEncoder 没有字符串条目接口）。
+      final manifestTmp = File('$outputPath.manifest.tmp');
+      manifestTmp.writeAsStringSync(manifestJson);
+      try {
+        await encoder.addFile(manifestTmp, _manifestPath);
+      } finally {
+        manifestTmp.deleteSync();
+      }
+
+      await _addDirectoryStreamed(encoder, libraryDir, _libraryDir);
+      await _addDirectoryStreamed(encoder, dbDir, _dbDir);
+    } finally {
+      await encoder.close();
+    }
+  }
+
+  /// 逐文件流式加入 zip。空目录条目不再写入——恢复侧写文件时
+  /// `create(recursive: true)` 会按需重建目录。
+  static Future<void> _addDirectoryStreamed(
+    ZipFileEncoder encoder,
+    Directory sourceDir,
+    String archiveRoot,
+  ) async {
+    if (!await sourceDir.exists()) return;
+    await for (final entity in sourceDir.list(recursive: true)) {
+      if (entity is! File) continue;
+      final relativePath = _toArchivePath(
+        p.relative(entity.path, from: sourceDir.path),
+      );
+      await encoder.addFile(entity, '$archiveRoot/$relativePath');
+    }
   }
 
   static Future<MergeResult?> restoreBackupArchive({
@@ -121,16 +151,31 @@ class BackupRestoreService {
 
       await GStorage.close();
 
+      // 两步替换的跨步骤回滚：第一步（library）成功后保留 .bak，第二步
+      // （db/box）失败时连第一步一起恢复——否则会留下「文献=备份版、
+      // 数据库=旧版」的错位状态（_replaceDirectory 自身的回滚只覆盖单步）。
       if (scope == BackupRestoreScope.full) {
-        await _replaceDirectory(docsDir, extractedDocsDir);
-        await _replaceDirectory(dataDir, extractedDataDir);
+        await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
+        try {
+          await _replaceDirectory(dataDir, extractedDataDir);
+        } catch (_) {
+          await _rollbackFromBackup(docsDir);
+          rethrow;
+        }
+        await _deleteBackupOf(docsDir);
       } else if (scope == BackupRestoreScope.libraryOnly) {
-        await _replaceDirectory(docsDir, extractedDocsDir);
-        await _replaceBoxFiles(
-          fromDir: extractedDataDir,
-          toDir: dataDir,
-          boxNames: _libraryBoxNames,
-        );
+        await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
+        try {
+          await _replaceBoxFiles(
+            fromDir: extractedDataDir,
+            toDir: dataDir,
+            boxNames: _libraryBoxNames,
+          );
+        } catch (_) {
+          await _rollbackFromBackup(docsDir);
+          rethrow;
+        }
+        await _deleteBackupOf(docsDir);
       } else if (scope == BackupRestoreScope.settingsOnly) {
         await _replaceBoxFiles(
           fromDir: extractedDataDir,
@@ -192,40 +237,13 @@ class BackupRestoreService {
     }
   }
 
-  static Future<void> _addDirectoryToArchive(
-    Archive archive, {
-    required Directory sourceDir,
-    required String archiveRoot,
-  }) async {
-    archive.add(ArchiveFile.directory('$archiveRoot/'));
-    if (!await sourceDir.exists()) return;
-
-    await for (final entity in sourceDir.list(recursive: true)) {
-      final relativePath = _toArchivePath(
-        p.relative(entity.path, from: sourceDir.path),
-      );
-
-      if (entity is Directory) {
-        archive.add(ArchiveFile.directory('$archiveRoot/$relativePath/'));
-        continue;
-      }
-      if (entity is! File) continue;
-
-      archive.add(
-        ArchiveFile.bytes(
-            '$archiveRoot/$relativePath',
-            await entity.readAsBytes(),
-          )
-          ..lastModTime =
-              entity.lastModifiedSync().millisecondsSinceEpoch ~/ 1000,
-      );
-    }
-  }
-
+  /// [keepBackup] 为 true 时成功后保留 `.bak` 目录——供调用方做跨步骤
+  /// 回滚（见 restoreBackupArchive），用完须调 [_deleteBackupOf] 清理。
   static Future<void> _replaceDirectory(
     Directory targetDir,
-    Directory sourceDir,
-  ) async {
+    Directory sourceDir, {
+    bool keepBackup = false,
+  }) async {
     final backupDir = Directory('${targetDir.path}.bak');
     if (await backupDir.exists()) {
       await backupDir.delete(recursive: true);
@@ -238,7 +256,7 @@ class BackupRestoreService {
 
     try {
       await _copyDirectory(sourceDir, targetDir);
-      if (await backupDir.exists()) {
+      if (!keepBackup && await backupDir.exists()) {
         await backupDir.delete(recursive: true);
       }
     } catch (error) {
@@ -249,6 +267,24 @@ class BackupRestoreService {
         await backupDir.rename(targetDir.path);
       }
       rethrow;
+    }
+  }
+
+  /// 用 `.bak` 把 [targetDir] 恢复到替换前状态（跨步骤回滚用）。
+  /// `.bak` 不存在时为 no-op（替换前目标目录本就不存在的情况）。
+  static Future<void> _rollbackFromBackup(Directory targetDir) async {
+    final backupDir = Directory('${targetDir.path}.bak');
+    if (!await backupDir.exists()) return;
+    if (await targetDir.exists()) {
+      await targetDir.delete(recursive: true);
+    }
+    await backupDir.rename(targetDir.path);
+  }
+
+  static Future<void> _deleteBackupOf(Directory targetDir) async {
+    final backupDir = Directory('${targetDir.path}.bak');
+    if (await backupDir.exists()) {
+      await backupDir.delete(recursive: true);
     }
   }
 
