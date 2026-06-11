@@ -849,17 +849,16 @@ class DocExtractService {
       'useDocUnwarping': state.useDocUnwarping,
       'useSealRecognition': state.useSealRecognition,
       'useOcrForImageBlock': state.useOcrForImageBlock,
-      'mergeTables': true,
+      'mergeTables': state.mergeTables,
       'relevelTitles': true,
       'restructurePages': state.restructurePages,
       'topP': 1,
       'layoutNms': state.layoutNms,
       'layoutShapeMode': state.layoutShapeMode,
-      'layoutThreshold': state.layoutThreshold,
       'minPixels': 147384,
       'maxPixels': 2822400,
       'repetitionPenalty': state.repetitionPenalty,
-      'temperature': 0,
+      'temperature': state.temperature,
     };
   }
 }

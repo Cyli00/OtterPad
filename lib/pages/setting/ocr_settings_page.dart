@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/haptics.dart';
+import '../../services/snackbar_service.dart';
+import '../../widgets/app_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_picker.dart';
 
@@ -43,6 +45,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
 
   List<(String, String, String)> _outputDefs(AppLocalizations l10n) => [
     ('restructurePages', l10n.multiPageReconstruction, l10n.ocrMultiPageDesc),
+    ('mergeTables', l10n.crossPageTableMerge, l10n.crossPageTableMergeDesc),
   ];
 
   Map<String, String> _labelNames(AppLocalizations l10n) => {
@@ -84,6 +87,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     'useOcrForImageBlock' => s.useOcrForImageBlock,
     'restructurePages' => s.restructurePages,
     'layoutNms' => s.layoutNms,
+    'mergeTables' => s.mergeTables,
     _ => false,
   };
 
@@ -499,19 +503,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                       ],
                     ),
                   ),
-                  _sliderTile(
-                    title: context.l10n.layoutDetectionThreshold,
-                    subtitle: context.l10n.ocrThresholdHelp,
-                    value: docState.layoutThreshold,
-                    min: 0.0, max: 1.0, divisions: 20, defaultValue: 0.5,
-                    formatter: (v) => v.toStringAsFixed(2),
-                    onChanged: (v) => ref
-                        .read(docExtractApiProvider.notifier)
-                        .setDouble('layoutThreshold', v),
-                    onReset: () => ref
-                        .read(docExtractApiProvider.notifier)
-                        .setDouble('layoutThreshold', 0.5),
-                  ),
                   const SizedBox(height: 8),
                 ],
               ),
@@ -529,7 +520,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     title: context.l10n.repetitionPenalty,
                     subtitle: context.l10n.repetitionPenaltyHint,
                     value: docState.repetitionPenalty,
-                    min: 1.0, max: 2.0, divisions: 20, defaultValue: 1.0,
+                    min: 1.0, max: 1.2, divisions: 20, defaultValue: 1.0,
                     formatter: (v) => v.toStringAsFixed(2),
                     onChanged: (v) => ref
                         .read(docExtractApiProvider.notifier)
@@ -537,6 +528,19 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     onReset: () => ref
                         .read(docExtractApiProvider.notifier)
                         .setDouble('repetitionPenalty', 1.0),
+                  ),
+                  _sliderTile(
+                    title: context.l10n.recognitionStability,
+                    subtitle: context.l10n.recognitionStabilityHint,
+                    value: docState.temperature,
+                    min: 0.0, max: 1.0, divisions: 20, defaultValue: 0.0,
+                    formatter: (v) => v.toStringAsFixed(2),
+                    onChanged: (v) => ref
+                        .read(docExtractApiProvider.notifier)
+                        .setDouble('temperature', v),
+                    onReset: () => ref
+                        .read(docExtractApiProvider.notifier)
+                        .setDouble('temperature', 0.0),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -591,9 +595,57 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 ],
               ),
             ),
+
+            const SizedBox(height: 24),
+            Center(
+              child: TextButton.icon(
+                onPressed: _confirmReset,
+                icon: const Icon(Symbols.restart_alt_rounded, size: 20),
+                label: Text(context.l10n.resetOcrSettings),
+                style: TextButton.styleFrom(foregroundColor: cs.error),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmReset() async {
+    final cs = Theme.of(context).colorScheme;
+    Haptics.soft();
+    final confirmed = await showAppDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: cs.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+        title: Text(context.l10n.resetOcrSettings),
+        content: Text(context.l10n.resetOcrSettingsConfirm),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, false);
+            },
+            child: Text(context.l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              Haptics.soft();
+              Navigator.pop(context, true);
+            },
+            style: TextButton.styleFrom(foregroundColor: cs.error),
+            child: Text(context.l10n.reset),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(docExtractApiProvider.notifier).resetExceptApiKey();
+    if (!mounted) return;
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.ocrSettingsReset);
   }
 }

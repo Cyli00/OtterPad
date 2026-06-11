@@ -1000,9 +1000,10 @@ class DocExtractApiState {
   final bool useOcrForImageBlock;
   final bool restructurePages;
   final bool layoutNms;
+  final bool mergeTables;
   final String layoutShapeMode;
-  final double layoutThreshold;
   final double repetitionPenalty;
+  final double temperature;
 
   // ── Markdown 忽略标签 ──
   final List<String> markdownIgnoreLabels;
@@ -1020,9 +1021,10 @@ class DocExtractApiState {
     this.useOcrForImageBlock = false,
     this.restructurePages = true,
     this.layoutNms = true,
+    this.mergeTables = true,
     this.layoutShapeMode = 'auto',
-    this.layoutThreshold = 0.5,
     this.repetitionPenalty = 1.0,
+    this.temperature = 0.0,
     this.markdownIgnoreLabels = kDefaultIgnoreLabels,
   });
 
@@ -1035,9 +1037,10 @@ class DocExtractApiState {
     bool? useOcrForImageBlock,
     bool? restructurePages,
     bool? layoutNms,
+    bool? mergeTables,
     String? layoutShapeMode,
-    double? layoutThreshold,
     double? repetitionPenalty,
+    double? temperature,
     List<String>? markdownIgnoreLabels,
   }) => DocExtractApiState(
     apiKey: apiKey ?? this.apiKey,
@@ -1049,9 +1052,10 @@ class DocExtractApiState {
     useOcrForImageBlock: useOcrForImageBlock ?? this.useOcrForImageBlock,
     restructurePages: restructurePages ?? this.restructurePages,
     layoutNms: layoutNms ?? this.layoutNms,
+    mergeTables: mergeTables ?? this.mergeTables,
     layoutShapeMode: layoutShapeMode ?? this.layoutShapeMode,
-    layoutThreshold: layoutThreshold ?? this.layoutThreshold,
     repetitionPenalty: repetitionPenalty ?? this.repetitionPenalty,
+    temperature: temperature ?? this.temperature,
     markdownIgnoreLabels: markdownIgnoreLabels ?? this.markdownIgnoreLabels,
   );
 }
@@ -1081,12 +1085,14 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         box.get('${_prefix}restructurePages', defaultValue: true) as bool;
     final layoutNms =
         box.get('${_prefix}layoutNms', defaultValue: true) as bool;
+    final mergeTables =
+        box.get('${_prefix}mergeTables', defaultValue: true) as bool;
     final layoutShapeMode =
         box.get('${_prefix}layoutShapeMode', defaultValue: 'auto') as String;
-    final layoutThreshold =
-        box.get('${_prefix}layoutThreshold', defaultValue: 0.5) as double;
     final repetitionPenalty =
         box.get('${_prefix}repetitionPenalty', defaultValue: 1.0) as double;
+    final temperature =
+        box.get('${_prefix}temperature', defaultValue: 0.0) as double;
 
     final rawLabels = box.get('${_prefix}markdownIgnoreLabels') as List?;
     final markdownIgnoreLabels = rawLabels != null
@@ -1102,9 +1108,10 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
       useOcrForImageBlock: useOcrForImageBlock,
       restructurePages: restructurePages,
       layoutNms: layoutNms,
+      mergeTables: mergeTables,
       layoutShapeMode: layoutShapeMode,
-      layoutThreshold: layoutThreshold,
       repetitionPenalty: repetitionPenalty,
+      temperature: temperature,
       markdownIgnoreLabels: markdownIgnoreLabels,
     );
   }
@@ -1130,16 +1137,18 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         state = state.copyWith(restructurePages: value);
       case 'layoutNms':
         state = state.copyWith(layoutNms: value);
+      case 'mergeTables':
+        state = state.copyWith(mergeTables: value);
     }
     await GStorage.setting.put('$_prefix$field', value);
   }
 
   Future<void> setDouble(String field, double value) async {
     switch (field) {
-      case 'layoutThreshold':
-        state = state.copyWith(layoutThreshold: value);
       case 'repetitionPenalty':
         state = state.copyWith(repetitionPenalty: value);
+      case 'temperature':
+        state = state.copyWith(temperature: value);
     }
     await GStorage.setting.put('$_prefix$field', value);
   }
@@ -1155,6 +1164,29 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
   Future<void> setIgnoreLabels(List<String> labels) async {
     state = state.copyWith(markdownIgnoreLabels: labels);
     await GStorage.setting.put('${_prefix}markdownIgnoreLabels', labels);
+  }
+
+  /// 重置除 API Key 外的所有提取配置为默认值（清除持久化键，state 回落到默认构造）。
+  Future<void> resetExceptApiKey() async {
+    final box = GStorage.setting;
+    const fields = [
+      'useChartRecognition',
+      'useDocOrientationClassify',
+      'useDocUnwarping',
+      'useSealRecognition',
+      'useOcrForImageBlock',
+      'restructurePages',
+      'layoutNms',
+      'mergeTables',
+      'layoutShapeMode',
+      'repetitionPenalty',
+      'temperature',
+      'markdownIgnoreLabels',
+    ];
+    for (final f in fields) {
+      await box.delete('$_prefix$f');
+    }
+    state = DocExtractApiState(apiKey: state.apiKey);
   }
 
   void reload() {
