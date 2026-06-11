@@ -235,6 +235,14 @@ class ReaderJsBridge {
     }
   }
 
+  // ─── Dart → JS：选区 ───
+
+  /// 清除 WebView 内的文本选区。原生选择手柄绘制在独立的系统窗口层、
+  /// 永远浮在 Flutter 之上——弹 dialog 前必须清掉，否则手柄"穿透"对话框。
+  void clearSelection() {
+    _controller.evaluateJavascript(source: 'window.clearSelection()');
+  }
+
   // ─── Dart → JS：滚动/跳转 ───
 
   void scrollToRatio(double ratio) {

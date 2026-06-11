@@ -140,24 +140,11 @@ enum ReaderPaginationMode {
   };
 }
 
-/// 工具栏透明度预设
-enum ToolbarOpacity {
-  opaque(1.0, '不透明'),
-  slight(0.85, '微透明'),
-  glass(0.7, '毛玻璃'),
-  half(0.5, '半透明');
-
-  final double value;
-  final String label;
-  const ToolbarOpacity(this.value, this.label);
-}
-
 class ReaderSettingsState {
   final ReaderTheme theme;
   final ReaderFont font;
   final double fontSize;
   final DefaultReadingMode defaultReadingMode;
-  final ToolbarOpacity toolbarOpacity;
   final ReaderPaginationMode paginationMode;
 
   const ReaderSettingsState({
@@ -165,7 +152,6 @@ class ReaderSettingsState {
     this.font = ReaderFont.serif,
     this.fontSize = 16.0,
     this.defaultReadingMode = DefaultReadingMode.markdown,
-    this.toolbarOpacity = ToolbarOpacity.opaque,
     this.paginationMode = ReaderPaginationMode.vertical,
   });
 
@@ -174,7 +160,6 @@ class ReaderSettingsState {
     ReaderFont? font,
     double? fontSize,
     DefaultReadingMode? defaultReadingMode,
-    ToolbarOpacity? toolbarOpacity,
     ReaderPaginationMode? paginationMode,
   }) {
     return ReaderSettingsState(
@@ -182,7 +167,6 @@ class ReaderSettingsState {
       font: font ?? this.font,
       fontSize: fontSize ?? this.fontSize,
       defaultReadingMode: defaultReadingMode ?? this.defaultReadingMode,
-      toolbarOpacity: toolbarOpacity ?? this.toolbarOpacity,
       paginationMode: paginationMode ?? this.paginationMode,
     );
   }
@@ -206,7 +190,6 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   static const _kFont = 'reader_font';
   static const _kFontSize = 'reader_font_size';
   static const _kDefaultMode = 'reader_default_mode';
-  static const _kToolbarOpacity = 'reader_toolbar_opacity';
   static const _kPaginationMode = 'reader_pagination_mode';
 
   ReaderSettingsNotifier() : super(_load());
@@ -220,9 +203,6 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
     final modeIndex =
         box.get(_kDefaultMode, defaultValue: DefaultReadingMode.markdown.index)
             as int;
-    final opacityIndex =
-        box.get(_kToolbarOpacity, defaultValue: ToolbarOpacity.opaque.index)
-            as int;
     final paginationIndex = box.get(_kPaginationMode, defaultValue: 0) as int;
     return ReaderSettingsState(
       theme: ReaderTheme
@@ -233,8 +213,6 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
         ReaderSettingsState.maxFontSize,
       ),
       defaultReadingMode: DefaultReadingMode.values[modeIndex.clamp(0, 1)],
-      toolbarOpacity: ToolbarOpacity
-          .values[opacityIndex.clamp(0, ToolbarOpacity.values.length - 1)],
       paginationMode:
           ReaderPaginationMode.values[paginationIndex.clamp(
             0,
@@ -265,11 +243,6 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   void setDefaultReadingMode(DefaultReadingMode mode) {
     state = state.copyWith(defaultReadingMode: mode);
     GStorage.setting.put(_kDefaultMode, mode.index);
-  }
-
-  void setToolbarOpacity(ToolbarOpacity opacity) {
-    state = state.copyWith(toolbarOpacity: opacity);
-    GStorage.setting.put(_kToolbarOpacity, opacity.index);
   }
 
   void setPaginationMode(ReaderPaginationMode mode) {

@@ -1,7 +1,7 @@
 import 'package:markdown/markdown.dart' as md;
+import 'package:path/path.dart' as p;
 
 import '../../../providers/reader_settings_provider.dart';
-import '../../../services/reader_localhost_server.dart';
 import '../../../services/translation_style.dart';
 import 'reader_background.dart';
 
@@ -20,11 +20,17 @@ String buildReaderHtml({
   required ReaderPalette palette,
   required ReaderSettingsState settings,
   required String baseHref,
+  // localhost server 的 root 与 port 必须由调用方（主 isolate）传入：
+  // buildReaderHtml 可能在后台 isolate 执行，那里 ReaderLocalhostServer
+  // 单例是未初始化的新实例，直接访问会让 file:// 重写失效、图片裂掉。
+  required String serverRoot,
+  required int serverPort,
   String translationStyleId = 'themed',
   String imageCacheBuster = '',
   double topInset = 0,
 }) {
-  final htmlBody = _markdownToHtml(markdownContent, imageCacheBuster);
+  final htmlBody =
+      _markdownToHtml(markdownContent, serverRoot, serverPort, imageCacheBuster);
   // 动态 CSS 变量块（palette/字体/行高）按文档注入 :root；静态 CSS 在
   // assets/reader/reader.css、JS 在 assets/reader/reader.js，均经 localhost
   // /_assets/* 路由提供（见 ReaderLocalhostServer）。
@@ -91,7 +97,12 @@ String _cssVarsToJsSetProperty(Map<String, String> vars) {
 
 // ─── Markdown → HTML ───
 
-String _markdownToHtml(String markdown, [String imageCacheBuster = '']) {
+String _markdownToHtml(
+  String markdown,
+  String serverRoot,
+  int serverPort, [
+  String imageCacheBuster = '',
+]) {
   var html = md.markdownToHtml(
     markdown,
     extensionSet: md.ExtensionSet.gitHubWeb,
@@ -99,7 +110,7 @@ String _markdownToHtml(String markdown, [String imageCacheBuster = '']) {
     blockSyntaxes: [_LatexBlockPreserve()],
   );
 
-  html = _injectImageAttrs(html, imageCacheBuster);
+  html = _injectImageAttrs(html, serverRoot, serverPort, imageCacheBuster);
   html = _convertFigCaptions(html);
   return html;
 }
@@ -222,7 +233,12 @@ class _LatexBlockPreserve extends md.BlockSyntax {
 ///   HTTP origin 下浏览器拒绝跨协议加载。把 `file:///<root>/library/<documentId>/...`
 ///   转成 server URL `http://localhost:PORT/library/<documentId>/...` 后同 origin 加载
 ///   正常。相对路径与 http(s)/data URI 保留原样。
-String _injectImageAttrs(String html, [String cacheBuster = '']) {
+String _injectImageAttrs(
+  String html,
+  String serverRoot,
+  int serverPort, [
+  String cacheBuster = '',
+]) {
   const lazyAttrs = 'loading="lazy" decoding="async" ';
   return html.replaceAllMapped(
     RegExp(r'<img\s+([^>]*?)src="([^"]*?)"', caseSensitive: false),
@@ -234,7 +250,7 @@ String _injectImageAttrs(String html, [String cacheBuster = '']) {
       if (src.startsWith('file://')) {
         try {
           final filePath = Uri.parse(src).toFilePath();
-          final mapped = ReaderLocalhostServer.instance.urlForPath(filePath);
+          final mapped = _serverUrlForPath(filePath, serverRoot, serverPort);
           if (mapped != null) {
             resolved = mapped;
             fromFileScheme = true;
@@ -254,5 +270,17 @@ String _injectImageAttrs(String html, [String cacheBuster = '']) {
       return '<img $lazyAttrs${attrs}src="$resolved"';
     },
   );
+}
+
+/// [ReaderLocalhostServer.urlForPath] 的纯函数版：只依赖传入的 root/port，
+/// 可在后台 isolate 安全运行（不触碰单例状态）。逻辑须与原方法保持一致：
+/// 越界（不在 root 下）返回 null，Windows 反斜杠归一为正斜杠并逐段编码。
+String? _serverUrlForPath(String absPath, String serverRoot, int serverPort) {
+  if (serverRoot.isEmpty || serverPort <= 0) return null;
+  final rel = p.relative(p.normalize(absPath), from: serverRoot);
+  if (rel.startsWith('..') || p.isAbsolute(rel)) return null;
+  final urlPath =
+      rel.split(RegExp(r'[/\\]')).map(Uri.encodeComponent).join('/');
+  return 'http://localhost:$serverPort/$urlPath';
 }
 

@@ -40,9 +40,7 @@ class ReaderBottomBar extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: cs.surface.withValues(
-          alpha: readerSettings.toolbarOpacity.value,
-        ),
+        color: cs.surface,
         border: Border(
           top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
         ),

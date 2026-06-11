@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../data/models/book/highlight.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
@@ -17,6 +18,7 @@ import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
 import '../../../services/translation_service.dart';
+import '../../../widgets/tactile_press.dart';
 
 /// 打开一个流式翻译小窗口展示 [sourceText] 的译文。
 ///
@@ -26,6 +28,7 @@ Future<void> showTranslationPopup(
   BuildContext context, {
   required String sourceText,
   String? fullText,
+  void Function(String colorHex, String note)? onAddNote,
 }) async {
   final container = ProviderScope.containerOf(context, listen: false);
   final agentState = container.read(effectiveAgentApiProvider);
@@ -47,7 +50,11 @@ Future<void> showTranslationPopup(
     barrierColor: Colors.black.withValues(alpha: 0.3),
     builder: (_) => BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-      child: _TranslationPopup(sourceText: sourceText, fullText: fullText),
+      child: _TranslationPopup(
+        sourceText: sourceText,
+        fullText: fullText,
+        onAddNote: onAddNote,
+      ),
     ),
   );
 }
@@ -55,7 +62,16 @@ Future<void> showTranslationPopup(
 class _TranslationPopup extends ConsumerStatefulWidget {
   final String sourceText;
   final String? fullText;
-  const _TranslationPopup({required this.sourceText, this.fullText});
+
+  /// 「添加到注释」回调：把选取段落按 [colorHex] 高亮并以 [note]（译文）
+  /// 作为注解。null = 不显示该按钮。
+  final void Function(String colorHex, String note)? onAddNote;
+
+  const _TranslationPopup({
+    required this.sourceText,
+    this.fullText,
+    this.onAddNote,
+  });
 
   @override
   ConsumerState<_TranslationPopup> createState() => _TranslationPopupState();
@@ -66,9 +82,15 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
   String _latest = '';
   Object? _error;
   bool _done = false;
+  bool _noteAdded = false;
 
   final _sourceAnchorKey = GlobalKey();
   final _bodyAnchorKey = GlobalKey();
+
+  // 原文框与译文区各自独立的 controller——两个 thumbVisibility 滚动条
+  // 若都回退到 PrimaryScrollController 会触发多 ScrollPosition 断言。
+  final _sourceScrollCtrl = ScrollController();
+  final _bodyScrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -160,6 +182,9 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
       agentState: agentState,
       translationConfig: config,
       extraSystemInstruction: extraInstruction,
+      // 带 ⟪⟫ 标记的请求禁用缓存：标记回显依赖模型行为，一次丢标记的
+      // 结果若被缓存，会让同一选区在 TTL 内永远"无高亮"。
+      useCache: extraInstruction == null,
     );
 
     _sub = stream.listen(
@@ -207,6 +232,8 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
   @override
   void dispose() {
     _sub?.cancel();
+    _sourceScrollCtrl.dispose();
+    _bodyScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -316,8 +343,10 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
           border: Border.all(color: cs.outlineVariant.withAlpha(80)),
         ),
         child: Scrollbar(
+          controller: _sourceScrollCtrl,
           thumbVisibility: true,
           child: SingleChildScrollView(
+            controller: _sourceScrollCtrl,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Text.rich(sourceSpan),
           ),
@@ -401,8 +430,10 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     }
 
     return Scrollbar(
+      controller: _bodyScrollCtrl,
       thumbVisibility: true,
       child: SingleChildScrollView(
+        controller: _bodyScrollCtrl,
         padding: const EdgeInsets.only(right: 8, bottom: 4),
         child: SelectableText.rich(
           TextSpan(children: spans),
@@ -460,6 +491,66 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
               ],
             ),
           const Spacer(),
+          // 添加到注释：选颜色 → 高亮选取段落 + 译文作注解。流结束后才可用
+          // （注解内容是完整译文）。
+          if (widget.onAddNote != null && _done)
+            PopupMenuButton<String>(
+              enabled: !_noteAdded,
+              icon: Icon(
+                _noteAdded
+                    ? Symbols.check_circle_rounded
+                    : Symbols.bookmark_add_rounded,
+                size: 20,
+                color: _noteAdded ? cs.primary : cs.onSurfaceVariant,
+              ),
+              tooltip: context.l10n.addToNote,
+              // 与 toolbar 色盘同款横排圆点，配色随对话框主题
+              color: cs.surfaceContainerHigh,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              // 成功反馈靠按钮自身（图标变 ✓ + 触觉）：snackbar 渲染在
+              // 页面 Scaffold 层，会被对话框的模糊 barrier 盖住，看不见。
+              onSelected: (color) {
+                Haptics.soft();
+                widget.onAddNote!(color, copyTranslation);
+                setState(() => _noteAdded = true);
+              },
+              itemBuilder: (menuContext) => [
+                PopupMenuItem<String>(
+                  enabled: false,
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final color in kHighlightColors)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: TactilePress(
+                            onTap: () =>
+                                Navigator.pop(menuContext, color),
+                            baseColor: Colors.transparent,
+                            borderRadius: BorderRadius.circular(11),
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(int.parse('0xFF$color'))
+                                    .withAlpha(200),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           PopupMenuButton<String>(
             icon: Icon(
               Symbols.content_copy_rounded,

@@ -198,12 +198,18 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     final buster = _figuresCacheBuster();
     final inset = widget.topInset;
     final path = _htmlFilePath;
+    // server root/port 在主 isolate 取出传入——isolate 内单例未初始化，
+    // 否则 file://→localhost 重写失效、图片裂成 alt 文本（见 _serverUrlForPath）。
+    final serverRoot = ReaderLocalhostServer.instance.root;
+    final serverPort = ReaderLocalhostServer.instance.port;
     await Isolate.run(() {
       final html = buildReaderHtml(
         markdownContent: markdown,
         palette: palette,
         settings: settings,
         baseHref: baseHref,
+        serverRoot: serverRoot,
+        serverPort: serverPort,
         translationStyleId: styleId,
         imageCacheBuster: buster,
         topInset: inset,
@@ -294,6 +300,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   void scrollToSearchResult(int index) => _bridge?.scrollToSearchResult(index);
 
   void activateNearestSearchResult() => _bridge?.activateNearestSearchResult();
+
+  void clearSelection() => _bridge?.clearSelection();
 
   void flashImage(String filename) => _bridge?.flashImage(filename);
 

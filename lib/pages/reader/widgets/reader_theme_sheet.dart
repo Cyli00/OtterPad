@@ -65,18 +65,6 @@ class ReaderThemeSheetBody extends ConsumerWidget {
                 ref.read(readerSettingsProvider.notifier).setTheme(t);
               },
             ),
-
-            const SizedBox(height: 20),
-
-            // ── 工具栏透明度 ──
-            _sectionLabel(theme, cs, Symbols.blur_on_rounded, context.l10n.toolbarOpacity),
-            const SizedBox(height: 12),
-            _OpacityRow(
-              current: readerSettings.toolbarOpacity,
-              onChanged: (o) => ref
-                  .read(readerSettingsProvider.notifier)
-                  .setToolbarOpacity(o),
-            ),
           ],
         ),
       ),
@@ -223,97 +211,6 @@ class _ColorDot extends StatelessWidget {
       ),
     );
   }
-}
-
-// ── 工具栏透明度选择行：4 档预设，视觉对齐背景选择行 ──
-
-class _OpacityRow extends StatelessWidget {
-  final ToolbarOpacity current;
-  final ValueChanged<ToolbarOpacity> onChanged;
-
-  const _OpacityRow({required this.current, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Row(
-      children: ToolbarOpacity.values.map((o) {
-        final selected = o == current;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              right: o != ToolbarOpacity.values.last ? 10 : 0,
-            ),
-            child: GestureDetector(
-              onTap: () {
-                Haptics.soft();
-                onChanged(o);
-              },
-              child: Column(
-                children: [
-                  AnimatedContainer(
-                    duration: kAnimFast,
-                    curve: kAnimCurve,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: selected ? cs.primary : cs.outlineVariant,
-                        width: selected ? 2.5 : 1,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(13.5),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          CustomPaint(painter: _CheckerPainter(cs: cs)),
-                          ColoredBox(
-                            color: cs.surface.withValues(alpha: o.value),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    o.label,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: selected ? cs.primary : cs.onSurfaceVariant,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-/// 棋盘格底纹，用来直观展示透明度差异
-class _CheckerPainter extends CustomPainter {
-  final ColorScheme cs;
-  _CheckerPainter({required this.cs});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const step = 8.0;
-    final light = Paint()..color = cs.surfaceContainerHighest;
-    final dark = Paint()..color = cs.outlineVariant.withAlpha(60);
-    for (var y = 0.0; y < size.height; y += step) {
-      for (var x = 0.0; x < size.width; x += step) {
-        final isEven = ((x ~/ step) + (y ~/ step)) % 2 == 0;
-        canvas.drawRect(Rect.fromLTWH(x, y, step, step), isEven ? light : dark);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CheckerPainter old) => cs != old.cs;
 }
 
 // ── 背景选择行：5 个圆形色块对应 ReaderTheme ──
