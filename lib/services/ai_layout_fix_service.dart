@@ -12,85 +12,81 @@ import '../providers/api_provider.dart';
 import '../utils/doc_paths.dart';
 import 'agent_model_capability.dart';
 import 'agent_thinking_payload.dart';
+import 'figure_extract_service.dart';
 import 'pdf_process_lock.dart';
+import 'prompts.dart';
 
-class NumberedParagraph {
-  final int id;
-  final String content;
-  const NumberedParagraph(this.id, this.content);
-}
-
-/// 单个批次：一组目标 PDF 页 + 落在这些页上的图片清单条目与公式段落。
+/// 单个批次：一组目标 PDF 页 + 落在这些页上的图片清单条目。
 /// 按批调用可控制单请求体积（Gemini inline 上限 20MB）、避免输出超长截断，
 /// 并支持批间进度展示与失败重试。
 class AiLayoutFixChunk {
   final List<int> pages;
-  final List<NumberedParagraph> paragraphs;
   final List<Map<String, dynamic>> figures;
 
   AiLayoutFixChunk({
     required this.pages,
-    List<NumberedParagraph>? paragraphs,
     List<Map<String, dynamic>>? figures,
-  })  : paragraphs = paragraphs ?? [],
-        figures = figures ?? [];
+  }) : figures = figures ?? [];
 }
 
 class AiLayoutFixAnalysis {
   final String documentId;
   final String pdfPath;
-  final String mdPath;
-  final String mdContent;
-  final List<String> allParagraphs;
   final List<int> targetPages;
-  final List<NumberedParagraph> formulaParagraphs;
   final Map<String, dynamic> currentManifest;
   final List<AiLayoutFixChunk> chunks;
+
+  /// 每页 main caption 块的 bbox（144 DPI）——applyResults 用它做
+  /// "caption 不入框" 的机械校验（与 FigureExtractService 的
+  /// trimCaptionFromRegion 契约对齐）。
+  final Map<int, List<List<double>>> captionBlocksByPage;
   final int estimatedTokens;
 
   const AiLayoutFixAnalysis({
     required this.documentId,
     required this.pdfPath,
-    required this.mdPath,
-    required this.mdContent,
-    required this.allParagraphs,
     required this.targetPages,
-    required this.formulaParagraphs,
     required this.currentManifest,
     required this.chunks,
+    required this.captionBlocksByPage,
     required this.estimatedTokens,
   });
 
-  bool get isEmpty =>
-      formulaParagraphs.isEmpty &&
-      ((currentManifest['figures'] as List?)?.isEmpty ?? true);
+  int get figureCount =>
+      (currentManifest['figures'] as List?)?.length ?? 0;
+
+  bool get isEmpty => targetPages.isEmpty;
 }
 
-/// execute() 的产物：校验通过的段落修复 + 图片清单（crop_bbox 已转回 144 DPI）。
+/// execute() 的产物——纯增量语义：未提及的条目一律保留原状。
 class AiLayoutFixResult {
-  /// 段落 id → 修复后内容（仅含确有改动且通过校验的段落）。
-  final Map<int, String> paragraphs;
+  /// 修复条目（img 已通过送审白名单校验）：
+  /// {img, page_idx, crop_bbox?(144 DPI), figure_title?, subfigures}。
+  /// crop_bbox / figure_title 缺失 = 该字段无改动。
+  final List<Map<String, dynamic>> fixes;
 
-  /// LLM 返回并通过校验的图片条目：{img, figure_title, page_idx, crop_bbox}。
-  final List<Map<String, dynamic>> figures;
+  /// 模型发现的漏检图：{page_idx, crop_bbox, figure_title?, subfigures}。
+  /// img 文件名由 applyResults 生成，模型无命名权。
+  final List<Map<String, dynamic>> additions;
 
-  /// LLM 实际审阅过的页（渲染成功并送入模型）。manifest 合并时只对这些页
-  /// 做"整页替换"，渲染失败页上的旧条目原样保留。
-  final Set<int> coveredPages;
+  /// 显式删除白名单（仅含送审清单中存在的 img）。
+  final Set<String> removals;
 
   const AiLayoutFixResult({
-    required this.paragraphs,
-    required this.figures,
-    required this.coveredPages,
+    required this.fixes,
+    required this.additions,
+    required this.removals,
   });
 }
 
 class AiLayoutFixSummary {
-  final int paragraphsFixed;
   final int figuresAdjusted;
+  final int figuresAdded;
+  final int figuresRemoved;
   const AiLayoutFixSummary({
-    required this.paragraphsFixed,
     required this.figuresAdjusted,
+    required this.figuresAdded,
+    required this.figuresRemoved,
   });
 }
 
@@ -107,7 +103,11 @@ class _PageImage {
   });
 }
 
-/// AI 排版修复服务：多模态 LLM 修正公式排版 + 图片重提。
+/// AI 排版修复服务：多模态 LLM 审核 figure 裁剪区域。
+///
+/// 任务边界：bbox 边缘修复（子图与 (a)/(b) 序号标签完整入框、main caption
+/// 排除）+ figure_title 纠错/补缺 + 新增漏检图 + 显式 remove 删除。
+/// 纯增量语义——模型未提及的条目一律保留原状，没有"整页替换"。
 ///
 /// 与模型交换 bbox 时统一用 **0–1000 归一化坐标**（Gemini 用其原生
 /// [ymin,xmin,ymax,xmax] 顺序，其余服务商用 [left,top,right,bottom]）：
@@ -122,73 +122,64 @@ class AiLayoutFixService {
   static const _llmZoom = 2.0;
   static const _maxPagesPerChunk = 5;
 
-  static final _formulaRe = RegExp(r'\$');
-  static final _unescapedDollarRe = RegExp(r'(?<!\\)\$');
-
   // ── Step 1: 分析 ─────────────────────────────────────────
 
   static Future<AiLayoutFixAnalysis> analyze({
     required String documentId,
   }) async {
     final pdfPath = DocPaths.pdf(documentId);
-    final mdPath = DocPaths.md(documentId);
     final jsonPath = DocPaths.json(documentId);
     final manifestPath = DocPaths.figuresManifest(documentId);
 
-    final mdFile = File(mdPath);
-    if (!mdFile.existsSync()) throw Exception('Markdown 文件不存在');
-    final mdContent = await mdFile.readAsString();
-
-    final allParagraphs = mdContent.split(RegExp(r'\n\s*\n'));
-
-    final formulaParagraphs = <NumberedParagraph>[];
-    for (var i = 0; i < allParagraphs.length; i++) {
-      final para = allParagraphs[i].trim();
-      if (para.isEmpty) continue;
-      if (para.startsWith('#')) continue;
-      if (para.startsWith('![')) continue;
-      if (_formulaRe.hasMatch(para)) {
-        formulaParagraphs.add(NumberedParagraph(i, para));
-      }
-    }
+    // main caption 判定与提取管线同源（caption 配置从 assets 加载）
+    await FigureExtractService.instance.init();
 
     final targetPages = <int>{};
-    final pageMdNorm = <int, String>{};
+    final captionBlocksByPage = <int, List<List<double>>>{};
     final extractFile = File(jsonPath);
     if (extractFile.existsSync()) {
-      final extractData =
-          jsonDecode(await extractFile.readAsString()) as Map<String, dynamic>;
-      final pages =
-          extractData['layoutParsingResults'] as List<dynamic>? ?? [];
+      final decoded = jsonDecode(await extractFile.readAsString());
+      final List<dynamic> pages;
+      if (decoded is Map<String, dynamic>) {
+        pages = decoded['layoutParsingResults'] as List<dynamic>? ?? [];
+      } else if (decoded is List<dynamic>) {
+        pages = decoded;
+      } else {
+        pages = [];
+      }
 
-      for (final page in pages) {
-        final pageMap = page as Map<String, dynamic>;
-        final pageIdx = pageMap['page_index'] as int;
+      for (var pi = 0; pi < pages.length; pi++) {
+        final pageMap = pages[pi] as Map<String, dynamic>;
+        final pageIdx = (pageMap['page_index'] as int?) ?? pi;
         final blocks = (pageMap['prunedResult']
                     as Map<String, dynamic>?)?['parsing_res_list']
                 as List<dynamic>? ??
             [];
 
         for (final block in blocks) {
-          final label =
-              (block as Map<String, dynamic>)['block_label'] as String?;
+          final b = block as Map<String, dynamic>;
+          final label = b['block_label'] as String?;
           if (label == 'image' || label == 'chart') {
             targetPages.add(pageIdx);
-            break;
+          } else if (label == 'figure_title' &&
+              FigureExtractService.instance
+                  .isMainCaption(b['block_content'] as String? ?? '')) {
+            // main caption 块 bbox（144 DPI）→ "caption 不入框" 输出校验
+            final bbox = (b['block_bbox'] as List<dynamic>?)
+                ?.map((v) => (v as num).toDouble())
+                .toList();
+            if (bbox != null && bbox.length == 4) {
+              captionBlocksByPage.putIfAbsent(pageIdx, () => []).add(bbox);
+            }
           }
-        }
-
-        final pageMd = (pageMap['markdown']
-                as Map<String, dynamic>?)?['text'] as String? ??
-            '';
-        pageMdNorm[pageIdx] = _normalizeWs(pageMd);
-        if (_formulaRe.hasMatch(pageMd)) {
-          targetPages.add(pageIdx);
         }
       }
     }
 
-    var manifest = <String, dynamic>{'figures': <dynamic>[], 'diagnostics': <String, dynamic>{}};
+    var manifest = <String, dynamic>{
+      'figures': <dynamic>[],
+      'diagnostics': <String, dynamic>{},
+    };
     final manifestFile = File(manifestPath);
     if (manifestFile.existsSync()) {
       manifest =
@@ -204,21 +195,6 @@ class AiLayoutFixService {
       if (page is int) targetPages.add(page);
     }
 
-    // 公式段落 → 来源页映射（按归一化文本片段在页 markdown 中查找）。
-    // 用于分批；找不到来源页的段落归入第一批。
-    final paragraphPages = <int, int>{};
-    for (final fp in formulaParagraphs) {
-      final snippet = _snippetOf(fp.content);
-      if (snippet.length < 16) continue;
-      for (final entry in pageMdNorm.entries) {
-        if (entry.value.contains(snippet)) {
-          paragraphPages[fp.id] = entry.key;
-          targetPages.add(entry.key);
-          break;
-        }
-      }
-    }
-
     // ── 组装批次 ──
     final sortedPages = targetPages.toList()..sort();
     final chunks = <AiLayoutFixChunk>[];
@@ -229,10 +205,6 @@ class AiLayoutFixService {
           math.min(i + _maxPagesPerChunk, sortedPages.length),
         ),
       ));
-    }
-    if (chunks.isEmpty && formulaParagraphs.isNotEmpty) {
-      // 无 extract.json / 无目标页：退化为单个纯文本批次
-      chunks.add(AiLayoutFixChunk(pages: const []));
     }
     final chunkOfPage = <int, AiLayoutFixChunk>{
       for (final c in chunks)
@@ -248,44 +220,23 @@ class AiLayoutFixService {
         'crop_bbox': f['crop_bbox'],
       });
     }
-    if (chunks.isNotEmpty) {
-      for (final fp in formulaParagraphs) {
-        final page = paragraphPages[fp.id];
-        final chunk = (page != null ? chunkOfPage[page] : null) ?? chunks.first;
-        chunk.paragraphs.add(fp);
-      }
-    }
 
     // 粗略估算：高 detail 下主流服务商单页约 1500~2600 token，取 2500；
-    // 输出只回传有改动的段落（按约一半改动率估）+ 图片清单
+    // 输出为增量修复条目，按清单体量的 1/3 估
     final imageTokens = sortedPages.length * 2500;
     final figuresJson = jsonEncode(manifest['figures']);
-    final paragraphsText =
-        formulaParagraphs.map((fp) => '[${fp.id}] ${fp.content}').join('\n\n');
-    final textTokens = (figuresJson.length + paragraphsText.length + 800) ~/ 4;
-    final outputTokens =
-        figuresJson.length ~/ 3 + paragraphsText.length ~/ 8;
+    final textTokens = (figuresJson.length + 1200) ~/ 4;
+    final outputTokens = figuresJson.length ~/ 3;
 
     return AiLayoutFixAnalysis(
       documentId: documentId,
       pdfPath: pdfPath,
-      mdPath: mdPath,
-      mdContent: mdContent,
-      allParagraphs: allParagraphs,
       targetPages: sortedPages,
-      formulaParagraphs: formulaParagraphs,
       currentManifest: manifest,
       chunks: chunks,
+      captionBlocksByPage: captionBlocksByPage,
       estimatedTokens: imageTokens + textTokens + outputTokens,
     );
-  }
-
-  static String _normalizeWs(String s) =>
-      s.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-  static String _snippetOf(String paragraph) {
-    final n = _normalizeWs(paragraph);
-    return n.length > 60 ? n.substring(0, 60) : n;
   }
 
   // ── Step 2: 分批调用 LLM ─────────────────────────────────
@@ -302,11 +253,11 @@ class AiLayoutFixService {
 
     // Gemini 原生 bbox 训练约定是 [ymin,xmin,ymax,xmax]，沿用可提高定位精度
     final yFirst = agentState.provider == AgentApiProvider.gemini;
-    final systemPrompt = _systemPrompt(yFirst: yFirst);
+    final systemPrompt = Prompts.layoutFixSystem(yFirst: yFirst);
 
-    final outParagraphs = <int, String>{};
-    final outFigures = <Map<String, dynamic>>[];
-    final coveredPages = <int>{};
+    final outFixes = <Map<String, dynamic>>[];
+    final outAdditions = <Map<String, dynamic>>[];
+    final outRemovals = <String>{};
 
     final total = analysis.chunks.length;
     for (var i = 0; i < total; i++) {
@@ -317,24 +268,20 @@ class AiLayoutFixService {
       final pageImages =
           await _renderPages(analysis.pdfPath, chunk.pages, cancelToken);
       if (cancelToken.isCancelled) break;
+      if (pageImages.isEmpty) continue;
       final imagesByPage = <int, _PageImage>{
         for (final pi in pageImages) pi.pageIdx: pi,
       };
 
-      // 渲染失败的页退出本批：图片条目保留原状、段落不做无对照的盲改
+      // 渲染失败的页退出本批，其条目不送审——增量语义下天然保留原状。
+      // figures 可以为空：有视觉块但无 manifest 条目的页仍要送审（漏检场景）。
       final figures = chunk.figures
           .where((f) => imagesByPage.containsKey(f['page_idx']))
           .toList();
-      final paragraphs = chunk.paragraphs.where((fp) {
-        if (chunk.pages.isEmpty) return true; // 纯文本批次
-        return imagesByPage.isNotEmpty;
-      }).toList();
-      if (figures.isEmpty && paragraphs.isEmpty) continue;
 
       onProgress('calling', i + 1, total);
       final userPrompt = _buildUserPrompt(
         figures: figures,
-        paragraphs: paragraphs,
         imagesByPage: imagesByPage,
         yFirst: yFirst,
       );
@@ -352,20 +299,19 @@ class AiLayoutFixService {
 
       _mergeChunkResult(
         parsed: _parseJsonResponse(response),
-        sentParagraphs: paragraphs,
         chunkFigures: figures,
         imagesByPage: imagesByPage,
         yFirst: yFirst,
-        outParagraphs: outParagraphs,
-        outFigures: outFigures,
+        outFixes: outFixes,
+        outAdditions: outAdditions,
+        outRemovals: outRemovals,
       );
-      coveredPages.addAll(imagesByPage.keys);
     }
 
     return AiLayoutFixResult(
-      paragraphs: outParagraphs,
-      figures: outFigures,
-      coveredPages: coveredPages,
+      fixes: outFixes,
+      additions: outAdditions,
+      removals: outRemovals,
     );
   }
 
@@ -379,77 +325,88 @@ class AiLayoutFixService {
   }) async {
     onProgress('applying', 1, 1);
 
-    final updatedParagraphs = List<String>.from(analysis.allParagraphs);
-    var paragraphsFixed = 0;
-    result.paragraphs.forEach((id, content) {
-      if (id >= 0 && id < updatedParagraphs.length) {
-        updatedParagraphs[id] = content;
-        paragraphsFixed++;
-      }
-    });
-    await File(analysis.mdPath).writeAsString(updatedParagraphs.join('\n\n'));
-
-    onProgress('cropping', 1, 1);
-
     final existingFigures =
         (analysis.currentManifest['figures'] as List<dynamic>? ?? [])
             .map((f) => Map<String, dynamic>.from(f as Map))
             .toList();
 
-    // 只对模型实际审阅过的页做"整页替换"；其余页旧条目原样保留
-    final kept = <Map<String, dynamic>>[];
-    final coveredByImg = <String, Map<String, dynamic>>{};
-    for (final f in existingFigures) {
-      final page = f['page_idx'];
-      if (page is int && result.coveredPages.contains(page)) {
-        coveredByImg[f['img'] as String] = f;
-      } else {
-        kept.add(f);
-      }
-    }
+    // 1. 显式删除（白名单在 merge 阶段已校验）
+    final kept = existingFigures
+        .where((f) => !result.removals.contains(f['img']))
+        .toList();
+    final byImg = <String, Map<String, dynamic>>{
+      for (final f in kept) f['img'] as String: f,
+    };
 
-    final merged = <Map<String, dynamic>>[];
+    // 2. 按 img 增量更新；bbox 先过 "caption 不入框" 机械校验
     final figuresToRecrop = <Map<String, dynamic>>[];
-    final seenImgs = <String>{};
-    for (final lf in result.figures) {
-      final img = lf['img'] as String;
-      if (!seenImgs.add(img)) continue;
-      final existing = coveredByImg.remove(img);
+    final subfigureDiag = <String, dynamic>{};
+    var adjusted = 0;
+    for (final fix in result.fixes) {
+      final target = byImg[fix['img'] as String];
+      if (target == null) continue; // 同条目被 remove 时 remove 优先
 
-      if (existing != null) {
-        final m = Map<String, dynamic>.from(existing);
-        if (lf['figure_title'] != null) m['figure_title'] = lf['figure_title'];
-        m['page_idx'] = lf['page_idx'];
-
-        final newBbox = lf['crop_bbox'] as List<dynamic>;
-        if (_bboxChanged(existing['crop_bbox'] as List<dynamic>?, newBbox)) {
-          m['crop_bbox'] = newBbox;
-          m['region_method'] = 'ai_layout_fix';
-          figuresToRecrop.add(m);
+      var changed = false;
+      final title = fix['figure_title'];
+      if (title is String && title != target['figure_title']) {
+        target['figure_title'] = title;
+        changed = true;
+      }
+      final newBbox = fix['crop_bbox'];
+      if (newBbox is List) {
+        final pageIdx = fix['page_idx'] as int;
+        final trimmed = _trimCaptionOverlap(
+          newBbox.map((v) => (v as num).toDouble()).toList(),
+          analysis.captionBlocksByPage[pageIdx] ?? const [],
+        );
+        if (_bboxChanged(target['crop_bbox'] as List<dynamic>?, trimmed)) {
+          target['crop_bbox'] = trimmed;
+          target['page_idx'] = pageIdx;
+          target['region_method'] = 'ai_layout_fix';
+          figuresToRecrop.add(target);
+          changed = true;
         }
-        merged.add(m);
-      } else {
-        final newEntry = <String, dynamic>{
-          'img': img,
-          'figure_title': lf['figure_title'],
-          'page_idx': lf['page_idx'],
-          'crop_bbox': lf['crop_bbox'],
-          'block_ids': <String>[],
-          'region_method': 'ai_layout_fix',
-        };
-        merged.add(newEntry);
-        figuresToRecrop.add(newEntry);
+      }
+      if (changed) {
+        adjusted++;
+        subfigureDiag[fix['img'] as String] = fix['subfigures'];
       }
     }
-    // 覆盖页上模型未回传的条目 = 模型判定不是真图片 → 删除
-    final removedCount = coveredByImg.length;
 
+    // 3. 新增漏检图：文件名由客户端生成，避开 manifest 与磁盘已有名字
+    final outputDir = DocPaths.figuresDir(analysis.documentId);
+    final usedImgs = kept.map((f) => f['img'] as String).toSet();
+    for (final add in result.additions) {
+      final pageIdx = add['page_idx'] as int;
+      final trimmed = _trimCaptionOverlap(
+        (add['crop_bbox'] as List)
+            .map((v) => (v as num).toDouble())
+            .toList(),
+        analysis.captionBlocksByPage[pageIdx] ?? const [],
+      );
+      final img = _nextAiFixName(outputDir, usedImgs, pageIdx);
+      usedImgs.add(img);
+      final entry = <String, dynamic>{
+        'img': img,
+        'figure_title': add['figure_title'],
+        'page_idx': pageIdx,
+        'crop_bbox': trimmed,
+        'block_ids': <String>[],
+        'region_method': 'ai_layout_fix',
+      };
+      kept.add(entry);
+      figuresToRecrop.add(entry);
+      subfigureDiag[img] = add['subfigures'];
+    }
+
+    onProgress('cropping', 1, 1);
     if (figuresToRecrop.isNotEmpty && !cancelToken.isCancelled) {
-      await _recropFigures(analysis.pdfPath, analysis.documentId, figuresToRecrop);
+      await _recropFigures(
+          analysis.pdfPath, analysis.documentId, figuresToRecrop);
     }
 
     // 稳定按页排序（Dart sort 不稳定，用原序号兜底）
-    final indexed = [...kept, ...merged].asMap().entries.toList()
+    final indexed = kept.asMap().entries.toList()
       ..sort((a, b) {
         final pa = a.value['page_idx'] is int
             ? a.value['page_idx'] as int
@@ -461,54 +418,80 @@ class AiLayoutFixService {
         return c != 0 ? c : a.key.compareTo(b.key);
       });
 
+    // 模型的子图枚举入 diagnostics 留诊断线索（客户端不校验其内容）
+    final diagnostics = Map<String, dynamic>.from(
+        analysis.currentManifest['diagnostics'] as Map? ?? {});
+    if (subfigureDiag.isNotEmpty) {
+      diagnostics['ai_layout_fix_subfigures'] = subfigureDiag;
+    }
+
     final manifestPath = DocPaths.figuresManifest(analysis.documentId);
     await File(manifestPath).writeAsString(
       const JsonEncoder.withIndent('  ').convert({
         'figures': indexed.map((e) => e.value).toList(),
-        'diagnostics': analysis.currentManifest['diagnostics'] ?? {},
+        'diagnostics': diagnostics,
       }),
     );
 
     return AiLayoutFixSummary(
-      paragraphsFixed: paragraphsFixed,
-      figuresAdjusted: figuresToRecrop.length + removedCount,
+      figuresAdjusted: adjusted,
+      figuresAdded: result.additions.length,
+      figuresRemoved: result.removals.length,
     );
+  }
+
+  /// 生成新增图文件名 `ai_fix_p{page}_{n}.png`——模型无命名权（消灭重名/
+  /// 格式幻觉面）。跳过 manifest 已占用与磁盘已存在的名字。
+  static String _nextAiFixName(
+    String outputDir,
+    Set<String> usedImgs,
+    int pageIdx,
+  ) {
+    for (var n = 1;; n++) {
+      final name = 'ai_fix_p${pageIdx}_$n.png';
+      if (usedImgs.contains(name)) continue;
+      if (File(p.join(outputDir, name)).existsSync()) continue;
+      return name;
+    }
+  }
+
+  /// "caption 不入框" 机械校验：bbox 与 main caption 块重叠超过 caption
+  /// 自身面积 50% 时，从损失面积最小的方向把 bbox 裁到 caption 边界外
+  /// （与 FigureExtractService.trimCaptionFromRegion 的 4 方向思路一致）。
+  /// 50% 容差防御 PaddleOCR caption 块本身框错位置时裁坏 AI 的正确修复；
+  /// 裁完区域翻转/塌缩则放弃裁剪，保留模型原框。
+  static List<double> _trimCaptionOverlap(
+    List<double> bbox,
+    List<List<double>> captions,
+  ) {
+    var l = bbox[0], t = bbox[1], r = bbox[2], b = bbox[3];
+    for (final c in captions) {
+      final ow = math.min(r, c[2]) - math.max(l, c[0]);
+      final oh = math.min(b, c[3]) - math.max(t, c[1]);
+      if (ow <= 0 || oh <= 0) continue;
+      final capArea = (c[2] - c[0]) * (c[3] - c[1]);
+      if (capArea <= 0 || ow * oh < capArea * 0.5) continue;
+
+      // 4 方向 trim 候选，选损失面积最小的
+      final candidates = <(double, void Function())>[
+        if (c[1] > t) ((b - c[1]) * (r - l), () => b = c[1]),
+        if (c[3] < b) ((c[3] - t) * (r - l), () => t = c[3]),
+        if (c[0] > l) ((r - c[0]) * (b - t), () => r = c[0]),
+        if (c[2] < r) ((c[2] - l) * (b - t), () => l = c[2]),
+      ];
+      if (candidates.isEmpty) continue;
+      candidates.reduce((a, x) => x.$1 < a.$1 ? x : a).$2();
+    }
+    if (r - l <= 0 || b - t <= 0) return bbox;
+    return [l, t, r, b];
   }
 
   // ── Prompt 构造 ─────────────────────────────────────────
 
-  static String _systemPrompt({required bool yFirst}) {
-    final order =
-        yFirst ? '[ymin, xmin, ymax, xmax]' : '[left, top, right, bottom]';
-    return 'You are an academic document layout expert. You receive rendered '
-        'PDF page images (each labeled with its page index and pixel size), '
-        'a figures manifest, and numbered formula paragraphs extracted from '
-        'a paper.\n\n'
-        'Tasks:\n'
-        '1. FIGURES: Compare the manifest against the page images. Correct '
-        'bbox, figure_title and page_idx; add figures the extraction missed; '
-        'omit entries that are not real figures (omission means deletion). '
-        'Keep the exact original "img" value for existing figures; for new '
-        'figures use "img": "ai_fix_p<page>_<n>.png".\n'
-        '2. FORMULAS: Compare each numbered paragraph against the page '
-        r'images. Fix LaTeX OCR errors, formula delimiters ($ inline, $$ '
-        'display) and broken line structure inside the paragraph. Never '
-        'rewrite prose: keep all non-formula wording exactly as given.\n\n'
-        'All bounding boxes are $order with integer coordinates normalized '
-        "to 0-1000 relative to that page image's width and height.\n\n"
-        'Respond with JSON only, exactly this shape:\n'
-        '{"figures":[{"img":"...","figure_title":"...","page_idx":0,'
-        '"bbox":[0,0,0,0]}],"paragraphs":[{"id":0,"content":"..."}]}\n\n'
-        'Rules:\n'
-        '- Return ONLY paragraphs you actually changed, with their original '
-        'ids; return an empty list if none need fixing.\n'
-        '- Return the complete corrected figure list for the pages shown.\n'
-        '- No text outside the JSON.';
-  }
+  // system prompt 措辞在 Prompt Registry：Prompts.layoutFixSystem(yFirst:)
 
   static String _buildUserPrompt({
     required List<Map<String, dynamic>> figures,
-    required List<NumberedParagraph> paragraphs,
     required Map<int, _PageImage> imagesByPage,
     required bool yFirst,
   }) {
@@ -522,17 +505,15 @@ class AiLayoutFixService {
       };
     }).toList();
 
-    final paragraphsText =
-        paragraphs.map((fp) => '[${fp.id}] ${fp.content}').join('\n\n');
-
     return (StringBuffer()
-          ..writeln('## Current figures manifest (for the pages shown)')
+          ..writeln(Prompts.layoutFixUserManifestHeader)
           ..writeln('```json')
           ..writeln(const JsonEncoder.withIndent('  ').convert(promptFigures))
           ..writeln('```')
           ..writeln()
-          ..writeln('## Formula paragraphs')
-          ..writeln(paragraphsText.isEmpty ? '(none)' : paragraphsText))
+          ..writeln(promptFigures.isEmpty
+              ? Prompts.layoutFixUserScanHint
+              : Prompts.layoutFixUserAuditHint))
         .toString();
   }
 
@@ -561,63 +542,73 @@ class AiLayoutFixService {
 
   static void _mergeChunkResult({
     required Map<String, dynamic> parsed,
-    required List<NumberedParagraph> sentParagraphs,
     required List<Map<String, dynamic>> chunkFigures,
     required Map<int, _PageImage> imagesByPage,
     required bool yFirst,
-    required Map<int, String> outParagraphs,
-    required List<Map<String, dynamic>> outFigures,
+    required List<Map<String, dynamic>> outFixes,
+    required List<Map<String, dynamic>> outAdditions,
+    required Set<String> outRemovals,
   }) {
-    final sentById = <int, String>{
-      for (final fp in sentParagraphs) fp.id: fp.content,
-    };
-    for (final entry in parsed['paragraphs'] as List<dynamic>? ?? const []) {
+    final sentImgs = {for (final f in chunkFigures) f['img'] as String};
+
+    for (final entry in parsed['fixes'] as List<dynamic>? ?? const []) {
       if (entry is! Map) continue;
-      final id = entry['id'];
-      final content = entry['content'];
-      if (id is! int || content is! String) continue;
-      final original = sentById[id];
-      if (original == null) continue; // 模型编造了未发送的段落 id
-      final fixed = content.trim();
-      if (fixed.isEmpty || fixed == original.trim()) continue;
-      // $ 定界符必须成对，防止半截公式污染整篇渲染
-      if (_unescapedDollarRe.allMatches(fixed).length.isOdd) continue;
-      outParagraphs[id] = fixed;
+      final img = entry['img'];
+      // img 白名单：只接受本批送审的条目，模型编造的名字直接丢弃
+      if (img is! String || !sentImgs.contains(img)) continue;
+      final pageIdx = entry['page_idx'];
+      final pi = pageIdx is int ? imagesByPage[pageIdx] : null;
+      if (pi == null) continue;
+
+      final crop = _bbox1000ToCrop(entry['bbox'], pi, yFirst);
+      final title = entry['figure_title'];
+      final hasTitle = title is String && title.trim().isNotEmpty;
+      if (crop == null && !hasTitle) continue; // 无实质改动
+      outFixes.add({
+        'img': img,
+        'page_idx': pageIdx,
+        'crop_bbox': ?crop,
+        if (hasTitle) 'figure_title': title.trim(),
+        'subfigures': _stringList(entry['subfigures']),
+      });
     }
 
-    final existingByImg = <String, Map<String, dynamic>>{
-      for (final f in chunkFigures) f['img'] as String: f,
-    };
-    for (final entry in parsed['figures'] as List<dynamic>? ?? const []) {
+    for (final entry in parsed['additions'] as List<dynamic>? ?? const []) {
       if (entry is! Map) continue;
-      final validated =
-          _validateFigure(Map<String, dynamic>.from(entry), imagesByPage, yFirst);
-      if (validated != null) {
-        outFigures.add(validated);
-      } else {
-        // 条目无效但对应已有图片——保留原条目，避免被"整页替换"语义误删
-        final img = entry['img'];
-        final existing = img is String ? existingByImg[img] : null;
-        if (existing != null) {
-          outFigures.add(Map<String, dynamic>.from(existing));
-        }
+      final pageIdx = entry['page_idx'];
+      final pi = pageIdx is int ? imagesByPage[pageIdx] : null;
+      if (pi == null) continue;
+      final crop = _bbox1000ToCrop(entry['bbox'], pi, yFirst);
+      if (crop == null) continue; // 新增条目必须有有效框
+      final title = entry['figure_title'];
+      outAdditions.add({
+        'page_idx': pageIdx,
+        'crop_bbox': crop,
+        'figure_title': (title is String && title.trim().isNotEmpty)
+            ? title.trim()
+            : null,
+        'subfigures': _stringList(entry['subfigures']),
+      });
+    }
+
+    for (final entry in parsed['remove'] as List<dynamic>? ?? const []) {
+      // 与 fixes 同款白名单：只能删本批送审过的条目
+      if (entry is String && sentImgs.contains(entry)) {
+        outRemovals.add(entry);
       }
     }
   }
 
-  static Map<String, dynamic>? _validateFigure(
-    Map<String, dynamic> lf,
-    Map<int, _PageImage> imagesByPage,
+  static List<String> _stringList(dynamic v) =>
+      v is List ? v.whereType<String>().toList() : const [];
+
+  /// 0-1000 归一化 bbox → 144 DPI crop_bbox。无效（非 4 元数组 / 过小
+  /// 不足页面 1%）返回 null。
+  static List<double>? _bbox1000ToCrop(
+    dynamic bbox,
+    _PageImage pi,
     bool yFirst,
   ) {
-    final img = lf['img'];
-    if (img is! String || img.trim().isEmpty) return null;
-    final pageIdx = lf['page_idx'];
-    if (pageIdx is! int) return null;
-    final pi = imagesByPage[pageIdx];
-    if (pi == null) return null;
-
-    final bbox = lf['bbox'];
     if (bbox is! List || bbox.length != 4 || bbox.any((v) => v is! num)) {
       return null;
     }
@@ -628,25 +619,16 @@ class AiLayoutFixService {
     final t = yFirst ? n[0] : n[1];
     final r = yFirst ? n[3] : n[2];
     final b = yFirst ? n[2] : n[3];
-    // 过小（不足页面 1%）视为无效框
     if (r - l < 10 || b - t < 10) return null;
 
     final w144 = pi.widthPx / _llmZoom * _apiZoom;
     final h144 = pi.heightPx / _llmZoom * _apiZoom;
-    final title = lf['figure_title'];
-    return {
-      'img': img.trim(),
-      'figure_title': (title is String && title.trim().isNotEmpty)
-          ? title.trim()
-          : null,
-      'page_idx': pageIdx,
-      'crop_bbox': [
-        l / 1000 * w144,
-        t / 1000 * h144,
-        r / 1000 * w144,
-        b / 1000 * h144,
-      ],
-    };
+    return [
+      l / 1000 * w144,
+      t / 1000 * h144,
+      r / 1000 * w144,
+      b / 1000 * h144,
+    ];
   }
 
   // ── PDF 渲染 ────────────────────────────────────────────
@@ -1089,44 +1071,82 @@ class AiLayoutFixService {
   static Map<String, dynamic> _outputSchema({required bool yFirst}) {
     final bboxDesc = yFirst
         ? 'Bounding box [ymin, xmin, ymax, xmax], integers normalized to '
-            '0-1000 relative to the page image.'
+            '0-1000 relative to the page image — same convention as the '
+            'manifest bboxes in the input.'
         : 'Bounding box [left, top, right, bottom], integers normalized to '
-            '0-1000 relative to the page image.';
+            '0-1000 relative to the page image — same convention as the '
+            'manifest bboxes in the input.';
+    const subfiguresDesc =
+        'Sequence labels of every subfigure panel visible in this figure, '
+        'e.g. ["a","b","c"]. Empty for single-panel figures.';
+    final bboxSchema = {
+      'type': ['array', 'null'],
+      'items': {'type': 'integer'},
+      'description': '$bboxDesc Null = bbox unchanged.',
+    };
     return {
       'type': 'object',
       'properties': {
-        'figures': {
+        'fixes': {
           'type': 'array',
           'items': {
             'type': 'object',
             'properties': {
               'img': {'type': 'string'},
-              'figure_title': {'type': 'string'},
               'page_idx': {'type': 'integer'},
+              'subfigures': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': subfiguresDesc,
+              },
+              'bbox': bboxSchema,
+              'figure_title': {
+                'type': ['string', 'null'],
+                'description': 'Corrected title. Null = title unchanged.',
+              },
+            },
+            'required': [
+              'img',
+              'page_idx',
+              'subfigures',
+              'bbox',
+              'figure_title',
+            ],
+            'additionalProperties': false,
+          },
+        },
+        'additions': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'page_idx': {'type': 'integer'},
+              'subfigures': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': subfiguresDesc,
+              },
               'bbox': {
                 'type': 'array',
                 'items': {'type': 'integer'},
                 'description': bboxDesc,
               },
+              'figure_title': {
+                'type': ['string', 'null'],
+              },
             },
-            'required': ['img', 'figure_title', 'page_idx', 'bbox'],
+            'required': ['page_idx', 'subfigures', 'bbox', 'figure_title'],
             'additionalProperties': false,
           },
         },
-        'paragraphs': {
+        'remove': {
           'type': 'array',
-          'items': {
-            'type': 'object',
-            'properties': {
-              'id': {'type': 'integer'},
-              'content': {'type': 'string'},
-            },
-            'required': ['id', 'content'],
-            'additionalProperties': false,
-          },
+          'items': {'type': 'string'},
+          'description':
+              'img values (from the manifest) that are not real figures.',
         },
       },
-      'required': ['figures', 'paragraphs'],
+      'required': ['fixes', 'additions', 'remove'],
       'additionalProperties': false,
     };
   }
@@ -1222,7 +1242,16 @@ class AiLayoutFixService {
         cleaned = cleaned.substring(0, cleaned.length - 3);
       }
     }
-    return jsonDecode(cleaned.trim()) as Map<String, dynamic>;
+    final decoded = jsonDecode(cleaned.trim());
+    if (decoded is Map<String, dynamic>) return decoded;
+    if (decoded is List) {
+      if (decoded.length == 1 && decoded[0] is Map) {
+        return Map<String, dynamic>.from(decoded[0] as Map);
+      }
+      // 裸数组兜底：当作 fixes 列表（白名单校验会过滤掉不合法条目）
+      return {'fixes': decoded};
+    }
+    throw FormatException('Expected JSON object, got ${decoded.runtimeType}');
   }
 
   static bool _bboxChanged(List<dynamic>? old, List<dynamic>? updated) {

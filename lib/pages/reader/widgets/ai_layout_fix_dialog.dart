@@ -248,8 +248,8 @@ class _AiLayoutFixDialogState extends State<AiLayoutFixDialog> {
             _infoChip(
               cs,
               theme,
-              Symbols.function_rounded,
-              '${_analysis!.formulaParagraphs.length} paragraphs',
+              Symbols.photo_library_rounded,
+              l10n.aiLayoutFixFigureCount(_analysis!.figureCount),
             ),
           ],
         );
@@ -301,8 +301,9 @@ class _AiLayoutFixDialogState extends State<AiLayoutFixDialog> {
               const SizedBox(height: 8),
               Text(
                 l10n.aiLayoutFixSummary(
-                  _summary!.paragraphsFixed,
                   _summary!.figuresAdjusted,
+                  _summary!.figuresAdded,
+                  _summary!.figuresRemoved,
                 ),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: cs.onSurfaceVariant,

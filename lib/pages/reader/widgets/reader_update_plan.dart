@@ -54,6 +54,11 @@ class ReaderProps {
   final List<Highlight> highlights;
   final String? highlightQuery;
 
+  /// 显式重载纪元：markdown 内容未变但页面引用的磁盘资源已变
+  /// （AI 排版修复原地覆盖 figures/*.png）时由 view 层递增，
+  /// 强制走 ReloadContent 让 WebView 重新请求图片。
+  final int reloadEpoch;
+
   const ReaderProps({
     required this.markdownData,
     required this.palette,
@@ -61,6 +66,7 @@ class ReaderProps {
     required this.translationStyleId,
     required this.highlights,
     required this.highlightQuery,
+    this.reloadEpoch = 0,
   });
 }
 
@@ -74,7 +80,8 @@ class ReaderProps {
 List<ReaderUpdate> planUpdates(ReaderProps oldProps, ReaderProps newProps) {
   final updates = <ReaderUpdate>[];
 
-  final dataChanged = newProps.markdownData != oldProps.markdownData;
+  final dataChanged = newProps.markdownData != oldProps.markdownData ||
+      newProps.reloadEpoch != oldProps.reloadEpoch;
 
   if (dataChanged) {
     updates.add(const ReloadContent());

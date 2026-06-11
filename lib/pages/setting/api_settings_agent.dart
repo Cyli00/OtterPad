@@ -45,6 +45,16 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   /// 当前正在编辑的实例 id，持久化到 Hive 以便跨页面保留选择。
   String _currentId = '';
 
+  /// initState 缓存 notifier——Riverpod 3.x 禁止在 dispose() 中通过 ref.read
+  /// 取 provider（widget 已 unmount-pending）。Notifier 实例的生命周期由
+  /// provider 管理、独立于 widget，cache 安全（同 reader view.dart 先例）。
+  late final AgentApiNotifier _apiNotifier;
+
+  /// 最近一次 build 同步的 provider state 快照，供 dispose 路径的
+  /// [_pendingEdits] 做差异比较（dispose 中不可用 ref）。快照可能落后于
+  /// 防抖落盘后的最新值，最坏后果是差异误判导致一次幂等重写，无害。
+  AgentProvidersState? _apiSnapshot;
+
   bool _keyObscured = true;
   final _keyDebounce = DebouncedAction();
   final _urlDebounce = DebouncedAction();
@@ -56,6 +66,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   @override
   void initState() {
     super.initState();
+    _apiNotifier = ref.read(agentApiProvider.notifier);
     final instances = ref.read(agentApiProvider).instances;
     final lastId = GStorage.setting.get(_lastInstanceKey) as String?;
     final inst =
@@ -80,8 +91,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       : (inst.baseUrl.isNotEmpty ? inst.baseUrl : inst.protocol.defaultBaseUrl);
 
   /// 当前输入框相对已落盘实例的未保存编辑；无当前实例返回 null。
+  /// 读 [_apiSnapshot] 而非 ref——dispose 路径（_flushEditsDeferred）也会调。
   ({String id, String? url, String? key})? _pendingEdits() {
-    final inst = ref.read(agentApiProvider).byId(_currentId);
+    final inst = _apiSnapshot?.byId(_currentId);
     if (inst == null) return null;
     final urlText = _urlCtrl.text.trim();
     final keyText = _keyCtrl.text.trim();
@@ -100,9 +112,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _keyDebounce.cancel();
     final edits = _pendingEdits();
     if (edits == null) return null;
-    final notifier = ref.read(agentApiProvider.notifier);
-    if (edits.url != null) await notifier.setBaseUrl(edits.id, edits.url!);
-    if (edits.key != null) await notifier.setApiKey(edits.id, edits.key!);
+    if (edits.url != null) await _apiNotifier.setBaseUrl(edits.id, edits.url!);
+    if (edits.key != null) await _apiNotifier.setApiKey(edits.id, edits.key!);
     return ref.read(agentApiProvider).byId(edits.id);
   }
 
@@ -113,11 +124,14 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _keyDebounce.cancel();
     final edits = _pendingEdits();
     if (edits == null || (edits.url == null && edits.key == null)) return;
-    final notifier = ref.read(agentApiProvider.notifier);
     Future.microtask(() async {
       try {
-        if (edits.url != null) await notifier.setBaseUrl(edits.id, edits.url!);
-        if (edits.key != null) await notifier.setApiKey(edits.id, edits.key!);
+        if (edits.url != null) {
+          await _apiNotifier.setBaseUrl(edits.id, edits.url!);
+        }
+        if (edits.key != null) {
+          await _apiNotifier.setApiKey(edits.id, edits.key!);
+        }
       } catch (_) {}
     });
   }
@@ -612,7 +626,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final instances = ref.watch(agentApiProvider).instances;
+    final apiState = ref.watch(agentApiProvider);
+    _apiSnapshot = apiState; // dispose 路径的差异比较用（见字段注释）
+    final instances = apiState.instances;
     // 当前实例；id 失效（极少见）时回落到第一个
     final current = instances.firstWhere(
       (i) => i.id == _currentId,

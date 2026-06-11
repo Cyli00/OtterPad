@@ -437,6 +437,12 @@ class FigureExtractService {
     _initialized = true;
   }
 
+  /// 判断文本是否为 main caption（"Figure 1." / "图 1" 等主标题）。
+  /// AiLayoutFixService 用它收集 caption 块做"caption 不入框"输出校验，
+  /// 与本服务 trimCaptionFromRegion 的判定保持同源。使用前须 [init]。
+  bool isMainCaption(String text) =>
+      _mainCaptionRe.hasMatch(_normalizeCaptionText(text));
+
   /// 从 caption 文本提取文件名标识(如 "Figure 1." → "Figure_1")
   String _extractCaptionName(String text) {
     final m = _mainCaptionRe.firstMatch(_normalizeCaptionText(text));
