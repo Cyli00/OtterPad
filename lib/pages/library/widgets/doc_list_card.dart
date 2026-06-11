@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../data/models/book/document.dart';
+import '../../../providers/history_provider.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../../utils/doc_paths.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
 
-/// 文献列表卡片（文献库列表视图 + 收藏夹详情页共用）
+/// 文献列表卡片（文献库列表 / 搜索 / 阅读历史 / 收藏夹 / 无文件条目共用）
 ///
 /// 支持两种模式：
 /// - 正常模式：点击打开阅读器，长按进入多选模式
 /// - 多选模式：点击切换选中/取消，缩略图显示蒙版 + 勾选图标
-class DocListCard extends StatelessWidget {
+///
+/// 阅读进度由卡片自己经 [docProgressProvider] 按 docId 细粒度订阅——
+/// 阅读器每 500ms 的 setProgress 只重建对应卡片，调用方无需再 watch
+/// historyProvider 拼 map 下发。
+class DocListCard extends ConsumerWidget {
   final Document doc;
   final String? comment;
   final VoidCallback? onTap;
@@ -22,12 +28,6 @@ class DocListCard extends StatelessWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback? onSelectionTap;
-  final bool compact;
-
-  /// 阅读进度 0.0–1.0；==0 时不渲染 chip。
-  /// 由调用方从 historyProvider 派生后传入（统一在父级 watch，避免每张卡都
-  /// 单独订阅 historyProvider）。
-  final double progress;
 
   const DocListCard({
     super.key,
@@ -38,23 +38,18 @@ class DocListCard extends StatelessWidget {
     this.isSelectionMode = false,
     this.isSelected = false,
     this.onSelectionTap,
-    this.compact = false,
-    this.progress = 0.0,
   });
 
   // 缩略图尺寸——锁 A4 比例（W/H 0.707），cover + topCenter 不裁切页面。
   // 右列文字高度跟它对齐，年份行顶到缩略图底边。
-  static const double _thumbWidthCompact = 88;
-  static const double _thumbHeightCompact = 124;
-  static const double _thumbWidthFull = 100;
-  static const double _thumbHeightFull = 142;
+  static const double _thumbWidth = 100;
+  static const double _thumbHeight = 142;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final thumbWidth = compact ? _thumbWidthCompact : _thumbWidthFull;
-    final thumbHeight = compact ? _thumbHeightCompact : _thumbHeightFull;
+    final progress = ref.watch(docProgressProvider(doc.id));
 
     return AnimatedContainer(
       duration: kAnimFast,
@@ -87,7 +82,7 @@ class DocListCard extends StatelessWidget {
         onTap: isSelectionMode ? onSelectionTap : onTap,
         onLongPress: isSelectionMode ? null : onLongPress,
         child: Padding(
-            padding: EdgeInsets.all(compact ? 12 : 16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -99,8 +94,8 @@ class DocListCard extends StatelessWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
-                          width: thumbWidth,
-                          height: thumbHeight,
+                          width: _thumbWidth,
+                          height: _thumbHeight,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -144,7 +139,7 @@ class DocListCard extends StatelessWidget {
                     // ——Spacer 在 unbounded Column 里会断言失败。
                     Expanded(
                       child: SizedBox(
-                        height: doc.contentHash != null ? thumbHeight : null,
+                        height: doc.contentHash != null ? _thumbHeight : null,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -155,12 +150,10 @@ class DocListCard extends StatelessWidget {
                                 color: colorScheme.onSurface,
                                 height: 1.3,
                               ),
-                              maxLines: compact ? 2 : 3,
+                              maxLines: 3,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            // compact 模式下隐藏作者：作者信息密度最低（同期作者经常
-                            // 重复），窄卡优先牺牲。Full 模式保留。
-                            if (!compact && doc.authors.isNotEmpty) ...[
+                            if (doc.authors.isNotEmpty) ...[
                               const SizedBox(height: 6),
                               Text(
                                 doc.authors.join(', '),

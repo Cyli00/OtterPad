@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/documents_provider.dart';
-import '../../../providers/history_provider.dart';
 import '../../../providers/selection_provider.dart';
 import 'doc_card_actions.dart';
 import 'doc_list_card.dart';
@@ -40,20 +39,16 @@ class BookshelfList extends ConsumerWidget {
 
     Widget buildCard(int index) {
       final doc = docs[index];
-      // 进度走单卡片粒度订阅（docProgressProvider）——阅读器每 500ms 的
-      // setProgress 只重建对应卡片，不再整列表 rebuild。
-      return Consumer(
-        builder: (context, ref, _) => DocListCard(
-          doc: doc,
-          progress: ref.watch(docProgressProvider(doc.id)),
-          isSelectionMode: isSelectionMode,
-          isSelected: selection.selectedIds.contains(doc.id),
-          onTap: () => DocCardActions.openReader(context, ref, doc),
-          onLongPress: () =>
-              ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
-          onSelectionTap: () =>
-              ref.read(selectionProvider.notifier).toggle(doc.id),
-        ),
+      // 进度由 DocListCard 内部按 docId 细粒度订阅，无需在此下发
+      return DocListCard(
+        doc: doc,
+        isSelectionMode: isSelectionMode,
+        isSelected: selection.selectedIds.contains(doc.id),
+        onTap: () => DocCardActions.openReader(context, ref, doc),
+        onLongPress: () =>
+            ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
+        onSelectionTap: () =>
+            ref.read(selectionProvider.notifier).toggle(doc.id),
       );
     }
 

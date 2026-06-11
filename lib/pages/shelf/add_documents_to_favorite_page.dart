@@ -9,7 +9,6 @@ import '../../data/models/collection/favorite.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
-import '../../providers/history_provider.dart';
 import '../../services/snackbar_service.dart';
 import '../../core/l10n.dart';
 import '../library/widgets/doc_list_card.dart';
@@ -97,8 +96,6 @@ class _AddDocumentsToFavoritePageState
     // 才会出现在 validDocsProvider 中。
     final docs = ref.watch(validDocsProvider);
     final favorites = ref.watch(favoritesProvider);
-    final history = ref.watch(historyProvider);
-    final progressByDoc = {for (final e in history) e.docId: e.progress};
 
     final currentFavorite = favorites.firstWhere(
       (f) => f.id == widget.favorite.id,
@@ -179,7 +176,6 @@ class _AddDocumentsToFavoritePageState
                   final selected = _selectedIds.contains(doc.id);
                   final card = DocListCard(
                     doc: doc,
-                    progress: progressByDoc[doc.id] ?? 0.0,
                     isSelectionMode: true,
                     isSelected: selected,
                     onSelectionTap: included ? null : () => _toggleSelected(doc.id),

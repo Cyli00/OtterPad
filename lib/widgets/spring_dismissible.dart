@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../core/animation_constants.dart';
 import '../services/haptics.dart';
@@ -117,5 +118,44 @@ class _SpringDismissibleState extends State<SpringDismissible>
         ]),
       );
     });
+  }
+}
+
+/// [SpringDismissible.background] 的标准删除背景：errorContainer 圆角容器，
+/// 右缘垂直排布删除图标 + 文案。此前历史页与无文件条目页各持一份逐像素
+/// 相同的拷贝，收敛于此。
+class SpringDismissDeleteBackground extends StatelessWidget {
+  /// 图标下方的短文案（如「移除」/「删除」），由调用方传 l10n 文本。
+  final String label;
+
+  const SpringDismissDeleteBackground({super.key, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.errorContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Symbols.delete_rounded, size: 22, color: cs.onErrorContainer),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: cs.onErrorContainer,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

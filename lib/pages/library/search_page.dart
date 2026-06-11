@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/l10n.dart';
 import '../../services/haptics.dart';
 import '../../providers/documents_provider.dart';
-import '../../providers/history_provider.dart';
 import 'widgets/doc_card_actions.dart';
 import 'widgets/doc_list_card.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -44,8 +43,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final colorScheme = theme.colorScheme;
     // 搜索结果只覆盖有文件的文献——无 PDF 条目搜出来也打不开。
     final docs = ref.watch(validDocsProvider);
-    final history = ref.watch(historyProvider);
-    final progressByDoc = {for (final e in history) e.docId: e.progress};
     final filtered = _query.isEmpty
         ? []
         : docs.where((d) => d.matchesQuery(_query)).toList();
@@ -149,8 +146,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           padding: const EdgeInsets.only(bottom: 8),
                           child: DocListCard(
                             doc: doc,
-                            compact: true,
-                            progress: progressByDoc[doc.id] ?? 0.0,
                             onTap: () => DocCardActions.openReader(
                               context,
                               ref,

@@ -28,8 +28,6 @@ class ReadingHistoryPage extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     final sections = ref.watch(historySectionsProvider);
     final totalCount = ref.watch(historyCountProvider);
-    final history = ref.watch(historyProvider);
-    final progressByDoc = {for (final e in history) e.docId: e.progress};
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -70,7 +68,6 @@ class ReadingHistoryPage extends ConsumerWidget {
                     ref: ref,
                     section: sections[i],
                     isFirst: i == 0,
-                    progressByDoc: progressByDoc,
                   ),
                 const SliverToBoxAdapter(child: SizedBox(height: 32)),
               ],
@@ -117,7 +114,6 @@ class ReadingHistoryPage extends ConsumerWidget {
     required WidgetRef ref,
     required HistorySection section,
     required bool isFirst,
-    required Map<String, double> progressByDoc,
   }) {
     return [
       SliverToBoxAdapter(
@@ -134,8 +130,6 @@ class ReadingHistoryPage extends ConsumerWidget {
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final doc = section.docs[index];
-            final theme = Theme.of(context);
-            final cs = theme.colorScheme;
             return SpringDismissible(
               key: ValueKey(doc.id),
               onDismissed: () {
@@ -144,36 +138,10 @@ class ReadingHistoryPage extends ConsumerWidget {
                     .read(snackBarServiceProvider)
                     .showResult(message: context.l10n.removedFromHistory);
               },
-              background: Container(
-                decoration: BoxDecoration(
-                  color: cs.errorContainer,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Symbols.delete_rounded,
-                        size: 22, color: cs.onErrorContainer),
-                    const SizedBox(height: 3),
-                    Text(
-                      context.l10n.remove,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: cs.onErrorContainer,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              background:
+                  SpringDismissDeleteBackground(label: context.l10n.remove),
               child: DocListCard(
                 doc: doc,
-                compact: true,
-                progress: progressByDoc[doc.id] ?? 0.0,
-                isSelectionMode: false,
-                isSelected: false,
                 onTap: () => DocCardActions.openReader(context, ref, doc),
               ),
             );

@@ -178,7 +178,6 @@ class NoFileEntriesPage extends ConsumerWidget {
 
                     if (isSelectionMode) return card;
 
-                    final cs = Theme.of(context).colorScheme;
                     final entryDeletedMsg = context.l10n.entryDeleted;
                     return SpringDismissible(
                       key: ValueKey(doc.id),
@@ -188,33 +187,8 @@ class NoFileEntriesPage extends ConsumerWidget {
                             .read(snackBarServiceProvider)
                             .showResult(message: entryDeletedMsg);
                       },
-                      background: Container(
-                        decoration: BoxDecoration(
-                          color: cs.errorContainer,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Symbols.delete_rounded,
-                              size: 22,
-                              color: cs.onErrorContainer,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              context.l10n.delete,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: cs.onErrorContainer,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                  ),
-                            ),
-                          ],
-                        ),
+                      background: SpringDismissDeleteBackground(
+                        label: context.l10n.delete,
                       ),
                       child: card,
                     );
