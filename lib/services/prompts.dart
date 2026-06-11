@@ -107,6 +107,16 @@ abstract final class Prompts {
     defaultText: kDefaultSummaryImagePrompt,
   );
 
+  // ── 不可定制：翻译受保护 span 占位符守卫 ──
+
+  /// masked 输入含 `[[mN]]` 占位符（行内公式/代码，见
+  /// ProtectedSpans）时追加到 system prompt。
+  static const translationPlaceholderGuard =
+      'The input contains placeholders like [[m0]], [[m1]] that stand for '
+      'protected content (formulas or code). Keep every placeholder exactly '
+      'as-is at its corresponding position in the translation. Never '
+      'translate, alter, merge, or drop a placeholder.';
+
   // ── 不可定制：AI 排版修复（坐标序随 provider 变体，函数形态）──
 
   /// 排版修复 system prompt。Gemini 用其原生 [ymin,xmin,ymax,xmax]

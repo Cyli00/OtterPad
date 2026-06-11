@@ -9,8 +9,11 @@ import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../utils/doc_paths.dart';
+import 'document_structure.dart';
 import 'pdf_process_lock.dart';
 import '../core/app_logger.dart';
+
+export 'document_structure.dart' show LayoutBlock;
 
 // ─── 诊断枚举 ─────────────────────────────────────────────
 
@@ -39,35 +42,9 @@ enum PairMethod {
 }
 
 // ─── 公开数据模型 ─────────────────────────────────────────
-
-/// 版面解析 API 返回的单个 block
-class LayoutBlock {
-  final String blockId;
-  final String blockLabel;
-
-  /// [left, top, right, bottom]，坐标基于 API zoom = 2.0（144 DPI）
-  final List<double> blockBbox;
-  final String blockContent;
-
-  const LayoutBlock({
-    required this.blockId,
-    required this.blockLabel,
-    required this.blockBbox,
-    required this.blockContent,
-  });
-
-  factory LayoutBlock.fromJson(Map<String, dynamic> json) {
-    final bbox = (json['block_bbox'] as List<dynamic>)
-        .map((v) => (v as num).toDouble())
-        .toList();
-    return LayoutBlock(
-      blockId: json['block_id']?.toString() ?? '',
-      blockLabel: json['block_label'] as String? ?? '',
-      blockBbox: bbox,
-      blockContent: json['block_content'] as String? ?? '',
-    );
-  }
-}
+//
+// LayoutBlock 已上移到 document_structure.dart（extract.json 的唯一防腐层），
+// 此处 export 维持原有公开 API。
 
 /// 一个检测到的 figure 区域（caption + 视觉块 + 子图注 block 的集合）
 class FigureSegment {
@@ -482,29 +459,14 @@ class FigureExtractService {
   // ─── Stage 0: 解析 ────────────────────────────────────
 
   static List<_PageData> _parsePages(String jsonContent) {
-    try {
-      final list = jsonDecode(jsonContent) as List<dynamic>;
-      return [
-        for (var i = 0; i < list.length; i++)
-          _parsePage(list[i] as Map<String, dynamic>, i),
-      ];
-    } catch (e) {
-      log.d('[FigureExtract] 解析 JSON 失败: $e');
-      return const [];
+    final structure = DocumentStructure.parse(jsonContent);
+    if (structure.isEmpty) {
+      log.d('[FigureExtract] 解析 JSON 失败或为空');
     }
-  }
-
-  static _PageData _parsePage(Map<String, dynamic> page, int index) {
-    final blockList =
-        ((page['prunedResult'] as Map<String, dynamic>?)?['parsing_res_list']
-            as List<dynamic>?) ??
-        const [];
-    final blocks = blockList
-        .map((b) => LayoutBlock.fromJson(b as Map<String, dynamic>))
-        .toList();
-    final markdown =
-        ((page['markdown'] as Map<String, dynamic>?)?['text'] as String?) ?? '';
-    return _PageData(index, blocks, markdown);
+    return [
+      for (final page in structure.pages)
+        _PageData(page.pageIndex, page.blocks, page.markdown),
+    ];
   }
 
   // ─── Stage 1: Inventory ───────────────────────────────

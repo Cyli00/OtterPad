@@ -10,8 +10,8 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../providers/api_provider.dart';
 import '../utils/doc_paths.dart';
-import 'agent_model_capability.dart';
-import 'agent_thinking_payload.dart';
+import 'agent_chat_service.dart';
+import 'document_structure.dart';
 import 'figure_extract_service.dart';
 import 'pdf_process_lock.dart';
 import 'prompts.dart';
@@ -136,41 +136,18 @@ class AiLayoutFixService {
 
     final targetPages = <int>{};
     final captionBlocksByPage = <int, List<List<double>>>{};
-    final extractFile = File(jsonPath);
-    if (extractFile.existsSync()) {
-      final decoded = jsonDecode(await extractFile.readAsString());
-      final List<dynamic> pages;
-      if (decoded is Map<String, dynamic>) {
-        pages = decoded['layoutParsingResults'] as List<dynamic>? ?? [];
-      } else if (decoded is List<dynamic>) {
-        pages = decoded;
-      } else {
-        pages = [];
-      }
-
-      for (var pi = 0; pi < pages.length; pi++) {
-        final pageMap = pages[pi] as Map<String, dynamic>;
-        final pageIdx = (pageMap['page_index'] as int?) ?? pi;
-        final blocks = (pageMap['prunedResult']
-                    as Map<String, dynamic>?)?['parsing_res_list']
-                as List<dynamic>? ??
-            [];
-
-        for (final block in blocks) {
-          final b = block as Map<String, dynamic>;
-          final label = b['block_label'] as String?;
-          if (label == 'image' || label == 'chart') {
-            targetPages.add(pageIdx);
-          } else if (label == 'figure_title' &&
-              FigureExtractService.instance
-                  .isMainCaption(b['block_content'] as String? ?? '')) {
-            // main caption 块 bbox（144 DPI）→ "caption 不入框" 输出校验
-            final bbox = (b['block_bbox'] as List<dynamic>?)
-                ?.map((v) => (v as num).toDouble())
-                .toList();
-            if (bbox != null && bbox.length == 4) {
-              captionBlocksByPage.putIfAbsent(pageIdx, () => []).add(bbox);
-            }
+    for (final page in (await DocumentStructure.load(jsonPath)).pages) {
+      for (final block in page.blocks) {
+        final label = block.blockLabel;
+        if (label == 'image' || label == 'chart') {
+          targetPages.add(page.pageIndex);
+        } else if (label == 'figure_title' &&
+            FigureExtractService.instance.isMainCaption(block.blockContent)) {
+          // main caption 块 bbox（144 DPI）→ "caption 不入框" 输出校验
+          if (block.blockBbox.length == 4) {
+            captionBlocksByPage
+                .putIfAbsent(page.pageIndex, () => [])
+                .add(block.blockBbox);
           }
         }
       }
@@ -285,7 +262,7 @@ class AiLayoutFixService {
         imagesByPage: imagesByPage,
         yFirst: yFirst,
       );
-      final response = await _callMultimodalApi(
+      final response = await AgentChatService.send(
         provider: agentState.provider,
         baseUrl: agentState.effectiveBaseUrl,
         apiKey: agentState.apiKey,
@@ -293,7 +270,13 @@ class AiLayoutFixService {
         modelParams: modelParams,
         systemPrompt: systemPrompt,
         userPrompt: userPrompt,
-        images: pageImages,
+        images: [
+          for (final img in pageImages)
+            AgentChatImage(base64Png: img.base64Png, label: _pageLabel(img)),
+        ],
+        schema: _outputSchema(yFirst: yFirst),
+        schemaName: 'layout_fix',
+        anthropicMaxTokens: 16384,
         cancelToken: cancelToken,
       );
 
@@ -773,298 +756,6 @@ class AiLayoutFixService {
     return byteData?.buffer.asUint8List();
   }
 
-  // ── 多模态 API 调用 ─────────────────────────────────────
-
-  /// 结构化输出降级阶梯 + 瞬时错误重试。
-  ///
-  /// 各 provider 先尝试原生 JSON Schema 约束（OpenAI strict json_schema /
-  /// Anthropic output_config / Gemini responseJsonSchema / 兼容端
-  /// response_format json_schema），被服务商以 400/422 拒绝时逐级退到
-  /// json_object 乃至纯 prompt 约束——兼容端各家支持差异极大
-  /// （json_schema 仅 Doubao/Grok 官方支持，GLM 视觉模型连 json_object
-  /// 都未文档化），由阶梯自动适配。
-  static Future<String> _callMultimodalApi({
-    required AgentApiProvider provider,
-    required String baseUrl,
-    required String apiKey,
-    required String modelId,
-    required AgentModelParams modelParams,
-    required String systemPrompt,
-    required String userPrompt,
-    required List<_PageImage> images,
-    required CancelToken cancelToken,
-  }) async {
-    final url = provider.chatUrl(baseUrl);
-
-    final dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 30),
-      sendTimeout: const Duration(minutes: 2),
-      receiveTimeout: const Duration(minutes: 5),
-    ));
-
-    final schema =
-        _outputSchema(yFirst: provider == AgentApiProvider.gemini);
-    final modes = switch (provider) {
-      AgentApiProvider.openai => const ['schema', 'json'],
-      AgentApiProvider.anthropic => const ['schema', 'none'],
-      AgentApiProvider.gemini => const ['schema', 'json'],
-      AgentApiProvider.openAICompatible => const ['schema', 'json', 'none'],
-    };
-
-    for (var m = 0; m < modes.length; m++) {
-      try {
-        return await _withTransientRetry(
-          cancelToken,
-          () => _postRequest(
-            dio: dio,
-            url: url,
-            provider: provider,
-            apiKey: apiKey,
-            modelId: modelId,
-            modelParams: modelParams,
-            systemPrompt: systemPrompt,
-            userPrompt: userPrompt,
-            images: images,
-            schema: schema,
-            mode: modes[m],
-            cancelToken: cancelToken,
-          ),
-        );
-      } on DioException catch (e) {
-        if (e.type == DioExceptionType.cancel) rethrow;
-        final code = e.response?.statusCode;
-        final canFallback =
-            m < modes.length - 1 && (code == 400 || code == 422);
-        if (!canFallback) throw Exception(_readableMessage(e));
-      }
-    }
-    throw StateError('unreachable');
-  }
-
-  /// 429/5xx/超时/断连重试一次（移动网络抖动常见），其余错误直接抛出。
-  static Future<T> _withTransientRetry<T>(
-    CancelToken cancelToken,
-    Future<T> Function() run,
-  ) async {
-    try {
-      return await run();
-    } on DioException catch (e) {
-      if (e.type == DioExceptionType.cancel) rethrow;
-      final code = e.response?.statusCode;
-      final transient = code == null
-          ? const {
-              DioExceptionType.connectionTimeout,
-              DioExceptionType.sendTimeout,
-              DioExceptionType.receiveTimeout,
-              DioExceptionType.connectionError,
-            }.contains(e.type)
-          : const {429, 500, 502, 503, 529}.contains(code);
-      if (!transient) rethrow;
-      await Future.delayed(const Duration(seconds: 2));
-      if (cancelToken.isCancelled) rethrow;
-      return run();
-    }
-  }
-
-  static Future<String> _postRequest({
-    required Dio dio,
-    required String url,
-    required AgentApiProvider provider,
-    required String apiKey,
-    required String modelId,
-    required AgentModelParams modelParams,
-    required String systemPrompt,
-    required String userPrompt,
-    required List<_PageImage> images,
-    required Map<String, dynamic> schema,
-    required String mode,
-    required CancelToken cancelToken,
-  }) async {
-    final Response<Map<String, dynamic>> resp;
-
-    switch (provider) {
-      case AgentApiProvider.openai:
-        final content = <Map<String, dynamic>>[
-          for (final img in images) ...[
-            {'type': 'input_text', 'text': _pageLabel(img)},
-            {
-              'type': 'input_image',
-              'image_url': 'data:image/png;base64,${img.base64Png}',
-              'detail': 'high',
-            },
-          ],
-          {'type': 'input_text', 'text': userPrompt},
-        ];
-        final text = <String, dynamic>{
-          if (mode == 'schema')
-            'format': {
-              'type': 'json_schema',
-              'name': 'layout_fix',
-              'strict': true,
-              'schema': schema,
-            }
-          else if (mode == 'json')
-            'format': {'type': 'json_object'},
-          if (modelParams.verbosity != null)
-            'verbosity': modelParams.verbosity,
-        };
-        resp = await dio.post(
-          url,
-          data: {
-            'model': modelId,
-            'instructions': systemPrompt,
-            'input': [
-              {'role': 'user', 'content': content},
-            ],
-            if (text.isNotEmpty) 'text': text,
-            ...AgentThinkingPayload.forOpenAI(
-                modelId, modelParams.thinkingLevel),
-          },
-          options: Options(headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Content-Type': 'application/json',
-          }),
-          cancelToken: cancelToken,
-        );
-        return _extractOpenAIText(resp.data!);
-
-      case AgentApiProvider.anthropic:
-        final content = <Map<String, dynamic>>[
-          for (final img in images) ...[
-            {'type': 'text', 'text': _pageLabel(img)},
-            {
-              'type': 'image',
-              'source': {
-                'type': 'base64',
-                'media_type': 'image/png',
-                'data': img.base64Png,
-              },
-            },
-          ],
-          {'type': 'text', 'text': userPrompt},
-        ];
-        final thinking = Map<String, dynamic>.from(
-          AgentThinkingPayload.forAnthropic(modelId, modelParams.thinkingLevel),
-        );
-        // adaptive 模型的 effort 也在 output_config 里，与 format 合并发送
-        final outputConfig = <String, dynamic>{
-          if (mode == 'schema')
-            'format': {'type': 'json_schema', 'schema': schema},
-          ...?(thinking.remove('output_config') as Map<String, dynamic>?),
-        };
-        // 旧模型要求 budget_tokens < max_tokens
-        var maxTokens = 16384;
-        final t = thinking['thinking'];
-        if (t is Map && t['budget_tokens'] is int) {
-          final budget = t['budget_tokens'] as int;
-          if (budget >= maxTokens) maxTokens = budget + 8192;
-        }
-        resp = await dio.post(
-          url,
-          data: {
-            'model': modelId,
-            'system': systemPrompt,
-            'max_tokens': maxTokens,
-            'messages': [
-              {'role': 'user', 'content': content},
-            ],
-            if (outputConfig.isNotEmpty) 'output_config': outputConfig,
-            ...thinking,
-          },
-          options: Options(headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
-          }),
-          cancelToken: cancelToken,
-        );
-        return _extractAnthropicText(resp.data!);
-
-      case AgentApiProvider.gemini:
-        final parts = <Map<String, dynamic>>[
-          for (final img in images) ...[
-            {'text': _pageLabel(img)},
-            {
-              'inline_data': {
-                'mime_type': 'image/png',
-                'data': img.base64Png,
-              },
-            },
-          ],
-          {'text': userPrompt},
-        ];
-        final thinkingCfg = AgentThinkingPayload.forGemini(
-            modelId, modelParams.thinkingLevel);
-        resp = await dio.post(
-          '$url/models/$modelId:generateContent',
-          queryParameters: {'key': apiKey},
-          data: {
-            'systemInstruction': {
-              'parts': [
-                {'text': systemPrompt},
-              ],
-            },
-            'contents': [
-              {'parts': parts},
-            ],
-            'generationConfig': {
-              'responseMimeType': 'application/json',
-              if (mode == 'schema') 'responseJsonSchema': schema,
-              if (thinkingCfg.isNotEmpty) 'thinkingConfig': thinkingCfg,
-            },
-          },
-          cancelToken: cancelToken,
-        );
-        return _extractGeminiText(resp.data!);
-
-      case AgentApiProvider.openAICompatible:
-        final content = <Map<String, dynamic>>[
-          for (final img in images) ...[
-            {'type': 'text', 'text': _pageLabel(img)},
-            {
-              'type': 'image_url',
-              'image_url': {
-                'url': 'data:image/png;base64,${img.base64Png}',
-                'detail': 'high',
-              },
-            },
-          ],
-          {'type': 'text', 'text': userPrompt},
-        ];
-        resp = await dio.post(
-          url,
-          data: {
-            'model': modelId,
-            'messages': [
-              {'role': 'system', 'content': systemPrompt},
-              {'role': 'user', 'content': content},
-            ],
-            if (mode == 'schema')
-              'response_format': {
-                'type': 'json_schema',
-                'json_schema': {
-                  'name': 'layout_fix',
-                  'strict': true,
-                  'schema': schema,
-                },
-              }
-            else if (mode == 'json')
-              'response_format': {'type': 'json_object'},
-            // DashScope 专属：把单图 token 上限 1280 → 16384，密集文档页必需
-            if (AgentModelCapability.isQwenVl(modelId))
-              'vl_high_resolution_images': true,
-            ...AgentThinkingPayload.forOpenAICompat(modelParams.thinkingLevel),
-          },
-          options: Options(headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Content-Type': 'application/json',
-          }),
-          cancelToken: cancelToken,
-        );
-        return _extractOpenAICompatibleText(resp.data!);
-    }
-  }
-
   /// 输出 JSON Schema（OpenAI strict 模式要求：根为 object、所有属性
   /// required、各级 additionalProperties=false；不用 minItems 等各家
   /// 支持不一的关键字，长度校验留在 client 侧）。
@@ -1151,86 +842,6 @@ class AiLayoutFixService {
     };
   }
 
-  static String _readableMessage(DioException e) {
-    final body = e.response?.data;
-    String msg = 'HTTP ${e.response?.statusCode ?? "?"}';
-    if (body is Map<String, dynamic>) {
-      final err = body['error'];
-      if (err is Map) msg = err['message'] as String? ?? msg;
-      if (err is String) msg = err;
-    }
-    return msg;
-  }
-
-  // ── 响应提取（兼容 thinking 模型）────────────────────────
-
-  static String _extractOpenAIText(Map<String, dynamic> data) {
-    final output = data['output'] as List<dynamic>?;
-    if (output != null) {
-      for (final item in output) {
-        if (item is Map<String, dynamic> && item['type'] == 'message') {
-          final content = item['content'] as List<dynamic>?;
-          if (content != null) {
-            for (final c in content) {
-              if (c is Map<String, dynamic> && c['type'] == 'output_text') {
-                return (c['text'] as String? ?? '').trim();
-              }
-            }
-          }
-        }
-      }
-    }
-    final choices = data['choices'] as List<dynamic>?;
-    if (choices != null && choices.isNotEmpty) {
-      final msg = (choices[0] as Map<String, dynamic>)['message'];
-      if (msg is Map<String, dynamic>) {
-        return (msg['content'] as String? ?? '').trim();
-      }
-    }
-    throw Exception('无法从 OpenAI 响应中提取结果');
-  }
-
-  static String _extractAnthropicText(Map<String, dynamic> data) {
-    final content = data['content'] as List<dynamic>?;
-    if (content != null) {
-      for (final block in content.reversed) {
-        if (block is Map<String, dynamic> && block['type'] == 'text') {
-          return (block['text'] as String? ?? '').trim();
-        }
-      }
-    }
-    throw Exception('无法从 Anthropic 响应中提取结果');
-  }
-
-  static String _extractGeminiText(Map<String, dynamic> data) {
-    final candidates = data['candidates'] as List<dynamic>?;
-    if (candidates != null && candidates.isNotEmpty) {
-      final parts = ((candidates[0] as Map<String, dynamic>)['content']
-              as Map<String, dynamic>?)?['parts'] as List<dynamic>?;
-      if (parts != null) {
-        for (final part in parts.reversed) {
-          if (part is Map<String, dynamic> &&
-              part['thought'] != true &&
-              part.containsKey('text')) {
-            return (part['text'] as String? ?? '').trim();
-          }
-        }
-      }
-    }
-    throw Exception('无法从 Gemini 响应中提取结果');
-  }
-
-  static String _extractOpenAICompatibleText(Map<String, dynamic> data) {
-    final choices = data['choices'] as List<dynamic>?;
-    if (choices != null && choices.isNotEmpty) {
-      final msg = (choices[0] as Map<String, dynamic>)['message'];
-      if (msg is Map<String, dynamic>) {
-        return (msg['content'] as String? ?? '').trim();
-      }
-    }
-    throw Exception('无法从 API 响应中提取结果');
-  }
-
   // ── 工具方法 ────────────────────────────────────────────
 
   static Map<String, dynamic> _parseJsonResponse(String text) {
@@ -1254,11 +865,14 @@ class AiLayoutFixService {
     throw FormatException('Expected JSON object, got ${decoded.runtimeType}');
   }
 
+  /// 与 figures.json 原 bbox 比较的落盘前审查：四边偏差都在容差内视为
+  /// 模型坐标抖动（0–1000 归一化坐标固有 ±数单位的不确定度，换算 144 DPI
+  /// 约 6–8px），丢弃该 fix、不触发重裁。8px 约为正文一个字符宽，肉眼不可辨。
   static bool _bboxChanged(List<dynamic>? old, List<dynamic>? updated) {
     if (old == null || updated == null) return true;
     if (old.length != 4 || updated.length != 4) return true;
     for (var i = 0; i < 4; i++) {
-      if (((old[i] as num) - (updated[i] as num)).abs() > 2) return true;
+      if (((old[i] as num) - (updated[i] as num)).abs() > 8) return true;
     }
     return false;
   }

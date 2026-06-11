@@ -6,8 +6,10 @@ import 'package:dio/dio.dart';
 import '../core/storage/storage.dart';
 import '../providers/api_provider.dart';
 import '../providers/translation_config_provider.dart';
+import 'agent_chat_service.dart';
 import 'agent_thinking_payload.dart';
 import 'prompts.dart';
+import 'translation_protected_spans.dart';
 
 /// 翻译缓存条目
 class _CacheEntry {
@@ -76,15 +78,21 @@ class TranslationService {
       throw Exception('请先在「AI 设置」中填写 API Key');
     }
 
+    // ── 受保护 span：行内公式/代码抠出占位，译后还原 ──
+    final protected = ProtectedSpans.mask(text);
+
     // ── 构建 prompt ──
     final targetLang = translationConfig.targetLanguage;
-    final systemPrompt = renderPrompt(
+    var systemPrompt = renderPrompt(
       translationConfig.systemPrompt,
       {'targetLanguage': targetLang},
     );
+    if (!protected.isEmpty) {
+      systemPrompt = '$systemPrompt\n${Prompts.translationPlaceholderGuard}';
+    }
     final userPrompt = renderPrompt(
       translationConfig.userPrompt,
-      {'targetLanguage': targetLang, 'input': text},
+      {'targetLanguage': targetLang, 'input': protected.masked},
     );
 
     // ── 调用 API ──
@@ -96,7 +104,7 @@ class TranslationService {
       agentState.paramsFor(modelId),
       translationThinkingLevel,
     );
-    final result = await _callApi(
+    final result = protected.restore(await _callApi(
       provider: agentState.provider,
       baseUrl: agentState.effectiveBaseUrl,
       apiKey: agentState.apiKey,
@@ -105,7 +113,7 @@ class TranslationService {
       userPrompt: userPrompt,
       temperature: translationConfig.temperature,
       modelParams: modelParams,
-    );
+    ));
 
     // ── 写缓存 ──
     _putCache(cacheKey, result);
@@ -127,6 +135,7 @@ class TranslationService {
     required TranslationConfig translationConfig,
     String? extraSystemInstruction,
     ThinkingLevel? translationThinkingLevel = ThinkingLevel.off,
+    bool useCache = true,
   }) async* {
     if (text.trim().isEmpty) {
       yield '';
@@ -134,10 +143,12 @@ class TranslationService {
     }
 
     final cacheKey = _buildCacheKey(text, translationConfig.targetLanguage);
-    final cached = _getCache(cacheKey);
-    if (cached != null) {
-      yield cached;
-      return;
+    if (useCache) {
+      final cached = _getCache(cacheKey);
+      if (cached != null) {
+        yield cached;
+        return;
+      }
     }
 
     final modelId = agentState.fastModelId ?? agentState.defaultModelId;
@@ -148,17 +159,22 @@ class TranslationService {
       throw Exception('请先在「AI 设置」中填写 API Key');
     }
 
+    final protected = ProtectedSpans.mask(text);
+
     final targetLang = translationConfig.targetLanguage;
     final baseSystemPrompt = renderPrompt(
       translationConfig.systemPrompt,
       {'targetLanguage': targetLang},
     );
-    final systemPrompt = extraSystemInstruction != null
+    var systemPrompt = extraSystemInstruction != null
         ? '$baseSystemPrompt\n$extraSystemInstruction'
         : baseSystemPrompt;
+    if (!protected.isEmpty) {
+      systemPrompt = '$systemPrompt\n${Prompts.translationPlaceholderGuard}';
+    }
     final userPrompt = renderPrompt(
       translationConfig.userPrompt,
-      {'targetLanguage': targetLang, 'input': text},
+      {'targetLanguage': targetLang, 'input': protected.masked},
     );
 
     final modelParams = _applyTranslationThinking(
@@ -179,7 +195,9 @@ class TranslationService {
         modelParams: modelParams,
       )) {
         accumulated += delta;
-        yield accumulated;
+        // 还原是纯函数，对部分快照同样安全：已完整出现的占位符立即
+        // 还原，半截占位符保持原样等下个 delta。
+        yield protected.restore(accumulated);
       }
     } catch (e) {
       streamErr = e;
@@ -203,15 +221,15 @@ class TranslationService {
         );
         accumulated = result;
         streamErr = null;
-        yield result;
+        yield protected.restore(result);
       } catch (_) {
         throw err;
       }
     }
 
     // 仅在确认无错误时写缓存——残缺译文不得持久化。
-    if (streamErr == null && accumulated.isNotEmpty) {
-      _putCache(cacheKey, accumulated);
+    if (useCache && streamErr == null && accumulated.isNotEmpty) {
+      _putCache(cacheKey, protected.restore(accumulated));
     }
   }
 
@@ -566,6 +584,8 @@ class TranslationService {
 
   // ── API 调用 ──────────────────────────────────────────────────────────────
 
+  /// 非流式调用走共享 Agent 对话接缝 [AgentChatService]，此处只补翻译语境
+  /// 的错误文案前缀。
   static Future<String> _callApi({
     required AgentApiProvider provider,
     required String baseUrl,
@@ -576,177 +596,21 @@ class TranslationService {
     double? temperature,
     AgentModelParams modelParams = const AgentModelParams(),
   }) async {
-    final dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 60),
-    ));
-
-    final url = provider.chatUrl(baseUrl);
     try {
-      final Response<Map<String, dynamic>> resp;
-
-      switch (provider) {
-        case AgentApiProvider.openai:
-          resp = await dio.post(
-            url,
-            data: {
-              'model': modelId,
-              'instructions': systemPrompt,
-              'input': userPrompt,
-              if (temperature != null) 'temperature': temperature,
-              ...AgentThinkingPayload.forOpenAI(modelId, modelParams.thinkingLevel),
-            },
-            options: Options(headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-            }),
-          );
-          return _extractOpenAI(resp.data!);
-
-        case AgentApiProvider.anthropic:
-          resp = await dio.post(
-            url,
-            data: {
-              'model': modelId,
-              'system': systemPrompt,
-              'max_tokens': 4096,
-              'messages': [
-                {'role': 'user', 'content': userPrompt},
-              ],
-              if (temperature != null) 'temperature': temperature,
-              ...AgentThinkingPayload.forAnthropic(modelId, modelParams.thinkingLevel),
-            },
-            options: Options(headers: {
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'Content-Type': 'application/json',
-            }),
-          );
-          return _extractAnthropic(resp.data!);
-
-        case AgentApiProvider.gemini:
-          final thinkingCfg =
-              AgentThinkingPayload.forGemini(modelId, modelParams.thinkingLevel);
-          resp = await dio.post(
-            '$url/models/$modelId:generateContent',
-            queryParameters: {'key': apiKey},
-            data: {
-              'systemInstruction': {
-                'parts': [
-                  {'text': systemPrompt}
-                ]
-              },
-              'contents': [
-                {
-                  'parts': [
-                    {'text': userPrompt}
-                  ]
-                }
-              ],
-              'generationConfig': {
-                if (temperature != null) 'temperature': temperature,
-                if (thinkingCfg.isNotEmpty) 'thinkingConfig': thinkingCfg,
-              },
-            },
-          );
-          return _extractGemini(resp.data!);
-
-        case AgentApiProvider.openAICompatible:
-          resp = await dio.post(
-            url,
-            data: _buildOpenAICompatibleBody(
-              modelId: modelId,
-              systemPrompt: systemPrompt,
-              userPrompt: userPrompt,
-              temperature: temperature,
-              modelParams: modelParams,
-            ),
-            options: Options(headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-            }),
-          );
-          return _extractOpenAICompatible(resp.data!);
-      }
-    } on DioException catch (e) {
-      final body = e.response?.data;
-      String msg = 'HTTP ${e.response?.statusCode ?? "?"}';
-      if (body is Map<String, dynamic>) {
-        final err = body['error'];
-        if (err is Map) msg = err['message'] as String? ?? msg;
-        if (err is String) msg = err;
-      }
-      throw Exception('翻译请求失败：$msg');
+      return await AgentChatService.send(
+        provider: provider,
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+        modelId: modelId,
+        modelParams: modelParams,
+        systemPrompt: systemPrompt,
+        userPrompt: userPrompt,
+        temperature: temperature,
+        receiveTimeout: const Duration(seconds: 60),
+      );
+    } on AgentChatException catch (e) {
+      throw Exception('翻译请求失败：${e.message}');
     }
-  }
-
-  // ── 结果提取 ──────────────────────────────────────────────────────────────
-
-  static String _extractOpenAI(Map<String, dynamic> data) {
-    // Responses API: output[].content[].text
-    final output = data['output'] as List<dynamic>?;
-    if (output != null) {
-      for (final item in output) {
-        if (item is Map<String, dynamic> && item['type'] == 'message') {
-          final content = item['content'] as List<dynamic>?;
-          if (content != null) {
-            for (final c in content) {
-              if (c is Map<String, dynamic> && c['type'] == 'output_text') {
-                return (c['text'] as String? ?? '').trim();
-              }
-            }
-          }
-        }
-      }
-    }
-    // Chat Completions fallback
-    final choices = data['choices'] as List<dynamic>?;
-    if (choices != null && choices.isNotEmpty) {
-      final msg = (choices[0] as Map<String, dynamic>)['message'];
-      if (msg is Map<String, dynamic>) {
-        return (msg['content'] as String? ?? '').trim();
-      }
-    }
-    throw Exception('无法从 OpenAI 响应中提取翻译结果');
-  }
-
-  static String _extractAnthropic(Map<String, dynamic> data) {
-    final content = data['content'] as List<dynamic>?;
-    if (content != null && content.isNotEmpty) {
-      final first = content[0] as Map<String, dynamic>;
-      return (first['text'] as String? ?? '').trim();
-    }
-    throw Exception('无法从 Anthropic 响应中提取翻译结果');
-  }
-
-  static String _extractGemini(Map<String, dynamic> data) {
-    final candidates = data['candidates'] as List<dynamic>?;
-    if (candidates != null && candidates.isNotEmpty) {
-      final parts =
-          ((candidates[0] as Map<String, dynamic>)['content'] as Map<String, dynamic>?)?['parts']
-              as List<dynamic>?;
-      if (parts != null && parts.isNotEmpty) {
-        return ((parts[0] as Map<String, dynamic>)['text'] as String? ?? '')
-            .trim();
-      }
-    }
-    throw Exception('无法从 Gemini 响应中提取翻译结果');
-  }
-
-  /// Chat Completions 标准格式，兼容 DeepSeek `insufficient_system_resource`
-  static String _extractOpenAICompatible(Map<String, dynamic> data) {
-    final choices = data['choices'] as List<dynamic>?;
-    if (choices != null && choices.isNotEmpty) {
-      final choice = choices[0] as Map<String, dynamic>;
-      if (choice['finish_reason'] == 'insufficient_system_resource') {
-        throw Exception('服务器资源不足，请稍后重试');
-      }
-      final msg = choice['message'];
-      if (msg is Map<String, dynamic>) {
-        return (msg['content'] as String? ?? '').trim();
-      }
-    }
-    throw Exception('无法从 API 响应中提取翻译结果');
   }
 
   // ── 缓存 ──────────────────────────────────────────────────────────────────

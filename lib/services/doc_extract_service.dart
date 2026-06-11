@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../providers/api_provider.dart';
 import '../utils/doc_paths.dart';
 import '../utils/markdown_preprocessor.dart';
+import 'document_structure.dart';
 import 'figure_extract_service.dart';
 import '../core/app_logger.dart';
 
@@ -386,7 +387,7 @@ class DocExtractService {
     required List<FigureManifestEntry> figures,
     required String mdDir,
   }) {
-    final pages = jsonDecode(jsonContent) as List<dynamic>;
+    final structure = DocumentStructure.parse(jsonContent);
 
     final pageFigs = <int, List<FigureManifestEntry>>{};
     for (final fig in figures) {
@@ -394,22 +395,12 @@ class DocExtractService {
     }
 
     final mdPages = <String>[];
-    for (var pageIdx = 0; pageIdx < pages.length; pageIdx++) {
-      final page = pages[pageIdx] as Map<String, dynamic>;
-      var mdText =
-          (page['markdown'] as Map<String, dynamic>?)?['text'] as String? ?? '';
+    for (final page in structure.pages) {
+      var mdText = page.markdown;
 
-      if (pageFigs.containsKey(pageIdx)) {
-        final pageBlocks =
-            (page['prunedResult'] as Map<String, dynamic>?)?['parsing_res_list']
-                as List<dynamic>? ??
-            [];
-        mdText = _replaceInPageMd(
-          mdText,
-          pageFigs[pageIdx]!,
-          pageBlocks,
-          mdDir,
-        );
+      final figs = pageFigs[page.pageIndex];
+      if (figs != null) {
+        mdText = _replaceInPageMd(mdText, figs, page.blocks, mdDir);
       }
       mdPages.add(mdText);
     }
@@ -426,17 +417,15 @@ class DocExtractService {
   static String _replaceInPageMd(
     String mdText,
     List<FigureManifestEntry> pageFigures,
-    List<dynamic> rawBlocks,
+    List<LayoutBlock> blocks,
     String mdDir,
   ) {
     final lines = mdText.split('\n');
 
-    final blockMap = <String, Map<String, dynamic>>{};
-    for (final b in rawBlocks) {
-      final block = b as Map<String, dynamic>;
-      final id = block['block_id']?.toString() ?? '';
-      if (id.isNotEmpty) blockMap[id] = block;
-    }
+    final blockMap = <String, LayoutBlock>{
+      for (final b in blocks)
+        if (b.blockId.isNotEmpty) b.blockId: b,
+    };
 
     // Phase 1：按 figure 顺序收集每个 plan 的行集合。`claimed` 累积——
     // 后到的 figure 不会把先到 figure 已占的行（或空行）抢走。
@@ -490,7 +479,7 @@ class DocExtractService {
   /// 包围），最终 appliedCeiling 保护把外层整体砍掉。集合方式没这个问题。
   static _FigurePlan? _planFigureLines(
     List<String> lines,
-    Map<String, Map<String, dynamic>> blockMap,
+    Map<String, LayoutBlock> blockMap,
     FigureManifestEntry fig,
     Set<int> claimed,
   ) {
@@ -504,13 +493,15 @@ class DocExtractService {
       final block = blockMap[bid];
       if (block == null) continue;
 
-      final label = block['block_label'] as String? ?? '';
-      final content = (block['block_content'] as String? ?? '').trim();
+      final label = block.blockLabel;
+      final content = block.blockContent.trim();
 
       int? idx;
       if (label == 'image' || label == 'chart') {
-        final bbox = block['block_bbox'] as List<dynamic>?;
-        if (bbox != null && bbox.length >= 4) {
+        // 探针用 rawBbox：md 行内的 bbox 编码图片名按 JSON 字面拼接，
+        // int 的 `12` 不能变成 `12.0`。
+        final bbox = block.rawBbox;
+        if (bbox.length >= 4) {
           idx = _findLine(
             lines,
             '_${bbox[0]}_${bbox[1]}_${bbox[2]}_${bbox[3]}',
@@ -760,26 +751,16 @@ class DocExtractService {
   }
 
   static Set<String> _extractParagraphTitles(String jsonContent) {
-    try {
-      final pages = jsonDecode(jsonContent) as List<dynamic>;
-      final titles = <String>{};
-      for (final page in pages) {
-        final blocks =
-            (page as Map<String, dynamic>)['prunedResult']?['parsing_res_list']
-                as List<dynamic>? ??
-            [];
-        for (final block in blocks) {
-          final b = block as Map<String, dynamic>;
-          if (b['block_label'] == 'paragraph_title') {
-            final c = (b['block_content'] as String?)?.trim() ?? '';
-            if (c.isNotEmpty) titles.add(c);
-          }
+    final titles = <String>{};
+    for (final page in DocumentStructure.parse(jsonContent).pages) {
+      for (final block in page.blocks) {
+        if (block.blockLabel == 'paragraph_title') {
+          final c = block.blockContent.trim();
+          if (c.isNotEmpty) titles.add(c);
         }
       }
-      return titles;
-    } catch (_) {
-      return {};
     }
+    return titles;
   }
 
   static bool _titleSetContains(Set<String> titles, String text) {
