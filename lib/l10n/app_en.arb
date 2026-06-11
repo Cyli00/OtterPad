@@ -89,10 +89,6 @@
   "horizontalPagination": "Horizontal",
   "translationStyle": "Translation Style",
 
-  "toolbarOpacityOpaque": "Opaque",
-  "toolbarOpacitySlight": "Slight",
-  "toolbarOpacityGlass": "Glass",
-  "toolbarOpacityHalf": "Half",
 
   "highlightsAndNotes": "Highlights & Notes",
   "noHighlights": "No highlights yet",
@@ -112,7 +108,6 @@
 
   "color": "Color",
   "background": "Background",
-  "toolbarOpacity": "Toolbar Opacity",
 
   "translationDone": "Translation done",
   "translationCacheUsed": "Used cached translation. To re-translate, tap the overflow menu",
@@ -213,6 +208,8 @@
 
   "searchContent": "Search content",
   "exitSearch": "Exit search",
+  "matchCase": "Match case",
+  "matchWholeWord": "Match whole word",
   "noMatchFound": "No matches found",
   "previousResult": "Previous result",
   "nextResult": "Next result",
@@ -222,6 +219,7 @@
   "saveNote": "Save",
   "streaming": "Receiving...",
   "copied": "Copied",
+  "addToNote": "Add to notes",
   "copyTranslation": "Copy translation",
   "copyOriginal": "Copy original",
 

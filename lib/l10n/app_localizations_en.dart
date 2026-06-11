@@ -253,18 +253,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translationStyle => 'Translation Style';
 
   @override
-  String get toolbarOpacityOpaque => 'Opaque';
-
-  @override
-  String get toolbarOpacitySlight => 'Slight';
-
-  @override
-  String get toolbarOpacityGlass => 'Glass';
-
-  @override
-  String get toolbarOpacityHalf => 'Half';
-
-  @override
   String get highlightsAndNotes => 'Highlights & Notes';
 
   @override
@@ -311,9 +299,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get background => 'Background';
-
-  @override
-  String get toolbarOpacity => 'Toolbar Opacity';
 
   @override
   String get translationDone => 'Translation done';
@@ -585,6 +570,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get exitSearch => 'Exit search';
 
   @override
+  String get matchCase => 'Match case';
+
+  @override
+  String get matchWholeWord => 'Match whole word';
+
+  @override
   String get noMatchFound => 'No matches found';
 
   @override
@@ -607,6 +598,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get copied => 'Copied';
+
+  @override
+  String get addToNote => 'Add to notes';
 
   @override
   String get copyTranslation => 'Copy translation';

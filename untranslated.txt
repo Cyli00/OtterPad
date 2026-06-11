@@ -1,5 +1,8 @@
 {
   "zh_Hant": [
+    "matchCase",
+    "matchWholeWord",
+    "addToNote",
     "tasksInProgress",
     "aiSettingsSelectTextModel",
     "aiSettingsFillApiKey",

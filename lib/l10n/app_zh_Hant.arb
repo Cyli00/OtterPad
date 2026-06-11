@@ -89,10 +89,6 @@
   "horizontalPagination": "左右翻頁",
   "translationStyle": "譯文樣式",
 
-  "toolbarOpacityOpaque": "不透明",
-  "toolbarOpacitySlight": "微透明",
-  "toolbarOpacityGlass": "毛玻璃",
-  "toolbarOpacityHalf": "半透明",
 
   "highlightsAndNotes": "標註與筆記",
   "noHighlights": "還沒有標註",
@@ -112,7 +108,6 @@
 
   "color": "顏色",
   "background": "背景",
-  "toolbarOpacity": "工具列透明度",
 
   "translationDone": "翻譯完成",
   "translationCacheUsed": "使用了先前的翻譯快取，如需重新翻譯請點擊右上角省略號裡的重新翻譯",

@@ -249,18 +249,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get translationStyle => '译文样式';
 
   @override
-  String get toolbarOpacityOpaque => '不透明';
-
-  @override
-  String get toolbarOpacitySlight => '微透明';
-
-  @override
-  String get toolbarOpacityGlass => '毛玻璃';
-
-  @override
-  String get toolbarOpacityHalf => '半透明';
-
-  @override
   String get highlightsAndNotes => '标注与笔记';
 
   @override
@@ -306,9 +294,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get background => '背景';
-
-  @override
-  String get toolbarOpacity => '工具栏透明度';
 
   @override
   String get translationDone => '翻译完成';
@@ -578,6 +563,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get exitSearch => '退出搜索';
 
   @override
+  String get matchCase => '区分大小写';
+
+  @override
+  String get matchWholeWord => '全词匹配';
+
+  @override
   String get noMatchFound => '未找到匹配内容';
 
   @override
@@ -600,6 +591,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get copied => '已复制';
+
+  @override
+  String get addToNote => '添加到注释';
 
   @override
   String get copyTranslation => '复制译文';
@@ -2413,18 +2407,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get translationStyle => '譯文樣式';
 
   @override
-  String get toolbarOpacityOpaque => '不透明';
-
-  @override
-  String get toolbarOpacitySlight => '微透明';
-
-  @override
-  String get toolbarOpacityGlass => '毛玻璃';
-
-  @override
-  String get toolbarOpacityHalf => '半透明';
-
-  @override
   String get highlightsAndNotes => '標註與筆記';
 
   @override
@@ -2470,9 +2452,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get background => '背景';
-
-  @override
-  String get toolbarOpacity => '工具列透明度';
 
   @override
   String get translationDone => '翻譯完成';

@@ -89,10 +89,6 @@
   "horizontalPagination": "左右翻页",
   "translationStyle": "译文样式",
 
-  "toolbarOpacityOpaque": "不透明",
-  "toolbarOpacitySlight": "微透明",
-  "toolbarOpacityGlass": "毛玻璃",
-  "toolbarOpacityHalf": "半透明",
 
   "highlightsAndNotes": "标注与笔记",
   "noHighlights": "还没有标注",
@@ -108,7 +104,6 @@
 
   "color": "颜色",
   "background": "背景",
-  "toolbarOpacity": "工具栏透明度",
 
   "translationDone": "翻译完成",
   "translationCacheUsed": "使用了之前的翻译缓存，如需重新翻译请点击右上角省略号里的重新翻译",
@@ -206,6 +201,8 @@
 
   "searchContent": "搜索正文内容",
   "exitSearch": "退出搜索",
+  "matchCase": "区分大小写",
+  "matchWholeWord": "全词匹配",
   "noMatchFound": "未找到匹配内容",
   "previousResult": "上一个结果",
   "nextResult": "下一个结果",
@@ -215,6 +212,7 @@
   "saveNote": "保存",
   "streaming": "流式接收中",
   "copied": "已复制",
+  "addToNote": "添加到注释",
   "copyTranslation": "复制译文",
   "copyOriginal": "复制原文",
 

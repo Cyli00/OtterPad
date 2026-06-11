@@ -579,30 +579,6 @@ abstract class AppLocalizations {
   /// **'Translation Style'**
   String get translationStyle;
 
-  /// No description provided for @toolbarOpacityOpaque.
-  ///
-  /// In en, this message translates to:
-  /// **'Opaque'**
-  String get toolbarOpacityOpaque;
-
-  /// No description provided for @toolbarOpacitySlight.
-  ///
-  /// In en, this message translates to:
-  /// **'Slight'**
-  String get toolbarOpacitySlight;
-
-  /// No description provided for @toolbarOpacityGlass.
-  ///
-  /// In en, this message translates to:
-  /// **'Glass'**
-  String get toolbarOpacityGlass;
-
-  /// No description provided for @toolbarOpacityHalf.
-  ///
-  /// In en, this message translates to:
-  /// **'Half'**
-  String get toolbarOpacityHalf;
-
   /// No description provided for @highlightsAndNotes.
   ///
   /// In en, this message translates to:
@@ -680,12 +656,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Background'**
   String get background;
-
-  /// No description provided for @toolbarOpacity.
-  ///
-  /// In en, this message translates to:
-  /// **'Toolbar Opacity'**
-  String get toolbarOpacity;
 
   /// No description provided for @translationDone.
   ///
@@ -1209,6 +1179,18 @@ abstract class AppLocalizations {
   /// **'Exit search'**
   String get exitSearch;
 
+  /// No description provided for @matchCase.
+  ///
+  /// In en, this message translates to:
+  /// **'Match case'**
+  String get matchCase;
+
+  /// No description provided for @matchWholeWord.
+  ///
+  /// In en, this message translates to:
+  /// **'Match whole word'**
+  String get matchWholeWord;
+
   /// No description provided for @noMatchFound.
   ///
   /// In en, this message translates to:
@@ -1256,6 +1238,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied'**
   String get copied;
+
+  /// No description provided for @addToNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to notes'**
+  String get addToNote;
 
   /// No description provided for @copyTranslation.
   ///
