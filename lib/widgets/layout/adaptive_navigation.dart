@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/haptics.dart';
+import '../tactile_press.dart';
 
 /// 导航目标项配置
 class AdaptiveDestination {
@@ -128,13 +129,12 @@ class _NavigationRailItem extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Material(
-        color: backgroundColor,
+      child: TactilePress(
+        baseColor: backgroundColor,
         borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: SizedBox(
+        onTap: onTap,
+        haptics: false,
+        child: SizedBox(
             height: 56,
             child: extended
                 ? Row(
@@ -163,7 +163,6 @@ class _NavigationRailItem extends StatelessWidget {
                       child: icon,
                     ),
                   ),
-          ),
         ),
       ),
     );

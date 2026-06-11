@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../widgets/tactile_press.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../router/app_routes.dart';
@@ -66,11 +67,12 @@ class HomeHeader extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            child: GestureDetector(
+            child: TactilePress(
               onTap: () {
-                Haptics.soft();
                 context.push(AppRoutes.librarySearch);
               },
+              baseColor: Colors.transparent,
+              borderRadius: BorderRadius.circular(24.0),
               child: Container(
                 height: isMobile ? 44 : 48,
                 decoration: BoxDecoration(

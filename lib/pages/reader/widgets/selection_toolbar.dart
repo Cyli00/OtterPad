@@ -7,6 +7,7 @@ import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../services/haptics.dart';
+import '../../../widgets/tactile_press.dart';
 
 /// 在选区附近显示阅读上下文菜单 Overlay（含可展开的笔记面板）。
 OverlayEntry showReaderContextMenu({
@@ -354,12 +355,10 @@ class _ColorDot extends StatelessWidget {
     final color = Color(int.parse('0xFF$hexColor'));
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
-      child: InkWell(
-        onTap: () {
-          Haptics.soft();
-          onTap();
-        },
-        borderRadius: BorderRadius.circular(10),
+      child: TactilePress(
+        onTap: onTap,
+        baseColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(11),
         child: Container(
           width: 22,
           height: 22,
@@ -397,16 +396,12 @@ class _ActionIcon extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       preferBelow: false,
-      child: InkWell(
-        onTap: () {
-          Haptics.soft();
-          onTap();
-        },
+      child: TactilePress(
+        onTap: onTap,
+        baseColor: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Icon(icon, color: color, size: 20),
-        ),
+        padding: const EdgeInsets.all(8),
+        child: Icon(icon, color: color, size: 20),
       ),
     );
   }

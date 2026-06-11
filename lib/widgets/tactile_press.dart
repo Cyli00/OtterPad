@@ -56,7 +56,7 @@ class _TactilePressState extends State<TactilePress> {
     final Color target =
         _pressed ? pressTarget : (_hovered ? hoverTarget : base);
     final double scale =
-        _pressed ? (widget.pressedScale ?? 1.0) : 1.0;
+        _pressed ? (widget.pressedScale ?? 0.97) : 1.0;
     final radius = widget.borderRadius ?? BorderRadius.circular(12);
 
     final content = widget.padding == null
@@ -92,22 +92,28 @@ class _TactilePressState extends State<TactilePress> {
                       };
             },
           ),
-          LongPressGestureRecognizer:
-              GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-            LongPressGestureRecognizer.new,
-            (r) {
-              r
-                ..onLongPress = widget.onLongPress == null
-                    ? null
-                    : () {
-                        if (widget.haptics) Haptics.medium();
-                        widget.onLongPress!();
-                      }
-                ..onLongPressEnd = widget.onLongPress != null
-                    ? (_) => setState(() => _pressed = false)
-                    : null;
-            },
-          ),
+          // 仅在确有 onLongPress 时注册——回调全空的 LongPressGestureRecognizer
+          // 是"僵尸竞争者"：500ms deadline 一到它无条件赢得竞技场，Tap 被判负，
+          // onTap 静默丢失（用户按住稍久抬手 = 点击无效），且 _pressed 的清除
+          // 走不到 onLongPressEnd（也是 null），按压灰永久卡在条目上。
+          if (widget.onLongPress != null)
+            LongPressGestureRecognizer:
+                GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+              LongPressGestureRecognizer.new,
+              (r) {
+                r
+                  ..onLongPress = () {
+                    if (widget.haptics) Haptics.medium();
+                    widget.onLongPress!();
+                  }
+                  ..onLongPressEnd = (_) {
+                    setState(() => _pressed = false);
+                  }
+                  ..onLongPressCancel = () {
+                    setState(() => _pressed = false);
+                  };
+              },
+            ),
         },
         child: AnimatedScale(
           scale: scale,
