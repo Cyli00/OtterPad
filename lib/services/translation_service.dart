@@ -6,6 +6,7 @@ import '../core/storage/storage.dart';
 import '../providers/api_provider.dart';
 import '../providers/translation_config_provider.dart';
 import 'agent_thinking_payload.dart';
+import 'prompts.dart';
 
 /// 翻译缓存条目
 class _CacheEntry {
@@ -76,11 +77,14 @@ class TranslationService {
 
     // ── 构建 prompt ──
     final targetLang = translationConfig.targetLanguage;
-    final systemPrompt = translationConfig.systemPrompt
-        .replaceAll('{{targetLanguage}}', targetLang);
-    final userPrompt = translationConfig.userPrompt
-        .replaceAll('{{targetLanguage}}', targetLang)
-        .replaceAll('{{input}}', text);
+    final systemPrompt = renderPrompt(
+      translationConfig.systemPrompt,
+      {'targetLanguage': targetLang},
+    );
+    final userPrompt = renderPrompt(
+      translationConfig.userPrompt,
+      {'targetLanguage': targetLang, 'input': text},
+    );
 
     // ── 调用 API ──
     // 翻译专用 thinking 覆盖：translationThinkingLevel != null 时强制写入到
@@ -144,14 +148,17 @@ class TranslationService {
     }
 
     final targetLang = translationConfig.targetLanguage;
-    final baseSystemPrompt = translationConfig.systemPrompt
-        .replaceAll('{{targetLanguage}}', targetLang);
+    final baseSystemPrompt = renderPrompt(
+      translationConfig.systemPrompt,
+      {'targetLanguage': targetLang},
+    );
     final systemPrompt = extraSystemInstruction != null
         ? '$baseSystemPrompt\n$extraSystemInstruction'
         : baseSystemPrompt;
-    final userPrompt = translationConfig.userPrompt
-        .replaceAll('{{targetLanguage}}', targetLang)
-        .replaceAll('{{input}}', text);
+    final userPrompt = renderPrompt(
+      translationConfig.userPrompt,
+      {'targetLanguage': targetLang, 'input': text},
+    );
 
     final modelParams = _applyTranslationThinking(
       agentState.paramsFor(modelId),

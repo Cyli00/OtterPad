@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../services/haptics.dart';
+import '../../services/prompts.dart';
 import '../../services/translation_skip_sections.dart';
 import '../../services/translation_style.dart';
 import '../../widgets/tactile_press.dart';
@@ -27,6 +28,10 @@ class _TranslationSettingsSectionState
   late final TextEditingController _userPromptCtrl;
   Timer? _systemTimer;
   Timer? _userTimer;
+
+  /// user prompt 缺必需占位符时的即时错误提示。非 null 期间存储层
+  /// （PromptStore.set）同样会拒绝保存——红字 = 当前文本无效未保存。
+  String? _userPromptError;
 
   @override
   void initState() {
@@ -53,6 +58,17 @@ class _TranslationSettingsSectionState
   }
 
   void _debounceSaveUser(String value) {
+    // 即时校验：缺必需占位符立即红字（空白除外——空白 = 重置为默认）。
+    // 防抖落点的 setUserPrompt 校验不过会拒绝写入，红字即"未保存"。
+    final missing = Prompts.translationUser.missingPlaceholders(value);
+    final error = (missing.isEmpty || value.trim().isEmpty)
+        ? null
+        : context.l10n.promptMissingPlaceholders(
+            missing.map((p) => '{{$p}}').join(', '),
+          );
+    if (error != _userPromptError) {
+      setState(() => _userPromptError = error);
+    }
     _userTimer?.cancel();
     _userTimer = Timer(const Duration(milliseconds: 600), () {
       ref.read(translationConfigProvider.notifier).setUserPrompt(value);
@@ -310,6 +326,7 @@ class _TranslationSettingsSectionState
                       .read(translationConfigProvider.notifier)
                       .resetUserPrompt();
                   _userPromptCtrl.text = kDefaultTranslationUserPrompt;
+                  setState(() => _userPromptError = null);
                 }),
             ],
           ),
@@ -320,7 +337,8 @@ class _TranslationSettingsSectionState
             maxLines: 6,
             style: theme.textTheme.bodyMedium,
             decoration: _fieldDeco(theme, cs,
-                hint: 'Translate to {{targetLanguage}}:\n\n{{input}}'),
+                    hint: 'Translate to {{targetLanguage}}:\n\n{{input}}')
+                .copyWith(errorText: _userPromptError),
             onChanged: (v) => _debounceSaveUser(v.trim()),
           ),
         ],

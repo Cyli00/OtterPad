@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/storage.dart';
+import '../services/prompt_store.dart';
+import '../services/prompts.dart';
 
-const kDefaultSummaryImagePrompt = '''
-A detailed scientific infographic in the style of a Cell journal highlight summary. White or very light grey background. Clean vector-like line art, thin dark grey outlines. The layout includes a title, short explanatory text blocks, and simple diagram panels connected by arrows, presenting key findings in a structured, readable flow. Restrained color palette: soft muted blue, warm pale grey, very pale desaturated orange for functional coding only. No purple, no large filled color blocks, no gradients, no shadows, no 3D, no photorealistic rendering, no chaotic or dense text, no empty minimal look. Sans-serif labels, editorial and precise.
-''';
+// 默认提示词文本在 Prompt Registry（services/prompts.dart）——
+// 本文件只管理生图域的非 prompt 配置，prompt 的存取委托 PromptStore。
 
 const kDefaultSummaryAspectRatio = '16:9';
 const kDefaultSummaryFidelity = 'high';
@@ -52,7 +53,6 @@ class ImageGenerationConfig {
 
 const _kAspectRatio = 'image_generation_aspect_ratio';
 const _kFidelity = 'image_generation_fidelity';
-const _kPrompt = 'image_generation_prompt';
 const _kMaxReferenceImages = 'image_generation_max_reference_images';
 
 class ImageGenerationConfigNotifier
@@ -66,8 +66,7 @@ class ImageGenerationConfigNotifier
             as String;
     final fidelity =
         box.get(_kFidelity, defaultValue: kDefaultSummaryFidelity) as String;
-    final prompt =
-        box.get(_kPrompt, defaultValue: kDefaultSummaryImagePrompt) as String;
+    final prompt = PromptStore.resolve(Prompts.summaryImage);
     final maxReferenceImages =
         box.get(
               _kMaxReferenceImages,
@@ -98,14 +97,16 @@ class ImageGenerationConfigNotifier
     await GStorage.setting.put(_kFidelity, value);
   }
 
+  /// 空白输入 = 重置为默认（PromptStore 语义：用户清空但未配置新文本时
+  /// 直接用当前默认）。生图 prompt 无必需占位符，保存不会被拒绝。
   Future<void> setPrompt(String value) async {
-    state = state.copyWith(prompt: value);
-    await GStorage.setting.put(_kPrompt, value);
+    await PromptStore.set(Prompts.summaryImage, value);
+    state = state.copyWith(prompt: PromptStore.resolve(Prompts.summaryImage));
   }
 
   Future<void> resetPrompt() async {
+    await PromptStore.reset(Prompts.summaryImage);
     state = state.copyWith(prompt: kDefaultSummaryImagePrompt);
-    await GStorage.setting.delete(_kPrompt);
   }
 
   Future<void> setMaxReferenceImages(int value) async {
@@ -116,10 +117,10 @@ class ImageGenerationConfigNotifier
 
   Future<void> resetAll() async {
     state = const ImageGenerationConfig();
+    await PromptStore.reset(Prompts.summaryImage);
     final box = GStorage.setting;
     await box.delete(_kAspectRatio);
     await box.delete(_kFidelity);
-    await box.delete(_kPrompt);
     await box.delete(_kMaxReferenceImages);
   }
 }

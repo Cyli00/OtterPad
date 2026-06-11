@@ -73,6 +73,8 @@
 - **AgentModelCapability** (`lib/services/agent_model_capability.dart`) — 禁止硬编码模型能力判断。
 - **BuiltInToolNames** (`lib/services/builtin_tools.dart`) — 各厂内置工具名常量（snake_case，对齐 API 字段）与 `forProvider` 可用集。禁止在请求构造 / 设置 UI 里硬编码工具名字符串。
 - **AiSettingsPrompt** (`lib/services/ai_settings_prompt.dart`) — 禁止各调用点自写 AI 设置错误文案。
+- **Prompts / PromptDef** (`lib/services/prompts.dart`) — 全代码库 LLM prompt 的唯一文本源：可定制 prompt 是 `PromptDef` 声明（id / storageKey / 默认文本 / 必需占位符），不可定制 prompt（如排版修复的 yFirst 变体）是同文件函数；占位符插值统一走 `renderPrompt`。改 prompt 措辞只碰这个文件。禁止在 service / provider 里硬编码 prompt 文本或自写 `{{}}` 替换。
+- **PromptStore** (`lib/services/prompt_store.dart`) — 可定制 prompt 五件套（解析/保存/重置/是否默认/占位符校验）的唯一实现：空白 = 未定制回退默认，缺必需占位符拒绝保存并返回缺失列表。新 prompt 开放定制 = 在 `prompts.dart` 加一条 PromptDef 声明。禁止在 config provider 里自写 prompt 的默认值回退 / 存储 / 重置逻辑。
 
 ### 翻译系统
 

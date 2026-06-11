@@ -8,6 +8,7 @@ import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/image_generation_config_provider.dart';
 import '../../services/haptics.dart';
+import '../../services/prompts.dart';
 import 'setting_picker.dart';
 
 /// 画幅比例用户场景副标题——帮用户从"数字"映射到"使用场景"。

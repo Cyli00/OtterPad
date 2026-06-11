@@ -1,26 +1,13 @@
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/storage.dart';
+import '../services/prompt_store.dart';
+import '../services/prompts.dart';
 import '../services/translation_skip_sections.dart';
 import '../services/translation_style.dart';
 
-// ── 默认提示词模板（参考 Read-Frog prompt.ts，适配 Markdown 场景）────────
-
-const kDefaultTranslationSystemPrompt = '''
-You are a professional {{targetLanguage}} native translator who needs to fluently translate text into {{targetLanguage}}.
-
-## Translation Rules
-1. Output only the translated content, without explanations or additional content.
-2. The returned translation must maintain exactly the same number of paragraphs and format as the original text.
-3. For content that should not be translated (such as proper nouns, code, formulas, etc.), keep the original text.
-4. Preserve all Markdown formatting including headings, lists, emphasis, and LaTeX expressions.
-5. If the input contains "%%%%" separators on their own lines, the output MUST preserve the exact same separators in the exact same positions, with each segment translated independently. Never merge segments, never drop separators, never add extra ones.
-6. When multiple segments appear together, they are usually from the same document. Use surrounding segments as context to resolve pronouns, keep terminology consistent, and match tone—but preserve each segment's own boundaries. Translate each segment in place; do NOT move content across segment boundaries.''';
-
-const kDefaultTranslationUserPrompt = '''
-Translate to {{targetLanguage}}:
-
-{{input}}''';
+// 默认提示词文本在 Prompt Registry（services/prompts.dart）——
+// 本文件只管理翻译域的非 prompt 配置，prompt 的存取委托 PromptStore。
 
 const kDefaultTargetLanguage = '中文(简体)';
 
@@ -53,10 +40,8 @@ const kTargetLanguages = <String>[
   'Română',
 ];
 
-// ── Hive 存储 key ──────────────────────────────────────────────────────
+// ── Hive 存储 key（prompt 的 key 在 PromptDef.storageKey）──────────────
 
-const _kSystemPrompt = 'translation_config_system_prompt';
-const _kUserPrompt = 'translation_config_user_prompt';
 const _kTargetLang = 'translation_config_target_language';
 const _kTemperature = 'translation_config_temperature';
 const _kDisplayStyle = 'translation_config_display_style';
@@ -87,9 +72,9 @@ class TranslationConfig {
   });
 
   bool get isSystemPromptDefault =>
-      systemPrompt == kDefaultTranslationSystemPrompt;
+      systemPrompt.trim() == kDefaultTranslationSystemPrompt.trim();
   bool get isUserPromptDefault =>
-      userPrompt == kDefaultTranslationUserPrompt;
+      userPrompt.trim() == kDefaultTranslationUserPrompt.trim();
 
   /// 解析后的样式策略对象（便于 UI / weaver 直接用）。
   TranslationStyleStrategy get displayStyle =>
@@ -121,10 +106,8 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
     final box = GStorage.setting;
     final rawSections = box.get(_kIgnoreSections) as List?;
     return TranslationConfig(
-      systemPrompt: box.get(_kSystemPrompt,
-          defaultValue: kDefaultTranslationSystemPrompt) as String,
-      userPrompt: box.get(_kUserPrompt,
-          defaultValue: kDefaultTranslationUserPrompt) as String,
+      systemPrompt: PromptStore.resolve(Prompts.translationSystem),
+      userPrompt: PromptStore.resolve(Prompts.translationUser),
       targetLanguage:
           box.get(_kTargetLang, defaultValue: kDefaultTargetLanguage) as String,
       temperature: box.get(_kTemperature) as double?,
@@ -136,14 +119,26 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
     );
   }
 
-  Future<void> setSystemPrompt(String value) async {
-    state = state.copyWith(systemPrompt: value);
-    await GStorage.setting.put(_kSystemPrompt, value);
+  /// 返回缺失的必需占位符——非空表示已拒绝保存（state 与存储均保留旧值），
+  /// UI 据此渲染 errorText。空白输入 = 重置为默认（PromptStore 语义）。
+  Future<List<String>> setSystemPrompt(String value) async {
+    final missing = await PromptStore.set(Prompts.translationSystem, value);
+    if (missing.isEmpty) {
+      state = state.copyWith(
+        systemPrompt: PromptStore.resolve(Prompts.translationSystem),
+      );
+    }
+    return missing;
   }
 
-  Future<void> setUserPrompt(String value) async {
-    state = state.copyWith(userPrompt: value);
-    await GStorage.setting.put(_kUserPrompt, value);
+  Future<List<String>> setUserPrompt(String value) async {
+    final missing = await PromptStore.set(Prompts.translationUser, value);
+    if (missing.isEmpty) {
+      state = state.copyWith(
+        userPrompt: PromptStore.resolve(Prompts.translationUser),
+      );
+    }
+    return missing;
   }
 
   Future<void> setTargetLanguage(String value) async {
@@ -152,13 +147,13 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
   }
 
   Future<void> resetSystemPrompt() async {
+    await PromptStore.reset(Prompts.translationSystem);
     state = state.copyWith(systemPrompt: kDefaultTranslationSystemPrompt);
-    await GStorage.setting.delete(_kSystemPrompt);
   }
 
   Future<void> resetUserPrompt() async {
+    await PromptStore.reset(Prompts.translationUser);
     state = state.copyWith(userPrompt: kDefaultTranslationUserPrompt);
-    await GStorage.setting.delete(_kUserPrompt);
   }
 
   Future<void> setTemperature(double? value) async {
@@ -189,9 +184,9 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
 
   Future<void> resetAll() async {
     state = const TranslationConfig();
+    await PromptStore.reset(Prompts.translationSystem);
+    await PromptStore.reset(Prompts.translationUser);
     final box = GStorage.setting;
-    await box.delete(_kSystemPrompt);
-    await box.delete(_kUserPrompt);
     await box.delete(_kTargetLang);
     await box.delete(_kTemperature);
     await box.delete(_kDisplayStyle);
