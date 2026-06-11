@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import '../../../services/figure_extract_service.dart';
 import '../../../services/haptics.dart';
 import 'figure_viewer.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 
 // ─── 数据模型 ───
@@ -443,20 +445,18 @@ class _FiguresTab extends StatelessWidget {
               const SizedBox(width: 8),
             ],
             if (onRegenerateSummary != null)
-              GestureDetector(
+              TactilePress(
                 onTap: summaryState.generating ? null : () {
-                  Haptics.soft();
                   onRegenerateSummary!();
                 },
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    Symbols.refresh_rounded,
-                    size: 18,
-                    color: summaryState.generating
-                        ? cs.onSurfaceVariant.withAlpha(90)
-                        : cs.onSurfaceVariant,
-                  ),
+                baseColor: Colors.transparent,
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Symbols.refresh_rounded,
+                  size: 18,
+                  color: summaryState.generating
+                      ? cs.onSurfaceVariant.withAlpha(90)
+                      : cs.onSurfaceVariant,
                 ),
               ),
           ],
@@ -516,13 +516,50 @@ class _FiguresTab extends StatelessWidget {
 
 // ─── References Tab ───
 
-class _ReferencesTab extends ConsumerWidget {
+class _ReferencesTab extends ConsumerStatefulWidget {
   final List<ReferenceItem> references;
 
   const _ReferencesTab({required this.references});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ReferencesTab> createState() => _ReferencesTabState();
+}
+
+class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
+  /// 最近复制的条目索引——行高亮 + check 图标维持 2 秒，给"刚才点中的
+  /// 是哪条"明确的指向反馈（透明底上的按压色太弱，单凭它无法定位）。
+  int? _copiedIndex;
+  Timer? _copiedTimer;
+
+  @override
+  void dispose() {
+    _copiedTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copy(int index, ReferenceItem item) async {
+    final text =
+        item.isNumbered ? '[${item.number}] ${item.text}' : item.text;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    setState(() => _copiedIndex = index);
+    _copiedTimer?.cancel();
+    _copiedTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copiedIndex = null);
+    });
+    // 摘要进 snackbar：让"复制了什么"可确认，不再只报一个编号
+    final snippet = item.text.length > 30
+        ? '${item.text.substring(0, 30)}…'
+        : item.text;
+    ref.read(snackBarServiceProvider).showResult(
+          message: context.l10n.copiedReference(item.number, snippet),
+          duration: const Duration(seconds: 2),
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final references = widget.references;
     if (references.isEmpty) {
       return _EmptyState(
         icon: Symbols.menu_book_rounded,
@@ -540,19 +577,14 @@ class _ReferencesTab extends ConsumerWidget {
           Divider(color: cs.outlineVariant.withAlpha(40), height: 1),
       itemBuilder: (context, index) {
         final item = references[index];
+        final copied = index == _copiedIndex;
 
         return TactilePress(
-          baseColor: Colors.transparent,
-          onTap: () {
-            final text = item.isNumbered
-                ? '[${item.number}] ${item.text}'
-                : item.text;
-            Clipboard.setData(ClipboardData(text: text));
-            ref.read(snackBarServiceProvider).showResult(
-              message: context.l10n.copiedReferenceNumber(item.number),
-              duration: const Duration(seconds: 2),
-            );
-          },
+          // 复制后的 2 秒高亮复用 TactilePress 内部的 AnimatedContainer
+          baseColor: copied
+              ? cs.primaryContainer.withAlpha(110)
+              : Colors.transparent,
+          onTap: () => _copy(index, item),
           borderRadius: BorderRadius.circular(8),
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
@@ -577,6 +609,19 @@ class _ReferencesTab extends ConsumerWidget {
                     ),
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                AnimatedOpacity(
+                  opacity: copied ? 1 : 0,
+                  duration: kAnimFast,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Icon(
+                      Symbols.check_circle_rounded,
+                      size: 18,
+                      fill: 1,
+                      color: cs.primary,
+                    ),
                   ),
                 ),
               ],
@@ -629,29 +674,26 @@ class _ActionLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () {
-        Haptics.soft();
-        onTap();
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: cs.primary),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: cs.primary,
+    return TactilePress(
+      onTap: onTap,
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: cs.primary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: cs.primary,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ],
         ),
-      ),
     );
   }
 }
+

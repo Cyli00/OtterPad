@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 import '../../../core/animation_constants.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/reader_settings_provider.dart';
+import '../../../services/haptics.dart';
 import '../../../services/reader_localhost_server.dart';
 import 'reader_background.dart';
 import 'reader_js_bridge.dart';
@@ -30,6 +31,10 @@ class WebViewMarkdownReader extends StatefulWidget {
 
   final String translationStyleId;
   final double initialScrollProgress;
+
+  /// 横向翻页的进度锚点（视口起始处内容块索引），优先于比率恢复。
+  /// 来源是 HistoryEntry.anchorBlock；null = 老数据或纵向模式按比率。
+  final int? initialAnchorBlock;
   final String? highlightQuery;
 
   final void Function(String text, Rect selectionRect)? onSelectionEnd;
@@ -38,8 +43,15 @@ class WebViewMarkdownReader extends StatefulWidget {
   final void Function(String imageSource)? onImageClick;
   final void Function(ScrollDirection direction)? onScrollDirection;
 
-  /// 阅读进度上报（0.0–1.0）。WebView JS 侧已做 500ms 节流。
-  final void Function(double progress)? onScrollProgress;
+  /// 阅读进度上报（0.0–1.0 + 内容块锚点）。WebView JS 侧已做 500ms 节流。
+  final void Function(double progress, int? anchorBlock)? onScrollProgress;
+
+  /// 横向模式边缘点击成功翻页——view 层触发轻触觉反馈。
+  final VoidCallback? onPageFlip;
+
+  /// 显式重载纪元：md 内容未变但 figures/*.png 被原地覆盖（AI 排版修复）
+  /// 时由 view 层递增，强制 WebView 整页重载以重新请求图片。
+  final int reloadEpoch;
 
   /// 横向翻页模式下点击页面中央触发——view 层据此 toggle 沉浸式工具栏。
   /// vertical 模式下不会被调（JS 侧已 mode 短路）。
@@ -54,6 +66,7 @@ class WebViewMarkdownReader extends StatefulWidget {
     required this.documentDir,
     this.translationStyleId = 'themed',
     this.initialScrollProgress = 0,
+    this.initialAnchorBlock,
     this.topInset = 0,
     this.bottomInset = 0,
     this.highlightQuery,
@@ -63,7 +76,9 @@ class WebViewMarkdownReader extends StatefulWidget {
     this.onImageClick,
     this.onScrollDirection,
     this.onScrollProgress,
+    this.onPageFlip,
     this.onToggleToolbar,
+    this.reloadEpoch = 0,
   });
 
   @override
@@ -189,6 +204,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     translationStyleId: w.translationStyleId,
     highlights: w.highlights,
     highlightQuery: w.highlightQuery,
+    reloadEpoch: w.reloadEpoch,
   );
 
   void _applyUpdate(ReaderUpdate update) {
@@ -404,7 +420,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     // 冻结态：InAppWebView 不挂载（原生 View detach 出 ViewRoot），改用截图占位。
     final Widget content = _frozen ? _buildFrozenPlaceholder() : webView;
 
-    // horizontal 翻页模式不需要覆盖滚动条——那边有页号 / 边缘点击翻页 UI。
+    // horizontal 翻页模式不需要覆盖滚动条——页内有进度页脚（x/y 页码）
+    // 和边缘点击翻页，纵向拖动滚动条的交互不存在。
     if (isHorizontal) return content;
 
     return Stack(
@@ -445,14 +462,23 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   @override
   void onContentReady() {
+    // 主题/翻译样式重放：加载期间到达的 ApplyTheme/ApplyTranslationStyle 被
+    // bridge 的 !_contentReady 丢弃，而 planUpdates 是新旧 props 差分——丢弃
+    // 后差异不再出现，永不重试。ready 时用 widget 当前值兜底（幂等：HTML
+    // 生成时本就带这些值，重放只是覆写同名 CSS 变量/属性）。
+    _bridge?.applyTheme(widget.palette, widget.settings);
+    _bridge?.applyTranslationStyle(widget.translationStyleId);
     // 翻页方式必须在首屏注入：JS 默认 body 没 data-pagination 属性，
     // 视为 vertical；horizontal 时若不注入会以 vertical 渲染首屏，
     // 直到第一次 didUpdateWidget 才切，造成"先看到 vertical 一闪"。
     _bridge?.applyPagination(widget.settings.paginationMode);
     _bridge?.restoreAllHighlights(widget.highlights);
     _bridge?.applySearchQuery(widget.highlightQuery);
-    if (widget.initialScrollProgress > 0) {
-      _bridge?.restoreScrollProgress(widget.initialScrollProgress);
+    if (widget.initialScrollProgress > 0 || widget.initialAnchorBlock != null) {
+      _bridge?.restoreScrollProgress(
+        widget.initialScrollProgress,
+        anchorBlock: widget.initialAnchorBlock,
+      );
     }
   }
 
@@ -480,8 +506,15 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       widget.onScrollDirection?.call(direction);
 
   @override
-  void onScrollProgress(double progress) =>
-      widget.onScrollProgress?.call(progress);
+  void onScrollProgress(double progress, int? anchorBlock) =>
+      widget.onScrollProgress?.call(progress, anchorBlock);
+
+  @override
+  void onPageFlip() {
+    // 系统返回手势确认同档的轻触感——仅点击翻页，滑动翻页 JS 侧不发此事件
+    Haptics.light();
+    widget.onPageFlip?.call();
+  }
 
   @override
   void onScrollMetrics(ReaderScrollMetrics metrics) {

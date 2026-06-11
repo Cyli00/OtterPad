@@ -523,11 +523,12 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
   /// 写盘节流走 [HistoryNotifier.setProgress] 内的 2s 防抖；session 自己不持有
   /// progress state（事实源是 HistoryEntry，UI 直接 watch historyProvider）。
   /// PDF 翻页 + Markdown WebView 滚动两条路都把数据汇到这里。
-  void reportProgress(double progress) {
+  /// [anchorBlock] 仅 Markdown 路径提供（内容块锚点），PDF 传 null。
+  void reportProgress(double progress, {int? anchorBlock}) {
     if (args.documentId.isEmpty) return;
     _ref
         .read(historyProvider.notifier)
-        .setProgress(args.documentId, progress);
+        .setProgress(args.documentId, progress, anchorBlock: anchorBlock);
   }
 
   /// reader 退出时调，强制把防抖窗口里的最后一次进度落盘。

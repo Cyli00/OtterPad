@@ -18,35 +18,35 @@ import 'documents_provider.dart' show validDocsProvider;
 /// `progress` 含义：0.0 = 未读/未滚动；1.0 = 读到底。PDF 模式用
 /// `currentPage / totalPages`，Markdown 模式用 `scrollTop / (scrollHeight - viewHeight)`。
 /// 老版本 Hive 数据无 `progress` 字段时回退 0.0。
+///
+/// `anchorBlock` 是 Markdown 阅读位置的内容块锚点（`#content` 顶层块索引）：
+/// 比率在布局参数（字号/窗口尺寸）变化后会落错页，横向翻页恢复时优先用它。
+/// null = 老数据或 PDF 进度。
 class HistoryEntry {
   final String docId;
   final DateTime openedAt;
   final double progress;
+  final int? anchorBlock;
 
   const HistoryEntry({
     required this.docId,
     required this.openedAt,
     this.progress = 0.0,
+    this.anchorBlock,
   });
-
-  HistoryEntry copyWith({DateTime? openedAt, double? progress}) {
-    return HistoryEntry(
-      docId: docId,
-      openedAt: openedAt ?? this.openedAt,
-      progress: progress ?? this.progress,
-    );
-  }
 
   Map<String, dynamic> toMap() => {
         'docId': docId,
         'openedAt': openedAt.toIso8601String(),
         'progress': progress,
+        if (anchorBlock != null) 'anchorBlock': anchorBlock,
       };
 
   factory HistoryEntry.fromMap(Map map) => HistoryEntry(
         docId: map['docId'] as String,
         openedAt: DateTime.parse(map['openedAt'] as String),
         progress: (map['progress'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0,
+        anchorBlock: (map['anchorBlock'] as num?)?.toInt(),
       );
 }
 
@@ -82,10 +82,19 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
   }
 
   /// 记录一次阅读：已存在同 docId 时先移除再插入顶部（冒泡）。
+  /// 进度/锚点从旧 entry 继承——否则重开文档瞬间进度归零，
+  /// 阅读位置恢复（view.dart initState 读取）拿到的永远是 0。
   void record(String docId) {
     final now = DateTime.now();
+    final idx = state.indexWhere((e) => e.docId == docId);
+    final prev = idx >= 0 ? state[idx] : null;
     final next = <HistoryEntry>[
-      HistoryEntry(docId: docId, openedAt: now),
+      HistoryEntry(
+        docId: docId,
+        openedAt: now,
+        progress: prev?.progress ?? 0.0,
+        anchorBlock: prev?.anchorBlock,
+      ),
       ...state.where((e) => e.docId != docId),
     ];
     if (next.length > _maxEntries) {
@@ -120,15 +129,23 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
   ///
   /// 注意：仅更新已存在 entry 的 progress；如果文献从未打开过（无 HistoryEntry）
   /// 则直接忽略——`record(docId)` 在 reader 入口已经先建好 entry 了。
-  void setProgress(String docId, double progress) {
+  void setProgress(String docId, double progress, {int? anchorBlock}) {
     final clamped = progress.clamp(0.0, 1.0);
     final idx = state.indexWhere((e) => e.docId == docId);
     if (idx < 0) return;
     final old = state[idx];
-    // 同进度不动 state，避免无谓 rebuild
-    if ((old.progress - clamped).abs() < 1e-4) return;
+    // 同进度同锚点不动 state，避免无谓 rebuild
+    if ((old.progress - clamped).abs() < 1e-4 &&
+        old.anchorBlock == anchorBlock) {
+      return;
+    }
     final next = [...state];
-    next[idx] = old.copyWith(progress: clamped);
+    next[idx] = HistoryEntry(
+      docId: old.docId,
+      openedAt: old.openedAt,
+      progress: clamped,
+      anchorBlock: anchorBlock,
+    );
     state = next;
 
     _progressDebounce?.cancel();

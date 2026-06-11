@@ -159,17 +159,16 @@ class ReaderLocalhostServer {
     req.response.headers
       ..contentType = ContentType.parse(_mimeType(fullPath))
       ..contentLength = stat.size
-      // 缓存按资源类型分流：
-      // - HTML：reader HTML 内容随翻译/笔记/markdown 重写频繁变化，且
-      //   reload 时 URL 不变，必须 `no-store` 强制 WebView 每次重新拉取，
-      //   否则翻译完成后 loadUrl 同 URL 命中旧缓存 → 译文看不见（这正是
-      //   引入 cache-control 后踩到的坑：原本 max-age=300 让翻译失效）。
-      // - 图片/字体/CSS/JS：内容随磁盘文件变化但写入频率低（figure 提取
-      //   后通常不再改），5 分钟缓存加速重复访问、降低 server 压力。
-      ..set(
-        HttpHeaders.cacheControlHeader,
-        _isHtmlPath(fullPath) ? 'no-store' : 'public, max-age=300',
-      );
+      // 文档目录文件统一 no-store：
+      // - HTML：内容随翻译/笔记/markdown 重写频繁变化，且 reload 时 URL
+      //   不变，必须强制 WebView 每次重新拉取，否则翻译完成后 loadUrl 同
+      //   URL 命中旧缓存 → 译文看不见（引入 cache-control 后踩到的坑：
+      //   原本 max-age=300 让翻译失效）。
+      // - 图片：figures/*.png 会被 AI 排版修复原地覆盖（URL 不变、内容变），
+      //   max-age 会让重载后仍显示旧图——同一个坑的图片版。localhost 读
+      //   本地文件毫秒级，放弃缓存没有实际代价；DOM 不重建时图片本就不会
+      //   重新请求，惩罚只发生在显式 reload 后。
+      ..set(HttpHeaders.cacheControlHeader, 'no-store');
 
     if (req.method == 'HEAD') {
       await req.response.close();
@@ -217,11 +216,6 @@ class ReaderLocalhostServer {
       req.response.statusCode = HttpStatus.notFound;
       await req.response.close();
     }
-  }
-
-  bool _isHtmlPath(String path) {
-    final ext = p.extension(path).toLowerCase();
-    return ext == '.html' || ext == '.htm';
   }
 
   String _mimeType(String path) {

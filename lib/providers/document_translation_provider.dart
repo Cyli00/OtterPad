@@ -212,14 +212,14 @@ class DocumentTranslationNotifier
     }
   }
 
-  /// 三态循环：双语 → 原文 → 译文 → 双语 …
+  /// 三态循环：双语 → 译文 → 原文 → 双语 …
   /// 只在 [hasResult] 时可用，其它状态点击无效。
   void cycleMode() {
     if (!state.hasResult) return;
     final next = switch (state.mode) {
-      DocTranslationMode.bilingual => DocTranslationMode.off,
-      DocTranslationMode.off => DocTranslationMode.translated,
-      DocTranslationMode.translated => DocTranslationMode.bilingual,
+      DocTranslationMode.bilingual => DocTranslationMode.translated,
+      DocTranslationMode.translated => DocTranslationMode.off,
+      DocTranslationMode.off => DocTranslationMode.bilingual,
     };
     state = state.copyWith(mode: next);
   }

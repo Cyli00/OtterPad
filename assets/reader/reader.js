@@ -499,7 +499,12 @@ function _reportScrollProgress() {
     }
     if (ratio < 0) ratio = 0;
     if (ratio > 1) ratio = 1;
-    window.flutter_inappwebview.callHandler('onScrollProgress', { progress: ratio });
+    // anchorBlock 是位置的内容引用（视口起始处第一个可见块索引）——
+    // 比率在字号/窗口尺寸变化后会失真，恢复时横向模式优先用锚点。
+    window.flutter_inappwebview.callHandler('onScrollProgress', {
+      progress: ratio,
+      anchorBlock: _findAnchorBlockIndex(),
+    });
   }, 500);
 }
 window.addEventListener('scroll', _reportScrollProgress, { passive: true });
@@ -561,17 +566,20 @@ window._scrollToRatio = function(ratio) {
   window.scrollTo({ top: r * max, behavior: 'auto' });
 };
 
-window._restoreProgress = function(ratio) {
+window._restoreProgress = function(ratio, anchorBlock) {
   requestAnimationFrame(() => {
     const r = Math.max(0, Math.min(1, ratio));
-    if (document.body.dataset.pagination === 'horizontal') {
+    if (_isHorizontal()) {
+      // 锚点优先：比率在布局参数（字号/窗口尺寸）变化后会落错页，
+      // 内容块引用不会。老数据无锚点 → 退回比率反算。
+      if (_restoreToAnchor(anchorBlock)) { _updateFooter(); return; }
       const max = _maxPage();
       if (max > 0) {
         const idx = Math.max(0, Math.min(max, Math.round(r * max)));
         _targetPage = idx;
-        document.getElementById('content')
-          .scrollTo({ left: idx * window.innerWidth, behavior: 'auto' });
+        _content().scrollTo({ left: idx * window.innerWidth, behavior: 'auto' });
       }
+      _updateFooter();
     } else {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       if (max > 0) window.scrollTo({ top: r * max, behavior: 'auto' });
@@ -584,6 +592,9 @@ window._restoreProgress = function(ratio) {
 // 左 30% 上一页 / 右 30% 下一页 / 中央 toggle 工具栏。
 // 高亮点击不走这里——SVG <g data-hl-id> 自带 click 已 stopPropagation。
 document.addEventListener('click', (e) => {
+  // 触摸拖动刚结束时部分 WebView 会补发合成 click——窗口期内一律忽略
+  // （_suppressClickUntil 由触摸手势层维护，见横向翻页触摸区段）。
+  if (performance.now() < _suppressClickUntil) return;
   if (document.body.dataset.translationStyle === 'blur') {
     const span = e.target.closest('.translated');
     if (span) { span.classList.toggle('revealed'); return; }
@@ -605,10 +616,19 @@ document.addEventListener('click', (e) => {
   if (sel && !sel.isCollapsed) return;
 
   const x = e.clientX / window.innerWidth;
-  if (x < 0.3) {
-    _flipPage(-1);
-  } else if (x > 0.7) {
-    _flipPage(1);
+  if (x < 0.3 || x > 0.7) {
+    const dir = x < 0.3 ? -1 : 1;
+    const before = _targetPage;
+    _flipPage(dir);
+    if (_targetPage !== before) {
+      // 点击翻页成功 → Flutter 侧 Haptics.light()。
+      // 滑动翻页不通知——页面跟手本身已是足够的确认反馈。
+      if (window.flutter_inappwebview) {
+        window.flutter_inappwebview.callHandler('onPageFlip');
+      }
+    } else {
+      _nudgeEdge(dir);
+    }
   } else if (window.flutter_inappwebview) {
     window.flutter_inappwebview.callHandler('onToggleToolbar');
   }
@@ -792,87 +812,165 @@ window.setPaginationMode = function(mode) {
   if (mode !== 'vertical' && mode !== 'horizontal') return;
   document.body.dataset.pagination = mode;
   _syncPaginationVars();
+  _setTouchTakeover(mode === 'horizontal');
   if (window._overlayer) window._overlayer.redraw();
   window.dispatchEvent(new Event('scroll'));
-  if (mode === 'horizontal') _targetPage = _currentPage();
+  if (mode === 'horizontal') {
+    _targetPage = _currentPage();
+  } else {
+    _cancelFlipAnim();
+    _content().style.transform = '';
+  }
+  _updateFooter();
 };
 
-// ─── 横向翻页"页号状态机"（参考 Flutter PageController）───
-// 不依赖 scrollLeft 当前值翻页——smooth scroll 在动画中会让 scrollLeft
-// 处于"非整页"状态，多次相对 scrollBy 累加会停在中间。改成：
-//   _targetPage 是真实意图位置，scrollBy 永远基于它的整页边界，
-//   连续翻页累加到 _targetPage，最终一次性 scrollTo 到对齐位置。
+// ─── 横向翻页引擎 ───
+// _targetPage 是页号唯一真值源：点击/触摸/滚轮/键盘/恢复/resize 全部汇到
+// _animateToPage，原生横向滚动已被 touch-action: none 禁用（见 reader.css）。
+// 旧实现的 scrollTo({behavior:'smooth'}) 时长曲线由 UA 决定（Android WebView
+// 上明显偏慢），且原生手势滑动绕过状态机导致 _targetPage 失步——滑几页后
+// 点击边缘会跳回滑动前的位置。统一成自驱 rAF 动画后两个问题一起消失。
 let _targetPage = 0;
+let _flipRAF = null;        // settle / nudge 动画句柄
+let _touchDragging = false;
+
+// 240ms + easeOutCubic 对齐 Flutter 侧 AnimationConstants.kAnim / kAnimCurve。
+const _PAGE_ANIM_MS = 240;
+function _easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+function _content() { return document.getElementById('content'); }
+function _isHorizontal() {
+  return document.body.dataset.pagination === 'horizontal';
+}
 
 function _currentPage() {
-  return Math.round(
-    document.getElementById('content').scrollLeft / window.innerWidth);
+  return Math.round(_content().scrollLeft / window.innerWidth);
 }
 
 function _maxPage() {
-  const c = document.getElementById('content');
-  return Math.max(0, Math.round(c.scrollWidth / window.innerWidth) - 1);
+  return Math.max(0,
+      Math.round(_content().scrollWidth / window.innerWidth) - 1);
 }
 
-function _goToPage(idx) {
-  const c = document.getElementById('content');
+function _cancelFlipAnim() {
+  if (_flipRAF) { cancelAnimationFrame(_flipRAF); _flipRAF = null; }
+}
+
+// 所有程序化翻页的唯一出口：把 scrollLeft 动画到 idx 整页边界。
+// fromOvershoot 是橡皮筋拖动留下的视觉过冲（transform px），随动画衰减归零
+// ——scrollLeft 会被 DOM clamp 到 [0, max]，边界外的位移只能用 transform 表达。
+function _animateToPage(idx, fromOvershoot) {
+  const c = _content();
   idx = Math.max(0, Math.min(_maxPage(), idx));
   _targetPage = idx;
-  c.scrollTo({ left: idx * window.innerWidth, behavior: 'smooth' });
+  _cancelFlipAnim();
+  const from = c.scrollLeft;
+  const to = idx * window.innerWidth;
+  const over0 = fromOvershoot || 0;
+  if (Math.abs(to - from) < 0.5 && Math.abs(over0) < 0.5) {
+    c.scrollLeft = to;
+    c.style.transform = '';
+    return;
+  }
+  const t0 = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - t0) / _PAGE_ANIM_MS);
+    const k = _easeOutCubic(t);
+    c.scrollLeft = from + (to - from) * k;
+    if (over0) {
+      const over = over0 * (1 - k);
+      c.style.transform =
+          Math.abs(over) > 0.5 ? 'translateX(' + over + 'px)' : '';
+    }
+    if (t < 1) {
+      _flipRAF = requestAnimationFrame(step);
+    } else {
+      _flipRAF = null;
+      c.style.transform = '';
+    }
+  }
+  _flipRAF = requestAnimationFrame(step);
 }
 
 function _flipPage(delta) {
-  _goToPage(_targetPage + delta);
+  _animateToPage(_targetPage + delta);
+}
+
+// 边界反馈：已在首/末页时朝 dir 方向拉出 18px 再弹回（sin 半波），
+// 不改 _targetPage——给"翻不动"一个视觉语义，代替点了没反应的死寂。
+function _nudgeEdge(dir) {
+  const c = _content();
+  _cancelFlipAnim();
+  const t0 = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - t0) / _PAGE_ANIM_MS);
+    const off = -dir * 18 * Math.sin(Math.PI * t);
+    c.style.transform = t < 1 ? 'translateX(' + off + 'px)' : '';
+    if (t < 1) { _flipRAF = requestAnimationFrame(step); }
+    else { _flipRAF = null; }
+  }
+  _flipRAF = requestAnimationFrame(step);
 }
 
 // ─── --page-width 同步 + resize 响应 ───
 // vw 在某些 WebView 实现里不触发 column reflow，必须用 JS 主动 setProperty。
-// resize 时记录视觉锚点（视口左侧最近的可见 block），重排后 scrollIntoView
-// 推回左缘——避免内容重排后 scrollLeft 数值含义失效导致页码错乱。
+// resize 时记录视觉锚点（视口起始侧第一个可见 block 的索引），重排后恢复——
+// 避免内容重排后 scrollLeft 数值含义失效导致页码错乱。
 function _syncPaginationVars() {
   document.documentElement.style.setProperty(
     '--page-width', window.innerWidth + 'px');
 }
 _syncPaginationVars();
 
+// 视口起始侧（横向=左缘 / 纵向=顶缘）第一个可见内容块的索引。
+// resize 锚点保持和进度持久化共用：布局参数（字号/窗口尺寸）变化后,
+// 比率反算会落错页，内容块引用不会。
+function _findAnchorBlockIndex() {
+  const c = _content();
+  const cRect = c.getBoundingClientRect();
+  const horizontal = _isHorizontal();
+  const children = c.children;
+  for (let i = 0; i < children.length; i++) {
+    const el = children[i];
+    if (el.tagName === 'svg' || el.tagName === 'SVG') continue;
+    const r = el.getBoundingClientRect();
+    if (horizontal ? r.right > cRect.left + 8 : r.bottom > 8) return i;
+  }
+  return -1;
+}
+
+// 把第 idx 个内容块所在页对齐到视口（横向模式）。scrollIntoView 后必须吸附
+// 整页边界——锚点块可能起始于页中部，否则视口会同时露出两半页内容。
+function _restoreToAnchor(idx) {
+  const c = _content();
+  if (idx == null || idx < 0 || idx >= c.children.length) return false;
+  c.children[idx].scrollIntoView({ block: 'nearest', inline: 'start' });
+  const page = Math.max(0, Math.min(_maxPage(),
+      Math.round(c.scrollLeft / window.innerWidth)));
+  c.scrollTo({ left: page * window.innerWidth, behavior: 'auto' });
+  _targetPage = page;
+  return true;
+}
+
 let _paginationResizeTimer = null;
 window.addEventListener('resize', () => {
   // vertical 模式不需要锚点保持——浏览器原生处理纵向 reflow，scrollY 保持
   // 段落相对位置足够。仅刷新 var 以便切回 horizontal 时是最新值。
-  if (document.body.dataset.pagination !== 'horizontal') {
+  if (!_isHorizontal()) {
     _syncPaginationVars();
     return;
   }
 
-  // 重排前抓"当前视口左侧最近的 #content 子元素"作为锚点
-  const c = document.getElementById('content');
-  const cRect = c.getBoundingClientRect();
-  let anchor = null;
-  for (const el of c.children) {
-    if (el.tagName === 'svg' || el.tagName === 'SVG') continue;
-    const r = el.getBoundingClientRect();
-    if (r.right > cRect.left + 8) { anchor = el; break; }
-  }
+  // 重排前抓当前锚点索引
+  const anchorIdx = _findAnchorBlockIndex();
 
   clearTimeout(_paginationResizeTimer);
   _paginationResizeTimer = setTimeout(() => {
     _syncPaginationVars();
     // 等下一帧 layout 完成再恢复锚点位置 + redraw 高亮
     requestAnimationFrame(() => {
-      const c = document.getElementById('content');
-      if (anchor) {
-        anchor.scrollIntoView({ block: 'nearest', inline: 'start' });
-      }
-      // scrollIntoView 的锚点元素可能不在新 layout 的整页边界——
-      // 比如锚点段落被分到第 3 页中部。强制把 scrollLeft 落到最近整页
-      // 边界，避免视口里同时露出两半页内容。
-      const snapped =
-          Math.round(c.scrollLeft / window.innerWidth) * window.innerWidth;
-      if (Math.abs(c.scrollLeft - snapped) > 1) {
-        c.scrollTo({ left: snapped, behavior: 'auto' });
-      }
-      _targetPage = Math.round(c.scrollLeft / window.innerWidth);
-
+      _restoreToAnchor(anchorIdx);
+      _updateFooter();
       if (window._overlayer) window._overlayer.redraw();
       window.dispatchEvent(new Event('scroll'));
     });
@@ -888,7 +986,7 @@ window.addEventListener('resize', () => {
 let _wheelCooldownUntil = 0;
 let _wheelLastDir = 0;
 window.addEventListener('wheel', (e) => {
-  if (document.body.dataset.pagination !== 'horizontal') return;
+  if (!_isHorizontal()) return;
   e.preventDefault();
   const dir = Math.sign(e.deltaY);
   if (!dir) return;
@@ -901,7 +999,7 @@ window.addEventListener('wheel', (e) => {
 
 // 键盘 → ArrowLeft/PageUp 上一页；ArrowRight/PageDown/Space 下一页
 window.addEventListener('keydown', (e) => {
-  if (document.body.dataset.pagination !== 'horizontal') return;
+  if (!_isHorizontal()) return;
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
     e.preventDefault();
@@ -911,3 +1009,184 @@ window.addEventListener('keydown', (e) => {
     _flipPage(-1);
   }
 });
+
+// ─── 横向翻页：触摸手势（书页模型，参照 Flutter PageView 物理）───
+// touch-action: none 已禁用 #content 的原生横向滚动（reader.css），这里完整接管：
+//   认领：位移出 8px slop 且 |dx|>|dy|，且无活动选区、触点不在可横滚内层
+//     （pre / 公式块）——手指不动 = 让位给原生长按选择；纵向意图 = 放行。
+//   跟手：scrollLeft 1:1 跟随；边界外 0.3 阻尼且改用 transform 表达
+//     （scrollLeft 会被 DOM clamp 到 [0,max]，表达不了过冲）。
+//   松手：|速度|>0.3px/ms 沿速度方向翻一页（与位移矛盾时速度优先=反悔手势）；
+//     否则位移过半翻页、不足回弹。单次手势最多翻一页。
+let _touch = null;
+let _suppressClickUntil = 0;
+
+// 触点到 #content 之间存在还能朝手指反方向滚的元素 → 让位给内层原生滚动
+function _innerHScrollable(target, dx) {
+  const c = _content();
+  for (let el = target; el && el !== c; el = el.parentElement) {
+    if (el.scrollWidth > el.clientWidth + 1) {
+      const ox = getComputedStyle(el).overflowX;
+      if ((ox === 'auto' || ox === 'scroll') &&
+          (dx < 0 ? el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+                  : el.scrollLeft > 1)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+document.addEventListener('touchstart', (e) => {
+  if (!_isHorizontal() || e.touches.length !== 1) {
+    // 多指介入：若正在拖动，按当前位置就近收尾——否则 _touchDragging
+    // 卡 true，snap 兜底永久失效、橡皮筋 transform 残留在屏上。
+    if (_touchDragging) {
+      _touchDragging = false;
+      _animateToPage(
+          Math.round(_content().scrollLeft / window.innerWidth),
+          _touch ? _touch.overVisual : 0);
+    }
+    _touch = null;
+    return;
+  }
+  const t = e.touches[0];
+  // 不在此处打断动画：纯点击（中央 toggle 工具栏）不该把翻页动画停在半路，
+  // 真正认领拖动时（touchmove 出 slop）才接管。
+  _touch = {
+    id: t.identifier, x0: t.clientX, y0: t.clientY,
+    base: 0, basePage: 0, claimed: false, refused: false,
+    lastX: t.clientX, lastT: e.timeStamp, vx: 0, overVisual: 0,
+    target: e.target,
+  };
+}, { passive: true });
+
+function _onTouchMove(e) {
+  if (!_touch || !_isHorizontal() || _touch.refused) return;
+  const t = Array.from(e.touches).find(x => x.identifier === _touch.id);
+  if (!t) return;
+  if (!_touch.claimed) {
+    const dx = t.clientX - _touch.x0;
+    const dy = t.clientY - _touch.y0;
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    const sel = window.getSelection();
+    if ((sel && !sel.isCollapsed) ||
+        Math.abs(dx) <= Math.abs(dy) ||
+        _innerHScrollable(_touch.target, dx)) {
+      _touch.refused = true;
+      return;
+    }
+    _touch.claimed = true;
+    _touchDragging = true;
+    _cancelFlipAnim();
+    const c = _content();
+    c.style.transform = '';
+    _touch.base = c.scrollLeft;
+    _touch.basePage = Math.max(0, Math.min(_maxPage(),
+        Math.round(_touch.base / window.innerWidth)));
+    _touch.x0 = t.clientX;  // 认领点重置基准：从这里开始 1:1，避免 slop 跳变
+  }
+  e.preventDefault();
+  const c = _content();
+  const raw = _touch.base - (t.clientX - _touch.x0);
+  const maxLeft = _maxPage() * window.innerWidth;
+  const clamped = Math.max(0, Math.min(maxLeft, raw));
+  const over = raw - clamped;   // <0 = 首页再往前拖；>0 = 末页再往后拖
+  c.scrollLeft = clamped;
+  _touch.overVisual = -over * 0.3;
+  c.style.transform = over ? 'translateX(' + _touch.overVisual + 'px)' : '';
+  const dt = e.timeStamp - _touch.lastT;
+  if (dt > 0) {
+    _touch.vx = (t.clientX - _touch.lastX) / dt;
+    _touch.lastX = t.clientX;
+    _touch.lastT = e.timeStamp;
+  }
+}
+
+function _onTouchEnd(e) {
+  const st = _touch;
+  _touch = null;
+  if (!st || !st.claimed) return;
+  _touchDragging = false;
+  // preventDefault(touchmove) 后浏览器不应再派发合成 click，但部分 WebView
+  // 实现仍会补发——400ms 窗口内的 click 一律忽略（见 click handler 头部）。
+  _suppressClickUntil = performance.now() + 400;
+  const c = _content();
+  if (!_isHorizontal()) { c.style.transform = ''; return; }
+  // 手指停顿 >100ms 再松开，最后一次采样速度已过期，视为静止松手
+  const vx = (e.timeStamp - st.lastT > 100) ? 0 : st.vx;
+  let delta = 0;
+  if (Math.abs(vx) > 0.3) {
+    delta = vx < 0 ? 1 : -1;
+  } else {
+    const moved = (c.scrollLeft - st.base) / window.innerWidth;
+    if (moved > 0.5) delta = 1;
+    else if (moved < -0.5) delta = -1;
+  }
+  _animateToPage(st.basePage + delta, st.overVisual);
+}
+
+// touchmove 必须 passive:false 才能 preventDefault，但非 passive listener 会
+// 拖累 vertical 模式的原生滚动合成——所以随模式动态挂/卸，仅横向模式存在。
+let _touchMoveAttached = false;
+function _setTouchTakeover(on) {
+  if (on === _touchMoveAttached) return;
+  _touchMoveAttached = on;
+  if (on) {
+    document.addEventListener('touchmove', _onTouchMove, { passive: false });
+  } else {
+    document.removeEventListener('touchmove', _onTouchMove);
+    _touch = null;
+    _touchDragging = false;
+  }
+}
+
+document.addEventListener('touchend', _onTouchEnd, { passive: true });
+document.addEventListener('touchcancel', _onTouchEnd, { passive: true });
+
+// ─── 整页对齐兜底 ───
+// scrollToBlock / scrollToSearchResult / flashImage 这类 scrollIntoView 滚动源
+// 不经过 _animateToPage，会停在任意 scrollLeft。观察 #content 滚动，idle 150ms
+// 后吸附最近整页并同步 _targetPage——保证页号对任何滚动源都不失步。
+let _snapTimer = null;
+_content().addEventListener('scroll', () => {
+  if (!_isHorizontal() || _touchDragging || _flipRAF) return;
+  clearTimeout(_snapTimer);
+  _snapTimer = setTimeout(() => {
+    if (!_isHorizontal() || _touchDragging || _flipRAF) return;
+    const page = Math.max(0, Math.min(_maxPage(),
+        Math.round(_content().scrollLeft / window.innerWidth)));
+    if (Math.abs(_content().scrollLeft - page * window.innerWidth) > 1) {
+      _animateToPage(page);
+    } else {
+      _targetPage = page;
+    }
+  }, 150);
+}, { passive: true });
+
+// ─── 进度页脚 ───
+// 横向 "12 / 45"，纵向 "37%"。页内渲染而非 Flutter overlay：页码要和翻页
+// 动画同帧更新，走 bridge 有 500ms 节流 + IPC 延迟；主题色直接引用 :root
+// CSS 变量（样式见 reader.css #page-footer），换主题自动跟随。
+const _footerEl = document.createElement('div');
+_footerEl.id = 'page-footer';
+document.body.appendChild(_footerEl);
+
+let _footerRAF = null;
+function _updateFooter() {
+  if (_footerRAF) return;
+  _footerRAF = requestAnimationFrame(() => {
+    _footerRAF = null;
+    if (_isHorizontal()) {
+      const page = Math.max(0, Math.min(_maxPage(), _currentPage()));
+      _footerEl.textContent = (page + 1) + ' / ' + (_maxPage() + 1);
+    } else {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const r = max > 0 ? Math.max(0, Math.min(1, window.scrollY / max)) : 0;
+      _footerEl.textContent = Math.round(r * 100) + '%';
+    }
+  });
+}
+window.addEventListener('scroll', _updateFooter, { passive: true });
+_content().addEventListener('scroll', _updateFooter, { passive: true });
+_updateFooter();

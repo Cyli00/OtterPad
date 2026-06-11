@@ -143,11 +143,13 @@ class ReaderBottomBar extends StatelessWidget {
     );
   }
 
+  // 必须与 DocumentTranslationNotifier.cycleMode 的顺序一致：
+  // 双语 → 译文 → 原文 → 双语
   static DocTranslationMode _nextMode(DocTranslationMode mode) =>
       switch (mode) {
-        DocTranslationMode.bilingual => DocTranslationMode.off,
-        DocTranslationMode.off => DocTranslationMode.translated,
-        DocTranslationMode.translated => DocTranslationMode.bilingual,
+        DocTranslationMode.bilingual => DocTranslationMode.translated,
+        DocTranslationMode.translated => DocTranslationMode.off,
+        DocTranslationMode.off => DocTranslationMode.bilingual,
       };
 
   static IconData _modeIcon(DocTranslationMode mode) => switch (mode) {

@@ -30,9 +30,15 @@ abstract class ReaderJsBridgeListener {
   void onHighlightClick(String highlightId, Map<String, dynamic> rawPos);
   void onImageClick(String imageSource);
   void onScrollDirection(ScrollDirection direction);
-  void onScrollProgress(double progress);
+
+  /// [anchorBlock] 是视口起始处第一个可见内容块的索引（位置的内容引用），
+  /// 横向翻页恢复时优先于比率；JS 侧无法定位时为 null。
+  void onScrollProgress(double progress, int? anchorBlock);
   void onScrollMetrics(ReaderScrollMetrics metrics);
   void onToggleToolbar();
+
+  /// 横向模式边缘点击成功翻页——Flutter 侧触发 Haptics.light()。
+  void onPageFlip();
 }
 
 /// 阅读器 WebView 桥——所有 Dart → JS 调用的单一入口。
@@ -57,7 +63,7 @@ class ReaderJsBridge {
       .replaceAll('\n', '\\n')
       .replaceAll('\r', '');
 
-  /// 注册所有 9 个 JS → Dart handler。必须在构造后立即调用。
+  /// 注册所有 10 个 JS → Dart handler。必须在构造后立即调用。
   void attachHandlers() {
     _controller.addJavaScriptHandler(
       handlerName: 'onContentReady',
@@ -125,7 +131,11 @@ class ReaderJsBridge {
         final data = args[0] as Map<String, dynamic>;
         final raw = data['progress'];
         if (raw is num) {
-          _listener.onScrollProgress(raw.toDouble().clamp(0.0, 1.0));
+          final anchor = data['anchorBlock'];
+          _listener.onScrollProgress(
+            raw.toDouble().clamp(0.0, 1.0),
+            anchor is num && anchor >= 0 ? anchor.toInt() : null,
+          );
         }
       },
     );
@@ -149,6 +159,11 @@ class ReaderJsBridge {
     _controller.addJavaScriptHandler(
       handlerName: 'onToggleToolbar',
       callback: (_) => _listener.onToggleToolbar(),
+    );
+
+    _controller.addJavaScriptHandler(
+      handlerName: 'onPageFlip',
+      callback: (_) => _listener.onPageFlip(),
     );
   }
 
@@ -243,9 +258,10 @@ class ReaderJsBridge {
     );
   }
 
-  void restoreScrollProgress(double progress) {
+  /// [anchorBlock] 优先于比率（见 JS `_restoreProgress`）；null = 仅按比率。
+  void restoreScrollProgress(double progress, {int? anchorBlock}) {
     _controller.evaluateJavascript(
-      source: 'window._restoreProgress($progress)',
+      source: 'window._restoreProgress($progress, ${anchorBlock ?? 'null'})',
     );
   }
 

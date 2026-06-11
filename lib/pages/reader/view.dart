@@ -21,6 +21,7 @@ import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/document_task_provider.dart';
 import '../../providers/document_translation_provider.dart';
 import '../../providers/favorites_provider.dart';
+import '../../providers/history_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/reader_session_provider.dart';
 import '../../providers/summary_image_provider.dart';
@@ -149,10 +150,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   int? _lastReportedPdfPage;
 
   double _markdownScrollProgress = 0;
+  int? _markdownAnchorBlock;
+
+  // AI 排版修复后强制 WebView 重载的纪元计数（见 ReaderProps.reloadEpoch）
+  int _readerReloadEpoch = 0;
 
   @override
   void initState() {
     super.initState();
+    // 重开文档恢复阅读位置：进度/锚点持久化在 HistoryEntry（事实源），
+    // 经 initialScrollProgress / initialAnchorBlock 传入 WebView 在
+    // onContentReady 时恢复。横向翻页优先锚点（比率在字号/窗口尺寸
+    // 变化后会落错页），纵向按比率。
+    final entry = ref
+        .read(historyProvider)
+        .where((e) => e.docId == widget.document.id)
+        .firstOrNull;
+    if (entry != null) {
+      _markdownScrollProgress = entry.progress;
+      _markdownAnchorBlock = entry.anchorBlock;
+    }
     _sessionArgs = ReaderSessionArgs(
       documentId: widget.document.id,
       title: widget.document.title,
@@ -283,19 +300,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         documentId: widget.document.id,
         agentState: agentState,
         onComplete: () {
-          final mdPath = DocPaths.md(widget.document.id);
-          final mdFile = File(mdPath);
-          if (mdFile.existsSync()) {
-            final content = mdFile.readAsStringSync();
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              _sessionNotifier.useExtractedMarkdown(
-                markdownPath: mdPath,
-                markdownContent: content,
-              );
-              _figuresFuture = null;
-            });
-          }
+          // AI 修复只改 manifest + 原地覆盖 figures/*.png，md 内容不变——
+          // 内容驱动的刷新链路（useExtractedMarkdown → cacheKey）会短路，
+          // 用显式 reloadEpoch 强制 WebView 重载以取回新图（server 端
+          // 图片已 no-store）；大纲面板自带 manifest 重读 + ImageCache evict。
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() => _readerReloadEpoch++);
+            _figuresFuture = null;
+          });
         },
       ),
     );
@@ -1364,6 +1377,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       documentDir: documentDir,
       translationStyleId: displayStyle.id,
       initialScrollProgress: _markdownScrollProgress,
+      initialAnchorBlock: _markdownAnchorBlock,
+      reloadEpoch: _readerReloadEpoch,
       topInset: topPad,
       bottomInset: bottomPad,
       highlightQuery: session.highlightQuery,
@@ -1372,10 +1387,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onHighlightClick: _handleHighlightTap,
       onImageClick: _handleMarkdownImageTap,
       onScrollDirection: _handleWebViewScrollDirection,
-      onScrollProgress: (p) {
+      onScrollProgress: (p, anchor) {
         if (!mounted) return;
         _markdownScrollProgress = p;
-        _sessionNotifier.reportProgress(p);
+        _markdownAnchorBlock = anchor;
+        _sessionNotifier.reportProgress(p, anchorBlock: anchor);
       },
       onToggleToolbar: _handleWebViewToggleToolbar,
     );
