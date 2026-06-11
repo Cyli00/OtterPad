@@ -2013,12 +2013,6 @@ abstract class AppLocalizations {
   /// **'Geometry for layout detection boxes'**
   String get layoutGeometryHelp;
 
-  /// No description provided for @layoutDetectionThreshold.
-  ///
-  /// In en, this message translates to:
-  /// **'Layout Detection Threshold'**
-  String get layoutDetectionThreshold;
-
   /// No description provided for @outputControl.
   ///
   /// In en, this message translates to:
@@ -2028,14 +2022,38 @@ abstract class AppLocalizations {
   /// No description provided for @repetitionPenalty.
   ///
   /// In en, this message translates to:
-  /// **'Repetition Penalty'**
+  /// **'Repetition Suppression'**
   String get repetitionPenalty;
 
   /// No description provided for @repetitionPenaltyHint.
   ///
   /// In en, this message translates to:
-  /// **'Increase when text or table content is duplicated'**
+  /// **'Raise it when results contain repeated text or table content'**
   String get repetitionPenaltyHint;
+
+  /// No description provided for @crossPageTableMerge.
+  ///
+  /// In en, this message translates to:
+  /// **'Cross-page Table Merging'**
+  String get crossPageTableMerge;
+
+  /// No description provided for @crossPageTableMergeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Detects tables spanning pages and merges them into one'**
+  String get crossPageTableMergeDesc;
+
+  /// No description provided for @recognitionStability.
+  ///
+  /// In en, this message translates to:
+  /// **'Recognition Stability'**
+  String get recognitionStability;
+
+  /// No description provided for @recognitionStabilityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Lower it when results are unstable or show obvious hallucinations; raise slightly when there are omissions or excessive repetition'**
+  String get recognitionStabilityHint;
 
   /// No description provided for @recognitionEnhancement.
   ///
@@ -2088,7 +2106,7 @@ abstract class AppLocalizations {
   /// No description provided for @imageAreaOcr.
   ///
   /// In en, this message translates to:
-  /// **'Image Area OCR'**
+  /// **'Image Text Recognition'**
   String get imageAreaOcr;
 
   /// No description provided for @orientationCorrection.
@@ -2106,7 +2124,7 @@ abstract class AppLocalizations {
   /// No description provided for @deduplicateBoxes.
   ///
   /// In en, this message translates to:
-  /// **'Deduplicate Boxes'**
+  /// **'NMS Post-processing'**
   String get deduplicateBoxes;
 
   /// No description provided for @multiPageReconstruction.
@@ -2736,7 +2754,7 @@ abstract class AppLocalizations {
   /// No description provided for @ocrImageAreaDesc.
   ///
   /// In en, this message translates to:
-  /// **'Perform OCR on image areas'**
+  /// **'Recognizes text within image layout elements'**
   String get ocrImageAreaDesc;
 
   /// No description provided for @ocrOrientationDesc.
@@ -2754,7 +2772,7 @@ abstract class AppLocalizations {
   /// No description provided for @ocrDeduplicateDesc.
   ///
   /// In en, this message translates to:
-  /// **'Remove overlapping layout detection boxes'**
+  /// **'Effective only when layout analysis is enabled. Automatically removes duplicate or highly overlapping region boxes'**
   String get ocrDeduplicateDesc;
 
   /// No description provided for @ocrMultiPageDesc.
@@ -2763,17 +2781,35 @@ abstract class AppLocalizations {
   /// **'Reconstruct multi-page document structure'**
   String get ocrMultiPageDesc;
 
-  /// No description provided for @ocrThresholdHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Higher values retain fewer regions'**
-  String get ocrThresholdHelp;
-
   /// No description provided for @ocrFilterHelp.
   ///
   /// In en, this message translates to:
-  /// **'Checked label regions will not appear in Markdown output. All ignored by default.'**
+  /// **'Checked label regions will not appear in Markdown output. All ignored by default'**
   String get ocrFilterHelp;
+
+  /// No description provided for @resetOcrSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Settings'**
+  String get resetOcrSettings;
+
+  /// No description provided for @resetOcrSettingsConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This resets all OCR options to their defaults except the API Key. Continue?'**
+  String get resetOcrSettingsConfirm;
+
+  /// No description provided for @reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get reset;
+
+  /// No description provided for @ocrSettingsReset.
+  ///
+  /// In en, this message translates to:
+  /// **'OCR settings reset'**
+  String get ocrSettingsReset;
 
   /// No description provided for @ocrInterface.
   ///
@@ -3249,11 +3285,11 @@ abstract class AppLocalizations {
   /// **'No figures found\nPlease extract first'**
   String get figuresNotFoundHint;
 
-  /// No description provided for @copiedReferenceNumber.
+  /// No description provided for @copiedReference.
   ///
   /// In en, this message translates to:
-  /// **'Copied reference {number}'**
-  String copiedReferenceNumber(int number);
+  /// **'Copied [{number}] {snippet}'**
+  String copiedReference(int number, String snippet);
 
   /// No description provided for @searchMatchesFound.
   ///
@@ -3804,7 +3840,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiLayoutFixConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'AI layout fix will use the expert model to correct formula formatting and figure extraction. Estimated token usage: ~{tokens}'**
+  /// **'AI layout fix will use the expert model to audit figure crop regions (subfigure completeness, caption exclusion) and recover missed figures. Estimated token usage: ~{tokens}'**
   String aiLayoutFixConfirmMessage(String tokens);
 
   /// No description provided for @aiLayoutFixAnalyzing.
@@ -3846,8 +3882,8 @@ abstract class AppLocalizations {
   /// No description provided for @aiLayoutFixSummary.
   ///
   /// In en, this message translates to:
-  /// **'{paragraphs} paragraphs fixed · {figures} figures adjusted'**
-  String aiLayoutFixSummary(int paragraphs, int figures);
+  /// **'{adjusted} adjusted · {added} added · {removed} removed'**
+  String aiLayoutFixSummary(int adjusted, int added, int removed);
 
   /// No description provided for @aiLayoutFixFailed.
   ///
@@ -3858,8 +3894,20 @@ abstract class AppLocalizations {
   /// No description provided for @aiLayoutFixNoContent.
   ///
   /// In en, this message translates to:
-  /// **'No formula paragraphs or figures to fix'**
+  /// **'No figures to audit'**
   String get aiLayoutFixNoContent;
+
+  /// No description provided for @promptMissingPlaceholders.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing required placeholder: {placeholders}'**
+  String promptMissingPlaceholders(String placeholders);
+
+  /// No description provided for @aiLayoutFixFigureCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} figures'**
+  String aiLayoutFixFigureCount(int count);
 
   /// No description provided for @aiLayoutFixRevertHint.
   ///

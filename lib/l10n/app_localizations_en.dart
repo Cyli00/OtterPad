@@ -990,17 +990,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get layoutGeometryHelp => 'Geometry for layout detection boxes';
 
   @override
-  String get layoutDetectionThreshold => 'Layout Detection Threshold';
-
-  @override
   String get outputControl => 'Output Control';
 
   @override
-  String get repetitionPenalty => 'Repetition Penalty';
+  String get repetitionPenalty => 'Repetition Suppression';
 
   @override
   String get repetitionPenaltyHint =>
-      'Increase when text or table content is duplicated';
+      'Raise it when results contain repeated text or table content';
+
+  @override
+  String get crossPageTableMerge => 'Cross-page Table Merging';
+
+  @override
+  String get crossPageTableMergeDesc =>
+      'Detects tables spanning pages and merges them into one';
+
+  @override
+  String get recognitionStability => 'Recognition Stability';
+
+  @override
+  String get recognitionStabilityHint =>
+      'Lower it when results are unstable or show obvious hallucinations; raise slightly when there are omissions or excessive repetition';
 
   @override
   String get recognitionEnhancement => 'Recognition Enhancement';
@@ -1027,7 +1038,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stampRecognition => 'Stamp Recognition';
 
   @override
-  String get imageAreaOcr => 'Image Area OCR';
+  String get imageAreaOcr => 'Image Text Recognition';
 
   @override
   String get orientationCorrection => 'Orientation Correction';
@@ -1036,7 +1047,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get curvatureCorrection => 'Curvature Correction';
 
   @override
-  String get deduplicateBoxes => 'Deduplicate Boxes';
+  String get deduplicateBoxes => 'NMS Post-processing';
 
   @override
   String get multiPageReconstruction => 'Multi-page Reconstruction';
@@ -1422,7 +1433,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ocrStampRecognitionDesc => 'Recognize stamps in documents';
 
   @override
-  String get ocrImageAreaDesc => 'Perform OCR on image areas';
+  String get ocrImageAreaDesc => 'Recognizes text within image layout elements';
 
   @override
   String get ocrOrientationDesc => 'Auto-correct 0°/90°/180°/270° rotation';
@@ -1431,17 +1442,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ocrCurvatureDesc => 'Correct curved or wrinkled documents';
 
   @override
-  String get ocrDeduplicateDesc => 'Remove overlapping layout detection boxes';
+  String get ocrDeduplicateDesc =>
+      'Effective only when layout analysis is enabled. Automatically removes duplicate or highly overlapping region boxes';
 
   @override
   String get ocrMultiPageDesc => 'Reconstruct multi-page document structure';
 
   @override
-  String get ocrThresholdHelp => 'Higher values retain fewer regions';
+  String get ocrFilterHelp =>
+      'Checked label regions will not appear in Markdown output. All ignored by default';
 
   @override
-  String get ocrFilterHelp =>
-      'Checked label regions will not appear in Markdown output. All ignored by default.';
+  String get resetOcrSettings => 'Reset Settings';
+
+  @override
+  String get resetOcrSettingsConfirm =>
+      'This resets all OCR options to their defaults except the API Key. Continue?';
+
+  @override
+  String get reset => 'Reset';
+
+  @override
+  String get ocrSettingsReset => 'OCR settings reset';
 
   @override
   String get ocrInterface => 'OCR Interface';
@@ -1773,8 +1795,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get figuresNotFoundHint => 'No figures found\nPlease extract first';
 
   @override
-  String copiedReferenceNumber(int number) {
-    return 'Copied reference $number';
+  String copiedReference(int number, String snippet) {
+    return 'Copied [$number] $snippet';
   }
 
   @override
@@ -2141,7 +2163,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String aiLayoutFixConfirmMessage(String tokens) {
-    return 'AI layout fix will use the expert model to correct formula formatting and figure extraction. Estimated token usage: ~$tokens';
+    return 'AI layout fix will use the expert model to audit figure crop regions (subfigure completeness, caption exclusion) and recover missed figures. Estimated token usage: ~$tokens';
   }
 
   @override
@@ -2163,8 +2185,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiLayoutFixComplete => 'Layout fix complete';
 
   @override
-  String aiLayoutFixSummary(int paragraphs, int figures) {
-    return '$paragraphs paragraphs fixed · $figures figures adjusted';
+  String aiLayoutFixSummary(int adjusted, int added, int removed) {
+    return '$adjusted adjusted · $added added · $removed removed';
   }
 
   @override
@@ -2173,7 +2195,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get aiLayoutFixNoContent => 'No formula paragraphs or figures to fix';
+  String get aiLayoutFixNoContent => 'No figures to audit';
+
+  @override
+  String promptMissingPlaceholders(String placeholders) {
+    return 'Missing required placeholder: $placeholders';
+  }
+
+  @override
+  String aiLayoutFixFigureCount(int count) {
+    return '$count figures';
+  }
 
   @override
   String get aiLayoutFixRevertHint => 'Revert via \"Re-extract\" if needed';

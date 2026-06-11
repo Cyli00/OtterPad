@@ -982,16 +982,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get layoutGeometryHelp => '版面检测框的几何形状表示';
 
   @override
-  String get layoutDetectionThreshold => '版面检测阈值';
-
-  @override
   String get outputControl => '输出控制';
 
   @override
-  String get repetitionPenalty => '重复惩罚';
+  String get repetitionPenalty => '重复抑制强度';
 
   @override
-  String get repetitionPenaltyHint => '出现重复文字或表格内容时适当调高';
+  String get repetitionPenaltyHint => '结果中出现重复文字、重复表格内容时，可适当调高';
+
+  @override
+  String get crossPageTableMerge => '跨页表格合并';
+
+  @override
+  String get crossPageTableMergeDesc => '开启后，会识别跨页表格，将其合并为一个';
+
+  @override
+  String get recognitionStability => '识别稳定性';
+
+  @override
+  String get recognitionStabilityHint => '结果不稳定或出现明显幻觉时调低，漏识别或者重复较多时可略微调高';
 
   @override
   String get recognitionEnhancement => '识别增强';
@@ -1018,7 +1027,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stampRecognition => '印章识别';
 
   @override
-  String get imageAreaOcr => '图片区 OCR';
+  String get imageAreaOcr => '图片文字识别';
 
   @override
   String get orientationCorrection => '方向校正';
@@ -1027,7 +1036,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get curvatureCorrection => '弯曲校正';
 
   @override
-  String get deduplicateBoxes => '去重叠检测框';
+  String get deduplicateBoxes => 'NMS后处理';
 
   @override
   String get multiPageReconstruction => '多页重构';
@@ -1403,7 +1412,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ocrStampRecognitionDesc => '识别文档中的印章';
 
   @override
-  String get ocrImageAreaDesc => '对图片区域执行文字识别';
+  String get ocrImageAreaDesc => '开启后，对图片版面元素中的文本进行识别';
 
   @override
   String get ocrOrientationDesc => '自动纠正 0°/90°/180°/270° 旋转';
@@ -1412,16 +1421,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ocrCurvatureDesc => '校正弯曲或褶皱的文档';
 
   @override
-  String get ocrDeduplicateDesc => '移除重叠的版面检测框';
+  String get ocrDeduplicateDesc => '当且仅当使用版面分析模块时生效，开启后，会自动移除重复或高度重叠的区域框';
 
   @override
   String get ocrMultiPageDesc => '重构多页文档结构';
 
   @override
-  String get ocrThresholdHelp => '区域过滤的阈值，值越高保留的区域越少';
+  String get ocrFilterHelp => '勾选的标签区域将不会输出到 Markdown 结果中，默认全忽略';
 
   @override
-  String get ocrFilterHelp => '勾选的标签区域将不会输出到 Markdown 结果中，默认全忽略。';
+  String get resetOcrSettings => '重置设置';
+
+  @override
+  String get resetOcrSettingsConfirm => '这将把除 API Key 外的所有 OCR 配置恢复为默认值，是否继续？';
+
+  @override
+  String get reset => '重置';
+
+  @override
+  String get ocrSettingsReset => '已重置 OCR 配置';
 
   @override
   String get ocrInterface => 'OCR 接口';
@@ -1735,8 +1753,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get figuresNotFoundHint => '未找到图表\n请先提取文档';
 
   @override
-  String copiedReferenceNumber(int number) {
-    return '已复制参考文献 $number';
+  String copiedReference(int number, String snippet) {
+    return '已复制 [$number] $snippet';
   }
 
   @override
@@ -2096,7 +2114,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String aiLayoutFixConfirmMessage(String tokens) {
-    return 'AI 排版修复将使用专家模型修正公式排版和图片提取，预计消耗约 $tokens Token';
+    return 'AI 排版修复将使用专家模型审核图片裁剪区域（子图完整性、标题排除）并补提漏检图片，预计消耗约 $tokens Token';
   }
 
   @override
@@ -2118,8 +2136,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiLayoutFixComplete => '排版修复完成';
 
   @override
-  String aiLayoutFixSummary(int paragraphs, int figures) {
-    return '已修复 $paragraphs 个段落 · 调整 $figures 张图片';
+  String aiLayoutFixSummary(int adjusted, int added, int removed) {
+    return '调整 $adjusted · 新增 $added · 移除 $removed';
   }
 
   @override
@@ -2128,7 +2146,17 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get aiLayoutFixNoContent => '未找到需要修复的公式段落或图片';
+  String get aiLayoutFixNoContent => '未找到需要审核的图片';
+
+  @override
+  String promptMissingPlaceholders(String placeholders) {
+    return '缺少必需占位符：$placeholders';
+  }
+
+  @override
+  String aiLayoutFixFigureCount(int count) {
+    return '$count 张图片';
+  }
 
   @override
   String get aiLayoutFixRevertHint => '如需还原，可通过「重新提取」恢复';
@@ -3118,16 +3146,25 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get layoutGeometryHelp => '版面偵測框的幾何形狀表示';
 
   @override
-  String get layoutDetectionThreshold => '版面偵測閾值';
-
-  @override
   String get outputControl => '輸出控制';
 
   @override
-  String get repetitionPenalty => '重複懲罰';
+  String get repetitionPenalty => '重複抑制強度';
 
   @override
-  String get repetitionPenaltyHint => '出現重複文字或表格內容時適當調高';
+  String get repetitionPenaltyHint => '結果中出現重複文字、重複表格內容時，可適當調高';
+
+  @override
+  String get crossPageTableMerge => '跨頁表格合併';
+
+  @override
+  String get crossPageTableMergeDesc => '開啟後，會識別跨頁表格，將其合併為一個';
+
+  @override
+  String get recognitionStability => '辨識穩定性';
+
+  @override
+  String get recognitionStabilityHint => '結果不穩定或出現明顯幻覺時調低，漏辨識或重複較多時可略微調高';
 
   @override
   String get recognitionEnhancement => '辨識增強';
@@ -3154,7 +3191,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get stampRecognition => '印章辨識';
 
   @override
-  String get imageAreaOcr => '圖片區 OCR';
+  String get imageAreaOcr => '圖片文字辨識';
 
   @override
   String get orientationCorrection => '方向校正';
@@ -3163,7 +3200,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get curvatureCorrection => '彎曲校正';
 
   @override
-  String get deduplicateBoxes => '去重疊偵測框';
+  String get deduplicateBoxes => 'NMS後處理';
 
   @override
   String get multiPageReconstruction => '多頁重構';
@@ -3539,7 +3576,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get ocrStampRecognitionDesc => '辨識文件中的印章';
 
   @override
-  String get ocrImageAreaDesc => '對圖片區域執行文字辨識';
+  String get ocrImageAreaDesc => '開啟後，對圖片版面元素中的文字進行辨識';
 
   @override
   String get ocrOrientationDesc => '自動校正 0°/90°/180°/270° 旋轉';
@@ -3548,16 +3585,25 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get ocrCurvatureDesc => '校正彎曲或皺褶的文件';
 
   @override
-  String get ocrDeduplicateDesc => '移除重疊的版面偵測框';
+  String get ocrDeduplicateDesc => '僅當使用版面分析模組時生效，開啟後，會自動移除重複或高度重疊的區域框';
 
   @override
   String get ocrMultiPageDesc => '重構多頁文件結構';
 
   @override
-  String get ocrThresholdHelp => '區域過濾的閾值，值越高保留的區域越少';
+  String get ocrFilterHelp => '勾選的標籤區域將不會輸出到 Markdown 結果中，預設全忽略';
 
   @override
-  String get ocrFilterHelp => '勾選的標籤區域將不會輸出到 Markdown 結果中，預設全忽略。';
+  String get resetOcrSettings => '重設設定';
+
+  @override
+  String get resetOcrSettingsConfirm => '這將把除 API Key 外的所有 OCR 設定恢復為預設值，是否繼續？';
+
+  @override
+  String get reset => '重設';
+
+  @override
+  String get ocrSettingsReset => '已重設 OCR 設定';
 
   @override
   String get ocrInterface => 'OCR 介面';
@@ -3871,8 +3917,8 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get figuresNotFoundHint => '未找到圖表\n請先擷取文件';
 
   @override
-  String copiedReferenceNumber(int number) {
-    return '已複製參考文獻 $number';
+  String copiedReference(int number, String snippet) {
+    return '已複製 [$number] $snippet';
   }
 
   @override
@@ -3942,7 +3988,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String aiLayoutFixConfirmMessage(String tokens) {
-    return 'AI 排版修復將使用專家模型修正公式排版和圖片擷取，預計消耗約 $tokens Token';
+    return 'AI 排版修復將使用專家模型審核圖片裁剪區域（子圖完整性、標題排除）並補提漏檢圖片，預計消耗約 $tokens Token';
   }
 
   @override
@@ -3964,8 +4010,8 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get aiLayoutFixComplete => '排版修復完成';
 
   @override
-  String aiLayoutFixSummary(int paragraphs, int figures) {
-    return '已修復 $paragraphs 個段落 · 調整 $figures 張圖片';
+  String aiLayoutFixSummary(int adjusted, int added, int removed) {
+    return '調整 $adjusted · 新增 $added · 移除 $removed';
   }
 
   @override
@@ -3974,7 +4020,17 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get aiLayoutFixNoContent => '未找到需要修復的公式段落或圖片';
+  String get aiLayoutFixNoContent => '未找到需要審核的圖片';
+
+  @override
+  String promptMissingPlaceholders(String placeholders) {
+    return '缺少必需佔位符：$placeholders';
+  }
+
+  @override
+  String aiLayoutFixFigureCount(int count) {
+    return '$count 張圖片';
+  }
 
   @override
   String get aiLayoutFixRevertHint => '如需還原，可透過「重新擷取」恢復';
