@@ -57,7 +57,7 @@ class ChineseMetadataExtractor {
 
   // 期刊名后缀：明确的中文期刊命名词，避免在正文里乱匹配
   static final _journalPattern = RegExp(
-    r'[一-鿿]{2,12}(?:学报|学刊|杂志|通报|导报|公报|评论|论坛|科学|医学|科技|工程|译丛|文摘)',
+    r'[一-鿿]{2,12}(?:学报|学刊|杂志|通报|导报|公报|评论|论坛|科学|医学|科技|工程|译丛|文摘|研究|进展|报告|纪要|年鉴|快报|通讯|集刊|丛刊|学术|综述)',
   );
 
   static final _volumeIssuePattern = RegExp(r'第\s*\d+\s*[卷期]');
@@ -79,12 +79,22 @@ class ChineseMetadataExtractor {
 
     // 同时定位标题的起止下标：作者用 titleEnd（标题后）、期刊用 titleStart（标题前）
     final needle = knownTitle?.replaceAll(_whitespacePattern, '');
-    final titleStart = (needle != null && needle.isNotEmpty)
+    var titleStart = (needle != null && needle.isNotEmpty)
         ? compact.indexOf(needle)
         : -1;
-    final titleEnd = titleStart >= 0 ? titleStart + needle!.length : -1;
+    // 精确匹配失败时尝试 Dice bigram 模糊锚定
+    if (titleStart < 0 && needle != null && needle.length >= 4) {
+      titleStart = _fuzzyLocate(compact, needle, threshold: 0.7);
+    }
+    final titleEnd = titleStart >= 0 && needle != null
+        ? titleStart + needle.length
+        : -1;
 
-    final authors = _extractAuthors(compact, titleEnd);
+    var authors = _extractAuthors(compact, titleEnd);
+    // 标题锚定完全失败时，用无锚定策略从正文前部扫描作者
+    if (authors.isEmpty && titleEnd < 0) {
+      authors = _extractAuthorsUnanchored(compact);
+    }
     final journal = _extractJournal(compact, titleStart);
 
     return DocumentMetadata(
@@ -160,5 +170,79 @@ class ChineseMetadataExtractor {
         .replaceAll(_asciiNoisePattern, '');
 
     return _journalPattern.firstMatch(header)?.group(0);
+  }
+
+  // ── 模糊标题锚定 ─────────────────────────────────────────────────────
+
+  /// 在 [text] 中模糊定位 [needle]：滑动窗口 + Dice bigram 相似度。
+  /// 返回最佳匹配的起始下标，低于 [threshold] 返回 -1。
+  static int _fuzzyLocate(String text, String needle, {double threshold = 0.7}) {
+    final nLen = needle.length;
+    if (nLen < 2 || text.length < nLen) return -1;
+
+    final needleBigrams = _bigrams(needle);
+    final searchEnd = min(text.length, nLen * 6);
+    var bestScore = 0.0;
+    var bestIdx = -1;
+
+    for (var i = 0; i <= searchEnd - nLen; i++) {
+      final window = text.substring(i, i + nLen);
+      final score = _diceSimilarity(needleBigrams, nLen, window);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    }
+    return bestScore >= threshold ? bestIdx : -1;
+  }
+
+  static Map<String, int> _bigrams(String s) {
+    final m = <String, int>{};
+    for (var i = 0; i < s.length - 1; i++) {
+      final bg = s.substring(i, i + 2);
+      m[bg] = (m[bg] ?? 0) + 1;
+    }
+    return m;
+  }
+
+  static double _diceSimilarity(
+    Map<String, int> aBigrams,
+    int aLen,
+    String b,
+  ) {
+    if (aLen < 2 || b.length < 2) return 0.0;
+    final bBigrams = _bigrams(b);
+    var intersection = 0;
+    for (final e in aBigrams.entries) {
+      final bCount = bBigrams[e.key];
+      if (bCount != null) intersection += min(e.value, bCount);
+    }
+    return 2 * intersection / (aLen - 1 + b.length - 1);
+  }
+
+  // ── 无锚定作者回退 ───────────────────────────────────────────────────
+
+  // 连续中文名 + 分隔符（逗号/顿号）的序列模式：至少 2 个名字
+  static final _authorSequencePattern = RegExp(
+    r'(?:[一-鿿]{2,4}[,，、;；\d\s*]*){2,}[一-鿿]{2,4}',
+  );
+
+  /// 标题锚定失败时的回退：在正文前 300 字符内寻找作者序列。
+  static List<String> _extractAuthorsUnanchored(String compact) {
+    final region = compact.substring(0, min(compact.length, 300));
+    final seqMatch = _authorSequencePattern.firstMatch(region);
+    if (seqMatch == null) return const [];
+
+    final segment = seqMatch.group(0)!;
+    final names = <String>[];
+    for (final part in segment.split(_authorDelimiterPattern)) {
+      final m = _chineseNamePattern.firstMatch(part);
+      if (m == null) continue;
+      final name = m.group(0)!;
+      if (_nonNameWords.contains(name)) continue;
+      final rest = part.replaceFirst(name, '');
+      if (!_singleHanPattern.hasMatch(rest)) names.add(name);
+    }
+    return names.length >= 2 ? names : const [];
   }
 }
