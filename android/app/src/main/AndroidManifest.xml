@@ -2,6 +2,7 @@
     <!-- release 必需：本地阅读器 HTTP server 绑定 socket + 所有联网功能（Agent API/翻译/封面图）。
          debug/profile 由 Flutter 自动注入，main 需手动声明。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <application
         android:label="OtterPad"
         android:name="${applicationName}"
@@ -45,6 +46,14 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
         </intent>
     </queries>
 </manifest>

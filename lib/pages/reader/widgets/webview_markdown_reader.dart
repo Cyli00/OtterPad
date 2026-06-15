@@ -518,6 +518,9 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       onWebViewCreated: (controller) {
         _bridge = ReaderJsBridge(controller, this)..attachHandlers();
       },
+      onRenderProcessGone: (controller, detail) async {
+        await controller.reload();
+      },
     );
 
     // 冻结态：InAppWebView 不挂载（原生 View detach 出 ViewRoot），改用截图占位。
