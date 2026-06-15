@@ -2,10 +2,13 @@
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/storage.dart';
+import '../services/agent_http.dart';
 import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
 import '../services/identifier_resolver.dart';
 import '../services/metadata_search_service.dart';
+import '../services/tavily_search_service.dart';
+import '../services/url_context_service.dart';
 import '../services/zotero_sync_service.dart';
 
 enum ProxyMode { custom, system, none }
@@ -69,11 +72,18 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
   }
 
   void _applyToResolver() {
+    AgentHttp.instance.applyProxy(state.mode, state.host, state.port);
     IdentifierResolver.instance.applyProxy(state.mode, state.host, state.port);
     DocExtractService.instance.applyProxy(state.mode, state.host, state.port);
     BatchExtractService.instance.applyProxy(state.mode, state.host, state.port);
     ZoteroSyncService.instance.applyProxy(state.mode, state.host, state.port);
-    MetadataSearchService.instance.applyProxy(state.mode, state.host, state.port);
+    MetadataSearchService.instance.applyProxy(
+      state.mode,
+      state.host,
+      state.port,
+    );
+    UrlContextService.instance.applyProxy(state.mode, state.host, state.port);
+    TavilySearchService.instance.applyProxy(state.mode, state.host, state.port);
   }
 
   /// 启动时调用，将已保存的配置应用到 Dio

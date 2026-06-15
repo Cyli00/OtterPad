@@ -4,6 +4,9 @@ abstract class AppRoutes {
   static const settings = '/settings';
   static const reader = '/reader';
 
+  // 阅读器子页面
+  static const readerChat = '/reader/chat';
+
   // 文献库子页面
   static const librarySearch = '/library/search';
 
@@ -12,6 +15,7 @@ abstract class AppRoutes {
   static const shelfFavoriteAddDocs = '/shelf/favorite/add-documents';
   static const shelfHistory = '/shelf/history';
   static const shelfNoFileEntries = '/shelf/no-file-entries';
+  static const shelfCloudSync = '/shelf/cloud-sync';
 
   // 设置子页面
   static const settingsNetwork = '/settings/network';

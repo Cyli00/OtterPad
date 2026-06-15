@@ -460,9 +460,9 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
               ),
             ),
 
-            // ── 版面分析 ──
+            // ── 输出控制 ──
             _buildGroup(
-              title: context.l10n.layoutAnalysis,
+              title: context.l10n.outputControl,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -503,18 +503,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-
-            // ── 输出控制 ──
-            _buildGroup(
-              title: context.l10n.outputControl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 8),
                   ..._switchGroup(docState, _outputDefs(context.l10n)),
                   _sliderTile(
                     title: context.l10n.repetitionPenalty,

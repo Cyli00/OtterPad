@@ -94,7 +94,9 @@ class HomeHeader extends ConsumerWidget {
                     const SizedBox(width: 8.0),
                     Expanded(
                       child: Text(
-                        isMobile ? context.l10n.searchDocumentsHint : context.l10n.searchDocumentsHintDesktop,
+                        isMobile
+                            ? context.l10n.searchDocumentsHint
+                            : context.l10n.searchDocumentsHintDesktop,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           fontSize: isMobile ? 14 : 15,
@@ -109,7 +111,9 @@ class HomeHeader extends ConsumerWidget {
           ),
           const SizedBox(width: 8.0),
           _HeaderButton(
-            icon: isGrid ? Symbols.view_list_rounded : Symbols.grid_view_rounded,
+            icon: isGrid
+                ? Symbols.view_list_rounded
+                : Symbols.grid_view_rounded,
             tooltip: isGrid ? context.l10n.listView : context.l10n.gridView,
             size: isMobile ? 36 : 40,
             onPressed: () {
@@ -128,16 +132,6 @@ class HomeHeader extends ConsumerWidget {
               if (action != null && context.mounted) {
                 _handleToolbarAction(context, ref, action);
               }
-            },
-          ),
-          const SizedBox(width: 8.0),
-          _HeaderButton(
-            icon: Symbols.settings_rounded,
-            tooltip: context.l10n.settings,
-            size: isMobile ? 36 : 40,
-            onPressed: () {
-              Haptics.soft();
-              context.push(AppRoutes.settings);
             },
           ),
         ],

@@ -10,6 +10,7 @@ import '../data/models/collection/favorite.dart';
 import '../pages/library/search_page.dart';
 import '../pages/library/view.dart';
 import '../pages/main/view.dart';
+import '../pages/reader/chat/document_chat_page.dart';
 import '../pages/reader/view.dart';
 import '../pages/setting/api_settings_page.dart';
 import '../pages/setting/ocr_settings_page.dart';
@@ -19,6 +20,7 @@ import '../pages/setting/network_settings_page.dart';
 import '../pages/setting/view.dart';
 import '../pages/shelf/add_documents_to_favorite_page.dart';
 import '../pages/shelf/favorite_detail_page.dart';
+import '../pages/shelf/cloud_sync_page.dart';
 import '../pages/shelf/no_file_entries_page.dart';
 import '../pages/shelf/reading_history_page.dart';
 import '../pages/shelf/view.dart';
@@ -134,6 +136,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           state: state,
           child: ReaderPage(document: state.extra! as Document),
         ),
+        routes: [
+          GoRoute(
+            path: 'chat',
+            parentNavigatorKey: rootNavigatorKey,
+            pageBuilder: (context, state) => _forward(
+              state: state,
+              child: DocumentChatPage(
+                args: state.extra! as DocumentChatPageArgs,
+              ),
+            ),
+          ),
+        ],
       ),
 
       // 主导航 Shell（IndexedStack 保持各 Tab 页状态）
@@ -203,6 +217,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                       state: state,
                       child: const NoFileEntriesPage(),
                     ),
+                  ),
+                  GoRoute(
+                    path: 'cloud-sync',
+                    parentNavigatorKey: rootNavigatorKey,
+                    pageBuilder: (context, state) =>
+                        _drillIn(state: state, child: const CloudSyncPage()),
                   ),
                 ],
               ),

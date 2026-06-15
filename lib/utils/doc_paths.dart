@@ -43,6 +43,12 @@ class DocPaths {
   static String figuresManifest(String documentIdOrPdfPath) =>
       p.join(figuresDir(documentIdOrPdfPath), 'figures.json');
 
+  static String chatsDir(String documentIdOrPdfPath) =>
+      p.join(docDir(documentIdOrPdfPath), 'chats');
+
+  static String chatSession(String documentIdOrPdfPath, String sessionId) =>
+      p.join(chatsDir(documentIdOrPdfPath), '$sessionId.json');
+
   static String summaryDir(String documentIdOrPdfPath) =>
       p.join(docDir(documentIdOrPdfPath), 'summary');
 
