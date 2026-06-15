@@ -336,7 +336,7 @@ abstract class AppLocalizations {
   /// No description provided for @ocrSettingsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'OCR API · Output Control · Recognition Enhancement · Document Correction'**
+  /// **'OCR Interface · Output Control · Recognition · Correction'**
   String get ocrSettingsSubtitle;
 
   /// No description provided for @appearanceSettings.
@@ -3198,7 +3198,7 @@ abstract class AppLocalizations {
   /// No description provided for @viewLibraryTotal.
   ///
   /// In en, this message translates to:
-  /// **'View library · {count} items'**
+  /// **'Library · {count} items'**
   String viewLibraryTotal(int count);
 
   /// No description provided for @addedDocumentsToFavorite.

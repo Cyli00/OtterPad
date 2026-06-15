@@ -127,7 +127,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ocrSettingsSubtitle =>
-      'OCR API · Output Control · Recognition Enhancement · Document Correction';
+      'OCR Interface · Output Control · Recognition · Correction';
 
   @override
   String get appearanceSettings => 'Display';
@@ -1729,7 +1729,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String viewLibraryTotal(int count) {
-    return 'View library · $count items';
+    return 'Library · $count items';
   }
 
   @override
