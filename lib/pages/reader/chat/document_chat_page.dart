@@ -603,7 +603,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                         ),
                         IconButton(
                           icon: Icon(
-                            Symbols.stream_rounded,
+                            Symbols.flowsheet,
                             size: 22,
                             color: _stream ? cs.primary : cs.onSurfaceVariant,
                           ),
@@ -802,27 +802,33 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
               ),
             ),
             // 锚定文献：本抽屉里所有会话都属于这一篇
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: Row(
-                children: [
-                  Icon(
-                    Symbols.description_rounded,
-                    size: 16,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      widget.args.document.title,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            GestureDetector(
+              onTap: () {
+                Haptics.soft();
+                context.pop();
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      Symbols.description_rounded,
+                      size: 16,
+                      color: cs.onSurfaceVariant,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        widget.args.document.title,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             if (chat.sessions.isEmpty)

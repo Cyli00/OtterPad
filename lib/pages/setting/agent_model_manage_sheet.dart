@@ -532,7 +532,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             if (cap.reasoning) ...[
               const SizedBox(width: 4),
               _CapDot(
-                icon: Symbols.psychology_rounded,
+                icon: Symbols.neurology_rounded,
                 tooltip: context.l10n.reasoning,
               ),
             ],
@@ -605,10 +605,10 @@ class _CapDot extends StatelessWidget {
         height: 22,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: cs.primaryContainer,
+          color: cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 14, fill: 1, color: cs.onPrimaryContainer),
+        child: Icon(icon, size: 14, fill: 1, color: cs.onSurfaceVariant),
       ),
     );
   }
