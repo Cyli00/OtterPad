@@ -72,6 +72,18 @@
     "importCancelledLabel",
     "noFilesImported",
     "importCompleteLabel",
-    "taskBusy"
+    "taskBusy",
+    "askAi",
+    "newChat",
+    "chatHistory",
+    "chatNoHistory",
+    "chatInputHint",
+    "chatEmptyHint",
+    "chatMessageCount",
+    "chatSend",
+    "chatRemoveQuote",
+    "chatLocateSource",
+    "chatNewSessionHint",
+    "dontRemindAgain"
   ]
 }

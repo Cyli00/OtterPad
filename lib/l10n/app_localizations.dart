@@ -135,12 +135,6 @@ abstract class AppLocalizations {
   /// **'Appearance'**
   String get appearance;
 
-  /// No description provided for @font.
-  ///
-  /// In en, this message translates to:
-  /// **'Font'**
-  String get font;
-
   /// No description provided for @translate.
   ///
   /// In en, this message translates to:
@@ -897,12 +891,6 @@ abstract class AppLocalizations {
   /// **'My Library'**
   String get myLibrary;
 
-  /// No description provided for @synced.
-  ///
-  /// In en, this message translates to:
-  /// **'Synced'**
-  String get synced;
-
   /// No description provided for @readingHistory.
   ///
   /// In en, this message translates to:
@@ -1520,18 +1508,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reset to auto-detect'**
   String get resetToAuto;
-
-  /// No description provided for @builtInTools.
-  ///
-  /// In en, this message translates to:
-  /// **'Built-in Tools'**
-  String get builtInTools;
-
-  /// No description provided for @official.
-  ///
-  /// In en, this message translates to:
-  /// **'Official'**
-  String get official;
 
   /// No description provided for @defaultLevel.
   ///
@@ -2169,71 +2145,35 @@ abstract class AppLocalizations {
   /// **'Search'**
   String get searchToolLabel;
 
-  /// No description provided for @codeExecutionLabel.
+  /// No description provided for @streamOutput.
   ///
   /// In en, this message translates to:
-  /// **'Code Execution'**
-  String get codeExecutionLabel;
+  /// **'Streaming output'**
+  String get streamOutput;
 
-  /// No description provided for @urlContextLabel.
+  /// No description provided for @tavilySearchSection.
   ///
   /// In en, this message translates to:
-  /// **'URL Context'**
-  String get urlContextLabel;
+  /// **'Web Search Fallback (Tavily)'**
+  String get tavilySearchSection;
 
-  /// No description provided for @youtubeLabel.
+  /// No description provided for @tavilySearchDesc.
   ///
   /// In en, this message translates to:
-  /// **'YouTube'**
-  String get youtubeLabel;
+  /// **'Provides web search for models without native search (e.g. DeepSeek, Doubao). Once the key is set, the search toggle in chat works for these models.'**
+  String get tavilySearchDesc;
 
-  /// No description provided for @codeInterpreterLabel.
+  /// No description provided for @tavilyNotConfiguredHint.
   ///
   /// In en, this message translates to:
-  /// **'Code Interpreter'**
-  String get codeInterpreterLabel;
+  /// **'This model has no native web search. Set a Tavily API Key in AI settings to enable it.'**
+  String get tavilyNotConfiguredHint;
 
-  /// No description provided for @imageGenerationLabel.
+  /// No description provided for @mimoSearchPluginHint.
   ///
   /// In en, this message translates to:
-  /// **'Image Generation'**
-  String get imageGenerationLabel;
-
-  /// No description provided for @searchToolDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Search the web for latest information'**
-  String get searchToolDesc;
-
-  /// No description provided for @codeExecutionDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Execute code in sandbox and return results'**
-  String get codeExecutionDesc;
-
-  /// No description provided for @urlContextDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Read URL content as context'**
-  String get urlContextDesc;
-
-  /// No description provided for @youtubeDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Detect and extract YouTube video info'**
-  String get youtubeDesc;
-
-  /// No description provided for @codeInterpreterDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Run code and process files in sandbox'**
-  String get codeInterpreterDesc;
-
-  /// No description provided for @imageGenerationDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Generate images in conversation'**
-  String get imageGenerationDesc;
+  /// **'MiMo web search requires enabling the plugin first: platform.xiaomimimo.com/console/plugin'**
+  String get mimoSearchPluginHint;
 
   /// No description provided for @taskInProgress.
   ///
@@ -2540,6 +2480,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Generating and uploading remote backup...'**
   String get generatingAndUploading;
+
+  /// No description provided for @backupScopeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup Scope'**
+  String get backupScopeTitle;
+
+  /// No description provided for @backupScopeFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full backup'**
+  String get backupScopeFull;
+
+  /// No description provided for @backupScopeFullDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Includes PDFs and extracted files; archive can be large'**
+  String get backupScopeFullDesc;
+
+  /// No description provided for @backupScopeData.
+  ///
+  /// In en, this message translates to:
+  /// **'Data only'**
+  String get backupScopeData;
+
+  /// No description provided for @backupScopeDataDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings, metadata, highlights, translations and chats; excludes PDFs and extracted files'**
+  String get backupScopeDataDesc;
+
+  /// No description provided for @startBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Backup'**
+  String get startBackup;
+
+  /// No description provided for @autoBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Backup'**
+  String get autoBackup;
+
+  /// No description provided for @autoBackupOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get autoBackupOff;
+
+  /// No description provided for @autoBackupDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get autoBackupDaily;
+
+  /// No description provided for @autoBackupWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get autoBackupWeekly;
+
+  /// No description provided for @autoBackupHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Backs up to the remote in the background when due, only if content has changed.'**
+  String get autoBackupHint;
+
+  /// No description provided for @cloudSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud Sync'**
+  String get cloudSync;
+
+  /// No description provided for @syncBackupNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Back Up Now'**
+  String get syncBackupNow;
+
+  /// No description provided for @syncLastBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Last backup: {info}'**
+  String syncLastBackup(String info);
+
+  /// No description provided for @syncLastBackupNever.
+  ///
+  /// In en, this message translates to:
+  /// **'No backup yet'**
+  String get syncLastBackupNever;
+
+  /// No description provided for @syncRemoteNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote backup not configured'**
+  String get syncRemoteNotConfigured;
+
+  /// No description provided for @syncRemoteNotConfiguredDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure S3 or WebDAV to back up and see sync status here.'**
+  String get syncRemoteNotConfiguredDesc;
+
+  /// No description provided for @syncGroupChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed since last backup'**
+  String get syncGroupChanged;
+
+  /// No description provided for @syncGroupNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Never backed up'**
+  String get syncGroupNever;
+
+  /// No description provided for @syncGroupSynced.
+  ///
+  /// In en, this message translates to:
+  /// **'Backed up'**
+  String get syncGroupSynced;
+
+  /// No description provided for @syncReasonAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get syncReasonAdded;
+
+  /// No description provided for @syncReasonContent.
+  ///
+  /// In en, this message translates to:
+  /// **'File changed'**
+  String get syncReasonContent;
+
+  /// No description provided for @syncReasonMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata / highlights'**
+  String get syncReasonMeta;
+
+  /// No description provided for @syncReasonFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Translations / chats'**
+  String get syncReasonFiles;
 
   /// No description provided for @remoteBackupUploaded.
   ///
@@ -3914,6 +3998,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Expert model must support image input'**
   String get expertRequiresVision;
+
+  /// No description provided for @askAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask AI'**
+  String get askAi;
+
+  /// No description provided for @newChat.
+  ///
+  /// In en, this message translates to:
+  /// **'New chat'**
+  String get newChat;
+
+  /// No description provided for @chatHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat history'**
+  String get chatHistory;
+
+  /// No description provided for @chatNoHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats yet'**
+  String get chatNoHistory;
+
+  /// No description provided for @chatInputHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about this document…'**
+  String get chatInputHint;
+
+  /// No description provided for @chatEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask anything about this document — answers are grounded in the extracted full text and figures'**
+  String get chatEmptyHint;
+
+  /// No description provided for @chatMessageCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} messages'**
+  String chatMessageCount(int count);
+
+  /// No description provided for @chatSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get chatSend;
+
+  /// No description provided for @chatRemoveQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove quote'**
+  String get chatRemoveQuote;
+
+  /// No description provided for @chatLocateSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Locate in document'**
+  String get chatLocateSource;
+
+  /// No description provided for @chatNewSessionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The new chat will still be grounded in the full text and figures of \"{title}\".'**
+  String chatNewSessionHint(String title);
+
+  /// No description provided for @dontRemindAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t remind me again'**
+  String get dontRemindAgain;
 }
 
 class _AppLocalizationsDelegate

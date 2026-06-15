@@ -27,9 +27,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearance => 'Appearance';
 
   @override
-  String get font => 'Font';
-
-  @override
   String get translate => 'Translate';
 
   @override
@@ -427,9 +424,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myLibrary => 'My Library';
 
   @override
-  String get synced => 'Synced';
-
-  @override
   String get readingHistory => 'Reading History';
 
   @override
@@ -740,12 +734,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get resetToAuto => 'Reset to auto-detect';
-
-  @override
-  String get builtInTools => 'Built-in Tools';
-
-  @override
-  String get official => 'Official';
 
   @override
   String get defaultLevel => 'Default';
@@ -1071,37 +1059,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchToolLabel => 'Search';
 
   @override
-  String get codeExecutionLabel => 'Code Execution';
+  String get streamOutput => 'Streaming output';
 
   @override
-  String get urlContextLabel => 'URL Context';
+  String get tavilySearchSection => 'Web Search Fallback (Tavily)';
 
   @override
-  String get youtubeLabel => 'YouTube';
+  String get tavilySearchDesc =>
+      'Provides web search for models without native search (e.g. DeepSeek, Doubao). Once the key is set, the search toggle in chat works for these models.';
 
   @override
-  String get codeInterpreterLabel => 'Code Interpreter';
+  String get tavilyNotConfiguredHint =>
+      'This model has no native web search. Set a Tavily API Key in AI settings to enable it.';
 
   @override
-  String get imageGenerationLabel => 'Image Generation';
-
-  @override
-  String get searchToolDesc => 'Search the web for latest information';
-
-  @override
-  String get codeExecutionDesc => 'Execute code in sandbox and return results';
-
-  @override
-  String get urlContextDesc => 'Read URL content as context';
-
-  @override
-  String get youtubeDesc => 'Detect and extract YouTube video info';
-
-  @override
-  String get codeInterpreterDesc => 'Run code and process files in sandbox';
-
-  @override
-  String get imageGenerationDesc => 'Generate images in conversation';
+  String get mimoSearchPluginHint =>
+      'MiMo web search requires enabling the plugin first: platform.xiaomimimo.com/console/plugin';
 
   @override
   String get taskInProgress => 'This document already has a task running';
@@ -1290,6 +1263,84 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get generatingAndUploading =>
       'Generating and uploading remote backup...';
+
+  @override
+  String get backupScopeTitle => 'Backup Scope';
+
+  @override
+  String get backupScopeFull => 'Full backup';
+
+  @override
+  String get backupScopeFullDesc =>
+      'Includes PDFs and extracted files; archive can be large';
+
+  @override
+  String get backupScopeData => 'Data only';
+
+  @override
+  String get backupScopeDataDesc =>
+      'Settings, metadata, highlights, translations and chats; excludes PDFs and extracted files';
+
+  @override
+  String get startBackup => 'Start Backup';
+
+  @override
+  String get autoBackup => 'Auto Backup';
+
+  @override
+  String get autoBackupOff => 'Off';
+
+  @override
+  String get autoBackupDaily => 'Daily';
+
+  @override
+  String get autoBackupWeekly => 'Weekly';
+
+  @override
+  String get autoBackupHint =>
+      'Backs up to the remote in the background when due, only if content has changed.';
+
+  @override
+  String get cloudSync => 'Cloud Sync';
+
+  @override
+  String get syncBackupNow => 'Back Up Now';
+
+  @override
+  String syncLastBackup(String info) {
+    return 'Last backup: $info';
+  }
+
+  @override
+  String get syncLastBackupNever => 'No backup yet';
+
+  @override
+  String get syncRemoteNotConfigured => 'Remote backup not configured';
+
+  @override
+  String get syncRemoteNotConfiguredDesc =>
+      'Configure S3 or WebDAV to back up and see sync status here.';
+
+  @override
+  String get syncGroupChanged => 'Changed since last backup';
+
+  @override
+  String get syncGroupNever => 'Never backed up';
+
+  @override
+  String get syncGroupSynced => 'Backed up';
+
+  @override
+  String get syncReasonAdded => 'New';
+
+  @override
+  String get syncReasonContent => 'File changed';
+
+  @override
+  String get syncReasonMeta => 'Metadata / highlights';
+
+  @override
+  String get syncReasonFiles => 'Translations / chats';
 
   @override
   String remoteBackupUploaded(String target) {
@@ -2209,4 +2260,45 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get expertRequiresVision => 'Expert model must support image input';
+
+  @override
+  String get askAi => 'Ask AI';
+
+  @override
+  String get newChat => 'New chat';
+
+  @override
+  String get chatHistory => 'Chat history';
+
+  @override
+  String get chatNoHistory => 'No chats yet';
+
+  @override
+  String get chatInputHint => 'Ask about this document…';
+
+  @override
+  String get chatEmptyHint =>
+      'Ask anything about this document — answers are grounded in the extracted full text and figures';
+
+  @override
+  String chatMessageCount(int count) {
+    return '$count messages';
+  }
+
+  @override
+  String get chatSend => 'Send';
+
+  @override
+  String get chatRemoveQuote => 'Remove quote';
+
+  @override
+  String get chatLocateSource => 'Locate in document';
+
+  @override
+  String chatNewSessionHint(String title) {
+    return 'The new chat will still be grounded in the full text and figures of \"$title\".';
+  }
+
+  @override
+  String get dontRemindAgain => 'Don\'t remind me again';
 }

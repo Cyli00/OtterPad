@@ -27,9 +27,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appearance => '外观';
 
   @override
-  String get font => '字体';
-
-  @override
   String get translate => '翻译';
 
   @override
@@ -420,9 +417,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get myLibrary => '我的库';
 
   @override
-  String get synced => '已同步';
-
-  @override
   String get readingHistory => '阅读历史';
 
   @override
@@ -732,12 +726,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get resetToAuto => '重置为自动推断';
-
-  @override
-  String get builtInTools => '内置工具';
-
-  @override
-  String get official => '官方';
 
   @override
   String get defaultLevel => '默认';
@@ -1060,37 +1048,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchToolLabel => '搜索';
 
   @override
-  String get codeExecutionLabel => '代码执行';
+  String get streamOutput => '流式输出';
 
   @override
-  String get urlContextLabel => 'URL 上下文';
+  String get tavilySearchSection => '联网搜索回退（Tavily）';
 
   @override
-  String get youtubeLabel => 'YouTube';
+  String get tavilySearchDesc =>
+      '为不支持原生联网搜索的模型（如 DeepSeek、豆包）提供搜索能力。填入 Key 后，对话页的联网开关对这些模型即可生效。';
 
   @override
-  String get codeInterpreterLabel => '代码解释器';
+  String get tavilyNotConfiguredHint =>
+      '当前模型无原生联网搜索，请在 AI 设置中配置 Tavily API Key 以启用';
 
   @override
-  String get imageGenerationLabel => '图片生成';
-
-  @override
-  String get searchToolDesc => '使用网络搜索获取最新信息';
-
-  @override
-  String get codeExecutionDesc => '在沙箱中执行代码并返回结果';
-
-  @override
-  String get urlContextDesc => '读取 URL 内容作为上下文';
-
-  @override
-  String get youtubeDesc => '自动识别并提取 YouTube 视频信息';
-
-  @override
-  String get codeInterpreterDesc => '在沙箱中运行代码、处理文件';
-
-  @override
-  String get imageGenerationDesc => '在对话中生成图片';
+  String get mimoSearchPluginHint =>
+      'MiMo 联网搜索需先在平台控制台开通插件：platform.xiaomimimo.com/console/plugin';
 
   @override
   String get taskInProgress => '该文献已有任务正在进行中';
@@ -1275,6 +1248,80 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generatingAndUploading => '正在生成并上传远程备份...';
+
+  @override
+  String get backupScopeTitle => '备份范围';
+
+  @override
+  String get backupScopeFull => '完整备份';
+
+  @override
+  String get backupScopeFullDesc => '包含 PDF 与提取文件，备份体积较大';
+
+  @override
+  String get backupScopeData => '仅数据';
+
+  @override
+  String get backupScopeDataDesc => '设置、元数据、批注、翻译与对话；不含 PDF 与提取文件';
+
+  @override
+  String get startBackup => '开始备份';
+
+  @override
+  String get autoBackup => '自动备份';
+
+  @override
+  String get autoBackupOff => '关闭';
+
+  @override
+  String get autoBackupDaily => '每日';
+
+  @override
+  String get autoBackupWeekly => '每周';
+
+  @override
+  String get autoBackupHint => '到期后台自动上传到远端，仅在内容有变化时执行。';
+
+  @override
+  String get cloudSync => '云同步';
+
+  @override
+  String get syncBackupNow => '立即备份';
+
+  @override
+  String syncLastBackup(String info) {
+    return '上次备份：$info';
+  }
+
+  @override
+  String get syncLastBackupNever => '尚未备份过';
+
+  @override
+  String get syncRemoteNotConfigured => '未配置远端备份';
+
+  @override
+  String get syncRemoteNotConfiguredDesc => '配置 S3 或 WebDAV 后即可备份并在此查看同步状态。';
+
+  @override
+  String get syncGroupChanged => '有变更未备份';
+
+  @override
+  String get syncGroupNever => '从未备份';
+
+  @override
+  String get syncGroupSynced => '已备份';
+
+  @override
+  String get syncReasonAdded => '新导入';
+
+  @override
+  String get syncReasonContent => '文件变更';
+
+  @override
+  String get syncReasonMeta => '元数据 / 批注';
+
+  @override
+  String get syncReasonFiles => '翻译 / 对话';
 
   @override
   String remoteBackupUploaded(String target) {
@@ -2160,6 +2207,46 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get expertRequiresVision => '专家模型需要支持图片输入';
+
+  @override
+  String get askAi => '问 AI';
+
+  @override
+  String get newChat => '新会话';
+
+  @override
+  String get chatHistory => '会话历史';
+
+  @override
+  String get chatNoHistory => '还没有会话';
+
+  @override
+  String get chatInputHint => '针对这篇文献提问…';
+
+  @override
+  String get chatEmptyHint => '问点关于这篇文献的问题吧——回答基于提取的全文与图表';
+
+  @override
+  String chatMessageCount(int count) {
+    return '$count 条消息';
+  }
+
+  @override
+  String get chatSend => '发送';
+
+  @override
+  String get chatRemoveQuote => '移除引用';
+
+  @override
+  String get chatLocateSource => '定位原文';
+
+  @override
+  String chatNewSessionHint(String title) {
+    return '新会话仍将基于《$title》的全文与图表进行问答。';
+  }
+
+  @override
+  String get dontRemindAgain => '不再提醒';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -2183,9 +2270,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get appearance => '外觀';
-
-  @override
-  String get font => '字體';
 
   @override
   String get translate => '翻譯';
@@ -2578,9 +2662,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get myLibrary => '我的庫';
 
   @override
-  String get synced => '已同步';
-
-  @override
   String get readingHistory => '閱讀歷史';
 
   @override
@@ -2881,12 +2962,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get resetToAuto => '重設為自動推斷';
-
-  @override
-  String get builtInTools => '內建工具';
-
-  @override
-  String get official => '官方';
 
   @override
   String get defaultLevel => '預設';
@@ -3209,37 +3284,22 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get searchToolLabel => '搜尋';
 
   @override
-  String get codeExecutionLabel => '程式碼執行';
+  String get streamOutput => '串流輸出';
 
   @override
-  String get urlContextLabel => 'URL 上下文';
+  String get tavilySearchSection => '聯網搜尋回退（Tavily）';
 
   @override
-  String get youtubeLabel => 'YouTube';
+  String get tavilySearchDesc =>
+      '為不支援原生聯網搜尋的模型（如 DeepSeek、豆包）提供搜尋能力。填入 Key 後，對話頁的聯網開關對這些模型即可生效。';
 
   @override
-  String get codeInterpreterLabel => '程式碼直譯器';
+  String get tavilyNotConfiguredHint =>
+      '目前模型無原生聯網搜尋，請在 AI 設定中設定 Tavily API Key 以啟用';
 
   @override
-  String get imageGenerationLabel => '圖片產生';
-
-  @override
-  String get searchToolDesc => '使用網路搜尋取得最新資訊';
-
-  @override
-  String get codeExecutionDesc => '在沙箱中執行程式碼並回傳結果';
-
-  @override
-  String get urlContextDesc => '讀取 URL 內容作為上下文';
-
-  @override
-  String get youtubeDesc => '自動辨識並擷取 YouTube 影片資訊';
-
-  @override
-  String get codeInterpreterDesc => '在沙箱中執行程式碼、處理檔案';
-
-  @override
-  String get imageGenerationDesc => '在對話中產生圖片';
+  String get mimoSearchPluginHint =>
+      'MiMo 聯網搜尋需先在平台控制台開通外掛：platform.xiaomimimo.com/console/plugin';
 
   @override
   String get taskInProgress => '該文獻已有工作正在進行中';
@@ -3424,6 +3484,80 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get generatingAndUploading => '正在產生並上傳遠端備份...';
+
+  @override
+  String get backupScopeTitle => '備份範圍';
+
+  @override
+  String get backupScopeFull => '完整備份';
+
+  @override
+  String get backupScopeFullDesc => '包含 PDF 與擷取檔案，備份體積較大';
+
+  @override
+  String get backupScopeData => '僅資料';
+
+  @override
+  String get backupScopeDataDesc => '設定、中繼資料、標註、翻譯與對話；不含 PDF 與擷取檔案';
+
+  @override
+  String get startBackup => '開始備份';
+
+  @override
+  String get autoBackup => '自動備份';
+
+  @override
+  String get autoBackupOff => '關閉';
+
+  @override
+  String get autoBackupDaily => '每日';
+
+  @override
+  String get autoBackupWeekly => '每週';
+
+  @override
+  String get autoBackupHint => '到期後台自動上傳到遠端，僅在內容有變化時執行。';
+
+  @override
+  String get cloudSync => '雲同步';
+
+  @override
+  String get syncBackupNow => '立即備份';
+
+  @override
+  String syncLastBackup(String info) {
+    return '上次備份：$info';
+  }
+
+  @override
+  String get syncLastBackupNever => '尚未備份過';
+
+  @override
+  String get syncRemoteNotConfigured => '未設定遠端備份';
+
+  @override
+  String get syncRemoteNotConfiguredDesc => '設定 S3 或 WebDAV 後即可備份並在此檢視同步狀態。';
+
+  @override
+  String get syncGroupChanged => '有變更未備份';
+
+  @override
+  String get syncGroupNever => '從未備份';
+
+  @override
+  String get syncGroupSynced => '已備份';
+
+  @override
+  String get syncReasonAdded => '新匯入';
+
+  @override
+  String get syncReasonContent => '檔案變更';
+
+  @override
+  String get syncReasonMeta => '中繼資料 / 標註';
+
+  @override
+  String get syncReasonFiles => '翻譯 / 對話';
 
   @override
   String remoteBackupUploaded(String target) {
