@@ -222,6 +222,17 @@ class ReaderJsBridge {
     );
   }
 
+  /// `--top-inset` 重放：缓存命中的 `.reader.html` 烤的是生成时的工具栏
+  /// 高度，跨设备/横竖屏可能过期；ready 时用当前值覆写一次（top-inset
+  /// 不进缓存指纹的代价）。
+  void applyTopInset(double topInset) {
+    if (!_contentReady) return;
+    _controller.evaluateJavascript(
+      source:
+          "document.documentElement.style.setProperty('--top-inset', '${topInset}px')",
+    );
+  }
+
   // ─── Dart → JS：搜索 ───
 
   void applySearchQuery(String? query) {
@@ -267,8 +278,9 @@ class ReaderJsBridge {
   }
 
   /// [anchorBlock] 优先于比率（见 JS `_restoreProgress`）；null = 仅按比率。
-  void restoreScrollProgress(double progress, {int? anchorBlock}) {
-    _controller.evaluateJavascript(
+  /// 返回 Future——widget 的揭幕幕布等 JS 执行完再淡出，避免露出跳变。
+  Future<void> restoreScrollProgress(double progress, {int? anchorBlock}) {
+    return _controller.evaluateJavascript(
       source: 'window._restoreProgress($progress, ${anchorBlock ?? 'null'})',
     );
   }

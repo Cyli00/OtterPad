@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/translation_style.dart';
 import 'reader_background.dart';
+import 'reader_typography.dart';
 
 // ─── Public API ───
 
@@ -20,25 +21,29 @@ String buildReaderHtml({
   required ReaderPalette palette,
   required ReaderSettingsState settings,
   required String baseHref,
-  // localhost server 的 root 与 port 必须由调用方（主 isolate）传入：
+  // localhost server 的 root 必须由调用方（主 isolate）传入：
   // buildReaderHtml 可能在后台 isolate 执行，那里 ReaderLocalhostServer
   // 单例是未初始化的新实例，直接访问会让 file:// 重写失效、图片裂掉。
   required String serverRoot,
-  required int serverPort,
   String translationStyleId = 'themed',
   String imageCacheBuster = '',
   double topInset = 0,
 }) {
-  final htmlBody =
-      _markdownToHtml(markdownContent, serverRoot, serverPort, imageCacheBuster);
-  // 动态 CSS 变量块（palette/字体/行高）按文档注入 :root；静态 CSS 在
-  // assets/reader/reader.css、JS 在 assets/reader/reader.js，均经 localhost
-  // /_assets/* 路由提供（见 ReaderLocalhostServer）。
+  final htmlBody = _markdownToHtml(
+    markdownContent,
+    serverRoot,
+    imageCacheBuster,
+  );
+  // CSS 变量块按文档注入 :root：palette/字体可热更新，排版 token 静态注入
+  // 一次（reader.css 的数字全部来自 ReaderTypography，不在 CSS 里硬编码）。
+  // 静态 CSS 在 assets/reader/reader.css、JS 在 assets/reader/reader.js，
+  // 均经 localhost /_assets/* 路由提供（见 ReaderLocalhostServer）。
   // --top-inset：顶部工具栏高度，让正文 padding-top 把首行（标题）顶到工具栏
   // 之下，否则半透明工具栏会压住标题最上沿。
   final rootVars = _cssVarsToCssBlock({
     ...palette.toCssVars(),
     ...settings.toCssVars(),
+    ...ReaderTypography.cssVars(),
     '--top-inset': '${topInset}px',
   });
 
@@ -99,8 +104,7 @@ String _cssVarsToJsSetProperty(Map<String, String> vars) {
 
 String _markdownToHtml(
   String markdown,
-  String serverRoot,
-  int serverPort, [
+  String serverRoot, [
   String imageCacheBuster = '',
 ]) {
   var html = md.markdownToHtml(
@@ -110,7 +114,7 @@ String _markdownToHtml(
     blockSyntaxes: [_LatexBlockPreserve()],
   );
 
-  html = _injectImageAttrs(html, serverRoot, serverPort, imageCacheBuster);
+  html = _injectImageAttrs(html, serverRoot, imageCacheBuster);
   html = _convertFigCaptions(html);
   return html;
 }
@@ -231,12 +235,14 @@ class _LatexBlockPreserve extends md.BlockSyntax {
 /// - **file:// 转换**：figure 提取管线写入 markdown 的 src 是绝对 file:// URL
 ///   （`doc_extract_service.dart` 里 `Uri.file(fig.imagePath)`），在 localhost
 ///   HTTP origin 下浏览器拒绝跨协议加载。把 `file:///<root>/library/<documentId>/...`
-///   转成 server URL `http://localhost:PORT/library/<documentId>/...` 后同 origin 加载
-///   正常。相对路径与 http(s)/data URI 保留原样。
+///   转成**根相对** URL `/library/<documentId>/...`——HTML 本身经
+///   `http://localhost:PORT/...` 加载，根相对路径解析到当前 origin，同 origin
+///   加载正常；且 HTML 与端口解耦（端口每次 app 启动随机分配，缓存的
+///   `.reader.html` 跨启动复用时若烤死绝对 URL 图片会全裂）。
+///   相对路径与 http(s)/data URI 保留原样。
 String _injectImageAttrs(
   String html,
-  String serverRoot,
-  int serverPort, [
+  String serverRoot, [
   String cacheBuster = '',
 ]) {
   const lazyAttrs = 'loading="lazy" decoding="async" ';
@@ -250,7 +256,7 @@ String _injectImageAttrs(
       if (src.startsWith('file://')) {
         try {
           final filePath = Uri.parse(src).toFilePath();
-          final mapped = _serverUrlForPath(filePath, serverRoot, serverPort);
+          final mapped = _rootRelativeUrlForPath(filePath, serverRoot);
           if (mapped != null) {
             resolved = mapped;
             fromFileScheme = true;
@@ -272,15 +278,19 @@ String _injectImageAttrs(
   );
 }
 
-/// [ReaderLocalhostServer.urlForPath] 的纯函数版：只依赖传入的 root/port，
-/// 可在后台 isolate 安全运行（不触碰单例状态）。逻辑须与原方法保持一致：
+/// 绝对文件路径 → 根相对 URL（`/library/<documentId>/figures/x.png`）。
+///
+/// 不带 host:port——HTML 经 localhost 加载后由当前 origin 解析；端口
+/// 每次 app 启动随机分配，烤死绝对 URL 会让跨启动复用的缓存 HTML 图片
+/// 全裂。只依赖传入的 root，可在后台 isolate 安全运行（不触碰单例状态）。
 /// 越界（不在 root 下）返回 null，Windows 反斜杠归一为正斜杠并逐段编码。
-String? _serverUrlForPath(String absPath, String serverRoot, int serverPort) {
-  if (serverRoot.isEmpty || serverPort <= 0) return null;
+String? _rootRelativeUrlForPath(String absPath, String serverRoot) {
+  if (serverRoot.isEmpty) return null;
   final rel = p.relative(p.normalize(absPath), from: serverRoot);
   if (rel.startsWith('..') || p.isAbsolute(rel)) return null;
-  final urlPath =
-      rel.split(RegExp(r'[/\\]')).map(Uri.encodeComponent).join('/');
-  return 'http://localhost:$serverPort/$urlPath';
+  final urlPath = rel
+      .split(RegExp(r'[/\\]'))
+      .map(Uri.encodeComponent)
+      .join('/');
+  return '/$urlPath';
 }
-

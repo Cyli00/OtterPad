@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/reader_settings_provider.dart';
+import 'reader_typography.dart';
 
 /// [Color] → CSS `rgba(...)` 字符串。
 ///
@@ -56,10 +57,10 @@ class ReaderPalette {
     '--link': cssColor(link),
     '--divider': cssColor(divider),
     '--code-bg': cssColor(codeBlock),
-    '--tr-weak': cssColorWithAlpha(text, 0.47),
-    '--tr-hl-bg': cssColorWithAlpha(link, 0.14),
-    '--tr-hl-text': cssColorWithAlpha(link, 0.71),
-    '--tr-deco': cssColorWithAlpha(link, 0.55),
+    '--tr-weak': cssColorWithAlpha(text, ReaderTypography.trWeakAlpha),
+    '--tr-hl-bg': cssColorWithAlpha(link, ReaderTypography.trHlBgAlpha),
+    '--tr-hl-text': cssColorWithAlpha(link, ReaderTypography.trHlTextAlpha),
+    '--tr-deco': cssColorWithAlpha(link, ReaderTypography.trDecoAlpha),
   };
 
   @override

@@ -18,6 +18,7 @@ OverlayEntry showReaderContextMenu({
   required void Function(String color) onHighlight,
   required VoidCallback onCopy,
   required VoidCallback onTranslate,
+  required VoidCallback onAskAi,
   Highlight? Function()? onCreateForNote,
   void Function(String highlightId, String note)? onNoteChanged,
   VoidCallback? onDelete,
@@ -55,6 +56,10 @@ OverlayEntry showReaderContextMenu({
           onTranslate();
           close();
         },
+        onAskAi: () {
+          onAskAi();
+          close();
+        },
         onCreateForNote: onCreateForNote,
         onNoteChanged: onNoteChanged,
         onDelete: onDelete != null
@@ -79,6 +84,7 @@ class _ContextMenuOverlay extends StatefulWidget {
   final void Function(String color) onHighlight;
   final VoidCallback onCopy;
   final VoidCallback onTranslate;
+  final VoidCallback onAskAi;
   final Highlight? Function()? onCreateForNote;
   final void Function(String highlightId, String note)? onNoteChanged;
   final VoidCallback? onDelete;
@@ -90,6 +96,7 @@ class _ContextMenuOverlay extends StatefulWidget {
     required this.onHighlight,
     required this.onCopy,
     required this.onTranslate,
+    required this.onAskAi,
     this.onCreateForNote,
     this.onNoteChanged,
     this.onDelete,
@@ -255,6 +262,11 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
               color: _showNotePanel
                   ? const Color(0xFF4FC3F7)
                   : Colors.white,
+            ),
+            _ActionIcon(
+              icon: Symbols.auto_awesome_rounded,
+              tooltip: context.l10n.askAi,
+              onTap: widget.onAskAi,
             ),
             _ActionIcon(
               icon: Symbols.translate_rounded,

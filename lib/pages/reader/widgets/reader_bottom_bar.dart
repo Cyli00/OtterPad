@@ -7,7 +7,7 @@ import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../utils/markdown_translation_weaver.dart';
 
-enum ReaderSheetType { outline, notes, theme, text }
+enum ReaderSheetType { outline, notes, theme }
 
 class ReaderBottomBar extends StatelessWidget {
   final ReaderSettingsState readerSettings;
@@ -16,9 +16,9 @@ class ReaderBottomBar extends StatelessWidget {
   final VoidCallback onOpenOutline;
   final VoidCallback onTranslate;
   final VoidCallback onCycleTranslationMode;
+  final VoidCallback onAskAi;
   final VoidCallback onOpenNotes;
   final VoidCallback onOpenTheme;
-  final VoidCallback onOpenText;
 
   const ReaderBottomBar({
     super.key,
@@ -28,9 +28,9 @@ class ReaderBottomBar extends StatelessWidget {
     required this.onOpenOutline,
     required this.onTranslate,
     required this.onCycleTranslationMode,
+    required this.onAskAi,
     required this.onOpenNotes,
     required this.onOpenTheme,
-    required this.onOpenText,
   });
 
   @override
@@ -61,6 +61,12 @@ class ReaderBottomBar extends StatelessWidget {
             _buildTranslationBottomButton(context, cs),
             _bottomButton(
               cs,
+              icon: Symbols.auto_awesome_rounded,
+              tooltip: l10n.askAi,
+              onTap: onAskAi,
+            ),
+            _bottomButton(
+              cs,
               icon: Symbols.stylus_note_rounded,
               tooltip: l10n.notes,
               active: activeSheet == ReaderSheetType.notes,
@@ -72,13 +78,6 @@ class ReaderBottomBar extends StatelessWidget {
               tooltip: l10n.appearance,
               active: activeSheet == ReaderSheetType.theme,
               onTap: onOpenTheme,
-            ),
-            _bottomButton(
-              cs,
-              icon: Symbols.custom_typography_rounded,
-              tooltip: l10n.font,
-              active: activeSheet == ReaderSheetType.text,
-              onTap: onOpenText,
             ),
           ],
         ),

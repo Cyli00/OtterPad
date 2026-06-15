@@ -5,6 +5,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../../../providers/reader_settings_provider.dart';
 import '../reader_background.dart';
+import '../reader_typography.dart';
 import 'nr_custom_text_node.dart';
 import 'nr_image_node.dart';
 import 'nr_latex_node.dart';
@@ -33,7 +34,7 @@ MarkdownConfig buildReaderMarkdownConfig({
     fontSize: settings.fontSize,
     fontFamily: settings.font.fontFamily,
     fontFamilyFallback: settings.font.fontFamilyFallback,
-    height: 1.7,
+    height: ReaderTypography.bodyHeight,
   );
 
   return MarkdownConfig(
@@ -41,58 +42,60 @@ MarkdownConfig buildReaderMarkdownConfig({
       PConfig(textStyle: baseStyle),
       H1Config(
         style: baseStyle.copyWith(
-          fontSize: settings.fontSize * 1.6,
-          fontWeight: FontWeight.w700,
-          height: 1.3,
+          fontSize: settings.fontSize * ReaderTypography.h1Scale,
+          fontWeight: ReaderTypography.h1Weight,
+          height: ReaderTypography.h1Height,
         ),
       ),
       H2Config(
         style: baseStyle.copyWith(
-          fontSize: settings.fontSize * 1.35,
-          fontWeight: FontWeight.w700,
-          height: 1.35,
+          fontSize: settings.fontSize * ReaderTypography.h2Scale,
+          fontWeight: ReaderTypography.h2Weight,
+          height: ReaderTypography.h2Height,
         ),
       ),
       H3Config(
         style: baseStyle.copyWith(
-          fontSize: settings.fontSize * 1.15,
-          fontWeight: FontWeight.w600,
-          height: 1.4,
+          fontSize: settings.fontSize * ReaderTypography.h3Scale,
+          fontWeight: ReaderTypography.h3Weight,
+          height: ReaderTypography.h3to6Height,
         ),
       ),
       H4Config(
         style: baseStyle.copyWith(
-          fontSize: settings.fontSize * 1.05,
-          fontWeight: FontWeight.w600,
-          height: 1.4,
+          fontSize: settings.fontSize * ReaderTypography.h4Scale,
+          fontWeight: ReaderTypography.h4Weight,
+          height: ReaderTypography.h3to6Height,
         ),
       ),
       H5Config(
-        style: baseStyle.copyWith(fontWeight: FontWeight.w600, height: 1.4),
+        style: baseStyle.copyWith(
+          fontWeight: ReaderTypography.h5Weight,
+          height: ReaderTypography.h3to6Height,
+        ),
       ),
       H6Config(
         style: baseStyle.copyWith(
-          fontWeight: FontWeight.w500,
+          fontWeight: ReaderTypography.h6Weight,
           color: secondaryColor,
-          height: 1.4,
+          height: ReaderTypography.h3to6Height,
         ),
       ),
       BlockquoteConfig(
         sideColor: dividerColor,
         textColor: secondaryColor,
-        sideWith: 3.0,
-        padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+        sideWith: ReaderTypography.blockquoteSideWidth,
+        padding: const EdgeInsets.only(
+          left: ReaderTypography.blockquotePadLeft,
+          top: 4,
+          bottom: 4,
+        ),
       ),
       PreConfig(
         textStyle: TextStyle(
-          fontFamily: 'Consolas',
-          fontFamilyFallback: const [
-            'Cascadia Mono',
-            'Courier New',
-            'Menlo',
-            'Noto Sans Mono',
-          ],
-          fontSize: settings.fontSize * 0.88,
+          fontFamily: ReaderTypography.codeFontFamily,
+          fontFamilyFallback: ReaderTypography.codeFontFallback,
+          fontSize: settings.fontSize * ReaderTypography.codeScale,
           color: textColor,
         ),
         decoration: BoxDecoration(
@@ -103,14 +106,9 @@ MarkdownConfig buildReaderMarkdownConfig({
       ),
       CodeConfig(
         style: TextStyle(
-          fontFamily: 'Consolas',
-          fontFamilyFallback: const [
-            'Cascadia Mono',
-            'Courier New',
-            'Menlo',
-            'Noto Sans Mono',
-          ],
-          fontSize: settings.fontSize * 0.88,
+          fontFamily: ReaderTypography.codeFontFamily,
+          fontFamilyFallback: ReaderTypography.codeFontFallback,
+          fontSize: settings.fontSize * ReaderTypography.codeScale,
           color: textColor,
           backgroundColor: codeBlockBg,
         ),
@@ -131,7 +129,7 @@ MarkdownConfig buildReaderMarkdownConfig({
       HrConfig(height: 1, color: dividerColor),
       NRImgConfig(
         captionStyle: baseStyle.copyWith(
-          fontSize: settings.fontSize * 0.85,
+          fontSize: settings.fontSize * ReaderTypography.captionScale,
           color: secondaryColor,
         ),
         highlightQuery: highlightQuery,
@@ -178,6 +176,8 @@ MarkdownGenerator buildReaderMarkdownGenerator({
     textGenerator: (node, config, visitor) =>
         NRCustomTextNode(node.textContent, config, visitor),
     richTextBuilder: searchRichTextBuilder ?? (span) => Text.rich(span),
-    linesMargin: EdgeInsets.symmetric(vertical: settings.fontSize * 0.4),
+    linesMargin: EdgeInsets.symmetric(
+      vertical: settings.fontSize * ReaderTypography.blockMarginScale,
+    ),
   );
 }

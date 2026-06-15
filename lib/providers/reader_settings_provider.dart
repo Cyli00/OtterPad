@@ -176,12 +176,12 @@ class ReaderSettingsState {
 
   /// 字体相关 CSS 变量。
   ///
-  /// 仅产出字体/字号字段；颜色由 [ReaderPalette.toCssVars] 负责。
-  /// 调用方合并两 map 得到完整 `:root` 变量集合。
+  /// 仅产出随设置变化的字体/字号字段；颜色由 [ReaderPalette.toCssVars]、
+  /// 静态排版 token（行高/标题倍率等）由 ReaderTypography.cssVars 负责。
+  /// 调用方合并各 map 得到完整 `:root` 变量集合。
   Map<String, String> toCssVars() => {
     '--font-size': '${fontSize}px',
     '--font-family': font.cssFontFamily,
-    '--line-height': '1.7',
   };
 }
 

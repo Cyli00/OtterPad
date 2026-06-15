@@ -7,7 +7,7 @@ body {
   color: var(--text);
   background-color: var(--bg);
   padding: 20px;
-  padding-top: calc(var(--font-size) * 0.4 + var(--top-inset, 20px));
+  padding-top: calc(var(--font-size) * var(--block-margin) + var(--top-inset, 20px));
   padding-bottom: 40px;
   -webkit-user-select: text;
   user-select: text;
@@ -18,35 +18,38 @@ body {
 #content { position: relative; max-width: 100%; contain: content; }
 #content > * { scroll-margin-top: 60px; }
 
+/* 排版数值（倍率/字重/行高/间距）全部来自 ReaderTypography 注入的 :root
+   变量（lib/pages/reader/widgets/reader_typography.dart），CSS 不持有数字。
+   标题 margin-top 的逐级倍率是 CSS 独有知识，留在这里。 */
 p, li, blockquote, pre, table, .math-display {
-  margin-top: calc(var(--font-size) * 0.4);
-  margin-bottom: calc(var(--font-size) * 0.4);
+  margin-top: calc(var(--font-size) * var(--block-margin));
+  margin-bottom: calc(var(--font-size) * var(--block-margin));
 }
 
 h1 {
-  font-size: calc(var(--font-size) * 1.6);
-  font-weight: 700; line-height: 1.3;
+  font-size: calc(var(--font-size) * var(--h1-scale));
+  font-weight: var(--h1-weight); line-height: var(--h1-lh);
   margin-top: calc(var(--font-size) * 0.8);
-  margin-bottom: calc(var(--font-size) * 0.4);
+  margin-bottom: calc(var(--font-size) * var(--block-margin));
 }
 h2 {
-  font-size: calc(var(--font-size) * 1.35);
-  font-weight: 700; line-height: 1.35;
+  font-size: calc(var(--font-size) * var(--h2-scale));
+  font-weight: var(--h2-weight); line-height: var(--h2-lh);
   margin-top: calc(var(--font-size) * 0.7);
-  margin-bottom: calc(var(--font-size) * 0.4);
+  margin-bottom: calc(var(--font-size) * var(--block-margin));
 }
 h3 {
-  font-size: calc(var(--font-size) * 1.15);
-  font-weight: 600; line-height: 1.4;
+  font-size: calc(var(--font-size) * var(--h3-scale));
+  font-weight: var(--h3-weight); line-height: var(--h3-lh);
   margin-top: calc(var(--font-size) * 0.6);
-  margin-bottom: calc(var(--font-size) * 0.4);
+  margin-bottom: calc(var(--font-size) * var(--block-margin));
 }
 h4 {
-  font-size: calc(var(--font-size) * 1.05);
-  font-weight: 600; line-height: 1.4;
+  font-size: calc(var(--font-size) * var(--h4-scale));
+  font-weight: var(--h4-weight); line-height: var(--h4-lh);
 }
-h5 { font-weight: 600; line-height: 1.4; }
-h6 { font-weight: 500; line-height: 1.4; color: var(--secondary); }
+h5 { font-weight: var(--h5-weight); line-height: var(--h5-lh); }
+h6 { font-weight: var(--h6-weight); line-height: var(--h6-lh); color: var(--secondary); }
 
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -54,14 +57,14 @@ a:hover { text-decoration: underline; }
 hr { border: none; border-top: 1px solid var(--divider); margin: 1em 0; }
 
 blockquote {
-  border-left: 3px solid var(--divider);
-  padding-left: 12px;
+  border-left: var(--bq-side) solid var(--divider);
+  padding-left: var(--bq-pad);
   color: var(--secondary);
 }
 
 pre {
-  font-family: Consolas, 'Cascadia Mono', 'Courier New', Menlo, 'Noto Sans Mono', monospace;
-  font-size: calc(var(--font-size) * 0.88);
+  font-family: var(--code-font);
+  font-size: calc(var(--font-size) * var(--code-scale));
   background: var(--code-bg);
   border-radius: 8px;
   padding: 12px;
@@ -69,8 +72,8 @@ pre {
 }
 
 code {
-  font-family: Consolas, 'Cascadia Mono', 'Courier New', Menlo, 'Noto Sans Mono', monospace;
-  font-size: calc(var(--font-size) * 0.88);
+  font-family: var(--code-font);
+  font-size: calc(var(--font-size) * var(--code-scale));
   background: var(--code-bg);
   padding: 1px 4px;
   border-radius: 4px;
@@ -100,7 +103,7 @@ img {
 }
 
 figure {
-  margin: calc(var(--font-size) * 0.4) 0;
+  margin: calc(var(--font-size) * var(--block-margin)) 0;
   text-align: center;
   scroll-margin-top: 60px;
   scroll-margin-bottom: 60px;
@@ -108,7 +111,7 @@ figure {
 figure img { margin: 4px auto; }
 
 figcaption {
-  font-size: calc(var(--font-size) * 0.85);
+  font-size: calc(var(--font-size) * var(--caption-scale));
   color: var(--secondary);
   line-height: 1.5;
   padding: 4px 8px 0;

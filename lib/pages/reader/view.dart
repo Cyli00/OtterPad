@@ -40,6 +40,7 @@ import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/doc_paths.dart';
 import '../../utils/markdown_translation_weaver.dart';
+import 'chat/document_chat_page.dart';
 import 'coordinators/reader_summary_image_coordinator.dart';
 import 'widgets/figure_viewer.dart';
 import 'widgets/webview_markdown_reader.dart';
@@ -54,7 +55,6 @@ import 'widgets/reader_pdf_search_controller.dart';
 import 'widgets/reader_search_bars.dart';
 import 'widgets/reader_search_navigator.dart';
 import 'widgets/reader_sheet_host.dart';
-import 'widgets/reader_text_sheet.dart';
 import 'widgets/reader_theme_sheet.dart';
 import 'widgets/ai_layout_fix_dialog.dart';
 import 'widgets/reader_top_toolbar.dart';
@@ -397,26 +397,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     });
   }
 
-  // ─── 底部面板（字体 / 主题 / 大纲） ───
+  // ─── 底部面板（外观 / 大纲） ───
 
   void _pauseWebView() => _webViewReaderKey.currentState?.pauseWebView();
   void _resumeWebView() => _webViewReaderKey.currentState?.resumeWebView();
-
-  Future<void> _openTextSheet() async {
-    if (_session.markdownContent == null) return;
-    if (_activeSheet == ReaderSheetType.text) {
-      _sheetHostKey.currentState!.close();
-      return;
-    }
-    final future = _sheetHostKey.currentState!.show(
-      builder: (_) => const ReaderTextSheetBody(),
-      barrierAlpha: 0.25,
-      onPause: _pauseWebView,
-      onResume: _resumeWebView,
-    );
-    setState(() => _activeSheet = ReaderSheetType.text);
-    await future;
-  }
 
   Future<void> _openThemeSheet() async {
     if (_activeSheet == ReaderSheetType.theme) {
@@ -720,6 +704,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               duration: const Duration(seconds: 1),
             );
       },
+      onAskAi: () => _openAiChat(quote: highlight.text.trim()),
       onTranslate: () {
         final fullText = _expandToParagraphContext(highlight.text.trim());
         showTranslationPopup(
@@ -757,6 +742,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               duration: const Duration(seconds: 1),
             );
       },
+      onAskAi: () => _openAiChat(quote: text.trim()),
       onTranslate: () {
         final trimmed = text.trim();
         final fullText = _expandToParagraphContext(trimmed);
@@ -803,6 +789,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _sessionNotifier.toggleToolbars();
   }
 
+  /// 打开问 AI 对话页。[quote] 是划词引用；底栏入口不带引用。
+  void _openAiChat({String? quote}) {
+    // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"新路由显示
+    _webViewReaderKey.currentState?.clearSelection();
+    context.push(
+      AppRoutes.readerChat,
+      extra: DocumentChatPageArgs(
+        document: widget.document,
+        initialQuote: quote,
+        onLocateQuote: _locateQuoteInReader,
+      ),
+    );
+  }
+
+  /// 会话历史「定位原文」——按引用文本在 markdown 源里找偏移，复用大纲
+  /// 跳转的滚动管线。渲染文本与源文本可能因 Markdown 标记不一致，全文
+  /// 匹配失败时退化为引用前 30 字符。
+  void _locateQuoteInReader(String quote) {
+    final md = _session.markdownContent;
+    final trimmed = quote.trim();
+    if (md == null || trimmed.isEmpty) return;
+    var idx = md.indexOf(trimmed);
+    if (idx < 0 && trimmed.length > 30) {
+      idx = md.indexOf(trimmed.substring(0, 30));
+    }
+    if (idx >= 0) _scrollToCharOffset(idx);
+  }
+
   // ─── 选择/标记工具栏 ───
 
   void _dismissSelectionToolbar() {
@@ -826,7 +840,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // ─── UI ───
 
-  @override
   /// 统一退出入口：先把 WebView 冻结成截图再 pop。
   ///
   /// 平台视图不参与 Flutter 合成——反向转场的 fade/scale 对原生 WebView
@@ -1139,7 +1152,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // _buildResultNavigator 已提取为独立的 [_ResultNavigator] ConsumerWidget，
   // 只 watch (currentResultIndex, searchResults.length)，搜索导航不再触发整页 rebuild。
 
-  /// 底部工具栏：大纲 / 笔记 / 主题面板 / 字体面板
+  /// 底部工具栏：大纲 / 翻译 / 问 AI / 笔记 / 外观面板
   ///
   /// 仅在 Markdown 模式显示。工具栏背景用 surface 的半透明色，视觉上浮在
   /// 阅读内容之上；沉浸式状态切换由 [AnimatedSlide] 在 build 里处理。
@@ -1155,9 +1168,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onOpenOutline: _openOutlineSheet,
       onTranslate: _handleTranslate,
       onCycleTranslationMode: _handleCycleTranslationMode,
+      onAskAi: _openAiChat,
       onOpenNotes: _openNotesSheet,
       onOpenTheme: _openThemeSheet,
-      onOpenText: _openTextSheet,
     );
   }
 
@@ -1397,7 +1410,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
 
     if (session.markdownContent == null) {
-      return const Center(child: CircularProgressIndicator());
+      // 与 WebViewMarkdownReader 的揭幕幕布同款 spinner——内容加载 → HTML
+      // 生成 → WebView 首帧的整个过程视觉连续，不再多段跳变。
+      final palette = resolveReaderPalette(settings.theme, theme.colorScheme);
+      return ColoredBox(
+        color: palette.background,
+        child: Center(
+          child: CircularProgressIndicator(
+            color: palette.secondaryText,
+            strokeWidth: 2,
+          ),
+        ),
+      );
     }
 
     // 工具栏高度通过 topInset/bottomInset 传入 ListView padding，

@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'dart:convert' show utf8;
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:crypto/crypto.dart' show md5;
+import 'package:flutter/foundation.dart' show ValueListenable, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/animation_constants.dart';
@@ -141,6 +144,15 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   /// 立即加载，HTML 必须先落盘），build 用纸张底色占位。
   bool _htmlReady = false;
 
+  /// 揭幕控制：纸色幕布盖在 WebView 上方，遮住原生实例创建 → HTML 首帧
+  /// paint → 进度恢复的全过程（原生 WebView 在首帧 paint 前刷系统白底，
+  /// 是「进入闪白」的来源）。[onContentReady] 恢复完进度后调 [_reveal] 淡出。
+  /// [_curtainGone] 在淡出动画结束后把幕布整体出树——幕布上的 spinner 是
+  /// 永久动画，不能留在 opacity:0 的层里空转。
+  bool _revealed = false;
+  bool _curtainGone = false;
+  Timer? _revealFallbackTimer;
+
   @override
   void initState() {
     super.initState();
@@ -150,10 +162,21 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   Future<void> _prepareInitialHtml() async {
     await _writeHtmlFile();
     if (mounted) setState(() => _htmlReady = true);
+    // 兜底：onContentReady 依赖 window.onload，首屏图片异常时可能迟迟不来。
+    // 超时强制揭幕——transparentBackground 下未 paint 区域透出底层纸色，
+    // 提前揭幕也不会闪白。
+    _revealFallbackTimer = Timer(const Duration(seconds: 3), _reveal);
+  }
+
+  void _reveal() {
+    _revealFallbackTimer?.cancel();
+    if (!mounted || _revealed) return;
+    setState(() => _revealed = true);
   }
 
   @override
   void dispose() {
+    _revealFallbackTimer?.cancel();
     _scrollbarHideTimer?.cancel();
     _scrollMetrics.dispose();
     // 释放 keepAlive 保活的原生 WebView，否则离开阅读器后原生实例泄漏。
@@ -162,9 +185,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   }
 
   // dispose 不再清理 HTML——`.reader.html` 在文献目录内，随文献删除一起走。
-  // 留着的好处：用户从阅读器返回后再次进入同一文献，HTML 能被复用（虽然
-  // initState 总会重写一次，但避免了"删→写→删→写"的瞬时 IO 抖动）；
-  // 留下的代价仅几十 KB 磁盘占用，可忽略。
+  // 留着的好处：重进同一文献时指纹命中（见 _writeHtmlFile）可跳过整篇
+  // parse + 写盘，接近秒开；留下的代价仅几十 KB 磁盘占用，可忽略。
 
   /// 覆盖滚动条可见性：每次新事件重置 1.5s 淡出计时器。
   /// 用户在 thumb 上按住期间（[_scrollbarPointerActive]）也保持可见。
@@ -183,9 +205,27 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   /// Flutter 拖动覆盖条 → JS scrollTo。ratio ∈ [0,1]。
   void _scrollToRatio(double ratio) => _bridge?.scrollToRatio(ratio);
 
+  /// app 版本+构建号——指纹的版本成分：升级后 markdown→HTML 生成逻辑或
+  /// reader.css 的 var() 语义可能变化，旧缓存必须失效。进程内只过一次
+  /// 平台通道。
+  static String? _appVersionCache;
+
+  static Future<String> _appVersion() async {
+    if (_appVersionCache != null) return _appVersionCache!;
+    final info = await PackageInfo.fromPlatform();
+    return _appVersionCache = '${info.version}+${info.buildNumber}';
+  }
+
   /// HTML 生成（整篇 markdown 解析 + 全文正则后处理）与写盘都在后台
   /// isolate 执行——大文献的同步转换此前直接跑在 initState 里，卡住打开
   /// 阅读器的首帧与路由转场（「打开就卡一下」的来源）。
+  ///
+  /// `.reader.html` 当缓存用：sidecar 指纹文件 `.reader.html.fp` 记录
+  /// 内容 hash | 图片 cacheBuster | app 版本，三者都没变就跳过整篇
+  /// parse + 写盘（大文献数百 ms~秒级），isolate 只做一次 hash（几十 ms）。
+  /// 主题/字号/翻译样式/翻页/top-inset **不进指纹**——[onContentReady]
+  /// 会用 widget 当前值无条件重放，缓存 HTML 里烤的旧值被覆写。
+  /// debug 构建始终重新生成：开发期改生成器代码不用手动清缓存。
   ///
   /// Isolate 闭包不能捕获 `this`（State 持有 controller 等不可发送对象），
   /// 全部输入先提为局部变量。
@@ -198,26 +238,45 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     final buster = _figuresCacheBuster();
     final inset = widget.topInset;
     final path = _htmlFilePath;
-    // server root/port 在主 isolate 取出传入——isolate 内单例未初始化，
-    // 否则 file://→localhost 重写失效、图片裂成 alt 文本（见 _serverUrlForPath）。
+    // server root 在主 isolate 取出传入——isolate 内单例未初始化，
+    // 否则 file:// 重写失效、图片裂成 alt 文本（见 _rootRelativeUrlForPath）。
     final serverRoot = ReaderLocalhostServer.instance.root;
-    final serverPort = ReaderLocalhostServer.instance.port;
-    await Isolate.run(() {
+    final appVersion = await _appVersion();
+    final reused = await Isolate.run(() {
+      final fingerprint =
+          '${md5.convert(utf8.encode(markdown))}|$buster|$appVersion';
+      final htmlFile = File(path);
+      final fpFile = File('$path.fp');
+      String? stored;
+      try {
+        if (fpFile.existsSync()) stored = fpFile.readAsStringSync();
+      } catch (_) {
+        // 指纹读不出来按不匹配处理，走重新生成
+      }
+      if (!kDebugMode && stored == fingerprint && htmlFile.existsSync()) {
+        return true;
+      }
+      // 写入顺序「删 fp → 写 HTML → 写 fp」：中途被杀只会留下无指纹的
+      // 半截 HTML，下次必然重新生成，不会把坏文件当缓存加载。
+      if (fpFile.existsSync()) fpFile.deleteSync();
       final html = buildReaderHtml(
         markdownContent: markdown,
         palette: palette,
         settings: settings,
         baseHref: baseHref,
         serverRoot: serverRoot,
-        serverPort: serverPort,
         translationStyleId: styleId,
         imageCacheBuster: buster,
         topInset: inset,
       );
-      final file = File(path);
-      file.parent.createSync(recursive: true);
-      file.writeAsStringSync(html);
+      htmlFile.parent.createSync(recursive: true);
+      htmlFile.writeAsStringSync(html);
+      fpFile.writeAsStringSync(fingerprint);
+      return false;
     });
+    if (reused) {
+      log.d('[WebViewMarkdownReader] .reader.html 指纹命中，跳过重新生成');
+    }
   }
 
   @override
@@ -402,12 +461,24 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     return '';
   }
 
+  /// 纸色 + 弱化 spinner——HTML 落盘前的占位和揭幕幕布共用，让「进入 →
+  /// 内容就绪」全程背景色恒定、spinner 连续，不再出现多段视觉跳变。
+  Widget _loadingCurtain() => ColoredBox(
+    color: widget.palette.background,
+    child: Center(
+      child: CircularProgressIndicator(
+        color: widget.palette.secondaryText,
+        strokeWidth: 2,
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     // HTML 还在后台 isolate 生成——先铺纸张底色占位，避免 WebView 加载到
     // 半截文件，也避免占位闪白/闪黑。
     if (!_htmlReady) {
-      return ColoredBox(color: widget.palette.background);
+      return _loadingCurtain();
     }
 
     // 走 localhost server，所有平台同 origin 加载——
@@ -423,7 +494,10 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       initialUrlRequest: URLRequest(url: WebUri(url)),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
-        transparentBackground: false,
+        // 原生 WebView 从创建到 HTML 首帧 paint 之间默认刷系统白底，暗色/
+        // 纸色主题下表现为进入时闪白。透明后这段空窗透出底层纸色背景
+        // （view 层 contentBg），配合上方的揭幕幕布彻底消除闪白。
+        transparentBackground: true,
         // 必须开 hybrid composition：VD 模式（false）下 WebView 的原生文本选择
         // 手柄与放大镜（PopupWindow）无法叠加到 Flutter 纹理上——表现为手柄消失、
         // 放大镜渲染成黑色圆角矩形。代价是键盘/对话框动画期间 WebView 会逐帧
@@ -447,7 +521,29 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     );
 
     // 冻结态：InAppWebView 不挂载（原生 View detach 出 ViewRoot），改用截图占位。
-    final Widget content = _frozen ? _buildFrozenPlaceholder() : webView;
+    Widget content = _frozen ? _buildFrozenPlaceholder() : webView;
+
+    // 揭幕幕布：内容（含进度恢复）就绪前盖住 WebView，淡出后整体出树。
+    if (!_curtainGone) {
+      content = Stack(
+        fit: StackFit.expand,
+        children: [
+          content,
+          IgnorePointer(
+            child: AnimatedOpacity(
+              duration: kAnim,
+              opacity: _revealed ? 0 : 1,
+              onEnd: () {
+                if (_revealed && mounted) {
+                  setState(() => _curtainGone = true);
+                }
+              },
+              child: _loadingCurtain(),
+            ),
+          ),
+        ],
+      );
+    }
 
     // horizontal 翻页模式不需要覆盖滚动条——页内有进度页脚（x/y 页码）
     // 和边缘点击翻页，纵向拖动滚动条的交互不存在。
@@ -497,6 +593,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     // 生成时本就带这些值，重放只是覆写同名 CSS 变量/属性）。
     _bridge?.applyTheme(widget.palette, widget.settings);
     _bridge?.applyTranslationStyle(widget.translationStyleId);
+    _bridge?.applyTopInset(widget.topInset);
     // 翻页方式必须在首屏注入：JS 默认 body 没 data-pagination 属性，
     // 视为 vertical；horizontal 时若不注入会以 vertical 渲染首屏，
     // 直到第一次 didUpdateWidget 才切，造成"先看到 vertical 一闪"。
@@ -504,10 +601,16 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     _bridge?.restoreAllHighlights(widget.highlights);
     _bridge?.applySearchQuery(widget.highlightQuery);
     if (widget.initialScrollProgress > 0 || widget.initialAnchorBlock != null) {
-      _bridge?.restoreScrollProgress(
-        widget.initialScrollProgress,
-        anchorBlock: widget.initialAnchorBlock,
-      );
+      // 揭幕必须等进度恢复的 JS 执行完，否则会看到「先顶部、再跳到上次
+      // 位置」的闪动；剩余的 paint 延迟由幕布 240ms 淡出动画掩盖。
+      _bridge
+          ?.restoreScrollProgress(
+            widget.initialScrollProgress,
+            anchorBlock: widget.initialAnchorBlock,
+          )
+          .whenComplete(_reveal);
+    } else {
+      _reveal();
     }
   }
 
