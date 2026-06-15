@@ -62,17 +62,26 @@
 - **DocPaths** (`lib/utils/doc_paths.dart`) — 文献文件路径中心工具。禁止用 `p.basenameWithoutExtension` 或持久化绝对路径自行拼接。
 - **StorageCleanupService** (`lib/services/storage_cleanup_service.dart`) — 禁止在 UI 层直接删除缓存目录。
 - **BackupProvider** (`lib/providers/backup_provider.dart`) — 禁止在设置页或服务里散落保存备份凭据。
-- **BackupRestoreService** (`lib/services/backup_restore_service.dart`) — 禁止手写 ZIP 结构或直接覆盖 Hive 文件而不经过 `GStorage.close()`/`reopen()`。
+- **BackupRestoreService** (`lib/services/backup_restore_service.dart`) — ZIP 打包/恢复实现。创建侧 `BackupScope`（full / dataOnly），dataOnly 的文件过滤谓词 `includeInDataOnly` 是「数据文件」判定的单一来源（指纹服务共用）；dataOnly 备份覆盖恢复时自动从 `.bak` 拷回重文件防丢 PDF。禁止手写 ZIP 结构或直接覆盖 Hive 文件而不经过 `GStorage.close()`/`reopen()`。
 - **BackupMergeService** (`lib/services/backup_merge_service.dart`) — 备份增量合并（按 ID 去重、只增不覆盖、不做版本比较）。本地专属配置（代理 / 备份凭据）不参与合并。禁止在 restore/merge 流程外自行拼装 Hive box 合并逻辑。
-- **BackupS3Service** (`lib/services/backup_s3_service.dart`) — 禁止在 UI 层拼签名请求。
+- **BackupS3Service** (`lib/services/backup_s3_service.dart`) — S3 SigV4 签名请求实现（含 `listObjects`/`deleteObject`）。禁止在 UI 层拼签名请求。
+- **BackupRemote** (`lib/services/backup_remote.dart`) — S3 / WebDAV 远端备份的唯一接缝（`ping`/`upload`/`download`/`list`/`delete`，实例绑定远端目录、方法只接受文件名），`resolveBackupRemote()` 按配置解析 adapter。禁止调用点按 `remoteType` 自写 if/else 分发或裸操作 webdav client / BackupS3Service。
+- **BackupOrchestrator** (`lib/providers/backup_orchestrator.dart`) — 备份/恢复编排唯一实现：打包→时间戳上传→保留 3 份 prune→落指纹快照；下载→排空 Active Task→恢复→刷新受影响 provider。设置页与自动备份都只调它。禁止页面/任务自行拼接 BackupRestoreService + BackupRemote 链路。
+- **BackupFingerprintService** (`lib/services/backup_fingerprint.dart`) — 「上次备份了什么」的唯一记录：每篇文献 content/meta/files 三维指纹 + `BackupSnapshot` 快照（settings box）。禁止另存备份时间戳或自写指纹比对。
+- **AutoBackupProvider / AutoBackupScheduler** (`lib/providers/auto_backup_provider.dart`) — 自动备份配置（周期/范围）与调度（main 挂载：启动 2min 首查 + 每小时 tick；闸门：到期且指纹有变化）。禁止另起定时器触发备份。
+- **SyncStatusProvider** (`lib/providers/sync_status_provider.dart`) — 云同步三态（已同步/有变更/从未备份 + 变更原因）唯一真值源，现算指纹 vs 快照纯本地比对；云图标角标与云同步页共用。禁止 UI 自行比对指纹或发网络请求判定同步状态。
 
 ### Agent API 与模型
 
 - **AgentApiProvider** (`lib/providers/api_provider.dart`) — API 配置中心，现为**多实例**（`AgentProviderInstance` 有序列表，同协议可多开、按 `instanceId` 寻址）。专家/快速/生图三个全局角色仍唯一，持久化为 `"instanceId:modelId"`。调用层读已解析视图 `effectiveAgentApiProvider`（`AgentApiState`），禁止在调用点自行猜 provider/实例。
 - **AgentModelParams** (`lib/providers/api_provider.dart`) — 禁止用散落字符串 key 在 UI 和服务间传参。
 - **AgentModelCapability** (`lib/services/agent_model_capability.dart`) — 禁止硬编码模型能力判断。
-- **AgentChatService** (`lib/services/agent_chat_service.dart`) — 非流式多模态对话唯一出口（4 provider 请求构造 / 响应提取 / 结构化输出降级阶梯 / 瞬时重试）。禁止在 service 里自写 `switch(provider)` 拼请求体或逐家提取响应。注：`TranslationService` 的流式 SSE 仍各自实现，暂未收敛。
-- **BuiltInToolNames** (`lib/services/builtin_tools.dart`) — 各厂内置工具名常量（snake_case，对齐 API 字段）与 `forProvider` 可用集。禁止在请求构造 / 设置 UI 里硬编码工具名字符串。
+- **AgentChatService** (`lib/services/agent_chat_service.dart`) — 多模态对话唯一出口，非流式 `send` + 流式 `sendStream`（4 provider 请求构造 / 响应提取 / 结构化输出降级阶梯 / 瞬时重试 / 搜索工具回环：Kimi `$web_search` 服务端执行、Tavily 客户端执行，上限 3 轮）。禁止在 service 里自写 `switch(provider)` 拼请求体或逐家提取响应。注：`TranslationService` 的流式 SSE 仍各自实现，暂未收敛。
+- **BuiltInToolNames / BuiltInToolsHelper** (`lib/services/builtin_tools.dart`) — 内置工具标识常量（search / urlContext）与 provider+model 官方支持检测 `isSupported`（兼容端按 baseUrl 域名识别 `CompatSearchVendor`：qwen/zhipu/kimi/mimo；`tavily` 是伪厂商，由 AgentChatService 在无原生搜索且已配置 Tavily 时主动升级）。禁止在请求构造 / 设置 UI 里硬编码工具名字符串或自写厂商域名判断。
+- **TavilySearchService** (`lib/services/tavily_search_service.dart`) — Tavily 搜索客户端，为无原生联网的兼容端模型提供 function calling 搜索回退；API Key 的唯一存取接缝（存 SecureCredentialVault），已接入 ProxyProvider。禁止调用点自存 Tavily Key 或绕过它直接请求 Tavily API。
+- **UrlContextService** (`lib/services/url_context_service.dart`) — 客户端 URL 内容提取回退（OpenAI / 兼容端无原生 URL 工具时抓取网页转文本注入上下文），已接入 ProxyProvider。Anthropic `web_fetch` / Gemini `url_context` 原生路径不经过这里。禁止在调用点自写网页抓取/正文提取。
+- **DocumentChatService** (`lib/services/document_chat_service.dart`) — 问 AI 服务：会话文件存取（`library/{id}/chats/`）+ 文献上下文组装 + 角色解析（专家/快速各自 `loadInstance`）+ 请求发送的唯一出口。禁止 UI 直接调 AgentChatService 发文献问答。
+- **DocumentChatProvider** (`lib/providers/document_chat_provider.dart`) — 问 AI 对话状态机（family by documentId：发送/流式增量/中断/会话切换/URL 回退接线）。禁止页面自管发送状态或 CancelToken。
 - **AiSettingsPrompt** (`lib/services/ai_settings_prompt.dart`) — 禁止各调用点自写 AI 设置错误文案。
 - **Prompts / PromptDef** (`lib/services/prompts.dart`) — 全代码库 LLM prompt 的唯一文本源：可定制 prompt 是 `PromptDef` 声明（id / storageKey / 默认文本 / 必需占位符），不可定制 prompt（如排版修复的 yFirst 变体）是同文件函数；占位符插值统一走 `renderPrompt`。改 prompt 措辞只碰这个文件。禁止在 service / provider 里硬编码 prompt 文本或自写 `{{}}` 替换。
 - **PromptStore** (`lib/services/prompt_store.dart`) — 可定制 prompt 五件套（解析/保存/重置/是否默认/占位符校验）的唯一实现：空白 = 未定制回退默认，缺必需占位符拒绝保存并返回缺失列表。新 prompt 开放定制 = 在 `prompts.dart` 加一条 PromptDef 声明。禁止在 config provider 里自写 prompt 的默认值回退 / 存储 / 重置逻辑。

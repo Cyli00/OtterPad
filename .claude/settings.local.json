@@ -76,7 +76,8 @@
       "Read(//e/gitProjects/anx-reader/**)",
       "Skill(improve-codebase-architecture)",
       "Bash(awk -F: '{sum+=$2} END {print sum}')",
-      "Bash(mktemp *)"
+      "Bash(mktemp *)",
+      "WebFetch(domain:platform.xiaomimimo.com)"
     ]
   },
   "outputStyle": "Explanatory",
