@@ -22,6 +22,9 @@ class AgentThinkingPayload {
   /// none..xhigh。超出该代际能力的档位就近归并。
   static Map<String, dynamic> forOpenAI(String modelId, ThinkingLevel? level) {
     if (level == null) return const {};
+    // xAI Responses API（同形复用本线路）：grok-4 系不接受 reasoning.effort
+    // （400），grok-3-mini 仅 low/high——统一不发，保留服务端默认深度。
+    if (modelId.toLowerCase().startsWith('grok')) return const {};
     final minor = AgentModelCapability.gpt5Minor(modelId);
     var effort = switch (level) {
       ThinkingLevel.off => 'none',
@@ -66,8 +69,7 @@ class AgentThinkingPayload {
       };
       return {
         'thinking': {'type': 'adaptive'},
-        if (effort != null)
-          'output_config': {'effort': effort},
+        if (effort != null) 'output_config': {'effort': effort},
       };
     }
 
@@ -84,12 +86,12 @@ class AgentThinkingPayload {
   /// Anthropic 旧模型（非 adaptive）各档对应的 `budget_tokens`。
   /// off 返回 0（不会被 enabled 路径用到）。
   static int legacyBudgetOf(ThinkingLevel level) => switch (level) {
-        ThinkingLevel.off => 0,
-        ThinkingLevel.low => 1024,
-        ThinkingLevel.medium => 4096,
-        ThinkingLevel.high => 16384,
-        ThinkingLevel.xhigh => 32000,
-      };
+    ThinkingLevel.off => 0,
+    ThinkingLevel.low => 1024,
+    ThinkingLevel.medium => 4096,
+    ThinkingLevel.high => 16384,
+    ThinkingLevel.xhigh => 32000,
+  };
 
   /// Gemini：返回放在 `generationConfig.thinkingConfig` 下的 fragment。
   ///
@@ -100,10 +102,7 @@ class AgentThinkingPayload {
   ///
   /// **2.5 系列**：用 `thinkingBudget` 数字。映射 [off=0, low=512, medium=4096,
   /// high=16384, xhigh=模型上限]；2.5 Pro 不能完全关，off clamp 到 128。
-  static Map<String, dynamic> forGemini(
-    String modelId,
-    ThinkingLevel? level,
-  ) {
+  static Map<String, dynamic> forGemini(String modelId, ThinkingLevel? level) {
     if (level == null) return const {};
 
     if (AgentModelCapability.isGemini3(modelId)) {

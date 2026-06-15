@@ -7,7 +7,6 @@ import '../core/storage/storage.dart';
 import '../providers/api_provider.dart';
 import '../providers/translation_config_provider.dart';
 import 'agent_chat_service.dart';
-import 'agent_thinking_payload.dart';
 import 'prompts.dart';
 import 'translation_protected_spans.dart';
 
@@ -19,14 +18,14 @@ class _CacheEntry {
   _CacheEntry({required this.translation, required this.timestampMs});
 
   Map<String, dynamic> toJson() => {
-        'translation': translation,
-        'ts': timestampMs,
-      };
+    'translation': translation,
+    'ts': timestampMs,
+  };
 
   factory _CacheEntry.fromJson(Map<String, dynamic> json) => _CacheEntry(
-        translation: json['translation'] as String? ?? '',
-        timestampMs: json['ts'] as int? ?? 0,
-      );
+    translation: json['translation'] as String? ?? '',
+    timestampMs: json['ts'] as int? ?? 0,
+  );
 
   bool get isExpired {
     const maxAge = Duration(days: 7);
@@ -83,17 +82,16 @@ class TranslationService {
 
     // ── 构建 prompt ──
     final targetLang = translationConfig.targetLanguage;
-    var systemPrompt = renderPrompt(
-      translationConfig.systemPrompt,
-      {'targetLanguage': targetLang},
-    );
+    var systemPrompt = renderPrompt(translationConfig.systemPrompt, {
+      'targetLanguage': targetLang,
+    });
     if (!protected.isEmpty) {
       systemPrompt = '$systemPrompt\n${Prompts.translationPlaceholderGuard}';
     }
-    final userPrompt = renderPrompt(
-      translationConfig.userPrompt,
-      {'targetLanguage': targetLang, 'input': protected.masked},
-    );
+    final userPrompt = renderPrompt(translationConfig.userPrompt, {
+      'targetLanguage': targetLang,
+      'input': protected.masked,
+    });
 
     // ── 调用 API ──
     // 翻译专用 thinking 覆盖：translationThinkingLevel != null 时强制写入到
@@ -104,16 +102,18 @@ class TranslationService {
       agentState.paramsFor(modelId),
       translationThinkingLevel,
     );
-    final result = protected.restore(await _callApi(
-      provider: agentState.provider,
-      baseUrl: agentState.effectiveBaseUrl,
-      apiKey: agentState.apiKey,
-      modelId: modelId,
-      systemPrompt: systemPrompt,
-      userPrompt: userPrompt,
-      temperature: translationConfig.temperature,
-      modelParams: modelParams,
-    ));
+    final result = protected.restore(
+      await _callApi(
+        provider: agentState.provider,
+        baseUrl: agentState.effectiveBaseUrl,
+        apiKey: agentState.apiKey,
+        modelId: modelId,
+        systemPrompt: systemPrompt,
+        userPrompt: userPrompt,
+        temperature: translationConfig.temperature,
+        modelParams: modelParams,
+      ),
+    );
 
     // ── 写缓存 ──
     _putCache(cacheKey, result);
@@ -162,20 +162,19 @@ class TranslationService {
     final protected = ProtectedSpans.mask(text);
 
     final targetLang = translationConfig.targetLanguage;
-    final baseSystemPrompt = renderPrompt(
-      translationConfig.systemPrompt,
-      {'targetLanguage': targetLang},
-    );
+    final baseSystemPrompt = renderPrompt(translationConfig.systemPrompt, {
+      'targetLanguage': targetLang,
+    });
     var systemPrompt = extraSystemInstruction != null
         ? '$baseSystemPrompt\n$extraSystemInstruction'
         : baseSystemPrompt;
     if (!protected.isEmpty) {
       systemPrompt = '$systemPrompt\n${Prompts.translationPlaceholderGuard}';
     }
-    final userPrompt = renderPrompt(
-      translationConfig.userPrompt,
-      {'targetLanguage': targetLang, 'input': protected.masked},
-    );
+    final userPrompt = renderPrompt(translationConfig.userPrompt, {
+      'targetLanguage': targetLang,
+      'input': protected.masked,
+    });
 
     final modelParams = _applyTranslationThinking(
       agentState.paramsFor(modelId),
@@ -251,6 +250,9 @@ class TranslationService {
 
   // ── 流式 API 分派 ─────────────────────────────────────────────────────────
 
+  /// 流式调用同样走共享 Agent 对话接缝 [AgentChatService]：sendStream 是
+  /// 回调式接口，用 StreamController 桥成 Stream；下游取消订阅（如译文
+  /// 弹层提前关闭）时经 CancelToken 中断底层请求。
   static Stream<String> _callApiStream({
     required AgentApiProvider provider,
     required String baseUrl,
@@ -260,326 +262,35 @@ class TranslationService {
     required String userPrompt,
     double? temperature,
     AgentModelParams modelParams = const AgentModelParams(),
-  }) async* {
-    final dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(minutes: 3),
-    ));
-
-    final url = provider.chatUrl(baseUrl);
-    switch (provider) {
-      case AgentApiProvider.openai:
-        yield* _streamOpenAI(dio, url, apiKey,
-            modelId, systemPrompt, userPrompt, temperature, modelParams);
-      case AgentApiProvider.anthropic:
-        yield* _streamAnthropic(dio, url, apiKey,
-            modelId, systemPrompt, userPrompt, temperature, modelParams);
-      case AgentApiProvider.gemini:
-        yield* _streamGemini(dio, url, apiKey,
-            modelId, systemPrompt, userPrompt, temperature, modelParams);
-      case AgentApiProvider.openAICompatible:
-        yield* _streamOpenAICompatible(dio, url, apiKey,
-            modelId, systemPrompt, userPrompt, temperature, modelParams);
-    }
-  }
-
-  /// OpenAI Responses API 流式，兼容 Chat Completions fallback 格式：
-  /// - Responses: `{"type":"response.output_text.delta","delta":"hi"}`
-  /// - Chat:      `{"choices":[{"delta":{"content":"hi"}}]}`
-  static Stream<String> _streamOpenAI(
-    Dio dio,
-    String url,
-    String apiKey,
-    String modelId,
-    String systemPrompt,
-    String userPrompt,
-    double? temperature,
-    AgentModelParams modelParams,
-  ) async* {
-    final resp = await dio.post<ResponseBody>(
-      url,
-      data: {
-        'model': modelId,
-        'instructions': systemPrompt,
-        'input': userPrompt,
-        'stream': true,
-        if (temperature != null) 'temperature': temperature,
-        ...AgentThinkingPayload.forOpenAI(modelId, modelParams.thinkingLevel),
+  }) {
+    final cancelToken = CancelToken();
+    final controller = StreamController<String>(
+      onCancel: () {
+        if (!cancelToken.isCancelled) cancelToken.cancel();
       },
-      options: Options(
-        headers: {
-          'Authorization': 'Bearer $apiKey',
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        responseType: ResponseType.stream,
-      ),
     );
-
-    await for (final event in _sseEventStream(resp.data!.stream)) {
-      final data = _extractSseData(event);
-      if (data == null || data == '[DONE]') continue;
-      try {
-        final json = jsonDecode(data) as Map<String, dynamic>;
-        if (json['type'] == 'response.output_text.delta') {
-          final d = json['delta'];
-          if (d is String && d.isNotEmpty) yield d;
-          continue;
-        }
-        final choices = json['choices'] as List<dynamic>?;
-        if (choices != null && choices.isNotEmpty) {
-          final delta = (choices[0] as Map<String, dynamic>)['delta'];
-          if (delta is Map<String, dynamic>) {
-            final content = delta['content'];
-            if (content is String && content.isNotEmpty) yield content;
-          }
-        }
-      } catch (_) {
-        // 单 event 解析失败 → 跳过，其他 event 继续
-      }
-    }
-  }
-
-  /// Anthropic Messages API 流式：`content_block_delta.delta.text`
-  static Stream<String> _streamAnthropic(
-    Dio dio,
-    String url,
-    String apiKey,
-    String modelId,
-    String systemPrompt,
-    String userPrompt,
-    double? temperature,
-    AgentModelParams modelParams,
-  ) async* {
-    final resp = await dio.post<ResponseBody>(
-      url,
-      data: {
-        'model': modelId,
-        'system': systemPrompt,
-        'max_tokens': 4096,
-        'messages': [
-          {'role': 'user', 'content': userPrompt},
-        ],
-        'stream': true,
-        if (temperature != null) 'temperature': temperature,
-        ...AgentThinkingPayload.forAnthropic(modelId, modelParams.thinkingLevel),
-      },
-      options: Options(
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        responseType: ResponseType.stream,
-      ),
-    );
-
-    await for (final event in _sseEventStream(resp.data!.stream)) {
-      final data = _extractSseData(event);
-      if (data == null) continue;
-      try {
-        final json = jsonDecode(data) as Map<String, dynamic>;
-        if (json['type'] == 'content_block_delta') {
-          final delta = json['delta'] as Map<String, dynamic>?;
-          if (delta?['type'] == 'text_delta') {
-            final text = delta!['text'];
-            if (text is String && text.isNotEmpty) yield text;
-          }
-        }
-      } catch (_) {}
-    }
-  }
-
-  /// Gemini 流式：`:streamGenerateContent?alt=sse`，累加 parts[*].text
-  static Stream<String> _streamGemini(
-    Dio dio,
-    String baseChatUrl,
-    String apiKey,
-    String modelId,
-    String systemPrompt,
-    String userPrompt,
-    double? temperature,
-    AgentModelParams modelParams,
-  ) async* {
-    final thinkingCfg =
-        AgentThinkingPayload.forGemini(modelId, modelParams.thinkingLevel);
-    final resp = await dio.post<ResponseBody>(
-      '$baseChatUrl/models/$modelId:streamGenerateContent',
-      queryParameters: {'key': apiKey, 'alt': 'sse'},
-      data: {
-        'systemInstruction': {
-          'parts': [
-            {'text': systemPrompt}
-          ]
-        },
-        'contents': [
-          {
-            'parts': [
-              {'text': userPrompt}
-            ]
-          }
-        ],
-        'generationConfig': {
-          if (temperature != null) 'temperature': temperature,
-          if (thinkingCfg.isNotEmpty) 'thinkingConfig': thinkingCfg,
-        },
-      },
-      options: Options(
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        responseType: ResponseType.stream,
-      ),
-    );
-
-    await for (final event in _sseEventStream(resp.data!.stream)) {
-      final data = _extractSseData(event);
-      if (data == null) continue;
-      try {
-        final json = jsonDecode(data) as Map<String, dynamic>;
-        final candidates = json['candidates'] as List<dynamic>?;
-        if (candidates == null || candidates.isEmpty) continue;
-        final content = (candidates[0] as Map<String, dynamic>)['content'];
-        if (content is! Map<String, dynamic>) continue;
-        final parts = content['parts'] as List<dynamic>?;
-        if (parts == null) continue;
-        for (final part in parts) {
-          if (part is Map<String, dynamic>) {
-            final t = part['text'];
-            if (t is String && t.isNotEmpty) yield t;
-          }
-        }
-      } catch (_) {}
-    }
-  }
-
-  /// OpenAI Compatible (Chat Completions) 流式：标准 `choices[].delta.content`
-  ///
-  /// 兼容 DeepSeek 等第三方服务。过滤 `reasoning_content`，仅提取 `content`。
-  static Stream<String> _streamOpenAICompatible(
-    Dio dio,
-    String url,
-    String apiKey,
-    String modelId,
-    String systemPrompt,
-    String userPrompt,
-    double? temperature,
-    AgentModelParams modelParams,
-  ) async* {
-    final body = _buildOpenAICompatibleBody(
+    AgentChatService.sendStream(
+      provider: provider,
+      baseUrl: baseUrl,
+      apiKey: apiKey,
       modelId: modelId,
+      modelParams: modelParams,
       systemPrompt: systemPrompt,
       userPrompt: userPrompt,
       temperature: temperature,
-      modelParams: modelParams,
-      stream: true,
+      receiveTimeout: const Duration(minutes: 3),
+      cancelToken: cancelToken,
+      onDelta: controller.add,
+    ).then(
+      (_) => controller.close(),
+      onError: (Object e) {
+        if (controller.hasListener && !controller.isClosed) {
+          controller.addError(e);
+        }
+        controller.close();
+      },
     );
-
-    final resp = await dio.post<ResponseBody>(
-      url,
-      data: body,
-      options: Options(
-        headers: {
-          'Authorization': 'Bearer $apiKey',
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        responseType: ResponseType.stream,
-      ),
-    );
-
-    await for (final event in _sseEventStream(resp.data!.stream)) {
-      final data = _extractSseData(event);
-      if (data == null || data == '[DONE]') continue;
-      try {
-        final json = jsonDecode(data) as Map<String, dynamic>;
-        final choices = json['choices'] as List<dynamic>?;
-        if (choices == null || choices.isEmpty) continue;
-        final choice = choices[0] as Map<String, dynamic>;
-        final finishReason = choice['finish_reason'] as String?;
-        if (finishReason == 'insufficient_system_resource') {
-          throw Exception('服务器资源不足，请稍后重试');
-        }
-        final delta = choice['delta'];
-        if (delta is Map<String, dynamic>) {
-          final content = delta['content'];
-          if (content is String && content.isNotEmpty) yield content;
-        }
-      } catch (e) {
-        if (e is Exception && e.toString().contains('服务器资源不足')) {
-          rethrow;
-        }
-      }
-    }
-  }
-
-  /// 构建 OpenAI Compatible (Chat Completions) 请求体
-  static Map<String, dynamic> _buildOpenAICompatibleBody({
-    required String modelId,
-    required String systemPrompt,
-    required String userPrompt,
-    double? temperature,
-    required AgentModelParams modelParams,
-    bool stream = false,
-  }) {
-    final body = <String, dynamic>{
-      'model': modelId,
-      'messages': [
-        {'role': 'system', 'content': systemPrompt},
-        {'role': 'user', 'content': userPrompt},
-      ],
-      if (stream) 'stream': true,
-      if (temperature != null) 'temperature': temperature,
-      if (modelParams.maxTokens != null) 'max_tokens': modelParams.maxTokens,
-      if (modelParams.topP != null) 'top_p': modelParams.topP,
-      if (modelParams.frequencyPenalty != null)
-        'frequency_penalty': modelParams.frequencyPenalty,
-      if (modelParams.presencePenalty != null)
-        'presence_penalty': modelParams.presencePenalty,
-    };
-
-    body.addAll(AgentThinkingPayload.forOpenAICompat(modelParams.thinkingLevel));
-    return body;
-  }
-
-  // ── SSE 通用解析 ──────────────────────────────────────────────────────────
-
-  /// 把字节流切成 SSE 事件（以 `\n\n` 或 `\r\n\r\n` 分隔）。
-  /// UTF-8 边界可能跨 chunk，用 `allowMalformed` 容忍截断的 code unit。
-  static Stream<String> _sseEventStream(Stream<List<int>> source) async* {
-    String buffer = '';
-    const decoder = Utf8Decoder(allowMalformed: true);
-    await for (final chunk in source) {
-      buffer += decoder.convert(chunk);
-      while (true) {
-        int delim = buffer.indexOf('\n\n');
-        int delimLen = 2;
-        if (delim < 0) {
-          final alt = buffer.indexOf('\r\n\r\n');
-          if (alt < 0) break;
-          delim = alt;
-          delimLen = 4;
-        }
-        final event = buffer.substring(0, delim);
-        buffer = buffer.substring(delim + delimLen);
-        if (event.isNotEmpty) yield event;
-      }
-    }
-    if (buffer.trim().isNotEmpty) yield buffer;
-  }
-
-  /// 从单个 SSE event 抽取 `data:` 负载，多行按 SSE 规范用 `\n` 拼接。
-  static String? _extractSseData(String event) {
-    final dataLines = <String>[];
-    for (final line in event.split(RegExp(r'\r?\n'))) {
-      if (line.startsWith('data:')) {
-        dataLines.add(line.substring(5).trimLeft());
-      }
-    }
-    if (dataLines.isEmpty) return null;
-    return dataLines.join('\n');
+    return controller.stream;
   }
 
   // ── API 调用 ──────────────────────────────────────────────────────────────

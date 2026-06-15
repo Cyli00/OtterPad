@@ -47,14 +47,25 @@ extension AgentApiProviderExt on AgentApiProvider {
     AgentApiProvider.openAICompatible => '/v1/chat/completions',
   };
 
-  /// chat 端点完整 URL。baseUrl 末尾已带版本段（/v1、/v3、/v4、/v1beta…）时
-  /// 不再追加默认版本、直接接资源路径——兼容 Zhipu(/api/paas/v4)、
-  /// Doubao(/api/v3) 等非 /v1 版本段的厂商，以及用户填带版本反代地址的场景。
+  /// 实际线上协议：xAI（Grok）已停用 OpenAI 兼容的 Chat Completions、仅保留
+  /// 与 OpenAI Responses 同形的自家 Responses API，按 host 升格为
+  /// [AgentApiProvider.openai]；其余原样。不进协议枚举——添加服务商仍只见
+  /// 4 种协议。请求构造 / 连通性检测 / 工具支持判定统一先过这一层。
+  AgentApiProvider wireProtocol(String baseUrl) =>
+      this == AgentApiProvider.openAICompatible && _isXaiHost(baseUrl)
+      ? AgentApiProvider.openai
+      : this;
+
+  /// chat 端点完整 URL（已按 [wireProtocol] 解析，xAI 返回 `/responses`）。
+  /// baseUrl 末尾已带版本段（/v1、/v3、/v4、/v1beta…）时不再追加默认版本、
+  /// 直接接资源路径——兼容 Zhipu(/api/paas/v4)、Doubao(/api/v3) 等非 /v1
+  /// 版本段的厂商，以及用户填带版本反代地址的场景。
   /// Gemini 返回值不含 `/models/{model}:generateContent`，由调用方追加。
   String chatUrl(String baseUrl) {
+    final wire = wireProtocol(baseUrl);
     final base = _trimTrailingSlash(baseUrl);
-    if (!_versionTailRe.hasMatch(base)) return '$base$chatPath';
-    return switch (this) {
+    if (!_versionTailRe.hasMatch(base)) return '$base${wire.chatPath}';
+    return switch (wire) {
       AgentApiProvider.openai => '$base/responses',
       AgentApiProvider.anthropic => '$base/messages',
       AgentApiProvider.gemini => base,
@@ -73,6 +84,12 @@ extension AgentApiProviderExt on AgentApiProvider {
 /// URL 末尾版本段（/v1、/v3、/v4、/v1beta、/v1beta2 等）
 final _versionTailRe = RegExp(r'/v[\da-z.]+$');
 
+/// xAI 官方域名（api.x.ai 等），接受 baseUrl 或完整 chat URL（host 相同）。
+bool _isXaiHost(String url) {
+  final host = Uri.tryParse(url.trim())?.host.toLowerCase() ?? '';
+  return host == 'x.ai' || host.endsWith('.x.ai');
+}
+
 String _trimTrailingSlash(String url) =>
     url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
@@ -85,8 +102,13 @@ class AgentVendorPreset {
   final AgentApiProvider protocol;
   final String baseUrl;
   final String keyHint;
-  const AgentVendorPreset(this.id, this.label, this.protocol,
-      [this.baseUrl = '', this.keyHint = '']);
+  const AgentVendorPreset(
+    this.id,
+    this.label,
+    this.protocol, [
+    this.baseUrl = '',
+    this.keyHint = '',
+  ]);
 }
 
 // ─── Agent API ───────────────────────────────────────────────────────────────
@@ -131,8 +153,7 @@ enum ThinkingLevel {
 /// 字段按服务商归类：
 /// * 通用：`temperature` / `topP` / `maxTokens` / `systemPrompt`
 /// * 跨 provider 统一思考力度：`thinkingLevel`（请求构造层按 capability 翻译）
-/// * OpenAI Responses API：`verbosity` / `parallelToolCalls` /
-///   `truncation` / `webSearchEnabled` / `webSearchContextSize`
+/// * OpenAI Responses API：`verbosity` / `parallelToolCalls` / `truncation`
 /// * Anthropic / Gemini 共享：`topK`
 /// * Gemini GenerateContent：`presencePenalty` / `frequencyPenalty`
 ///
@@ -163,12 +184,6 @@ class AgentModelParams {
   /// OpenAI `truncation`：'auto' | 'disabled'
   final String? truncation;
 
-  /// 工具调用 —— Web 搜索（OpenAI `web_search` / Gemini `google_search`）
-  final bool? webSearchEnabled;
-
-  /// 搜索上下文大小：'low' | 'medium' | 'high'
-  final String? webSearchContextSize;
-
   // ── Gemini 专属 ────────────────────────────────────
   /// Gemini `generationConfig.presencePenalty`：-2.0 ~ 2.0
   final double? presencePenalty;
@@ -186,8 +201,6 @@ class AgentModelParams {
     this.verbosity,
     this.parallelToolCalls,
     this.truncation,
-    this.webSearchEnabled,
-    this.webSearchContextSize,
     this.presencePenalty,
     this.frequencyPenalty,
   });
@@ -203,8 +216,6 @@ class AgentModelParams {
       verbosity == null &&
       parallelToolCalls == null &&
       truncation == null &&
-      webSearchEnabled == null &&
-      webSearchContextSize == null &&
       presencePenalty == null &&
       frequencyPenalty == null;
 
@@ -218,8 +229,6 @@ class AgentModelParams {
     Object? verbosity = _sentinel,
     Object? parallelToolCalls = _sentinel,
     Object? truncation = _sentinel,
-    Object? webSearchEnabled = _sentinel,
-    Object? webSearchContextSize = _sentinel,
     Object? presencePenalty = _sentinel,
     Object? frequencyPenalty = _sentinel,
   }) => AgentModelParams(
@@ -246,12 +255,6 @@ class AgentModelParams {
     truncation: identical(truncation, _sentinel)
         ? this.truncation
         : truncation as String?,
-    webSearchEnabled: identical(webSearchEnabled, _sentinel)
-        ? this.webSearchEnabled
-        : webSearchEnabled as bool?,
-    webSearchContextSize: identical(webSearchContextSize, _sentinel)
-        ? this.webSearchContextSize
-        : webSearchContextSize as String?,
     presencePenalty: identical(presencePenalty, _sentinel)
         ? this.presencePenalty
         : presencePenalty as double?,
@@ -271,9 +274,6 @@ class AgentModelParams {
     if (verbosity != null) 'verbosity': verbosity,
     if (parallelToolCalls != null) 'parallelToolCalls': parallelToolCalls,
     if (truncation != null) 'truncation': truncation,
-    if (webSearchEnabled != null) 'webSearchEnabled': webSearchEnabled,
-    if (webSearchContextSize != null)
-      'webSearchContextSize': webSearchContextSize,
     if (presencePenalty != null) 'presencePenalty': presencePenalty,
     if (frequencyPenalty != null) 'frequencyPenalty': frequencyPenalty,
   };
@@ -289,12 +289,9 @@ class AgentModelParams {
         verbosity: json['verbosity'] as String?,
         parallelToolCalls: json['parallelToolCalls'] as bool?,
         truncation: json['truncation'] as String?,
-        webSearchEnabled: json['webSearchEnabled'] as bool?,
-        webSearchContextSize: json['webSearchContextSize'] as String?,
         presencePenalty: (json['presencePenalty'] as num?)?.toDouble(),
         frequencyPenalty: (json['frequencyPenalty'] as num?)?.toDouble(),
       );
-
 }
 
 /// 单个服务商实例（注册表条目）。
@@ -314,9 +311,6 @@ class AgentProviderInstance {
   /// 每模型能力（分类 + 模态 + 工具/推理）。缺失项由 [capabilityFor] 即时推断兜底。
   final Map<String, AgentModelCapability> modelCaps;
 
-  /// 每模型启用的内置工具（search / code_execution 等）。缺失 = 全部关闭。
-  final Map<String, List<String>> modelBuiltInTools;
-
   const AgentProviderInstance({
     required this.id,
     required this.name,
@@ -326,7 +320,6 @@ class AgentProviderInstance {
     this.models = const [],
     this.modelParams = const {},
     this.modelCaps = const {},
-    this.modelBuiltInTools = const {},
   });
 
   /// 当前生效的 Base URL（用户未填时取协议默认值）
@@ -340,10 +333,6 @@ class AgentProviderInstance {
   AgentModelCapability capabilityFor(String modelId) =>
       modelCaps[modelId] ??
       AgentModelCapability.infer(provider: protocol, modelId: modelId);
-
-  /// 取模型已启用的内置工具集合。
-  Set<String> builtInToolsFor(String modelId) =>
-      Set<String>.from(modelBuiltInTools[modelId] ?? const <String>[]);
 }
 
 /// 单实例的「已解析视图」：实例自身字段 + 三个全局角色中**指向本实例**的那部分。
@@ -431,14 +420,23 @@ class AgentApiState {
 
 const _sentinel = Object();
 
-/// Agent 服务商配置的整体状态：有序实例列表。
+/// Agent 服务商配置的整体状态：有序实例列表 + 全局角色。
 ///
-/// 全局角色（专家/快速/生图）不放进 state——它们由 [AgentApiNotifier] 的静态
-/// getter 直接读 Hive；notifier 在写完任何配置后 `state = _load()` 触发重建，
-/// 驱动 UI（build 内读静态 getter）刷新——沿用重构前的同一套刷新机制。
+/// 角色（专家/快速/生图）以 `({String? id, String? modelId})` 存入 state，
+/// 支持 `ref.watch(provider.select((s) => s.defaultRole))` 细粒度订阅。
+/// 服务层无 `ref` 时仍可用 [AgentApiNotifier] 的静态 getter。
 class AgentProvidersState {
   final List<AgentProviderInstance> instances;
-  const AgentProvidersState({this.instances = const []});
+  final ({String? id, String? modelId}) defaultRole;
+  final ({String? id, String? modelId}) fastRole;
+  final ({String? id, String? modelId}) imageRole;
+
+  const AgentProvidersState({
+    this.instances = const [],
+    this.defaultRole = _noRole,
+    this.fastRole = _noRole,
+    this.imageRole = _noRole,
+  });
 
   AgentProviderInstance? byId(String? id) {
     if (id == null) return null;
@@ -448,6 +446,8 @@ class AgentProvidersState {
     return null;
   }
 }
+
+const ({String? id, String? modelId}) _noRole = (id: null, modelId: null);
 
 class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   // per-instance 存储键，均以实例 id 结尾。
@@ -478,23 +478,59 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
     AgentVendorPreset('openai', 'OpenAI', AgentApiProvider.openai),
     AgentVendorPreset('anthropic', 'Anthropic', AgentApiProvider.anthropic),
     AgentVendorPreset('gemini', 'Gemini', AgentApiProvider.gemini),
-    AgentVendorPreset('qwen', 'Qwen', AgentApiProvider.openAICompatible,
-        'https://dashscope.aliyuncs.com/compatible-mode/v1', 'sk-...'),
-    AgentVendorPreset('zhipu', 'Zhipu GLM', AgentApiProvider.openAICompatible,
-        'https://open.bigmodel.cn/api/paas/v4', '{id}.{secret}'),
-    AgentVendorPreset('kimi', 'Kimi', AgentApiProvider.openAICompatible,
-        'https://api.moonshot.cn/v1', 'sk-...'),
-    AgentVendorPreset('doubao', 'Doubao', AgentApiProvider.openAICompatible,
-        'https://ark.cn-beijing.volces.com/api/v3', 'API Key (UUID)'),
-    AgentVendorPreset('mimo', 'MiMo', AgentApiProvider.openAICompatible,
-        'https://api.xiaomimimo.com/v1', 'API Key'),
-    AgentVendorPreset('grok', 'Grok', AgentApiProvider.openAICompatible,
-        'https://api.x.ai/v1', 'xai-...'),
+    AgentVendorPreset(
+      'deepseek',
+      'DeepSeek',
+      AgentApiProvider.openAICompatible,
+      'https://api.deepseek.com',
+      'sk-...',
+    ),
+    AgentVendorPreset(
+      'qwen',
+      'Qwen',
+      AgentApiProvider.openAICompatible,
+      'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      'sk-...',
+    ),
+    AgentVendorPreset(
+      'zhipu',
+      'Zhipu GLM',
+      AgentApiProvider.openAICompatible,
+      'https://open.bigmodel.cn/api/paas/v4',
+      '{id}.{secret}',
+    ),
+    AgentVendorPreset(
+      'kimi',
+      'Kimi',
+      AgentApiProvider.openAICompatible,
+      'https://api.moonshot.cn/v1',
+      'sk-...',
+    ),
+    AgentVendorPreset(
+      'doubao',
+      'Doubao',
+      AgentApiProvider.openAICompatible,
+      'https://ark.cn-beijing.volces.com/api/v3',
+      'API Key (UUID)',
+    ),
+    AgentVendorPreset(
+      'mimo',
+      'MiMo',
+      AgentApiProvider.openAICompatible,
+      'https://api.xiaomimimo.com/v1',
+      'API Key',
+    ),
+    AgentVendorPreset(
+      'grok',
+      'Grok',
+      AgentApiProvider.openAICompatible,
+      'https://api.x.ai/v1',
+      'xai-...',
+    ),
   ];
 
   /// 该 id 是否为内置预设（内置不进 _idsKey、不可删、名字锁定）。
-  static bool isBuiltin(String id) =>
-      _builtinPresets.any((p) => p.id == id);
+  static bool isBuiltin(String id) => _builtinPresets.any((p) => p.id == id);
 
   /// 内置厂商预设的 API key 提示；非预设实例或预设未配置时返回 null
   /// （调用方回落到协议默认提示）。
@@ -517,6 +553,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
 
   /// 列表 = 内置预设（恒在）+ _idsKey 里的自定义实例（按序）。
   static AgentProvidersState _load() {
+    final box = GStorage.setting;
     final instances = <AgentProviderInstance>[
       for (final p in _builtinPresets)
         _loadConfig(p.id, p.protocol, p.label, defaultBaseUrl: p.baseUrl),
@@ -525,7 +562,15 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       final inst = _loadCustom(id);
       if (inst != null) instances.add(inst);
     }
-    return AgentProvidersState(instances: instances);
+    final (dId, dModel) = _parseRole(box.get(_globalDefaultKey) as String?);
+    final (fId, fModel) = _parseRole(box.get(_globalFastKey) as String?);
+    final (iId, iModel) = _parseRole(box.get(_globalImageKey) as String?);
+    return AgentProvidersState(
+      instances: instances,
+      defaultRole: (id: dId, modelId: dModel),
+      fastRole: (id: fId, modelId: fModel),
+      imageRole: (id: iId, modelId: iModel),
+    );
   }
 
   /// 按 id 加载任意实例（内置或自定义）；自定义协议键缺失返回 null。
@@ -601,17 +646,6 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       });
     }
 
-    // 读取每模型内置工具列表
-    final modelBuiltInTools = <String, List<String>>{};
-    final rawTools = box.get(_modelToolsKey(id));
-    if (rawTools is Map) {
-      rawTools.forEach((key, value) {
-        if (key is! String || !models.contains(key)) return;
-        if (value is! List) return;
-        modelBuiltInTools[key] = value.cast<String>().toList();
-      });
-    }
-
     return AgentProviderInstance(
       id: id,
       name: name,
@@ -621,7 +655,6 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       models: models,
       modelParams: modelParams,
       modelCaps: modelCaps,
-      modelBuiltInTools: modelBuiltInTools,
     );
   }
 
@@ -668,7 +701,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   }
 
   /// 删除实例：清掉全部 per-id 键 + 从列表移除 + 清空指向它的全局角色。
-  /// 内置三家不可删，直接忽略。
+  /// 内置预设不可删，直接忽略。
   Future<void> removeInstance(String id) async {
     if (isBuiltin(id)) return;
     final box = GStorage.setting;
@@ -680,6 +713,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
     await box.delete(_modelsKey(id));
     await box.delete(_modelParamsKey(id));
     await box.delete(_modelCapsKey(id));
+    // 遗留键：旧版「每模型内置工具」配置（功能已移除），删实例时顺带清理
     await box.delete(_modelToolsKey(id));
     for (final key in [_globalDefaultKey, _globalFastKey, _globalImageKey]) {
       final (rid, _) = _parseRole(box.get(key) as String?);
@@ -689,7 +723,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   }
 
   /// 在现有名字集合里求唯一名：冲突则追加 " 2"/" 3"…。
-  /// 内置三家的固定名与已有自定义名都算占用，避免与「OpenAI」等重名。
+  /// 内置预设的固定名与已有自定义名都算占用，避免与「OpenAI」等重名。
   String _uniqueName(String base) {
     final taken = <String>{
       for (final p in _builtinPresets) p.label.toLowerCase(),
@@ -788,11 +822,6 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
         caps.map((k, v) => MapEntry(k, v.toJson())),
       );
     }
-    if (inst.modelBuiltInTools.containsKey(modelId)) {
-      final tools = Map<String, List<String>>.from(inst.modelBuiltInTools)
-        ..remove(modelId);
-      await box.put(_modelToolsKey(id), tools);
-    }
     state = _load();
   }
 
@@ -847,25 +876,6 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       _modelParamsKey(id),
       params.map((k, v) => MapEntry(k, v.toJson())),
     );
-    state = _load();
-  }
-
-  // ── 内置工具 ──────────────────────────────────────────────────────────
-
-  Future<void> setModelBuiltInTools(
-    String id,
-    String modelId,
-    Set<String> tools,
-  ) async {
-    final inst = state.byId(id) ?? _loadAny(id);
-    if (inst == null || !inst.models.contains(modelId)) return;
-    final all = Map<String, List<String>>.from(inst.modelBuiltInTools);
-    if (tools.isEmpty) {
-      all.remove(modelId);
-    } else {
-      all[modelId] = tools.toList();
-    }
-    await GStorage.setting.put(_modelToolsKey(id), all);
     state = _load();
   }
 
@@ -961,8 +971,10 @@ final agentApiProvider =
 /// 解析顺序：快速角色 → 专家角色 → 生图角色 所属实例。无任何角色时返回空 state，
 /// 触发 [AiSettingsPrompt] 的「请先选择模型」提示。设置页不读它（用 [agentApiProvider]）。
 final effectiveAgentApiProvider = Provider<AgentApiState>((ref) {
-  ref.watch(agentApiProvider); // 实例 / 角色变更时重算
-  return AgentApiNotifier.resolveEffectiveState() ?? const AgentApiState();
+  final s = ref.watch(agentApiProvider);
+  final targetId = s.fastRole.id ?? s.defaultRole.id ?? s.imageRole.id;
+  if (targetId == null) return const AgentApiState();
+  return AgentApiNotifier.loadInstance(targetId) ?? const AgentApiState();
 });
 
 // ─── 文档提取 API（百度 AI Studio Layout Parsing）─────────────────────────────

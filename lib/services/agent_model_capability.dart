@@ -249,4 +249,29 @@ class AgentModelCapability {
     final id = modelId.toLowerCase();
     return RegExp(r'claude-(?:opus-4-[789]|fable)(?:\b|-)').hasMatch(id);
   }
+
+  // ─── Server-side 工具版本门槛 ────────────────────────────────────────
+  // BuiltInToolsHelper 据此判定是否注入 search / url_context 工具。
+
+  /// Claude 3.7 起（含 4.x / Fable / Mythos），支持 web_search / web_fetch。
+  static bool isModernClaude(String modelId) {
+    final id = modelId.toLowerCase();
+    return id.startsWith('claude-opus-4') ||
+        id.startsWith('claude-sonnet-4') ||
+        id.startsWith('claude-haiku-4') ||
+        id.startsWith('claude-fable') ||
+        id.startsWith('claude-mythos') ||
+        id.startsWith('claude-3-7') ||
+        id.startsWith('claude-3-5-haiku');
+  }
+
+  /// Gemini 2.0+（支持 google_search；1.x 是已弃用的旧格式）。
+  static bool isGeminiWithSearch(String modelId) =>
+      !modelId.toLowerCase().startsWith('gemini-1');
+
+  /// Gemini 2.5+（支持 url_context）。
+  static bool isGeminiWithUrlContext(String modelId) {
+    final id = modelId.toLowerCase();
+    return !id.startsWith('gemini-1') && !id.startsWith('gemini-2.0');
+  }
 }

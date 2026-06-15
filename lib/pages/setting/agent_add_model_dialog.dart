@@ -78,7 +78,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                     ),
                     const SizedBox(height: 22),
                     RoleToggleTile(
-                      icon: Symbols.gavel_rounded,
+                      icon: Symbols.psychology_rounded,
                       label: ctx.l10n.expertModel,
                       containerColor: cs.primaryContainer,
                       onContainerColor: cs.onPrimaryContainer,

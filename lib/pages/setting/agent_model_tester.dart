@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../providers/api_provider.dart';
+import '../../services/agent_http.dart';
 
 /// Agent API 的网络端操作合集——连通性检测 + 候选模型拉取。
 ///
@@ -15,24 +16,20 @@ Future<String?> testAgentModel({
   required String apiKey,
   required String modelId,
 }) async {
-  final dio = Dio(BaseOptions(
+  final dio = AgentHttp.instance.dio(
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 30),
-  ));
+  );
 
+  // xAI（Grok）按 host 升格走 OpenAI Responses 同形线路
+  provider = provider.wireProtocol(baseUrl);
   try {
     switch (provider) {
       case AgentApiProvider.openai:
         await dio.post(
           provider.chatUrl(baseUrl),
-          data: {
-            'model': modelId,
-            'input': 'hi',
-            'max_output_tokens': 16,
-          },
-          options: Options(headers: {
-            'Authorization': 'Bearer $apiKey',
-          }),
+          data: {'model': modelId, 'input': 'hi', 'max_output_tokens': 16},
+          options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
         );
       case AgentApiProvider.anthropic:
         await dio.post(
@@ -41,14 +38,16 @@ Future<String?> testAgentModel({
             'model': modelId,
             'max_tokens': 1,
             'messages': [
-              {'role': 'user', 'content': 'hi'}
+              {'role': 'user', 'content': 'hi'},
             ],
           },
-          options: Options(headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-          }),
+          options: Options(
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+          ),
         );
       case AgentApiProvider.gemini:
         await dio.post(
@@ -58,9 +57,9 @@ Future<String?> testAgentModel({
             'contents': [
               {
                 'parts': [
-                  {'text': 'hi'}
-                ]
-              }
+                  {'text': 'hi'},
+                ],
+              },
             ],
             'generationConfig': {'maxOutputTokens': 1},
           },
@@ -71,14 +70,16 @@ Future<String?> testAgentModel({
           data: {
             'model': modelId,
             'messages': [
-              {'role': 'user', 'content': 'hi'}
+              {'role': 'user', 'content': 'hi'},
             ],
             'max_tokens': 16,
           },
-          options: Options(headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Content-Type': 'application/json',
-          }),
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+            },
+          ),
         );
     }
     return null;
@@ -118,19 +119,17 @@ Future<List<String>> fetchAvailableModels({
   required String baseUrl,
   required String apiKey,
 }) async {
-  final dio = Dio(BaseOptions(
+  final dio = AgentHttp.instance.dio(
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 30),
-  ));
+  );
 
   switch (provider) {
     case AgentApiProvider.openai:
     case AgentApiProvider.openAICompatible:
       final response = await dio.get<Map<String, dynamic>>(
         provider.modelsUrl(baseUrl),
-        options: Options(
-          headers: {'Authorization': 'Bearer $apiKey'},
-        ),
+        options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
       );
       final data = response.data?['data'] as List<dynamic>?;
       if (data == null) return const <String>[];
@@ -145,10 +144,7 @@ Future<List<String>> fetchAvailableModels({
         provider.modelsUrl(baseUrl),
         queryParameters: {'limit': 100},
         options: Options(
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-          },
+          headers: {'x-api-key': apiKey, 'anthropic-version': '2023-06-01'},
         ),
       );
       final data = response.data?['data'] as List<dynamic>?;

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
-import '../../services/builtin_tools.dart';
 import '../../services/haptics.dart';
 import '../../widgets/tactile_press.dart';
 
@@ -22,8 +21,6 @@ Future<void> showAgentModelCapabilitySheet({
   required VoidCallback onReset,
   ThinkingLevel? initialThinkingLevel,
   ValueChanged<ThinkingLevel?>? onThinkingLevelChanged,
-  Set<String> initialBuiltInTools = const {},
-  ValueChanged<Set<String>>? onBuiltInToolsChanged,
 }) {
   return showModalBottomSheet(
     context: context,
@@ -39,8 +36,6 @@ Future<void> showAgentModelCapabilitySheet({
       onReset: onReset,
       initialThinkingLevel: initialThinkingLevel,
       onThinkingLevelChanged: onThinkingLevelChanged,
-      initialBuiltInTools: initialBuiltInTools,
-      onBuiltInToolsChanged: onBuiltInToolsChanged,
     ),
   );
 }
@@ -54,8 +49,6 @@ class _ModelCapabilitySheet extends StatefulWidget {
   final VoidCallback onReset;
   final ThinkingLevel? initialThinkingLevel;
   final ValueChanged<ThinkingLevel?>? onThinkingLevelChanged;
-  final Set<String> initialBuiltInTools;
-  final ValueChanged<Set<String>>? onBuiltInToolsChanged;
 
   const _ModelCapabilitySheet({
     required this.modelId,
@@ -66,8 +59,6 @@ class _ModelCapabilitySheet extends StatefulWidget {
     required this.onReset,
     this.initialThinkingLevel,
     this.onThinkingLevelChanged,
-    this.initialBuiltInTools = const {},
-    this.onBuiltInToolsChanged,
   });
 
   @override
@@ -83,7 +74,6 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
   late bool _tool;
   late bool _reasoning;
   late ThinkingLevel? _thinkingLevel;
-  late Set<String> _builtInTools;
 
   @override
   void initState() {
@@ -97,7 +87,6 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
     _tool = c.tool;
     _reasoning = c.reasoning;
     _thinkingLevel = widget.initialThinkingLevel;
-    _builtInTools = Set<String>.from(widget.initialBuiltInTools);
   }
 
   AgentModelCapability get _current => _embedding
@@ -204,8 +193,6 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
                         const SizedBox(height: 18),
                         _thinkingSection(theme, cs),
                       ],
-                      const SizedBox(height: 18),
-                      _toolsSection(theme, cs),
                     ],
                   ],
                 ),
@@ -234,9 +221,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
                         _tool = c.tool;
                         _reasoning = c.reasoning;
                         _thinkingLevel = null;
-                        _builtInTools = {};
                       });
-                      widget.onBuiltInToolsChanged?.call({});
                       widget.onReset();
                     },
                     child: Text(context.l10n.resetToAuto),
@@ -258,106 +243,6 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
     );
   }
 
-  void _toggleTool(String tool) {
-    setState(() {
-      if (_builtInTools.contains(tool)) {
-        _builtInTools.remove(tool);
-      } else {
-        _builtInTools.add(tool);
-      }
-    });
-    widget.onBuiltInToolsChanged?.call(Set.from(_builtInTools));
-  }
-
-  Widget _toolsSection(ThemeData theme, ColorScheme cs) {
-    final tools = BuiltInToolNames.forProvider(widget.protocol);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          context.l10n.builtInTools,
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: cs.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        ...tools.map((tool) => _toolToggle(
-              theme,
-              cs,
-              tool: tool,
-              value: _builtInTools.contains(tool),
-              supported: BuiltInToolsHelper.isSupported(
-                provider: widget.protocol,
-                modelId: widget.modelId,
-                tool: tool,
-              ),
-            )),
-      ],
-    );
-  }
-
-  Widget _toolToggle(
-    ThemeData theme,
-    ColorScheme cs, {
-    required String tool,
-    required bool value,
-    required bool supported,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Text(
-                  BuiltInToolNames.label(tool, context.l10n),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: cs.onSurface,
-                  ),
-                ),
-                if (supported) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      context.l10n.official,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: cs.onPrimaryContainer,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 32,
-            child: FittedBox(
-              child: Switch.adaptive(
-                value: value,
-                onChanged: (_) {
-                Haptics.soft();
-                _toggleTool(tool);
-              },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _setThinking(ThinkingLevel? level) {
     setState(() => _thinkingLevel = level);
     widget.onThinkingLevelChanged?.call(level);
@@ -368,16 +253,31 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
     final l10n = context.l10n;
     final segs = [
       _Seg(l10n.defaultLevel, _thinkingLevel == null, () => _setThinking(null)),
-      _Seg(l10n.off, _thinkingLevel == ThinkingLevel.off,
-          () => _setThinking(ThinkingLevel.off)),
-      _Seg(l10n.low, _thinkingLevel == ThinkingLevel.low,
-          () => _setThinking(ThinkingLevel.low)),
-      _Seg(l10n.medium, _thinkingLevel == ThinkingLevel.medium,
-          () => _setThinking(ThinkingLevel.medium)),
-      _Seg(l10n.high, _thinkingLevel == ThinkingLevel.high,
-          () => _setThinking(ThinkingLevel.high)),
-      _Seg(l10n.ultraHigh, _thinkingLevel == ThinkingLevel.xhigh,
-          () => _setThinking(ThinkingLevel.xhigh)),
+      _Seg(
+        l10n.off,
+        _thinkingLevel == ThinkingLevel.off,
+        () => _setThinking(ThinkingLevel.off),
+      ),
+      _Seg(
+        l10n.low,
+        _thinkingLevel == ThinkingLevel.low,
+        () => _setThinking(ThinkingLevel.low),
+      ),
+      _Seg(
+        l10n.medium,
+        _thinkingLevel == ThinkingLevel.medium,
+        () => _setThinking(ThinkingLevel.medium),
+      ),
+      _Seg(
+        l10n.high,
+        _thinkingLevel == ThinkingLevel.high,
+        () => _setThinking(ThinkingLevel.high),
+      ),
+      _Seg(
+        l10n.ultraHigh,
+        _thinkingLevel == ThinkingLevel.xhigh,
+        () => _setThinking(ThinkingLevel.xhigh),
+      ),
     ];
     Widget row(int from, int to) => Row(
       children: [

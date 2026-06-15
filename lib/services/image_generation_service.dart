@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../providers/api_provider.dart';
+import 'agent_http.dart';
 import 'agent_model_capability.dart';
 
 class ImageGenerationRequest {
@@ -57,13 +58,7 @@ class ImageGenerationService {
   ImageGenerationService._();
   static final ImageGenerationService instance = ImageGenerationService._();
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(minutes: 5),
-      sendTimeout: const Duration(minutes: 2),
-    ),
-  );
+  Dio get _dio => AgentHttp.instance.dio();
 
   Future<ImageGenerationResult> generate(ImageGenerationRequest request) async {
     if (request.apiKey.trim().isEmpty) {

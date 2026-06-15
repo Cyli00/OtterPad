@@ -7,8 +7,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
+import '../../providers/model_test_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/haptics.dart';
+import '../../services/tavily_search_service.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/tactile_press.dart';
 import '../../utils/debounced_action.dart';
@@ -18,12 +20,13 @@ import 'agent_model_manage_sheet.dart';
 import 'agent_model_tester.dart';
 
 /// 协议副标题——给用户一个"选它能做什么"的简短提示。
-String _protocolSubtitle(AgentApiProvider p, AppLocalizations l10n) => switch (p) {
-  AgentApiProvider.openai => l10n.providerDescOpenai,
-  AgentApiProvider.anthropic => l10n.providerDescAnthropic,
-  AgentApiProvider.gemini => l10n.providerDescGemini,
-  AgentApiProvider.openAICompatible => l10n.providerDescOpenaiCompatible,
-};
+String _protocolSubtitle(AgentApiProvider p, AppLocalizations l10n) =>
+    switch (p) {
+      AgentApiProvider.openai => l10n.providerDescOpenai,
+      AgentApiProvider.anthropic => l10n.providerDescAnthropic,
+      AgentApiProvider.gemini => l10n.providerDescGemini,
+      AgentApiProvider.openAICompatible => l10n.providerDescOpenaiCompatible,
+    };
 
 /// 文档助手 Agent API 配置区块。
 ///
@@ -50,18 +53,22 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   /// provider 管理、独立于 widget，cache 安全（同 reader view.dart 先例）。
   late final AgentApiNotifier _apiNotifier;
 
-  /// 最近一次 build 同步的 provider state 快照，供 dispose 路径的
-  /// [_pendingEdits] 做差异比较（dispose 中不可用 ref）。快照可能落后于
-  /// 防抖落盘后的最新值，最坏后果是差异误判导致一次幂等重写，无害。
-  AgentProvidersState? _apiSnapshot;
+  /// build 时缓存的当前实例 URL/Key，供 dispose 路径的 [_pendingEdits]
+  /// 做差异比较（dispose 中不可用 ref）。替代旧 _apiSnapshot 全量快照。
+  String _lastStoredUrl = '';
+  String _lastStoredKey = '';
 
   bool _keyObscured = true;
   final _keyDebounce = DebouncedAction();
   final _urlDebounce = DebouncedAction();
 
-  // key 在结果集中 → 已测过；value 为 null → 成功，非空 → 错误消息
-  final _modelTestResults = <String, String?>{};
-  final _modelTesting = <String>{};
+  // Tavily 搜索回退的 Key 编辑态（key 本体存 SecureCredentialVault，
+  // 由 TavilySearchService 作唯一存取接缝，不挂在 provider 实例上）
+  late final TextEditingController _tavilyCtrl;
+  bool _tavilyObscured = true;
+  final _tavilyDebounce = DebouncedAction();
+
+  ModelTestNotifier get _testNotifier => ref.read(modelTestProvider.notifier);
 
   @override
   void initState() {
@@ -75,13 +82,20 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _currentId = inst?.id ?? '';
     _urlCtrl = TextEditingController(text: _urlText(inst));
     _keyCtrl = TextEditingController(text: inst?.apiKey ?? '');
+    _tavilyCtrl = TextEditingController(text: TavilySearchService.apiKey);
   }
 
   @override
   void dispose() {
     _flushEditsDeferred();
+    _tavilyDebounce.cancel();
+    final tavilyKey = _tavilyCtrl.text.trim();
+    if (tavilyKey != TavilySearchService.apiKey) {
+      TavilySearchService.setApiKey(tavilyKey);
+    }
     _urlCtrl.dispose();
     _keyCtrl.dispose();
+    _tavilyCtrl.dispose();
     super.dispose();
   }
 
@@ -90,17 +104,15 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       ? ''
       : (inst.baseUrl.isNotEmpty ? inst.baseUrl : inst.protocol.defaultBaseUrl);
 
-  /// 当前输入框相对已落盘实例的未保存编辑；无当前实例返回 null。
-  /// 读 [_apiSnapshot] 而非 ref——dispose 路径（_flushEditsDeferred）也会调。
-  ({String id, String? url, String? key})? _pendingEdits() {
-    final inst = _apiSnapshot?.byId(_currentId);
-    if (inst == null) return null;
+  /// 当前输入框相对已落盘值的未保存编辑。
+  /// 读 [_lastStoredUrl]/[_lastStoredKey] 而非 ref——dispose 路径也会调。
+  ({String id, String? url, String? key}) _pendingEdits() {
     final urlText = _urlCtrl.text.trim();
     final keyText = _keyCtrl.text.trim();
     return (
-      id: inst.id,
-      url: urlText != _urlText(inst) ? urlText : null,
-      key: keyText != inst.apiKey ? keyText : null,
+      id: _currentId,
+      url: urlText != _lastStoredUrl ? urlText : null,
+      key: keyText != _lastStoredKey ? keyText : null,
     );
   }
 
@@ -111,7 +123,6 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _urlDebounce.cancel();
     _keyDebounce.cancel();
     final edits = _pendingEdits();
-    if (edits == null) return null;
     if (edits.url != null) await _apiNotifier.setBaseUrl(edits.id, edits.url!);
     if (edits.key != null) await _apiNotifier.setApiKey(edits.id, edits.key!);
     return ref.read(agentApiProvider).byId(edits.id);
@@ -123,7 +134,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _urlDebounce.cancel();
     _keyDebounce.cancel();
     final edits = _pendingEdits();
-    if (edits == null || (edits.url == null && edits.key == null)) return;
+    if (edits.url == null && edits.key == null) return;
     Future.microtask(() async {
       try {
         if (edits.url != null) {
@@ -143,8 +154,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       _currentId = inst.id;
       _keyCtrl.text = inst.apiKey;
       _urlCtrl.text = _urlText(inst);
-      _modelTestResults.clear();
     });
+    _testNotifier.clearAll();
     GStorage.setting.put(_lastInstanceKey, inst.id);
   }
 
@@ -496,13 +507,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   // ── 模型连通性检测 ──
 
   Future<void> _testModel(AgentProviderInstance inst, String modelId) async {
-    if (_modelTesting.contains(modelId)) return;
+    final testState = ref.read(modelTestProvider);
+    if (testState.testing.contains(modelId)) return;
     final fresh = await _commitPendingEdits() ?? inst;
     if (!mounted) return;
-    setState(() {
-      _modelTesting.add(modelId);
-      _modelTestResults.remove(modelId);
-    });
+    _testNotifier.startTest(modelId);
 
     final err = await testAgentModel(
       provider: fresh.protocol,
@@ -512,10 +521,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     );
 
     if (!mounted) return;
-    setState(() {
-      _modelTestResults[modelId] = err;
-      _modelTesting.remove(modelId);
-    });
+    _testNotifier.finishTest(modelId, err);
     final snackBar = ref.read(snackBarServiceProvider);
     if (err == null) {
       snackBar.showResult(message: context.l10n.modelConnected(modelId));
@@ -553,15 +559,18 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       providerType: inst.protocol,
       providerLabel: inst.name,
       addedModels: inst.models,
-      currentDefaultModel: AgentApiNotifier.globalDefaultRole.id == id
-          ? AgentApiNotifier.globalDefaultRole.modelId
-          : null,
-      currentFastModel: AgentApiNotifier.globalFastRole.id == id
-          ? AgentApiNotifier.globalFastRole.modelId
-          : null,
-      currentImageModel: AgentApiNotifier.globalImageRole.id == id
-          ? AgentApiNotifier.globalImageRole.modelId
-          : null,
+      currentDefaultModel: () {
+            final r = ref.read(agentApiProvider).defaultRole;
+            return r.id == id ? r.modelId : null;
+          }(),
+      currentFastModel: () {
+            final r = ref.read(agentApiProvider).fastRole;
+            return r.id == id ? r.modelId : null;
+          }(),
+      currentImageModel: () {
+            final r = ref.read(agentApiProvider).imageRole;
+            return r.id == id ? r.modelId : null;
+          }(),
       onAdd:
           (
             modelId, {
@@ -577,7 +586,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           ),
       onRemove: (modelId) {
         notifier.removeModel(id, modelId);
-        _modelTestResults.remove(modelId);
+        _testNotifier.clearResult(modelId);
       },
     );
   }
@@ -605,18 +614,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         ref
             .read(agentApiProvider.notifier)
             .setModelThinkingLevel(inst.id, modelId, null);
-        ref
-            .read(agentApiProvider.notifier)
-            .setModelBuiltInTools(inst.id, modelId, {});
       },
       initialThinkingLevel: inst.paramsFor(modelId).thinkingLevel,
       onThinkingLevelChanged: (level) => ref
           .read(agentApiProvider.notifier)
           .setModelThinkingLevel(inst.id, modelId, level),
-      initialBuiltInTools: inst.builtInToolsFor(modelId),
-      onBuiltInToolsChanged: (tools) => ref
-          .read(agentApiProvider.notifier)
-          .setModelBuiltInTools(inst.id, modelId, tools),
     );
   }
 
@@ -627,13 +629,15 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final apiState = ref.watch(agentApiProvider);
-    _apiSnapshot = apiState; // dispose 路径的差异比较用（见字段注释）
     final instances = apiState.instances;
     // 当前实例；id 失效（极少见）时回落到第一个
     final current = instances.firstWhere(
       (i) => i.id == _currentId,
       orElse: () => instances.first,
     );
+    // dispose 路径的差异比较用（见 _pendingEdits）
+    _lastStoredUrl = _urlText(current);
+    _lastStoredKey = current.apiKey;
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -664,11 +668,14 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             decoration: _fieldDeco(
               theme,
               cs,
-              hint: AgentApiNotifier.presetKeyHint(current.id) ??
+              hint:
+                  AgentApiNotifier.presetKeyHint(current.id) ??
                   current.protocol.apiKeyHint,
               suffix: IconButton(
                 icon: Icon(
-                  _keyObscured ? Symbols.visibility_off_rounded : Symbols.visibility_rounded,
+                  _keyObscured
+                      ? Symbols.visibility_off_rounded
+                      : Symbols.visibility_rounded,
                   size: 20,
                 ),
                 onPressed: () {
@@ -727,11 +734,13 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             padding: const EdgeInsets.only(left: 4, top: 6),
             child: Text(
               // 预览跟随输入框现值实时变化；清空时回落到当前生效地址
-              context.l10n.previewUrl(current.protocol.chatUrl(
-                _urlCtrl.text.trim().isNotEmpty
-                    ? _urlCtrl.text.trim()
-                    : current.effectiveBaseUrl,
-              )),
+              context.l10n.previewUrl(
+                current.protocol.chatUrl(
+                  _urlCtrl.text.trim().isNotEmpty
+                      ? _urlCtrl.text.trim()
+                      : current.effectiveBaseUrl,
+                ),
+              ),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: cs.onSurfaceVariant.withAlpha(120),
               ),
@@ -745,43 +754,113 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             const SizedBox(height: 24),
             _sectionLabel(theme, cs, context.l10n.models),
             const SizedBox(height: 12),
-            ...current.models.map((modelId) {
-              final hasTested = _modelTestResults.containsKey(modelId);
-              final errorMsg = _modelTestResults[modelId];
-              return AgentModelListTile(
-                key: ValueKey('${current.id}/$modelId'),
-                modelId: modelId,
-                isTesting: _modelTesting.contains(modelId),
-                hasTested: hasTested,
-                errorMsg: errorMsg,
-                capability: current.capabilityFor(modelId),
-                onRemove: () {
-                  ref
-                      .read(agentApiProvider.notifier)
-                      .removeModel(current.id, modelId);
-                  _modelTestResults.remove(modelId);
-                },
-                onTest: () => _testModel(current, modelId),
-                onShowError: () => _showTestError(modelId, errorMsg!),
-                onEdit: () => _openCapabilitySheet(current, modelId),
-              );
-            }),
+            Consumer(
+              builder: (context, ref, _) {
+                final testState = ref.watch(modelTestProvider);
+                return Column(
+                  children: current.models.map((modelId) {
+                    final hasTested =
+                        testState.results.containsKey(modelId);
+                    final errorMsg = testState.results[modelId];
+                    return AgentModelListTile(
+                      key: ValueKey('${current.id}/$modelId'),
+                      modelId: modelId,
+                      isTesting: testState.testing.contains(modelId),
+                      hasTested: hasTested,
+                      errorMsg: errorMsg,
+                      capability: current.capabilityFor(modelId),
+                      onRemove: () {
+                        ref
+                            .read(agentApiProvider.notifier)
+                            .removeModel(current.id, modelId);
+                        ref
+                            .read(modelTestProvider.notifier)
+                            .clearResult(modelId);
+                      },
+                      onTest: () => _testModel(current, modelId),
+                      onShowError: () =>
+                          _showTestError(modelId, errorMsg!),
+                      onEdit: () =>
+                          _openCapabilitySheet(current, modelId),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
           ],
 
           // ── 全局模型角色 ──
           const SizedBox(height: 24),
           _sectionLabel(theme, cs, context.l10n.globalModelRoles),
           const SizedBox(height: 12),
-          _buildGlobalRoles(theme, cs),
+          Consumer(
+            builder: (context, ref, _) {
+              // select 角色元组——records 有结构比较，只在角色变化时重建
+              ref.watch(
+                agentApiProvider.select(
+                  (s) => (s.defaultRole, s.fastRole, s.imageRole),
+                ),
+              );
+              final fullState = ref.read(agentApiProvider);
+              return _buildGlobalRoles(theme, cs, fullState);
+            },
+          ),
+
+          // ── 联网搜索回退（Tavily）──
+          const SizedBox(height: 24),
+          _sectionLabel(theme, cs, context.l10n.tavilySearchSection),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _tavilyCtrl,
+            onChanged: (v) {
+              _tavilyDebounce.run(
+                () => TavilySearchService.setApiKey(v.trim()),
+              );
+            },
+            obscureText: _tavilyObscured,
+            decoration: _fieldDeco(
+              theme,
+              cs,
+              hint: 'tvly-...',
+              suffix: IconButton(
+                icon: Icon(
+                  _tavilyObscured
+                      ? Symbols.visibility_off_rounded
+                      : Symbols.visibility_rounded,
+                  size: 20,
+                ),
+                onPressed: () {
+                  Haptics.soft();
+                  setState(() => _tavilyObscured = !_tavilyObscured);
+                },
+              ),
+            ),
+            autocorrect: false,
+            enableSuggestions: false,
+            style: theme.textTheme.bodyMedium,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 6),
+            child: Text(
+              context.l10n.tavilySearchDesc,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildGlobalRoles(ThemeData theme, ColorScheme cs) {
-    final defaultRole = AgentApiNotifier.globalDefaultRole;
-    final fastRole = AgentApiNotifier.globalFastRole;
-    final imageRole = AgentApiNotifier.globalImageRole;
+  Widget _buildGlobalRoles(
+    ThemeData theme,
+    ColorScheme cs,
+    AgentProvidersState apiState,
+  ) {
+    final defaultRole = apiState.defaultRole;
+    final fastRole = apiState.fastRole;
+    final imageRole = apiState.imageRole;
 
     final divider = Divider(
       height: 1,
@@ -803,7 +882,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           _roleRow(
             theme,
             cs,
-            icon: Symbols.gavel_rounded,
+            icon: Symbols.psychology_rounded,
             iconBg: cs.primaryContainer,
             iconFg: cs.onPrimaryContainer,
             label: context.l10n.expertModel,
@@ -895,9 +974,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: isSet
-                  ? iconBg
-                  : cs.surfaceContainerHighest.withAlpha(120),
+              color: isSet ? iconBg : cs.surfaceContainerHighest.withAlpha(120),
               borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
@@ -999,7 +1076,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(
                         child: Text(
-                          imageOnly ? ctx.l10n.pleaseAddImageModel : ctx.l10n.pleaseAddModels,
+                          imageOnly
+                              ? ctx.l10n.pleaseAddImageModel
+                              : ctx.l10n.pleaseAddModels,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: cs.onSurfaceVariant.withAlpha(160),
                           ),
@@ -1054,9 +1133,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                                           Expanded(
                                             child: Text(
                                               modelId,
-                                              style: theme
-                                                  .textTheme
-                                                  .bodyMedium
+                                              style: theme.textTheme.bodyMedium
                                                   ?.copyWith(
                                                     fontWeight: selected
                                                         ? FontWeight.w600
@@ -1066,8 +1143,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                                                         : cs.onSurface,
                                                   ),
                                               maxLines: 1,
-                                              overflow:
-                                                  TextOverflow.ellipsis,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                           if (selected)

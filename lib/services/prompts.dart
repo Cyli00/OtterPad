@@ -74,6 +74,20 @@ Translate to {{targetLanguage}}:
 
 {{input}}''';
 
+// ── 问 AI（文献语境对话）──
+
+const kDefaultChatSystemPrompt = '''
+You are a research assistant embedded in a document reader. The user is reading the academic document below and will ask questions about it.
+
+## Rules
+1. Ground every answer in the document content; reference specific sections or figures when helpful.
+2. If the answer is not in the document, say so explicitly before offering general knowledge.
+3. Answer in the same language the user asks in.
+4. Use Markdown formatting; write math as LaTeX in \$...\$ / \$\$...\$\$.
+
+## Document
+{{document}}''';
+
 // ── 生图（论文总结信息图的风格指导）──
 
 const kDefaultSummaryImagePrompt = '''
@@ -99,6 +113,15 @@ abstract final class Prompts {
     requiredPlaceholders: ['targetLanguage', 'input'],
   );
 
+  // ── 可定制：问 AI ──
+
+  static const chatSystem = PromptDef(
+    id: 'chat.system',
+    storageKey: 'prompt_chat_system',
+    defaultText: kDefaultChatSystemPrompt,
+    requiredPlaceholders: ['document'],
+  );
+
   // ── 可定制：生图 ──
 
   static const summaryImage = PromptDef(
@@ -106,6 +129,14 @@ abstract final class Prompts {
     storageKey: 'image_generation_prompt',
     defaultText: kDefaultSummaryImagePrompt,
   );
+
+  // ── 不可定制：问 AI 会话标题生成（快速模型、强制关思考）──
+
+  static const chatTitleSystem =
+      'Summarize the user message into a very short conversation title in '
+      'the same language as the message: at most 12 characters for CJK or '
+      '6 words for English. Output the title only — no quotes, no trailing '
+      'punctuation, no explanation.';
 
   // ── 不可定制：翻译受保护 span 占位符守卫 ──
 
