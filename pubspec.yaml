@@ -54,9 +54,6 @@ dependencies:
   # 剪贴板（桌面端图片复制）
   pasteboard: ^0.5.0
 
-  # 权限
-  permission_handler: ^11.3.0
-
   # App 信息
   package_info_plus: ^8.0.0
 
@@ -114,9 +111,8 @@ dev_dependencies:
   json_serializable: ^6.8.0
 
 
-  # 启动图 / 图标
+  # 图标生成
   flutter_launcher_icons: ^0.14.4
-  flutter_native_splash: ^2.4.6
 
 flutter:
   generate: true
