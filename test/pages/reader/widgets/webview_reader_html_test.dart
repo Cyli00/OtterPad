@@ -36,6 +36,7 @@ Figure 1. Example caption.
       palette: palette,
       settings: const ReaderSettingsState(),
       baseHref: '/library/doc/',
+      serverRoot: '/',
     );
 
     expect(html, contains('<div class="math-display">'));
@@ -52,6 +53,7 @@ Figure 1. Example caption.
       palette: palette,
       settings: const ReaderSettingsState(),
       baseHref: '/library/doc/',
+      serverRoot: '/',
     );
 
     // 外部静态资源引用

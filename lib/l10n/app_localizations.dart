@@ -336,7 +336,7 @@ abstract class AppLocalizations {
   /// No description provided for @ocrSettingsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'OCR API · Recognition Settings'**
+  /// **'OCR API · Output Control · Recognition Enhancement · Document Correction'**
   String get ocrSettingsSubtitle;
 
   /// No description provided for @appearanceSettings.
@@ -348,7 +348,7 @@ abstract class AppLocalizations {
   /// No description provided for @appearanceSettingsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Theme · Colors · Reading · Font'**
+  /// **'Theme · Colors · Reading'**
   String get appearanceSettingsSubtitle;
 
   /// No description provided for @dataManagement.

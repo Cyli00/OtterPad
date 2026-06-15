@@ -126,13 +126,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ocrSettings => 'OCR 设置';
 
   @override
-  String get ocrSettingsSubtitle => 'OCR 接口 · 识别参数';
+  String get ocrSettingsSubtitle => 'OCR 接口 · 输出控制 · 识别增强 · 文档校正';
 
   @override
   String get appearanceSettings => '显示设置';
 
   @override
-  String get appearanceSettingsSubtitle => '主题模式 · 主题色彩 · 阅读设置 · 字体';
+  String get appearanceSettingsSubtitle => '主题模式 · 主题色彩 · 阅读设置';
 
   @override
   String get dataManagement => '数据管理';
@@ -2371,13 +2371,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get ocrSettings => 'OCR 設定';
 
   @override
-  String get ocrSettingsSubtitle => 'OCR 介面 · 辨識參數';
+  String get ocrSettingsSubtitle => 'OCR 介面 · 輸出控制 · 辨識增強 · 文件校正';
 
   @override
   String get appearanceSettings => '顯示設定';
 
   @override
-  String get appearanceSettingsSubtitle => '主題模式 · 主題色彩 · 閱讀設定 · 字體';
+  String get appearanceSettingsSubtitle => '主題模式 · 主題色彩 · 閱讀設定';
 
   @override
   String get dataManagement => '資料管理';
@@ -2802,6 +2802,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get exitSearch => '退出搜尋';
 
   @override
+  String get matchCase => '區分大小寫';
+
+  @override
+  String get matchWholeWord => '全字相符';
+
+  @override
   String get noMatchFound => '未找到相符內容';
 
   @override
@@ -2824,6 +2830,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get copied => '已複製';
+
+  @override
+  String get addToNote => '新增到筆記';
 
   @override
   String get copyTranslation => '複製譯文';
@@ -4100,6 +4109,296 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get fidelityHigh => '高';
 
   @override
+  String tasksInProgress(int count) {
+    return '$count 個任務進行中';
+  }
+
+  @override
+  String get aiSettingsSelectTextModel => '請先在「AI 設定」中選擇快速模型或專家模型';
+
+  @override
+  String get aiSettingsFillApiKey => '請先在「AI 設定」中填寫 API Key';
+
+  @override
+  String get aiSettingsFillImageApiKey => '請先在「AI 設定」中填寫圖模型 API Key';
+
+  @override
+  String get targetLanguageChangedRetranslate => '目標語言已變更，請重新翻譯';
+
+  @override
+  String get preparingTranslation => '準備中';
+
+  @override
+  String get noTranslatableParagraphs => '未偵測到可翻譯段落';
+
+  @override
+  String waitingExtractTitle(String title) {
+    return '等待擷取: $title';
+  }
+
+  @override
+  String submittingTaskTitle(String title) {
+    return '正在提交任務: $title';
+  }
+
+  @override
+  String extractionCompleteTitle(String title) {
+    return '文件擷取完成：$title';
+  }
+
+  @override
+  String networkError(String message) {
+    return '網路錯誤: $message';
+  }
+
+  @override
+  String extractionFailedDetail(String error) {
+    return '擷取失敗: $error';
+  }
+
+  @override
+  String waitingSubmitTitle(String title) {
+    return '等待提交: $title';
+  }
+
+  @override
+  String submittedWaitingTitle(String title) {
+    return '已提交，等待處理: $title';
+  }
+
+  @override
+  String extractingTitle(String title) {
+    return '正在擷取… · $title';
+  }
+
+  @override
+  String waitingSummaryTitle(String title) {
+    return '等待產生摘要圖: $title';
+  }
+
+  @override
+  String generatingSummaryTitle(String title) {
+    return '正在產生摘要圖: $title';
+  }
+
+  @override
+  String summaryGenerationFailed(String error) {
+    return '摘要圖產生失敗: $error';
+  }
+
+  @override
+  String waitingDownloadTitle(String title) {
+    return '等待下載: $title';
+  }
+
+  @override
+  String downloadingTitle(String title) {
+    return '正在下載: $title';
+  }
+
+  @override
+  String downloadSuccessTitle(String title) {
+    return '下載成功：$title';
+  }
+
+  @override
+  String get downloadFailedNoSource => '下載失敗，未找到可用的 PDF 來源';
+
+  @override
+  String downloadFailed(String error) {
+    return '下載失敗: $error';
+  }
+
+  @override
+  String get downloadingPdf => '正在下載 PDF';
+
+  @override
+  String downloadCancelledPartial(int count) {
+    return '已取消下載，已成功 $count 篇';
+  }
+
+  @override
+  String downloadCompleteAll(int count) {
+    return '下載完成，成功 $count 篇';
+  }
+
+  @override
+  String downloadCompletePartial(int ok, int fail) {
+    return '下載完成：成功 $ok 篇，失敗 $fail 篇';
+  }
+
+  @override
+  String get preparingImport => '準備匯入檔案...';
+
+  @override
+  String get importingFilesBusy => '正在匯入檔案，請稍候';
+
+  @override
+  String extractingMetadataFile(String fileName) {
+    return '正在擷取中繼資料: $fileName';
+  }
+
+  @override
+  String get documentAlreadyExists => '該文獻已存在於文庫中';
+
+  @override
+  String addedDocumentNoPdf(String title) {
+    return '已新增「$title」，但未獲取到關聯 PDF';
+  }
+
+  @override
+  String get goAdd => '去新增';
+
+  @override
+  String addedDocumentTitle(String title) {
+    return '已新增: $title';
+  }
+
+  @override
+  String get networkRequestFailedRetry => '網路請求失敗，請稍後重試';
+
+  @override
+  String addFailedError(String error) {
+    return '新增失敗: $error';
+  }
+
+  @override
+  String resolvingIdentifier(String identifier) {
+    return '正在解析識別碼: $identifier';
+  }
+
+  @override
+  String get resolvingIdentifierBusy => '正在解析識別碼，請稍候';
+
+  @override
+  String get preparingRebuild => '準備重構文庫...';
+
+  @override
+  String get rebuildInProgress => '文庫重構正在進行中';
+
+  @override
+  String get rebuildCancelled => '已取消重構文庫';
+
+  @override
+  String get rebuildComplete => '文庫重構完成';
+
+  @override
+  String rebuildAdded(int count) {
+    return '新增 $count 篇';
+  }
+
+  @override
+  String rebuildRemoved(int count) {
+    return '清理 $count 篇';
+  }
+
+  @override
+  String rebuildRepaired(int count) {
+    return '修復中繼資料 $count 篇';
+  }
+
+  @override
+  String rebuildUnresolved(int count) {
+    return '仍有 $count 篇待補全中繼資料';
+  }
+
+  @override
+  String rebuildNoFile(int count) {
+    return '$count 個無檔案條目';
+  }
+
+  @override
+  String get rebuildNormal => '，文庫狀態正常';
+
+  @override
+  String get fetchingZoteroItems => '正在拉取 Zotero 條目...';
+
+  @override
+  String get zoteroSyncInProgress => 'Zotero 同步正在進行中';
+
+  @override
+  String get zoteroSyncCancelled => '已取消 Zotero 同步';
+
+  @override
+  String get fetchingZoteroProgress => '正在拉取 Zotero 條目';
+
+  @override
+  String get importingDocuments => '正在匯入文獻...';
+
+  @override
+  String zoteroSyncCompleteAdded(int count) {
+    return 'Zotero 同步完成，新增 $count 篇';
+  }
+
+  @override
+  String get zoteroSyncCompleteNoNew => 'Zotero 同步完成，暫無新增條目';
+
+  @override
+  String zoteroSyncFailed(String error) {
+    return 'Zotero 同步失敗：$error';
+  }
+
+  @override
+  String get zoteroSyncNetworkFailed => 'Zotero 同步失敗：網路請求失敗';
+
+  @override
+  String existsInLibrary(String title) {
+    return '文庫中已存在: $title';
+  }
+
+  @override
+  String importedWithFullMetadata(String title) {
+    return '已匯入並擷取中繼資料: $title';
+  }
+
+  @override
+  String importedPartialMetadata(String title) {
+    return '已匯入 $title，僅擷取到部分中繼資料';
+  }
+
+  @override
+  String importedNoMetadata(String title) {
+    return '已匯入 $title，未辨識到可用中繼資料';
+  }
+
+  @override
+  String importedCountPart(int count) {
+    return '匯入 $count 篇';
+  }
+
+  @override
+  String duplicateCountPart(int count) {
+    return '重複 $count 篇';
+  }
+
+  @override
+  String fullMetadataCountPart(int count) {
+    return '完整中繼資料 $count 篇';
+  }
+
+  @override
+  String partialMetadataCountPart(int count) {
+    return '部分中繼資料 $count 篇';
+  }
+
+  @override
+  String unrecognizedMetadataCountPart(int count) {
+    return '未辨識中繼資料 $count 篇';
+  }
+
+  @override
+  String get importCancelledLabel => '已取消匯入';
+
+  @override
+  String get noFilesImported => '未匯入任何檔案';
+
+  @override
+  String get importCompleteLabel => '匯入完成';
+
+  @override
+  String get taskBusy => '任務正在進行中';
+
+  @override
   String aiLayoutFixConfirmMessage(String tokens) {
     return 'AI 排版修復將使用專家模型審核圖片裁剪區域（子圖完整性、標題排除）並補提漏檢圖片，預計消耗約 $tokens Token';
   }
@@ -4153,4 +4452,44 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get expertRequiresVision => '專家模型需要支援圖片輸入';
+
+  @override
+  String get askAi => '問 AI';
+
+  @override
+  String get newChat => '新對話';
+
+  @override
+  String get chatHistory => '對話歷史';
+
+  @override
+  String get chatNoHistory => '還沒有對話';
+
+  @override
+  String get chatInputHint => '針對這篇文獻提問…';
+
+  @override
+  String get chatEmptyHint => '問點關於這篇文獻的問題吧——回答基於擷取的全文與圖表';
+
+  @override
+  String chatMessageCount(int count) {
+    return '$count 則訊息';
+  }
+
+  @override
+  String get chatSend => '發送';
+
+  @override
+  String get chatRemoveQuote => '移除引用';
+
+  @override
+  String get chatLocateSource => '定位原文';
+
+  @override
+  String chatNewSessionHint(String title) {
+    return '新對話仍將基於《$title》的全文與圖表進行問答。';
+  }
+
+  @override
+  String get dontRemindAgain => '不再提醒';
 }

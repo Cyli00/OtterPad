@@ -126,13 +126,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ocrSettings => 'OCR Settings';
 
   @override
-  String get ocrSettingsSubtitle => 'OCR API · Recognition Settings';
+  String get ocrSettingsSubtitle =>
+      'OCR API · Output Control · Recognition Enhancement · Document Correction';
 
   @override
   String get appearanceSettings => 'Display';
 
   @override
-  String get appearanceSettingsSubtitle => 'Theme · Colors · Reading · Font';
+  String get appearanceSettingsSubtitle => 'Theme · Colors · Reading';
 
   @override
   String get dataManagement => 'Data Management';
