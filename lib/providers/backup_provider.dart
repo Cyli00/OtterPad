@@ -54,11 +54,11 @@ class BackupWebDavState {
       password.isNotEmpty;
 
   String get remoteFilePath {
-    final normalizedDir = _normalizeRemoteDir(remoteDir);
+    final normalizedDir = normalizeRemoteDir(remoteDir);
     return '$normalizedDir/${fileName.trim().isEmpty ? defaultFileName : fileName.trim()}';
   }
 
-  static String _normalizeRemoteDir(String value) {
+  static String normalizeRemoteDir(String value) {
     final trimmed = value.trim().replaceAll('\\', '/');
     if (trimmed.isEmpty) return defaultRemoteDir;
     final normalized = trimmed.startsWith('/') ? trimmed : '/$trimmed';
@@ -190,7 +190,7 @@ class BackupWebDavNotifier extends StateNotifier<BackupWebDavState> {
 
   Future<void> save(BackupWebDavState next) async {
     final normalized = next.copyWith(
-      remoteDir: BackupWebDavState._normalizeRemoteDir(next.remoteDir),
+      remoteDir: BackupWebDavState.normalizeRemoteDir(next.remoteDir),
       fileName: next.fileName.trim().isEmpty
           ? BackupWebDavState.defaultFileName
           : next.fileName.trim(),

@@ -9,6 +9,19 @@ import 'package:path_provider/path_provider.dart';
 import '../core/storage/storage.dart';
 import 'backup_merge_service.dart';
 
+/// 备份创建范围（与恢复侧 [BackupRestoreScope] 对称的另一半）。
+///
+/// [dataOnly] 排除可重新获取/重新生成的大文件（PDF 原文、extract 提取
+/// 产物、figures、summary 生成图），保留用户生产数据（设置、元数据、
+/// 批注、translations.json、chats）。恢复后文献落入「无文件条目」，
+/// 重新关联 PDF 的 UI 动线已存在。
+enum BackupScope {
+  full,
+  dataOnly;
+
+  bool get includeHeavyFiles => this == BackupScope.full;
+}
+
 enum BackupRestoreScope {
   full('完整恢复', '恢复 data 与 docs 目录'),
   libraryOnly('仅恢复文库数据', '恢复文献库、收藏、标注和文档文件'),
@@ -51,7 +64,12 @@ class BackupRestoreService {
         '${two(value.hour)}${two(value.minute)}${two(value.second)}.zip';
   }
 
-  static Future<String> createBackupArchive() async {
+  /// [manifestExtra] 由调用方附加进 manifest.json（设备名、文献数等），
+  /// 供恢复前预览。
+  static Future<String> createBackupArchive({
+    BackupScope scope = BackupScope.full,
+    Map<String, dynamic>? manifestExtra,
+  }) async {
     final createdAt = DateTime.now();
 
     await GStorage.flush();
@@ -60,8 +78,10 @@ class BackupRestoreService {
       'app': 'OtterPad',
       'formatVersion': _formatVersion,
       'createdAt': createdAt.toIso8601String(),
+      'scope': scope.name,
       'libraryRoot': GStorage.libraryDirPath,
       'dbRoot': GStorage.dbDirPath,
+      ...?manifestExtra,
     };
 
     final tempDir = await _getBackupTempDir();
@@ -76,6 +96,7 @@ class BackupRestoreService {
       GStorage.libraryDirPath,
       GStorage.dbDirPath,
       const JsonEncoder.withIndent('  ').convert(manifest),
+      scope.name,
     ]);
     return outputPath;
   }
@@ -85,6 +106,7 @@ class BackupRestoreService {
     final libraryDir = Directory(args[1]);
     final dbDir = Directory(args[2]);
     final manifestJson = args[3];
+    final scope = BackupScope.values.byName(args[4]);
 
     final encoder = ZipFileEncoder();
     encoder.create(outputPath);
@@ -98,27 +120,54 @@ class BackupRestoreService {
         manifestTmp.deleteSync();
       }
 
-      await _addDirectoryStreamed(encoder, libraryDir, _libraryDir);
+      await _addDirectoryStreamed(
+        encoder,
+        libraryDir,
+        _libraryDir,
+        include: scope.includeHeavyFiles ? null : includeInDataOnly,
+      );
       await _addDirectoryStreamed(encoder, dbDir, _dbDir);
     } finally {
       await encoder.close();
     }
   }
 
+  /// dataOnly 范围的文献目录过滤：排除 PDF 原文 / extract 提取产物 /
+  /// figures / summary 生成图，保留 translations.json、chats 等用户数据。
+  /// [relativePath] 相对 library 根，形如 `{docId}/source.pdf`。
+  ///
+  /// 也是备份指纹的「数据文件」判定来源（BackupFingerprintService）——
+  /// 两处必须共用同一规则，否则状态显示与实际打包内容漂移。
+  static bool includeInDataOnly(String relativePath) {
+    const excludedFiles = {
+      'source.pdf',
+      'extract.raw.md',
+      'extract.md',
+      'extract.json',
+    };
+    const excludedDirs = {'figures', 'summary'};
+    final parts = p.split(relativePath);
+    if (parts.length < 2) return true;
+    return parts.length == 2
+        ? !excludedFiles.contains(parts[1])
+        : !excludedDirs.contains(parts[1]);
+  }
+
   /// 逐文件流式加入 zip。空目录条目不再写入——恢复侧写文件时
-  /// `create(recursive: true)` 会按需重建目录。
+  /// `create(recursive: true)` 会按需重建目录。[include] 非空时按
+  /// 相对路径过滤（返回 false 跳过）。
   static Future<void> _addDirectoryStreamed(
     ZipFileEncoder encoder,
     Directory sourceDir,
-    String archiveRoot,
-  ) async {
+    String archiveRoot, {
+    bool Function(String relativePath)? include,
+  }) async {
     if (!await sourceDir.exists()) return;
     await for (final entity in sourceDir.list(recursive: true)) {
       if (entity is! File) continue;
-      final relativePath = _toArchivePath(
-        p.relative(entity.path, from: sourceDir.path),
-      );
-      await encoder.addFile(entity, '$archiveRoot/$relativePath');
+      final relative = p.relative(entity.path, from: sourceDir.path);
+      if (include != null && !include(relative)) continue;
+      await encoder.addFile(entity, '$archiveRoot/${_toArchivePath(relative)}');
     }
   }
 
@@ -135,6 +184,7 @@ class BackupRestoreService {
 
     try {
       await _extractArchiveToDirectory(archivePath, tempRoot.path);
+      final backupScope = _readManifestScope(tempRoot.path);
 
       if (mode == RestoreMode.merge) {
         return await BackupMergeService.merge(
@@ -162,6 +212,9 @@ class BackupRestoreService {
           await _rollbackFromBackup(docsDir);
           rethrow;
         }
+        if (backupScope == BackupScope.dataOnly) {
+          await _restoreHeavyFilesFromBak(docsDir);
+        }
         await _deleteBackupOf(docsDir);
       } else if (scope == BackupRestoreScope.libraryOnly) {
         await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
@@ -174,6 +227,9 @@ class BackupRestoreService {
         } catch (_) {
           await _rollbackFromBackup(docsDir);
           rethrow;
+        }
+        if (backupScope == BackupScope.dataOnly) {
+          await _restoreHeavyFilesFromBak(docsDir);
         }
         await _deleteBackupOf(docsDir);
       } else if (scope == BackupRestoreScope.settingsOnly) {
@@ -210,6 +266,13 @@ class BackupRestoreService {
     const dbPrefix = '$_archiveRoot/db/';
 
     for (final file in archive) {
+      // manifest 单独落到解压根，供恢复侧读取备份范围等元信息。
+      if (file.name == _manifestPath && file.isFile) {
+        File(p.join(tempRootPath, 'manifest.json'))
+          ..createSync(recursive: true)
+          ..writeAsBytesSync(file.readBytes() ?? const <int>[]);
+        continue;
+      }
       String? relative;
       String? subDir;
       if (file.name.startsWith(libraryPrefix)) {
@@ -267,6 +330,44 @@ class BackupRestoreService {
         await backupDir.rename(targetDir.path);
       }
       rethrow;
+    }
+  }
+
+  /// 解压根的 manifest.json 里记录的备份范围；缺失（v2 之前的旧备份）
+  /// 或解析失败按 full 处理。
+  static BackupScope _readManifestScope(String tempRootPath) {
+    try {
+      final raw = File(
+        p.join(tempRootPath, 'manifest.json'),
+      ).readAsStringSync();
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return BackupScope.values.asNameMap()[json['scope']] ?? BackupScope.full;
+    } catch (_) {
+      return BackupScope.full;
+    }
+  }
+
+  /// dataOnly 备份做**覆盖恢复**时的防数据丢失：备份里没有 PDF / 提取
+  /// 产物，直接整目录替换会清掉本地重文件。从 `.bak` 把被 dataOnly
+  /// 排除的文件拷回**仍存在于备份中的**文献目录；备份里已不存在的文献
+  /// 不拷回（尊重备份时刻的删除状态）。
+  static Future<void> _restoreHeavyFilesFromBak(Directory docsDir) async {
+    final bakDir = Directory('${docsDir.path}.bak');
+    if (!await bakDir.exists()) return;
+    await for (final entity in bakDir.list(recursive: true)) {
+      if (entity is! File) continue;
+      final relative = p.relative(entity.path, from: bakDir.path);
+      if (includeInDataOnly(_toArchivePath(relative))) continue;
+      final parts = p.split(relative);
+      if (parts.isEmpty) continue;
+      // 文献目录在恢复后的库里不存在 = 备份时已删除，不拷回
+      if (!await Directory(p.join(docsDir.path, parts.first)).exists()) {
+        continue;
+      }
+      final targetFile = File(p.join(docsDir.path, relative));
+      if (await targetFile.exists()) continue;
+      await Directory(p.dirname(targetFile.path)).create(recursive: true);
+      await entity.copy(targetFile.path);
     }
   }
 

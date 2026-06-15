@@ -4,26 +4,21 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../providers/api_provider.dart';
+import '../../providers/auto_backup_provider.dart';
+import '../../providers/backup_orchestrator.dart';
 import '../../providers/backup_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
-import '../../providers/highlight_provider.dart';
 import '../../providers/history_provider.dart';
-import '../../providers/proxy_provider.dart';
-import '../../providers/reader_settings_provider.dart';
-import '../../providers/task_activity_provider.dart';
 import '../../providers/task_provider.dart';
-import '../../providers/theme_provider.dart';
 import '../../providers/zotero_sync_provider.dart';
 import '../../services/backup_merge_service.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
 import '../../services/haptics.dart';
+import '../../widgets/backup_scope_dialog.dart';
 import '../../widgets/tactile_press.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/storage_cleanup_service.dart';
@@ -70,15 +65,18 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     StorageCleanupService.cacheSize().then((bytes) {
       if (mounted) {
         setState(
-          () =>
-              _cacheSizeText = context.l10n.storageUsage(StorageCleanupService.formatSize(bytes)),
+          () => _cacheSizeText = context.l10n.storageUsage(
+            StorageCleanupService.formatSize(bytes),
+          ),
         );
       }
     });
     StorageCleanupService.dataSize().then((bytes) {
       if (mounted) {
         setState(
-          () => _dataSizeText = context.l10n.storageUsage(StorageCleanupService.formatSize(bytes)),
+          () => _dataSizeText = context.l10n.storageUsage(
+            StorageCleanupService.formatSize(bytes),
+          ),
         );
       }
     });
@@ -91,6 +89,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     final remoteType = ref.watch(backupRemoteTypeProvider);
     final webDav = ref.watch(backupWebDavProvider);
     final s3 = ref.watch(backupS3Provider);
+    final autoBackup = ref.watch(autoBackupProvider);
     final zotero = ref.watch(zoteroSyncProvider);
     _ensurePingFuture(remoteType, webDav, s3);
 
@@ -110,174 +109,187 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       body: Listener(
         onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
         child: Stack(
-        children: [
-          ListView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ).copyWith(bottom: 40),
-            children: [
-              _buildGroup(
-                context,
-                title: context.l10n.remoteBackup,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.l10n.backupMethod,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
+          children: [
+            ListView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ).copyWith(bottom: 40),
+              children: [
+                _buildGroup(
+                  context,
+                  title: context.l10n.remoteBackup,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.l10n.backupMethod,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: SegmentedButton<BackupRemoteType>(
-                              segments: const [
-                                ButtonSegment(
-                                  value: BackupRemoteType.s3,
-                                  icon: Icon(Symbols.cloud_circle_rounded),
-                                  label: Text('S3'),
-                                ),
-                                ButtonSegment(
-                                  value: BackupRemoteType.webdav,
-                                  icon: Icon(Symbols.cloud_sync_rounded),
-                                  label: Text('WebDAV'),
-                                ),
-                              ],
-                              selected: {remoteType},
-                              onSelectionChanged: (value) {
-                                Haptics.soft();
-                                ref
-                                    .read(backupRemoteTypeProvider.notifier)
-                                    .setRemoteType(value.first);
-                                setState(() {
-                                  _pingFuture = null;
-                                  _pingCacheKey = '';
-                                });
-                              },
-                              style: SegmentedButton.styleFrom(
-                                backgroundColor: cs.surface,
-                                selectedBackgroundColor: cs.primaryContainer,
-                                side: BorderSide(
-                                  color: cs.outlineVariant.withAlpha(100),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: SegmentedButton<BackupRemoteType>(
+                                segments: const [
+                                  ButtonSegment(
+                                    value: BackupRemoteType.s3,
+                                    icon: Icon(Symbols.cloud_circle_rounded),
+                                    label: Text('S3'),
+                                  ),
+                                  ButtonSegment(
+                                    value: BackupRemoteType.webdav,
+                                    icon: Icon(Symbols.cloud_sync_rounded),
+                                    label: Text('WebDAV'),
+                                  ),
+                                ],
+                                selected: {remoteType},
+                                onSelectionChanged: (value) {
+                                  Haptics.soft();
+                                  ref
+                                      .read(backupRemoteTypeProvider.notifier)
+                                      .setRemoteType(value.first);
+                                  setState(() {
+                                    _pingFuture = null;
+                                    _pingCacheKey = '';
+                                  });
+                                },
+                                style: SegmentedButton.styleFrom(
+                                  backgroundColor: cs.surface,
+                                  selectedBackgroundColor: cs.primaryContainer,
+                                  side: BorderSide(
+                                    color: cs.outlineVariant.withAlpha(100),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    _buildDivider(context),
-                    _buildRemoteConfigTile(context, remoteType, s3, webDav),
-                    _buildDivider(context),
-                    _ActionTile(
-                      icon: Symbols.cloud_upload_rounded,
-                      title: context.l10n.backupTo(remoteType.label),
-                      subtitle: _remoteConfigured(remoteType, s3, webDav)
-                          ? context.l10n.uploadBackupTo(_remoteTargetLabel(remoteType, s3, webDav))
-                          : context.l10n.pleaseConfigureFirst(remoteType.label),
-                      enabled:
-                          _remoteConfigured(remoteType, s3, webDav) && !_busy,
-                      onTap: () => _backupToRemote(remoteType, s3, webDav),
-                    ),
-                    _buildDivider(context),
-                    _ActionTile(
-                      icon: Symbols.cloud_download_rounded,
-                      title: context.l10n.restoreFromRemote(remoteType.label),
-                      subtitle: _remoteConfigured(remoteType, s3, webDav)
-                          ? context.l10n.downloadAndRestore(_remoteTargetLabel(remoteType, s3, webDav))
-                          : context.l10n.pleaseConfigureFirst(remoteType.label),
-                      enabled:
-                          _remoteConfigured(remoteType, s3, webDav) && !_busy,
-                      onTap: () => _restoreFromRemote(remoteType, s3, webDav),
-                    ),
-                  ],
-                ),
-              ),
-              _buildZoteroGroup(context, zotero),
-              _buildGroup(
-                context,
-                title: context.l10n.localBackup,
-                child: Column(
-                  children: [
-                    _ActionTile(
-                      icon: Symbols.download_rounded,
-                      title: context.l10n.exportBackup,
-                      subtitle: context.l10n.generateZipAndSave,
-                      enabled: !_busy,
-                      onTap: _exportBackupToLocal,
-                    ),
-                    _buildDivider(context),
-                    _ActionTile(
-                      icon: Symbols.restore_page_rounded,
-                      title: context.l10n.restoreFromBackup,
-                      subtitle: context.l10n.selectLocalZipRestore,
-                      enabled: !_busy,
-                      onTap: _restoreFromLocal,
-                    ),
-                  ],
-                ),
-              ),
-              _buildGroup(
-                context,
-                title: context.l10n.storage,
-                child: Column(
-                  children: [
-                    _ActionTile(
-                      icon: Symbols.mop_rounded,
-                      title: context.l10n.clearCache,
-                      subtitle: _cacheSizeText ?? context.l10n.thumbnailsAndTemp,
-                      enabled: !_busy,
-                      onTap: _clearCache,
-                    ),
-                    if (Platform.isWindows ||
-                        Platform.isMacOS ||
-                        Platform.isLinux) ...[
+                      _buildDivider(context),
+                      _buildRemoteConfigTile(context, remoteType, s3, webDav),
+                      _buildDivider(context),
+                      _buildAutoBackupSection(context, autoBackup),
                       _buildDivider(context),
                       _ActionTile(
-                        icon: Symbols.delete_forever_rounded,
-                        title: context.l10n.clearAllData,
-                        subtitle: _dataSizeText ?? context.l10n.allDataWillBeDeleted,
-                        enabled: !_busy,
-                        onTap: _clearData,
+                        icon: Symbols.cloud_upload_rounded,
+                        title: context.l10n.backupTo(remoteType.label),
+                        subtitle: _remoteConfigured(remoteType, s3, webDav)
+                            ? context.l10n.uploadBackupTo(
+                                _remoteTargetLabel(remoteType, s3, webDav),
+                              )
+                            : context.l10n.pleaseConfigureFirst(
+                                remoteType.label,
+                              ),
+                        enabled:
+                            _remoteConfigured(remoteType, s3, webDav) && !_busy,
+                        onTap: _backupToRemote,
+                      ),
+                      _buildDivider(context),
+                      _ActionTile(
+                        icon: Symbols.cloud_download_rounded,
+                        title: context.l10n.restoreFromRemote(remoteType.label),
+                        subtitle: _remoteConfigured(remoteType, s3, webDav)
+                            ? context.l10n.downloadAndRestore(
+                                _remoteTargetLabel(remoteType, s3, webDav),
+                              )
+                            : context.l10n.pleaseConfigureFirst(
+                                remoteType.label,
+                              ),
+                        enabled:
+                            _remoteConfigured(remoteType, s3, webDav) && !_busy,
+                        onTap: _restoreFromRemote,
                       ),
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          if (_busy)
-            Positioned.fill(
-              child: ColoredBox(
-                color: cs.scrim.withAlpha(80),
-                child: Center(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 20,
+                _buildZoteroGroup(context, zotero),
+                _buildGroup(
+                  context,
+                  title: context.l10n.localBackup,
+                  child: Column(
+                    children: [
+                      _ActionTile(
+                        icon: Symbols.download_rounded,
+                        title: context.l10n.exportBackup,
+                        subtitle: context.l10n.generateZipAndSave,
+                        enabled: !_busy,
+                        onTap: _exportBackupToLocal,
+                      ),
+                      _buildDivider(context),
+                      _ActionTile(
+                        icon: Symbols.restore_page_rounded,
+                        title: context.l10n.restoreFromBackup,
+                        subtitle: context.l10n.selectLocalZipRestore,
+                        enabled: !_busy,
+                        onTap: _restoreFromLocal,
+                      ),
+                    ],
+                  ),
+                ),
+                _buildGroup(
+                  context,
+                  title: context.l10n.storage,
+                  child: Column(
+                    children: [
+                      _ActionTile(
+                        icon: Symbols.mop_rounded,
+                        title: context.l10n.clearCache,
+                        subtitle:
+                            _cacheSizeText ?? context.l10n.thumbnailsAndTemp,
+                        enabled: !_busy,
+                        onTap: _clearCache,
+                      ),
+                      if (Platform.isWindows ||
+                          Platform.isMacOS ||
+                          Platform.isLinux) ...[
+                        _buildDivider(context),
+                        _ActionTile(
+                          icon: Symbols.delete_forever_rounded,
+                          title: context.l10n.clearAllData,
+                          subtitle:
+                              _dataSizeText ??
+                              context.l10n.allDataWillBeDeleted,
+                          enabled: !_busy,
+                          onTap: _clearData,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_busy)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: cs.scrim.withAlpha(80),
+                  child: Center(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 20,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.surface,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: _buildBusyIndicator(theme),
                     ),
-                    decoration: BoxDecoration(
-                      color: cs.surface,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: _buildBusyIndicator(theme),
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -544,7 +556,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final configured = _remoteConfigured(remoteType, s3, webDav);
-    final title = remoteType == BackupRemoteType.s3 ? context.l10n.s3Config : context.l10n.webDavConfig;
+    final title = remoteType == BackupRemoteType.s3
+        ? context.l10n.s3Config
+        : context.l10n.webDavConfig;
     final icon = remoteType == BackupRemoteType.s3
         ? Symbols.cloud_circle_rounded
         : Symbols.cloud_sync_rounded;
@@ -607,7 +621,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                           : (success ? Colors.green : cs.error);
                       final label = waiting
                           ? context.l10n.detecting
-                          : (success ? context.l10n.connectionOk : context.l10n.connectionFailed);
+                          : (success
+                                ? context.l10n.connectionOk
+                                : context.l10n.connectionFailed);
                       return _StatusBadge(color: color, label: label);
                     },
                   ),
@@ -623,7 +639,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     Haptics.soft();
                     _editRemoteConfig(remoteType, s3, webDav);
                   },
-            child: Text(configured ? context.l10n.edit : context.l10n.configure),
+            child: Text(
+              configured ? context.l10n.edit : context.l10n.configure,
+            ),
           ),
         ],
       ),
@@ -739,10 +757,15 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   }
 
   Future<void> _clearCache() async {
-    await _runBusy(context.l10n.clearingCache, StorageCleanupService.clearCache);
+    await _runBusy(
+      context.l10n.clearingCache,
+      StorageCleanupService.clearCache,
+    );
     if (!mounted) return;
     _refreshSizeLabels();
-    ref.read(snackBarServiceProvider).showResult(message: context.l10n.cacheCleared);
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.cacheCleared);
   }
 
   Future<void> _clearData() async {
@@ -788,15 +811,21 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     ref.read(favoritesProvider.notifier).reload();
     ref.invalidate(historyProvider);
     _refreshSizeLabels();
-    ref.read(snackBarServiceProvider).showResult(message: context.l10n.allDataCleared);
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.allDataCleared);
   }
 
   Future<void> _exportBackupToLocal() async {
+    final scope = await showBackupScopeDialog(context);
+    if (scope == null) return;
     String? tempArchivePath;
 
     try {
       await _runBusy(context.l10n.generatingLocalBackup, () async {
-        tempArchivePath = await BackupRestoreService.createBackupArchive();
+        tempArchivePath = await BackupRestoreService.createBackupArchive(
+          scope: scope,
+        );
       });
       if (!mounted || tempArchivePath == null) return;
 
@@ -842,7 +871,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         archivePath: archivePath,
         scope: scope,
         mode: mode,
-        busyText: mode == RestoreMode.merge ? context.l10n.mergingBackup : context.l10n.restoringBackup,
+        busyText: mode == RestoreMode.merge
+            ? context.l10n.mergingBackup
+            : context.l10n.restoringBackup,
       );
       _showRestoreMessage(mode, mergeResult);
     } catch (e) {
@@ -850,67 +881,44 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
   }
 
-  Future<void> _backupToRemote(
-    BackupRemoteType remoteType,
-    BackupS3State s3,
-    BackupWebDavState webDav,
-  ) async {
-    String? tempArchivePath;
+  Future<void> _backupToRemote() async {
+    final scope = await showBackupScopeDialog(context);
+    if (scope == null) return;
 
     try {
+      String? target;
       await _runBusy(context.l10n.generatingAndUploading, () async {
-        tempArchivePath = await BackupRestoreService.createBackupArchive();
-        if (remoteType == BackupRemoteType.s3) {
-          await BackupS3Service.instance.uploadFile(s3, tempArchivePath!);
-        } else {
-          final client = createBackupWebDavClient(webDav);
-          await client.mkdirAll(webDav.remoteDir);
-          await client.writeFromFile(tempArchivePath!, webDav.remoteFilePath);
-        }
+        target = await ref
+            .read(backupOrchestratorProvider)
+            .backupToRemote(scope: scope);
       });
-      _showMessage(context.l10n.remoteBackupUploaded(_remoteTargetLabel(remoteType, s3, webDav)));
+      _showMessage(context.l10n.remoteBackupUploaded(target ?? ''));
     } catch (e) {
       _showMessage(context.l10n.uploadRemoteFailed(_formatError(e)));
-    } finally {
-      await _deleteTempFile(tempArchivePath);
     }
   }
 
-  Future<void> _restoreFromRemote(
-    BackupRemoteType remoteType,
-    BackupS3State s3,
-    BackupWebDavState webDav,
-  ) async {
+  Future<void> _restoreFromRemote() async {
     final options = await _pickRestoreOptions();
     if (options == null) return;
     final (scope, mode) = options;
 
     String? tempArchivePath;
     try {
-      final tempDir = await getTemporaryDirectory();
-      final archivePath = p.join(
-        tempDir.path,
-        'OtterPad',
-        'restore',
-        BackupRestoreService.buildBackupFileName(),
-      );
-      tempArchivePath = archivePath;
-      await Directory(p.dirname(archivePath)).create(recursive: true);
-
       await _runBusy(context.l10n.downloadingRemoteBackup, () async {
-        if (remoteType == BackupRemoteType.s3) {
-          await BackupS3Service.instance.downloadFile(s3, archivePath);
-        } else {
-          final client = createBackupWebDavClient(webDav);
-          await client.read2File(webDav.remoteFilePath, archivePath);
-        }
+        tempArchivePath = await ref
+            .read(backupOrchestratorProvider)
+            .downloadBackupToTemp();
       });
+      if (tempArchivePath == null) return;
 
       final mergeResult = await _restoreArchive(
-        archivePath: archivePath,
+        archivePath: tempArchivePath!,
         scope: scope,
         mode: mode,
-        busyText: mode == RestoreMode.merge ? context.l10n.mergingRemoteBackup : context.l10n.restoringRemoteBackup,
+        busyText: mode == RestoreMode.merge
+            ? context.l10n.mergingRemoteBackup
+            : context.l10n.restoringRemoteBackup,
       );
       _showRestoreMessage(mode, mergeResult, remote: true);
     } catch (e) {
@@ -920,20 +928,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
   }
 
-  /// 恢复会 close 全部 Hive box（overwrite）或整批读写 box（merge）——
-  /// 先取消所有 Active Task 并等活集合清空，避免在飞任务（翻译写盘、
-  /// 提取 saveResult 等）撞上 close 窗口炸出 "Box has already been closed"。
-  /// 取消是协作式的，已在飞的网络请求要跑完才退出，超时后尽力而为继续。
-  Future<void> _drainActiveTasks() async {
-    final notifier = ref.read(taskActivityProvider.notifier);
-    notifier.cancelAll();
-    final deadline = DateTime.now().add(const Duration(seconds: 15));
-    while (ref.read(taskActivityProvider).isNotEmpty &&
-        DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-  }
-
+  /// 恢复链（排空任务 → 恢复 → provider 刷新）在 [BackupOrchestrator]；
+  /// 页面只负责忙态遮罩与恢复后的页面级状态刷新。
   Future<MergeResult?> _restoreArchive({
     required String archivePath,
     required BackupRestoreScope scope,
@@ -942,13 +938,14 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   }) async {
     MergeResult? mergeResult;
     await _runBusy(busyText, () async {
-      await _drainActiveTasks();
-      mergeResult = await BackupRestoreService.restoreBackupArchive(
-        archivePath: archivePath,
-        scope: scope,
-        mode: mode,
-      );
-      await _refreshAfterRestore(scope);
+      mergeResult = await ref
+          .read(backupOrchestratorProvider)
+          .restoreFromArchive(
+            archivePath: archivePath,
+            scope: scope,
+            mode: mode,
+          );
+      _refreshPageAfterRestore(scope);
     });
     return mergeResult;
   }
@@ -969,50 +966,122 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       return;
     }
     final parts = <String>[];
-    if (result.documentsAdded > 0) parts.add(l10n.mergeDocumentsAdded(result.documentsAdded));
+    if (result.documentsAdded > 0)
+      parts.add(l10n.mergeDocumentsAdded(result.documentsAdded));
     if (result.highlightsAdded > 0)
       parts.add(l10n.mergeHighlightsAdded(result.highlightsAdded));
-    if (result.filesCopied > 0) parts.add(l10n.mergeFilesCopied(result.filesCopied));
-    if (result.settingsAdded > 0) parts.add(l10n.mergeSettingsAdded(result.settingsAdded));
+    if (result.filesCopied > 0)
+      parts.add(l10n.mergeFilesCopied(result.filesCopied));
+    if (result.settingsAdded > 0)
+      parts.add(l10n.mergeSettingsAdded(result.settingsAdded));
     _showMessage(l10n.mergeCompleteSummary(prefix, parts.join('、')));
   }
 
-  Future<void> _refreshAfterRestore(BackupRestoreScope scope) async {
-    if (scope.restoreSettings) {
-      ref.read(themeProvider.notifier).reload();
-      ref.read(proxyProvider.notifier).reload();
-      ref.read(agentApiProvider.notifier).reload();
-      ref.read(docExtractApiProvider.notifier).reload();
-      ref.read(readerSettingsProvider.notifier).reload();
-      ref.read(backupRemoteTypeProvider.notifier).reload();
-      ref.read(backupS3Provider.notifier).reload();
-      ref.read(backupWebDavProvider.notifier).reload();
-      ref.read(zoteroSyncProvider.notifier).reload();
-      if (mounted) {
-        _zoteroKeyCtrl.text = ref.read(zoteroSyncProvider).apiKey;
-        setState(() {
-          _pingFuture = null;
-          _pingCacheKey = '';
-        });
-      }
-    }
+  Widget _buildAutoBackupSection(BuildContext context, AutoBackupState auto) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final l10n = context.l10n;
+    final notifier = ref.read(autoBackupProvider.notifier);
 
-    if (scope.restoreLibrary) {
-      final previousDocIds = ref
-          .read(documentsProvider)
-          .map((doc) => doc.id)
-          .toSet();
-      ref.invalidate(documentsProvider);
-      ref.invalidate(favoritesProvider);
-      ref.invalidate(historyProvider);
-      final currentDocIds = ref
-          .read(documentsProvider)
-          .map((doc) => doc.id)
-          .toSet();
-      for (final docId in {...previousDocIds, ...currentDocIds}) {
-        ref.invalidate(highlightProvider(docId));
-      }
-    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.autoBackup,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<AutoBackupInterval>(
+              segments: [
+                ButtonSegment(
+                  value: AutoBackupInterval.off,
+                  label: Text(l10n.autoBackupOff),
+                ),
+                ButtonSegment(
+                  value: AutoBackupInterval.daily,
+                  label: Text(l10n.autoBackupDaily),
+                ),
+                ButtonSegment(
+                  value: AutoBackupInterval.weekly,
+                  label: Text(l10n.autoBackupWeekly),
+                ),
+              ],
+              selected: {auto.interval},
+              showSelectedIcon: false,
+              onSelectionChanged: (value) {
+                Haptics.soft();
+                notifier.setInterval(value.first);
+              },
+              style: SegmentedButton.styleFrom(
+                backgroundColor: cs.surface,
+                selectedBackgroundColor: cs.primaryContainer,
+                side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+          if (auto.interval != AutoBackupInterval.off) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<BackupScope>(
+                segments: [
+                  ButtonSegment(
+                    value: BackupScope.dataOnly,
+                    label: Text(l10n.backupScopeData),
+                  ),
+                  ButtonSegment(
+                    value: BackupScope.full,
+                    label: Text(l10n.backupScopeFull),
+                  ),
+                ],
+                selected: {auto.scope},
+                showSelectedIcon: false,
+                onSelectionChanged: (value) {
+                  Haptics.soft();
+                  notifier.setScope(value.first);
+                },
+                style: SegmentedButton.styleFrom(
+                  backgroundColor: cs.surface,
+                  selectedBackgroundColor: cs.primaryContainer,
+                  side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.autoBackupHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// provider 级刷新已由 [BackupOrchestrator] 完成；这里只同步本页持有的
+  /// 编辑态（Zotero Key 输入框、连通性测试缓存）。
+  void _refreshPageAfterRestore(BackupRestoreScope scope) {
+    if (!scope.restoreSettings || !mounted) return;
+    _zoteroKeyCtrl.text = ref.read(zoteroSyncProvider).apiKey;
+    setState(() {
+      _pingFuture = null;
+      _pingCacheKey = '';
+    });
   }
 
   Future<(BackupRestoreScope, RestoreMode)?> _pickRestoreOptions() {
@@ -1086,7 +1155,11 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop((scope, mode)),
-                  child: Text(mode == RestoreMode.merge ? context.l10n.startMerge : context.l10n.startRestore),
+                  child: Text(
+                    mode == RestoreMode.merge
+                        ? context.l10n.startMerge
+                        : context.l10n.startRestore,
+                  ),
                 ),
               ],
             );
@@ -1152,55 +1225,53 @@ class _ActionTile extends StatelessWidget {
     final cs = theme.colorScheme;
 
     return TactilePress(
-        onTap: enabled ? onTap : null,
-        baseColor: Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: enabled
-                      ? cs.primaryContainer
-                      : cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  color: enabled ? cs.primary : cs.onSurfaceVariant,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: enabled ? cs.onSurface : cs.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Symbols.chevron_right_rounded,
-                color: cs.onSurfaceVariant.withAlpha(120),
-              ),
-            ],
+      onTap: enabled ? onTap : null,
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: enabled ? cs.primaryContainer : cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: enabled ? cs.primary : cs.onSurfaceVariant,
+              size: 22,
+            ),
           ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: enabled ? cs.onSurface : cs.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Symbols.chevron_right_rounded,
+            color: cs.onSurfaceVariant.withAlpha(120),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1296,7 +1367,10 @@ class _RemoteDialogScaffold extends StatelessWidget {
                       child: Text(context.l10n.cancel),
                     ),
                     const SizedBox(width: 8),
-                    TextButton(onPressed: onSave, child: Text(context.l10n.save)),
+                    TextButton(
+                      onPressed: onSave,
+                      child: Text(context.l10n.save),
+                    ),
                   ],
                 ),
               ],
@@ -1439,7 +1513,9 @@ class _WebDavConfigDialogState extends State<_WebDavConfigDialog> {
               });
             },
             icon: Icon(
-              _obscurePassword ? Symbols.visibility_rounded : Symbols.visibility_off_rounded,
+              _obscurePassword
+                  ? Symbols.visibility_rounded
+                  : Symbols.visibility_off_rounded,
             ),
           ),
         ),
@@ -1551,7 +1627,9 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
               });
             },
             icon: Icon(
-              _obscureSecretKey ? Symbols.visibility_rounded : Symbols.visibility_off_rounded,
+              _obscureSecretKey
+                  ? Symbols.visibility_rounded
+                  : Symbols.visibility_off_rounded,
             ),
           ),
         ),

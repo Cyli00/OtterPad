@@ -8,6 +8,19 @@ import 'package:path/path.dart' as p;
 
 import '../providers/backup_provider.dart';
 
+/// ListObjectsV2 返回的单个对象信息。
+class S3ObjectInfo {
+  final String key;
+  final int size;
+  final DateTime? lastModified;
+
+  const S3ObjectInfo({
+    required this.key,
+    required this.size,
+    this.lastModified,
+  });
+}
+
 class BackupS3Service {
   BackupS3Service._();
 
@@ -34,13 +47,18 @@ class BackupS3Service {
     }
   }
 
-  Future<void> uploadFile(BackupS3State config, String localPath) async {
+  /// [objectKey] 缺省用配置里的固定 key；版本化备份由调用方传时间戳 key。
+  Future<void> uploadFile(
+    BackupS3State config,
+    String localPath, {
+    String? objectKey,
+  }) async {
     final file = File(localPath);
     final bytes = await file.readAsBytes();
     final response = await _signedRequest(
       config,
       method: 'PUT',
-      objectKey: config.normalizedObjectKey,
+      objectKey: objectKey ?? config.normalizedObjectKey,
       bodyBytes: bytes,
       responseType: ResponseType.plain,
     );
@@ -49,11 +67,15 @@ class BackupS3Service {
     }
   }
 
-  Future<void> downloadFile(BackupS3State config, String savePath) async {
+  Future<void> downloadFile(
+    BackupS3State config,
+    String savePath, {
+    String? objectKey,
+  }) async {
     final response = await _signedRequest(
       config,
       method: 'GET',
-      objectKey: config.normalizedObjectKey,
+      objectKey: objectKey ?? config.normalizedObjectKey,
       responseType: ResponseType.bytes,
     );
     if (response.statusCode != 200) {
@@ -71,14 +93,87 @@ class BackupS3Service {
     await File(savePath).writeAsBytes(bytes, flush: true);
   }
 
+  /// 列出 [prefix] 下的对象（ListObjectsV2）。备份目录最多几十个文件，
+  /// 不做分页（MaxKeys 默认 1000 远够）。
+  Future<List<S3ObjectInfo>> listObjects(
+    BackupS3State config,
+    String prefix,
+  ) async {
+    final response = await _signedRequest(
+      config,
+      method: 'GET',
+      objectKey: null,
+      responseType: ResponseType.plain,
+      queryParameters: {
+        'list-type': '2',
+        if (prefix.isNotEmpty) 'prefix': prefix,
+      },
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_formatResponseError(response));
+    }
+    return _parseListObjects(response.data?.toString() ?? '');
+  }
+
+  Future<void> deleteObject(BackupS3State config, String objectKey) async {
+    final response = await _signedRequest(
+      config,
+      method: 'DELETE',
+      objectKey: objectKey,
+      responseType: ResponseType.plain,
+    );
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw Exception(_formatResponseError(response));
+    }
+  }
+
+  /// 解析 ListObjectsV2 XML。结构固定且字段无嵌套歧义（Contents 内
+  /// Key/Size/LastModified 各一），正则提取足够，不为此引入 xml 包。
+  static List<S3ObjectInfo> _parseListObjects(String xml) {
+    final contents = RegExp(
+      r'<Contents>(.*?)</Contents>',
+      dotAll: true,
+    ).allMatches(xml);
+    final result = <S3ObjectInfo>[];
+    for (final m in contents) {
+      final block = m.group(1)!;
+      String? field(String tag) => RegExp(
+        '<$tag>(.*?)</$tag>',
+        dotAll: true,
+      ).firstMatch(block)?.group(1);
+      final key = field('Key');
+      if (key == null || key.isEmpty) continue;
+      result.add(
+        S3ObjectInfo(
+          key: _unescapeXml(key),
+          size: int.tryParse(field('Size') ?? '') ?? 0,
+          lastModified: DateTime.tryParse(field('LastModified') ?? ''),
+        ),
+      );
+    }
+    return result;
+  }
+
+  static String _unescapeXml(String value) => value
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'");
+
   Future<Response<dynamic>> _signedRequest(
     BackupS3State config, {
     required String method,
     required String? objectKey,
     required ResponseType responseType,
     Uint8List? bodyBytes,
+    Map<String, String>? queryParameters,
   }) async {
-    final uri = _buildRequestUri(config, objectKey: objectKey);
+    final uri = _buildRequestUri(
+      config,
+      objectKey: objectKey,
+      queryParameters: queryParameters,
+    );
     final payload = bodyBytes ?? Uint8List(0);
     final now = DateTime.now().toUtc();
     final amzDate = _amzDate(now);
@@ -95,7 +190,8 @@ class BackupS3Service {
     final canonicalHeaderText = signedHeaders
         .map((key) => '$key:${canonicalHeaders[key]!.trim()}')
         .join('\n');
-    final credentialScope = '$dateStamp/${config.region.trim()}/s3/aws4_request';
+    final credentialScope =
+        '$dateStamp/${config.region.trim()}/s3/aws4_request';
     final canonicalRequest = [
       method,
       _canonicalUri(uri),
@@ -139,12 +235,14 @@ class BackupS3Service {
   Uri _buildRequestUri(
     BackupS3State config, {
     required String? objectKey,
+    Map<String, String>? queryParameters,
   }) {
     final endpoint = Uri.parse(config.normalizedEndpoint);
     final baseSegments = endpoint.pathSegments.where((item) => item.isNotEmpty);
     final objectSegments = objectKey == null
         ? const <String>[]
         : objectKey.split('/').where((item) => item.isNotEmpty);
+    final query = (queryParameters?.isEmpty ?? true) ? null : queryParameters;
 
     if (config.usePathStyle) {
       return Uri(
@@ -156,6 +254,7 @@ class BackupS3Service {
           config.bucket.trim(),
           ...objectSegments,
         ],
+        queryParameters: query,
       );
     }
 
@@ -163,10 +262,8 @@ class BackupS3Service {
       scheme: endpoint.scheme,
       host: '${config.bucket.trim()}.${endpoint.host}',
       port: endpoint.hasPort ? endpoint.port : null,
-      pathSegments: [
-        ...baseSegments,
-        ...objectSegments,
-      ],
+      pathSegments: [...baseSegments, ...objectSegments],
+      queryParameters: query,
     );
   }
 
@@ -184,7 +281,9 @@ class BackupS3Service {
     for (final key in keys) {
       final values = uri.queryParametersAll[key]!..sort();
       for (final value in values) {
-        items.add('${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(value)}');
+        items.add(
+          '${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(value)}',
+        );
       }
     }
     return items.join('&');
@@ -226,7 +325,10 @@ class BackupS3Service {
     final keyRegion = _hmacSha256(keyDate, utf8.encode(region));
     final keyService = _hmacSha256(keyRegion, utf8.encode('s3'));
     final keySigning = _hmacSha256(keyService, utf8.encode('aws4_request'));
-    return Hmac(sha256, keySigning).convert(utf8.encode(stringToSign)).toString();
+    return Hmac(
+      sha256,
+      keySigning,
+    ).convert(utf8.encode(stringToSign)).toString();
   }
 
   List<int> _hmacSha256(List<int> key, List<int> value) {

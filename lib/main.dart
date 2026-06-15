@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'core/storage/secure_credential_vault.dart';
 import 'core/storage/storage.dart';
+import 'providers/auto_backup_provider.dart';
 import 'providers/proxy_provider.dart';
 import 'services/agent_model_capability.dart';
 import 'services/back_matter_detector.dart';
@@ -74,6 +75,9 @@ Future<void> main() async {
 
   // 初始化代理配置
   container.read(proxyProvider.notifier).applyInitial();
+
+  // 自动备份调度：启动 2 分钟后首查，之后每小时检查一次到期与变更
+  container.read(autoBackupSchedulerProvider).start();
 
   runApp(
     UncontrolledProviderScope(container: container, child: const OtterPadApp()),

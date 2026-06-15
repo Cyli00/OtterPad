@@ -7,6 +7,7 @@ import '../../widgets/app_dialog.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
+import '../../providers/sync_status_provider.dart';
 import '../../router/app_routes.dart';
 import '../../utils/doc_paths.dart';
 import 'widgets/library_menu_item.dart';
@@ -101,22 +102,33 @@ class ShelfPage extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-                // 页面大标题
-                Text(
-                  context.l10n.myLibrary,
-                  style: theme.textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface,
-                  ),
+                // 页面大标题 + 云同步 / 设置入口
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      context.l10n.myLibrary,
+                      style: theme.textTheme.headlineLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const Spacer(),
+                    const _CloudSyncButton(),
+                    IconButton(
+                      icon: const Icon(Symbols.settings_rounded),
+                      color: theme.colorScheme.onSurfaceVariant,
+                      tooltip: context.l10n.settings,
+                      onPressed: () {
+                        Haptics.soft();
+                        context.push(AppRoutes.settings);
+                      },
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 32),
 
                 // 菜单列表项
-                LibraryMenuItem(
-                  icon: Symbols.cloud_sync_rounded,
-                  title: context.l10n.synced,
-                  onTap: () {},
-                ),
                 LibraryMenuItem(
                   icon: Symbols.history_rounded,
                   title: context.l10n.readingHistory,
@@ -222,7 +234,9 @@ class ShelfPage extends ConsumerWidget {
                       ];
                       return FavoriteCard(
                         title: fav.name,
-                        subtitle: context.l10n.favoriteDocumentCount(fav.documentIds.length),
+                        subtitle: context.l10n.favoriteDocumentCount(
+                          fav.documentIds.length,
+                        ),
                         subtitleIcon: Container(
                           width: 24,
                           height: 24,
@@ -254,6 +268,56 @@ class ShelfPage extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 云同步入口按钮——图标本身就是状态指示器：
+/// 未配置远端 = cloud_off；有变更未备份 = cloud_sync + 角标点；
+/// 全部已备份 = cloud_done；状态计算中 = 静默云图标。
+class _CloudSyncButton extends ConsumerWidget {
+  const _CloudSyncButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final status = ref.watch(syncStatusProvider);
+
+    final (icon, showBadge) = status.maybeWhen(
+      data: (result) => !result.remoteConfigured
+          ? (Symbols.cloud_off_rounded, false)
+          : result.hasPendingChanges
+          ? (Symbols.cloud_sync_rounded, true)
+          : (Symbols.cloud_done_rounded, false),
+      orElse: () => (Symbols.cloud_rounded, false),
+    );
+
+    return IconButton(
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, color: cs.onSurfaceVariant),
+          if (showBadge)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: cs.tertiary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.surface, width: 1.5),
+                ),
+              ),
+            ),
+        ],
+      ),
+      tooltip: context.l10n.cloudSync,
+      onPressed: () {
+        Haptics.soft();
+        context.push(AppRoutes.shelfCloudSync);
+      },
     );
   }
 }
