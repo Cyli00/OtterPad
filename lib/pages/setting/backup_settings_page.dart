@@ -4,14 +4,12 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/auto_backup_provider.dart';
 import '../../providers/backup_orchestrator.dart';
 import '../../providers/backup_provider.dart';
-import '../../providers/documents_provider.dart';
-import '../../providers/favorites_provider.dart';
-import '../../providers/history_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/zotero_sync_provider.dart';
 import '../../services/backup_merge_service.dart';
@@ -21,9 +19,10 @@ import '../../services/haptics.dart';
 import '../../widgets/backup_scope_dialog.dart';
 import '../../widgets/tactile_press.dart';
 import '../../services/snackbar_service.dart';
-import '../../services/storage_cleanup_service.dart';
+import '../../services/storage_usage_service.dart';
 import '../../utils/debounced_action.dart';
 import '../../core/l10n.dart';
+import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
@@ -38,8 +37,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   String _busyText = '';
   String _pingCacheKey = '';
   Future<bool>? _pingFuture;
-  String? _cacheSizeText;
-  String? _dataSizeText;
+  String? _totalSizeText;
 
   late final TextEditingController _zoteroKeyCtrl;
   final _zoteroKeyDebounce = DebouncedAction();
@@ -62,20 +60,11 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   }
 
   void _refreshSizeLabels() {
-    StorageCleanupService.cacheSize().then((bytes) {
+    StorageUsageService.computeReport().then((report) {
       if (mounted) {
         setState(
-          () => _cacheSizeText = context.l10n.storageUsage(
-            StorageCleanupService.formatSize(bytes),
-          ),
-        );
-      }
-    });
-    StorageCleanupService.dataSize().then((bytes) {
-      if (mounted) {
-        setState(
-          () => _dataSizeText = context.l10n.storageUsage(
-            StorageCleanupService.formatSize(bytes),
+          () => _totalSizeText = context.l10n.storageUsage(
+            StorageUsageService.formatSize(report.totalBytes),
           ),
         );
       }
@@ -242,27 +231,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   child: Column(
                     children: [
                       _ActionTile(
-                        icon: Symbols.mop_rounded,
-                        title: context.l10n.clearCache,
-                        subtitle:
-                            _cacheSizeText ?? context.l10n.thumbnailsAndTemp,
+                        icon: Symbols.folder_managed_rounded,
+                        title: context.l10n.storageSpace,
+                        subtitle: _totalSizeText ??
+                            context.l10n.thumbnailsAndTemp,
                         enabled: !_busy,
-                        onTap: _clearCache,
+                        onTap: () => context.push(AppRoutes.settingsStorage),
                       ),
-                      if (Platform.isWindows ||
-                          Platform.isMacOS ||
-                          Platform.isLinux) ...[
-                        _buildDivider(context),
-                        _ActionTile(
-                          icon: Symbols.delete_forever_rounded,
-                          title: context.l10n.clearAllData,
-                          subtitle:
-                              _dataSizeText ??
-                              context.l10n.allDataWillBeDeleted,
-                          enabled: !_busy,
-                          onTap: _clearData,
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -754,66 +729,6 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _pingFuture = null;
       _pingCacheKey = '';
     });
-  }
-
-  Future<void> _clearCache() async {
-    await _runBusy(
-      context.l10n.clearingCache,
-      StorageCleanupService.clearCache,
-    );
-    if (!mounted) return;
-    _refreshSizeLabels();
-    ref
-        .read(snackBarServiceProvider)
-        .showResult(message: context.l10n.cacheCleared);
-  }
-
-  Future<void> _clearData() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        final cs = theme.colorScheme;
-        return AlertDialog(
-          backgroundColor: cs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          title: Text(
-            context.l10n.clearAllData,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            context.l10n.confirmDeleteAllDataBody,
-            style: theme.textTheme.bodyMedium,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text(context.l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              style: TextButton.styleFrom(foregroundColor: cs.error),
-              child: Text(context.l10n.clearField),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed != true) return;
-
-    await _runBusy(context.l10n.clearingData, StorageCleanupService.clearData);
-    if (!mounted) return;
-    ref.read(documentsProvider.notifier).reload();
-    ref.read(favoritesProvider.notifier).reload();
-    ref.invalidate(historyProvider);
-    _refreshSizeLabels();
-    ref
-        .read(snackBarServiceProvider)
-        .showResult(message: context.l10n.allDataCleared);
   }
 
   Future<void> _exportBackupToLocal() async {
