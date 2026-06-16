@@ -237,7 +237,11 @@ class AgentChatService {
           options: Options(headers: _bearerHeaders(apiKey)),
           cancelToken: cancelToken,
         );
-        return _extractOpenAI(resp.data!);
+        final openAIData = resp.data;
+        if (openAIData == null) {
+          throw const AgentChatException('Empty response body');
+        }
+        return _extractOpenAI(openAIData);
 
       case AgentApiProvider.anthropic:
         resp = await dio.post(
@@ -261,7 +265,11 @@ class AgentChatService {
           options: Options(headers: _anthropicHeaders(apiKey)),
           cancelToken: cancelToken,
         );
-        return _extractAnthropic(resp.data!);
+        final anthropicData = resp.data;
+        if (anthropicData == null) {
+          throw const AgentChatException('Empty response body');
+        }
+        return _extractAnthropic(anthropicData);
 
       case AgentApiProvider.gemini:
         resp = await dio.post(
@@ -282,7 +290,11 @@ class AgentChatService {
           ),
           cancelToken: cancelToken,
         );
-        return _extractGemini(resp.data!);
+        final geminiData = resp.data;
+        if (geminiData == null) {
+          throw const AgentChatException('Empty response body');
+        }
+        return _extractGemini(geminiData);
 
       case AgentApiProvider.openAICompatible:
         final vendor = _effectiveCompatVendor(webSearch, url);
@@ -1026,7 +1038,11 @@ class AgentChatService {
       cancelToken: cancelToken,
     );
 
-    await for (final event in _sseEventStream(resp.data!.stream)) {
+    final body = resp.data;
+    if (body == null) {
+      throw const AgentChatException('Empty stream response');
+    }
+    await for (final event in _sseEventStream(body.stream)) {
       final data = _extractSseData(event);
       if (data == null || data == '[DONE]') continue;
       try {
@@ -1092,7 +1108,11 @@ class AgentChatService {
       cancelToken: cancelToken,
     );
 
-    await for (final event in _sseEventStream(resp.data!.stream)) {
+    final body = resp.data;
+    if (body == null) {
+      throw const AgentChatException('Empty stream response');
+    }
+    await for (final event in _sseEventStream(body.stream)) {
       final data = _extractSseData(event);
       if (data == null) continue;
       try {
@@ -1148,7 +1168,11 @@ class AgentChatService {
       cancelToken: cancelToken,
     );
 
-    await for (final event in _sseEventStream(resp.data!.stream)) {
+    final body = resp.data;
+    if (body == null) {
+      throw const AgentChatException('Empty stream response');
+    }
+    await for (final event in _sseEventStream(body.stream)) {
       final data = _extractSseData(event);
       if (data == null) continue;
       try {
@@ -1212,10 +1236,14 @@ class AgentChatService {
         cancelToken: cancelToken,
       );
 
+      final body = resp.data;
+      if (body == null) {
+        throw const AgentChatException('Empty stream response');
+      }
       // tool_calls 增量按 index 归并：id/name 在首个分片，arguments 逐段拼接
       final toolCallAcc = <int, Map<String, dynamic>>{};
       var finishedByToolCalls = false;
-      await for (final event in _sseEventStream(resp.data!.stream)) {
+      await for (final event in _sseEventStream(body.stream)) {
         final data = _extractSseData(event);
         if (data == null || data == '[DONE]') continue;
         Map<String, dynamic> json;

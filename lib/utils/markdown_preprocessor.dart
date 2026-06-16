@@ -4,7 +4,7 @@ class MarkdownPreprocessor {
     var result = markdown;
     result = _sanitizeLatex(result);
     result = result.replaceAllMapped(_inlineDollarRe, (match) {
-      final trimmed = match.group(1)!.trim();
+      final trimmed = (match.group(1) ?? '').trim();
       return '\$$trimmed\$';
     });
     result = _simplifyInlineLatex(result);
@@ -255,11 +255,11 @@ class MarkdownPreprocessor {
   /// API 提取经常将独立的 display 方程误标为 inline。
   static String _promoteInlineEquations(String text) {
     return text.replaceAllMapped(_loneInlineEqRe, (match) {
-      final inner = match.group(1)!.trim();
+      final inner = (match.group(1) ?? '').trim();
       if (inner.contains('=') || inner.length > 60) {
         return '\n\$\$\n$inner\n\$\$\n';
       }
-      return match.group(0)!;
+      return match.group(0) ?? '';
     });
   }
 
@@ -273,7 +273,7 @@ class MarkdownPreprocessor {
       _arrayColsRe,
       (m) =>
           r'\begin{array}{'
-          '${m.group(1)!.replaceAll(' ', '')}'
+          '${(m.group(1) ?? '').replaceAll(' ', '')}'
           '}',
     );
     return res;
@@ -281,7 +281,7 @@ class MarkdownPreprocessor {
 
   static String _fixLatexSpacing(String text) {
     var res = text.replaceAllMapped(_inlineDollarRe, (match) {
-      final trimmed = match.group(1)!.trim();
+      final trimmed = (match.group(1) ?? '').trim();
       return '\$$trimmed\$';
     });
 
@@ -303,19 +303,18 @@ class MarkdownPreprocessor {
   /// 则保留原始 `$...$` 交给 `Math.tex` 渲染。
   static String _simplifyInlineLatex(String text) {
     return text.replaceAllMapped(_inlineDollarRe, (match) {
-      final inner = match.group(1)!.trim();
+      final inner = (match.group(1) ?? '').trim();
 
       final plainTextMatch = _plainTextCmdRe.firstMatch(inner);
       if (plainTextMatch != null) {
-        return plainTextMatch
-            .group(1)!
-            .replaceAllMapped(_textCmdNestedRe, (nested) => nested.group(1)!);
+        return (plainTextMatch.group(1) ?? '')
+            .replaceAllMapped(_textCmdNestedRe, (nested) => nested.group(1) ?? '');
       }
 
       final bareSuperscriptMatch = _bareSuperscriptRe.firstMatch(inner);
       if (bareSuperscriptMatch != null) {
         final sup =
-            _toScriptStrict(bareSuperscriptMatch.group(1)!, _superscriptMap);
+            _toScriptStrict(bareSuperscriptMatch.group(1) ?? '', _superscriptMap);
         if (sup != null) return sup;
       }
 
@@ -344,7 +343,7 @@ class MarkdownPreprocessor {
     for (final re in _fontWrapperPatterns) {
       for (var i = 0; i < 3; i++) {
         final prev = result;
-        result = result.replaceAllMapped(re, (m) => m.group(1)!);
+        result = result.replaceAllMapped(re, (m) => m.group(1) ?? '');
         if (prev == result) break;
       }
     }
@@ -362,20 +361,20 @@ class MarkdownPreprocessor {
   static String _resolveInlineScripts(String s) {
     var result = s;
     result = result.replaceAllMapped(_supBracedRe, (m) {
-      final sup = _toScriptStrict(m.group(1)!, _superscriptMap);
-      return sup ?? m.group(0)!;
+      final sup = _toScriptStrict(m.group(1) ?? '', _superscriptMap);
+      return sup ?? m.group(0) ?? '';
     });
     result = result.replaceAllMapped(_subBracedRe, (m) {
-      final sub = _toScriptStrict(m.group(1)!, _subscriptMap);
-      return sub ?? m.group(0)!;
+      final sub = _toScriptStrict(m.group(1) ?? '', _subscriptMap);
+      return sub ?? m.group(0) ?? '';
     });
     result = result.replaceAllMapped(_supSingleRe, (m) {
-      final sup = _toScriptStrict(m.group(1)!, _superscriptMap);
-      return sup ?? m.group(0)!;
+      final sup = _toScriptStrict(m.group(1) ?? '', _superscriptMap);
+      return sup ?? m.group(0) ?? '';
     });
     result = result.replaceAllMapped(_subSingleRe, (m) {
-      final sub = _toScriptStrict(m.group(1)!, _subscriptMap);
-      return sub ?? m.group(0)!;
+      final sub = _toScriptStrict(m.group(1) ?? '', _subscriptMap);
+      return sub ?? m.group(0) ?? '';
     });
     return result;
   }
@@ -399,7 +398,7 @@ class MarkdownPreprocessor {
   static String _normalizeInlineSpacing(String text) {
     var result = text.replaceAllMapped(
       _supBeforeRe,
-      (match) => match.group(1)!,
+      (match) => match.group(1) ?? '',
     );
     result = result.replaceAllMapped(
       _supAfterRe,
