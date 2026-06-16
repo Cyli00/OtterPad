@@ -1821,6 +1821,120 @@ abstract class AppLocalizations {
   /// **'Clear All Data'**
   String get clearAllData;
 
+  /// No description provided for @clearAllDataConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This will delete all documents, databases, and cache. This action cannot be undone.'**
+  String get clearAllDataConfirm;
+
+  /// No description provided for @storageSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage Space'**
+  String get storageSpace;
+
+  /// No description provided for @storageSpaceTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get storageSpaceTotal;
+
+  /// No description provided for @storageSpaceDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get storageSpaceDetails;
+
+  /// No description provided for @storageSpaceLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load storage info'**
+  String get storageSpaceLoadFailed;
+
+  /// No description provided for @storageSpaceClearable.
+  ///
+  /// In en, this message translates to:
+  /// **'Clearable: {size}'**
+  String storageSpaceClearable(String size);
+
+  /// No description provided for @storageSpaceFilesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files'**
+  String storageSpaceFilesCount(int count);
+
+  /// No description provided for @storageGroupPapers.
+  ///
+  /// In en, this message translates to:
+  /// **'Papers'**
+  String get storageGroupPapers;
+
+  /// No description provided for @storageCategoryImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get storageCategoryImages;
+
+  /// No description provided for @storageCategoryFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get storageCategoryFiles;
+
+  /// No description provided for @storageCategoryChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat History'**
+  String get storageCategoryChat;
+
+  /// No description provided for @storageCategoryNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get storageCategoryNotes;
+
+  /// No description provided for @storageCategoryCache.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache'**
+  String get storageCategoryCache;
+
+  /// No description provided for @storageCategoryLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get storageCategoryLogs;
+
+  /// No description provided for @storageSpaceSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get storageSpaceSelected;
+
+  /// No description provided for @storageSpaceCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected data cleared'**
+  String get storageSpaceCleared;
+
+  /// No description provided for @clearData.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Data'**
+  String get clearData;
+
+  /// No description provided for @clearDataConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'The following data will be permanently deleted: {names}'**
+  String clearDataConfirm(String names);
+
+  /// No description provided for @listSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get listSeparator;
+
   /// No description provided for @resetAndReimport.
   ///
   /// In en, this message translates to:

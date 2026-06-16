@@ -895,6 +895,70 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clearAllData => 'Clear All Data';
 
   @override
+  String get clearAllDataConfirm =>
+      'This will delete all documents, databases, and cache. This action cannot be undone.';
+
+  @override
+  String get storageSpace => 'Storage Space';
+
+  @override
+  String get storageSpaceTotal => 'Total';
+
+  @override
+  String get storageSpaceDetails => 'Details';
+
+  @override
+  String get storageSpaceLoadFailed => 'Failed to load storage info';
+
+  @override
+  String storageSpaceClearable(String size) {
+    return 'Clearable: $size';
+  }
+
+  @override
+  String storageSpaceFilesCount(int count) {
+    return '$count files';
+  }
+
+  @override
+  String get storageGroupPapers => 'Papers';
+
+  @override
+  String get storageCategoryImages => 'Images';
+
+  @override
+  String get storageCategoryFiles => 'Files';
+
+  @override
+  String get storageCategoryChat => 'Chat History';
+
+  @override
+  String get storageCategoryNotes => 'Notes';
+
+  @override
+  String get storageCategoryCache => 'Cache';
+
+  @override
+  String get storageCategoryLogs => 'Logs';
+
+  @override
+  String get storageSpaceSelected => 'Selected';
+
+  @override
+  String get storageSpaceCleared => 'Selected data cleared';
+
+  @override
+  String get clearData => 'Clear Data';
+
+  @override
+  String clearDataConfirm(String names) {
+    return 'The following data will be permanently deleted: $names';
+  }
+
+  @override
+  String get listSeparator => ', ';
+
+  @override
   String get resetAndReimport => 'Reset and Re-import';
 
   @override

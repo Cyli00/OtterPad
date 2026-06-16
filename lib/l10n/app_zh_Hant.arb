@@ -325,6 +325,40 @@
   "storage": "儲存空間",
   "clearCache": "清除快取",
   "clearAllData": "清除所有資料",
+  "clearAllDataConfirm": "這將刪除所有文獻、資料庫和快取，此操作無法撤銷。",
+  "storageSpace": "儲存空間",
+  "storageSpaceTotal": "合計",
+  "storageSpaceDetails": "詳情",
+  "storageSpaceLoadFailed": "載入儲存資訊失敗",
+  "storageSpaceClearable": "可清理：{size}",
+  "@storageSpaceClearable": {
+    "placeholders": {
+      "size": {"type": "String"}
+    }
+  },
+  "storageSpaceFilesCount": "{count} 個檔案",
+  "@storageSpaceFilesCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "storageGroupPapers": "文獻",
+  "storageCategoryImages": "圖片",
+  "storageCategoryFiles": "檔案",
+  "storageCategoryChat": "聊天紀錄",
+  "storageCategoryNotes": "筆記",
+  "storageCategoryCache": "快取",
+  "storageCategoryLogs": "日誌",
+  "storageSpaceSelected": "已選擇",
+  "storageSpaceCleared": "已清除所選資料",
+  "clearData": "清除資料",
+  "clearDataConfirm": "以下資料將被永久刪除：{names}",
+  "@clearDataConfirm": {
+    "placeholders": {
+      "names": {"type": "String"}
+    }
+  },
+  "listSeparator": "、",
   "resetAndReimport": "重設並全量重新匯入",
   "reimport": "重新匯入",
   "detecting": "正在偵測連線",

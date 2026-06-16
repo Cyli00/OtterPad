@@ -321,6 +321,40 @@
   "storage": "存储",
   "clearCache": "清除缓存",
   "clearAllData": "清除所有数据",
+  "clearAllDataConfirm": "这将删除所有文献、数据库和缓存，此操作无法撤销。",
+  "storageSpace": "存储空间",
+  "storageSpaceTotal": "合计",
+  "storageSpaceDetails": "详情",
+  "storageSpaceLoadFailed": "加载存储信息失败",
+  "storageSpaceClearable": "可清理：{size}",
+  "@storageSpaceClearable": {
+    "placeholders": {
+      "size": {"type": "String"}
+    }
+  },
+  "storageSpaceFilesCount": "{count} 个文件",
+  "@storageSpaceFilesCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "storageGroupPapers": "文献",
+  "storageCategoryImages": "图片",
+  "storageCategoryFiles": "文件",
+  "storageCategoryChat": "聊天记录",
+  "storageCategoryNotes": "笔记",
+  "storageCategoryCache": "缓存",
+  "storageCategoryLogs": "日志",
+  "storageSpaceSelected": "已选择",
+  "storageSpaceCleared": "已清除所选数据",
+  "clearData": "清除数据",
+  "clearDataConfirm": "以下数据将被永久删除：{names}",
+  "@clearDataConfirm": {
+    "placeholders": {
+      "names": {"type": "String"}
+    }
+  },
+  "listSeparator": "、",
   "resetAndReimport": "重置并全量重新导入",
   "reimport": "重新导入",
   "detecting": "正在检测连接",

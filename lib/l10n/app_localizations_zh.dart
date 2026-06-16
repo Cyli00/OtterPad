@@ -886,6 +886,69 @@ class AppLocalizationsZh extends AppLocalizations {
   String get clearAllData => '清除所有数据';
 
   @override
+  String get clearAllDataConfirm => '这将删除所有文献、数据库和缓存，此操作无法撤销。';
+
+  @override
+  String get storageSpace => '存储空间';
+
+  @override
+  String get storageSpaceTotal => '合计';
+
+  @override
+  String get storageSpaceDetails => '详情';
+
+  @override
+  String get storageSpaceLoadFailed => '加载存储信息失败';
+
+  @override
+  String storageSpaceClearable(String size) {
+    return '可清理：$size';
+  }
+
+  @override
+  String storageSpaceFilesCount(int count) {
+    return '$count 个文件';
+  }
+
+  @override
+  String get storageGroupPapers => '文献';
+
+  @override
+  String get storageCategoryImages => '图片';
+
+  @override
+  String get storageCategoryFiles => '文件';
+
+  @override
+  String get storageCategoryChat => '聊天记录';
+
+  @override
+  String get storageCategoryNotes => '笔记';
+
+  @override
+  String get storageCategoryCache => '缓存';
+
+  @override
+  String get storageCategoryLogs => '日志';
+
+  @override
+  String get storageSpaceSelected => '已选择';
+
+  @override
+  String get storageSpaceCleared => '已清除所选数据';
+
+  @override
+  String get clearData => '清除数据';
+
+  @override
+  String clearDataConfirm(String names) {
+    return '以下数据将被永久删除：$names';
+  }
+
+  @override
+  String get listSeparator => '、';
+
+  @override
   String get resetAndReimport => '重置并全量重新导入';
 
   @override
@@ -3129,6 +3192,69 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get clearAllData => '清除所有資料';
+
+  @override
+  String get clearAllDataConfirm => '這將刪除所有文獻、資料庫和快取，此操作無法撤銷。';
+
+  @override
+  String get storageSpace => '儲存空間';
+
+  @override
+  String get storageSpaceTotal => '合計';
+
+  @override
+  String get storageSpaceDetails => '詳情';
+
+  @override
+  String get storageSpaceLoadFailed => '載入儲存資訊失敗';
+
+  @override
+  String storageSpaceClearable(String size) {
+    return '可清理：$size';
+  }
+
+  @override
+  String storageSpaceFilesCount(int count) {
+    return '$count 個檔案';
+  }
+
+  @override
+  String get storageGroupPapers => '文獻';
+
+  @override
+  String get storageCategoryImages => '圖片';
+
+  @override
+  String get storageCategoryFiles => '檔案';
+
+  @override
+  String get storageCategoryChat => '聊天紀錄';
+
+  @override
+  String get storageCategoryNotes => '筆記';
+
+  @override
+  String get storageCategoryCache => '快取';
+
+  @override
+  String get storageCategoryLogs => '日誌';
+
+  @override
+  String get storageSpaceSelected => '已選擇';
+
+  @override
+  String get storageSpaceCleared => '已清除所選資料';
+
+  @override
+  String get clearData => '清除資料';
+
+  @override
+  String clearDataConfirm(String names) {
+    return '以下資料將被永久刪除：$names';
+  }
+
+  @override
+  String get listSeparator => '、';
 
   @override
   String get resetAndReimport => '重設並全量重新匯入';

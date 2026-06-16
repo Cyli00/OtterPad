@@ -328,6 +328,40 @@
   "storage": "Storage",
   "clearCache": "Clear Cache",
   "clearAllData": "Clear All Data",
+  "clearAllDataConfirm": "This will delete all documents, databases, and cache. This action cannot be undone.",
+  "storageSpace": "Storage Space",
+  "storageSpaceTotal": "Total",
+  "storageSpaceDetails": "Details",
+  "storageSpaceLoadFailed": "Failed to load storage info",
+  "storageSpaceClearable": "Clearable: {size}",
+  "@storageSpaceClearable": {
+    "placeholders": {
+      "size": {"type": "String"}
+    }
+  },
+  "storageSpaceFilesCount": "{count} files",
+  "@storageSpaceFilesCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "storageGroupPapers": "Papers",
+  "storageCategoryImages": "Images",
+  "storageCategoryFiles": "Files",
+  "storageCategoryChat": "Chat History",
+  "storageCategoryNotes": "Notes",
+  "storageCategoryCache": "Cache",
+  "storageCategoryLogs": "Logs",
+  "storageSpaceSelected": "Selected",
+  "storageSpaceCleared": "Selected data cleared",
+  "clearData": "Clear Data",
+  "clearDataConfirm": "The following data will be permanently deleted: {names}",
+  "@clearDataConfirm": {
+    "placeholders": {
+      "names": {"type": "String"}
+    }
+  },
+  "listSeparator": ", ",
   "resetAndReimport": "Reset and Re-import",
   "reimport": "Re-import",
   "detecting": "Detecting...",
