@@ -2366,4 +2366,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dontRemindAgain => 'Don\'t remind me again';
+
+  @override
+  String get aboutSubtitle => 'Open Source AI Literature Reading Assistant';
+
+  @override
+  String get aboutVersion => 'Version';
+
+  @override
+  String get aboutSystem => 'System';
+
+  @override
+  String get aboutCheckUpdate => 'Check for Updates';
+
+  @override
+  String get aboutLicense => 'License';
+
+  @override
+  String get aboutDisclaimer => 'Disclaimer';
+
+  @override
+  String get aboutDisclaimerContent =>
+      'This software is intended solely for non-commercial purposes such as learning, communication, and scientific research. Commercial use of this software is strictly prohibited. Any commercial activities are unrelated to this software.';
+
+  @override
+  String get aboutAgree => 'Agree';
+
+  @override
+  String get aboutDisagree => 'Disagree';
+
+  @override
+  String get aboutLicenseContent =>
+      'This software is released under the GNU General Public License v3.0 (GPL-3.0).\n\nYou are free to use, modify, and distribute this software, provided that modified versions are released under the same license with source code made available.\n\nSee the LICENSE file in the project repository for full terms.';
+
+  @override
+  String get aboutViewFullLicense => 'View Full Text';
 }
