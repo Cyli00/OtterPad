@@ -829,5 +829,17 @@
   "zoteroSyncCompleteNoNew": "Zotero 同步完成，暫無新增條目",
   "zoteroSyncFailed": "Zotero 同步失敗：{error}",
   "zoteroSyncInProgress": "Zotero 同步正在進行中",
-  "zoteroSyncNetworkFailed": "Zotero 同步失敗：網路請求失敗"
+  "zoteroSyncNetworkFailed": "Zotero 同步失敗：網路請求失敗",
+
+  "aboutSubtitle": "開源 AI 文獻閱讀助手",
+  "aboutVersion": "版本",
+  "aboutSystem": "系統",
+  "aboutCheckUpdate": "檢查更新",
+  "aboutLicense": "許可證",
+  "aboutDisclaimer": "免責聲明",
+  "aboutDisclaimerContent": "本軟體僅供學習交流、科研等非商業性質的用途，嚴禁將本軟體用於商業目的。如有任何商業行為，均與本軟體無關。",
+  "aboutAgree": "同意",
+  "aboutDisagree": "不同意",
+  "aboutLicenseContent": "本軟體依據 GNU 通用公共許可證第三版 (GPL-3.0) 發布。\n\n你可以自由地使用、修改和散布本軟體，但修改後的版本必須以相同許可證發布，並公開原始碼。\n\n詳細條款請參閱專案儲存庫中的 LICENSE 檔案。",
+  "aboutViewFullLicense": "檢視全文"
 }

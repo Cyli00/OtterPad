@@ -72,6 +72,17 @@ class SettingPage extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          _SettingsCard(
+            children: [
+              _SettingsTile(
+                icon: Symbols.info_rounded,
+                title: l10n.about,
+                subtitle: l10n.aboutSubtitle,
+                onTap: () => context.push(AppRoutes.settingsAbout),
+              ),
+            ],
+          ),
         ],
       ),
     );

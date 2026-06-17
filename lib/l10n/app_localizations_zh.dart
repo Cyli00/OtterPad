@@ -2310,6 +2310,41 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get dontRemindAgain => '不再提醒';
+
+  @override
+  String get aboutSubtitle => '开源 AI 文献阅读助手';
+
+  @override
+  String get aboutVersion => '版本';
+
+  @override
+  String get aboutSystem => '系统';
+
+  @override
+  String get aboutCheckUpdate => '检查更新';
+
+  @override
+  String get aboutLicense => '许可证';
+
+  @override
+  String get aboutDisclaimer => '免责声明';
+
+  @override
+  String get aboutDisclaimerContent =>
+      '本软件仅供学习交流、科研等非商业性质的用途，严禁将本软件用于商业目的。如有任何商业行为，均与本软件无关。';
+
+  @override
+  String get aboutAgree => '同意';
+
+  @override
+  String get aboutDisagree => '不同意';
+
+  @override
+  String get aboutLicenseContent =>
+      '本软件依据 GNU 通用公共许可证第三版 (GPL-3.0) 发布。\n\n你可以自由地使用、修改和分发本软件，但修改后的版本必须以相同许可证发布，并公开源代码。\n\n详细条款请参阅项目仓库中的 LICENSE 文件。';
+
+  @override
+  String get aboutViewFullLicense => '查看全文';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -4618,4 +4653,39 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get dontRemindAgain => '不再提醒';
+
+  @override
+  String get aboutSubtitle => '開源 AI 文獻閱讀助手';
+
+  @override
+  String get aboutVersion => '版本';
+
+  @override
+  String get aboutSystem => '系統';
+
+  @override
+  String get aboutCheckUpdate => '檢查更新';
+
+  @override
+  String get aboutLicense => '許可證';
+
+  @override
+  String get aboutDisclaimer => '免責聲明';
+
+  @override
+  String get aboutDisclaimerContent =>
+      '本軟體僅供學習交流、科研等非商業性質的用途，嚴禁將本軟體用於商業目的。如有任何商業行為，均與本軟體無關。';
+
+  @override
+  String get aboutAgree => '同意';
+
+  @override
+  String get aboutDisagree => '不同意';
+
+  @override
+  String get aboutLicenseContent =>
+      '本軟體依據 GNU 通用公共許可證第三版 (GPL-3.0) 發布。\n\n你可以自由地使用、修改和散布本軟體，但修改後的版本必須以相同許可證發布，並公開原始碼。\n\n詳細條款請參閱專案儲存庫中的 LICENSE 檔案。';
+
+  @override
+  String get aboutViewFullLicense => '檢視全文';
 }

@@ -4184,6 +4184,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Don\'t remind me again'**
   String get dontRemindAgain;
+
+  /// No description provided for @aboutSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Source AI Literature Reading Assistant'**
+  String get aboutSubtitle;
+
+  /// No description provided for @aboutVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get aboutVersion;
+
+  /// No description provided for @aboutSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get aboutSystem;
+
+  /// No description provided for @aboutCheckUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for Updates'**
+  String get aboutCheckUpdate;
+
+  /// No description provided for @aboutLicense.
+  ///
+  /// In en, this message translates to:
+  /// **'License'**
+  String get aboutLicense;
+
+  /// No description provided for @aboutDisclaimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Disclaimer'**
+  String get aboutDisclaimer;
+
+  /// No description provided for @aboutDisclaimerContent.
+  ///
+  /// In en, this message translates to:
+  /// **'This software is intended solely for non-commercial purposes such as learning, communication, and scientific research. Commercial use of this software is strictly prohibited. Any commercial activities are unrelated to this software.'**
+  String get aboutDisclaimerContent;
+
+  /// No description provided for @aboutAgree.
+  ///
+  /// In en, this message translates to:
+  /// **'Agree'**
+  String get aboutAgree;
+
+  /// No description provided for @aboutDisagree.
+  ///
+  /// In en, this message translates to:
+  /// **'Disagree'**
+  String get aboutDisagree;
+
+  /// No description provided for @aboutLicenseContent.
+  ///
+  /// In en, this message translates to:
+  /// **'This software is released under the GNU General Public License v3.0 (GPL-3.0).\n\nYou are free to use, modify, and distribute this software, provided that modified versions are released under the same license with source code made available.\n\nSee the LICENSE file in the project repository for full terms.'**
+  String get aboutLicenseContent;
+
+  /// No description provided for @aboutViewFullLicense.
+  ///
+  /// In en, this message translates to:
+  /// **'View Full Text'**
+  String get aboutViewFullLicense;
 }
 
 class _AppLocalizationsDelegate

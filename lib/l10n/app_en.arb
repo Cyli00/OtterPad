@@ -875,5 +875,17 @@
   "chatLocateSource": "Locate in document",
   "chatNewSessionHint": "The new chat will still be grounded in the full text and figures of \"{title}\".",
   "@chatNewSessionHint": { "placeholders": { "title": { "type": "String" } } },
-  "dontRemindAgain": "Don't remind me again"
+  "dontRemindAgain": "Don't remind me again",
+
+  "aboutSubtitle": "Open Source AI Literature Reading Assistant",
+  "aboutVersion": "Version",
+  "aboutSystem": "System",
+  "aboutCheckUpdate": "Check for Updates",
+  "aboutLicense": "License",
+  "aboutDisclaimer": "Disclaimer",
+  "aboutDisclaimerContent": "This software is intended solely for non-commercial purposes such as learning, communication, and scientific research. Commercial use of this software is strictly prohibited. Any commercial activities are unrelated to this software.",
+  "aboutAgree": "Agree",
+  "aboutDisagree": "Disagree",
+  "aboutLicenseContent": "This software is released under the GNU General Public License v3.0 (GPL-3.0).\n\nYou are free to use, modify, and distribute this software, provided that modified versions are released under the same license with source code made available.\n\nSee the LICENSE file in the project repository for full terms.",
+  "aboutViewFullLicense": "View Full Text"
 }

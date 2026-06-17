@@ -17,6 +17,7 @@ import '../pages/setting/ocr_settings_page.dart';
 import '../pages/setting/appearance_settings_page.dart';
 import '../pages/setting/backup_settings_page.dart';
 import '../pages/setting/network_settings_page.dart';
+import '../pages/setting/about_page.dart';
 import '../pages/setting/storage_space_page.dart';
 import '../pages/setting/view.dart';
 import '../pages/shelf/add_documents_to_favorite_page.dart';
@@ -280,6 +281,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             parentNavigatorKey: rootNavigatorKey,
             pageBuilder: (context, state) =>
                 _forward(state: state, child: const StorageSpacePage()),
+          ),
+          GoRoute(
+            path: 'about',
+            parentNavigatorKey: rootNavigatorKey,
+            pageBuilder: (context, state) =>
+                _lateral(state: state, child: const AboutPage()),
           ),
         ],
       ),
