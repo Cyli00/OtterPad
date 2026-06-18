@@ -774,5 +774,23 @@
   "aboutAgree": "同意",
   "aboutDisagree": "不同意",
   "aboutLicenseContent": "本软件依据 GNU 通用公共许可证第三版 (GPL-3.0) 发布。\n\n你可以自由地使用、修改和分发本软件，但修改后的版本必须以相同许可证发布，并公开源代码。\n\n详细条款请参阅项目仓库中的 LICENSE 文件。",
-  "aboutViewFullLicense": "查看全文"
+  "aboutViewFullLicense": "查看全文",
+
+  "generalSettings": "通用",
+  "generalSettingsSubtitle": "日志、缓存与系统偏好",
+  "generalSystem": "系统",
+  "generalLogRecording": "日志记录",
+  "generalLogRecordingDesc": "将日志写入本地文件，便于排查问题",
+  "generalLogLevel": "最低记录级别",
+  "generalLogLevelInfo": "信息",
+  "generalLogLevelWarning": "警告",
+  "generalLogLevelError": "错误",
+  "generalHapticFeedback": "震动反馈",
+  "generalHapticFeedbackDesc": "点击与交互时提供振动反馈",
+  "generalCacheAutoCleanup": "自动清理缓存",
+  "generalCacheAutoCleanupDesc": "启动应用时自动清理 WebView 与缩略图缓存",
+  "generalAutoCheckUpdate": "启动时检查更新",
+  "generalAutoCheckUpdateDesc": "应用启动时自动检查新版本",
+  "generalEnableHttp2": "HTTP/2",
+  "generalEnableHttp2Desc": "将并发 API 请求多路复用到单个连接，减少翻译等并行任务的网络开销"
 }

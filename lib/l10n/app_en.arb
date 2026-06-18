@@ -887,5 +887,23 @@
   "aboutAgree": "Agree",
   "aboutDisagree": "Disagree",
   "aboutLicenseContent": "This software is released under the GNU General Public License v3.0 (GPL-3.0).\n\nYou are free to use, modify, and distribute this software, provided that modified versions are released under the same license with source code made available.\n\nSee the LICENSE file in the project repository for full terms.",
-  "aboutViewFullLicense": "View Full Text"
+  "aboutViewFullLicense": "View Full Text",
+
+  "generalSettings": "General",
+  "generalSettingsSubtitle": "Logging, cache, and system preferences",
+  "generalSystem": "System",
+  "generalLogRecording": "Log Recording",
+  "generalLogRecordingDesc": "Record logs to local files for troubleshooting",
+  "generalLogLevel": "Minimum Log Level",
+  "generalLogLevelInfo": "Info",
+  "generalLogLevelWarning": "Warning",
+  "generalLogLevelError": "Error",
+  "generalHapticFeedback": "Haptic Feedback",
+  "generalHapticFeedbackDesc": "Vibration feedback for taps and interactions",
+  "generalCacheAutoCleanup": "Auto Cleanup Cache",
+  "generalCacheAutoCleanupDesc": "Clean up WebView and thumbnail caches on app startup",
+  "generalAutoCheckUpdate": "Check for Updates on Startup",
+  "generalAutoCheckUpdateDesc": "Automatically check for new versions when the app launches",
+  "generalEnableHttp2": "HTTP/2",
+  "generalEnableHttp2Desc": "Multiplexes concurrent API requests over a single connection, reducing overhead for parallel tasks like translation"
 }

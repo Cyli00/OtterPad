@@ -2401,4 +2401,61 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutViewFullLicense => 'View Full Text';
+
+  @override
+  String get generalSettings => 'General';
+
+  @override
+  String get generalSettingsSubtitle =>
+      'Logging, cache, and system preferences';
+
+  @override
+  String get generalSystem => 'System';
+
+  @override
+  String get generalLogRecording => 'Log Recording';
+
+  @override
+  String get generalLogRecordingDesc =>
+      'Record logs to local files for troubleshooting';
+
+  @override
+  String get generalLogLevel => 'Minimum Log Level';
+
+  @override
+  String get generalLogLevelInfo => 'Info';
+
+  @override
+  String get generalLogLevelWarning => 'Warning';
+
+  @override
+  String get generalLogLevelError => 'Error';
+
+  @override
+  String get generalHapticFeedback => 'Haptic Feedback';
+
+  @override
+  String get generalHapticFeedbackDesc =>
+      'Vibration feedback for taps and interactions';
+
+  @override
+  String get generalCacheAutoCleanup => 'Auto Cleanup Cache';
+
+  @override
+  String get generalCacheAutoCleanupDesc =>
+      'Clean up WebView and thumbnail caches on app startup';
+
+  @override
+  String get generalAutoCheckUpdate => 'Check for Updates on Startup';
+
+  @override
+  String get generalAutoCheckUpdateDesc =>
+      'Automatically check for new versions when the app launches';
+
+  @override
+  String get generalEnableHttp2 => 'HTTP/2';
+
+  @override
+  String get generalEnableHttp2Desc =>
+      'Multiplexes concurrent API requests over a single connection, reducing overhead for parallel tasks like translation';
 }

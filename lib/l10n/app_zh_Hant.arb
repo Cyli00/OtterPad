@@ -841,5 +841,23 @@
   "aboutAgree": "同意",
   "aboutDisagree": "不同意",
   "aboutLicenseContent": "本軟體依據 GNU 通用公共許可證第三版 (GPL-3.0) 發布。\n\n你可以自由地使用、修改和散布本軟體，但修改後的版本必須以相同許可證發布，並公開原始碼。\n\n詳細條款請參閱專案儲存庫中的 LICENSE 檔案。",
-  "aboutViewFullLicense": "檢視全文"
+  "aboutViewFullLicense": "檢視全文",
+
+  "generalSettings": "一般",
+  "generalSettingsSubtitle": "日誌、快取與系統偏好",
+  "generalSystem": "系統",
+  "generalLogRecording": "日誌記錄",
+  "generalLogRecordingDesc": "將日誌寫入本機檔案，便於排查問題",
+  "generalLogLevel": "最低記錄層級",
+  "generalLogLevelInfo": "資訊",
+  "generalLogLevelWarning": "警告",
+  "generalLogLevelError": "錯誤",
+  "generalHapticFeedback": "震動回饋",
+  "generalHapticFeedbackDesc": "點擊與互動時提供振動回饋",
+  "generalCacheAutoCleanup": "自動清理快取",
+  "generalCacheAutoCleanupDesc": "啟動應用程式時自動清理 WebView 與縮圖快取",
+  "generalAutoCheckUpdate": "啟動時檢查更新",
+  "generalAutoCheckUpdateDesc": "應用程式啟動時自動檢查新版本",
+  "generalEnableHttp2": "HTTP/2",
+  "generalEnableHttp2Desc": "將並行 API 請求多工到單一連線，減少翻譯等並行任務的網路開銷"
 }

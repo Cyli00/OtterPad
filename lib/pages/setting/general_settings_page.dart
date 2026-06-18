@@ -1,0 +1,299 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
+
+import '../../core/animation_constants.dart';
+import '../../core/l10n.dart';
+import '../../core/storage/storage.dart';
+import '../../services/agent_http.dart';
+import '../../services/haptics.dart';
+
+// ── GStorage keys ──
+
+const _kLogEnabled = 'general_log_enabled';
+const _kLogLevel = 'general_log_level';
+const _kHapticsEnabled = 'general_haptics_enabled';
+const _kCacheAutoCleanup = 'general_cache_auto_cleanup';
+const _kAutoCheckUpdate = 'general_auto_check_update';
+const _kHttp2Enabled = 'general_http2_enabled';
+
+class GeneralSettingsPage extends ConsumerStatefulWidget {
+  const GeneralSettingsPage({super.key});
+
+  @override
+  ConsumerState<GeneralSettingsPage> createState() =>
+      _GeneralSettingsPageState();
+}
+
+class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
+  late bool _logEnabled =
+      GStorage.setting.get(_kLogEnabled) as bool? ?? true;
+  late String _logLevel =
+      GStorage.setting.get(_kLogLevel) as String? ?? 'error';
+  late bool _hapticsEnabled =
+      GStorage.setting.get(_kHapticsEnabled) as bool? ?? true;
+  late bool _cacheAutoCleanup =
+      GStorage.setting.get(_kCacheAutoCleanup) as bool? ?? false;
+  late bool _autoCheckUpdate =
+      GStorage.setting.get(_kAutoCheckUpdate) as bool? ?? true;
+  late bool _http2Enabled =
+      GStorage.setting.get(_kHttp2Enabled) as bool? ?? false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final l10n = context.l10n;
+
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        title: Text(
+          l10n.generalSettings,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: false,
+        backgroundColor: cs.surface,
+        scrolledUnderElevation: 0,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ).copyWith(bottom: 40),
+        children: [
+          // ── 日志记录 ──
+          _buildGroup(
+            context,
+            title: l10n.generalLogRecording,
+            child: Column(
+              children: [
+                _SwitchTile(
+                  title: l10n.generalLogRecording,
+                  subtitle: l10n.generalLogRecordingDesc,
+                  value: _logEnabled,
+                  onChanged: (v) {
+                    Haptics.soft();
+                    setState(() => _logEnabled = v);
+                    GStorage.setting.put(_kLogEnabled, v);
+                  },
+                ),
+                AnimatedSize(
+                  duration: kAnimFast,
+                  curve: kAnimCurve,
+                  alignment: Alignment.topCenter,
+                  child: _logEnabled
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.generalLogLevel,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: SegmentedButton<String>(
+                                  segments: [
+                                    ButtonSegment(
+                                      value: 'info',
+                                      label: Text(l10n.generalLogLevelInfo),
+                                    ),
+                                    ButtonSegment(
+                                      value: 'warning',
+                                      label: Text(l10n.generalLogLevelWarning),
+                                    ),
+                                    ButtonSegment(
+                                      value: 'error',
+                                      label: Text(l10n.generalLogLevelError),
+                                    ),
+                                  ],
+                                  selected: {_logLevel},
+                                  onSelectionChanged: (set) {
+                                    Haptics.soft();
+                                    setState(() => _logLevel = set.first);
+                                    GStorage.setting.put(_kLogLevel, _logLevel);
+                                  },
+                                  style: SegmentedButton.styleFrom(
+                                    backgroundColor: cs.surface,
+                                    selectedBackgroundColor: cs.primaryContainer,
+                                    side: BorderSide(
+                                      color: cs.outlineVariant.withAlpha(100),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+
+          // ── 系统 ──
+          _buildGroup(
+            context,
+            title: l10n.generalSystem,
+            child: Column(
+              children: [
+                _SwitchTile(
+                  title: l10n.generalHapticFeedback,
+                  subtitle: l10n.generalHapticFeedbackDesc,
+                  value: _hapticsEnabled,
+                  onChanged: (v) {
+                    Haptics.soft();
+                    setState(() => _hapticsEnabled = v);
+                    GStorage.setting.put(_kHapticsEnabled, v);
+                    Haptics.setEnabled(v);
+                  },
+                ),
+                _divider(cs),
+                _SwitchTile(
+                  title: l10n.generalCacheAutoCleanup,
+                  subtitle: l10n.generalCacheAutoCleanupDesc,
+                  value: _cacheAutoCleanup,
+                  onChanged: (v) {
+                    Haptics.soft();
+                    setState(() => _cacheAutoCleanup = v);
+                    GStorage.setting.put(_kCacheAutoCleanup, v);
+                  },
+                ),
+                _divider(cs),
+                _SwitchTile(
+                  title: l10n.generalAutoCheckUpdate,
+                  subtitle: l10n.generalAutoCheckUpdateDesc,
+                  value: _autoCheckUpdate,
+                  onChanged: (v) {
+                    Haptics.soft();
+                    setState(() => _autoCheckUpdate = v);
+                    GStorage.setting.put(_kAutoCheckUpdate, v);
+                  },
+                ),
+                _divider(cs),
+                _SwitchTile(
+                  title: l10n.generalEnableHttp2,
+                  subtitle: l10n.generalEnableHttp2Desc,
+                  value: _http2Enabled,
+                  onChanged: (v) {
+                    Haptics.soft();
+                    setState(() => _http2Enabled = v);
+                    GStorage.setting.put(_kHttp2Enabled, v);
+                    AgentHttp.instance.resetInstances();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroup(
+    BuildContext context, {
+    required String title,
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
+          child: Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: child,
+        ),
+      ],
+    );
+  }
+
+  Widget _divider(ColorScheme cs) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      indent: 20,
+      endIndent: 20,
+      color: cs.outlineVariant.withAlpha(70),
+    );
+  }
+}
+
+// ── Switch Tile ──
+
+class _SwitchTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SwitchTile({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Switch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}

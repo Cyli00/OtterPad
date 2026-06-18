@@ -24,6 +24,7 @@ dependencies:
   # 偏好存储
   # 网络
   dio: ^5.9.0
+  dio_http2_adapter: ^2.7.1
   connectivity_plus: ^6.0.0
   pdfrx: ^2.2.24
 

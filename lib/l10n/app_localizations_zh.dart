@@ -2345,6 +2345,57 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutViewFullLicense => '查看全文';
+
+  @override
+  String get generalSettings => '通用';
+
+  @override
+  String get generalSettingsSubtitle => '日志、缓存与系统偏好';
+
+  @override
+  String get generalSystem => '系统';
+
+  @override
+  String get generalLogRecording => '日志记录';
+
+  @override
+  String get generalLogRecordingDesc => '将日志写入本地文件，便于排查问题';
+
+  @override
+  String get generalLogLevel => '最低记录级别';
+
+  @override
+  String get generalLogLevelInfo => '信息';
+
+  @override
+  String get generalLogLevelWarning => '警告';
+
+  @override
+  String get generalLogLevelError => '错误';
+
+  @override
+  String get generalHapticFeedback => '震动反馈';
+
+  @override
+  String get generalHapticFeedbackDesc => '点击与交互时提供振动反馈';
+
+  @override
+  String get generalCacheAutoCleanup => '自动清理缓存';
+
+  @override
+  String get generalCacheAutoCleanupDesc => '启动应用时自动清理 WebView 与缩略图缓存';
+
+  @override
+  String get generalAutoCheckUpdate => '启动时检查更新';
+
+  @override
+  String get generalAutoCheckUpdateDesc => '应用启动时自动检查新版本';
+
+  @override
+  String get generalEnableHttp2 => 'HTTP/2';
+
+  @override
+  String get generalEnableHttp2Desc => '将并发 API 请求多路复用到单个连接，减少翻译等并行任务的网络开销';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -4688,4 +4739,55 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get aboutViewFullLicense => '檢視全文';
+
+  @override
+  String get generalSettings => '一般';
+
+  @override
+  String get generalSettingsSubtitle => '日誌、快取與系統偏好';
+
+  @override
+  String get generalSystem => '系統';
+
+  @override
+  String get generalLogRecording => '日誌記錄';
+
+  @override
+  String get generalLogRecordingDesc => '將日誌寫入本機檔案，便於排查問題';
+
+  @override
+  String get generalLogLevel => '最低記錄層級';
+
+  @override
+  String get generalLogLevelInfo => '資訊';
+
+  @override
+  String get generalLogLevelWarning => '警告';
+
+  @override
+  String get generalLogLevelError => '錯誤';
+
+  @override
+  String get generalHapticFeedback => '震動回饋';
+
+  @override
+  String get generalHapticFeedbackDesc => '點擊與互動時提供振動回饋';
+
+  @override
+  String get generalCacheAutoCleanup => '自動清理快取';
+
+  @override
+  String get generalCacheAutoCleanupDesc => '啟動應用程式時自動清理 WebView 與縮圖快取';
+
+  @override
+  String get generalAutoCheckUpdate => '啟動時檢查更新';
+
+  @override
+  String get generalAutoCheckUpdateDesc => '應用程式啟動時自動檢查新版本';
+
+  @override
+  String get generalEnableHttp2 => 'HTTP/2';
+
+  @override
+  String get generalEnableHttp2Desc => '將並行 API 請求多工到單一連線，減少翻譯等並行任務的網路開銷';
 }

@@ -4250,6 +4250,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View Full Text'**
   String get aboutViewFullLicense;
+
+  /// No description provided for @generalSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'General'**
+  String get generalSettings;
+
+  /// No description provided for @generalSettingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Logging, cache, and system preferences'**
+  String get generalSettingsSubtitle;
+
+  /// No description provided for @generalSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get generalSystem;
+
+  /// No description provided for @generalLogRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Log Recording'**
+  String get generalLogRecording;
+
+  /// No description provided for @generalLogRecordingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Record logs to local files for troubleshooting'**
+  String get generalLogRecordingDesc;
+
+  /// No description provided for @generalLogLevel.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum Log Level'**
+  String get generalLogLevel;
+
+  /// No description provided for @generalLogLevelInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get generalLogLevelInfo;
+
+  /// No description provided for @generalLogLevelWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get generalLogLevelWarning;
+
+  /// No description provided for @generalLogLevelError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get generalLogLevelError;
+
+  /// No description provided for @generalHapticFeedback.
+  ///
+  /// In en, this message translates to:
+  /// **'Haptic Feedback'**
+  String get generalHapticFeedback;
+
+  /// No description provided for @generalHapticFeedbackDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Vibration feedback for taps and interactions'**
+  String get generalHapticFeedbackDesc;
+
+  /// No description provided for @generalCacheAutoCleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Cleanup Cache'**
+  String get generalCacheAutoCleanup;
+
+  /// No description provided for @generalCacheAutoCleanupDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Clean up WebView and thumbnail caches on app startup'**
+  String get generalCacheAutoCleanupDesc;
+
+  /// No description provided for @generalAutoCheckUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for Updates on Startup'**
+  String get generalAutoCheckUpdate;
+
+  /// No description provided for @generalAutoCheckUpdateDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically check for new versions when the app launches'**
+  String get generalAutoCheckUpdateDesc;
+
+  /// No description provided for @generalEnableHttp2.
+  ///
+  /// In en, this message translates to:
+  /// **'HTTP/2'**
+  String get generalEnableHttp2;
+
+  /// No description provided for @generalEnableHttp2Desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Multiplexes concurrent API requests over a single connection, reducing overhead for parallel tasks like translation'**
+  String get generalEnableHttp2Desc;
 }
 
 class _AppLocalizationsDelegate
