@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/l10n.dart';
 import '../../core/storage/storage.dart';
@@ -651,7 +652,30 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           const SizedBox(height: 24),
 
           // ── API Key ──
-          _sectionLabel(theme, cs, context.l10n.apiKey),
+          Row(
+            children: [
+              _sectionLabel(theme, cs, context.l10n.apiKey),
+              const Spacer(),
+              if (AgentApiNotifier.presetApiKeyUrl(current.id)
+                  case final url?)
+                IconButton(
+                  onPressed: () {
+                    Haptics.soft();
+                    launchUrl(
+                      Uri.parse(url),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  },
+                  icon: Icon(
+                    Symbols.arrow_outward_rounded,
+                    size: 16,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  tooltip: context.l10n.getToken,
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _keyCtrl,

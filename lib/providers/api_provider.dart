@@ -102,12 +102,14 @@ class AgentVendorPreset {
   final AgentApiProvider protocol;
   final String baseUrl;
   final String keyHint;
+  final String apiKeyUrl;
   const AgentVendorPreset(
     this.id,
     this.label,
     this.protocol, [
     this.baseUrl = '',
     this.keyHint = '',
+    this.apiKeyUrl = '',
   ]);
 }
 
@@ -475,15 +477,19 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   /// 各家 base URL 与 key 格式均按官方文档核实；Zhipu / Doubao 无 OpenAI
   /// 兼容的 GET /models 列表端点，模型靠管理弹窗的手动添加行录入。
   static const _builtinPresets = [
-    AgentVendorPreset('openai', 'OpenAI', AgentApiProvider.openai),
-    AgentVendorPreset('anthropic', 'Anthropic', AgentApiProvider.anthropic),
-    AgentVendorPreset('gemini', 'Gemini', AgentApiProvider.gemini),
+    AgentVendorPreset('openai', 'OpenAI', AgentApiProvider.openai,
+        '', '', 'https://platform.openai.com/api-keys'),
+    AgentVendorPreset('anthropic', 'Anthropic', AgentApiProvider.anthropic,
+        '', '', 'https://console.anthropic.com/settings/keys'),
+    AgentVendorPreset('gemini', 'Gemini', AgentApiProvider.gemini,
+        '', '', 'https://aistudio.google.com/app/api-keys'),
     AgentVendorPreset(
       'deepseek',
       'DeepSeek',
       AgentApiProvider.openAICompatible,
       'https://api.deepseek.com',
       'sk-...',
+      'https://platform.deepseek.com/api_keys',
     ),
     AgentVendorPreset(
       'qwen',
@@ -491,6 +497,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       AgentApiProvider.openAICompatible,
       'https://dashscope.aliyuncs.com/compatible-mode/v1',
       'sk-...',
+      'https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key',
     ),
     AgentVendorPreset(
       'zhipu',
@@ -498,6 +505,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       AgentApiProvider.openAICompatible,
       'https://open.bigmodel.cn/api/paas/v4',
       '{id}.{secret}',
+      'https://www.bigmodel.cn/invite?icode=kLOZSS2OB1GRYGoRuFBBh%2F2gad6AKpjZefIo3dVEQyA%3D',
     ),
     AgentVendorPreset(
       'kimi',
@@ -505,6 +513,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       AgentApiProvider.openAICompatible,
       'https://api.moonshot.cn/v1',
       'sk-...',
+      'https://platform.kimi.com/console/api-keys',
     ),
     AgentVendorPreset(
       'doubao',
@@ -512,6 +521,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       AgentApiProvider.openAICompatible,
       'https://ark.cn-beijing.volces.com/api/v3',
       'API Key (UUID)',
+      'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey?apikey=%7B%7D',
     ),
     AgentVendorPreset(
       'mimo',
@@ -519,6 +529,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       AgentApiProvider.openAICompatible,
       'https://api.xiaomimimo.com/v1',
       'API Key',
+      'https://platform.xiaomimimo.com?ref=MQJS4T',
     ),
     AgentVendorPreset(
       'grok',
@@ -526,6 +537,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       AgentApiProvider.openAICompatible,
       'https://api.x.ai/v1',
       'xai-...',
+      'https://console.x.ai',
     ),
   ];
 
@@ -537,6 +549,14 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   static String? presetKeyHint(String id) {
     for (final p in _builtinPresets) {
       if (p.id == id) return p.keyHint.isEmpty ? null : p.keyHint;
+    }
+    return null;
+  }
+
+  /// 内置预设的 API Key 获取页面；非预设或未配置时返回 null。
+  static String? presetApiKeyUrl(String id) {
+    for (final p in _builtinPresets) {
+      if (p.id == id) return p.apiKeyUrl.isEmpty ? null : p.apiKeyUrl;
     }
     return null;
   }
