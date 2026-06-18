@@ -6,6 +6,7 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:markdown_widget/markdown_widget.dart';
 
+import '../../../../services/haptics.dart';
 import '../../../../services/translation_style.dart';
 import 'nr_selectable_math.dart';
 
@@ -173,7 +174,10 @@ class _BlurRevealTextState extends State<_BlurRevealText> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => setState(() => _revealed = !_revealed),
+      onTap: () {
+        Haptics.soft();
+        setState(() => _revealed = !_revealed);
+      },
       child: _revealed
           ? widget.child
           : ClipRect(

@@ -25,5 +25,6 @@ abstract class AppRoutes {
   static const settingsBackup = '/settings/backup';
   static const settingsBackupHome = '/settings/backupHome';
   static const settingsStorage = '/settings/storage';
+  static const settingsGeneral = '/settings/general';
   static const settingsAbout = '/settings/about';
 }

@@ -35,6 +35,7 @@ class GStorage {
   static late Box _zoteroSyncBox;
   static late String _dbDirPath;
   static late String _libraryDirPath;
+  static late String _logsDirPath;
   static late String _appRootPath;
   static bool _initialized = false;
 
@@ -43,12 +44,15 @@ class GStorage {
     final appRoot = Directory(p.join(appSupport.path, 'OtterPad'));
     final dbDir = Directory(p.join(appRoot.path, 'db'));
     final libraryDir = Directory(p.join(appRoot.path, 'library'));
+    final logsDir = Directory(p.join(appRoot.path, 'logs'));
     if (!await dbDir.exists()) await dbDir.create(recursive: true);
     if (!await libraryDir.exists()) await libraryDir.create(recursive: true);
+    if (!await logsDir.exists()) await logsDir.create(recursive: true);
 
     _appRootPath = appRoot.path;
     _dbDirPath = dbDir.path;
     _libraryDirPath = libraryDir.path;
+    _logsDirPath = logsDir.path;
 
     if (!_initialized) {
       Hive.init(dbDir.path);
@@ -133,6 +137,9 @@ class GStorage {
 
   /// `<AppSupport>/OtterPad/library/`——所有文献子目录的父目录。
   static String get libraryDirPath => _libraryDirPath;
+
+  /// `<AppSupport>/OtterPad/logs/`——日志文件目录。
+  static String get logsDirPath => _logsDirPath;
 
   /// `<AppSupport>/OtterPad/`——`db/` 与 `library/` 的共同父目录。
   /// 用于 [ReaderLocalhostServer] 的 documentRoot。

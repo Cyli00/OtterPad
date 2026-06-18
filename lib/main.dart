@@ -15,7 +15,9 @@ import 'providers/proxy_provider.dart';
 import 'services/agent_model_capability.dart';
 import 'services/back_matter_detector.dart';
 import 'services/figure_extract_service.dart';
+import 'services/haptics.dart';
 import 'services/reader_localhost_server.dart';
+import 'services/storage_usage_service.dart';
 
 bool get _isDesktop =>
     !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
@@ -60,6 +62,18 @@ Future<void> main() async {
   // 凭据安全存储：必须在 GStorage.init 之后、任何 provider 读取凭据之前完成——
   // 同步 read() 依赖此处填充的内存缓存。
   await SecureCredentialVault.init();
+
+  // 应用通用设置中的持久化偏好
+  final hapticsOn =
+      GStorage.setting.get('general_haptics_enabled') as bool? ?? true;
+  Haptics.setEnabled(hapticsOn);
+
+  // 缓存自动清理（fire-and-forget，不阻塞启动）
+  final cacheCleanup =
+      GStorage.setting.get('general_cache_auto_cleanup') as bool? ?? false;
+  if (cacheCleanup) {
+    StorageUsageService.clearGroups({StorageGroupKey.cache});
+  }
 
   // 阅读器本地静态文件服务——必须在 GStorage.init 后启动
   // （依赖 GStorage.appRootPath 作为 documentRoot）。

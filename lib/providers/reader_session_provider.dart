@@ -287,10 +287,7 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
   }
 
   Future<void> ensureMarkdownReady() async {
-    if (state.markdownContent != null) {
-      _prewarmSearchSnapshot();
-      return;
-    }
+    if (state.markdownContent != null) return;
     final mdPath = state.markdownPath;
     if (mdPath == null) return;
 
@@ -307,7 +304,6 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
         markdownLoading: false,
         markdownLoadError: null,
       );
-      _prewarmSearchSnapshot();
     } catch (error) {
       if (!mounted) return;
       state = state.copyWith(markdownLoading: false, markdownLoadError: error);
@@ -371,7 +367,6 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
       searchResults: const [],
       currentResultIndex: 0,
     );
-    _prewarmSearchSnapshot();
   }
 
   bool togglePreview() {
@@ -390,6 +385,7 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     }
     if (!mounted || state.markdownContent == null) return false;
     state = state.copyWith(searchActive: true);
+    unawaited(_prewarmSearchSnapshot());
     return true;
   }
 

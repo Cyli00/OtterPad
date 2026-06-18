@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:ui';
+
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:hive/hive.dart';
@@ -41,13 +43,16 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     }
   }
 
-  static Favorite _createDefault() => Favorite(
-    id: Favorite.defaultId,
-    emoji: '📖',
-    name: '我的收藏',
-    documentIds: [],
-    createdAt: DateTime.now(),
-  );
+  static Favorite _createDefault() {
+    final lang = PlatformDispatcher.instance.locale.languageCode;
+    return Favorite(
+      id: Favorite.defaultId,
+      emoji: '📖',
+      name: lang == 'zh' ? '我的收藏' : 'My Favorites',
+      documentIds: [],
+      createdAt: DateTime.now(),
+    );
+  }
 
   void reload() {
     _load();

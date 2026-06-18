@@ -271,8 +271,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     // ——这些继续由内部的 ExtendedImage 手势系统处理。
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onLongPressStart: (details) =>
-          _showSaveMenu(fig, details.globalPosition),
+      onLongPressStart: (details) {
+        Haptics.medium();
+        _showSaveMenu(fig, details.globalPosition);
+      },
       onSecondaryTapDown: (details) =>
           _showSaveMenu(fig, details.globalPosition),
       child: ExtendedImage.file(

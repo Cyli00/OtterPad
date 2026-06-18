@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
+import '../../../services/haptics.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../library/widgets/pdf_cover.dart';
 
@@ -37,7 +38,10 @@ class FavoriteCard extends StatelessWidget {
       padding: const EdgeInsets.only(right: 16),
       child: GestureDetector(
         onLongPressStart: hasMenu
-            ? (d) => _showCardMenu(context, d.globalPosition, cs)
+            ? (d) {
+                Haptics.medium();
+                _showCardMenu(context, d.globalPosition, cs);
+              }
             : null,
         child: Container(
           width: _getDynamicWidth(),

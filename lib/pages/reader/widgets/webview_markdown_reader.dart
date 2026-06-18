@@ -179,7 +179,6 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     _revealFallbackTimer?.cancel();
     _scrollbarHideTimer?.cancel();
     _scrollMetrics.dispose();
-    // 释放 keepAlive 保活的原生 WebView，否则离开阅读器后原生实例泄漏。
     InAppWebViewController.disposeKeepAlive(_keepAlive);
     super.dispose();
   }

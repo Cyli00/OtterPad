@@ -39,6 +39,12 @@ class SettingPage extends ConsumerWidget {
         children: [
           _SettingsCard(
             children: [
+              _SettingsTile(
+                icon: Symbols.tune_rounded,
+                title: l10n.generalSettings,
+                subtitle: l10n.generalSettingsSubtitle,
+                onTap: () => context.push(AppRoutes.settingsGeneral),
+              ),
               if (_isDesktop)
                 _SettingsTile(
                   icon: Symbols.dns_rounded,

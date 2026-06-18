@@ -117,6 +117,7 @@ class StorageUsageService {
 
     await _countDir(await _thumbDir(), cacheC);
     await _countDir(await _tempDir(), cacheC);
+    await _countDir(Directory(GStorage.logsDirPath), logsC);
 
     final papersBytes = filesC.bytes + imagesC.bytes + notesC.bytes;
     final papersFiles = filesC.fileCount + imagesC.fileCount + notesC.fileCount;
@@ -188,7 +189,7 @@ class StorageUsageService {
           await _deleteContents(await _tempDir());
           await _clearLibraryMatching((sub, name) => name == '.reader.html');
         case StorageGroupKey.logs:
-          break;
+          await _deleteContents(Directory(GStorage.logsDirPath));
       }
     }
   }
