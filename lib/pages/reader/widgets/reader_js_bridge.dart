@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/reader_settings_provider.dart';
+import '../../../utils/js_string_escape.dart';
 import 'reader_background.dart';
 import 'webview_reader_html.dart';
 
@@ -56,12 +57,7 @@ class ReaderJsBridge {
 
   ReaderJsBridge(this._controller, this._listener);
 
-  /// 将 Dart 字符串转义为 JS 单引号字符串字面量的内容（不含外层引号）。
-  static String _jsLiteral(String s) => s
-      .replaceAll('\\', '\\\\')
-      .replaceAll("'", "\\'")
-      .replaceAll('\n', '\\n')
-      .replaceAll('\r', '');
+  static String _jsLiteral(String s) => escapeJsLiteral(s);
 
   /// 注册所有 10 个 JS → Dart handler。必须在构造后立即调用。
   void attachHandlers() {
