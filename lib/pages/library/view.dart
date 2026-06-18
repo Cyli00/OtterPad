@@ -79,6 +79,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     final added = await ref
         .read(documentLifecycleProvider)
         .addToFavoriteBatch(result.favoriteId, selectedIds);
+    if (!mounted) return;
     final skipped = selectedIds.length - added;
     final l10n = context.l10n;
     final msg = skipped == 0

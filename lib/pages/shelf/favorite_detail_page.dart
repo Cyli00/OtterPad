@@ -196,6 +196,7 @@ class FavoriteDetailPage extends ConsumerWidget {
         count++;
       }
     }
+    if (!context.mounted) return;
     ref.read(snackBarServiceProvider).showResult(message: context.l10n.removedFromFavoriteCount(count));
     ref.read(selectionProvider.notifier).exit();
   }
@@ -240,6 +241,7 @@ class FavoriteDetailPage extends ConsumerWidget {
     for (final id in selection.selectedIds.toList()) {
       await DocCardActions.delete(ref, id);
     }
+    if (!context.mounted) return;
     ref.read(snackBarServiceProvider).showResult(message: context.l10n.deletedDocuments(count));
     ref.read(selectionProvider.notifier).exit();
   }

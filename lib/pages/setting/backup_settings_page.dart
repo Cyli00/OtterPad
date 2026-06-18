@@ -733,7 +733,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
 
   Future<void> _exportBackupToLocal() async {
     final scope = await showBackupScopeDialog(context);
-    if (scope == null) return;
+    if (scope == null || !mounted) return;
     String? tempArchivePath;
 
     try {
@@ -758,8 +758,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         await targetFile.delete();
       }
       await File(tempArchivePath!).copy(targetFile.path);
+      if (!mounted) return;
       _showMessage(context.l10n.backupExportedTo(targetFile.path));
     } catch (e) {
+      if (!mounted) return;
       _showMessage(context.l10n.exportBackupFailed(_formatError(e)));
     } finally {
       await _deleteTempFile(tempArchivePath);
@@ -782,6 +784,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     if (archivePath == null) return;
 
     try {
+      if (!mounted) return;
       final mergeResult = await _restoreArchive(
         archivePath: archivePath,
         scope: scope,
@@ -792,13 +795,14 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       );
       _showRestoreMessage(mode, mergeResult);
     } catch (e) {
+      if (!mounted) return;
       _showMessage(context.l10n.restoreFailed(_formatError(e)));
     }
   }
 
   Future<void> _backupToRemote() async {
     final scope = await showBackupScopeDialog(context);
-    if (scope == null) return;
+    if (scope == null || !mounted) return;
 
     try {
       String? target;
@@ -807,15 +811,17 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             .read(backupOrchestratorProvider)
             .backupToRemote(scope: scope);
       });
+      if (!mounted) return;
       _showMessage(context.l10n.remoteBackupUploaded(target ?? ''));
     } catch (e) {
+      if (!mounted) return;
       _showMessage(context.l10n.uploadRemoteFailed(_formatError(e)));
     }
   }
 
   Future<void> _restoreFromRemote() async {
     final options = await _pickRestoreOptions();
-    if (options == null) return;
+    if (options == null || !mounted) return;
     final (scope, mode) = options;
 
     String? tempArchivePath;
@@ -825,7 +831,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             .read(backupOrchestratorProvider)
             .downloadBackupToTemp();
       });
-      if (tempArchivePath == null) return;
+      if (!mounted || tempArchivePath == null) return;
 
       final mergeResult = await _restoreArchive(
         archivePath: tempArchivePath!,
@@ -837,6 +843,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       );
       _showRestoreMessage(mode, mergeResult, remote: true);
     } catch (e) {
+      if (!mounted) return;
       _showMessage(context.l10n.remoteRestoreFailed(_formatError(e)));
     } finally {
       await _deleteTempFile(tempArchivePath);
@@ -881,14 +888,18 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       return;
     }
     final parts = <String>[];
-    if (result.documentsAdded > 0)
+    if (result.documentsAdded > 0) {
       parts.add(l10n.mergeDocumentsAdded(result.documentsAdded));
-    if (result.highlightsAdded > 0)
+    }
+    if (result.highlightsAdded > 0) {
       parts.add(l10n.mergeHighlightsAdded(result.highlightsAdded));
-    if (result.filesCopied > 0)
+    }
+    if (result.filesCopied > 0) {
       parts.add(l10n.mergeFilesCopied(result.filesCopied));
-    if (result.settingsAdded > 0)
+    }
+    if (result.settingsAdded > 0) {
       parts.add(l10n.mergeSettingsAdded(result.settingsAdded));
+    }
     _showMessage(l10n.mergeCompleteSummary(prefix, parts.join('、')));
   }
 

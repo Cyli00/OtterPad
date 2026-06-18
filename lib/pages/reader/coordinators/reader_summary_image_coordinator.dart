@@ -132,6 +132,7 @@ class ReaderSummaryImageCoordinator {
     final path =
         imagePath ?? DocumentSummaryImageService.imagePathFor(document.id);
     if (!await File(path).exists()) {
+      if (!context.mounted) return;
       ref.read(snackBarServiceProvider).showResult(message: context.l10n.summaryNotFound);
       return;
     }
@@ -261,6 +262,7 @@ class ReaderSummaryImageCoordinator {
     // 2. 必须有 markdown,否则没有正文可导出
     final mdFile = File(DocPaths.md(document.id));
     if (!await mdFile.exists()) {
+      if (!context.mounted) return null;
       return context.l10n.markdownNotFound;
     }
 
@@ -282,6 +284,7 @@ class ReaderSummaryImageCoordinator {
     } on DocumentSummaryImageException catch (e) {
       return e.message;
     } catch (e) {
+      if (!context.mounted) return null;
       return context.l10n.promptGenerationFailed('$e');
     }
 
@@ -290,6 +293,7 @@ class ReaderSummaryImageCoordinator {
       if (_isDesktop) {
         // 桌面：打包 ZIP（全平铺：根目录直接放 figure / article.md / prompt.md，
         // 用户解压后一次框选拖到 ChatGPT 网页版即可）
+        if (!context.mounted) return null;
         final targetPath = await FilePicker.platform.saveFile(
           dialogTitle: context.l10n.saveExportZip,
           fileName: '${_safeFileStem(document.title)}.zip',
@@ -310,6 +314,7 @@ class ReaderSummaryImageCoordinator {
         await File(targetPath).writeAsBytes(bytes, flush: true);
 
         await Clipboard.setData(ClipboardData(text: prompt));
+        if (!context.mounted) return null;
         return context.l10n.exportedWithPromptCopied(p.basename(targetPath));
       } else {
         // 移动：share sheet 多文件 + 剪贴板。markdown 放在 list 第一位让目标
@@ -323,6 +328,7 @@ class ReaderSummaryImageCoordinator {
         return null; // share sheet 自带反馈,不另加 toast
       }
     } catch (e) {
+      if (!context.mounted) return null;
       return context.l10n.exportFailed('$e');
     }
   }

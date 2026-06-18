@@ -57,12 +57,12 @@ Future<void> showFigureViewer(
       opaque: false,
       transitionDuration: kAnimSlow,
       reverseTransitionDuration: kAnim,
-      pageBuilder: (_, __, ___) => FigureViewer(
+      pageBuilder: (_, _, _) => FigureViewer(
         figures: figures,
         initialIndex: initialIndex,
         backgroundSnapshot: bgSnapshot,
       ),
-      transitionsBuilder: (_, animation, __, child) =>
+      transitionsBuilder: (_, animation, _, child) =>
           FadeTransition(opacity: animation, child: child),
     ),
   );
@@ -163,7 +163,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     return ExtendedImageSlidePage(
       slideAxis: SlideAxis.vertical,
       slideType: SlideType.onlyImage,
-      slidePageBackgroundHandler: (_, __) => Colors.transparent,
+      slidePageBackgroundHandler: (_, _) => Colors.transparent,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Stack(
@@ -349,14 +349,17 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final snackBar = ref.read(snackBarServiceProvider);
     final source = File(fig.imagePath);
     if (!await source.exists()) {
+      if (!mounted) return;
       snackBar.showResult(message: context.l10n.imageNotFound);
       return;
     }
     try {
       final bytes = await source.readAsBytes();
       await Pasteboard.writeImage(bytes);
+      if (!mounted) return;
       snackBar.showResult(message: context.l10n.copiedToClipboard);
     } catch (e) {
+      if (!mounted) return;
       snackBar.showResult(message: context.l10n.copyFailed('$e'));
     }
   }
@@ -365,6 +368,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final snackBar = ref.read(snackBarServiceProvider);
     final source = File(fig.imagePath);
     if (!await source.exists()) {
+      if (!mounted) return;
       snackBar.showResult(message: context.l10n.imageNotFound);
       return;
     }
@@ -372,6 +376,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
 
     try {
       if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+        if (!mounted) return;
         // 桌面：系统保存对话框 + File.copy
         final targetPath = await FilePicker.platform.saveFile(
           dialogTitle: context.l10n.saveImageTitle,
@@ -383,6 +388,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         final target = File(targetPath);
         if (await target.exists()) await target.delete();
         await source.copy(target.path);
+        if (!mounted) return;
         snackBar.showResult(message: context.l10n.savedToPath(target.path));
       } else {
         // 移动：交给系统分享面板，用户从中选"保存到相册"/"保存到文件"
@@ -392,6 +398,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         );
       }
     } catch (e) {
+      if (!mounted) return;
       snackBar.showResult(message: context.l10n.saveFailed('$e'));
     }
   }

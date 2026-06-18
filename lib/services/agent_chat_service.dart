@@ -430,7 +430,7 @@ class AgentChatService {
         'tools': [
           {'type': 'web_search'},
         ],
-      if (temperature != null) 'temperature': temperature,
+      'temperature': ?temperature,
       ...AgentThinkingPayload.forOpenAI(modelId, modelParams.thinkingLevel),
     };
   }
@@ -481,7 +481,7 @@ class AgentChatService {
       if (stream) 'stream': true,
       if (webSearch || urlContext)
         'tools': _anthropicTools(webSearch, urlContext),
-      if (temperature != null) 'temperature': temperature,
+      'temperature': ?temperature,
       if (outputConfig.isNotEmpty) 'output_config': outputConfig,
       ...thinking,
     };
@@ -514,7 +514,7 @@ class AgentChatService {
       'contents': _geminiContents(history, images, userPrompt),
       if (webSearch || urlContext) 'tools': _geminiTools(webSearch, urlContext),
       'generationConfig': {
-        if (temperature != null) 'temperature': temperature,
+        'temperature': ?temperature,
         if (schema != null) 'responseMimeType': 'application/json',
         if (mode == 'schema') 'responseJsonSchema': schema,
         if (thinkingCfg.isNotEmpty) 'thinkingConfig': thinkingCfg,
@@ -539,7 +539,7 @@ class AgentChatService {
       'model': modelId,
       'messages': messages,
       if (stream) 'stream': true,
-      if (temperature != null) 'temperature': temperature,
+      'temperature': ?temperature,
       if (modelParams.maxTokens != null) 'max_tokens': modelParams.maxTokens,
       if (modelParams.topP != null) 'top_p': modelParams.topP,
       if (modelParams.frequencyPenalty != null)

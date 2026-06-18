@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:animations/animations.dart';
-import 'package:flutter/foundation.dart';
-
 import '../../core/animation_constants.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';

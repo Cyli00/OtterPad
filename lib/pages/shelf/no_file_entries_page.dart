@@ -242,6 +242,7 @@ class NoFileEntriesPage extends ConsumerWidget {
     for (final id in selection.selectedIds.toList()) {
       await DocCardActions.delete(ref, id);
     }
+    if (!context.mounted) return;
     ref.read(snackBarServiceProvider).showResult(message: context.l10n.deletedEntries(count));
     ref.read(selectionProvider.notifier).exit();
   }
@@ -282,6 +283,7 @@ class NoFileEntriesPage extends ConsumerWidget {
       if (!context.mounted) return;
       snackBar.showResult(message: context.l10n.fileAttached);
     } catch (e) {
+      if (!context.mounted) return;
       snackBar.showResult(message: context.l10n.attachFileFailed('$e'));
     }
   }

@@ -604,8 +604,9 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       final titleSplit = DocumentMetadataParser.parseText(doc.title);
       if (titleSplit.title != null && titleSplit.authors.isNotEmpty) {
         doc = doc.copyWith(title: titleSplit.title);
-        if (doc.authors.isEmpty)
+        if (doc.authors.isEmpty) {
           doc = doc.copyWith(authors: titleSplit.authors);
+        }
       }
 
       // 提取一次首页文本，供标识符提取与中文正文元数据提取复用

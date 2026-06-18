@@ -123,6 +123,10 @@ class AutoBackupScheduler {
     if (snapshot != null && DateTime.now().difference(snapshot.at) < period) {
       return;
     }
+    final ctx = rootNavigatorKey.currentContext;
+    final title = ctx != null
+        ? (AppLocalizations.of(ctx)?.autoBackup ?? '自动备份')
+        : '自动备份';
     if (snapshot != null && !await _hasChanges(snapshot)) return;
 
     _running = true;
@@ -130,10 +134,6 @@ class AutoBackupScheduler {
     final progress = ValueNotifier(
       const ListenableProgress(current: 0, total: 0, status: ''),
     );
-    final ctx = rootNavigatorKey.currentContext;
-    final title = ctx != null
-        ? (AppLocalizations.of(ctx)?.autoBackup ?? '自动备份')
-        : '自动备份';
     final taskId = activity.report(progress: progress, title: title);
     try {
       await orchestrator.backupToRemote(scope: config.scope);
