@@ -302,8 +302,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translationDone => 'Translation done';
 
   @override
-  String get translationCacheUsed =>
-      'Used cached translation. To re-translate, tap the overflow menu';
+  String get translationCacheUsed => 'Loaded from cache';
 
   @override
   String get language => 'Language';
@@ -673,6 +672,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get manageModels => 'Manage Models';
 
   @override
+  String get addApiKeyFirst => 'Add API key to manage models';
+
+  @override
   String get models => 'Models';
 
   @override
@@ -685,7 +687,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fastModel => 'Fast Model';
 
   @override
-  String get imageModel => 'Image Model';
+  String get imageModel => 'Image-Gen Model';
 
   @override
   String get notSet => 'Not set';
@@ -693,6 +695,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get pleaseAddImageModel =>
       'Please add a model that supports image output first';
+
+  @override
+  String get pleaseAddMultimodalModel => 'Please add a multimodal model first';
 
   @override
   String get pleaseAddModels => 'Please add models under providers first';
@@ -722,7 +727,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get text => 'Text';
 
   @override
-  String get image => 'Image';
+  String get image => 'Multimodal';
 
   @override
   String get outputMode => 'Output';
@@ -764,10 +769,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get showAllModels => 'Show all models';
 
   @override
-  String get showImageModels => 'Show image models only';
+  String get showImageGenModels => 'Show image-gen models only';
 
   @override
-  String get noImageModels => 'No models with image output detected';
+  String get showMultimodalModels => 'Show multimodal models only';
+
+  @override
+  String get noImageGenModels => 'No models with image output detected';
+
+  @override
+  String get noMultimodalModels => 'No multimodal models detected';
 
   @override
   String get noResults => 'No results';
@@ -2363,6 +2374,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String chatNewSessionHint(String title) {
     return 'The new chat will still be grounded in the full text and figures of \"$title\".';
   }
+
+  @override
+  String get chatCopyMessage => 'Copy message';
+
+  @override
+  String get chatSelectText => 'Select text';
+
+  @override
+  String get chatEditingMessage => 'Editing message';
+
+  @override
+  String get chatEditHint =>
+      'Editing will restart the conversation from this point.';
+
+  @override
+  String get chatFork => 'Fork';
 
   @override
   String get dontRemindAgain => 'Don\'t remind me again';

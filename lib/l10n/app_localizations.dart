@@ -660,7 +660,7 @@ abstract class AppLocalizations {
   /// No description provided for @translationCacheUsed.
   ///
   /// In en, this message translates to:
-  /// **'Used cached translation. To re-translate, tap the overflow menu'**
+  /// **'Loaded from cache'**
   String get translationCacheUsed;
 
   /// No description provided for @language.
@@ -1383,6 +1383,12 @@ abstract class AppLocalizations {
   /// **'Manage Models'**
   String get manageModels;
 
+  /// No description provided for @addApiKeyFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Add API key to manage models'**
+  String get addApiKeyFirst;
+
   /// No description provided for @models.
   ///
   /// In en, this message translates to:
@@ -1410,7 +1416,7 @@ abstract class AppLocalizations {
   /// No description provided for @imageModel.
   ///
   /// In en, this message translates to:
-  /// **'Image Model'**
+  /// **'Image-Gen Model'**
   String get imageModel;
 
   /// No description provided for @notSet.
@@ -1424,6 +1430,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Please add a model that supports image output first'**
   String get pleaseAddImageModel;
+
+  /// No description provided for @pleaseAddMultimodalModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Please add a multimodal model first'**
+  String get pleaseAddMultimodalModel;
 
   /// No description provided for @pleaseAddModels.
   ///
@@ -1482,7 +1494,7 @@ abstract class AppLocalizations {
   /// No description provided for @image.
   ///
   /// In en, this message translates to:
-  /// **'Image'**
+  /// **'Multimodal'**
   String get image;
 
   /// No description provided for @outputMode.
@@ -1563,17 +1575,29 @@ abstract class AppLocalizations {
   /// **'Show all models'**
   String get showAllModels;
 
-  /// No description provided for @showImageModels.
+  /// No description provided for @showImageGenModels.
   ///
   /// In en, this message translates to:
-  /// **'Show image models only'**
-  String get showImageModels;
+  /// **'Show image-gen models only'**
+  String get showImageGenModels;
 
-  /// No description provided for @noImageModels.
+  /// No description provided for @showMultimodalModels.
+  ///
+  /// In en, this message translates to:
+  /// **'Show multimodal models only'**
+  String get showMultimodalModels;
+
+  /// No description provided for @noImageGenModels.
   ///
   /// In en, this message translates to:
   /// **'No models with image output detected'**
-  String get noImageModels;
+  String get noImageGenModels;
+
+  /// No description provided for @noMultimodalModels.
+  ///
+  /// In en, this message translates to:
+  /// **'No multimodal models detected'**
+  String get noMultimodalModels;
 
   /// No description provided for @noResults.
   ///
@@ -4178,6 +4202,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The new chat will still be grounded in the full text and figures of \"{title}\".'**
   String chatNewSessionHint(String title);
+
+  /// No description provided for @chatCopyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy message'**
+  String get chatCopyMessage;
+
+  /// No description provided for @chatSelectText.
+  ///
+  /// In en, this message translates to:
+  /// **'Select text'**
+  String get chatSelectText;
+
+  /// No description provided for @chatEditingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing message'**
+  String get chatEditingMessage;
+
+  /// No description provided for @chatEditHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing will restart the conversation from this point.'**
+  String get chatEditHint;
+
+  /// No description provided for @chatFork.
+  ///
+  /// In en, this message translates to:
+  /// **'Fork'**
+  String get chatFork;
 
   /// No description provided for @dontRemindAgain.
   ///

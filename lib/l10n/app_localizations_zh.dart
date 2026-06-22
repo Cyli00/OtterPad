@@ -296,7 +296,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get translationDone => '翻译完成';
 
   @override
-  String get translationCacheUsed => '使用了之前的翻译缓存，如需重新翻译请点击右上角省略号里的重新翻译';
+  String get translationCacheUsed => '已加载翻译缓存';
 
   @override
   String get language => '语言';
@@ -665,6 +665,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get manageModels => '管理模型';
 
   @override
+  String get addApiKeyFirst => '填写 API Key 以管理模型';
+
+  @override
   String get models => '模型';
 
   @override
@@ -684,6 +687,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pleaseAddImageModel => '请先添加支持图片输出的模型';
+
+  @override
+  String get pleaseAddMultimodalModel => '请先添加多模态模型';
 
   @override
   String get pleaseAddModels => '请先在各服务商下添加模型';
@@ -713,7 +719,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get text => '文本';
 
   @override
-  String get image => '图片';
+  String get image => '多模态';
 
   @override
   String get outputMode => '输出模式';
@@ -755,10 +761,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get showAllModels => '显示全部模型';
 
   @override
-  String get showImageModels => '仅显示生图模型';
+  String get showImageGenModels => '仅显示生图模型';
 
   @override
-  String get noImageModels => '未检测到支持图片输出的模型';
+  String get showMultimodalModels => '仅显示多模态模型';
+
+  @override
+  String get noImageGenModels => '未检测到支持图片输出的模型';
+
+  @override
+  String get noMultimodalModels => '未检测到多模态模型';
 
   @override
   String get noResults => '无匹配结果';
@@ -2309,6 +2321,21 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get chatCopyMessage => '复制消息';
+
+  @override
+  String get chatSelectText => '选择文本';
+
+  @override
+  String get chatEditingMessage => '正在编辑消息';
+
+  @override
+  String get chatEditHint => '编辑将从此处重新开始对话。';
+
+  @override
+  String get chatFork => '分叉';
+
+  @override
   String get dontRemindAgain => '不再提醒';
 
   @override
@@ -2690,7 +2717,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get translationDone => '翻譯完成';
 
   @override
-  String get translationCacheUsed => '使用了先前的翻譯快取，如需重新翻譯請點擊右上角省略號裡的重新翻譯';
+  String get translationCacheUsed => '已載入翻譯快取';
 
   @override
   String get language => '語言';
@@ -3059,6 +3086,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get manageModels => '管理模型';
 
   @override
+  String get addApiKeyFirst => '填寫 API Key 以管理模型';
+
+  @override
   String get models => '模型';
 
   @override
@@ -3078,6 +3108,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get pleaseAddImageModel => '請先新增支援圖片輸出的模型';
+
+  @override
+  String get pleaseAddMultimodalModel => '請先新增多模態模型';
 
   @override
   String get pleaseAddModels => '請先在各服務商下新增模型';
@@ -3107,7 +3140,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get text => '文字';
 
   @override
-  String get image => '圖片';
+  String get image => '多模態';
 
   @override
   String get outputMode => '輸出模式';
@@ -3149,10 +3182,16 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get showAllModels => '顯示全部模型';
 
   @override
-  String get showImageModels => '僅顯示生圖模型';
+  String get showImageGenModels => '僅顯示生圖模型';
 
   @override
-  String get noImageModels => '未偵測到支援圖片輸出的模型';
+  String get showMultimodalModels => '僅顯示多模態模型';
+
+  @override
+  String get noImageGenModels => '未偵測到支援圖片輸出的模型';
+
+  @override
+  String get noMultimodalModels => '未偵測到多模態模型';
 
   @override
   String get noResults => '無相符結果';
@@ -4701,6 +4740,21 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String chatNewSessionHint(String title) {
     return '新對話仍將基於《$title》的全文與圖表進行問答。';
   }
+
+  @override
+  String get chatCopyMessage => '複製訊息';
+
+  @override
+  String get chatSelectText => '選取文字';
+
+  @override
+  String get chatEditingMessage => '正在編輯訊息';
+
+  @override
+  String get chatEditHint => '編輯將從此處重新開始對話。';
+
+  @override
+  String get chatFork => '分叉';
 
   @override
   String get dontRemindAgain => '不再提醒';

@@ -918,7 +918,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       child: PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _handleBack();
+          if (!didPop && _sheetHostKey.currentState?.isOpen != true) {
+            _handleBack();
+          }
         },
         child: Scaffold(
           key: _scaffoldKey,
@@ -1193,18 +1195,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final state = ref.read(documentTranslationProvider(documentId));
     if (state.status == DocTranslationStatus.done) {
-      // 完全命中文件缓存：本次点击没有真的翻译（也没有花 API 配额），
-      // 用户可能困惑"为什么这么快/翻得跟上次一样"——明确提示并指引
-      // 重新翻译路径（顶栏省略号 → 重新翻译）。文案较长所以延长展示时间。
       ref
           .read(snackBarServiceProvider)
           .showResult(
             message: fullyCached
                 ? context.l10n.translationCacheUsed
                 : context.l10n.translationDone,
-            duration: fullyCached
-                ? const Duration(seconds: 6)
-                : const Duration(seconds: 4),
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 72),
           );
     } else {
       _reportTranslationFailure(state);
@@ -1514,7 +1511,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
     if (index < 0) return;
 
-    await showFigureViewer(context, figures, initialIndex: index);
+    await showFigureViewer(context, figures,
+        initialIndex: index, documentId: documentId);
   }
 
   // _wrapWithSelection 已移除，由 WebView 内部选择处理替代
