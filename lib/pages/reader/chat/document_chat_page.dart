@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
@@ -57,6 +59,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   String? _quote;
   ChatModelRole _role = ChatModelRole.expert;
 
+  /// 编辑模式：被编辑的 user 消息在 messages 中的 index。
+  int? _editingIndex;
+
   /// 会话级思考强度覆盖；null = 跟随模型参数里的设置。
   ThinkingLevel? _thinking;
 
@@ -93,18 +98,53 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     final text = _inputController.text.trim();
     if (text.isEmpty || chat.sending) return;
     Haptics.soft();
-    ref
-        .read(documentChatProvider(_documentId).notifier)
-        .send(
-          text: text,
-          role: _role,
-          quotedText: _quote,
-          thinkingOverride: _thinking,
-          webSearch: _webSearch,
-          streaming: _stream,
-        );
+
+    final editIdx = _editingIndex;
+    if (editIdx != null) {
+      ref
+          .read(documentChatProvider(_documentId).notifier)
+          .resendFrom(
+            keepCount: editIdx,
+            text: text,
+            role: _role,
+            quotedText: _quote,
+            thinkingOverride: _thinking,
+            webSearch: _webSearch,
+            streaming: _stream,
+          );
+    } else {
+      ref
+          .read(documentChatProvider(_documentId).notifier)
+          .send(
+            text: text,
+            role: _role,
+            quotedText: _quote,
+            thinkingOverride: _thinking,
+            webSearch: _webSearch,
+            streaming: _stream,
+          );
+    }
     _inputController.clear();
-    setState(() => _quote = null);
+    setState(() {
+      _quote = null;
+      _editingIndex = null;
+    });
+  }
+
+  void _cancelEditing() {
+    _inputController.clear();
+    setState(() {
+      _editingIndex = null;
+      _quote = null;
+    });
+  }
+
+  void _startEditing(int messageIndex, ChatMessage msg) {
+    _inputController.text = msg.content;
+    setState(() {
+      _editingIndex = messageIndex;
+      _quote = msg.quotedText;
+    });
   }
 
   /// 开启联网搜索时的兼容端提示：MiMo 官方端需先在平台控制台开通联网
@@ -378,7 +418,6 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       itemCount: itemCount,
       itemBuilder: (context, index) {
         if (sending && index == 0) {
-          // 首个增量到达前转圈，之后实时渲染流式 Markdown
           if (streamingText == null || streamingText.isEmpty) {
             return _buildPendingBubble(cs);
           }
@@ -387,13 +426,17 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             child: _buildAssistantBubble(theme, cs, streamingText),
           );
         }
-        final msg =
-            messages[messages.length - 1 - (sending ? index - 1 : index)];
+        final msgIndex =
+            messages.length - 1 - (sending ? index - 1 : index);
+        final msg = messages[msgIndex];
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: msg.isUser
-              ? _buildUserBubble(theme, cs, msg)
-              : _buildAssistantBubble(theme, cs, msg.content),
+              ? _buildUserBubble(theme, cs, msg, msgIndex)
+              : _buildAssistantBubble(
+                  theme, cs, msg.content,
+                  messageIndex: msgIndex,
+                ),
         );
       },
     );
@@ -417,10 +460,120 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     );
   }
 
-  Widget _buildUserBubble(ThemeData theme, ColorScheme cs, ChatMessage msg) {
+  void _showUserMessageMenu(
+    BuildContext context,
+    Offset position,
+    int messageIndex,
+    ChatMessage msg,
+  ) {
+    final l10n = context.l10n;
+    final cs = Theme.of(context).colorScheme;
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx, position.dy, position.dx, position.dy,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: cs.surfaceContainerHigh,
+      items: [
+        PopupMenuItem(
+          value: 'copy',
+          child: Row(
+            children: [
+              Expanded(child: Text(l10n.chatCopyMessage)),
+              Icon(Symbols.content_copy_rounded, size: 20, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'select',
+          child: Row(
+            children: [
+              Expanded(child: Text(l10n.chatSelectText)),
+              Icon(Symbols.select_all_rounded, size: 20, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Expanded(child: Text(l10n.edit)),
+              Icon(Symbols.edit_rounded, size: 20, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == null) return;
+      switch (value) {
+        case 'copy':
+          Clipboard.setData(ClipboardData(text: msg.content));
+          Haptics.soft();
+        case 'select':
+          _showSelectableTextDialog(msg.content);
+        case 'edit':
+          _startEditing(messageIndex, msg);
+      }
+    });
+  }
+
+  void _showSelectableTextDialog(String text) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    showAppDialog(
+      context: context,
+      builder: (_) => Material(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(28),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          width: (MediaQuery.of(context).size.width * 0.85).clamp(300.0, 480.0),
+          constraints: const BoxConstraints(maxHeight: 400),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: SelectableText(
+                  text,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurface,
+                    height: 1.6,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(context.l10n.close),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserBubble(
+    ThemeData theme,
+    ColorScheme cs,
+    ChatMessage msg,
+    int messageIndex,
+  ) {
     return Align(
       alignment: Alignment.centerRight,
-      child: Container(
+      child: GestureDetector(
+        onLongPressStart: (details) {
+          Haptics.medium();
+          _showUserMessageMenu(
+            context, details.globalPosition, messageIndex, msg,
+          );
+        },
+        child: Container(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.82,
         ),
@@ -476,25 +629,98 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           ],
         ),
       ),
+      ),
     );
   }
 
   Widget _buildAssistantBubble(
     ThemeData theme,
     ColorScheme cs,
-    String content,
-  ) {
-    // 回答用阅读器同款 Markdown 渲染（公式/代码/表格），默认排版设置。
+    String content, {
+    int? messageIndex,
+  }) {
     const defaultSettings = ReaderSettingsState();
-    return MarkdownBlock(
-      data: content,
-      selectable: true,
-      config: buildReaderMarkdownConfig(
-        settings: defaultSettings,
-        colorScheme: cs,
-      ),
-      generator: buildReaderMarkdownGenerator(settings: defaultSettings),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        MarkdownBlock(
+          data: content,
+          selectable: true,
+          config: buildReaderMarkdownConfig(
+            settings: defaultSettings,
+            colorScheme: cs,
+          ),
+          generator: buildReaderMarkdownGenerator(settings: defaultSettings),
+        ),
+        if (messageIndex != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                _BubbleAction(
+                  icon: Symbols.content_copy_rounded,
+                  tooltip: context.l10n.copy,
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: content));
+                    Haptics.soft();
+                  },
+                ),
+                _BubbleAction(
+                  icon: Symbols.share_rounded,
+                  tooltip: context.l10n.share,
+                  onTap: () {
+                    Haptics.soft();
+                    Share.share(content);
+                  },
+                ),
+                _BubbleAction(
+                  icon: Symbols.call_split_rounded,
+                  tooltip: context.l10n.chatFork,
+                  onTap: () {
+                    Haptics.soft();
+                    ref
+                        .read(documentChatProvider(_documentId).notifier)
+                        .forkFromMessage(messageIndex);
+                  },
+                ),
+                _BubbleAction(
+                  icon: Symbols.refresh_rounded,
+                  tooltip: context.l10n.retry,
+                  onTap: () {
+                    Haptics.soft();
+                    _retryFromAssistant(messageIndex);
+                  },
+                ),
+              ],
+            ),
+          ),
+      ],
     );
+  }
+
+  void _retryFromAssistant(int assistantIndex) {
+    final session = ref.read(documentChatProvider(_documentId)).activeSession;
+    if (session == null) return;
+    ChatMessage? userMsg;
+    for (var i = assistantIndex - 1; i >= 0; i--) {
+      if (session.messages[i].isUser) {
+        userMsg = session.messages[i];
+        break;
+      }
+    }
+    if (userMsg == null) return;
+    ref
+        .read(documentChatProvider(_documentId).notifier)
+        .resendFrom(
+          keepCount: assistantIndex,
+          text: userMsg.content,
+          role: _role,
+          quotedText: userMsg.quotedText,
+          thinkingOverride: _thinking,
+          webSearch: _webSearch,
+          streaming: _stream,
+        );
   }
 
   Widget _buildComposer(ThemeData theme, ColorScheme cs, bool sending) {
@@ -513,6 +739,15 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_editingIndex != null) ...[
+                Text(
+                  l10n.chatEditHint,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               if (_quote != null) ...[
                 _QuoteCard(
                   text: _quote!,
@@ -523,8 +758,6 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                 ),
                 const SizedBox(height: 8),
               ],
-              // 整合输入框：加高的输入区 + 左下工具排（模型/思考/搜索，
-              // 无背景裸图标）+ 右下圆底发送按钮
               Container(
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerLow,
@@ -535,6 +768,43 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (_editingIndex != null)
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(8, 4, 4, 0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Symbols.edit_rounded,
+                              size: 16,
+                              color: cs.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                l10n.chatEditingMessage,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: _cancelEditing,
+                              child: Icon(
+                                Symbols.close_rounded,
+                                size: 18,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     TextField(
                       controller: _inputController,
                       minLines: 2,
@@ -1074,6 +1344,33 @@ class _QuoteCardState extends State<_QuoteCard> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BubbleAction extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _BubbleAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: TactilePress(
+        onTap: onTap,
+        baseColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        padding: const EdgeInsets.all(6),
+        child: Icon(icon, size: 16, color: cs.onSurfaceVariant.withAlpha(160)),
       ),
     );
   }

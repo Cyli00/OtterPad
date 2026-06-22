@@ -210,6 +210,55 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     }
   }
 
+  /// 截断当前会话到 [keepCount] 条消息，然后以 [text] 重新发送。
+  ///
+  /// 编辑用户消息：`keepCount` = 被编辑消息的 index（丢弃该消息及之后的所有内容）。
+  /// 重试 AI 回答：`keepCount` = 被重试的 assistant 消息的 index（丢弃该回答），
+  ///   text 填上一条 user 消息的原文。
+  Future<void> resendFrom({
+    required int keepCount,
+    required String text,
+    required ChatModelRole role,
+    String? quotedText,
+    ThinkingLevel? thinkingOverride,
+    bool webSearch = false,
+    bool streaming = true,
+  }) async {
+    final session = state.activeSession;
+    if (session == null || state.sending) return;
+    final truncated = session.copyWith(
+      messages: session.messages.sublist(0, keepCount),
+    );
+    _upsert(truncated, sending: false);
+    await DocumentChatService.saveSession(documentId, truncated);
+    await send(
+      text: text,
+      role: role,
+      quotedText: quotedText,
+      thinkingOverride: thinkingOverride,
+      webSearch: webSearch,
+      streaming: streaming,
+    );
+  }
+
+  /// 从指定消息处分叉：创建新会话，包含 [upToIndex]（含）之前的所有消息。
+  Future<void> forkFromMessage(int upToIndex) async {
+    final session = state.activeSession;
+    if (session == null) return;
+    final forked = ChatSession(
+      id: ChatMessage.newId(),
+      title: session.title,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      messages: session.messages.sublist(0, upToIndex + 1),
+    );
+    await DocumentChatService.saveSession(documentId, forked);
+    state = state.copyWith(
+      sessions: [forked, ...state.sessions],
+      activeSessionId: forked.id,
+    );
+  }
+
   /// 中断当前流式回答——状态收尾（含已流出部分的落盘）由 [send] 的
   /// cancel 分支统一处理。
   void cancel() => _cancelToken?.cancel();
