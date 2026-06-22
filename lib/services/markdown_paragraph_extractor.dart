@@ -75,7 +75,7 @@ class MarkdownParagraphExtractor {
           offset: section.contentStart,
           length: section.contentEnd - section.contentStart,
           text: text,
-          hash: _hash(text),
+          hash: computeHash(text),
           kind: ParagraphKind.text,
         ));
       }
@@ -146,7 +146,7 @@ class MarkdownParagraphExtractor {
       offset: tStart,
       length: tEnd - tStart,
       text: text,
-      hash: _hash(text),
+      hash: computeHash(text),
       kind: _classify(text),
     ));
   }
@@ -158,7 +158,8 @@ class MarkdownParagraphExtractor {
     return ParagraphKind.text;
   }
 
-  static String _hash(String text) {
+  /// 缓存 / 去重用的稳定 hash——供 figure title 等外部来源复用同一键。
+  static String computeHash(String text) {
     final trimmed = text.trim();
     final h = trimmed.hashCode.toUnsigned(32).toRadixString(16);
     return '${trimmed.length}_$h';

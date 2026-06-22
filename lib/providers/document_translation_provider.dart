@@ -8,6 +8,7 @@ import '../router/app_router.dart';
 import '../router/app_routes.dart';
 import '../services/ai_settings_prompt.dart';
 import '../services/document_translation_service.dart';
+import '../services/figure_extract_service.dart';
 import '../services/markdown_paragraph_extractor.dart';
 import '../services/snackbar_service.dart';
 import '../utils/markdown_translation_weaver.dart';
@@ -126,10 +127,15 @@ class DocumentTranslationNotifier
       return false;
     }
 
+    // 收集 figure title 作为额外翻译段落（共享 translations.json 缓存）
+    final figureTitleParagraphs = await _collectFigureTitleParagraphs();
+    final allParagraphs = [...paragraphs, ...figureTitleParagraphs];
+
     final token = TranslationCancelToken();
     _cancelToken = token;
 
     // 初始态：loading + 默认进入双语模式（翻完无需二次点击就能看到结果）
+    // state.paragraphs 仅保留 markdown 段落（weaver 用），figure title 不参与 weave
     state = DocumentTranslationState(
       status: DocTranslationStatus.loading,
       paragraphs: paragraphs,
@@ -138,7 +144,7 @@ class DocumentTranslationNotifier
     );
     _progress.value = ListenableProgress(
       current: 0,
-      total: paragraphs.length,
+      total: allParagraphs.length,
       status: '翻译中',
     );
 
@@ -158,7 +164,7 @@ class DocumentTranslationNotifier
     try {
       final fullyCached = await DocumentTranslationService.translate(
         pdfPath: documentId,
-        paragraphs: paragraphs,
+        paragraphs: allParagraphs,
         agentState: agentState,
         config: config,
         cancelToken: token,
@@ -262,6 +268,29 @@ class DocumentTranslationNotifier
       total: 0,
       status: '准备中',
     );
+  }
+
+  /// 从 figure manifest 收集去重后的 caption 作为额外翻译段落。
+  Future<List<TranslatableParagraph>> _collectFigureTitleParagraphs() async {
+    final figures = await FigureExtractService.loadManifest(documentId);
+    if (figures == null || figures.isEmpty) return const [];
+
+    final result = <TranslatableParagraph>[];
+    final seen = <String>{};
+    for (final fig in figures) {
+      final text = fig.captionText.trim();
+      if (text.isEmpty) continue;
+      final hash = MarkdownParagraphExtractor.computeHash(text);
+      if (!seen.add(hash)) continue;
+      result.add(TranslatableParagraph(
+        offset: -1,
+        length: 0,
+        text: text,
+        hash: hash,
+        kind: ParagraphKind.text,
+      ));
+    }
+    return result;
   }
 
   @override

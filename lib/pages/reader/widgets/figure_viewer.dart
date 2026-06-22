@@ -18,7 +18,9 @@ import '../../../providers/translation_config_provider.dart';
 import '../../../router/app_router.dart';
 import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
+import '../../../services/document_translation_service.dart';
 import '../../../services/figure_extract_service.dart';
+import '../../../services/markdown_paragraph_extractor.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
 import '../../../services/translation_service.dart';
@@ -30,6 +32,7 @@ Future<void> showFigureViewer(
   BuildContext context,
   List<FigureManifestEntry> figures, {
   int initialIndex = 0,
+  String? documentId,
 }) async {
   // 截取背景：找到最外层 RepaintBoundary（包含阅读器 + Drawer 全屏画面）
   Uint8List? bgSnapshot;
@@ -61,6 +64,7 @@ Future<void> showFigureViewer(
         figures: figures,
         initialIndex: initialIndex,
         backgroundSnapshot: bgSnapshot,
+        documentId: documentId,
       ),
       transitionsBuilder: (_, animation, _, child) =>
           FadeTransition(opacity: animation, child: child),
@@ -73,12 +77,14 @@ class FigureViewer extends ConsumerStatefulWidget {
   final List<FigureManifestEntry> figures;
   final int initialIndex;
   final Uint8List? backgroundSnapshot;
+  final String? documentId;
 
   const FigureViewer({
     super.key,
     required this.figures,
     this.initialIndex = 0,
     this.backgroundSnapshot,
+    this.documentId,
   });
 
   @override
@@ -549,6 +555,25 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       return;
     }
 
+    final translationConfig = ref.read(translationConfigProvider);
+    final docId = widget.documentId;
+    final hash = MarkdownParagraphExtractor.computeHash(fig.captionText);
+
+    // 优先查 translations.json 共享缓存
+    if (docId != null) {
+      final cached = DocumentTranslationService.loadTranslations(
+        docId,
+        translationConfig.targetLanguage,
+      )[hash];
+      if (cached != null && cached.isNotEmpty) {
+        setState(() {
+          _translations[idx] = cached;
+          _showTranslation[idx] = true;
+        });
+        return;
+      }
+    }
+
     final agentState = ref.read(effectiveAgentApiProvider);
     final snackBar = ref.read(snackBarServiceProvider);
     if (!AiSettingsPrompt.ensureTextModelConfigured(
@@ -563,12 +588,21 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     setState(() => _translating[idx] = true);
 
     try {
-      final translationConfig = ref.read(translationConfigProvider);
       final result = await TranslationService.translate(
         text: fig.captionText,
         agentState: agentState,
         translationConfig: translationConfig,
       );
+
+      // 写回 translations.json 共享缓存
+      if (docId != null && result.isNotEmpty) {
+        DocumentTranslationService.saveSingleTranslation(
+          docId,
+          translationConfig.targetLanguage,
+          hash,
+          result,
+        );
+      }
 
       if (!mounted) return;
       setState(() {

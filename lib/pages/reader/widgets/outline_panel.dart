@@ -169,6 +169,7 @@ class _OutlinePanelState extends State<OutlinePanel>
   late final TabController _tabController;
   late final List<ReferenceItem> _references;
   List<FigureManifestEntry>? _figures;
+  Set<String> _existingImages = const {};
   bool _figuresLoaded = false;
 
   @override
@@ -190,15 +191,27 @@ class _OutlinePanelState extends State<OutlinePanel>
     // 显式 evict 这批 path,下次构建时 Image.file 重读磁盘.
     if (figures != null && figures.isNotEmpty) {
       final imageCache = PaintingBinding.instance.imageCache;
+      final exists = <String>{};
       for (final fig in figures) {
         imageCache.evict(FileImage(File(fig.imagePath)));
+        if (File(fig.imagePath).existsSync()) {
+          exists.add(fig.imagePath);
+        }
       }
-    }
-    if (mounted) {
-      setState(() {
-        _figures = figures;
-        _figuresLoaded = true;
-      });
+      if (mounted) {
+        setState(() {
+          _figures = figures;
+          _existingImages = exists;
+          _figuresLoaded = true;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _figures = figures;
+          _figuresLoaded = true;
+        });
+      }
     }
   }
 
@@ -241,8 +254,10 @@ class _OutlinePanelState extends State<OutlinePanel>
                 builder: (context, summaryState, _) {
                   return _FiguresTab(
                     figures: _figures,
+                    existingImages: _existingImages,
                     loaded: _figuresLoaded,
                     markdownContent: widget.markdownContent,
+                    documentId: widget.documentId,
                     onNavigate: widget.onNavigate,
                     summaryState: summaryState,
                     onRegenerateSummary: widget.onRegenerateSummary,
@@ -278,16 +293,20 @@ class _OutlinePanelState extends State<OutlinePanel>
 
 class _FiguresTab extends StatelessWidget {
   final List<FigureManifestEntry>? figures;
+  final Set<String> existingImages;
   final bool loaded;
   final String markdownContent;
+  final String? documentId;
   final void Function(int charOffset) onNavigate;
   final SummaryImageState summaryState;
   final VoidCallback? onRegenerateSummary;
 
   const _FiguresTab({
     required this.figures,
+    required this.existingImages,
     required this.loaded,
     required this.markdownContent,
+    this.documentId,
     required this.onNavigate,
     required this.summaryState,
     this.onRegenerateSummary,
@@ -332,10 +351,10 @@ class _FiguresTab extends StatelessWidget {
         }
         final figIndex = index - summaryOffset;
         final fig = figures![figIndex];
-        final imageFile = File(fig.imagePath);
-        final imageExists = imageFile.existsSync();
+        final imageExists = existingImages.contains(fig.imagePath);
 
-        return Column(
+        return RepaintBoundary(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -353,17 +372,20 @@ class _FiguresTab extends StatelessWidget {
               GestureDetector(
                 onTap: () {
                   Haptics.soft();
-                  showFigureViewer(context, figures!, initialIndex: figIndex);
+                  showFigureViewer(context, figures!,
+                      initialIndex: figIndex,
+                      documentId: documentId);
                 },
                 child: Hero(
                   tag: 'figure_${fig.imagePath}',
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.file(
-                      imageFile,
+                      File(fig.imagePath),
                       fit: BoxFit.contain,
                       width: double.infinity,
                       cacheWidth: 600,
+                      gaplessPlayback: true,
                     ),
                   ),
                 ),
@@ -400,11 +422,13 @@ class _FiguresTab extends StatelessWidget {
                       context,
                       figures!,
                       initialIndex: figIndex,
+                      documentId: documentId,
                     ),
                   ),
               ],
             ),
           ],
+        ),
         );
       },
     );
@@ -579,7 +603,8 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
         final item = references[index];
         final copied = index == _copiedIndex;
 
-        return TactilePress(
+        return RepaintBoundary(
+          child: TactilePress(
           // 复制后的 2 秒高亮复用 TactilePress 内部的 AnimatedContainer
           baseColor: copied
               ? cs.primaryContainer.withAlpha(110)
@@ -626,6 +651,7 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
                 ),
               ],
             ),
+        ),
         );
       },
     );

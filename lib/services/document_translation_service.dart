@@ -101,6 +101,18 @@ class DocumentTranslationService {
     await _writeJsonAtomic(file, root);
   }
 
+  /// 保存单条翻译（figure title 等外部来源单独翻译后写回共享缓存）。
+  static Future<void> saveSingleTranslation(
+    String pdfPath,
+    String targetLang,
+    String hash,
+    String translation,
+  ) async {
+    final existing = loadTranslations(pdfPath, targetLang);
+    existing[hash] = translation;
+    await _saveTranslations(pdfPath, targetLang, existing);
+  }
+
   /// 清除指定语言的翻译。文件中无其他语言时删除整个文件。
   static Future<void> clearTranslations(
     String pdfPath,
