@@ -1,5 +1,3 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 import '../../../providers/summary_image_provider.dart';
@@ -27,38 +25,33 @@ class ReaderOutlineSheetBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-        child: ColoredBox(
-          color: cs.surface,
-          child: Column(
-            children: [
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 12, bottom: 4),
-                  width: 32,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withAlpha(80),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+    return ColoredBox(
+      color: cs.surface,
+      child: Column(
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 4),
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withAlpha(80),
+                borderRadius: BorderRadius.circular(2),
               ),
-              Expanded(
-                child: OutlinePanel(
-                  key: ValueKey(markdownContent.hashCode),
-                  markdownContent: markdownContent,
-                  documentId: documentId,
-                  summaryImageState: summaryImageState,
-                  inSheet: true,
-                  onNavigate: onNavigate,
-                  onRegenerateSummary: onRegenerateSummary,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          Expanded(
+            child: OutlinePanel(
+              key: ValueKey(markdownContent.hashCode),
+              markdownContent: markdownContent,
+              documentId: documentId,
+              summaryImageState: summaryImageState,
+              inSheet: true,
+              onNavigate: onNavigate,
+              onRegenerateSummary: onRegenerateSummary,
+            ),
+          ),
+        ],
       ),
     );
   }

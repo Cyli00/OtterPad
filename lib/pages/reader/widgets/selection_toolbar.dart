@@ -183,7 +183,9 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
     // AndroidManifest 已设 windowSoftInputMode="adjustResize"，viewInsets 会
     // 随键盘动画逐帧更新，触发 MediaQuery → build → delegate 重算 → 工具栏
     // 平滑上移。
-    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final mq = MediaQuery.of(context);
+    final keyboardInset = mq.viewInsets.bottom;
+    final topPadding = mq.padding.top;
 
     return Stack(
       children: [
@@ -197,6 +199,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
           delegate: _SelectionMenuDelegate(
             selectionRect: widget.selectionRect,
             keyboardInset: keyboardInset,
+            topPadding: topPadding,
           ),
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
@@ -438,11 +441,13 @@ class _Divider extends StatelessWidget {
 class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
   final Rect selectionRect;
   final double keyboardInset;
+  final double topPadding;
   static const _gap = 8.0;
 
   _SelectionMenuDelegate({
     required this.selectionRect,
     this.keyboardInset = 0,
+    this.topPadding = 0,
   });
 
   @override
@@ -463,18 +468,17 @@ class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
     if (selectionRect.bottom + _gap + childSize.height <= availableHeight) {
       return Offset(clampedX, selectionRect.bottom + _gap);
     }
-    // 选区上方放置——优先把 childSize.height 完整塞进 availableHeight。
-    // max(0.0, …) 防御 availableHeight < childSize.height 时 clamp(0, 负数) 抛错。
-    final upperBound = math.max(0.0, availableHeight - childSize.height);
+    final upperBound = math.max(topPadding, availableHeight - childSize.height);
     return Offset(
       clampedX,
-      (selectionRect.top - _gap - childSize.height).clamp(0.0, upperBound),
+      (selectionRect.top - _gap - childSize.height).clamp(topPadding, upperBound),
     );
   }
 
   @override
   bool shouldRelayout(_SelectionMenuDelegate oldDelegate) {
     return selectionRect != oldDelegate.selectionRect ||
-        keyboardInset != oldDelegate.keyboardInset;
+        keyboardInset != oldDelegate.keyboardInset ||
+        topPadding != oldDelegate.topPadding;
   }
 }

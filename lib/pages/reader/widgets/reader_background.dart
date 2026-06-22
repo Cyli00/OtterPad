@@ -82,8 +82,9 @@ class ReaderPalette {
 /// 根据 [readerTheme] 生成阅读器页面的局部 [ThemeData]。
 ///
 /// 以 parent 的 primary 为 seed 生成对应亮度的基础 [ColorScheme]，
-/// 再用 [ReaderPalette] 仅覆盖 `surface`——工具栏/底部栏背景跟随阅读器
-/// 背景色。**图标、文字、强调色继续来自 seed 派生**，保证外观面板里
+/// 再用 [ReaderPalette] 覆盖 surface 及文字相关字段，使 Flutter 侧
+/// 工具栏/底栏/sheet 的前景色与 WebView 内容保持一致。
+/// **强调色（primary 等）继续来自 seed 派生**，保证外观面板里
 /// 选的主题色（橙/紫/蓝…）在所有背景下保持一致。
 ThemeData buildReaderThemeData(ThemeData parent, ReaderTheme readerTheme) {
   final brightness = readerTheme.brightness;
@@ -94,11 +95,19 @@ ThemeData buildReaderThemeData(ThemeData parent, ReaderTheme readerTheme) {
           brightness: brightness,
         );
   final palette = resolveReaderPalette(readerTheme, baseCs);
-  final localCs = baseCs.copyWith(surface: palette.background);
+  final localCs = baseCs.copyWith(
+    surface: palette.background,
+    onSurface: palette.text,
+    onSurfaceVariant: palette.secondaryText,
+    outlineVariant: palette.divider,
+  );
   return ThemeData(
     colorScheme: localCs,
     useMaterial3: true,
-    textTheme: parent.textTheme,
+    textTheme: parent.textTheme.apply(
+      bodyColor: palette.text,
+      displayColor: palette.text,
+    ),
   );
 }
 

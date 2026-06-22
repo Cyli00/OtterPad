@@ -144,6 +144,7 @@ class SnackBarService {
     required String message,
     Duration duration = const Duration(seconds: 4),
     SnackBarAction? action,
+    EdgeInsetsGeometry? margin,
   }) {
     final messenger = _messenger;
     if (messenger == null) return;
@@ -156,7 +157,7 @@ class SnackBarService {
         behavior: SnackBarBehavior.floating,
         width: mobile ? null : 400,
         margin: mobile
-            ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
+            ? (margin ?? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0))
             : null,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
