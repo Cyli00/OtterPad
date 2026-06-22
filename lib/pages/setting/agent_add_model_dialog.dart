@@ -77,25 +77,23 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                       ),
                     ),
                     const SizedBox(height: 22),
-                    RoleToggleTile(
-                      icon: Symbols.psychology_rounded,
-                      label: ctx.l10n.expertModel,
-                      containerColor: cs.primaryContainer,
-                      onContainerColor: cs.onPrimaryContainer,
-                      value: setAsDefault,
-                      onChanged: isMultimodal
-                          ? (v) {
-                              Haptics.soft();
-                              setLocal(() => setAsDefault = v);
-                            }
-                          : null,
-                      replacingText: !isMultimodal
-                          ? ctx.l10n.expertRequiresVision
-                          : defaultReplaces
-                              ? ctx.l10n.willReplace(currentDefault)
-                              : null,
-                    ),
-                    const SizedBox(height: 10),
+                    if (isMultimodal) ...[
+                      RoleToggleTile(
+                        icon: Symbols.psychology_rounded,
+                        label: ctx.l10n.expertModel,
+                        containerColor: cs.primaryContainer,
+                        onContainerColor: cs.onPrimaryContainer,
+                        value: setAsDefault,
+                        onChanged: (v) {
+                          Haptics.soft();
+                          setLocal(() => setAsDefault = v);
+                        },
+                        replacingText: defaultReplaces
+                            ? ctx.l10n.willReplace(currentDefault)
+                            : null,
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     RoleToggleTile(
                       icon: Symbols.bolt_rounded,
                       label: ctx.l10n.fastModel,

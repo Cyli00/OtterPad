@@ -732,23 +732,6 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               theme,
               cs,
               hint: current.protocol.defaultBaseUrl,
-              suffix: IconButton(
-                icon: Icon(
-                  Symbols.tune_rounded,
-                  size: 20,
-                  // 读输入框现值而非已落盘状态：刚输完 Key（防抖未到期）也能点
-                  color: _keyCtrl.text.trim().isNotEmpty
-                      ? cs.primary
-                      : cs.onSurfaceVariant.withAlpha(80),
-                ),
-                tooltip: context.l10n.manageModels,
-                onPressed: _keyCtrl.text.trim().isNotEmpty
-                    ? () {
-                        Haptics.soft();
-                        _openModelManageSheet(current);
-                      }
-                    : null,
-              ),
             ),
             keyboardType: TextInputType.url,
             autocorrect: false,
@@ -773,10 +756,34 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             ),
           ),
 
-          // ── 模型列表 ──
+          // ── 模型列表（永驻：无模型时只显示标题 + 管理按钮）──
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              _sectionLabel(theme, cs, context.l10n.models),
+              const Spacer(),
+              IconButton(
+                onPressed: _keyCtrl.text.trim().isNotEmpty
+                    ? () {
+                        Haptics.soft();
+                        _openModelManageSheet(current);
+                      }
+                    : null,
+                icon: Icon(
+                  Symbols.playlist_add_rounded,
+                  size: 20,
+                  weight: 600,
+                  color: _keyCtrl.text.trim().isNotEmpty
+                      ? cs.onSurfaceVariant
+                      : cs.onSurfaceVariant.withAlpha(80),
+                ),
+                tooltip: _keyCtrl.text.trim().isNotEmpty
+                    ? context.l10n.manageModels
+                    : context.l10n.addApiKeyFirst,
+              ),
+            ],
+          ),
           if (current.models.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            _sectionLabel(theme, cs, context.l10n.models),
             const SizedBox(height: 12),
             Consumer(
               builder: (context, ref, _) {
@@ -916,6 +923,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               roleLabel: context.l10n.expertModel,
               currentInstanceId: defaultRole.id,
               currentModelId: defaultRole.modelId,
+              multimodalOnly: true,
               onSelect: (instId, id) => ref
                   .read(agentApiProvider.notifier)
                   .setGlobalDefaultModel(instId, id),
@@ -1049,18 +1057,20 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     required String? currentInstanceId,
     required String? currentModelId,
     bool imageOnly = false,
+    bool multimodalOnly = false,
     required void Function(String instanceId, String modelId) onSelect,
     required VoidCallback onClear,
   }) async {
     // 按实例分组收集可选模型；按角色用能力过滤后剔除空实例：
-    // 生图角色只收 canGenerateImage；文本角色排除嵌入与生图模型。
+    // Expert 角色只收多模态；生图角色只收 canGenerateImage；
+    // 快速模型排除嵌入与生图模型。
     final entries = <({String id, String name, List<String> models})>[];
     for (final inst in ref.read(agentApiProvider).instances) {
       final models = inst.models.where((modelId) {
         final cap = inst.capabilityFor(modelId);
-        return imageOnly
-            ? cap.canGenerateImage
-            : (!cap.embedding && !cap.imageOutput);
+        if (imageOnly) return cap.canGenerateImage;
+        if (multimodalOnly) return cap.imageInput && !cap.embedding && !cap.imageOutput;
+        return !cap.embedding && !cap.imageOutput;
       }).toList();
       if (models.isNotEmpty) {
         entries.add((id: inst.id, name: inst.name, models: models));
@@ -1102,7 +1112,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                         child: Text(
                           imageOnly
                               ? ctx.l10n.pleaseAddImageModel
-                              : ctx.l10n.pleaseAddModels,
+                              : multimodalOnly
+                                  ? ctx.l10n.pleaseAddMultimodalModel
+                                  : ctx.l10n.pleaseAddModels,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: cs.onSurfaceVariant.withAlpha(160),
                           ),

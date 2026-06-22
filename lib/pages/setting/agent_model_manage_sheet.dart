@@ -85,7 +85,8 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   bool _loading = true;
   String? _error;
   String _query = '';
-  bool _imageOnly = false;
+  bool _imageGenOnly = false;
+  bool _multimodalOnly = false;
   late final Set<String> _localAdded;
   // 跟随用户在本 sheet 内的连续操作更新，避免重复开关时读到过期值
   String? _localDefault;
@@ -130,13 +131,23 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   List<String> get _filtered {
     if (_models == null) return [];
     var result = _models!;
-    if (_imageOnly) {
+    if (_imageGenOnly) {
       result = result
           .where(
             (m) => AgentModelCapability.isImageGenerationModel(
               provider: widget.providerType,
               modelId: m,
             ),
+          )
+          .toList();
+    }
+    if (_multimodalOnly) {
+      result = result
+          .where(
+            (m) => AgentModelCapability.infer(
+              provider: widget.providerType,
+              modelId: m,
+            ).imageInput,
           )
           .toList();
     }
@@ -297,26 +308,38 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
           ),
           IconButton(
             icon: Icon(
-              Symbols.refresh_rounded,
+              _multimodalOnly
+                  ? Symbols.visibility_rounded
+                  : Symbols.visibility_off_rounded,
               size: 20,
-              color: cs.onSurfaceVariant,
+              color: _multimodalOnly ? cs.primary : cs.onSurfaceVariant,
             ),
-            tooltip: context.l10n.refresh,
+            tooltip: _multimodalOnly
+                ? context.l10n.showAllModels
+                : context.l10n.showMultimodalModels,
             onPressed: () {
               Haptics.soft();
-              _fetchModels();
+              setState(() {
+                _multimodalOnly = !_multimodalOnly;
+                if (_multimodalOnly) _imageGenOnly = false;
+              });
             },
           ),
           IconButton(
             icon: Icon(
-              _imageOnly ? Symbols.image_rounded : Symbols.image_search_rounded,
+              Symbols.palette_rounded,
               size: 20,
-              color: _imageOnly ? cs.primary : cs.onSurfaceVariant,
+              color: _imageGenOnly ? cs.primary : cs.onSurfaceVariant,
             ),
-            tooltip: _imageOnly ? context.l10n.showAllModels : context.l10n.showImageModels,
+            tooltip: _imageGenOnly
+                ? context.l10n.showAllModels
+                : context.l10n.showImageGenModels,
             onPressed: () {
               Haptics.soft();
-              setState(() => _imageOnly = !_imageOnly);
+              setState(() {
+                _imageGenOnly = !_imageGenOnly;
+                if (_imageGenOnly) _multimodalOnly = false;
+              });
             },
           ),
           IconButton(
@@ -431,7 +454,11 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       return Padding(
         padding: const EdgeInsets.all(48),
         child: Text(
-          _imageOnly ? context.l10n.noImageModels : context.l10n.noResults,
+          _imageGenOnly
+              ? context.l10n.noImageGenModels
+              : _multimodalOnly
+                  ? context.l10n.noMultimodalModels
+                  : context.l10n.noResults,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant,
           ),
@@ -522,6 +549,15 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                 tooltip: context.l10n.image,
               ),
             ],
+            if (cap.imageOutput) ...[
+              const SizedBox(width: 4),
+              _CapDot(
+                icon: Symbols.palette_rounded,
+                tooltip: context.l10n.imageGen,
+                color: cs.secondaryContainer,
+                iconColor: cs.onSecondaryContainer,
+              ),
+            ],
             if (cap.tool) ...[
               const SizedBox(width: 4),
               _CapDot(
@@ -593,7 +629,14 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
 class _CapDot extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  const _CapDot({required this.icon, required this.tooltip});
+  final Color? color;
+  final Color? iconColor;
+  const _CapDot({
+    required this.icon,
+    required this.tooltip,
+    this.color,
+    this.iconColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -605,10 +648,10 @@ class _CapDot extends StatelessWidget {
         height: 22,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
+          color: color ?? cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 14, fill: 1, color: cs.onSurfaceVariant),
+        child: Icon(icon, size: 14, fill: 1, color: iconColor ?? cs.onSurfaceVariant),
       ),
     );
   }
