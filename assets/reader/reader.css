@@ -137,7 +137,6 @@ body[data-translation-style="blur"] .translated {
   transition: filter 0.15s ease-out;
   cursor: pointer;
 }
-body[data-translation-style="blur"] .translated:hover,
 body[data-translation-style="blur"] .translated.revealed {
   filter: none;
 }

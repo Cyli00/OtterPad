@@ -370,6 +370,15 @@ let _scrollIdleTimer = null;
 // 用于跨"终止信号"去重——防止"鼠标抬起 + 键盘 keyup + 后续微调"
 // 触发的多次 emit 都让 Flutter 端 dismiss/insert 工具栏导致闪烁。
 let _lastEmittedSig = '';
+let _pointerIsDown = false;
+let _pointerDownTimer = null;
+
+document.addEventListener('pointerdown', () => {
+  _pointerIsDown = true;
+  // Android WebView 吞掉 pointerup——800ms 无 pointerup 自动解锁 selectionchange
+  clearTimeout(_pointerDownTimer);
+  _pointerDownTimer = setTimeout(() => { _pointerIsDown = false; }, 800);
+});
 
 function _handleSelection() {
   clearTimeout(_selectionTimeout);
@@ -431,9 +440,12 @@ function _handleSelection() {
 // Overlay 的 outside-tap dismiss（Android）承担。
 let _selectionChangeTimer = null;
 document.addEventListener('pointerup', (e) => {
+  _pointerIsDown = false;
+  clearTimeout(_pointerDownTimer);
   _handleSelection();
 });
 document.addEventListener('selectionchange', () => {
+  if (_pointerIsDown) return;
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
   clearTimeout(_selectionChangeTimer);

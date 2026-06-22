@@ -125,6 +125,10 @@ MarkdownConfig buildReaderMarkdownConfig({
         border: TableBorder.all(color: dividerColor, width: 0.5),
         headPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         bodyPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        wrapper: (table) => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: table,
+        ),
       ),
       HrConfig(height: 1, color: dividerColor),
       NRImgConfig(
