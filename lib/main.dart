@@ -17,6 +17,7 @@ import 'services/back_matter_detector.dart';
 import 'services/figure_extract_service.dart';
 import 'services/haptics.dart';
 import 'services/reader_localhost_server.dart';
+import 'services/share_receiver_service.dart';
 import 'services/storage_usage_service.dart';
 
 bool get _isDesktop =>
@@ -93,7 +94,20 @@ Future<void> main() async {
   // 自动备份调度：启动 2 分钟后首查，之后每小时检查一次到期与变更
   container.read(autoBackupSchedulerProvider).start();
 
+  // 移动端：接收分享/打开 PDF 文件的 intent
+  ShareReceiverService? shareReceiver;
+  if (!_isDesktop) {
+    shareReceiver = ShareReceiverService(container);
+  }
+
   runApp(
     UncontrolledProviderScope(container: container, child: const OtterPadApp()),
   );
+
+  // 首帧后查询冷启动时携带的待导入文件
+  if (shareReceiver != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      shareReceiver!.checkInitialSharedFiles();
+    });
+  }
 }
