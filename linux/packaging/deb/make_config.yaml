@@ -1,0 +1,19 @@
+# deb 包配置 (flutter_distributor deb maker)
+display_name: OtterPad
+package_name: otterpad
+maintainer:
+  name: Cyli00
+  email: cyli00@users.noreply.github.com
+priority: optional
+section: utils
+# 运行期依赖，与 CI 构建依赖保持一致，保证安装后可启动
+dependencies:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+  - libsecret-1-0
+icon: assets/icons/app_icon.png
+generic_name: Reading App
+categories:
+  - Office
+  - Viewer
+startup_notify: true

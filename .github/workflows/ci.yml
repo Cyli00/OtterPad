@@ -40,11 +40,14 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --release
+      # 仅产出 armeabi-v7a 与 arm64-v8a 两个 ABI 的拆分 APK
+      - run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           retention-days: 7
 
   # ── Windows ──
@@ -58,7 +61,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      # VS 2026/MSVC 14.51 把 <experimental/coroutine> 变为硬错误，
+      # flutter_inappwebview_windows 0.6.0 仍依赖它，用该宏抑制静态断言
       - run: flutter build windows --release
+        env:
+          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x64

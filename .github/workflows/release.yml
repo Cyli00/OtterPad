@@ -1,0 +1,225 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: # 手动触发=只构建打包、不发 Release，可用于演练
+
+permissions:
+  contents: write
+
+jobs:
+  # ── 各平台并行构建并打包成可分发格式，统一命名后作为 artifact 上传 ──
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-latest
+          - platform: linux
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # 从 tag 取版本号 (去掉前导 v)；手动触发时回退为 0.0.0-dev
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          ref="${{ github.ref_name }}"
+          v="${ref#v}"
+          [ "$v" = "$ref" ] && v="0.0.0-dev"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare dist dir
+        shell: bash
+        run: mkdir -p release-dist
+
+      # ── Android：拆分 APK，直接 flutter build（命名确定，不走 distributor）──
+      - name: Build Android APKs
+        if: matrix.platform == 'android'
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+      - name: Collect Android
+        if: matrix.platform == 'android'
+        shell: bash
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "release-dist/OtterPad-$v-android-arm64-v8a.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "release-dist/OtterPad-$v-android-armeabi-v7a.apk"
+
+      # ── 桌面端：flutter_distributor ──
+      - name: Activate flutter_distributor
+        if: matrix.platform != 'android'
+        run: dart pub global activate flutter_distributor 0.6.8
+
+      # Windows：Inno Setup + 协程宏 (distributor 内部会跑 flutter build windows)
+      - name: Install Inno Setup
+        if: matrix.platform == 'windows'
+        run: choco install innosetup --no-progress -y
+      - name: Package Windows
+        if: matrix.platform == 'windows'
+        env:
+          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
+        run: flutter_distributor package --platform windows --targets exe,zip
+      - name: Collect Windows
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          cp "$(find dist -iname '*.exe' | head -1)" "release-dist/OtterPad-$v-windows-x64-setup.exe"
+          cp "$(find dist -iname '*.zip' | head -1)" "release-dist/OtterPad-$v-windows-x64-portable.zip"
+
+      # macOS：appdmg
+      - name: Install appdmg
+        if: matrix.platform == 'macos'
+        run: npm install -g appdmg
+      - name: Package macOS
+        if: matrix.platform == 'macos'
+        run: flutter_distributor package --platform macos --targets dmg
+      - name: Collect macOS
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          cp "$(find dist -iname '*.dmg' | head -1)" "release-dist/OtterPad-$v-macos.dmg"
+
+      # Linux：appimage/deb/rpm 工具链
+      - name: Install Linux deps
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            ninja-build libgtk-3-dev libsecret-1-dev libjsoncpp-dev libwebkit2gtk-4.1-dev \
+            rpm fakeroot libfuse2
+          sudo wget -qO /usr/local/bin/appimagetool \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
+      - name: Package Linux
+        if: matrix.platform == 'linux'
+        run: flutter_distributor package --platform linux --targets appimage,deb,rpm
+      - name: Collect Linux
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          cp "$(find dist -iname '*.AppImage' | head -1)" "release-dist/OtterPad-$v-linux-x86_64.AppImage"
+          cp "$(find dist -iname '*.deb'      | head -1)" "release-dist/OtterPad-$v-linux-x86_64.deb"
+          cp "$(find dist -iname '*.rpm'      | head -1)" "release-dist/OtterPad-$v-linux-x86_64.rpm"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.platform }}
+          path: release-dist/
+          retention-days: 3
+
+  # ── 汇总所有产物 + 自动生成 changelog + 建 GitHub Release ──
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-dist
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          tag="${{ github.ref_name }}"
+          prev=$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)
+          range="${prev:+$prev..}$tag"
+          {
+            git log --no-merges --pretty=format:'- %s' "$range" | grep -v 'Update changelog' || true
+            echo
+            echo
+          } > notes.md
+          version="${tag#v}"
+          sed "s|VERSION|$version|g" .github/release_template.md >> notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-dist/*
+          body_path: notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  # ── iOS TestFlight（骨架，默认禁用）──
+  # 启用条件：拥有 Apple Developer Program 账号($99/年)，并在仓库
+  # Settings → Secrets and variables → Actions 配置以下 secrets，然后删除 `if: false`：
+  #   BUILD_CERTIFICATE_BASE64      Apple Distribution 证书(.p12) 的 base64
+  #   P12_PASSWORD                  .p12 密码
+  #   PROVISIONING_PROFILE_BASE64   App Store 描述文件(.mobileprovision) 的 base64
+  #   KEYCHAIN_PASSWORD             临时钥匙串密码(任意字符串)
+  #   APPSTORE_ISSUER_ID            App Store Connect API Key 的 Issuer ID
+  #   APPSTORE_KEY_ID               API Key ID
+  #   APPSTORE_PRIVATE_KEY          API Key 私钥(.p8) 内容
+  ios-testflight:
+    if: false
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+
+      - name: Import signing assets
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH=$RUNNER_TEMP/cert.p12
+          PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
+          KEYCHAIN=$RUNNER_TEMP/app.keychain-db
+          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build signed IPA
+        run: flutter build ipa --release --export-method app-store
+
+      - name: Upload to TestFlight
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: build/ios/ipa/OtterPad.ipa
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_PRIVATE_KEY }}

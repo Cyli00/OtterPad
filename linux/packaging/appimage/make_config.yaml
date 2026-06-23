@@ -1,0 +1,9 @@
+# AppImage 配置 (flutter_distributor appimage maker, 依赖 appimagetool)
+display_name: OtterPad
+icon: assets/icons/app_icon.png
+generic_name: Reading App
+categories:
+  - Office
+  - Viewer
+startup_notify: true
+include: []

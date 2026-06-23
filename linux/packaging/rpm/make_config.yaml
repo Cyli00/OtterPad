@@ -1,0 +1,16 @@
+# rpm 包配置 (flutter_distributor rpm maker)
+display_name: OtterPad
+summary: A cross-platform reading app inspired by Zotero
+# TODO: 按实际开源协议修改 (当前占位)
+license: Proprietary
+url: https://github.com/Cyli00/NightReader
+vendor: Cyli00
+packager: Cyli00
+packagerEmail: cyli00@users.noreply.github.com
+icon: assets/icons/app_icon.png
+group: Applications/Productivity
+generic_name: Reading App
+categories:
+  - Office
+  - Viewer
+startup_notify: true
