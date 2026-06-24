@@ -382,6 +382,16 @@ class FigureExtractService {
   /// 偏低 (≥0.5) 容忍 caption 延续行轻微缩排; 太低则容易吃入邻栏文字.
   static const _continuationOverlapRatio = 0.6;
 
+  /// Body-text labels: 当候选块为这些标签且已积累的 caption 描述已完整时,
+  /// 终止多行合并. 这既阻止把正文段落吃进 caption, 又容许 OCR 将
+  /// caption 延续行错标为 text 的场景 (此时 anchor 描述不完整, 合并继续).
+  static const _bodyTextContinuationLabels = {
+    'text',
+    'paragraph_title',
+    'abstract',
+    'aside_text',
+  };
+
   /// 视觉簇配 caption 的距离阈值占整页对角线的比例
   static const _captionMatchRatio = 0.5;
 
@@ -435,6 +445,19 @@ class FigureExtractService {
 
   static String _normalizeCaptionText(String text) {
     return text.trim().replaceAll(_captionWhitespaceRe, ' ');
+  }
+
+  /// 判断已积累的 caption 文本是否具有"完整描述": 去掉 figure 编号前缀后,
+  /// 剩余文本以句末标点 (. ? !) 结尾.
+  /// 用于多行合并: 当 caption 已完整时, 阻止 body-text label 块继续合并.
+  bool _captionDescriptionComplete(String text) {
+    final normalized = _normalizeCaptionText(text);
+    final m = _mainCaptionRe.firstMatch(normalized);
+    if (m == null) return false;
+    final afterPrefix = normalized.substring(m.end).trim();
+    if (afterPrefix.isEmpty) return false;
+    final last = afterPrefix[afterPrefix.length - 1];
+    return last == '.' || last == '?' || last == '!';
   }
 
   static String _joinCaptionParts(Iterable<String> parts) {
@@ -602,10 +625,14 @@ class FigureExtractService {
   ///   3. **纵向 gap 过大** — gap > max(anchorHeight * 0.8, 15px).
   ///   4. **横向 overlap 不足** — 候选块与 anchor 横向 overlap < 60% (邻栏文字).
   ///   5. **越过 page.blocks 末尾**.
+  ///   6. **body-text label + 描述已完整** — 候选块标签为 text/paragraph_title 等,
+  ///      且已积累的 caption 文本在去掉 figure 编号前缀后以句末标点结尾.
+  ///      这阻止把正文段落吃进 caption, 同时保留 OCR 将 caption 延续行错标为
+  ///      text 的合并能力 (此时 anchor 描述不完整, 句末标点检查不通过).
   ///
-  /// 满足 (2)/(3)/(4) 时跳过该 block 继续扫描——可能 PaddleOCR 在 caption 中间
+  /// 满足 (2)/(3)/(4)/(6) 时跳过该 block 继续扫描——可能 PaddleOCR 在 caption 中间
   /// 插入了不相关的 vision_footnote 等; 不应中断合并扫描. 但 (1) 是硬终止.
-  /// 实际为了简单, 我们对 (2) 直接 break, (3)/(4) 也 break, 只有 (1) 单独标记.
+  /// 实际为了简单, 我们对 (2) 直接 break, (3)/(4)/(6) 也 break, 只有 (1) 单独标记.
   /// 选择 break 是因为延续行在 PaddleOCR 视角通常是紧邻的, 一旦中断就不再续.
   List<LayoutBlock> _scanCaptionContinuation(_PageData page, int anchorIndex) {
     final anchor = page.blocks[anchorIndex];
@@ -621,6 +648,7 @@ class FigureExtractService {
 
     final result = <LayoutBlock>[];
     var lastBottom = anchorBbox.bottom;
+    var accumulatedText = _normalizeCaptionText(anchor.blockContent);
 
     for (var j = anchorIndex + 1; j < page.blocks.length; j++) {
       final cand = page.blocks[j];
@@ -644,6 +672,12 @@ class FigureExtractService {
       );
       if (overlap / anchorWidth < _continuationOverlapRatio) break;
 
+      // 终止: body-text label + caption 描述已完整 → 正文段落, 不是延续行
+      if (_bodyTextContinuationLabels.contains(cand.blockLabel) &&
+          _captionDescriptionComplete(accumulatedText)) {
+        break;
+      }
+
       // 跳过空内容 (PaddleOCR 偶有空 block)
       if (candContent.isEmpty) {
         lastBottom = cbox.bottom;
@@ -651,6 +685,7 @@ class FigureExtractService {
       }
 
       result.add(cand);
+      accumulatedText = _joinCaptionParts([accumulatedText, candContent]);
       lastBottom = cbox.bottom;
     }
 

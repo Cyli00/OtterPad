@@ -649,6 +649,71 @@ void main() {
         containsAll(['6', '7', '8', '9', '10']));
     expect(_idsForCaption(segments, 'Table 1'), ['13', '12']);
   });
+  // ─── caption 延续行 body-text 过度合并 ──────────────────
+
+  test('text-label 正文段落不应被合并为 caption 延续行 (caption 已完整)', () {
+    // Bug 现场: anchor block 已包含完整 caption 文本 (以句号结尾),
+    // 后续 text 块是正文段落, 不应被当作 caption 延续行合并.
+    // anchor 高度大 (height=163), 导致 gap 阈值过大 (130px),
+    // 使得仅 gap=28 的正文段落通过了 gap 检查.
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('img', 'image', [101, 118, 582, 597]),
+        _block('sub', 'figure_title', [125, 580, 519, 621],
+            'Accessing large brain regions'),
+        _block('cap', 'figure_title', [97, 635, 588, 798],
+            'Figure 2. Current challenges in all-optical brain interrogation.'),
+        _block('body', 'text', [96, 826, 588, 1202],
+            'microscopy techniques must be developed to record and manipulate the activity of multiple brain areas.'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 1);
+    // caption 不应包含正文内容
+    expect(segments.single.captionText, isNot(contains('microscopy')));
+    // body block 不应在 segment.blocks 中 (作为 caption continuation)
+    final ids = segments.single.blocks.map((b) => b.blockId).toSet();
+    expect(ids, isNot(contains('body')));
+  });
+
+  test('text-label 块仍可作为延续行——当 anchor 文本不完整 (仅有编号无描述)', () {
+    // 原始修复场景: OCR 把 caption 拆成 figure_title + text,
+    // anchor 仅有 "Figure 1." 没有描述, text 块包含实际 caption 描述.
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('img', 'image', [100, 100, 700, 600]),
+        _block('cap', 'figure_title', [100, 620, 700, 640],
+            'Figure 1.'),
+        _block('desc', 'text', [100, 645, 700, 680],
+            'Detailed description of the experimental setup.'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 1);
+    // caption 应包含延续行的描述
+    expect(segments.single.captionText, contains('Detailed description'));
+  });
+
+  test('text-label 块仍可作为延续行——当 anchor 描述未结束 (无句号结尾)', () {
+    // anchor 有描述但句子未完成 (被 OCR 在中间截断)
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('img', 'image', [100, 100, 700, 600]),
+        _block('cap', 'figure_title', [100, 620, 700, 640],
+            'Figure 1. Detailed description of the experimental'),
+        _block('cont', 'text', [100, 645, 700, 680],
+            'setup and methodology.'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 1);
+    // caption 应包含延续行
+    expect(segments.single.captionText, contains('setup and methodology'));
+  });
+
   // ─── Pass 4: ordinal matching ──────────────────────────
 
   group('Pass 4 ordinal matching (预印本 Figure Legends 布局)', () {
