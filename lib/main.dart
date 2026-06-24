@@ -39,7 +39,7 @@ Future<void> main() async {
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.hidden,
-      title: '獭祭鱼 OtterPad',
+      title: 'OtterPad',
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();

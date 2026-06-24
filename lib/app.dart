@@ -64,7 +64,7 @@ class OtterPadApp extends ConsumerWidget {
 
         return MaterialApp.router(
           scaffoldMessengerKey: scaffoldMessengerKey,
-          title: '獭祭鱼 OtterPad',
+          title: 'OtterPad',
           debugShowCheckedModeBanner: false,
           locale: locale,
           supportedLocales: AppLocalizations.supportedLocales,
