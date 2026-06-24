@@ -1,7 +1,7 @@
 {
   "@@locale": "zh",
 
-  "appTitle": "獭祭鱼 OtterPad",
+  "appTitle": "OtterPad",
 
   "home": "首页",
   "library": "文献库",
@@ -35,6 +35,7 @@
   "processing": "处理中...",
   "cancelAll": "取消全部",
   "goToSettings": "前往设置",
+  "configurationRequired": "需要配置",
   "cancelled": "已取消",
   "copiedToClipboard": "已复制到剪贴板",
 
@@ -420,7 +421,9 @@
   "tavilySearchSection": "联网搜索回退（Tavily）",
   "tavilySearchDesc": "为不支持原生联网搜索的模型（如 DeepSeek、豆包）提供搜索能力。填入 Key 后，对话页的联网开关对这些模型即可生效。",
   "tavilyNotConfiguredHint": "当前模型无原生联网搜索，请在 AI 设置中配置 Tavily API Key 以启用",
-  "mimoSearchPluginHint": "MiMo 联网搜索需先在平台控制台开通插件：platform.xiaomimimo.com/console/plugin",
+  "mimoSearchPluginTitle": "开通联网搜索插件",
+  "mimoSearchPluginHint": "MiMo 联网搜索需先在平台控制台开通插件。",
+  "mimoSearchPluginOpenConsole": "打开插件控制台",
 
   "taskInProgress": "该文献已有任务正在进行中",
   "savingResult": "正在保存结果",

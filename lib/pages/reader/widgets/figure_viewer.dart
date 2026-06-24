@@ -15,8 +15,6 @@ import '../../../core/animation_constants.dart';
 import '../../../providers/api_provider.dart';
 import '../../../services/haptics.dart';
 import '../../../providers/translation_config_provider.dart';
-import '../../../router/app_router.dart';
-import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
 import '../../../services/document_translation_service.dart';
 import '../../../services/figure_extract_service.dart';
@@ -575,12 +573,9 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     }
 
     final agentState = ref.read(effectiveAgentApiProvider);
-    final snackBar = ref.read(snackBarServiceProvider);
-    if (!AiSettingsPrompt.ensureTextModelConfigured(
+    if (!await AiSettingsPrompt.ensureTextModelConfigured(
+      context: context,
       agentState: agentState,
-      snackBar: snackBar,
-      onOpenSettings: () =>
-          ref.read(routerProvider).push(AppRoutes.settingsApi),
     )) {
       return;
     }
@@ -613,11 +608,9 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     } catch (e) {
       if (!mounted) return;
       setState(() => _translating[idx] = false);
-      if (AiSettingsPrompt.showForConfigError(
+      if (await AiSettingsPrompt.showForConfigError(
+        context: context,
         error: e,
-        snackBar: ref.read(snackBarServiceProvider),
-        onOpenSettings: () =>
-            ref.read(routerProvider).push(AppRoutes.settingsApi),
       )) {
         return;
       }

@@ -285,6 +285,12 @@ abstract class AppLocalizations {
   /// **'Go to Settings'**
   String get goToSettings;
 
+  /// No description provided for @configurationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration Required'**
+  String get configurationRequired;
+
   /// No description provided for @cancelled.
   ///
   /// In en, this message translates to:
@@ -2307,11 +2313,23 @@ abstract class AppLocalizations {
   /// **'This model has no native web search. Set a Tavily API Key in AI settings to enable it.'**
   String get tavilyNotConfiguredHint;
 
+  /// No description provided for @mimoSearchPluginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable web search plugin'**
+  String get mimoSearchPluginTitle;
+
   /// No description provided for @mimoSearchPluginHint.
   ///
   /// In en, this message translates to:
-  /// **'MiMo web search requires enabling the plugin first: platform.xiaomimimo.com/console/plugin'**
+  /// **'MiMo web search requires enabling the plugin in the platform console first.'**
   String get mimoSearchPluginHint;
+
+  /// No description provided for @mimoSearchPluginOpenConsole.
+  ///
+  /// In en, this message translates to:
+  /// **'Open plugin console'**
+  String get mimoSearchPluginOpenConsole;
 
   /// No description provided for @taskInProgress.
   ///

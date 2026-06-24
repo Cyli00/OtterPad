@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/l10n.dart';
 import '../router/app_router.dart';
-import '../router/app_routes.dart';
 import '../services/ai_settings_prompt.dart';
 import '../services/document_translation_service.dart';
 import '../services/figure_extract_service.dart';
@@ -109,11 +108,8 @@ class DocumentTranslationNotifier
     final config = _ref.read(translationConfigProvider);
     final snackBar = _ref.read(snackBarServiceProvider);
 
-    if (!AiSettingsPrompt.ensureTextModelConfigured(
+    if (!await AiSettingsPrompt.ensureTextModelConfigured(
       agentState: agentState,
-      snackBar: snackBar,
-      onOpenSettings: () =>
-          _ref.read(routerProvider).push(AppRoutes.settingsApi),
     )) {
       return false;
     }

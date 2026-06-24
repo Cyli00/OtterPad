@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => '獭祭鱼 OtterPad';
+  String get appTitle => 'OtterPad';
 
   @override
   String get home => '首页';
@@ -100,6 +100,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get goToSettings => '前往设置';
+
+  @override
+  String get configurationRequired => '需要配置';
 
   @override
   String get cancelled => '已取消';
@@ -1137,8 +1140,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '当前模型无原生联网搜索，请在 AI 设置中配置 Tavily API Key 以启用';
 
   @override
-  String get mimoSearchPluginHint =>
-      'MiMo 联网搜索需先在平台控制台开通插件：platform.xiaomimimo.com/console/plugin';
+  String get mimoSearchPluginTitle => '开通联网搜索插件';
+
+  @override
+  String get mimoSearchPluginHint => 'MiMo 联网搜索需先在平台控制台开通插件。';
+
+  @override
+  String get mimoSearchPluginOpenConsole => '打开插件控制台';
 
   @override
   String get taskInProgress => '该文献已有任务正在进行中';
@@ -2430,7 +2438,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   AppLocalizationsZhHant() : super('zh_Hant');
 
   @override
-  String get appTitle => '獺祭魚 OtterPad';
+  String get appTitle => 'OtterPad';
 
   @override
   String get home => '首頁';
@@ -2521,6 +2529,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get goToSettings => '前往設定';
+
+  @override
+  String get configurationRequired => '需要設定';
 
   @override
   String get cancelled => '已取消';
@@ -3558,8 +3569,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
       '目前模型無原生聯網搜尋，請在 AI 設定中設定 Tavily API Key 以啟用';
 
   @override
-  String get mimoSearchPluginHint =>
-      'MiMo 聯網搜尋需先在平台控制台開通外掛：platform.xiaomimimo.com/console/plugin';
+  String get mimoSearchPluginTitle => '開通聯網搜尋外掛';
+
+  @override
+  String get mimoSearchPluginHint => 'MiMo 聯網搜尋需先在平台控制台開通外掛。';
+
+  @override
+  String get mimoSearchPluginOpenConsole => '開啟外掛控制台';
 
   @override
   String get taskInProgress => '該文獻已有工作正在進行中';

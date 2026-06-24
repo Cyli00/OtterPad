@@ -102,6 +102,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goToSettings => 'Go to Settings';
 
   @override
+  String get configurationRequired => 'Configuration Required';
+
+  @override
   String get cancelled => 'Cancelled';
 
   @override
@@ -1149,8 +1152,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'This model has no native web search. Set a Tavily API Key in AI settings to enable it.';
 
   @override
+  String get mimoSearchPluginTitle => 'Enable web search plugin';
+
+  @override
   String get mimoSearchPluginHint =>
-      'MiMo web search requires enabling the plugin first: platform.xiaomimimo.com/console/plugin';
+      'MiMo web search requires enabling the plugin in the platform console first.';
+
+  @override
+  String get mimoSearchPluginOpenConsole => 'Open plugin console';
 
   @override
   String get taskInProgress => 'This document already has a task running';

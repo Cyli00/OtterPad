@@ -13,6 +13,7 @@ import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../widgets/selection_pop_scope.dart';
 import '../../services/batch_extract_service.dart';
+import '../../services/ai_settings_prompt.dart';
 import '../../services/snackbar_service.dart';
 import '../../utils/doc_paths.dart';
 import '../shelf/widgets/create_favorite_dialog.dart';
@@ -140,12 +141,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     if (selection.selectedIds.isEmpty) return;
 
     final apiState = ref.read(docExtractApiProvider);
-    if (!apiState.isConfigured) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.configureExtractToken);
+    if (!await AiSettingsPrompt.ensureExtractConfigured(
+      context: context,
+      apiState: apiState,
+    )) {
       return;
     }
+    if (!context.mounted) return;
 
     final docs = ref.read(validDocsProvider);
     final selectedDocs = docs

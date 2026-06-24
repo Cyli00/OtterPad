@@ -35,6 +35,7 @@
   "processing": "Processing...",
   "cancelAll": "Cancel All",
   "goToSettings": "Go to Settings",
+  "configurationRequired": "Configuration Required",
   "cancelled": "Cancelled",
   "copiedToClipboard": "Copied to clipboard",
 
@@ -427,7 +428,9 @@
   "tavilySearchSection": "Web Search Fallback (Tavily)",
   "tavilySearchDesc": "Provides web search for models without native search (e.g. DeepSeek, Doubao). Once the key is set, the search toggle in chat works for these models.",
   "tavilyNotConfiguredHint": "This model has no native web search. Set a Tavily API Key in AI settings to enable it.",
-  "mimoSearchPluginHint": "MiMo web search requires enabling the plugin first: platform.xiaomimimo.com/console/plugin",
+  "mimoSearchPluginTitle": "Enable web search plugin",
+  "mimoSearchPluginHint": "MiMo web search requires enabling the plugin in the platform console first.",
+  "mimoSearchPluginOpenConsole": "Open plugin console",
 
   "taskInProgress": "This document already has a task running",
   "savingResult": "Saving result",

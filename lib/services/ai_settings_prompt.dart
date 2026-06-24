@@ -1,112 +1,191 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/l10n.dart';
 import '../providers/api_provider.dart';
 import '../router/app_router.dart';
-import 'snackbar_service.dart';
+import '../router/app_routes.dart';
+import '../widgets/app_dialog.dart';
 
 class AiSettingsPrompt {
   AiSettingsPrompt._();
 
-  static AppLocalizations? get _l10n {
-    final ctx = rootNavigatorKey.currentContext;
-    return ctx != null ? AppLocalizations.of(ctx) : null;
-  }
-
-  static bool ensureTextModelConfigured({
+  static Future<bool> ensureTextModelConfigured({
+    BuildContext? context,
     required AgentApiState agentState,
-    required SnackBarService snackBar,
-    required VoidCallback onOpenSettings,
-  }) {
-    final l10n = _l10n;
+  }) async {
     final hasModel =
         (agentState.fastModelId?.isNotEmpty ?? false) ||
         (agentState.defaultModelId?.isNotEmpty ?? false);
     if (!hasModel) {
-      _show(
-        snackBar,
-        message: l10n?.aiSettingsSelectTextModel ?? '请先在「AI 设置」中选择快速模型或专家模型',
-        onOpenSettings: onOpenSettings,
+      final ctx = _resolveContext(context);
+      if (ctx == null) return false;
+      await _showDialog(
+        context: ctx,
+        message: ctx.l10n.aiSettingsSelectTextModel,
+        route: AppRoutes.settingsApi,
       );
       return false;
     }
     if (agentState.apiKey.trim().isEmpty) {
-      _show(
-        snackBar,
-        message: l10n?.aiSettingsFillApiKey ?? '请先在「AI 设置」中填写 API Key',
-        onOpenSettings: onOpenSettings,
+      final ctx = _resolveContext(context);
+      if (ctx == null) return false;
+      await _showDialog(
+        context: ctx,
+        message: ctx.l10n.aiSettingsFillApiKey,
+        route: AppRoutes.settingsApi,
       );
       return false;
     }
     return true;
   }
 
-  static bool ensureImageModelSelected({
+  static Future<bool> ensureImageModelSelected({
+    BuildContext? context,
     required ({String? id, String? modelId}) imageRole,
-    required SnackBarService snackBar,
-    required VoidCallback onOpenSettings,
-  }) {
+  }) async {
     if (imageRole.id != null && imageRole.modelId != null) return true;
-    _show(
-      snackBar,
-      message: _l10n?.selectImageModelFirst ?? '请先在「AI 设置」中选择生图模型',
-      onOpenSettings: onOpenSettings,
+    final ctx = _resolveContext(context);
+    if (ctx == null) return false;
+    await _showDialog(
+      context: ctx,
+      message: ctx.l10n.selectImageModelFirst,
+      route: AppRoutes.settingsApi,
     );
     return false;
   }
 
-  static bool ensureImageModelConfigured({
+  static Future<bool> ensureImageModelConfigured({
+    BuildContext? context,
     required AgentApiState agentState,
-    required SnackBarService snackBar,
-    required VoidCallback onOpenSettings,
-  }) {
-    final l10n = _l10n;
+  }) async {
     final hasModel = agentState.imageModelId?.isNotEmpty ?? false;
     if (!hasModel) {
-      _show(
-        snackBar,
-        message: l10n?.selectImageModelFirst ?? '请先在「AI 设置」中选择生图模型',
-        onOpenSettings: onOpenSettings,
+      final ctx = _resolveContext(context);
+      if (ctx == null) return false;
+      await _showDialog(
+        context: ctx,
+        message: ctx.l10n.selectImageModelFirst,
+        route: AppRoutes.settingsApi,
       );
       return false;
     }
     if (agentState.apiKey.trim().isEmpty) {
-      _show(
-        snackBar,
-        message: l10n?.aiSettingsFillImageApiKey ?? '请先在「AI 设置」中填写生图模型 API Key',
-        onOpenSettings: onOpenSettings,
+      final ctx = _resolveContext(context);
+      if (ctx == null) return false;
+      await _showDialog(
+        context: ctx,
+        message: ctx.l10n.aiSettingsFillImageApiKey,
+        route: AppRoutes.settingsApi,
       );
       return false;
     }
     return true;
   }
 
-  static bool showForConfigError({
+  static Future<bool> ensureExtractConfigured({
+    BuildContext? context,
+    required DocExtractApiState apiState,
+  }) async {
+    if (apiState.isConfigured) return true;
+    final ctx = _resolveContext(context);
+    if (ctx == null) return false;
+    await _showDialog(
+      context: ctx,
+      message: ctx.l10n.configureExtractToken,
+      route: AppRoutes.settingsExtract,
+    );
+    return false;
+  }
+
+  static Future<bool> showForConfigError({
+    required BuildContext context,
     required Object error,
-    required SnackBarService snackBar,
-    required VoidCallback onOpenSettings,
-  }) {
+  }) async {
     final message = _normalizeError(error);
     if (!message.contains('AI 设置')) return false;
-    _show(snackBar, message: message, onOpenSettings: onOpenSettings);
+    if (!context.mounted) return false;
+    await _showDialog(
+      context: context,
+      message: message,
+      route: AppRoutes.settingsApi,
+    );
     return true;
   }
 
-  static void _show(
-    SnackBarService snackBar, {
+  static BuildContext? _resolveContext(BuildContext? context) {
+    final ctx = context ?? rootNavigatorKey.currentContext;
+    if (ctx == null || !ctx.mounted) return null;
+    return ctx;
+  }
+
+  static Future<void> _showDialog({
+    required BuildContext context,
     required String message,
-    required VoidCallback onOpenSettings,
-  }) {
-    snackBar.showResult(
-      message: message,
-      action: SnackBarAction(
-        label: rootNavigatorKey.currentContext != null
-            ? AppLocalizations.of(rootNavigatorKey.currentContext!)!
-                .goToSettings
-            : '前往设置',
-        onPressed: onOpenSettings,
-      ),
+    required String route,
+  }) async {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    // 视觉对齐 §3.1 Dialog 规范（titleLarge bold 标题 + bodyMedium 正文 +
+    // fromLTRB(24,24,24,20) + 宽度 clamp），与 _showNewChatDialog 等保持一致；
+    // 不再用 Material AlertDialog（其默认 headlineSmall 标题与 padding 不符）。
+    final goToSettings = await showAppDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final width = (MediaQuery.of(ctx).size.width * 0.85).clamp(
+          320.0,
+          480.0,
+        );
+        return Material(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(28),
+          clipBehavior: Clip.antiAlias,
+          child: Container(
+            width: width,
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.configurationRequired,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(l10n.cancel),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text(l10n.goToSettings),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
+    if (goToSettings == true && context.mounted) {
+      context.push(route);
+    }
   }
 
   static String _normalizeError(Object error) {

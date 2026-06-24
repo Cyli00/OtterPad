@@ -11,12 +11,11 @@ import '../../../data/models/book/highlight.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
-import '../../../router/app_router.dart';
-import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
 import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
+import '../../../services/translation_highlight_parser.dart';
 import '../../../services/translation_service.dart';
 import '../../../widgets/tactile_press.dart';
 
@@ -32,18 +31,14 @@ Future<void> showTranslationPopup(
 }) async {
   final container = ProviderScope.containerOf(context, listen: false);
   final agentState = container.read(effectiveAgentApiProvider);
-  final snackBar = container.read(snackBarServiceProvider);
-  void openSettings() {
-    container.read(routerProvider).push(AppRoutes.settingsApi);
-  }
 
-  if (!AiSettingsPrompt.ensureTextModelConfigured(
+  if (!await AiSettingsPrompt.ensureTextModelConfigured(
+    context: context,
     agentState: agentState,
-    snackBar: snackBar,
-    onOpenSettings: openSettings,
   )) {
     return;
   }
+  if (!context.mounted) return;
 
   await showDialog<void>(
     context: context,
@@ -111,8 +106,8 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     }
   }
 
-  static const _hlOpen = '⟪';
-  static const _hlClose = '⟫';
+  /// %%%% 分隔符模式下，选区对应的段索引（-1 = 无分隔）
+  int _hlSegmentIndex = -1;
 
   bool get _hasHighlight =>
       widget.fullText != null && widget.fullText != widget.sourceText;
@@ -121,42 +116,8 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
 
   String get _errorText => '$_error'.replaceFirst('Exception: ', '');
 
-  /// 在 [haystack] 中定位 [needle]，返回原始坐标 (start, end)。
-  /// 先尝试直接匹配，失败后完全剥离空白再匹配——处理跨段落选择
-  /// 丢失 `\n\n` 分隔符甚至连空格都没有的情况。
-  static (int, int)? _findInFullText(String haystack, String needle) {
-    final direct = haystack.indexOf(needle);
-    if (direct >= 0) return (direct, direct + needle.length);
-
-    // 完全剥离空白后做匹配，通过位置映射回溯到原文坐标
-    final origPos = <int>[];
-    final normBuf = StringBuffer();
-    for (int i = 0; i < haystack.length; i++) {
-      final c = haystack.codeUnitAt(i);
-      if (c != 0x20 && c != 0x0A && c != 0x0D && c != 0x09) {
-        normBuf.writeCharCode(c);
-        origPos.add(i);
-      }
-    }
-
-    final normH = normBuf.toString();
-    final normN = needle.replaceAll(RegExp(r'\s+'), '');
-    final idx = normH.indexOf(normN);
-    if (idx < 0 || idx + normN.length > origPos.length) return null;
-
-    final start = origPos[idx];
-    final end = origPos[idx + normN.length - 1] + 1;
-    return (start, end);
-  }
-
   ({String text, int? hlStart, int? hlEnd}) _parseTranslationHighlight() {
-    final raw = _latest;
-    final s = raw.indexOf(_hlOpen);
-    if (s < 0) return (text: raw, hlStart: null, hlEnd: null);
-
-    final e = raw.indexOf(_hlClose);
-    final clean = raw.replaceAll(_hlOpen, '').replaceAll(_hlClose, '');
-    return (text: clean, hlStart: s, hlEnd: e >= 0 ? e - 1 : clean.length);
+    return TranslationHighlightParser.parse(_latest, _hlSegmentIndex);
   }
 
   void _start() {
@@ -164,27 +125,20 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     final config = ref.read(translationConfigProvider);
 
     String textToTranslate = _effectiveFullText;
-    String? extraInstruction;
 
     if (_hasHighlight) {
-      final range = _findInFullText(_effectiveFullText, widget.sourceText);
-      if (range != null) {
-        final (s, e) = range;
-        textToTranslate =
-            '${_effectiveFullText.substring(0, s)}$_hlOpen${_effectiveFullText.substring(s, e)}$_hlClose${_effectiveFullText.substring(e)}';
-        extraInstruction =
-            '原文中 $_hlOpen$_hlClose 标记包裹的是用户重点关注的部分。在译文中，用相同的 $_hlOpen$_hlClose 标记包裹对应的译文部分。不要翻译或省略标记本身。';
-      }
+      final segmented = TranslationHighlightParser.buildSegmentedInput(
+        _effectiveFullText,
+        widget.sourceText,
+      );
+      textToTranslate = segmented.text;
+      _hlSegmentIndex = segmented.hlSegmentIndex;
     }
 
     final stream = TranslationService.translateStream(
       text: textToTranslate,
       agentState: agentState,
       translationConfig: config,
-      extraSystemInstruction: extraInstruction,
-      // 带 ⟪⟫ 标记的请求禁用缓存：标记回显依赖模型行为，一次丢标记的
-      // 结果若被缓存，会让同一选区在 TTL 内永远"无高亮"。
-      useCache: extraInstruction == null,
     );
 
     _sub = stream.listen(
@@ -192,14 +146,13 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         if (!mounted) return;
         setState(() => _latest = value);
       },
-      onError: (e) {
+      onError: (e) async {
         if (!mounted) return;
-        final handled = AiSettingsPrompt.showForConfigError(
+        final handled = await AiSettingsPrompt.showForConfigError(
+          context: context,
           error: e,
-          snackBar: ref.read(snackBarServiceProvider),
-          onOpenSettings: () =>
-              ref.read(routerProvider).push(AppRoutes.settingsApi),
         );
+        if (!mounted) return;
         if (handled) {
           Navigator.of(context, rootNavigator: true).pop();
           return;
@@ -310,7 +263,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     final fullText = _effectiveFullText;
     TextSpan sourceSpan;
     if (_hasHighlight) {
-      final range = _findInFullText(fullText, widget.sourceText);
+      final range = TranslationHighlightParser.findInFullText(fullText, widget.sourceText);
       if (range != null) {
         final (s, e) = range;
         sourceSpan = TextSpan(

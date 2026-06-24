@@ -952,6 +952,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 )
               : null,
           body: SafeArea(
+            top: false,
+            bottom: false,
             child: Listener(
               onPointerHover: _isDesktop ? _onDesktopPointerHover : null,
               child: Stack(
@@ -984,6 +986,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             : const Offset(0, -1),
                         child: Container(
                           color: cs.surface,
+                          padding: EdgeInsets.only(
+                            top: MediaQuery.of(context).padding.top,
+                          ),
                           child: isMarkdownHighlightMode
                               ? _buildHighlightSearchBar(session)
                               : (session.searchActive && !session.showPreview
@@ -1183,7 +1188,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // **必须**在触发翻译前检查 AI 配置：否则配置缺失时 provider 内 AiSettingsPrompt
     // 弹的错误 SnackBar 会被进度 SnackBar 覆盖，用户感受到的是"点了毫无反应"。
     // Provider 内的同一检查保留作 defense in depth。
-    if (!_ensureAgentConfigured()) return;
+    if (!await _ensureAgentConfigured()) return;
 
     final documentId = widget.document.id;
     final notifier = ref.read(documentTranslationProvider(documentId).notifier);
@@ -1204,7 +1209,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             margin: const EdgeInsets.fromLTRB(16, 12, 16, 72),
           );
     } else {
-      _reportTranslationFailure(state);
+      await _reportTranslationFailure(state);
     }
   }
 
@@ -1221,7 +1226,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (markdown == null || markdown.isEmpty) return;
 
     // 同 _handleTranslate：必须在触发翻译前检查配置。
-    if (!_ensureAgentConfigured()) return;
+    if (!await _ensureAgentConfigured()) return;
 
     final documentId = widget.document.id;
     final notifier = ref.read(documentTranslationProvider(documentId).notifier);
@@ -1236,7 +1241,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           .read(snackBarServiceProvider)
           .showResult(message: context.l10n.translationDone);
     } else {
-      _reportTranslationFailure(state);
+      await _reportTranslationFailure(state);
     }
   }
 
@@ -1245,12 +1250,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   /// 翻译相关动作的"前置配置守卫"——必须在显示进度 SnackBar 之前调用。
-  /// 失败时 AiSettingsPrompt 已经弹了"前往设置"SnackBar，调用方直接 return。
-  bool _ensureAgentConfigured() {
+  Future<bool> _ensureAgentConfigured() {
     return AiSettingsPrompt.ensureTextModelConfigured(
+      context: context,
       agentState: ref.read(effectiveAgentApiProvider),
-      snackBar: ref.read(snackBarServiceProvider),
-      onOpenSettings: () => context.push(AppRoutes.settingsApi),
     );
   }
 
@@ -1258,20 +1261,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 注释明说"交给 UI 层"。优先用 [AiSettingsPrompt.showForConfigError] 识别
   /// "AI 设置"相关错误并附加"前往设置"按钮；其它错误走通用 SnackBar。
   /// 取消（status=idle）和无 error 的情况静默——用户已知道自己点了取消。
-  void _reportTranslationFailure(DocumentTranslationState state) {
+  Future<void> _reportTranslationFailure(DocumentTranslationState state) async {
     final error = state.error;
     if (state.status != DocTranslationStatus.failed || error == null) return;
 
-    final snackBar = ref.read(snackBarServiceProvider);
-    final handled = AiSettingsPrompt.showForConfigError(
+    final handled = await AiSettingsPrompt.showForConfigError(
+      context: context,
       error: error,
-      snackBar: snackBar,
-      onOpenSettings: () => context.push(AppRoutes.settingsApi),
     );
+    if (!mounted) return;
     if (!handled) {
-      snackBar.showResult(
-        message: context.l10n.translationFailed(error.toString()),
-      );
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(
+            message: context.l10n.translationFailed(error.toString()),
+          );
     }
   }
 
@@ -1419,10 +1423,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
 
-    // 工具栏高度通过 topInset/bottomInset 传入 ListView padding，
-    // 使内容全屏渲染、可滚动到半透明工具栏背后，消除工具栏隐藏后的空白。
+    // 系统安全区（状态栏 / 小白条）由下方 return 的外层 Padding 用**实时**
+    // MediaQuery.padding 内缩 WebView 控件负责——滚动视口本身不再覆盖系统栏，
+    // 纵向滚到任意位置正文都不会侵占状态栏/小白条，且不依赖会被缓存过期的
+    // CSS --top-inset/--bottom-inset 值。
+    // 这里的 topInset/bottomInset 只让出工具栏自身高度（顶 48 / 底 56），使首/末
+    // 屏正文不被半透明工具栏压住；正文仍可滚到工具栏背后保持沉浸感。
     final topPad = 48.0;
-    final bottomPad = 56.0 + MediaQuery.of(context).padding.bottom;
+    final bottomPad = 56.0;
 
     // 翻译完成后按当前模式织入译文；未翻译或进行中保持原文，避免长文档
     // 在翻译过程中反复重建 widget 列表（完成时一次性切换即可）。
@@ -1448,32 +1456,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final highlights = ref.watch(highlightProvider(widget.document.id));
     final documentDir = DocPaths.docDir(widget.document.id);
 
-    return WebViewMarkdownReader(
-      key: _webViewReaderKey,
-      markdownData: effectiveMd,
-      settings: settings,
-      palette: palette,
-      highlights: highlights,
-      documentDir: documentDir,
-      translationStyleId: displayStyle.id,
-      initialScrollProgress: _markdownScrollProgress,
-      initialAnchorBlock: _markdownAnchorBlock,
-      reloadEpoch: _readerReloadEpoch,
-      topInset: topPad,
-      bottomInset: bottomPad,
-      highlightQuery: session.highlightQuery,
-      onSelectionEnd: _handleWebViewSelectionEnd,
-      onSelectionCleared: _handleWebViewSelectionCleared,
-      onHighlightClick: _handleHighlightTap,
-      onImageClick: _handleMarkdownImageTap,
-      onScrollDirection: _handleWebViewScrollDirection,
-      onScrollProgress: (p, anchor) {
-        if (!mounted) return;
-        _markdownScrollProgress = p;
-        _markdownAnchorBlock = anchor;
-        _sessionNotifier.reportProgress(p, anchorBlock: anchor);
-      },
-      onToggleToolbar: _handleWebViewToggleToolbar,
+    // 用实时安全区把 WebView 控件整体内缩——滚动区不覆盖状态栏/小白条。
+    // 控件外缘之外由底层 contentBg（Positioned.fill）铺阅读背景色，系统栏
+    // 区域始终落在干净的纸张底色上。
+    final safe = MediaQuery.of(context).padding;
+    return Padding(
+      padding: EdgeInsets.only(top: safe.top, bottom: safe.bottom),
+      child: WebViewMarkdownReader(
+        key: _webViewReaderKey,
+        markdownData: effectiveMd,
+        settings: settings,
+        palette: palette,
+        highlights: highlights,
+        documentDir: documentDir,
+        translationStyleId: displayStyle.id,
+        initialScrollProgress: _markdownScrollProgress,
+        initialAnchorBlock: _markdownAnchorBlock,
+        reloadEpoch: _readerReloadEpoch,
+        topInset: topPad,
+        bottomInset: bottomPad,
+        highlightQuery: session.highlightQuery,
+        onSelectionEnd: _handleWebViewSelectionEnd,
+        onSelectionCleared: _handleWebViewSelectionCleared,
+        onHighlightClick: _handleHighlightTap,
+        onImageClick: _handleMarkdownImageTap,
+        onScrollDirection: _handleWebViewScrollDirection,
+        onScrollProgress: (p, anchor) {
+          if (!mounted) return;
+          _markdownScrollProgress = p;
+          _markdownAnchorBlock = anchor;
+          _sessionNotifier.reportProgress(p, anchorBlock: anchor);
+        },
+        onToggleToolbar: _handleWebViewToggleToolbar,
+      ),
     );
   }
 
@@ -1511,8 +1526,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
     if (index < 0) return;
 
-    await showFigureViewer(context, figures,
-        initialIndex: index, documentId: documentId);
+    await showFigureViewer(
+      context,
+      figures,
+      initialIndex: index,
+      documentId: documentId,
+    );
   }
 
   // _wrapWithSelection 已移除，由 WebView 内部选择处理替代

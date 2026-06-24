@@ -7,12 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:go_router/go_router.dart';
-
 import '../core/l10n.dart';
 import '../data/models/book/document.dart';
 import '../router/app_router.dart';
-import '../router/app_routes.dart';
 import '../services/ai_settings_prompt.dart';
 import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
@@ -103,7 +100,6 @@ class DocumentTaskNotifier
   int _runningCount = 0;
 
   SnackBarService get _snackBar => _ref.read(snackBarServiceProvider);
-  GoRouter get _router => _ref.read(routerProvider);
 
   AppLocalizations? get _l10n {
     final ctx = rootNavigatorKey.currentContext;
@@ -153,14 +149,9 @@ class DocumentTaskNotifier
     bool showBusySnackBar = true,
     bool showResultSnackBar = true,
   }) async {
-    if (!apiState.isConfigured) {
-      _snackBar.showResult(
-        message: _l10n?.configureExtractToken ?? '请先在设置中配置文档提取 Access Token',
-        action: SnackBarAction(
-          label: _l10n?.goToSettings ?? '前往设置',
-          onPressed: () => _router.push(AppRoutes.settingsExtract),
-        ),
-      );
+    if (!await AiSettingsPrompt.ensureExtractConfigured(
+      apiState: apiState,
+    )) {
       return null;
     }
 
@@ -229,8 +220,9 @@ class DocumentTaskNotifier
     required List<BatchExtractItem> items,
     required DocExtractApiState apiState,
   }) async {
-    if (!apiState.isConfigured) {
-      _snackBar.showResult(message: _l10n?.configureExtractToken ?? '请先在设置中配置文档提取 Access Token');
+    if (!await AiSettingsPrompt.ensureExtractConfigured(
+      apiState: apiState,
+    )) {
       return {for (final item in items) item.documentId: null};
     }
 
@@ -367,19 +359,15 @@ class DocumentTaskNotifier
     required void Function(String imagePath) onSuccess,
   }) async {
     final imageRole = AgentApiNotifier.globalImageRole;
-    if (!AiSettingsPrompt.ensureImageModelSelected(
+    if (!await AiSettingsPrompt.ensureImageModelSelected(
       imageRole: imageRole,
-      snackBar: _snackBar,
-      onOpenSettings: () => _router.push(AppRoutes.settingsApi),
     )) {
       return null;
     }
     final agentState = AgentApiNotifier.loadInstance(imageRole.id!);
-    if (agentState == null) return null; // 角色指向的实例已被删除
-    if (!AiSettingsPrompt.ensureImageModelConfigured(
+    if (agentState == null) return null;
+    if (!await AiSettingsPrompt.ensureImageModelConfigured(
       agentState: agentState,
-      snackBar: _snackBar,
-      onOpenSettings: () => _router.push(AppRoutes.settingsApi),
     )) {
       return null;
     }

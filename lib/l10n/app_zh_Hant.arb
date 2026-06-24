@@ -1,7 +1,7 @@
 {
   "@@locale": "zh_Hant",
 
-  "appTitle": "獺祭魚 OtterPad",
+  "appTitle": "OtterPad",
 
   "home": "首頁",
   "library": "文獻庫",
@@ -35,6 +35,7 @@
   "processing": "處理中...",
   "cancelAll": "取消全部",
   "goToSettings": "前往設定",
+  "configurationRequired": "需要設定",
   "cancelled": "已取消",
   "copiedToClipboard": "已複製到剪貼簿",
 
@@ -424,7 +425,9 @@
   "tavilySearchSection": "聯網搜尋回退（Tavily）",
   "tavilySearchDesc": "為不支援原生聯網搜尋的模型（如 DeepSeek、豆包）提供搜尋能力。填入 Key 後，對話頁的聯網開關對這些模型即可生效。",
   "tavilyNotConfiguredHint": "目前模型無原生聯網搜尋，請在 AI 設定中設定 Tavily API Key 以啟用",
-  "mimoSearchPluginHint": "MiMo 聯網搜尋需先在平台控制台開通外掛：platform.xiaomimimo.com/console/plugin",
+  "mimoSearchPluginTitle": "開通聯網搜尋外掛",
+  "mimoSearchPluginHint": "MiMo 聯網搜尋需先在平台控制台開通外掛。",
+  "mimoSearchPluginOpenConsole": "開啟外掛控制台",
 
   "taskInProgress": "該文獻已有工作正在進行中",
   "savingResult": "正在儲存結果",
