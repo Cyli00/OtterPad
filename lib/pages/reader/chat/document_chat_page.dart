@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
@@ -161,24 +162,116 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     final vendor = BuiltInToolsHelper.compatSearchVendor(
       state.effectiveBaseUrl,
     );
-    final l10n = context.l10n;
-    final snackBar = ref.read(snackBarServiceProvider);
     if (vendor == CompatSearchVendor.mimo) {
-      snackBar.showResult(
-        message: l10n.mimoSearchPluginHint,
-        duration: const Duration(seconds: 7),
-      );
-    } else if (vendor == CompatSearchVendor.none &&
-        !TavilySearchService.isConfigured) {
-      snackBar.showResult(
-        message: l10n.tavilyNotConfiguredHint,
-        duration: const Duration(seconds: 7),
-        action: SnackBarAction(
-          label: l10n.goToSettings,
-          onPressed: () => context.push('${AppRoutes.settings}/api'),
-        ),
-      );
+      final dismissed =
+          GStorage.setting.get(_kMimoSearchHintDismissedKey) as bool? ?? false;
+      if (!dismissed) _showMimoSearchHintDialog();
+      return;
     }
+    if (vendor == CompatSearchVendor.none &&
+        !TavilySearchService.isConfigured) {
+      final l10n = context.l10n;
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(
+            message: l10n.tavilyNotConfiguredHint,
+            duration: const Duration(seconds: 7),
+            action: SnackBarAction(
+              label: l10n.goToSettings,
+              onPressed: () => context.push('${AppRoutes.settings}/api'),
+            ),
+          );
+    }
+  }
+
+  /// 「不再提醒」的持久化 key——MiMo 联网搜索插件提示，全局一次性偏好。
+  static const _kMimoSearchHintDismissedKey =
+      'mimo_search_plugin_hint_dismissed';
+
+  static const _kMimoPluginConsoleUrl =
+      'https://platform.xiaomimimo.com/console/plugin';
+
+  /// MiMo 官方端开启联网搜索时的开通提示弹窗：超链接包成「打开插件控制台」
+  /// 按钮（外部浏览器打开），「不再提醒」按钮写入 [_kMimoSearchHintDismissedKey]
+  /// 后不再弹出。视觉沿用 [_showNewChatDialog] 的圆角卡片样式。
+  Future<void> _showMimoSearchHintDialog() {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return showAppDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final l10n = dialogContext.l10n;
+        final width = (MediaQuery.of(dialogContext).size.width * 0.85).clamp(
+          320.0,
+          480.0,
+        );
+        return Material(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(28),
+          clipBehavior: Clip.antiAlias,
+          child: Container(
+            width: width,
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.mimoSearchPluginTitle,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.mimoSearchPluginHint,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // 超链接包成扁平文字按钮：§3.1 禁止 Dialog 内 OutlinedButton /
+                // 等宽布局，按钮统一 TextButton。primary 文字色 + 外链图标即表达
+                // 「主操作链接」，点击走外部浏览器打开插件控制台。
+                TextButton.icon(
+                  onPressed: () {
+                    Haptics.soft();
+                    launchUrl(
+                      Uri.parse(_kMimoPluginConsoleUrl),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  },
+                  icon: const Icon(Symbols.open_in_new_rounded, size: 18),
+                  label: Text(l10n.mimoSearchPluginOpenConsole),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        GStorage.setting.put(
+                          _kMimoSearchHintDismissedKey,
+                          true,
+                        );
+                        Navigator.of(dialogContext).pop();
+                      },
+                      child: Text(l10n.dontRemindAgain),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: Text(l10n.close),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   /// 「不再提醒」的持久化 key——全局一次性偏好，不分文献。
@@ -295,14 +388,14 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     context.pop();
   }
 
-  void _showError(String message) {
-    final snackBar = ref.read(snackBarServiceProvider);
-    final handled = AiSettingsPrompt.showForConfigError(
+  Future<void> _showError(String message) async {
+    final handled = await AiSettingsPrompt.showForConfigError(
+      context: context,
       error: message,
-      snackBar: snackBar,
-      onOpenSettings: () => context.push('${AppRoutes.settings}/api'),
     );
-    if (!handled) snackBar.showResult(message: message);
+    if (!handled) {
+      ref.read(snackBarServiceProvider).showResult(message: message);
+    }
   }
 
   @override
@@ -426,15 +519,16 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             child: _buildAssistantBubble(theme, cs, streamingText),
           );
         }
-        final msgIndex =
-            messages.length - 1 - (sending ? index - 1 : index);
+        final msgIndex = messages.length - 1 - (sending ? index - 1 : index);
         final msg = messages[msgIndex];
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: msg.isUser
               ? _buildUserBubble(theme, cs, msg, msgIndex)
               : _buildAssistantBubble(
-                  theme, cs, msg.content,
+                  theme,
+                  cs,
+                  msg.content,
                   messageIndex: msgIndex,
                 ),
         );
@@ -471,7 +565,10 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-        position.dx, position.dy, position.dx, position.dy,
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: cs.surfaceContainerHigh,
@@ -481,7 +578,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           child: Row(
             children: [
               Expanded(child: Text(l10n.chatCopyMessage)),
-              Icon(Symbols.content_copy_rounded, size: 20, color: cs.onSurfaceVariant),
+              Icon(
+                Symbols.content_copy_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant,
+              ),
             ],
           ),
         ),
@@ -490,7 +591,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           child: Row(
             children: [
               Expanded(child: Text(l10n.chatSelectText)),
-              Icon(Symbols.select_all_rounded, size: 20, color: cs.onSurfaceVariant),
+              Icon(
+                Symbols.select_all_rounded,
+                size: 20,
+                color: cs.onSurfaceVariant,
+              ),
             ],
           ),
         ),
@@ -570,65 +675,68 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         onLongPressStart: (details) {
           Haptics.medium();
           _showUserMessageMenu(
-            context, details.globalPosition, messageIndex, msg,
+            context,
+            details.globalPosition,
+            messageIndex,
+            msg,
           );
         },
         child: Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.82,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: cs.primaryContainer,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (msg.quotedText != null) ...[
-              // 点击引用块 → 回阅读器定位原文（末尾的 my_location 是可点暗示）
-              Tooltip(
-                message: context.l10n.chatLocateSource,
-                child: TactilePress(
-                  onTap: () => _locateQuote(msg.quotedText!),
-                  baseColor: Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Flexible(
-                          child: _QuoteBlock(
-                            text: msg.quotedText!,
-                            textColor: cs.onPrimaryContainer.withAlpha(170),
-                            accentColor: cs.onPrimaryContainer.withAlpha(100),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.82,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: cs.primaryContainer,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (msg.quotedText != null) ...[
+                // 点击引用块 → 回阅读器定位原文（末尾的 my_location 是可点暗示）
+                Tooltip(
+                  message: context.l10n.chatLocateSource,
+                  child: TactilePress(
+                    onTap: () => _locateQuote(msg.quotedText!),
+                    baseColor: Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Flexible(
+                            child: _QuoteBlock(
+                              text: msg.quotedText!,
+                              textColor: cs.onPrimaryContainer.withAlpha(170),
+                              accentColor: cs.onPrimaryContainer.withAlpha(100),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          Symbols.my_location_rounded,
-                          size: 14,
-                          color: cs.onPrimaryContainer.withAlpha(140),
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          Icon(
+                            Symbols.my_location_rounded,
+                            size: 14,
+                            color: cs.onPrimaryContainer.withAlpha(140),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
+                const SizedBox(height: 6),
+              ],
+              Text(
+                msg.content,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onPrimaryContainer,
+                ),
               ),
-              const SizedBox(height: 6),
             ],
-            Text(
-              msg.content,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onPrimaryContainer,
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -772,7 +880,8 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                       Container(
                         margin: const EdgeInsets.fromLTRB(8, 4, 4, 0),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8,
+                          horizontal: 12,
+                          vertical: 8,
                         ),
                         decoration: BoxDecoration(
                           color: cs.surfaceContainerHighest,
