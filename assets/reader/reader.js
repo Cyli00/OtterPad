@@ -108,6 +108,19 @@ class Overlayer {
     this._observer.observe(container);
   }
 
+  // 同步 SVG 尺寸到内容坐标系。横向翻页时 #content 横向溢出（scrollWidth >>
+  // clientWidth），width:100% 只覆盖一个视口宽，必须撑到 scrollWidth 才能容纳
+  // 所有列的高亮 rect（配合 _getContentRects 的绝对坐标）；纵向恢复 100%。
+  _syncSvgSize() {
+    if (document.body.dataset.pagination === 'horizontal') {
+      this.svg.style.width = this.container.scrollWidth + 'px';
+      this.svg.style.height = this.container.clientHeight + 'px';
+    } else {
+      this.svg.style.width = '100%';
+      this.svg.style.height = '100%';
+    }
+  }
+
   // 按段落拆分 Range，保证跨段落高亮的 getClientRects 精确
   _splitRangeByParagraph(range) {
     const ancestor = range.commonAncestorContainer;
@@ -128,27 +141,28 @@ class Overlayer {
     return result.length ? result : [range];
   }
 
-  // 从 Range 计算 content-relative 矩形（不含 scrollX/Y，差值即 content 坐标）。
+  // 从 Range 计算 SVG-relative 矩形（scroll-content 坐标系）。
   //
-  // **关键**：`position: absolute` 的 SVG 起点是包含块的 **padding-box**，
-  // 但 `getBoundingClientRect()` 返回的是 **border-box** 视口坐标。当
-  // container（#content）自身有 padding 时（横向翻页模式 padding: 24px 32px），
-  // 直接用 `r.top - cRect.top` 算出的坐标基于 border-box 起点，比 SVG 实际
-  // 起点多偏移一个 padding 量——高亮整体向下/向右偏移 padding，文字行底。
-  // 减去 container padding 把坐标系对齐到 padding-box 起点（即 SVG 起点）。
+  // SVG 是 position:absolute;top:0;left:0 在 position:relative 的 #content
+  // 内——containing block = #content 的 padding box，SVG 原点 = padding-box
+  // 顶端 = border-box 顶端（无 border）= cRect.top/left。
+  // getBoundingClientRect() 返回 viewport 坐标，减去 cRect 得 border-box 内坐标。
   //
-  // Vertical 模式下 container 无 padding，减 0 不变，保持兼容。
+  // 横向翻页时 #content 自身是横向滚动容器（overflow-x:auto），SVG 作为它的
+  // abspos 子元素随内容一起平移、原点钉在 scroll-content 左缘（page 0）。故须
+  // 再加 scrollLeft/scrollTop，把「当前视口相对」换算成「整篇 scroll-content
+  // 绝对坐标」，否则非首屏列的高亮会落到 page 0 区被 SVG viewport 裁掉而消失。
+  // 纵向模式滚的是 window、#content 自身不滚，scrollLeft/Top 恒为 0，无影响。
   _getContentRects(range) {
     const cRect = this.container.getBoundingClientRect();
-    const cs = getComputedStyle(this.container);
-    const padLeft = parseFloat(cs.paddingLeft) || 0;
-    const padTop = parseFloat(cs.paddingTop) || 0;
+    const sx = this.container.scrollLeft;
+    const sy = this.container.scrollTop;
     let rects = [];
     for (const pr of this._splitRangeByParagraph(range)) {
       for (const r of pr.getClientRects()) {
         rects.push({
-          left: r.left - cRect.left - padLeft,
-          top: r.top - cRect.top - padTop,
+          left: r.left - cRect.left + sx,
+          top: r.top - cRect.top + sy,
           width: r.width,
           height: r.height,
         });
@@ -193,6 +207,7 @@ class Overlayer {
     this.remove(id);
     const rects = this._getContentRects(range);
     if (!rects.length) return;
+    this._syncSvgSize();
     const g = this._drawGroup(id, rects, color);
     this.svg.appendChild(g);
     // 关键：存储 Range 对象，redraw 时重新 getClientRects
@@ -235,6 +250,7 @@ class Overlayer {
   // 读写分离：先批量读取所有 getClientRects（1 次强制 layout），
   // 再批量写 SVG（1 次 DOM 更新），避免 N 次 layout thrashing。
   redraw() {
+    this._syncSvgSize();
     const updates = [];
     for (const [id, obj] of this.map) {
       updates.push({ id, obj, rects: this._getContentRects(obj.range) });
@@ -248,9 +264,12 @@ class Overlayer {
     }
   }
 
+  // 注：当前无调用者（高亮点击走各 <g> 自带的 click 监听）。坐标换算与
+  // _getContentRects 对齐（scroll-content 绝对坐标），以便复活时仍正确。
   hitTest(x, y) {
     const cRect = this.container.getBoundingClientRect();
-    const cx = x - cRect.left, cy = y - cRect.top;
+    const cx = x - cRect.left + this.container.scrollLeft;
+    const cy = y - cRect.top + this.container.scrollTop;
     const arr = Array.from(this.map.entries());
     for (let i = arr.length - 1; i >= 0; i--) {
       const [key, obj] = arr[i];
@@ -822,18 +841,24 @@ window.activateNearestSearchResult = function() {
 //   3) dispatchEvent('scroll') 让 lazy 图片在新视口下重新评估。
 window.setPaginationMode = function(mode) {
   if (mode !== 'vertical' && mode !== 'horizontal') return;
+  // 切换前抓当前锚点——用旧模式的坐标系找到视口起始块
+  const anchorIdx = _findAnchorBlockIndex();
+
   document.body.dataset.pagination = mode;
   _syncPaginationVars();
   _setTouchTakeover(mode === 'horizontal');
-  if (window._overlayer) window._overlayer.redraw();
-  window.dispatchEvent(new Event('scroll'));
-  if (mode === 'horizontal') {
-    _targetPage = _currentPage();
-  } else {
+  if (mode !== 'horizontal') {
     _cancelFlipAnim();
     _content().style.transform = '';
   }
-  _updateFooter();
+
+  // 等布局重排完成后恢复锚点 + 重绘高亮（与 resize handler 同模式）
+  requestAnimationFrame(() => {
+    _restoreToAnchor(anchorIdx);
+    if (window._overlayer) window._overlayer.redraw();
+    _updateFooter();
+    window.dispatchEvent(new Event('scroll'));
+  });
 };
 
 // ─── 横向翻页引擎 ───
@@ -951,12 +976,21 @@ function _findAnchorBlockIndex() {
   return -1;
 }
 
-// 把第 idx 个内容块所在页对齐到视口（横向模式）。scrollIntoView 后必须吸附
-// 整页边界——锚点块可能起始于页中部，否则视口会同时露出两半页内容。
+// 把第 idx 个内容块对齐到视口起始。两种模式滚动容器不同，必须分流：
+//   vertical 滚 window——块顶对齐视口（scroll-margin-top:60px 自动让出工具栏）；
+//   horizontal 滚 #content——scrollIntoView 后还要吸附整页边界，锚点块可能起始
+//   于页中部，否则视口会同时露出两半页内容。
+// 旧实现只有 horizontal 分支（末尾 scrollLeft 吸附对 window.scrollY 无效），
+// 导致 horizontal→vertical 切换后停在残留 scrollY（通常文档顶部）。
 function _restoreToAnchor(idx) {
   const c = _content();
   if (idx == null || idx < 0 || idx >= c.children.length) return false;
-  c.children[idx].scrollIntoView({ block: 'nearest', inline: 'start' });
+  const el = c.children[idx];
+  if (!_isHorizontal()) {
+    el.scrollIntoView({ block: 'start', inline: 'nearest' });
+    return true;
+  }
+  el.scrollIntoView({ block: 'nearest', inline: 'start' });
   const page = Math.max(0, Math.min(_maxPage(),
       Math.round(c.scrollLeft / window.innerWidth)));
   c.scrollTo({ left: page * window.innerWidth, behavior: 'auto' });
