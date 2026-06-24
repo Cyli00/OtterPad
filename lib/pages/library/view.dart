@@ -147,7 +147,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     )) {
       return;
     }
-    if (!context.mounted) return;
+    if (!mounted) return;
 
     final docs = ref.read(validDocsProvider);
     final selectedDocs = docs
