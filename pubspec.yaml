@@ -120,7 +120,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/
     - assets/icons/
     - assets/config/
     # KaTeX 离线资源（CSS/JS/字体），由 ReaderLocalhostServer 的
@@ -131,7 +130,3 @@ flutter:
     # 阅读器静态 JS/CSS，同走 /_assets/* 路由（见 webview_reader_html）。
     - assets/reader/
 
-  fonts:
-    - family: MaterialSymbolsRounded
-      fonts:
-        - asset: assets/fonts/MaterialSymbolsRounded.ttf
