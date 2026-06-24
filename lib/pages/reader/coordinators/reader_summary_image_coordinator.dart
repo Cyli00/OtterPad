@@ -64,19 +64,7 @@ class ReaderSummaryImageCoordinator {
       return;
     }
 
-    if (!hasImageRole) {
-      scaffoldKey.currentState?.closeEndDrawer();
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(
-            message: context.l10n.selectImageModelFirst,
-            action: SnackBarAction(
-              label: context.l10n.goToSettings,
-              onPressed: () => context.push(AppRoutes.settingsApi),
-            ),
-          );
-      return;
-    }
+    if (!hasImageRole) return;
 
     if (openOutline) openOutlineSheet();
 
@@ -207,6 +195,51 @@ class ReaderSummaryImageCoordinator {
                   color: cs.onSurfaceVariant,
                 ),
               ),
+              if (!hasImageRole) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Symbols.warning_rounded,
+                        color: cs.onErrorContainer,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          context.l10n.selectImageModelFirst,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          context.push(AppRoutes.settingsApi);
+                        },
+                        child: Text(
+                          context.l10n.goToSettings,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
           actions: [
