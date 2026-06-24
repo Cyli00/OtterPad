@@ -31,7 +31,6 @@ import '../../services/doc_extract_service.dart';
 import '../../widgets/app_dialog.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
-import '../../services/reader/markdown_document_cache_service.dart';
 import '../../data/models/book/highlight.dart';
 import '../../providers/highlight_provider.dart';
 import '../../services/haptics.dart';
@@ -75,7 +74,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 /// 主 build 的 select 返回类型——Dart record 自带 structural ==。
 /// 排除 currentResultIndex（由 [_ResultNavigator] 独立消费），
 /// markdownContent 用 cacheKey 代替（避免大字符串逐字比较），
-/// searchResults 只保留 length，error/snapshot 只保留 nullity。
+/// searchResultCount 只保留 length，error/snapshot 只保留 nullity。
 typedef _MainBuildKey = (
   bool initialized,
   bool fileExists,
@@ -85,10 +84,9 @@ typedef _MainBuildKey = (
   bool toolbarsVisible,
   bool searchActive,
   bool isHighlightMode,
-  bool hasSearchSnapshot,
   String? summaryImagePath,
   String? highlightQuery,
-  int searchResultsLength,
+  int searchResultCount,
   bool markdownLoading,
   bool hasMarkdownLoadError,
   bool hasResult,
@@ -110,10 +108,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     s.toolbarsVisible,
     s.searchActive,
     s.markdownHighlightMode,
-    s.searchSnapshot != null,
     s.summaryImagePath,
     s.highlightQuery,
-    s.searchResults.length,
+    s.searchResultCount,
     s.markdownLoading,
     s.markdownLoadError != null,
     s.hasResult,
@@ -355,19 +352,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _sessionNotifier.closeSearch();
   }
 
-  void _onSearchResultTap(
-    List<SearchResult> results,
-    int tappedIndex,
-    String query,
-  ) {
-    final offset = _sessionNotifier.selectSearchResult(
-      results,
-      tappedIndex,
-      query,
-    );
+  void _onSearchResultTap(int hitIndex, String query) {
+    final count =
+        _session.searchResultCount > 0 ? _session.searchResultCount : hitIndex + 1;
+    _sessionNotifier.selectSearchResult(hitIndex, query, count);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _scrollToSearchResult(offset);
+      _webViewReaderKey.currentState?.scrollToSearchResult(hitIndex);
     });
   }
 
@@ -376,23 +367,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _goToPrevResult() {
-    final offset = _sessionNotifier.goToPreviousSearchResult();
-    if (offset != null) _scrollToSearchResult(offset);
+    final index = _sessionNotifier.goToPreviousSearchResult();
+    if (index != null) {
+      _webViewReaderKey.currentState?.scrollToSearchResult(index);
+    }
   }
 
   void _goToNextResult() {
-    final offset = _sessionNotifier.goToNextSearchResult();
-    if (offset != null) _scrollToSearchResult(offset);
-  }
-
-  /// 跳转到搜索结果：scroll 到目标块 → 等 scroll 动画完成后激活最近匹配项。
-  void _scrollToSearchResult(int charOffset) {
-    _scrollToCharOffset(charOffset);
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (mounted) {
-        _webViewReaderKey.currentState?.activateNearestSearchResult();
-      }
-    });
+    final index = _sessionNotifier.goToNextSearchResult();
+    if (index != null) {
+      _webViewReaderKey.currentState?.scrollToSearchResult(index);
+    }
   }
 
   // ─── 底部面板（外观 / 大纲） ───
@@ -547,12 +532,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     });
   }
 
-  /// 统一跳转：charOffset → block index → WebView scrollToBlock。
-  ///
-  /// `\n\n+` 分割数 = `#content > *` 直接子元素数（顶层块 1:1 对应）。
   void _scrollToCharOffset(int charOffset) {
-    final blockIndex = _session.blockIndexForCharOffset(charOffset);
-    if (blockIndex == null) return;
+    final md = _session.markdownContent;
+    if (md == null || md.isEmpty) return;
+    final safeOffset = charOffset.clamp(0, md.length);
+    final breaks = RegExp(r'\n\n+').allMatches(md);
+    var blockIndex = 0;
+    for (final brk in breaks) {
+      if (brk.start >= safeOffset) break;
+      blockIndex++;
+    }
     _webViewReaderKey.currentState?.scrollToBlockIndex(blockIndex);
   }
 
@@ -861,7 +850,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final cs = theme.colorScheme;
     // select 排除 currentResultIndex（由独立的 _ResultNavigator 消费）,
     // 避免搜索导航时整页 rebuild。markdownContent 用 cacheKey 代替全文比较，
-    // searchResults 只比较 length，error/snapshot 只比较 nullity。
+    // searchResultCount 只比较 length，error/snapshot 只比较 nullity。
     ref.watch(readerSessionProvider(_sessionArgs).select(_mainBuildSelector));
     // ref.read 获取完整 state 用于数据访问——select 已覆盖所有 rebuild 场景，
     // currentResultIndex 变化时 select 不触发、read 返回的值不被消费，安全。
@@ -1035,7 +1024,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     ),
                   // ── 浮动搜索结果导航器 ──
                   if (isMarkdownHighlightMode &&
-                      session.searchResults.isNotEmpty)
+                      session.searchResultCount > 0)
                     Positioned(
                       right: 16,
                       bottom: 32,
@@ -1052,13 +1041,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       child: _buildPdfResultNavigator(pdfMatchCount),
                     ),
                   // ── 搜索遮罩层 ──
-                  if (session.searchActive &&
-                      session.showPreview &&
-                      session.searchSnapshot != null)
+                  if (session.searchActive && session.showPreview)
                     Positioned.fill(
                       child: SearchOverlay(
                         readerSettings: readerSettings,
-                        searchSnapshot: session.searchSnapshot!,
+                        onSearch: (
+                          String query, {
+                          bool caseSensitive = false,
+                          bool wholeWord = false,
+                        }) async {
+                          final results = await _webViewReaderKey.currentState
+                                  ?.searchContent(
+                                query,
+                                caseSensitive: caseSensitive,
+                                wholeWord: wholeWord,
+                              ) ??
+                              const [];
+                          if (mounted) {
+                            _sessionNotifier.updateSearchResults(
+                              results.length,
+                            );
+                          }
+                          return results;
+                        },
                         onResultTap: _onSearchResultTap,
                         onDismiss: _closeSearch,
                         initialQuery: session.highlightQuery,
@@ -1155,7 +1160,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   // _buildResultNavigator 已提取为独立的 [_ResultNavigator] ConsumerWidget，
-  // 只 watch (currentResultIndex, searchResults.length)，搜索导航不再触发整页 rebuild。
+  // 只 watch (currentResultIndex, searchResultCount.length)，搜索导航不再触发整页 rebuild。
 
   /// 底部工具栏：大纲 / 翻译 / 问 AI / 笔记 / 外观面板
   ///
@@ -1602,7 +1607,7 @@ class _PdfScrollThumbState extends State<_PdfScrollThumb> {
   }
 }
 
-/// 独立 rebuild 的搜索结果导航器——只 watch currentResultIndex 和 searchResults.length，
+/// 独立 rebuild 的搜索结果导航器——只 watch currentResultIndex 和 searchResultCount.length，
 /// 搜索导航（上/下箭头）不再触发 [_ReaderPageState] 的主 build。
 class _ResultNavigator extends ConsumerWidget {
   final ReaderSessionArgs sessionArgs;
@@ -1620,7 +1625,7 @@ class _ResultNavigator extends ConsumerWidget {
     final (currentIndex, total) = ref.watch(
       readerSessionProvider(
         sessionArgs,
-      ).select((s) => (s.currentResultIndex, s.searchResults.length)),
+      ).select((s) => (s.currentResultIndex, s.searchResultCount)),
     );
     return ReaderTextResultNavigator(
       currentIndex: currentIndex,

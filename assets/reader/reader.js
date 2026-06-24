@@ -738,12 +738,33 @@ window.scrollToBlock = function(index) {
 };
 
 // ─── 搜索高亮 ───
-window.highlightSearch = function(query) {
+
+function _getBlockParent(el) {
+  const content = document.getElementById('content');
+  while (el && el.parentElement !== content) el = el.parentElement;
+  return el || content;
+}
+
+function _findHeading(block) {
+  const content = document.getElementById('content');
+  let prev = block.previousElementSibling;
+  while (prev) {
+    if (/^H[1-6]$/.test(prev.tagName)) return prev.textContent.trim();
+    prev = prev.previousElementSibling;
+  }
+  return '';
+}
+
+window.highlightSearch = function(query, caseSensitive, wholeWord) {
   window.clearSearchHighlight();
-  if (!query) return 0;
+  if (!query) return JSON.stringify({ count: 0, results: [] });
 
   const content = document.getElementById('content');
-  const lowerQuery = query.toLowerCase();
+
+  let escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (wholeWord) escaped = '(?<![A-Za-z0-9])' + escaped + '(?![A-Za-z0-9])';
+  const regex = new RegExp(escaped, caseSensitive ? 'gu' : 'giu');
+
   const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) => {
       let el = node.parentElement;
@@ -760,11 +781,10 @@ window.highlightSearch = function(query) {
   while (walker.nextNode()) {
     const node = walker.currentNode;
     const text = node.textContent;
-    const lower = text.toLowerCase();
-    let pos = 0;
-    while ((pos = lower.indexOf(lowerQuery, pos)) >= 0) {
-      hits.push({ node, offset: pos, length: query.length });
-      pos += query.length;
+    regex.lastIndex = 0;
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      hits.push({ node, offset: m.index, length: m[0].length });
     }
   }
 
@@ -781,7 +801,26 @@ window.highlightSearch = function(query) {
     } catch(e) {}
   }
 
-  return hits.length;
+  const results = [];
+  for (let i = 0; i < hits.length; i++) {
+    const mark = document.getElementById('sh' + i);
+    if (!mark) continue;
+    const block = _getBlockParent(mark);
+    const heading = _findHeading(block);
+    const matchText = mark.textContent;
+    const blockText = block.textContent;
+    const matchIdx = blockText.indexOf(matchText);
+    const start = Math.max(0, matchIdx - 60);
+    const end = Math.min(blockText.length, matchIdx + matchText.length + 160);
+    results.push({
+      heading,
+      snippet: blockText.substring(start, end),
+      matchStart: matchIdx - start,
+      matchLength: matchText.length,
+    });
+  }
+
+  return JSON.stringify({ count: hits.length, results });
 };
 
 window.clearSearchHighlight = function() {
@@ -817,21 +856,6 @@ window.flashImage = function(filename) {
   return false;
 };
 
-window.activateNearestSearchResult = function() {
-  const marks = document.querySelectorAll('.search-hl');
-  if (!marks.length) return;
-  document.querySelectorAll('.search-hl-active').forEach(e =>
-    e.classList.remove('search-hl-active'));
-  const viewTop = window.scrollY;
-  const viewBottom = viewTop + window.innerHeight;
-  for (const mark of marks) {
-    const absTop = mark.getBoundingClientRect().top + window.scrollY;
-    if (absTop >= viewTop - 50 && absTop <= viewBottom) {
-      mark.classList.add('search-hl-active');
-      return;
-    }
-  }
-};
 
 // ─── 翻页模式切换（Flutter 调用）───
 // 由 Flutter 在 onContentReady 与 settings.paginationMode 变化时触发。

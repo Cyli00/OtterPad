@@ -359,7 +359,18 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   void scrollToSearchResult(int index) => _bridge?.scrollToSearchResult(index);
 
-  void activateNearestSearchResult() => _bridge?.activateNearestSearchResult();
+  Future<List<SearchHit>> searchContent(
+    String query, {
+    bool caseSensitive = false,
+    bool wholeWord = false,
+  }) async {
+    return await _bridge?.searchContent(
+          query,
+          caseSensitive: caseSensitive,
+          wholeWord: wholeWord,
+        ) ??
+        const [];
+  }
 
   void clearSelection() => _bridge?.clearSelection();
 

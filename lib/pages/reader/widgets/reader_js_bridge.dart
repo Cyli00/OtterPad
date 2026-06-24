@@ -10,6 +10,23 @@ import '../../../utils/js_string_escape.dart';
 import 'reader_background.dart';
 import 'webview_reader_html.dart';
 
+/// JS 搜索命中结果。
+class SearchHit {
+  final String heading;
+  final String snippet;
+  final int matchStart;
+  final int matchLength;
+  final int hitIndex;
+
+  const SearchHit({
+    required this.heading,
+    required this.snippet,
+    required this.matchStart,
+    required this.matchLength,
+    required this.hitIndex,
+  });
+}
+
 /// 阅读器 WebView 滚动条度量。
 class ReaderScrollMetrics {
   final double progress;
@@ -245,9 +262,35 @@ class ReaderJsBridge {
       _controller.evaluateJavascript(source: 'window.clearSearchHighlight()');
     } else {
       _controller.evaluateJavascript(
-        source: "window.highlightSearch('${_jsLiteral(query)}')",
+        source:
+            "window.highlightSearch('${_jsLiteral(query)}', false, false)",
       );
     }
+  }
+
+  Future<List<SearchHit>> searchContent(
+    String query, {
+    bool caseSensitive = false,
+    bool wholeWord = false,
+  }) async {
+    if (!_contentReady || query.isEmpty) return const [];
+    final raw = await _controller.evaluateJavascript(
+      source:
+          "window.highlightSearch('${_jsLiteral(query)}', $caseSensitive, $wholeWord)",
+    );
+    if (raw == null) return const [];
+    final json = jsonDecode(raw is String ? raw : raw.toString());
+    final list = json['results'] as List<dynamic>;
+    return [
+      for (var i = 0; i < list.length; i++)
+        SearchHit(
+          heading: (list[i]['heading'] as String?) ?? '',
+          snippet: (list[i]['snippet'] as String?) ?? '',
+          matchStart: (list[i]['matchStart'] as num?)?.toInt() ?? 0,
+          matchLength: (list[i]['matchLength'] as num?)?.toInt() ?? 0,
+          hitIndex: i,
+        ),
+    ];
   }
 
   // ─── Dart → JS：选区 ───
@@ -275,11 +318,6 @@ class ReaderJsBridge {
     );
   }
 
-  void activateNearestSearchResult() {
-    _controller.evaluateJavascript(
-      source: 'window.activateNearestSearchResult()',
-    );
-  }
 
   /// [anchorBlock] 优先于比率（见 JS `_restoreProgress`）；null = 仅按比率。
   /// 返回 Future——widget 的揭幕幕布等 JS 执行完再淡出，避免露出跳变。

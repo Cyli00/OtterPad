@@ -46,10 +46,9 @@ class ReaderSessionState {
   final String? markdownCacheKey;
   final bool markdownLoading;
   final Object? markdownLoadError;
-  final MarkdownSearchSnapshot? searchSnapshot;
   final bool searchActive;
   final String? highlightQuery;
-  final List<SearchResult> searchResults;
+  final int searchResultCount;
   final int currentResultIndex;
   final bool toolbarsVisible;
   final bool sheetOpen;
@@ -64,10 +63,9 @@ class ReaderSessionState {
     this.markdownCacheKey,
     this.markdownLoading = false,
     this.markdownLoadError,
-    this.searchSnapshot,
     this.searchActive = false,
     this.highlightQuery,
-    this.searchResults = const [],
+    this.searchResultCount = 0,
     this.currentResultIndex = 0,
     this.toolbarsVisible = true,
     this.sheetOpen = false,
@@ -88,10 +86,9 @@ class ReaderSessionState {
     Object? markdownCacheKey = _sentinel,
     bool? markdownLoading,
     Object? markdownLoadError = _sentinel,
-    Object? searchSnapshot = _sentinel,
     bool? searchActive,
     Object? highlightQuery = _sentinel,
-    List<SearchResult>? searchResults,
+    int? searchResultCount,
     int? currentResultIndex,
     bool? toolbarsVisible,
     bool? sheetOpen,
@@ -114,14 +111,11 @@ class ReaderSessionState {
       markdownLoadError: identical(markdownLoadError, _sentinel)
           ? this.markdownLoadError
           : markdownLoadError,
-      searchSnapshot: identical(searchSnapshot, _sentinel)
-          ? this.searchSnapshot
-          : searchSnapshot as MarkdownSearchSnapshot?,
       searchActive: searchActive ?? this.searchActive,
       highlightQuery: identical(highlightQuery, _sentinel)
           ? this.highlightQuery
           : highlightQuery as String?,
-      searchResults: searchResults ?? this.searchResults,
+      searchResultCount: searchResultCount ?? this.searchResultCount,
       currentResultIndex: currentResultIndex ?? this.currentResultIndex,
       toolbarsVisible: toolbarsVisible ?? this.toolbarsVisible,
       sheetOpen: sheetOpen ?? this.sheetOpen,
@@ -129,19 +123,6 @@ class ReaderSessionState {
           ? this.summaryImagePath
           : summaryImagePath as String?,
     );
-  }
-
-  int? blockIndexForCharOffset(int charOffset) {
-    final md = markdownContent;
-    if (md == null || md.isEmpty) return null;
-    final safeOffset = charOffset.clamp(0, md.length);
-    final breaks = RegExp(r'\n\n+').allMatches(md);
-    var blockIndex = 0;
-    for (final brk in breaks) {
-      if (brk.start >= safeOffset) break;
-      blockIndex++;
-    }
-    return blockIndex;
   }
 
   String? imageFilenameNearOffset(int charOffset) {
@@ -318,25 +299,9 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     if (mounted && state.markdownPath == mdPath) {
       state = state.copyWith(
         markdownCacheKey: resolved.cacheKey,
-        searchSnapshot: null,
       );
     }
     return resolved.content;
-  }
-
-  Future<void> _prewarmSearchSnapshot() async {
-    final content = state.markdownContent;
-    final cacheKey = state.markdownCacheKey;
-    if (content == null || cacheKey == null || state.searchSnapshot != null) {
-      return;
-    }
-    final snapshot =
-        await MarkdownDocumentCacheService.instance.getSearchSnapshot(
-      cacheKey: cacheKey,
-      markdownContent: content,
-    );
-    if (!mounted) return;
-    state = state.copyWith(searchSnapshot: snapshot);
   }
 
   void useExtractedMarkdown({
@@ -360,11 +325,10 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
       markdownCacheKey: cacheKey,
       markdownLoading: false,
       markdownLoadError: null,
-      searchSnapshot: null,
       showPreview: true,
       searchActive: false,
       highlightQuery: null,
-      searchResults: const [],
+      searchResultCount: 0,
       currentResultIndex: 0,
     );
   }
@@ -385,7 +349,6 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     }
     if (!mounted || state.markdownContent == null) return false;
     state = state.copyWith(searchActive: true);
-    unawaited(_prewarmSearchSnapshot());
     return true;
   }
 
@@ -399,46 +362,43 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     state = state.copyWith(searchActive: false);
   }
 
-  int selectSearchResult(
-    List<SearchResult> results,
-    int tappedIndex,
-    String query,
-  ) {
-    final offset = results[tappedIndex].charOffset;
+  void updateSearchResults(int totalResults) {
+    state = state.copyWith(searchResultCount: totalResults);
+  }
+
+  void selectSearchResult(int hitIndex, String query, int totalResults) {
     state = state.copyWith(
       searchActive: false,
       showPreview: true,
-      searchResults: results,
-      currentResultIndex: tappedIndex,
+      searchResultCount: totalResults,
+      currentResultIndex: hitIndex,
       highlightQuery: query,
     );
-    return offset;
   }
 
   void clearHighlight() {
     if (state.highlightQuery == null) return;
     state = state.copyWith(
       highlightQuery: null,
-      searchResults: const [],
+      searchResultCount: 0,
       currentResultIndex: 0,
     );
   }
 
   int? goToPreviousSearchResult() {
-    final results = state.searchResults;
-    if (results.isEmpty) return null;
-    final next =
-        (state.currentResultIndex - 1 + results.length) % results.length;
+    final count = state.searchResultCount;
+    if (count == 0) return null;
+    final next = (state.currentResultIndex - 1 + count) % count;
     state = state.copyWith(currentResultIndex: next);
-    return results[next].charOffset;
+    return next;
   }
 
   int? goToNextSearchResult() {
-    final results = state.searchResults;
-    if (results.isEmpty) return null;
-    final next = (state.currentResultIndex + 1) % results.length;
+    final count = state.searchResultCount;
+    if (count == 0) return null;
+    final next = (state.currentResultIndex + 1) % count;
     state = state.copyWith(currentResultIndex: next);
-    return results[next].charOffset;
+    return next;
   }
 
   void setSheetOpen(bool value) {
