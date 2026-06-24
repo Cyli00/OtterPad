@@ -25,7 +25,6 @@ dependencies:
   # 网络
   dio: ^5.9.0
   dio_http2_adapter: ^2.7.1
-  connectivity_plus: ^6.0.0
   pdfrx: ^2.2.24
 
 
@@ -56,10 +55,7 @@ dependencies:
   pasteboard: ^0.5.0
 
   # App 信息
-  package_info_plus: ^8.0.0
-
-  # Toast / Dialog
-  flutter_smart_dialog: ^4.9.8
+  package_info_plus: ^9.0.1
 
   # 日志
   logger: ^2.5.0
