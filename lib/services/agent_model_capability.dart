@@ -119,7 +119,7 @@ class AgentModelCapability {
       return const AgentModelCapability(embedding: true);
     }
 
-    final imageOutput = isImageGenerationModel(provider: provider, modelId: id);
+    final imageOutput = isImageGenerationModel(modelId: id);
     final imageInput = imageOutput || _isKnownVisionModel(id);
     // 生图模型不带工具/推理能力（对齐 kelivo）
     final tool = !imageOutput && _isToolModel(id);
@@ -132,68 +132,46 @@ class AgentModelCapability {
     );
   }
 
-  // ─── 生图模型识别（从 assets/config/image_models.json 加载） ───
+  // ─── 能力识别（从 assets/config/model_capabilities.json 统一加载） ───
+  // 正则移植自 kelivo ModelRegistry，并按各厂 API 文档补充。
+  // 新增/修改模型能力只需改 JSON，不动 Dart 代码。
 
-  static Map<String, List<String>> _imageModelPatterns = {};
+  static RegExp? _embeddingRe;
+  static RegExp? _visionRe;
+  static RegExp? _imageGenRe;
+  static RegExp? _toolRe;
+  static RegExp? _reasoningRe;
 
-  /// 从 JSON 加载生图模型匹配规则，应在 app 启动时调用一次。
   static Future<void> init() async {
-    final raw = await rootBundle.loadString('assets/config/image_models.json');
-    final data = jsonDecode(raw) as Map<String, dynamic>;
-    _imageModelPatterns = data.map(
-      (k, v) => MapEntry(k, (v as List).cast<String>()),
+    final raw = await rootBundle.loadString(
+      'assets/config/model_capabilities.json',
     );
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    RegExp compile(String key) {
+      final patterns = (data[key] as List).cast<String>();
+      return RegExp(patterns.join('|'), caseSensitive: false);
+    }
+    _embeddingRe = compile('embedding');
+    _visionRe = compile('vision');
+    _imageGenRe = compile('imageGen');
+    _toolRe = compile('tool');
+    _reasoningRe = compile('reasoning');
   }
 
-  static bool isImageGenerationModel({
-    required AgentApiProvider provider,
-    required String modelId,
-  }) {
-    final id = modelId.toLowerCase();
-    final key = provider == AgentApiProvider.openAICompatible
-        ? 'openAICompatible'
-        : provider.name;
-    final patterns = _imageModelPatterns[key];
-    if (patterns == null) return false;
-    return patterns.any((p) => id.contains(p));
+  static bool isImageGenerationModel({required String modelId}) {
+    return _imageGenRe?.hasMatch(modelId.toLowerCase()) ?? false;
   }
 
-  static bool _isLikelyEmbedding(String id) {
-    return id.contains('embedding') ||
-        RegExp(r'(^|[-_/])embed(?:dings?)?([-.]|$)').hasMatch(id);
-  }
+  static bool _isLikelyEmbedding(String id) =>
+      _embeddingRe?.hasMatch(id) ?? false;
 
-  /// 视觉（图片输入）识别。除通用 vl/vision 关键字外补充各厂命名：
-  /// GLM-4.5V/4.6V/5V、Doubao Seed 1.6+（原生多模态）、Kimi k2.5/k2.6、
-  /// Grok 4、MiMo V2.5 系列（均为多模态，依据各家官方 API 文档）。
-  static bool _isKnownVisionModel(String id) {
-    return RegExp(
-      r'(gpt-4o|gpt-4\.1|gpt-5|gemini|claude|qwen-vl|vision|vl|'
-      r'glm-[\d.]+v\b|doubao-seed|kimi-k2\.[5-9]|grok-4|mimo)',
-      caseSensitive: false,
-    ).hasMatch(id);
-  }
+  static bool _isKnownVisionModel(String id) =>
+      _visionRe?.hasMatch(id) ?? false;
 
-  // ─── 能力识别（工具 / 推理）—— 正则移植自 kelivo ModelRegistry，
-  //     并按各厂 API 文档补充 MiMo / Doubao Seed ───
+  static bool _isToolModel(String id) => _toolRe?.hasMatch(id) ?? false;
 
-  static final RegExp _toolRe = RegExp(
-    r'(gpt-4o|gpt-4\.1|gpt-oss|gpt-5(?!-chat)|o\d|gemini|claude|qwen-?3|'
-    r'grok-4|kimi-k2|glm-4[-.](?:5|6|7)|glm-5|minimax-m2|mimo|doubao-seed|'
-    r'deepseek-(?:chat|r1|reasoner|v3|v3\.1|v3\.2|v4))',
-    caseSensitive: false,
-  );
-
-  static final RegExp _reasoningRe = RegExp(
-    r'(gpt-oss|gpt-5(?!-chat)|o\d|gemini-(?:2\.5|3)|gemma[-_]?4|claude|'
-    r'qwen-?3|grok-4|kimi-k2|glm-4[-.](?:5|6|7)|glm-5|minimax-m2|mimo|'
-    r'doubao-seed|deepseek-(?:r1|reasoner|v3\.1|v3\.2|v4))',
-    caseSensitive: false,
-  );
-
-  static bool _isToolModel(String id) => _toolRe.hasMatch(id);
-
-  static bool _isReasoningModel(String id) => _reasoningRe.hasMatch(id);
+  static bool _isReasoningModel(String id) =>
+      _reasoningRe?.hasMatch(id) ?? false;
 
   // ─── Thinking / reasoning 版本识别 ───────────────────────────────────
   // 这些方法服务于请求构造层把统一的 ThinkingLevel 翻译成各家具体字段。

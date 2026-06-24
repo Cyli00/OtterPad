@@ -12,35 +12,30 @@ void main() {
     test('识别 OpenAI 生图模型', () {
       expect(
         AgentModelCapability.isImageGenerationModel(
-          provider: AgentApiProvider.openai,
           modelId: 'gpt-image-2',
         ),
         isTrue,
       );
       expect(
         AgentModelCapability.isImageGenerationModel(
-          provider: AgentApiProvider.openai,
           modelId: 'gpt-image-2-2026-04-21',
         ),
         isTrue,
       );
       expect(
         AgentModelCapability.isImageGenerationModel(
-          provider: AgentApiProvider.openai,
           modelId: 'gpt-image-1.5',
         ),
         isFalse,
       );
       expect(
         AgentModelCapability.isImageGenerationModel(
-          provider: AgentApiProvider.openai,
           modelId: 'gpt-image-1',
         ),
         isFalse,
       );
       expect(
         AgentModelCapability.isImageGenerationModel(
-          provider: AgentApiProvider.openai,
           modelId: 'gpt-4o',
         ),
         isFalse,
@@ -50,17 +45,30 @@ void main() {
     test('识别 Gemini 生图模型', () {
       expect(
         AgentModelCapability.isImageGenerationModel(
-          provider: AgentApiProvider.gemini,
           modelId: 'gemini-3.1-flash-image-preview',
         ),
         isTrue,
       );
       expect(
         AgentModelCapability.isImageGenerationModel(
-          provider: AgentApiProvider.gemini,
           modelId: 'gemini-2.5-pro',
         ),
         isFalse,
+      );
+    });
+
+    test('识别 Doubao seedance 生图模型', () {
+      expect(
+        AgentModelCapability.isImageGenerationModel(
+          modelId: 'seedance-2.0-draw',
+        ),
+        isTrue,
+      );
+      expect(
+        AgentModelCapability.isImageGenerationModel(
+          modelId: 'doubao-seedance-draw-2.0',
+        ),
+        isTrue,
       );
     });
 
@@ -117,6 +125,16 @@ void main() {
       final c = AgentModelCapability.fromModelId(
         provider: AgentApiProvider.openai,
         modelId: 'gpt-image-2',
+      );
+      expect(c.imageOutput, isTrue);
+      expect(c.tool, isFalse);
+      expect(c.reasoning, isFalse);
+    });
+
+    test('seedance 生图模型不带工具/推理', () {
+      final c = AgentModelCapability.fromModelId(
+        provider: AgentApiProvider.openAICompatible,
+        modelId: 'seedance-2.0-draw',
       );
       expect(c.imageOutput, isTrue);
       expect(c.tool, isFalse);

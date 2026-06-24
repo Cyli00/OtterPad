@@ -65,7 +65,6 @@ class ImageGenerationService {
       throw const ImageGenerationException('请先在「AI 设置」中填写生图模型 API Key');
     }
     if (!AgentModelCapability.isImageGenerationModel(
-      provider: request.provider,
       modelId: request.modelId,
     )) {
       throw ImageGenerationException('当前模型不支持图片生成：${request.modelId}');

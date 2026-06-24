@@ -135,7 +135,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       result = result
           .where(
             (m) => AgentModelCapability.isImageGenerationModel(
-              provider: widget.providerType,
               modelId: m,
             ),
           )
@@ -160,7 +159,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
 
   Future<void> _showAddConfirm(String id) async {
     final isImageModel = AgentModelCapability.isImageGenerationModel(
-      provider: widget.providerType,
       modelId: id,
     );
 
@@ -516,7 +514,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     final isDefault = _localDefault == id;
     final isFast = _localFast == id;
     final isImageModel = AgentModelCapability.isImageGenerationModel(
-      provider: widget.providerType,
       modelId: id,
     );
     final cap = AgentModelCapability.infer(

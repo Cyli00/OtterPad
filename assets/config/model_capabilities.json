@@ -1,0 +1,61 @@
+{
+  "embedding": [
+    "embedding",
+    "(?:^|[-_/])embed(?:dings?)?(?:[-.]|$)"
+  ],
+  "vision": [
+    "gpt-4o",
+    "gpt-4\\.1",
+    "gpt-5",
+    "gemini",
+    "claude",
+    "qwen-vl",
+    "vision",
+    "vl",
+    "glm-[\\d.]+v\\b",
+    "doubao-seed",
+    "kimi-k2\\.[5-9]",
+    "grok-4",
+    "mimo"
+  ],
+  "imageGen": [
+    "gpt-image-2",
+    "seedance",
+    "gemini[\\w.-]*-image"
+  ],
+  "tool": [
+    "gpt-4o",
+    "gpt-4\\.1",
+    "gpt-oss",
+    "gpt-5(?!-chat)",
+    "o\\d",
+    "gemini",
+    "claude",
+    "qwen-?3",
+    "grok-4",
+    "kimi-k2",
+    "glm-4[-.](?:5|6|7)",
+    "glm-5",
+    "minimax-m2",
+    "mimo",
+    "doubao-seed",
+    "deepseek-(?:chat|r1|reasoner|v3|v3\\.1|v3\\.2|v4)"
+  ],
+  "reasoning": [
+    "gpt-oss",
+    "gpt-5(?!-chat)",
+    "o\\d",
+    "gemini-(?:2\\.5|3)",
+    "gemma[-_]?4",
+    "claude",
+    "qwen-?3",
+    "grok-4",
+    "kimi-k2",
+    "glm-4[-.](?:5|6|7)",
+    "glm-5",
+    "minimax-m2",
+    "mimo",
+    "doubao-seed",
+    "deepseek-(?:r1|reasoner|v3\\.1|v3\\.2|v4)"
+  ]
+}
