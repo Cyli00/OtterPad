@@ -20,20 +20,14 @@ class ReaderSheetHost extends StatefulWidget {
   /// sheet 关闭动画结束后调用（如 `setSheetOpen(false)`）。
   final VoidCallback? onSheetClose;
 
-  const ReaderSheetHost({
-    super.key,
-    this.onSheetOpen,
-    this.onSheetClose,
-  });
+  const ReaderSheetHost({super.key, this.onSheetOpen, this.onSheetClose});
 
   /// 从 [context] 向上找到最近的 [ReaderSheetHostState] 并关闭 sheet。
   ///
   /// 替代 `Navigator.pop(context, result)` 的语义——sheet 内容不需要
   /// 持有 host 的 GlobalKey，只需通过 context 获取 close 方法。
   static void closeOf(BuildContext context, [dynamic result]) {
-    context
-        .findAncestorStateOfType<ReaderSheetHostState>()
-        ?.close(result);
+    context.findAncestorStateOfType<ReaderSheetHostState>()?.close(result);
   }
 
   @override
@@ -65,10 +59,7 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: kAnimSlow,
-    );
+    _controller = AnimationController(vsync: this, duration: kAnimSlow);
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 1),
       end: Offset.zero,
@@ -117,11 +108,7 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
     widget.onSheetOpen?.call();
 
     setState(() {});
-    _controller.animateTo(
-      1.0,
-      duration: kAnimSlow,
-      curve: kAnimCurve,
-    );
+    _controller.animateTo(1.0, duration: kAnimSlow, curve: kAnimCurve);
 
     return completer.future;
   }
@@ -131,11 +118,7 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
     if (!_isOpen) return;
     _isOpen = false;
     _pendingResult = result;
-    _controller.animateBack(
-      0.0,
-      duration: kAnim,
-      curve: kAnimCurveReverse,
-    );
+    _controller.animateBack(0.0, duration: kAnim, curve: kAnimCurveReverse);
   }
 
   void _forceClose() {
@@ -174,15 +157,10 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
 
   void _handleDragEnd(DragEndDetails details) {
     final velocity = details.velocity.pixelsPerSecond.dy;
-    if (velocity > _kFlingVelocity ||
-        _controller.value < _kCloseThreshold) {
+    if (velocity > _kFlingVelocity || _controller.value < _kCloseThreshold) {
       close();
     } else {
-      _controller.animateTo(
-        1.0,
-        duration: kAnimFast,
-        curve: kAnimCurve,
-      );
+      _controller.animateTo(1.0, duration: kAnimFast, curve: kAnimCurve);
     }
   }
 
@@ -223,7 +201,9 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
               Positioned(
                 left: 0,
                 right: 0,
-                top: 0,
+                // 顶部内缩状态栏：满高 sheet（如大纲）顶到屏幕顶时，拖拽手势条
+                // 不会落进状态栏区域。barrier 仍铺满全屏（top:0）做压暗。
+                top: MediaQuery.of(context).padding.top,
                 bottom: _bottomBarHeight,
                 child: Align(
                   alignment: Alignment.bottomCenter,

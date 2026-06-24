@@ -8,7 +8,9 @@ body {
   background-color: var(--bg);
   padding: 20px;
   padding-top: calc(var(--font-size) * var(--block-margin) + var(--top-inset, 20px));
-  padding-bottom: 40px;
+  /* 对齐 padding-top：让出底部工具栏自身高度（--bottom-inset，56px），
+     使末屏正文不被半透明底栏压住。系统小白条由 Flutter 侧 WebView 内缩负责。 */
+  padding-bottom: calc(var(--font-size) * var(--block-margin) + var(--bottom-inset, 40px));
   -webkit-user-select: text;
   user-select: text;
   word-wrap: break-word;
@@ -213,12 +215,17 @@ html, body {
  * - scrollbar 隐藏：横向模式视觉上是"翻书"，原生滚动条破坏沉浸感。
  */
 body[data-pagination="horizontal"] {
+  /* 从完整 inset（工具栏+安全区）中扣除工具栏高度（top 48px / bottom 56px），
+     只保留系统安全区作为 padding——工具栏以 Flutter overlay 形式覆盖内容上方，
+     用户可点击切换显隐，与 Apple Books / Kindle 一致。 */
+  --h-pad-top: max(calc(var(--top-inset, 48px) - 48px), 16px);
+  --h-pad-bottom: max(calc(var(--bottom-inset, 56px) - 56px), 16px);
   height: 100vh;
   overflow: hidden;
   padding: 0;
 }
 body[data-pagination="horizontal"] #content {
-  padding: 24px 32px;
+  padding: var(--h-pad-top) 32px var(--h-pad-bottom);
   /* column-width 必须用 JS 喂入的 px 值（--page-width）而非 100vw：
      在 InAppWebView 底层 (WebView2 / Chromium) 上 vw 单位不会触发
      multi-column 的 reflow——窗口变大后会出现"一屏看到下一页"。
@@ -226,7 +233,7 @@ body[data-pagination="horizontal"] #content {
      CSS var 变化会触发 column layout invalidation，浏览器才重排。 */
   column-width: var(--page-width, 100vw);
   column-gap: 64px;
-  height: calc(100vh - 48px);
+  height: calc(100vh - var(--h-pad-top) - var(--h-pad-bottom));
   overflow-x: auto;
   overflow-y: hidden;
   touch-action: none;
@@ -273,4 +280,7 @@ body[data-pagination="horizontal"] img {
   color: var(--secondary);
   background: var(--bg);
   pointer-events: none;
+}
+body[data-pagination="horizontal"] #page-footer {
+  bottom: calc(var(--h-pad-bottom, 16px) + 4px);
 }

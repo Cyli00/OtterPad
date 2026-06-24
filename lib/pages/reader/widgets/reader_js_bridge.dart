@@ -229,6 +229,14 @@ class ReaderJsBridge {
     );
   }
 
+  void applyBottomInset(double bottomInset) {
+    if (!_contentReady) return;
+    _controller.evaluateJavascript(
+      source:
+          "document.documentElement.style.setProperty('--bottom-inset', '${bottomInset}px')",
+    );
+  }
+
   // ─── Dart → JS：搜索 ───
 
   void applySearchQuery(String? query) {

@@ -28,6 +28,7 @@ String buildReaderHtml({
   String translationStyleId = 'themed',
   String imageCacheBuster = '',
   double topInset = 0,
+  double bottomInset = 0,
 }) {
   final htmlBody = _markdownToHtml(
     markdownContent,
@@ -45,6 +46,7 @@ String buildReaderHtml({
     ...settings.toCssVars(),
     ...ReaderTypography.cssVars(),
     '--top-inset': '${topInset}px',
+    '--bottom-inset': '${bottomInset}px',
   });
 
   final bgColor = cssColor(palette.background);

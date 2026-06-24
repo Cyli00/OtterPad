@@ -236,6 +236,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     final baseHref = _docBaseHref;
     final buster = _figuresCacheBuster();
     final inset = widget.topInset;
+    final bottomInset = widget.bottomInset;
     final path = _htmlFilePath;
     // server root 在主 isolate 取出传入——isolate 内单例未初始化，
     // 否则 file:// 重写失效、图片裂成 alt 文本（见 _rootRelativeUrlForPath）。
@@ -267,6 +268,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
         translationStyleId: styleId,
         imageCacheBuster: buster,
         topInset: inset,
+        bottomInset: bottomInset,
       );
       htmlFile.parent.createSync(recursive: true);
       htmlFile.writeAsStringSync(html);
@@ -596,6 +598,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     _bridge?.applyTheme(widget.palette, widget.settings);
     _bridge?.applyTranslationStyle(widget.translationStyleId);
     _bridge?.applyTopInset(widget.topInset);
+    _bridge?.applyBottomInset(widget.bottomInset);
     // 翻页方式必须在首屏注入：JS 默认 body 没 data-pagination 属性，
     // 视为 vertical；horizontal 时若不注入会以 vertical 渲染首屏，
     // 直到第一次 didUpdateWidget 才切，造成"先看到 vertical 一闪"。
