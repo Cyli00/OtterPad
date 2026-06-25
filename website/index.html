@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>OtterPad · Web OCR — 把扫描件读成干净的 Markdown</title>
-<meta name="description" content="OtterPad Web OCR：基于 PaddleOCR 的版面分析，把图片型 PDF 还原成结构化 Markdown——标题、正文、公式、表格，各归各位。" />
+<title>OtterPad · AI 驱动的跨平台学术文献阅读器</title>
+<meta name="description" content="OtterPad：基于 PaddleOCR 版面分析，把扫描型 PDF 转为易读格式，配合 AI 问答、段落翻译、图表提取，让学术文献在手机上也能好好读。" />
 <link rel="icon" type="image/png" href="assets/otter-swim.png" />
 
 <!-- OG -->
-<meta property="og:title" content="OtterPad · Web OCR" />
-<meta property="og:description" content="粘贴 Key，拖入 PDF，立即把扫描件读成结构化 Markdown。" />
-<meta property="og:image" content="assets/app-screenshot.png" />
+<meta property="og:title" content="OtterPad · 学术文献阅读器" />
+<meta property="og:description" content="把扫描型 PDF 转为易读格式，AI 问答、段落翻译、图表提取，学术阅读从未如此简单。" />
+<meta property="og:image" content="assets/screenshot-reader.png" />
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,21 +19,20 @@
 
 <style>
 /* ============================================================
-   OtterPad · Web OCR  —  "纸与水" 编辑风
+   OtterPad · "纸与水" 编辑风
    米纸底 / 墨黑线条 / 静水墨绿 / 暖琥珀点缀
    ============================================================ */
 :root{
-  --paper:#FFFFFF;        /* 主背景：白 */
-  --paper-2:#F4F7F4;      /* 分区：极浅绿白 */
-  --card:#FFFFFF;         /* 卡片：白 */
-  --ink:#1A1A1A;          /* 近黑：文字 / 线条 */
-  --ink-soft:#565A56;     /* 次要文字 */
-  --ink-faint:#9AA09A;    /* 更弱 */
-  --water:#779C7B;        /* 唯一点缀色 */
-  --water-2:#4D6550;      /* 深绿：深色块 / 浅底前景 */
-  --water-wash:#EBF0EB;   /* 浅绿：面板 / 标签底 */
-  --sun:#779C7B;          /* 统一为点缀绿 */
-  --coral:#779C7B;        /* 统一为点缀绿 */
+  --paper:#FFFFFF;
+  --paper-2:#F4F7F4;
+  --card:#FFFFFF;
+  --ink:#1A1A1A;
+  --ink-soft:#565A56;
+  --ink-faint:#9AA09A;
+  --water:#779C7B;
+  --water-2:#4D6550;
+  --water-wash:#EBF0EB;
+  --sun:#779C7B;
   --line:#1A1A1A;
   --shadow:24px 24px 0 rgba(26,26,26,.05);
   --shadow-lift:0 18px 40px -18px rgba(119,156,123,.5);
@@ -53,7 +52,6 @@ body{
   -webkit-font-smoothing:antialiased;
   overflow-x:hidden;
 }
-/* 纸张颗粒噪点叠层 */
 body::before{
   content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;
   opacity:.045;mix-blend-mode:multiply;
@@ -85,7 +83,6 @@ img{display:block;max-width:100%}
 .btn--water{background:var(--water);border-color:var(--water);color:var(--ink)}
 .btn--ghost{background:transparent;color:var(--ink)}
 .btn--ghost:hover{background:var(--ink);color:var(--paper)}
-.btn[disabled]{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 
 /* ============================================================
    NAV
@@ -116,7 +113,6 @@ header.nav.scrolled{
    HERO
    ============================================================ */
 .hero{position:relative;padding:170px 0 90px;overflow:hidden}
-/* 背景静水等高线 */
 .hero .contours{position:absolute;inset:0;z-index:0;opacity:.5;pointer-events:none}
 .hero-grid{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr .95fr;gap:50px;align-items:center}
 .hero-copy h1{
@@ -129,14 +125,14 @@ header.nav.scrolled{
   content:"";position:absolute;left:-2%;right:-2%;bottom:.08em;height:.36em;z-index:-1;
   background:var(--sun);opacity:.55;border-radius:3px;transform:rotate(-1deg);
 }
-.hero-copy p.lead{font-size:1.16rem;color:var(--ink-soft);max-width:33ch;margin-bottom:2em}
+.hero-copy p.lead{font-size:1.16rem;color:var(--ink-soft);max-width:36ch;margin-bottom:2em}
 .hero-actions{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
 .hero-stats{display:flex;gap:34px;margin-top:2.6em}
 .hero-stats .s{display:flex;flex-direction:column}
 .hero-stats .num{font-family:var(--font-display);font-weight:900;font-size:1.7rem;color:var(--water)}
 .hero-stats .lab{font-size:.82rem;color:var(--ink-faint);font-family:var(--font-mono);letter-spacing:.04em}
 
-/* hero 视觉：手机截图 + 漂浮水獭 */
+/* hero 视觉 */
 .hero-art{position:relative;display:flex;justify-content:center;align-items:center;min-height:480px}
 .water-blob{
   position:absolute;width:430px;height:430px;border-radius:46% 54% 58% 42%/52% 44% 56% 48%;
@@ -147,12 +143,11 @@ header.nav.scrolled{
   0%,100%{border-radius:46% 54% 58% 42%/52% 44% 56% 48%;transform:rotate(0deg)}
   50%{border-radius:58% 42% 44% 56%/46% 58% 42% 54%;transform:rotate(6deg)}
 }
-.phone{
-  position:relative;z-index:2;width:255px;border-radius:34px;overflow:hidden;
-  border:9px solid var(--ink);background:var(--ink);
-  box-shadow:0 30px 60px -20px rgba(77,101,80,.6);transform:rotate(-3deg);
+.hero-phone{
+  position:relative;z-index:2;width:240px;
+  filter:drop-shadow(0 30px 60px rgba(77,101,80,.5));
+  transform:rotate(-3deg);
 }
-.phone img{width:100%;display:block}
 .otter-swim{
   position:absolute;z-index:3;width:140px;right:-6px;top:-14px;transform:rotate(8deg);
   animation:bob 5s ease-in-out infinite;
@@ -166,7 +161,6 @@ header.nav.scrolled{
 @keyframes bob{0%,100%{transform:translateY(0) rotate(var(--r,0deg))}50%{transform:translateY(-14px) rotate(var(--r,0deg))}}
 .otter-swim{--r:8deg}.otter-sit{--r:-6deg}
 
-/* 水滴小装饰 */
 .drop{position:absolute;background:var(--water);border-radius:50% 50% 50% 0;transform:rotate(45deg);opacity:.5;z-index:1}
 
 @media(max-width:880px){
@@ -192,128 +186,6 @@ section.block{padding:100px 0;position:relative}
 .sec-head p{color:var(--ink-soft);font-size:1.08rem;max-width:54ch}
 
 /* ============================================================
-   OCR DEMO
-   ============================================================ */
-#demo{background:var(--paper-2);border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
-.demo-shell{
-  background:var(--card);border:2px solid var(--ink);border-radius:22px;
-  box-shadow:var(--shadow);overflow:hidden;
-}
-/* 闸门 */
-.gate{padding:34px 38px;display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;border-bottom:2px dashed rgba(26,26,26,.22);position:relative}
-.gate .lockbadge{
-  position:absolute;right:30px;top:26px;font-family:var(--font-mono);font-size:.72rem;
-  letter-spacing:.12em;display:flex;align-items:center;gap:7px;color:var(--ink-faint);
-  border:1.5px solid currentColor;border-radius:30px;padding:5px 12px;transition:.3s;
-}
-.gate .lockbadge.ok{color:var(--water);background:var(--water-wash);border-color:var(--water)}
-.gate .lockbadge svg{width:14px;height:14px}
-.field{flex:1;min-width:260px}
-.field label{display:block;font-family:var(--font-mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:9px}
-.keyrow{display:flex;gap:0;border:2px solid var(--ink);border-radius:13px;overflow:hidden;background:#fff;transition:border-color .2s,box-shadow .2s}
-.keyrow.err{border-color:var(--ink);animation:shake .4s}
-.keyrow.ok{border-color:var(--water)}
-@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
-.keyrow input{
-  flex:1;border:none;outline:none;font-family:var(--font-mono);font-size:.95rem;
-  padding:13px 16px;background:transparent;color:var(--ink);letter-spacing:.02em;
-}
-.keyrow .verify{
-  border:none;background:var(--ink);color:var(--paper);font-family:var(--font-body);
-  font-weight:600;padding:0 24px;cursor:pointer;display:flex;align-items:center;gap:9px;transition:background .2s;white-space:nowrap;
-}
-.keyrow .verify:hover{background:var(--water)}
-.keyrow .verify[disabled]{opacity:.5;cursor:wait}
-.gate-note{flex-basis:100%;font-size:.85rem;color:var(--ink-faint);margin-top:4px;display:flex;align-items:center;gap:8px}
-.gate-note svg{width:15px;height:15px;stroke:var(--sun);flex-shrink:0}
-.gate-msg{font-size:.85rem;font-weight:600;margin-top:8px;min-height:1.2em}
-.gate-msg.err{color:var(--ink)}
-.gate-msg.ok{color:var(--water)}
-.spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:var(--paper);border-radius:50%;animation:spin .7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-/* 工作区（默认锁定模糊） */
-.workspace{position:relative;transition:filter .5s}
-.workspace.locked{filter:blur(7px) grayscale(.4);pointer-events:none;user-select:none}
-.lock-overlay{
-  position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
-  background:rgba(244,247,244,.62);backdrop-filter:blur(2px);text-align:center;padding:30px;transition:opacity .5s;
-}
-.lock-overlay.hide{opacity:0;pointer-events:none}
-.lock-overlay .lk{width:66px;height:66px;border-radius:50%;background:var(--ink);display:grid;place-items:center;box-shadow:var(--shadow-lift)}
-.lock-overlay .lk svg{width:30px;height:30px;stroke:var(--sun)}
-.lock-overlay p{font-family:var(--font-display);font-weight:600;font-size:1.3rem}
-.lock-overlay span{font-size:.9rem;color:var(--ink-soft);font-family:var(--font-mono);letter-spacing:.04em}
-
-/* 上传 + 双栏 */
-.ws-pad{padding:26px}
-.dropzone{
-  border:2.5px dashed rgba(26,26,26,.3);border-radius:16px;padding:46px 24px;text-align:center;
-  cursor:pointer;transition:.25s;background:rgba(255,255,255,.4);
-}
-.dropzone:hover,.dropzone.drag{border-color:var(--water);background:var(--water-wash)}
-.dropzone .up-ic{width:54px;height:54px;margin:0 auto 14px;color:var(--water)}
-.dropzone h4{font-family:var(--font-display);font-weight:600;font-size:1.25rem;margin-bottom:6px}
-.dropzone p{color:var(--ink-soft);font-size:.92rem}
-.dropzone .hint{font-family:var(--font-mono);font-size:.74rem;color:var(--ink-faint);margin-top:12px;letter-spacing:.04em}
-
-.split{display:none;grid-template-columns:1fr 1fr;gap:0;border:2px solid var(--ink);border-radius:16px;overflow:hidden;min-height:560px}
-.split.show{display:grid}
-.pane{display:flex;flex-direction:column;min-width:0}
-.pane.left{border-right:2px solid var(--ink)}
-.pane-bar{
-  display:flex;align-items:center;gap:10px;padding:13px 18px;background:var(--ink);color:var(--paper);
-  font-family:var(--font-mono);font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;
-}
-.pane-bar .chip{margin-left:auto;font-size:.7rem;background:rgba(255,255,255,.16);padding:4px 10px;border-radius:20px;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:none;letter-spacing:0}
-.pane.left .pane-bar{background:var(--water-2)}
-.pdf-frame{flex:1;border:none;width:100%;background:#525659}
-.pdf-empty{flex:1;display:grid;place-items:center;color:var(--ink-faint);font-family:var(--font-mono);font-size:.85rem;background:repeating-linear-gradient(45deg,#fff,#fff 14px,#eef2ee 14px,#eef2ee 28px)}
-
-/* markdown 输出栏 */
-.md-out{flex:1;overflow:auto;padding:26px 28px;background:var(--card);position:relative}
-.md-placeholder{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--ink-faint);text-align:center}
-.md-placeholder svg{width:46px;height:46px;color:var(--ink-faint);opacity:.6}
-.run-bar{display:flex;align-items:center;gap:12px;padding:14px 18px;border-top:2px solid var(--ink);background:var(--paper)}
-.run-bar .btn{padding:.6em 1.3em;font-size:.9rem}
-.run-progress{flex:1;height:8px;background:rgba(26,26,26,.1);border-radius:10px;overflow:hidden;display:none}
-.run-progress.show{display:block}
-.run-progress .bar{height:100%;width:0;background:linear-gradient(90deg,var(--water-2),var(--water));transition:width .35s;border-radius:10px}
-.run-status{font-family:var(--font-mono);font-size:.78rem;color:var(--water);min-width:120px;text-align:right}
-
-/* 流式 markdown 块 */
-.md-block{opacity:0;transform:translateY(10px);animation:rise .5s forwards;position:relative;padding-left:62px;margin-bottom:1.05em}
-@keyframes rise{to{opacity:1;transform:none}}
-.md-block .tag{
-  position:absolute;left:0;top:.25em;font-family:var(--font-mono);font-size:.6rem;font-weight:600;
-  letter-spacing:.06em;padding:3px 7px;border-radius:6px;border:1.5px solid;line-height:1;white-space:nowrap;
-}
-.tag.t-title{color:var(--water-2);border-color:var(--water);background:var(--water-wash)}
-.tag.t-text{color:var(--ink-soft);border-color:rgba(26,26,26,.28);background:rgba(26,26,26,.04)}
-.tag.t-formula{color:var(--water-2);border-color:var(--water);background:var(--water-wash)}
-.tag.t-table{color:var(--water-2);border-color:var(--water);background:var(--water-wash)}
-.tag.t-list{color:var(--ink-soft);border-color:rgba(26,26,26,.28);background:rgba(26,26,26,.04)}
-.md-out h1.r{font-family:var(--font-display);font-weight:900;font-size:1.6rem;line-height:1.2}
-.md-out h2.r{font-family:var(--font-display);font-weight:600;font-size:1.2rem;margin-top:.2em}
-.md-out p.r{font-size:.95rem;color:var(--ink);line-height:1.7}
-.md-out .authors{font-size:.86rem;color:var(--ink-soft);font-style:italic}
-.md-out ul.r{font-size:.93rem;padding-left:1.2em}
-.md-out ul.r li{margin-bottom:.3em}
-.md-out .formula{font-family:var(--font-mono);background:var(--water-wash);border-left:3px solid var(--water);padding:12px 16px;border-radius:0 8px 8px 0;font-size:.92rem;overflow-x:auto}
-.md-out table.r{border-collapse:collapse;font-size:.84rem;width:100%}
-.md-out table.r th,.md-out table.r td{border:1px solid rgba(26,26,26,.25);padding:7px 11px;text-align:left}
-.md-out table.r th{background:var(--ink);color:var(--paper);font-weight:600}
-.cursor{display:inline-block;width:9px;height:1.1em;background:var(--water);vertical-align:text-bottom;animation:blink .9s steps(1) infinite;margin-left:2px}
-@keyframes blink{50%{opacity:0}}
-.md-done{display:none;gap:10px;margin-top:18px;padding-top:18px;border-top:1px dashed rgba(26,26,26,.2)}
-.md-done.show{display:flex}
-.md-done .btn{padding:.5em 1.1em;font-size:.84rem}
-.openfull{margin-top:18px;font-size:.86rem;font-family:var(--font-mono)}
-.openfull a{color:var(--water);font-weight:600;text-decoration:underline;text-underline-offset:3px}
-
-@media(max-width:760px){.split{grid-template-columns:1fr}.pane.left{border-right:none;border-bottom:2px solid var(--ink)}.pdf-frame{min-height:360px}}
-
-/* ============================================================
    FEATURES 卡片
    ============================================================ */
 .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
@@ -330,23 +202,51 @@ section.block{padding:100px 0;position:relative}
 @media(max-width:860px){.cards{grid-template-columns:1fr}}
 
 /* ============================================================
-   APP 区
+   SCREENSHOTS 展示区
    ============================================================ */
-#app-sec{background:var(--water-2);color:var(--paper)}
-#app-sec .eyebrow{color:var(--water-wash)}
-#app-sec .eyebrow::before{background:var(--water-wash)}
-#app-sec .sec-head p{color:rgba(255,255,255,.78)}
-.app-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:50px;align-items:center}
-.app-phone{position:relative;display:flex;justify-content:center}
-.app-phone .phone{transform:rotate(3deg);border-color:var(--paper)}
-.app-phone .otter-swim{width:120px;left:-20px;top:auto;bottom:-10px;right:auto;transform:rotate(-10deg);filter:drop-shadow(2px 4px 0 rgba(77,101,80,.4)) invert(0)}
-.app-feats{list-style:none;display:flex;flex-direction:column;gap:18px;margin-top:8px}
-.app-feats li{display:flex;gap:14px;align-items:flex-start}
-.app-feats .b{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.16);display:grid;place-items:center;flex-shrink:0;border:1.5px solid rgba(255,255,255,.4)}
-.app-feats .b svg{width:16px;height:16px;stroke:var(--water-wash)}
-.app-feats b{font-weight:700;display:block;margin-bottom:2px}
-.app-feats span{color:rgba(255,255,255,.72);font-size:.92rem}
-@media(max-width:860px){.app-grid{grid-template-columns:1fr;gap:30px}.app-phone{order:-1}}
+#screenshots{background:var(--paper-2);border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+.screenshot-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start;justify-items:center}
+.screenshot-item{text-align:center}
+.screenshot-item img{width:280px;margin:0 auto 20px;filter:drop-shadow(0 20px 40px rgba(77,101,80,.25))}
+.screenshot-label{
+  display:inline-block;font-family:var(--font-mono);font-size:.78rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-faint);font-weight:600;
+}
+@media(max-width:700px){.screenshot-grid{grid-template-columns:1fr;gap:50px}}
+
+/* ============================================================
+   HOW IT WORKS 流程
+   ============================================================ */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;counter-reset:step}
+.step{position:relative;padding:28px 24px;border:2px solid var(--ink);border-radius:20px;background:var(--card)}
+.step::before{
+  counter-increment:step;content:counter(step);
+  font-family:var(--font-display);font-weight:900;font-size:2.6rem;color:rgba(26,26,26,.07);
+  position:absolute;right:16px;top:10px;
+}
+.step .ic{width:48px;height:48px;border-radius:14px;background:var(--water-wash);display:grid;place-items:center;margin-bottom:16px;border:2px solid var(--ink)}
+.step .ic svg{width:24px;height:24px;stroke:var(--water-2)}
+.step h3{font-family:var(--font-display);font-weight:600;font-size:1.15rem;margin-bottom:.4em}
+.step p{color:var(--ink-soft);font-size:.92rem}
+@media(max-width:760px){.steps{grid-template-columns:1fr}}
+
+/* ============================================================
+   TECH 区
+   ============================================================ */
+#tech{background:var(--water-2);color:var(--paper)}
+#tech .eyebrow{color:var(--water-wash)}
+#tech .eyebrow::before{background:var(--water-wash)}
+#tech .sec-head p{color:rgba(255,255,255,.78)}
+.tech-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.tech-tag{
+  background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.25);border-radius:14px;
+  padding:22px 18px;text-align:center;transition:transform .3s,background .3s;
+}
+.tech-tag:hover{transform:translateY(-4px);background:rgba(255,255,255,.18)}
+.tech-tag svg{width:32px;height:32px;margin:0 auto 12px;stroke:var(--water-wash)}
+.tech-tag b{display:block;font-size:1rem;margin-bottom:4px}
+.tech-tag span{font-size:.82rem;color:rgba(255,255,255,.65);font-family:var(--font-mono);letter-spacing:.02em}
+@media(max-width:700px){.tech-grid{grid-template-columns:1fr 1fr}}
 
 /* ============================================================
    CTA band
@@ -362,16 +262,17 @@ section.block{padding:100px 0;position:relative}
    ============================================================ */
 footer{background:var(--ink);color:var(--paper);padding:64px 0 30px;position:relative}
 .ripple{position:absolute;top:-1px;left:0;right:0;height:30px;overflow:hidden;line-height:0}
-.foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:36px;margin-bottom:46px}
+.foot-inner{display:flex;justify-content:space-between;align-items:flex-start;gap:36px;margin-bottom:46px;flex-wrap:wrap}
 .foot-brand{display:flex;align-items:center;gap:11px;font-family:var(--font-display);font-weight:900;font-size:1.3rem;margin-bottom:14px}
 .foot-brand img{width:40px;height:40px;filter:invert(1)}
 .foot-brand .dot{color:var(--sun)}
-.foot-col p{color:rgba(255,255,255,.6);font-size:.9rem;max-width:30ch}
+.foot-desc{color:rgba(255,255,255,.6);font-size:.9rem;max-width:34ch}
+.foot-links{display:flex;gap:48px}
 .foot-col h5{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--sun);margin-bottom:16px}
 .foot-col a{display:block;color:rgba(255,255,255,.78);font-size:.93rem;margin-bottom:11px;transition:.2s;width:fit-content}
 .foot-col a:hover{color:var(--paper);transform:translateX(3px)}
 .foot-bot{border-top:1px solid rgba(255,255,255,.14);padding-top:22px;display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;font-size:.83rem;color:rgba(255,255,255,.5);font-family:var(--font-mono);letter-spacing:.03em}
-@media(max-width:860px){.foot-grid{grid-template-columns:1fr 1fr;gap:30px}}
+@media(max-width:860px){.foot-links{gap:30px}.foot-inner{flex-direction:column}}
 
 /* scroll reveal */
 .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s cubic-bezier(.2,.8,.2,1),transform .7s cubic-bezier(.2,.8,.2,1)}
@@ -387,12 +288,12 @@ footer{background:var(--ink);color:var(--paper);padding:64px 0 30px;position:rel
   <div class="nav-inner">
     <a href="#" class="brand"><img src="assets/otter-swim.png" alt="OtterPad" />OtterPad<span class="dot">.</span></a>
     <nav class="nav-links">
-      <a href="#demo">在线 OCR</a>
-      <a href="#features">能力</a>
-      <a href="#app-sec">关于 App</a>
+      <a href="#features">功能</a>
+      <a href="#screenshots">界面</a>
+      <a href="#how">工作原理</a>
     </nav>
     <div class="nav-cta">
-      <a href="https://ocr.otterpad.site" class="btn btn--water">打开 Web OCR <span class="arr">↗</span></a>
+      <a href="https://github.com/Cyli00/NightReader/releases" class="btn btn--water">下载 APK <span class="arr">↗</span></a>
     </div>
   </div>
 </header>
@@ -410,17 +311,17 @@ footer{background:var(--ink);color:var(--paper);padding:64px 0 30px;position:rel
   </svg>
   <div class="wrap hero-grid">
     <div class="hero-copy">
-      <span class="eyebrow reveal">基于 PaddleOCR · 版面分析引擎</span>
-      <h1 class="reveal">扫描件、公式、表格，<br>一次 OCR <span class="mark">全部读懂</span></h1>
-      <p class="lead reveal">把图片型 PDF 还原成结构化 <em>Markdown</em>——标题、正文、公式、表格各归各位，复制即用，无需重排。</p>
+      <span class="eyebrow reveal">AI-Powered · 跨平台学术阅读器</span>
+      <h1 class="reveal">导师发的文献，<br>终于能在手机上<span class="mark">好好读</span>了</h1>
+      <p class="lead reveal">基于 PaddleOCR 版面分析，把排版复杂的 PDF 转为智能排版格式——配合 AI 问答、段落翻译、图表提取，沉浸阅读论文。</p>
       <div class="hero-actions reveal">
-        <a href="#demo" class="btn">免费体验 OCR <span class="arr">→</span></a>
-        <a href="https://ocr.otterpad.site" class="btn btn--ghost">完整版 ocr.otterpad.site <span class="arr">↗</span></a>
+        <a href="https://github.com/Cyli00/NightReader/releases" class="btn">下载 Android APK <span class="arr">→</span></a>
+        <a href="https://github.com/Cyli00/NightReader" class="btn btn--ghost">GitHub 源码 <span class="arr">↗</span></a>
       </div>
       <div class="hero-stats reveal">
-        <div class="s"><span class="num">99.2%</span><span class="lab">印刷体准确率</span></div>
-        <div class="s"><span class="num">80+</span><span class="lab">语种支持</span></div>
-        <div class="s"><span class="num">&lt;3s</span><span class="lab">单页识别</span></div>
+        <div class="s"><span class="num">6</span><span class="lab">核心功能模块</span></div>
+        <div class="s"><span class="num">80+</span><span class="lab">OCR 语种</span></div>
+        <div class="s"><span class="num">GPL-3.0</span><span class="lab">开源协议</span></div>
       </div>
     </div>
     <div class="hero-art reveal">
@@ -429,7 +330,7 @@ footer{background:var(--ink);color:var(--paper);padding:64px 0 30px;position:rel
       <span class="drop" style="width:14px;height:14px;right:6%;bottom:14%;opacity:.4"></span>
       <div class="water-blob"></div>
       <img class="otter-swim" src="assets/otter-swim.png" alt="水獭" />
-      <div class="phone"><img src="assets/app-screenshot.png" alt="OtterPad 截图" /></div>
+      <img class="hero-phone" src="assets/screenshot-reader.png" alt="OtterPad 阅读界面" />
       <img class="otter-sit" src="assets/otter-sitting.png" alt="看书的水獭" />
     </div>
   </div>
@@ -438,148 +339,87 @@ footer{background:var(--ink);color:var(--paper);padding:64px 0 30px;position:rel
 <!-- ===================== STRIP ===================== -->
 <div class="strip">
   <div class="strip-inner">
-    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg>本地优先 · 隐私安全</div>
-    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h7"/></svg>高精度公式识别</div>
-    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>表格结构还原</div>
-    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>一键导出 Markdown</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg>本地优先 · 数据不出设备</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h7"/></svg>免费 OCR 版面分析</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>基于文献事实的 AI 问答</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 5h12M3 10h8M3 15h10M21 5l-5 5 5 5"/></svg>段落级翻译</div>
   </div>
 </div>
-
-<!-- ===================== OCR DEMO ===================== -->
-<section class="block" id="demo">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">在线体验</span>
-      <h2>粘贴 Key，拖入 PDF，立即识别</h2>
-      <p>左侧是上传的 PDF 原件，右侧是带版面标注的 Markdown 识别结果。为防止恶意流量，上传与识别前需校验 PaddleOCR API Key。</p>
-    </div>
-
-    <div class="demo-shell reveal">
-      <!-- 闸门 -->
-      <div class="gate">
-        <span class="lockbadge" id="lockbadge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-          <span id="lockbadge-txt">未验证</span>
-        </span>
-        <div class="field">
-          <label for="apikey">PaddleOCR API Key</label>
-          <div class="keyrow" id="keyrow">
-            <input id="apikey" type="text" autocomplete="off" spellcheck="false" placeholder="pp-xxxxxxxxxxxxxxxx" />
-            <button class="verify" id="verifyBtn"><span id="verifyTxt">验证</span></button>
-          </div>
-          <div class="gate-msg" id="gateMsg"></div>
-        </div>
-        <div class="gate-note">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
-          演示环境：任意非空 Key 即可解锁；正式版会校验你在 <a href="https://ocr.otterpad.site" style="color:var(--water);text-decoration:underline;text-underline-offset:2px">ocr.otterpad.site</a> 申请的真实 Key。
-        </div>
-      </div>
-
-      <!-- 工作区 -->
-      <div class="workspace locked" id="workspace">
-        <div class="lock-overlay" id="lockOverlay">
-          <div class="lk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
-          <p>验证 API Key 后解锁</p>
-          <span>UPLOAD · OCR · LAYOUT 均已锁定</span>
-        </div>
-
-        <div class="ws-pad">
-          <!-- 上传区 -->
-          <div class="dropzone" id="dropzone">
-            <input type="file" id="fileInput" accept="application/pdf" hidden />
-            <svg class="up-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0 5 5m-5-5L7 9"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-            <h4>拖入 PDF，或点击选择文件</h4>
-            <p>支持图片型 / 扫描型 PDF，单文件 ≤ 50 MB</p>
-            <div class="hint">PDF ONLY · 本地预览，不上传到第三方</div>
-          </div>
-
-          <!-- 双栏 -->
-          <div class="split" id="split">
-            <!-- 左：PDF -->
-            <div class="pane left">
-              <div class="pane-bar">原件 · PDF<span class="chip" id="fileChip">document.pdf</span></div>
-              <iframe class="pdf-frame" id="pdfFrame" title="PDF 预览"></iframe>
-            </div>
-            <!-- 右：Markdown -->
-            <div class="pane">
-              <div class="pane-bar">识别结果 · Markdown<span class="chip" id="layoutChip" style="display:none">已标注 6 个版面块</span></div>
-              <div class="md-out" id="mdOut">
-                <div class="md-placeholder" id="mdPlaceholder">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
-                  点击下方「开始识别」生成 Markdown
-                </div>
-              </div>
-              <div class="run-bar">
-                <button class="btn btn--water" id="runBtn">开始识别 · 版面分析</button>
-                <div class="run-progress" id="runProgress"><div class="bar" id="runBar"></div></div>
-                <span class="run-status" id="runStatus"></span>
-              </div>
-            </div>
-          </div>
-          <p class="openfull">需要批量识别 / API 接入？<a href="https://ocr.otterpad.site">前往 ocr.otterpad.site 完整版 ↗</a></p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ===================== FEATURES ===================== -->
 <section class="block" id="features">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="eyebrow">核心能力</span>
-      <h2>不只是 OCR，是把版面读懂</h2>
-      <p>PaddleOCR 版面分析引擎，理解一页论文里每一块内容的角色与阅读顺序。</p>
+      <span class="eyebrow">核心功能</span>
+      <h2>不只是 PDF 阅读器</h2>
+      <p>从文献导入到深度理解，OtterPad 覆盖学术阅读的完整工作流。</p>
     </div>
     <div class="cards">
       <div class="card reveal"><span class="num">01</span>
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></div>
-        <h3>高精度 OCR</h3>
-        <p>印刷与手写混排、多语种文本，逐字坐标级还原，复杂背景也稳。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
+        <h3>沉浸式阅读</h3>
+        <p>自定义主题配色、字号排版，支持高亮与标注。扫描 PDF 经版面分析后智能重排，在手机上也能舒适阅读。</p>
       </div>
       <div class="card reveal"><span class="num">02</span>
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></div>
-        <h3>版面分析</h3>
-        <p>自动区分标题 / 正文 / 公式 / 表格 / 图注，并按真实阅读顺序重排。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.93 4.93l2.12 2.12m9.9 9.9 2.12 2.12M4.93 19.07l2.12-2.12m9.9-9.9 2.12-2.12"/></svg></div>
+        <h3>AI 全文问答</h3>
+        <p>基于提取的完整文本与图表，AI 回答关于文档的任何问题。支持 OpenAI / Anthropic / Google 等多模型自由切换。</p>
       </div>
       <div class="card reveal"><span class="num">03</span>
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg></div>
-        <h3>Markdown 导出</h3>
-        <p>结构化输出，公式转 LaTeX、表格转管道语法，可直接导入 OtterPad 阅读。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 8h14M5 8 3 20h18L19 8M9 4h6"/></svg></div>
+        <h3>段落级翻译</h3>
+        <p>8 并发逐段翻译，自动保护公式、代码、引用编号。双语对照，离线缓存，术语不丢。</p>
+      </div>
+      <div class="card reveal"><span class="num">04</span>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></div>
+        <h3>图表提取</h3>
+        <p>精准识别 PDF 中的 figure 和 table，支持独立查看、缩放和复制，不再为看清一张小图费劲。</p>
+      </div>
+      <div class="card reveal"><span class="num">05</span>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></div>
+        <h3>多源文献搜索</h3>
+        <p>通过 DOI / PubMed / Crossref / Semantic Scholar 等检索文献，AI 智能重命名，自定义分类标签。</p>
+      </div>
+      <div class="card reveal"><span class="num">06</span>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg></div>
+        <h3>云备份与同步</h3>
+        <p>S3 / WebDAV 云端备份与恢复，Zotero 双向同步文献库，可配置定时自动备份。数据安全有保障。</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ===================== APP SECTION ===================== -->
-<section class="block" id="app-sec">
-  <div class="wrap app-grid">
-    <div class="app-phone reveal">
-      <div class="phone"><img src="assets/app-screenshot.png" alt="OtterPad App" /></div>
-      <img class="otter-swim" src="assets/otter-sitting.png" alt="水獭" />
-    </div>
-    <div class="reveal">
-      <span class="eyebrow">关于 OtterPad</span>
-      <div class="sec-head" style="margin-bottom:30px">
-        <h2>Web OCR 只是开始</h2>
-        <p>识别完的 Markdown，直接流进 OtterPad——一个为科研阅读打造的文献空间。</p>
-      </div>
-      <ul class="app-feats">
-        <li><span class="b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5a2 2 0 0 1 2-2h12v18l-6-3-6 3z"/></svg></span><div><b>文献库与推荐</b><span>导入、整理、按主题智能推荐相关论文。</span></div></li>
-        <li><span class="b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8h14M5 8 3 20h18L19 8M9 4h6"/></svg></span><div><b>段落级翻译</b><span>双语对照，公式与术语保留，离线缓存。</span></div></li>
-        <li><span class="b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg></span><div><b>AI 阅读助手</b><span>就地提问、总结、生成图示，沉浸不打断。</span></div></li>
-      </ul>
-      <div style="margin-top:32px"><a href="https://ocr.otterpad.site" class="btn" style="background:var(--paper);color:var(--ink);border-color:var(--paper)">进入 OtterPad <span class="arr">↗</span></a></div>
-    </div>
-  </div>
-</section>
 
-<!-- ===================== CTA ===================== -->
-<section class="cta">
+<!-- ===================== TECH ===================== -->
+<section class="block" id="tech">
   <div class="wrap">
-    <img class="otter-sit reveal" src="assets/otter-swim.png" alt="水獭" />
-    <h2 class="reveal">准备好把 PDF <em>读穿</em> 了吗？</h2>
-    <a href="https://ocr.otterpad.site" class="btn btn--water reveal">立即开始 · ocr.otterpad.site <span class="arr">↗</span></a>
+    <div class="sec-head reveal">
+      <span class="eyebrow">技术栈</span>
+      <h2>现代技术，开源透明</h2>
+      <p>基于 Flutter 构建，跨平台一套代码。所有源码在 GitHub 公开。</p>
+    </div>
+    <div class="tech-grid reveal">
+      <div class="tech-tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 2l-2 7H3l6 4.5L7 21l5-3.5 5 3.5-2-7.5 6-4.5h-7z"/></svg>
+        <b>Flutter + Dart</b>
+        <span>跨平台框架</span>
+      </div>
+      <div class="tech-tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 2v4m0 12v4M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/></svg>
+        <b>Riverpod</b>
+        <span>状态管理</span>
+      </div>
+      <div class="tech-tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M12 7v5l3 3"/></svg>
+        <b>Dio + HTTP/2</b>
+        <span>高性能网络</span>
+      </div>
+      <div class="tech-tag">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 3v18"/></svg>
+        <b>Material Design 3</b>
+        <span>设计语言</span>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -587,41 +427,35 @@ footer{background:var(--ink);color:var(--paper);padding:64px 0 30px;position:rel
 <footer>
   <svg class="ripple" viewBox="0 0 1200 30" preserveAspectRatio="none"><path d="M0 18 Q150 2 300 18 T600 18 T900 18 T1200 18" fill="none" stroke="#779C7B" stroke-width="2" opacity=".6"/></svg>
   <div class="wrap">
-    <div class="foot-grid">
-      <div class="foot-col">
+    <div class="foot-inner">
+      <div>
         <div class="foot-brand"><img src="assets/otter-swim.png" alt="" />OtterPad<span class="dot">.</span></div>
-        <p>把扫描的论文，读成可以阅读的文字。基于 PaddleOCR 版面分析的科研阅读工具。</p>
+        <p class="foot-desc">AI 驱动的跨平台学术文献阅读器。基于 PaddleOCR 版面分析，让每一篇论文都能好好读。</p>
       </div>
-      <div class="foot-col">
-        <h5>产品</h5>
-        <a href="https://ocr.otterpad.site">Web OCR</a>
-        <a href="#features">版面分析</a>
-        <a href="#app-sec">OtterPad App</a>
-        <a href="https://ocr.otterpad.site">API 接入</a>
-      </div>
-      <div class="foot-col">
-        <h5>资源</h5>
-        <a href="https://ocr.otterpad.site">使用文档</a>
-        <a href="https://ocr.otterpad.site">申请 API Key</a>
-        <a href="https://ocr.otterpad.site">价格</a>
-      </div>
-      <div class="foot-col">
-        <h5>法律</h5>
-        <a href="https://ocr.otterpad.site">隐私政策</a>
-        <a href="https://ocr.otterpad.site">服务条款</a>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h5>产品</h5>
+          <a href="#features">功能</a>
+          <a href="#screenshots">界面</a>
+          <a href="#how">工作原理</a>
+        </div>
+        <div class="foot-col">
+          <h5>开源</h5>
+          <a href="https://github.com/Cyli00/NightReader">GitHub 仓库</a>
+          <a href="https://github.com/Cyli00/NightReader/releases">下载 Releases</a>
+          <a href="https://github.com/Cyli00/NightReader/issues">反馈 Issues</a>
+        </div>
       </div>
     </div>
     <div class="foot-bot">
       <span>© 2026 OtterPad. 让每一页都被读懂。</span>
-      <span>Powered by PaddleOCR · Built for readers 🦦</span>
+      <span>Open Source · GPL-3.0 · Built for readers 🦦</span>
     </div>
   </div>
 </footer>
 
 <script>
-/* ============================================================
-   1) NAV 滚动态 + 滚动揭示
-   ============================================================ */
+/* NAV 滚动态 + 滚动揭示 */
 const nav=document.getElementById('nav');
 addEventListener('scroll',()=>nav.classList.toggle('scrolled',scrollY>30));
 
@@ -629,181 +463,6 @@ const io=new IntersectionObserver((es)=>{
   es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});
 },{threshold:.12});
 document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
-
-/* ============================================================
-   2) API KEY 闸门状态机：locked → verifying → unlocked
-   ============================================================ */
-const keyrow=document.getElementById('keyrow');
-const apikey=document.getElementById('apikey');
-const verifyBtn=document.getElementById('verifyBtn');
-const verifyTxt=document.getElementById('verifyTxt');
-const gateMsg=document.getElementById('gateMsg');
-const workspace=document.getElementById('workspace');
-const lockOverlay=document.getElementById('lockOverlay');
-const lockbadge=document.getElementById('lockbadge');
-const lockbadgeTxt=document.getElementById('lockbadge-txt');
-let verified=false;
-
-verifyBtn.addEventListener('click',verify);
-apikey.addEventListener('keydown',e=>{if(e.key==='Enter')verify();});
-
-function verify(){
-  if(verified)return;
-  const v=apikey.value.trim();
-  keyrow.classList.remove('err','ok');
-  gateMsg.className='gate-msg';gateMsg.textContent='';
-  if(v.length<6){                              // 演示：仅校验非空/足够长，模拟真实校验
-    keyrow.classList.add('err');
-    gateMsg.classList.add('err');
-    gateMsg.textContent='✕ Key 为空或长度不足，请粘贴有效的 PaddleOCR API Key。';
-    return;
-  }
-  // verifying
-  verifyBtn.disabled=true;
-  verifyTxt.outerHTML='<span class="spin" id="verifyTxt"></span>';
-  setTimeout(()=>{
-    verified=true;
-    keyrow.classList.add('ok');
-    document.getElementById('verifyTxt').outerHTML='<span id="verifyTxt">✓ 已验证</span>';
-    apikey.disabled=true;
-    gateMsg.classList.add('ok');
-    const masked='••••••••'+v.slice(-4);
-    gateMsg.textContent='✓ 验证通过 · '+masked+' · 上传与识别已解锁';
-    lockbadge.classList.add('ok');
-    lockbadgeTxt.textContent='已验证';
-    // 解锁动画
-    lockOverlay.classList.add('hide');
-    workspace.classList.remove('locked');
-  },1300);
-}
-
-/* ============================================================
-   3) 上传：本地 PDF → iframe 原生预览
-   ============================================================ */
-const dropzone=document.getElementById('dropzone');
-const fileInput=document.getElementById('fileInput');
-const split=document.getElementById('split');
-const pdfFrame=document.getElementById('pdfFrame');
-const fileChip=document.getElementById('fileChip');
-
-dropzone.addEventListener('click',()=>{if(verified)fileInput.click();});
-fileInput.addEventListener('change',e=>handleFile(e.target.files[0]));
-['dragover','dragenter'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();if(verified)dropzone.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.remove('drag');}));
-dropzone.addEventListener('drop',e=>{if(verified&&e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
-
-function handleFile(file){
-  if(!file||file.type!=='application/pdf'){alert('请选择 PDF 文件');return;}
-  const url=URL.createObjectURL(file);       // 浏览器原生渲染真实文件
-  pdfFrame.src=url+'#toolbar=0&view=FitH';
-  fileChip.textContent=file.name;
-  dropzone.style.display='none';
-  split.classList.add('show');
-}
-
-/* ============================================================
-   4) 伪 OCR：进度阶段 + 逐块流式揭示 Markdown
-   ============================================================ */
-const runBtn=document.getElementById('runBtn');
-const runProgress=document.getElementById('runProgress');
-const runBar=document.getElementById('runBar');
-const runStatus=document.getElementById('runStatus');
-const mdOut=document.getElementById('mdOut');
-const mdPlaceholder=document.getElementById('mdPlaceholder');
-const layoutChip=document.getElementById('layoutChip');
-let running=false;
-
-// 预置识别结果（标签 = 版面分析角色）
-const RESULT=[
-  {tag:'title',cls:'t-title',label:'标题',html:'<h1 class="r">Self-Supervised Layout Analysis for Scientific Document OCR</h1>'},
-  {tag:'text',cls:'t-text',label:'作者',html:'<p class="authors">L. Nakamura, R. Velasquez, H. Ortega · OtterPad Research, 2026</p>'},
-  {tag:'title',cls:'t-title',label:'标题',html:'<h2 class="r">Abstract</h2>'},
-  {tag:'text',cls:'t-text',label:'正文',html:'<p class="r">We present a layout-aware OCR pipeline that decouples region detection from text recognition. By tagging each block as title, body, formula, or table before transcription, reading order is preserved and downstream Markdown conversion becomes lossless across multi-column scientific PDFs.</p>'},
-  {tag:'formula',cls:'t-formula',label:'公式',html:'<div class="formula">L = − Σ&#8341; y&#8341; · log( softmax( f(x&#8341;; θ) ) ) &nbsp;+&nbsp; λ‖θ‖²</div>'},
-  {tag:'list',cls:'t-list',label:'列表',html:'<ul class="r"><li>区域检测 mAP 提升 <b>+6.4</b> 个百分点</li><li>多栏阅读顺序错误率降至 <b>1.1%</b></li><li>表格结构 F1 = <b>0.93</b></li></ul>'},
-  {tag:'table',cls:'t-table',label:'表格',html:'<table class="r"><thead><tr><th>Method</th><th>Acc.</th><th>Layout F1</th></tr></thead><tbody><tr><td>Baseline OCR</td><td>94.1%</td><td>0.78</td></tr><tr><td><b>Ours</b></td><td><b>99.2%</b></td><td><b>0.93</b></td></tr></tbody></table>'},
-];
-
-const STAGES=[
-  {p:18,t:'上传文件…'},
-  {p:46,t:'版面分析中…'},
-  {p:74,t:'文本识别中…'},
-  {p:92,t:'结构化导出…'},
-];
-
-runBtn.addEventListener('click',()=>{
-  if(running||split.classList.contains('show')===false)return;
-  running=true;runBtn.disabled=true;
-  mdPlaceholder.style.display='none';
-  mdOut.querySelectorAll('.md-block,.md-done').forEach(n=>n.remove());
-  runProgress.classList.add('show');runBar.style.width='0';
-
-  let i=0;
-  const step=()=>{
-    if(i<STAGES.length){
-      runBar.style.width=STAGES[i].p+'%';
-      runStatus.textContent=STAGES[i].t;
-      i++;setTimeout(step,560);
-    }else{
-      runBar.style.width='100%';runStatus.textContent='识别完成';
-      setTimeout(streamResult,300);
-    }
-  };
-  step();
-});
-
-function streamResult(){
-  layoutChip.style.display='inline';
-  const cursor=document.createElement('span');cursor.className='cursor';
-  let n=0;
-  const emit=()=>{
-    if(n<RESULT.length){
-      const b=RESULT[n];
-      const div=document.createElement('div');
-      div.className='md-block';
-      div.style.animationDelay='0s';
-      div.innerHTML='<span class="tag '+b.cls+'">'+b.label+'</span>'+b.html;
-      mdOut.appendChild(div);
-      mdOut.appendChild(cursor);
-      mdOut.scrollTop=mdOut.scrollHeight;
-      n++;setTimeout(emit,460);
-    }else{
-      cursor.remove();
-      const done=document.createElement('div');
-      done.className='md-done show';
-      done.innerHTML='<button class="btn" id="copyMd">复制 Markdown</button>'+
-        '<a class="btn btn--ghost" href="https://ocr.otterpad.site">在完整版打开 ↗</a>';
-      mdOut.appendChild(done);
-      document.getElementById('copyMd').addEventListener('click',copyMd);
-      running=false;runBtn.disabled=false;runBtn.textContent='重新识别';
-      runStatus.textContent='';runProgress.classList.remove('show');
-    }
-  };
-  emit();
-}
-
-function copyMd(){
-  const md=`# Self-Supervised Layout Analysis for Scientific Document OCR
-*L. Nakamura, R. Velasquez, H. Ortega · OtterPad Research, 2026*
-
-## Abstract
-We present a layout-aware OCR pipeline that decouples region detection from text recognition...
-
-$$ L = -\\sum_i y_i \\log(\\mathrm{softmax}(f(x_i;\\theta))) + \\lambda\\lVert\\theta\\rVert^2 $$
-
-- 区域检测 mAP 提升 +6.4 个百分点
-- 多栏阅读顺序错误率降至 1.1%
-- 表格结构 F1 = 0.93
-
-| Method | Acc. | Layout F1 |
-|---|---|---|
-| Baseline OCR | 94.1% | 0.78 |
-| **Ours** | **99.2%** | **0.93** |`;
-  navigator.clipboard.writeText(md).then(()=>{
-    const btn=document.getElementById('copyMd');btn.textContent='✓ 已复制';
-    setTimeout(()=>btn.textContent='复制 Markdown',1600);
-  });
-}
 </script>
 </body>
 </html>
