@@ -4,38 +4,124 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n.dart';
 import '../../../data/models/book/document.dart';
+import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
+import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
 
-class ReaderDocumentInfoSheet extends ConsumerWidget {
+Future<void> showDocumentInfoDialog({
+  required BuildContext context,
+  required Document document,
+}) {
+  return showAppDialog(
+    context: context,
+    builder: (context) => _DocumentInfoDialog(document: document),
+  );
+}
+
+class _DocumentInfoDialog extends ConsumerWidget {
   final Document document;
 
-  const ReaderDocumentInfoSheet({super.key, required this.document});
+  const _DocumentInfoDialog({required this.document});
 
   void _copy(BuildContext context, WidgetRef ref, String text) {
+    Haptics.soft();
     Clipboard.setData(ClipboardData(text: text));
     ref.read(snackBarServiceProvider).showResult(
       message: context.l10n.copiedToClipboard,
     );
   }
 
-  Widget _buildInfoRow(
-    BuildContext context,
-    WidgetRef ref,
-    String label,
-    String value,
-  ) {
-    if (value.isEmpty) return const SizedBox.shrink();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final l10n = context.l10n;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final dialogWidth = (screenWidth * 0.85).clamp(320.0, 540.0);
+
+    final rows = <(String, String)>[
+      (l10n.author, document.authors.join(', ')),
+      (l10n.journal, document.journal ?? ''),
+      (l10n.year, document.year ?? ''),
+      ('DOI', document.doi ?? ''),
+      if (document.keywords.isNotEmpty)
+        ('Keywords', document.keywords.join(', ')),
+    ];
+
+    return AlertDialog(
+      backgroundColor: cs.surfaceContainerLow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      content: SizedBox(
+        width: dialogWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 标题
+            TactilePress(
+              baseColor: Colors.transparent,
+              onTap: () => _copy(context, ref, document.title),
+              borderRadius: BorderRadius.circular(10),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                document.title,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  height: 1.3,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 信息行
+            ...rows
+                .where((r) => r.$2.isNotEmpty)
+                .map((r) => _InfoRow(
+                      label: r.$1,
+                      value: r.$2,
+                      onCopy: () => _copy(context, ref, r.$2),
+                    )),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Haptics.soft();
+            Navigator.pop(context);
+          },
+          child: Text(l10n.close),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final VoidCallback onCopy;
+
+  const _InfoRow({
+    required this.label,
+    required this.value,
+    required this.onCopy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4.0),
+      padding: const EdgeInsets.only(bottom: 4),
       child: TactilePress(
-        onTap: () => _copy(context, ref, value),
+        onTap: onCopy,
         baseColor: Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -60,86 +146,6 @@ class ReaderDocumentInfoSheet extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.85;
-
-    return Container(
-      constraints: BoxConstraints(maxHeight: maxHeight),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 32,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.onSurfaceVariant.withAlpha(80),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                context.l10n.documentInfo,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
-              ),
-            ),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TactilePress(
-                    baseColor: Colors.transparent,
-                    onTap: () => _copy(context, ref, document.title),
-                    borderRadius: BorderRadius.circular(10),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Text(
-                      document.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        height: 1.3,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoRow(context, ref, context.l10n.author, document.authors.join(', ')),
-                  _buildInfoRow(context, ref, context.l10n.journal, document.journal ?? ''),
-                  _buildInfoRow(context, ref, context.l10n.year, document.year ?? ''),
-                  _buildInfoRow(context, ref, 'DOI', document.doi ?? ''),
-                  SizedBox(
-                    height: MediaQuery.of(context).padding.bottom + 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

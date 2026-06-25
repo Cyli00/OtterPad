@@ -647,9 +647,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _showDocumentInfo(BuildContext context) {
-    _sheetHostKey.currentState!.show(
-      builder: (_) => ReaderDocumentInfoSheet(document: widget.document),
-    );
+    showDocumentInfoDialog(context: context, document: widget.document);
   }
 
   // ─── 高亮标记 ───
@@ -1365,31 +1363,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   key: const ValueKey('markdown'),
                   child: _buildMarkdownPreview(theme, readerSettings, session),
                 )
-              : PdfViewer.file(
+              : KeyedSubtree(
                   key: const ValueKey('pdf'),
-                  DocPaths.pdf(widget.document.id),
-                  controller: _pdfController,
-                  params: PdfViewerParams(
-                    backgroundColor: Colors.transparent,
-                    matchTextColor: cs.primaryContainer.withAlpha(150),
-                    activeMatchTextColor: cs.primary.withAlpha(72),
-                    onViewerReady: (document, controller) =>
-                        _pdfSearch.bind(controller),
-                    pagePaintCallbacks: _pdfSearch.searcher == null
-                        ? null
-                        : [_pdfSearch.searcher!.pageTextMatchPaintCallback],
-                    viewerOverlayBuilder: (context, size, handleLinkTap) => [
-                      PdfViewerScrollThumb(
-                        controller: _pdfController,
-                        orientation: ScrollbarOrientation.right,
-                        thumbSize: const Size(8, 48),
-                        margin: 2,
-                        thumbBuilder:
-                            (context, thumbSize, pageNumber, controller) {
-                              return _PdfScrollThumb(size: thumbSize);
-                            },
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      top: MediaQuery.of(context).padding.top,
+                      bottom: MediaQuery.of(context).padding.bottom,
+                    ),
+                    child: PdfViewer.file(
+                      DocPaths.pdf(widget.document.id),
+                      controller: _pdfController,
+                      params: PdfViewerParams(
+                        backgroundColor: Colors.transparent,
+                        matchTextColor: cs.primaryContainer.withAlpha(150),
+                        activeMatchTextColor: cs.primary.withAlpha(72),
+                        onViewerReady: (document, controller) =>
+                            _pdfSearch.bind(controller),
+                        pagePaintCallbacks: _pdfSearch.searcher == null
+                            ? null
+                            : [_pdfSearch.searcher!.pageTextMatchPaintCallback],
+                        viewerOverlayBuilder:
+                            (context, size, handleLinkTap) => [
+                              PdfViewerScrollThumb(
+                                controller: _pdfController,
+                                orientation: ScrollbarOrientation.right,
+                                thumbSize: const Size(8, 48),
+                                margin: 2,
+                                thumbBuilder:
+                                    (context, thumbSize, pageNumber,
+                                        controller) {
+                                      return _PdfScrollThumb(size: thumbSize);
+                                    },
+                              ),
+                            ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
         ),
