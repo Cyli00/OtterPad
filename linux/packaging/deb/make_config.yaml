@@ -11,6 +11,7 @@ dependencies:
   - libgtk-3-0
   - libwebkit2gtk-4.1-0
   - libsecret-1-0
+installed_size: 51200
 icon: assets/icons/app_icon.png
 generic_name: Reading App
 categories:
