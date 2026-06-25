@@ -901,7 +901,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get clearAllData => '清除所有数据';
 
   @override
-  String get clearAllDataConfirm => '这将删除所有文献、数据库和缓存，此操作无法撤销。';
+  String get clearAllDataConfirm => '这将删除所有文献、数据库和缓存，此操作无法撤销';
 
   @override
   String get storageSpace => '存储空间';
@@ -1133,7 +1133,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tavilySearchDesc =>
-      '为不支持原生联网搜索的模型（如 DeepSeek、豆包）提供搜索能力。填入 Key 后，对话页的联网开关对这些模型即可生效。';
+      '为不支持原生联网搜索的模型（如 DeepSeek、豆包）提供搜索能力。填入 Key 后，对话页的联网开关对这些模型即可生效';
 
   @override
   String get tavilyNotConfiguredHint =>
@@ -1143,7 +1143,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mimoSearchPluginTitle => '开通联网搜索插件';
 
   @override
-  String get mimoSearchPluginHint => 'MiMo 联网搜索需先在平台控制台开通插件。';
+  String get mimoSearchPluginHint => 'MiMo 联网搜索需先在平台控制台开通插件';
 
   @override
   String get mimoSearchPluginOpenConsole => '打开插件控制台';
@@ -1363,7 +1363,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get autoBackupWeekly => '每周';
 
   @override
-  String get autoBackupHint => '到期后台自动上传到远端，仅在内容有变化时执行。';
+  String get autoBackupHint => '到期后台自动上传到远端，仅在内容有变化时执行';
 
   @override
   String get cloudSync => '云同步';
@@ -1383,7 +1383,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get syncRemoteNotConfigured => '未配置远端备份';
 
   @override
-  String get syncRemoteNotConfiguredDesc => '配置 S3 或 WebDAV 后即可备份并在此查看同步状态。';
+  String get syncRemoteNotConfiguredDesc => '配置 S3 或 WebDAV 后即可备份并在此查看同步状态';
 
   @override
   String get syncGroupChanged => '有变更未备份';
@@ -1481,7 +1481,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get selectImageModelFirst => '请先在「AI 设置」中选择生图模型';
 
   @override
-  String get summaryApiCostHint => '总结图由第三方生图模型生成，可能产生 API 调用费用。';
+  String get summaryApiCostHint => '总结图由第三方生图模型生成，可能产生 API 调用费用';
 
   @override
   String estimatedCost(String dollar, String cost) {
@@ -1489,7 +1489,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get useAppImageGen => '若希望使用 App 生图，请点击 App 生图，手动上传素材。';
+  String get useAppImageGen => '若希望使用 App 生图，请点击 App 生图，手动上传素材';
 
   @override
   String get appImageGen => 'App 生图';
@@ -1520,7 +1520,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get exportToAppImageGenHint =>
-      '将文献素材导出后，到 ChatGPT / Gemini 等官方 App 中手动上传以生图。';
+      '将文献素材导出后，到 ChatGPT / Gemini 等官方 App 中手动上传以生图';
 
   @override
   String get exportShareHint => '同时分享 figures + Markdown，prompt 自动复制到剪贴板';
@@ -1584,14 +1584,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aspectTall => '竖屏 · 手机壁纸';
 
   @override
-  String get imageRefCountHint => '从文献提取的 figure 中按顺序选择参考图；不同模型会按自身上限自动裁剪。';
+  String get imageRefCountHint => '从文献提取的 figure 中按顺序选择参考图；不同模型会按自身上限自动裁剪';
 
   @override
-  String get aspectRatioHint => 'OpenAI 会映射到最接近的输出尺寸，并在 prompt 中保留比例要求。';
+  String get aspectRatioHint => 'OpenAI 会映射到最接近的输出尺寸，并在 prompt 中保留比例要求';
 
   @override
   String get summaryPromptHint =>
-      '用于控制文献总结图的视觉风格和信息组织方式；运行时会自动追加文献标题、元数据、Markdown 和参考 figure。';
+      '用于控制文献总结图的视觉风格和信息组织方式；运行时会自动追加文献标题、元数据、Markdown 和参考 figure';
 
   @override
   String get summaryPromptLabel => '总结图 Prompt';
@@ -1637,7 +1637,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String confirmDeleteDocuments(int count) {
-    return '确定要删除 $count 篇文献吗？此操作不可撤销。';
+    return '确定要删除 $count 篇文献吗？此操作不可撤销';
   }
 
   @override
@@ -1732,7 +1732,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String confirmDeleteFavorite(String name) {
-    return '确定要删除「$name」吗？收藏夹内的文献不会被删除。';
+    return '确定要删除「$name」吗？收藏夹内的文献不会被删除';
   }
 
   @override
@@ -1741,7 +1741,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get clearReadingHistoryConfirm => '将清除所有阅读记录，文献本身不会被删除。此操作不可撤销。';
+  String get clearReadingHistoryConfirm => '将清除所有阅读记录，文献本身不会被删除。此操作不可撤销';
 
   @override
   String get noReadingHistoryHint => '打开任意文献后，这里会按日期显示浏览顺序';
@@ -1795,7 +1795,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String confirmDeleteProvider(String name) {
-    return '确定删除「$name」？将清除其 API Key、地址和模型。';
+    return '确定删除「$name」？将清除其 API Key、地址和模型';
   }
 
   @override
@@ -1893,7 +1893,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get markdownIgnoreLabels => 'Markdown 忽略标签';
 
   @override
-  String get resolutionHint => 'OpenAI 映射为 quality；Gemini 映射为 imageSize。';
+  String get resolutionHint => 'OpenAI 映射为 quality；Gemini 映射为 imageSize';
 
   @override
   String get translationStyleThemed => '主题色';
@@ -2325,7 +2325,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String chatNewSessionHint(String title) {
-    return '新会话仍将基于《$title》的全文与图表进行问答。';
+    return '新会话仍将基于《$title》的全文与图表进行问答';
   }
 
   @override
@@ -2338,7 +2338,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatEditingMessage => '正在编辑消息';
 
   @override
-  String get chatEditHint => '编辑将从此处重新开始对话。';
+  String get chatEditHint => '编辑将从此处重新开始对话';
 
   @override
   String get chatFork => '分叉';
@@ -2366,7 +2366,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutDisclaimerContent =>
-      '本软件仅供学习交流、科研等非商业性质的用途，严禁将本软件用于商业目的。如有任何商业行为，均与本软件无关。';
+      '本软件仅供学习交流、科研等非商业性质的用途，严禁将本软件用于商业目的。如有任何商业行为，均与本软件无关';
 
   @override
   String get aboutAgree => '同意';
@@ -2376,7 +2376,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutLicenseContent =>
-      '本软件依据 GNU 通用公共许可证第三版 (GPL-3.0) 发布。\n\n你可以自由地使用、修改和分发本软件，但修改后的版本必须以相同许可证发布，并公开源代码。\n\n详细条款请参阅项目仓库中的 LICENSE 文件。';
+      '本软件依据 GNU 通用公共许可证第三版 (GPL-3.0) 发布。\n\n你可以自由地使用、修改和分发本软件，但修改后的版本必须以相同许可证发布，并公开源代码。\n\n详细条款请参阅项目仓库中的 LICENSE 文件';
 
   @override
   String get aboutViewFullLicense => '查看全文';
@@ -2431,6 +2431,67 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generalEnableHttp2Desc => '将并发 API 请求多路复用到单个连接，减少翻译等并行任务的网络开销';
+
+  @override
+  String get onboardingWelcomeTitle => '欢迎使用 OtterPad';
+
+  @override
+  String get onboardingWelcomeBody => '让我们完成一些初始设置。你可以稍后在设置中随时更改';
+
+  @override
+  String get onboardingStart => '开始设置';
+
+  @override
+  String get onboardingSkip => '跳过';
+
+  @override
+  String get onboardingOcrTitle => '设置文档 OCR';
+
+  @override
+  String get onboardingOcrBody =>
+      'OtterPad 使用 PaddleOCR 从 PDF 中提取文字。你需要一个 API Token 才能开始使用';
+
+  @override
+  String get onboardingOcrGuide => '前往设置';
+
+  @override
+  String get onboardingToolsHint => '通过此按钮可以添加 PDF 文件和进行 OCR 文字提取';
+
+  @override
+  String get onboardingAiTitle => '设置 AI 模型';
+
+  @override
+  String get onboardingAiBody => '配置 AI 模型以解锁文献对话、翻译等功能。也可以跳过，稍后再设置';
+
+  @override
+  String get onboardingAiGuide => '前往配置';
+
+  @override
+  String get onboardingExpertHint => '配置多模态模型，用于文献内对话和 OCR 校正';
+
+  @override
+  String get onboardingFastHint => '配置快速模型，用于翻译、快问快答和标题重命名';
+
+  @override
+  String get onboardingImageGenHint => '配置生图模型，用于生成文献摘要图片';
+
+  @override
+  String get onboardingNext => '下一步';
+
+  @override
+  String get onboardingFinish => '完成';
+
+  @override
+  String get onboardingGotIt => '知道了';
+
+  @override
+  String get emptyLibraryTitle => '文献库还是空的';
+
+  @override
+  String get emptyLibraryBody => '设置 OCR 和 AI 模型，然后添加你的第一篇 PDF 开始阅读';
+
+  @override
+  String get emptyLibraryAction => '初始设置';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -3330,7 +3391,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get clearAllData => '清除所有資料';
 
   @override
-  String get clearAllDataConfirm => '這將刪除所有文獻、資料庫和快取，此操作無法撤銷。';
+  String get clearAllDataConfirm => '這將刪除所有文獻、資料庫和快取，此操作無法撤銷';
 
   @override
   String get storageSpace => '儲存空間';
@@ -3562,7 +3623,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get tavilySearchDesc =>
-      '為不支援原生聯網搜尋的模型（如 DeepSeek、豆包）提供搜尋能力。填入 Key 後，對話頁的聯網開關對這些模型即可生效。';
+      '為不支援原生聯網搜尋的模型（如 DeepSeek、豆包）提供搜尋能力。填入 Key 後，對話頁的聯網開關對這些模型即可生效';
 
   @override
   String get tavilyNotConfiguredHint =>
@@ -3572,7 +3633,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get mimoSearchPluginTitle => '開通聯網搜尋外掛';
 
   @override
-  String get mimoSearchPluginHint => 'MiMo 聯網搜尋需先在平台控制台開通外掛。';
+  String get mimoSearchPluginHint => 'MiMo 聯網搜尋需先在平台控制台開通外掛';
 
   @override
   String get mimoSearchPluginOpenConsole => '開啟外掛控制台';
@@ -3792,7 +3853,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get autoBackupWeekly => '每週';
 
   @override
-  String get autoBackupHint => '到期後台自動上傳到遠端，僅在內容有變化時執行。';
+  String get autoBackupHint => '到期後台自動上傳到遠端，僅在內容有變化時執行';
 
   @override
   String get cloudSync => '雲同步';
@@ -3812,7 +3873,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get syncRemoteNotConfigured => '未設定遠端備份';
 
   @override
-  String get syncRemoteNotConfiguredDesc => '設定 S3 或 WebDAV 後即可備份並在此檢視同步狀態。';
+  String get syncRemoteNotConfiguredDesc => '設定 S3 或 WebDAV 後即可備份並在此檢視同步狀態';
 
   @override
   String get syncGroupChanged => '有變更未備份';
@@ -3910,7 +3971,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get selectImageModelFirst => '請先在「AI 設定」中選擇生圖模型';
 
   @override
-  String get summaryApiCostHint => '摘要圖由第三方生圖模型產生，可能產生 API 呼叫費用。';
+  String get summaryApiCostHint => '摘要圖由第三方生圖模型產生，可能產生 API 呼叫費用';
 
   @override
   String estimatedCost(String dollar, String cost) {
@@ -3918,7 +3979,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get useAppImageGen => '若希望使用 App 生圖，請點擊 App 生圖，手動上傳素材。';
+  String get useAppImageGen => '若希望使用 App 生圖，請點擊 App 生圖，手動上傳素材';
 
   @override
   String get appImageGen => 'App 生圖';
@@ -3949,7 +4010,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get exportToAppImageGenHint =>
-      '將文獻素材匯出後，到 ChatGPT / Gemini 等官方 App 中手動上傳以生圖。';
+      '將文獻素材匯出後，到 ChatGPT / Gemini 等官方 App 中手動上傳以生圖';
 
   @override
   String get exportShareHint => '同時分享 figures + Markdown，prompt 自動複製到剪貼簿';
@@ -4013,14 +4074,14 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get aspectTall => '直屏 · 手機桌布';
 
   @override
-  String get imageRefCountHint => '從文獻擷取的 figure 中按順序選擇參考圖；不同模型會按自身上限自動裁剪。';
+  String get imageRefCountHint => '從文獻擷取的 figure 中按順序選擇參考圖；不同模型會按自身上限自動裁剪';
 
   @override
-  String get aspectRatioHint => 'OpenAI 會對應到最接近的輸出尺寸，並在 prompt 中保留比例要求。';
+  String get aspectRatioHint => 'OpenAI 會對應到最接近的輸出尺寸，並在 prompt 中保留比例要求';
 
   @override
   String get summaryPromptHint =>
-      '用於控制文獻摘要圖的視覺風格和資訊組織方式；執行時會自動追加文獻標題、中繼資料、Markdown 和參考 figure。';
+      '用於控制文獻摘要圖的視覺風格和資訊組織方式；執行時會自動追加文獻標題、中繼資料、Markdown 和參考 figure';
 
   @override
   String get summaryPromptLabel => '摘要圖 Prompt';
@@ -4066,7 +4127,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String confirmDeleteDocuments(int count) {
-    return '確定要刪除 $count 篇文獻嗎？此操作不可復原。';
+    return '確定要刪除 $count 篇文獻嗎？此操作不可復原';
   }
 
   @override
@@ -4161,7 +4222,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String confirmDeleteFavorite(String name) {
-    return '確定要刪除「$name」嗎？收藏夾內的文獻不會被刪除。';
+    return '確定要刪除「$name」嗎？收藏夾內的文獻不會被刪除';
   }
 
   @override
@@ -4170,7 +4231,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get clearReadingHistoryConfirm => '將清除所有閱讀記錄，文獻本身不會被刪除。此操作不可復原。';
+  String get clearReadingHistoryConfirm => '將清除所有閱讀記錄，文獻本身不會被刪除。此操作不可復原';
 
   @override
   String get noReadingHistoryHint => '開啟任意文獻後，這裡會按日期顯示瀏覽順序';
@@ -4224,7 +4285,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String confirmDeleteProvider(String name) {
-    return '確定刪除「$name」？將清除其 API Key、位址和模型。';
+    return '確定刪除「$name」？將清除其 API Key、位址和模型';
   }
 
   @override
@@ -4322,7 +4383,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get markdownIgnoreLabels => 'Markdown 忽略標籤';
 
   @override
-  String get resolutionHint => 'OpenAI 對應為 quality；Gemini 對應為 imageSize。';
+  String get resolutionHint => 'OpenAI 對應為 quality；Gemini 對應為 imageSize';
 
   @override
   String get translationStyleThemed => '主題色';
@@ -4754,7 +4815,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String chatNewSessionHint(String title) {
-    return '新對話仍將基於《$title》的全文與圖表進行問答。';
+    return '新對話仍將基於《$title》的全文與圖表進行問答';
   }
 
   @override
@@ -4767,7 +4828,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get chatEditingMessage => '正在編輯訊息';
 
   @override
-  String get chatEditHint => '編輯將從此處重新開始對話。';
+  String get chatEditHint => '編輯將從此處重新開始對話';
 
   @override
   String get chatFork => '分叉';
@@ -4795,7 +4856,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get aboutDisclaimerContent =>
-      '本軟體僅供學習交流、科研等非商業性質的用途，嚴禁將本軟體用於商業目的。如有任何商業行為，均與本軟體無關。';
+      '本軟體僅供學習交流、科研等非商業性質的用途，嚴禁將本軟體用於商業目的。如有任何商業行為，均與本軟體無關';
 
   @override
   String get aboutAgree => '同意';
@@ -4805,7 +4866,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get aboutLicenseContent =>
-      '本軟體依據 GNU 通用公共許可證第三版 (GPL-3.0) 發布。\n\n你可以自由地使用、修改和散布本軟體，但修改後的版本必須以相同許可證發布，並公開原始碼。\n\n詳細條款請參閱專案儲存庫中的 LICENSE 檔案。';
+      '本軟體依據 GNU 通用公共許可證第三版 (GPL-3.0) 發布。\n\n你可以自由地使用、修改和散布本軟體，但修改後的版本必須以相同許可證發布，並公開原始碼。\n\n詳細條款請參閱專案儲存庫中的 LICENSE 檔案';
 
   @override
   String get aboutViewFullLicense => '檢視全文';
@@ -4860,4 +4921,65 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get generalEnableHttp2Desc => '將並行 API 請求多工到單一連線，減少翻譯等並行任務的網路開銷';
+
+  @override
+  String get onboardingWelcomeTitle => '歡迎使用 OtterPad';
+
+  @override
+  String get onboardingWelcomeBody => '讓我們完成一些初始設定。你可以稍後在設定中隨時更改';
+
+  @override
+  String get onboardingStart => '開始設定';
+
+  @override
+  String get onboardingSkip => '跳過';
+
+  @override
+  String get onboardingOcrTitle => '設定文件 OCR';
+
+  @override
+  String get onboardingOcrBody =>
+      'OtterPad 使用 PaddleOCR 從 PDF 中擷取文字。你需要一個 API Token 才能開始使用';
+
+  @override
+  String get onboardingOcrGuide => '前往設定';
+
+  @override
+  String get onboardingToolsHint => '透過此按鈕可以新增 PDF 檔案和進行 OCR 文字擷取';
+
+  @override
+  String get onboardingAiTitle => '設定 AI 模型';
+
+  @override
+  String get onboardingAiBody => '設定 AI 模型以解鎖文獻對話、翻譯等功能。也可以跳過，稍後再設定';
+
+  @override
+  String get onboardingAiGuide => '前往設定';
+
+  @override
+  String get onboardingExpertHint => '設定多模態模型，用於文獻內對話和 OCR 校正';
+
+  @override
+  String get onboardingFastHint => '設定快速模型，用於翻譯、快問快答和標題重新命名';
+
+  @override
+  String get onboardingImageGenHint => '設定生圖模型，用於產生文獻摘要圖片';
+
+  @override
+  String get onboardingNext => '下一步';
+
+  @override
+  String get onboardingFinish => '完成';
+
+  @override
+  String get onboardingGotIt => '知道了';
+
+  @override
+  String get emptyLibraryTitle => '文獻庫還是空的';
+
+  @override
+  String get emptyLibraryBody => '設定 OCR 和 AI 模型，然後新增你的第一篇 PDF 開始閱讀';
+
+  @override
+  String get emptyLibraryAction => '初始設定';
 }
