@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/l10n.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/selection_provider.dart';
 import 'doc_card_actions.dart';
 import 'doc_list_card.dart';
+import 'library_empty_state.dart';
 
 /// 文献库列表视图
 ///
@@ -12,7 +12,9 @@ import 'doc_list_card.dart';
 /// 中屏（≥900dp）：双栏 [SliverGrid]。
 /// 宽屏（≥1800dp）：三栏 [SliverGrid]，内容区居中且不超过 [_kMaxContentWidth]。
 class BookshelfList extends ConsumerWidget {
-  const BookshelfList({super.key});
+  final VoidCallback? onStartSetup;
+
+  const BookshelfList({super.key, this.onStartSetup});
 
   // ┌─ 桌面端布局参数（可调） ──────────────────────────────────┐
   static const _kTwoColumnBreakpoint = 900; // ← 双栏触发宽度
@@ -29,11 +31,9 @@ class BookshelfList extends ConsumerWidget {
         selection.isActive && selection.sourceContext == 'library';
 
     if (docs.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Center(child: Text(context.l10n.noDocuments)),
-        ),
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: LibraryEmptyState(onStartSetup: onStartSetup),
       );
     }
 

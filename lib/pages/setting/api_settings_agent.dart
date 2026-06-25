@@ -5,14 +5,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/model_test_provider.dart';
+import '../../providers/onboarding_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/haptics.dart';
 import '../../services/tavily_search_service.dart';
 import '../../services/snackbar_service.dart';
+import '../../widgets/onboarding_spotlight.dart';
 import '../../widgets/tactile_press.dart';
 import '../../utils/debounced_action.dart';
 import 'agent_model_list_tile.dart';
@@ -42,6 +45,11 @@ class AgentApiSection extends ConsumerStatefulWidget {
 
 class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   static const _lastInstanceKey = 'agent_api_last_instance';
+
+  final _expertRoleKey = GlobalKey(debugLabel: 'expertRole');
+  final _fastRoleKey = GlobalKey(debugLabel: 'fastRole');
+  final _imageRoleKey = GlobalKey(debugLabel: 'imageRole');
+  bool _onboardingScheduled = false;
 
   late final TextEditingController _urlCtrl;
   late final TextEditingController _keyCtrl;
@@ -77,6 +85,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _apiNotifier = ref.read(agentApiProvider.notifier);
     final instances = ref.read(agentApiProvider).instances;
     final lastId = GStorage.setting.get(_lastInstanceKey) as String?;
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _maybeStartOnboardingGuide());
     final inst =
         instances.where((i) => i.id == lastId).firstOrNull ??
         (instances.isNotEmpty ? instances.first : null);
@@ -98,6 +108,74 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _keyCtrl.dispose();
     _tavilyCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _maybeStartOnboardingGuide() async {
+    if (_onboardingScheduled) return;
+    final step = ref.read(onboardingProvider);
+    if (step != OnboardingStep.aiExpert) return;
+    _onboardingScheduled = true;
+
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    await _runAiOnboardingGuide();
+  }
+
+  Future<void> _runAiOnboardingGuide() async {
+    final notifier = ref.read(onboardingProvider.notifier);
+    final l10n = context.l10n;
+
+    // ① Expert Model
+    await _scrollToAndSpotlight(
+      key: _expertRoleKey,
+      message: l10n.onboardingExpertHint,
+      actionLabel: l10n.onboardingNext,
+    );
+    if (!mounted) return;
+    notifier.advance(); // → aiFast
+
+    // ② Fast Model
+    await _scrollToAndSpotlight(
+      key: _fastRoleKey,
+      message: l10n.onboardingFastHint,
+      actionLabel: l10n.onboardingNext,
+    );
+    if (!mounted) return;
+    notifier.advance(); // → aiImageGen
+
+    // ③ Image Gen Model
+    await _scrollToAndSpotlight(
+      key: _imageRoleKey,
+      message: l10n.onboardingImageGenHint,
+      actionLabel: l10n.onboardingFinish,
+    );
+    if (!mounted) return;
+    notifier.complete();
+  }
+
+  Future<void> _scrollToAndSpotlight({
+    required GlobalKey key,
+    required String message,
+    required String actionLabel,
+  }) async {
+    final ctx = key.currentContext;
+    if (ctx != null) {
+      await Scrollable.ensureVisible(
+        ctx,
+        duration: kAnim,
+        curve: kAnimCurve,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    if (!mounted) return;
+    await showOnboardingSpotlight(
+      context: context,
+      targetKey: key,
+      message: message,
+      actionLabel: actionLabel,
+      borderRadius: 16,
+    );
   }
 
   /// URL 输入框显示值：用户未填时回落到协议默认地址。
@@ -913,6 +991,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           _roleRow(
             theme,
             cs,
+            key: _expertRoleKey,
             icon: Symbols.psychology_rounded,
             iconBg: cs.primaryContainer,
             iconFg: cs.onPrimaryContainer,
@@ -936,6 +1015,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           _roleRow(
             theme,
             cs,
+            key: _fastRoleKey,
             icon: Symbols.bolt_rounded,
             iconBg: cs.tertiaryContainer,
             iconFg: cs.onTertiaryContainer,
@@ -958,6 +1038,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           _roleRow(
             theme,
             cs,
+            key: _imageRoleKey,
             icon: Symbols.palette_rounded,
             iconBg: cs.secondaryContainer,
             iconFg: cs.onSecondaryContainer,
@@ -985,6 +1066,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   Widget _roleRow(
     ThemeData theme,
     ColorScheme cs, {
+    Key? key,
     required IconData icon,
     required Color iconBg,
     required Color iconFg,
@@ -997,6 +1079,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     final isSet = instanceId != null && modelId != null && instName != null;
 
     return TactilePress(
+      key: key,
       onTap: onTap,
       baseColor: Colors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

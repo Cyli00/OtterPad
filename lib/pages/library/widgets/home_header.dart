@@ -16,6 +16,8 @@ import 'package:material_symbols_icons/symbols.dart';
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({super.key});
 
+  static final toolsButtonKey = GlobalKey(debugLabel: 'toolsButton');
+
   Future<void> _handleToolbarAction(
     BuildContext context,
     WidgetRef ref,
@@ -123,6 +125,7 @@ class HomeHeader extends ConsumerWidget {
           ),
           const SizedBox(width: 8.0),
           _HeaderButton(
+            key: toolsButtonKey,
             icon: Symbols.note_add_rounded,
             tooltip: context.l10n.tools,
             size: isMobile ? 36 : 40,
@@ -147,6 +150,7 @@ class _HeaderButton extends StatelessWidget {
   final double size;
 
   const _HeaderButton({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,

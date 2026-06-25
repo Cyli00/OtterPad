@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../services/haptics.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/onboarding_dialogs.dart';
+import '../../widgets/onboarding_spotlight.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
+import '../../providers/onboarding_provider.dart';
 import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../widgets/selection_pop_scope.dart';
 import '../../services/batch_extract_service.dart';
 import '../../services/ai_settings_prompt.dart';
 import '../../services/snackbar_service.dart';
+import '../../router/app_routes.dart';
 import '../../utils/doc_paths.dart';
 import '../shelf/widgets/create_favorite_dialog.dart';
 import '../shelf/widgets/pick_favorite_sheet.dart';
@@ -39,11 +44,81 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
   static const _kAnimDuration = kAnimSlow;
   static const _kAnimCurve = kAnimCurve;
 
+  bool _onboardingScheduled = false;
+
   @override
   void initState() {
     super.initState();
     // length 2：推荐（左）/ 文献库（右）；initialIndex 1 → 默认打开文献库
     _tabController = TabController(length: 2, initialIndex: 1, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStartOnboarding());
+  }
+
+  Future<void> _maybeStartOnboarding() async {
+    if (_onboardingScheduled) return;
+    final step = ref.read(onboardingProvider);
+    if (step != OnboardingStep.welcome) return;
+    _onboardingScheduled = true;
+
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    await _runOnboarding();
+  }
+
+  Future<void> _runOnboarding() async {
+    final notifier = ref.read(onboardingProvider.notifier);
+    final l10n = context.l10n;
+
+    // ① 欢迎对话框
+    final startSetup = await showOnboardingWelcomeDialog(context);
+    if (!startSetup || !mounted) {
+      notifier.complete();
+      return;
+    }
+
+    // ② OCR 对话框
+    notifier.advance(); // → ocrIntro
+    final goToOcr = await showOnboardingOcrDialog(context);
+    if (!mounted) return;
+
+    notifier.advance(); // → ocrGetToken
+    if (goToOcr) {
+      await context.push(AppRoutes.settingsExtract);
+      if (!mounted) return;
+    }
+
+    // ③ 高亮 Tools 按钮（跳过 OCR 子步骤）
+    notifier.jumpTo(OnboardingStep.toolsHighlight);
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+    await showOnboardingSpotlight(
+      context: context,
+      targetKey: HomeHeader.toolsButtonKey,
+      message: l10n.onboardingToolsHint,
+      actionLabel: l10n.onboardingGotIt,
+      borderRadius: 20,
+    );
+    if (!mounted) return;
+
+    // ④ AI 模型对话框
+    notifier.advance(); // → aiIntro
+    final goToAi = await showOnboardingAiDialog(context);
+    if (!mounted) return;
+
+    if (!goToAi) {
+      notifier.complete();
+      return;
+    }
+
+    // ⑤ 前往 AI 设置（AgentApiSection 负责后续 spotlight 引导）
+    notifier.advance(); // → aiExpert
+    await context.push(AppRoutes.settingsApi);
+    if (!mounted) return;
+
+    // 从 AI 设置返回时，如果引导未完成则标记完成
+    if (ref.read(onboardingProvider) != OnboardingStep.completed) {
+      notifier.complete();
+    }
   }
 
   @override
@@ -278,6 +353,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     );
   }
 
+  void _restartOnboarding() {
+    ref.read(onboardingProvider.notifier).jumpTo(OnboardingStep.welcome);
+    _onboardingScheduled = false;
+    _runOnboarding();
+  }
+
   Widget _buildTabContent(bool isGrid) {
     return TabBarView(
       controller: _tabController,
@@ -285,7 +366,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
         Center(child: Text(context.l10n.recommendContent)),
         CustomScrollView(
           slivers: [
-            if (isGrid) const BookshelfGrid() else const BookshelfList(),
+            if (isGrid)
+              BookshelfGrid(onStartSetup: _restartOnboarding)
+            else
+              BookshelfList(onStartSetup: _restartOnboarding),
           ],
         ),
       ],

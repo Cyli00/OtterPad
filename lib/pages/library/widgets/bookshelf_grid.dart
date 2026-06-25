@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/l10n.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/history_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../utils/doc_paths.dart';
 import 'doc_card_actions.dart';
 import 'document_card.dart';
+import 'library_empty_state.dart';
 
 class BookshelfGrid extends ConsumerWidget {
-  const BookshelfGrid({super.key});
+  final VoidCallback? onStartSetup;
+
+  const BookshelfGrid({super.key, this.onStartSetup});
 
   /// 文字块固定高度：标题 2 行 + 期刊 1 行 + 年份行 + 上下 8px padding +
   /// 行间 4px 间距，约 92px，留少量余量防字体渲染舍入触发 overflow。
@@ -33,11 +35,9 @@ class BookshelfGrid extends ConsumerWidget {
         selection.isActive && selection.sourceContext == 'library';
 
     if (docs.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Center(child: Text(context.l10n.noDocumentsInLibrary)),
-        ),
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: LibraryEmptyState(onStartSetup: onStartSetup),
       );
     }
 

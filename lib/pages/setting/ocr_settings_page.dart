@@ -6,9 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
+import '../../providers/onboarding_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/onboarding_spotlight.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_picker.dart';
 
@@ -372,9 +374,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           suffixIcon: suffix,
         );
 
+    final onboardingStep = ref.watch(onboardingProvider);
+
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
+        leading: _buildBackButton(onboardingStep),
         title: Text(
           context.l10n.ocrSettings,
           style: theme.textTheme.titleLarge?.copyWith(
@@ -408,57 +413,11 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    onPressed: () {
-                      Haptics.soft();
-                      launchUrl(
-                        Uri.parse('https://aistudio.baidu.com/paddleocr'),
-                        mode: LaunchMode.externalApplication,
-                      );
-                    },
-                    icon: Icon(Symbols.arrow_outward_rounded,
-                        size: 16, color: cs.onSurfaceVariant),
-                    tooltip: context.l10n.getToken,
-                    visualDensity: VisualDensity.compact,
-                  ),
+                  _buildGetTokenButton(cs),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _keyCtrl,
-                onChanged: (v) {
-                  _keyTimer?.cancel();
-                  _keyTimer =
-                      Timer(const Duration(milliseconds: 600), () {
-                    ref
-                        .read(docExtractApiProvider.notifier)
-                        .setApiKey(v.trim());
-                  });
-                },
-                obscureText: _keyObscured,
-                decoration: fieldDeco(
-                  hint: 'token ...',
-                  label: 'API Key',
-                  suffix: IconButton(
-                    icon: Icon(
-                      _keyObscured
-                          ? Symbols.visibility_off_rounded
-                          : Symbols.visibility_rounded,
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      Haptics.soft();
-                      setState(() => _keyObscured = !_keyObscured);
-                    },
-                  ),
-                ),
-                autocorrect: false,
-                enableSuggestions: false,
-                style: theme.textTheme.bodyMedium,
-              ),
-            ),
+            _buildApiKeyField(theme, cs, fieldDeco),
 
             // ── 输出控制 ──
             _buildGroup(
@@ -635,5 +594,82 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     ref
         .read(snackBarServiceProvider)
         .showResult(message: context.l10n.ocrSettingsReset);
+  }
+
+  Widget _buildGetTokenButton(ColorScheme cs) {
+    final step = ref.watch(onboardingProvider);
+    final button = IconButton(
+      onPressed: () {
+        Haptics.soft();
+        launchUrl(
+          Uri.parse('https://aistudio.baidu.com/paddleocr'),
+          mode: LaunchMode.externalApplication,
+        );
+        if (step == OnboardingStep.ocrGetToken) {
+          ref.read(onboardingProvider.notifier).advance();
+        }
+      },
+      icon: Icon(Symbols.arrow_outward_rounded,
+          size: 16, color: cs.onSurfaceVariant),
+      tooltip: context.l10n.getToken,
+      visualDensity: VisualDensity.compact,
+    );
+    if (step != OnboardingStep.ocrGetToken) return button;
+    return OnboardingPulse(borderRadius: 20, child: button);
+  }
+
+  Widget _buildApiKeyField(
+    ThemeData theme,
+    ColorScheme cs,
+    InputDecoration Function({required String hint, String? label, Widget? suffix}) fieldDeco,
+  ) {
+    final step = ref.watch(onboardingProvider);
+
+    final field = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: TextField(
+        controller: _keyCtrl,
+        onChanged: (v) {
+          _keyTimer?.cancel();
+          _keyTimer = Timer(const Duration(milliseconds: 600), () {
+            ref.read(docExtractApiProvider.notifier).setApiKey(v.trim());
+          });
+          if (step == OnboardingStep.ocrApiKey && v.trim().isNotEmpty) {
+            ref.read(onboardingProvider.notifier).advance();
+          }
+        },
+        obscureText: _keyObscured,
+        decoration: fieldDeco(
+          hint: 'token ...',
+          label: 'API Key',
+          suffix: IconButton(
+            icon: Icon(
+              _keyObscured
+                  ? Symbols.visibility_off_rounded
+                  : Symbols.visibility_rounded,
+              size: 20,
+            ),
+            onPressed: () {
+              Haptics.soft();
+              setState(() => _keyObscured = !_keyObscured);
+            },
+          ),
+        ),
+        autocorrect: false,
+        enableSuggestions: false,
+        style: theme.textTheme.bodyMedium,
+      ),
+    );
+    if (step != OnboardingStep.ocrApiKey) return field;
+    return OnboardingPulse(borderRadius: 12, child: field);
+  }
+
+  Widget _buildBackButton(OnboardingStep step) {
+    final button = IconButton(
+      onPressed: () => Navigator.of(context).maybePop(),
+      icon: const Icon(Symbols.arrow_back_rounded),
+    );
+    if (step != OnboardingStep.ocrGoBack) return button;
+    return OnboardingPulse(borderRadius: 20, child: button);
   }
 }
