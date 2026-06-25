@@ -1,33 +1,86 @@
-## 项目简介
+<div align="center">
 
-**獭祭鱼 OtterPad** 是一款革新性的学术文献阅读与管理工具，采用 Flutter 框架开发，支持 iOS、Android 等多平台。它通过集成 AI 工作流技术，为科研工作者、学生和学术爱好者提供高效的文献阅读、理解和管理体验。
+<img src="./assets/icons/app_icon.png" width="120px" alt="OtterPad"/>
 
-## 核心功能特性
+# OtterPad
 
-### 智能搜索与管理
-- **文献搜索** - 支持多维度、多数据源的文献搜索
-- **重命名功能** - AI 辅助的智能文献命名规则
-- **文件分类收藏** - 自定义分类体系，智能标签生成
+**AI-Powered Cross-Platform Academic Paper Reader**
 
-### 内容理解与分析
-- **图文表分割** - 精准识别和提取文献中的图表内容
-- **多模态理解** - 支持多种内容形式的深层语义理解
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![License](https://img.shields.io/github/license/Cyli00/NightReader)](./LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Android-brightgreen)]()
 
-### 学术谱系追踪
-- **作者信息追踪** - 详细的作者科研经历和成果展示
-- **学科领域关联** - 自动识别和展示相关学科领域
-- **学脉传承分析** - 可视化展示研究方向的学术继承关系
+English | [简体中文](docs/README_zh.md)
 
-### 学习辅助功能
-- **智能注释** - AI 驱动的上下文理解和解释
-- **笔记系统** - 支持结构化笔记与知识图谱构建
+</div>
 
-### 关联度分析
-- **多文献关联** - 自动发现文献间的逻辑关系和引用链路
-- **知识图谱构建** - 关键概念和理论框架的可视化
+## What is this?
 
-## 技术栈
+OtterPad is a cross-platform academic literature reading and management tool with integrated AI workflows, helping researchers efficiently read, understand, and manage papers.
 
-Framework:
-  - Flutter 3.x+
-  - Dart 3.x+
+- 📖 Immersive PDF reading with customizable themes and typography
+- 🤖 AI-powered full-text Q&A grounded in extracted text and figures
+- 🌐 Document-level paragraph translation preserving formulas and code blocks
+- 🔍 Multi-source literature search and metadata resolution
+- 📊 Intelligent figure/table extraction and standalone viewing
+
+<div align="center">
+
+| Immersive Reading | AI Full-Text Q&A |
+|:---:|:---:|
+| <img src="./docs/immersive_reading_experience_framed.png" width="280px"/> | <img src="./docs/ask_anything_with_fullcontext_framed.png" width="280px"/> |
+
+</div>
+
+## Features
+
+### Reading & Translation
+- **Immersive Reading** — Customizable theme colors, font sizes, highlighting and annotations
+- **Paragraph-Level Translation** — 8 concurrent workers translating paragraph by paragraph, automatically protecting formulas / code / citation numbers
+- **Figure Extraction** — Accurately identifies figures and tables in PDFs for standalone viewing and copying
+
+### AI Understanding
+- **Full-Text Q&A** — AI answers any question about the document, grounded in extracted full text and figures
+- **Multi-Model Support** — OpenAI / Anthropic / Google / compatible APIs, switch freely
+- **Smart Summary** — AI-generated key takeaways from papers
+
+### Literature Management
+- **Multi-Source Search** — Search via DOI / PubMed / Crossref / Semantic Scholar and more
+- **AI Rename** — Intelligent file naming based on metadata
+- **Collections & Tags** — Custom categorization and tagging system
+- **Zotero Sync** — Two-way sync with your Zotero library
+
+### Data Safety
+- **Cloud Backup** — S3 / WebDAV cloud backup and restore
+- **Auto Backup** — Configurable scheduled automatic backups
+
+## Installation
+
+Download the APK for your architecture from [Releases](https://github.com/Cyli00/NightReader/releases):
+- `arm64-v8a` — Most modern Android devices
+- `armeabi-v7a` — Older 32-bit devices
+- `x86_64` — Emulators / ChromeOS
+
+> Desktop and iOS builds are planned but not yet available.
+
+## Tech Stack
+
+- **Framework** — Flutter 3.x + Dart 3.x
+- **State Management** — Riverpod
+- **Routing** — GoRouter
+- **Storage** — Hive (local) + Flutter Secure Storage (credentials)
+- **Networking** — Dio + HTTP/2
+- **Design Language** — Material Design 3
+
+## Acknowledgements
+
+OtterPad stands on the shoulders of these excellent open-source projects:
+
+- [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) — Third-party BiliBili client built with Flutter
+- [PDFMathTranslate](https://github.com/PDFMathTranslate/PDFMathTranslate) — AI-powered PDF translation preserving full layout (EMNLP 2025)
+- [FlClash](https://github.com/chen08209/FlClash) — Multi-platform proxy client based on ClashMeta
+- [Kelivo](https://github.com/Chevey339/kelivo) — Multi-platform LLM chat client built with Flutter
+
+## License
+
+This project is licensed under [GPL-3.0](./LICENSE).
