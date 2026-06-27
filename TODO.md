@@ -7,3 +7,4 @@
   - file_picker ^8→^11：`FilePicker.platform.X()` → `FilePicker.X()` 静态调用（5 个文件）
   - share_plus ^10→^13：`Share` → `SharePlus` 类重命名（3 个文件）
   - package_info_plus ^9→^10：无 API 变更，随 share_plus 一起升（win32 ^6 依赖）
+- 引入PP-OCRv6移动端模型做一些精细处理，减少对api请求的过度依赖
