@@ -1,4 +1,4 @@
-<div align=center>
+<div align=left>
 
 [![Release Downloads](https://img.shields.io/github/downloads/Cyli00/NightReader/vVERSION/total?style=flat-square&logo=github)](https://github.com/Cyli00/NightReader/releases/tag/vVERSION)
 
@@ -48,6 +48,7 @@
 </div>
 
 > [!NOTE]
+> windows、linux 和 mac OS 版本没有经过严格测试，相应的排版也没有做过适配。
 > macOS 包未签名，首次打开请右键 → 打开，或在终端执行 `xattr -cr /Applications/OtterPad.app`。
 
 <div dir="ltr">

@@ -154,15 +154,14 @@ jobs:
         shell: bash
         run: |
           tag="${{ github.ref_name }}"
+          version="${tag#v}"
+          sed "s|VERSION|$version|g" .github/release_template.md > notes.md
           prev=$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)
           range="${prev:+$prev..}$tag"
           {
             git log --no-merges --pretty=format:'- %s' "$range" | grep -v 'Update changelog' || true
             echo
-            echo
-          } > notes.md
-          version="${tag#v}"
-          sed "s|VERSION|$version|g" .github/release_template.md >> notes.md
+          } >> notes.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
