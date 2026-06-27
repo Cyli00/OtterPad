@@ -24,12 +24,24 @@ class LayoutBlock {
 
   final String blockContent;
 
+  /// PaddleOCR 页内逻辑分组 ID，同组 block 属于同一逻辑实体（如复合图的子图）。
+  final int? groupId;
+
+  /// PaddleOCR 跨页全局分组 ID。
+  final int? globalGroupId;
+
+  /// PaddleOCR 推断的阅读顺序（页内），null 表示未提供。
+  final int? blockOrder;
+
   LayoutBlock({
     required this.blockId,
     required this.blockLabel,
     required this.blockBbox,
     List<num>? rawBbox,
     required this.blockContent,
+    this.groupId,
+    this.globalGroupId,
+    this.blockOrder,
   }) : rawBbox = rawBbox ?? blockBbox;
 
   factory LayoutBlock.fromJson(Map<String, dynamic> json) {
@@ -41,6 +53,9 @@ class LayoutBlock {
       blockBbox: [for (final v in rawBbox) v.toDouble()],
       rawBbox: List.unmodifiable(rawBbox),
       blockContent: json['block_content'] as String? ?? '',
+      groupId: json['group_id'] as int?,
+      globalGroupId: json['global_group_id'] as int?,
+      blockOrder: json['block_order'] as int?,
     );
   }
 }
