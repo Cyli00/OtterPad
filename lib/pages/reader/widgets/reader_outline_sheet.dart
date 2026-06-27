@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../providers/summary_image_provider.dart';
@@ -10,6 +11,7 @@ class ReaderOutlineSheetBody extends StatelessWidget {
   final String markdownContent;
   final String documentId;
   final ValueNotifier<SummaryImageState> summaryImageState;
+  final ValueListenable<int>? figuresEpoch;
   final ValueChanged<int> onNavigate;
   final VoidCallback onRegenerateSummary;
 
@@ -18,6 +20,7 @@ class ReaderOutlineSheetBody extends StatelessWidget {
     required this.markdownContent,
     required this.documentId,
     required this.summaryImageState,
+    this.figuresEpoch,
     required this.onNavigate,
     required this.onRegenerateSummary,
   });
@@ -46,6 +49,7 @@ class ReaderOutlineSheetBody extends StatelessWidget {
               markdownContent: markdownContent,
               documentId: documentId,
               summaryImageState: summaryImageState,
+              figuresEpoch: figuresEpoch,
               inSheet: true,
               onNavigate: onNavigate,
               onRegenerateSummary: onRegenerateSummary,

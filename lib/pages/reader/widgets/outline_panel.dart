@@ -145,6 +145,9 @@ class OutlinePanel extends StatefulWidget {
   final void Function(int charOffset) onNavigate;
   final VoidCallback? onRegenerateSummary;
 
+  /// AI 排版修复完成后递增，触发 manifest 重读 + ImageCache evict。
+  final ValueListenable<int>? figuresEpoch;
+
   /// true: 嵌入 bottom sheet（外壳由 caller 提供圆角+drag handle，本组件不再加
   /// Scaffold/SafeArea-top，避免双层背景盖住 sheet 顶部圆角）。
   /// false: 作为 Drawer 内容渲染，自带 Scaffold + SafeArea(top: true)。
@@ -155,6 +158,7 @@ class OutlinePanel extends StatefulWidget {
     required this.markdownContent,
     this.documentId,
     required this.summaryImageState,
+    this.figuresEpoch,
     required this.onNavigate,
     this.onRegenerateSummary,
     this.inSheet = false,
@@ -178,6 +182,7 @@ class _OutlinePanelState extends State<OutlinePanel>
     _tabController = TabController(length: 2, vsync: this);
     _references = parseReferences(widget.markdownContent);
     _loadFigures();
+    widget.figuresEpoch?.addListener(_loadFigures);
   }
 
   Future<void> _loadFigures() async {
@@ -216,7 +221,17 @@ class _OutlinePanelState extends State<OutlinePanel>
   }
 
   @override
+  void didUpdateWidget(covariant OutlinePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.figuresEpoch != widget.figuresEpoch) {
+      oldWidget.figuresEpoch?.removeListener(_loadFigures);
+      widget.figuresEpoch?.addListener(_loadFigures);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.figuresEpoch?.removeListener(_loadFigures);
     _tabController.dispose();
     super.dispose();
   }

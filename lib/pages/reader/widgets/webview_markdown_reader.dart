@@ -43,7 +43,7 @@ class WebViewMarkdownReader extends StatefulWidget {
 
   final void Function(String text, Rect selectionRect)? onSelectionEnd;
   final VoidCallback? onSelectionCleared;
-  final void Function(Highlight highlight, Offset position)? onHighlightClick;
+  final void Function(Highlight highlight, Rect rect)? onHighlightClick;
   final void Function(String imageSource)? onImageClick;
   final void Function(ScrollDirection direction)? onScrollDirection;
 
@@ -430,9 +430,9 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   // ─── 坐标转换 ───
 
-  Rect _normalizedToScreen(Map<String, dynamic> data) {
+  Rect? _normalizedToScreen(Map<String, dynamic> data) {
     final box = _webViewKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return Rect.zero;
+    if (box == null || !box.hasSize) return null;
 
     final size = box.size;
     final offset = box.localToGlobal(Offset.zero);
@@ -442,19 +442,6 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       (data['top'] as num).toDouble() * size.height + offset.dy,
       (data['right'] as num).toDouble() * size.width + offset.dx,
       (data['bottom'] as num).toDouble() * size.height + offset.dy,
-    );
-  }
-
-  Offset _normalizedToOffset(Map<String, dynamic> data) {
-    final box = _webViewKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return Offset.zero;
-
-    final size = box.size;
-    final offset = box.localToGlobal(Offset.zero);
-
-    return Offset(
-      (data['x'] as num).toDouble() * size.width + offset.dx,
-      (data['y'] as num).toDouble() * size.height + offset.dy,
     );
   }
 
@@ -632,7 +619,9 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   @override
   void onSelectionEnd(String text, Map<String, dynamic> rawRect) {
-    widget.onSelectionEnd?.call(text, _normalizedToScreen(rawRect));
+    final rect = _normalizedToScreen(rawRect);
+    if (rect == null) return;
+    widget.onSelectionEnd?.call(text, rect);
   }
 
   @override
@@ -642,7 +631,9 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   void onHighlightClick(String highlightId, Map<String, dynamic> rawPos) {
     final hl = widget.highlights.where((h) => h.id == highlightId).firstOrNull;
     if (hl == null) return;
-    widget.onHighlightClick?.call(hl, _normalizedToOffset(rawPos));
+    final rect = _normalizedToScreen(rawPos);
+    if (rect == null) return;
+    widget.onHighlightClick?.call(hl, rect);
   }
 
   @override

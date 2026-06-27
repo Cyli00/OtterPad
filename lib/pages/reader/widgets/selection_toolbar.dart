@@ -466,7 +466,10 @@ class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
         (cx - childSize.width / 2).clamp(8.0, size.width - childSize.width - 8);
 
     if (selectionRect.bottom + _gap + childSize.height <= availableHeight) {
-      return Offset(clampedX, selectionRect.bottom + _gap);
+      return Offset(
+        clampedX,
+        math.max(topPadding, selectionRect.bottom + _gap),
+      );
     }
     final upperBound = math.max(topPadding, availableHeight - childSize.height);
     return Offset(

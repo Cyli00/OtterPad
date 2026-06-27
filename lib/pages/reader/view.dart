@@ -140,6 +140,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     const SummaryImageState(),
   );
 
+  // AI 排版修复后通知 OutlinePanel 重新加载 figures manifest
+  final _figuresEpoch = ValueNotifier<int>(0);
+
   // PDF 进度采集：上一次上报的 pageNumber 缓存，避免每次 controller 通知（包括
   // 滚动 / zoom / fit）都触发一次 reportProgress——只有 pageNumber 真变了才上报。
   int? _lastReportedPdfPage;
@@ -313,6 +316,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             if (!mounted) return;
             setState(() => _readerReloadEpoch++);
             _figuresFuture = null;
+            _figuresEpoch.value++;
           });
         },
       ),
@@ -442,6 +446,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         markdownContent: session.markdownContent!,
         documentId: widget.document.id,
         summaryImageState: _summaryImageState,
+        figuresEpoch: _figuresEpoch,
         onNavigate: (offset) {
           _sheetHostKey.currentState!.close();
           _scrollToCharOffset(offset);
@@ -670,10 +675,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _sessionNotifier.updateHighlightColor(highlightId, color);
   }
 
-  void _handleHighlightTap(Highlight highlight, Offset position) {
+  void _handleHighlightTap(Highlight highlight, Rect rect) {
     if (!mounted) return;
     _dismissSelectionToolbar();
-    final rect = Rect.fromCenter(center: position, width: 4, height: 4);
     _selectionToolbarEntry = showReaderContextMenu(
       context: context,
       selectionRect: rect,
@@ -819,6 +823,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     unawaited(_sessionNotifier.flushProgress());
     _pdfSearch.dispose();
     _summaryImageState.dispose();
+    _figuresEpoch.dispose();
     _selectionToolbarEntry?.remove();
     super.dispose();
   }
@@ -927,6 +932,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     markdownContent: session.markdownContent!,
                     documentId: widget.document.id,
                     summaryImageState: _summaryImageState,
+                    figuresEpoch: _figuresEpoch,
                     onNavigate: (offset) {
                       _scaffoldKey.currentState?.closeEndDrawer();
                       _scrollToCharOffset(offset);

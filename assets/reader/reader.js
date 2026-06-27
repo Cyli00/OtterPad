@@ -194,10 +194,14 @@ class Overlayer {
       _suppressNextClear = true;
       window.getSelection()?.removeAllRanges();
       if (!window.flutter_inappwebview) return;
+      const rect = g.getBoundingClientRect();
+      const vw = window.innerWidth, vh = window.innerHeight;
       window.flutter_inappwebview.callHandler('onHighlightClick', {
         id: id,
-        x: e.clientX / window.innerWidth,
-        y: e.clientY / window.innerHeight,
+        left: rect.left / vw,
+        top: rect.top / vh,
+        right: rect.right / vw,
+        bottom: rect.bottom / vh,
       });
     });
     return g;
