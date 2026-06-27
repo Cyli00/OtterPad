@@ -1,0 +1,4 @@
+# Flutter 生成文件统一 LF，避免 autocrlf 幽灵 diff
+linux/flutter/** text eol=lf
+macos/Flutter/** text eol=lf
+windows/flutter/** text eol=lf
