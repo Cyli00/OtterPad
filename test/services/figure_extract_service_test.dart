@@ -714,6 +714,57 @@ void main() {
     expect(segments.single.captionText, contains('setup and methodology'));
   });
 
+  // ─── 中文连字符编号 caption (图X-Y / 表X-Y) ──────────────
+
+  test('中文连字符编号 caption (图3-9) 被正确识别并配对', () {
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('1', 'image', [100, 100, 700, 600]),
+        _block('2', 'figure_title', [100, 620, 700, 660],
+            '图3-9 折射球面光路图'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 1);
+    expect(segments.single.captionText, startsWith('图3-9'));
+    expect(segments.single.blocks.any((b) => b.blockId == '1'), isTrue);
+  });
+
+  test('中文 table 连字符编号 (表3-1) + 同页 figure 共存', () {
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('img', 'image', [100, 100, 500, 400]),
+        _block('cap1', 'figure_title', [100, 420, 500, 450],
+            '图4-1 光路示意图'),
+        _block('tbl', 'table', [100, 500, 900, 800]),
+        _block('cap2', 'figure_title', [100, 820, 900, 850],
+            '表3-1 常用玻璃的折射率'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 2);
+    final names = segments.map((s) => s.captionText).toSet();
+    expect(names, contains(startsWith('图4-1')));
+    expect(names, contains(startsWith('表3-1')));
+  });
+
+  test('回归: 点分编号 (Figure 1.2) 仍然正常工作', () {
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('1', 'image', [100, 100, 700, 600]),
+        _block('2', 'figure_title', [100, 620, 700, 660],
+            'Figure 1.2 Optical layout.'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    expect(segments.length, 1);
+    expect(segments.single.captionText, startsWith('Figure 1.2'));
+    expect(segments.single.blocks.any((b) => b.blockId == '1'), isTrue);
+  });
+
   // ─── Pass 4: ordinal matching ──────────────────────────
 
   group('Pass 4 ordinal matching (预印本 Figure Legends 布局)', () {
@@ -881,6 +932,222 @@ void main() {
       );
     });
   });
+
+  // ─── groupId 子图聚类 ──────────────────────────────────
+
+  group('groupId 预分组聚类', () {
+    test('同 groupId 的远距离子图聚为一簇', () {
+      // 四个子图分散在页面四角，空间距离远超 maxGap，
+      // 但 PaddleOCR 给了相同 group_id=1 → 应归为同一 cluster。
+      final service = FigureExtractService.instance;
+      final pages = [
+        [
+          _blockEx('a', 'image', [50, 50, 200, 200], groupId: 1),
+          _blockEx('b', 'image', [800, 50, 950, 200], groupId: 1),
+          _blockEx('c', 'image', [50, 800, 200, 950], groupId: 1),
+          _blockEx('d', 'image', [800, 800, 950, 950], groupId: 1),
+          _block('cap', 'figure_title', [300, 980, 700, 1010],
+              'Figure 1. Four-panel composite.'),
+        ],
+      ];
+      final segments = service.findFigures(pages);
+      expect(segments.length, 1);
+      expect(segments.single.captionName, 'Figure_1');
+      final ids = segments.single.blocks.map((b) => b.blockId).toSet();
+      expect(ids, containsAll(['a', 'b', 'c', 'd']));
+    });
+
+    test('不同 groupId → 分属不同 cluster', () {
+      final service = FigureExtractService.instance;
+      final pages = [
+        [
+          _blockEx('a', 'image', [100, 100, 400, 400], groupId: 1),
+          _blockEx('b', 'image', [100, 420, 400, 500], groupId: 1),
+          _block('cap1', 'figure_title', [100, 510, 400, 530],
+              'Figure 1. First.'),
+          _blockEx('c', 'image', [600, 100, 900, 400], groupId: 2),
+          _block('cap2', 'figure_title', [600, 410, 900, 430],
+              'Figure 2. Second.'),
+        ],
+      ];
+      final segments = service.findFigures(pages);
+      expect(segments.length, 2);
+      final fig1 = segments.firstWhere((s) => s.captionName == 'Figure_1');
+      final fig2 = segments.firstWhere((s) => s.captionName == 'Figure_2');
+      expect(fig1.blocks.map((b) => b.blockId), containsAll(['a', 'b']));
+      expect(fig2.blocks.map((b) => b.blockId), contains('c'));
+    });
+
+    test('null groupId → 退化为空间聚类（回归）', () {
+      // 没有 groupId 的 block 走原有空间聚类逻辑
+      final service = FigureExtractService.instance;
+      final pages = [
+        [
+          _block('a', 'image', [100, 100, 400, 400]),
+          _block('b', 'image', [100, 410, 400, 500]),
+          _block('cap', 'figure_title', [100, 510, 400, 530],
+              'Figure 1. Grouped by spatial proximity.'),
+        ],
+      ];
+      final segments = service.findFigures(pages);
+      expect(segments.length, 1);
+      final ids = segments.single.blocks.map((b) => b.blockId).toSet();
+      expect(ids, containsAll(['a', 'b']));
+    });
+  });
+
+  // ─── 双栏配对约束 ──────────────────────────────────────
+
+  group('双栏栏位约束配对', () {
+    test('双栏页面：左栏 caption 配左栏 image，不跨栏', () {
+      // 双栏排版需要至少 4 个 text block (每侧 ≥3) 触发双栏检测。
+      // 左栏 image + caption，右栏 image + caption，caption 空间上
+      // 可能离对栏 image 也不远，但栏位约束阻止跨栏配对。
+      final service = FigureExtractService.instance;
+      final pages = [
+        [
+          // 左栏 text blocks (触发双栏检测)
+          _block('t1', 'text', [50, 50, 500, 80], 'Left column text 1'),
+          _block('t2', 'text', [50, 90, 500, 120], 'Left column text 2'),
+          _block('t3', 'text', [50, 130, 500, 160], 'Left column text 3'),
+          // 右栏 text blocks
+          _block('t4', 'text', [550, 50, 1050, 80], 'Right column text 1'),
+          _block('t5', 'text', [550, 90, 1050, 120], 'Right column text 2'),
+          _block('t6', 'text', [550, 130, 1050, 160], 'Right column text 3'),
+          // 左栏 figure
+          _block('L_img', 'image', [50, 200, 500, 700]),
+          _block('L_cap', 'figure_title', [50, 710, 500, 740],
+              'Figure 1. Left column figure.'),
+          // 右栏 figure
+          _block('R_img', 'image', [550, 200, 1050, 700]),
+          _block('R_cap', 'figure_title', [550, 710, 1050, 740],
+              'Figure 2. Right column figure.'),
+        ],
+      ];
+      final segments = service.findFigures(pages);
+      expect(segments.length, 2);
+      final fig1 = segments.firstWhere((s) => s.captionName == 'Figure_1');
+      final fig2 = segments.firstWhere((s) => s.captionName == 'Figure_2');
+      expect(fig1.blocks.any((b) => b.blockId == 'L_img'), isTrue);
+      expect(fig2.blocks.any((b) => b.blockId == 'R_img'), isTrue);
+    });
+
+    test('单栏页面不受栏位约束影响（回归）', () {
+      final service = FigureExtractService.instance;
+      final pages = [
+        [
+          _block('img', 'image', [100, 100, 900, 600]),
+          _block('cap', 'figure_title', [100, 620, 900, 660],
+              'Figure 1. Single column.'),
+        ],
+      ];
+      final segments = service.findFigures(pages);
+      expect(segments.length, 1);
+      expect(segments.single.captionName, 'Figure_1');
+    });
+  });
+
+  // ─── group_id 段落续接 caption 合并 ─────────────────────
+
+  group('group_id 段落续接', () {
+    test('同 group_id 的 text 块跳过空间检查直接合并为 caption 续接', () {
+      // OCR 把 caption 标为 text 并拆成两个 block，共享 group_id=5。
+      // 即使纵向 gap 超出通常阈值，同 group 也应合并。
+      final service = FigureExtractService.instance;
+      final pages = [
+        [
+          _block('img', 'image', [100, 100, 700, 400]),
+          _blockEx('cap', 'text', [100, 420, 700, 440],
+              content: 'Figure 1. First part of a caption that', groupId: 5),
+          _blockEx('cont', 'text', [100, 550, 700, 570],
+              content: 'continues across a large gap.', groupId: 5),
+        ],
+      ];
+      final segments = service.findFigures(pages);
+      expect(segments.length, 1);
+      expect(segments.single.captionText, contains('continues across'));
+    });
+
+    test('不同 group_id 的 text 块不合并（停止信号）', () {
+      // 候选 block 与后续 block 共享 group_id=6（属于另一段落），
+      // 应作为停止信号，不合并到 caption。
+      final service = FigureExtractService.instance;
+      final pages = [
+        [
+          _block('img', 'image', [100, 100, 700, 400]),
+          _blockEx('cap', 'text', [100, 420, 700, 440],
+              content: 'Figure 1. Complete caption.', groupId: 5),
+          _blockEx('para1', 'text', [100, 450, 700, 470],
+              content: 'This is body text paragraph', groupId: 6),
+          _blockEx('para2', 'text', [100, 475, 700, 495],
+              content: 'that should not be merged.', groupId: 6),
+        ],
+      ];
+      final segments = service.findFigures(pages);
+      expect(segments.length, 1);
+      expect(segments.single.captionText, isNot(contains('body text')));
+    });
+  });
+
+  // ─── label-only caption 续接边界 ─────────────────────────
+
+  test('label-only caption 不吸收远左的全宽正文段落', () {
+    // 复现真实 bug：中文教材"图3-9/10/11"三图并排，
+    // "图3-11"（66px 宽 label）后面紧跟全宽正文（837px 宽）。
+    // 正文左边缘 (95) 远在 anchor 左边缘 (697) 左侧 → 不应被吸收。
+    // 如果吸收，caption bbox 膨胀到全宽，导致 3 张图全部误配到 "图3-11"。
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('11', 'image', [190, 853, 354, 1010]),
+        _block('12', 'figure_title', [244, 1030, 300, 1049], '图3-9'),
+        _block('13', 'image', [417, 852, 558, 1012]),
+        _block('14', 'figure_title', [455, 1030, 521, 1049], '图3-10'),
+        _block('15', 'image', [620, 908, 839, 1012]),
+        _block('16', 'figure_title', [697, 1029, 763, 1049], '图3-11'),
+        _block('17', 'text', [95, 1062, 931, 1149],
+            '若需经一次反射使光轴转过若干角度，根据反射定律和几何关系...'),
+      ],
+    ];
+    final segments = service.findFigures(pages);
+    // 应该是 3 个独立的 figure，而不是全部合并到 "图3-11"
+    expect(segments.length, 3);
+    final names = segments.map((s) => s.captionName).toSet();
+    expect(names, containsAll(['图3-9', '图3-10', '图3-11']));
+    // 正文不应出现在任何 segment 中
+    for (final seg in segments) {
+      expect(seg.blocks.any((b) => b.blockId == '17'), isFalse);
+    }
+  });
+
+  // ─── previous anchor vision_footnote 消歧 ──────────────
+
+  group('previous anchor vision_footnote 消歧', () {
+    test('table 后的 vision_footnote → table cluster 亲和', () {
+      // 页面上方是 image + 其 caption，下方是 table + vision_footnote。
+      // vision_footnote 的 previous anchor 是 table，应与 table caption 配对。
+      final service = FigureExtractService.instance;
+      final pages = [
+        [
+          _block('img', 'image', [100, 100, 900, 400]),
+          _block('cap1', 'figure_title', [100, 410, 900, 440],
+              'Figure 1. Image result.'),
+          _block('tbl', 'table', [100, 500, 900, 800]),
+          _block('cap2', 'figure_title', [100, 810, 900, 840],
+              'Table 1. Data summary.'),
+          _block('vf', 'vision_footnote', [100, 845, 900, 870],
+              'Note: values are means ± SD.'),
+        ],
+      ];
+      final segments = service.findFigures(pages);
+      expect(segments.length, 2);
+      final tblSeg = segments.firstWhere(
+        (s) => s.captionName.startsWith('Table'),
+      );
+      // vision_footnote 应归入 table segment
+      expect(tblSeg.blocks.any((b) => b.blockId == 'vf'), isTrue);
+    });
+  });
 }
 
 LayoutBlock _block(
@@ -894,6 +1161,24 @@ LayoutBlock _block(
     blockLabel: label,
     blockBbox: bbox,
     blockContent: content,
+  );
+}
+
+LayoutBlock _blockEx(
+  String id,
+  String label,
+  List<double> bbox, {
+  String content = '',
+  int? groupId,
+  int? blockOrder,
+}) {
+  return LayoutBlock(
+    blockId: id,
+    blockLabel: label,
+    blockBbox: bbox,
+    blockContent: content,
+    groupId: groupId,
+    blockOrder: blockOrder,
   );
 }
 

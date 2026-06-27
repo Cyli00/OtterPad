@@ -275,11 +275,17 @@ class _PageData {
   final String markdown;
 }
 
-/// 视觉块或子图注块,绑定 pageIndex 用于跨页配对
+/// 视觉块或子图注块,绑定 pageIndex 用于跨页配对.
+///
+/// [anchorType] 由 previous anchor 模式填充:
+///   - `image` — 前一个视觉 block 是 image/chart
+///   - `table` — 前一个视觉 block 是 table
+///   - null    — 无前序视觉 block 或非 vision_footnote
 class _FigureBlock {
-  _FigureBlock(this.pageIndex, this.block);
+  _FigureBlock(this.pageIndex, this.block, {this.anchorType});
   final int pageIndex;
   final LayoutBlock block;
+  final String? anchorType;
   _Bbox get bbox => _Bbox.fromBlock(block);
 }
 
@@ -315,6 +321,99 @@ class _Column {
   const _Column(this.left, this.right);
   final double left, right;
   double get width => right - left;
+}
+
+/// 页面栏位布局——双栏检测结果，用于配对阶段防止跨栏误配。
+class _PageColumns {
+  const _PageColumns._({
+    required this.isDoubleColumn,
+    required this.pageLeft,
+    required this.pageRight,
+    this.leftColRight,
+    this.rightColLeft,
+  });
+
+  final bool isDoubleColumn;
+  final double pageLeft, pageRight;
+  final double? leftColRight, rightColLeft;
+
+  /// 两个 bbox 是否在同一栏（单栏页面始终返回 true，跨栏元素与任何栏匹配）。
+  bool sameColumn(_Bbox a, _Bbox b) {
+    if (!isDoubleColumn) return true;
+    final ca = _columnOf(a);
+    final cb = _columnOf(b);
+    if (ca < 0 || cb < 0) return true;
+    return ca == cb;
+  }
+
+  /// 0=左栏, 1=右栏, -1=跨栏/不确定
+  int _columnOf(_Bbox bbox) {
+    if (!isDoubleColumn) return -1;
+    const margin = 30.0;
+    if (bbox.right <= leftColRight! + margin) return 0;
+    if (bbox.left >= rightColLeft! - margin) return 1;
+    return -1;
+  }
+
+  static _PageColumns detect(List<LayoutBlock> pageBlocks) {
+    double pageLeft = double.infinity, pageRight = 0;
+    for (final b in pageBlocks) {
+      if (b.blockBbox.length < 4) continue;
+      if (b.blockBbox[0] < pageLeft) pageLeft = b.blockBbox[0];
+      if (b.blockBbox[2] > pageRight) pageRight = b.blockBbox[2];
+    }
+    if (pageLeft.isInfinite || pageRight <= pageLeft) {
+      return _PageColumns._(
+        isDoubleColumn: false,
+        pageLeft: 0,
+        pageRight: 0,
+      );
+    }
+
+    const textLabels = {'text', 'paragraph_title', 'abstract'};
+    final textBlocks =
+        pageBlocks.where((b) => textLabels.contains(b.blockLabel)).toList();
+    if (textBlocks.length < 4) {
+      return _PageColumns._(
+        isDoubleColumn: false,
+        pageLeft: pageLeft,
+        pageRight: pageRight,
+      );
+    }
+
+    const minPerSide = 3;
+    const margin = 30.0;
+    final pageMid = pageLeft + (pageRight - pageLeft) / 2;
+    final leftBlocks =
+        textBlocks.where((b) => b.blockBbox[2] <= pageMid + margin).toList();
+    final rightBlocks =
+        textBlocks.where((b) => b.blockBbox[0] >= pageMid - margin).toList();
+
+    if (leftBlocks.length < minPerSide || rightBlocks.length < minPerSide) {
+      return _PageColumns._(
+        isDoubleColumn: false,
+        pageLeft: pageLeft,
+        pageRight: pageRight,
+      );
+    }
+
+    final leftColRight = leftBlocks.fold<double>(
+      0.0,
+      (m, b) => b.blockBbox[2] > m ? b.blockBbox[2] : m,
+    );
+    final rightColLeft = rightBlocks.fold<double>(
+      double.infinity,
+      (m, b) => b.blockBbox[0] < m ? b.blockBbox[0] : m,
+    );
+
+    return _PageColumns._(
+      isDoubleColumn: true,
+      pageLeft: pageLeft,
+      pageRight: pageRight,
+      leftColRight: leftColRight,
+      rightColLeft: rightColLeft,
+    );
+  }
 }
 
 /// trimCaptionFromRegion 内部使用: 表示从 region 哪一侧收缩.
@@ -399,6 +498,7 @@ class FigureExtractService {
   static const _clusterGapRatio = 0.025;
   static const _minClusterGap = 24.0;
   static const _maxClusterGap = 56.0;
+
 
   // ─── caption 配置(从 assets 加载) ────────────────────
 
@@ -645,6 +745,7 @@ class FigureExtractService {
       anchorHeight * _continuationGapRatio,
       _continuationGapMin,
     );
+    final anchorGroupId = anchor.groupId;
 
     final result = <LayoutBlock>[];
     var lastBottom = anchorBbox.bottom;
@@ -659,34 +760,57 @@ class FigureExtractService {
       // 终止: 视觉块阻断
       if (_captionMergeExcludeLabels.contains(cand.blockLabel)) break;
 
-      final cbox = _Bbox.fromBlock(cand);
-      // 终止: 纵向 gap 过大
-      final gap = cbox.top - lastBottom;
-      if (gap < 0 || gap > maxGap) break;
+      // group_id 段落续接: 与 anchor 同 group → 跳过空间检查直接合并
+      final sameGroup = anchorGroupId != null &&
+          cand.groupId != null &&
+          cand.groupId == anchorGroupId;
 
-      // 终止: 横向 overlap 不足 (避免吃入邻栏)
-      final overlap = math.max(
-        0.0,
-        math.min(anchorBbox.right, cbox.right) -
-            math.max(anchorBbox.left, cbox.left),
-      );
-      if (overlap / anchorWidth < _continuationOverlapRatio) break;
+      if (!sameGroup) {
+        final cbox = _Bbox.fromBlock(cand);
+        // 终止: 纵向 gap 过大
+        final gap = cbox.top - lastBottom;
+        if (gap < 0 || gap > maxGap) break;
 
-      // 终止: body-text label + caption 描述已完整 → 正文段落, 不是延续行
-      if (_bodyTextContinuationLabels.contains(cand.blockLabel) &&
-          _captionDescriptionComplete(accumulatedText)) {
-        break;
+        // 终止: 横向 overlap 不足 (避免吃入邻栏)
+        final overlap = math.max(
+          0.0,
+          math.min(anchorBbox.right, cbox.right) -
+              math.max(anchorBbox.left, cbox.left),
+        );
+        if (overlap / anchorWidth < _continuationOverlapRatio) break;
+
+        // 终止: body-text label + caption 描述已完整 → 正文段落, 不是延续行
+        if (_bodyTextContinuationLabels.contains(cand.blockLabel) &&
+            _captionDescriptionComplete(accumulatedText)) {
+          break;
+        }
+
+        // 终止: label-only caption + body-text → 全宽段落不是续接.
+        // 场景: "图3-11"（66px 宽）后面紧跟全宽正文（837px 宽），
+        // 正文的左边缘远在 anchor 左侧，说明它是独立段落而非 caption 续接。
+        if (_bodyTextContinuationLabels.contains(cand.blockLabel) &&
+            !_captionDescriptionComplete(accumulatedText)) {
+          final leftDrift = anchorBbox.left - cbox.left;
+          if (leftDrift > anchorWidth) break;
+        }
+
+        // group_id 停止信号: 候选 block 与后续 block 共享 group_id
+        // (属于另一段落) → 它不是 caption 的续接
+        if (cand.groupId != null && j + 1 < page.blocks.length) {
+          final next = page.blocks[j + 1];
+          if (next.groupId == cand.groupId) break;
+        }
       }
 
       // 跳过空内容 (PaddleOCR 偶有空 block)
       if (candContent.isEmpty) {
-        lastBottom = cbox.bottom;
+        lastBottom = _Bbox.fromBlock(cand).bottom;
         continue;
       }
 
       result.add(cand);
       accumulatedText = _joinCaptionParts([accumulatedText, candContent]);
-      lastBottom = cbox.bottom;
+      lastBottom = _Bbox.fromBlock(cand).bottom;
     }
 
     return result;
@@ -721,21 +845,41 @@ class FigureExtractService {
   /// 长度 ≤ `_maxSubLabelLength`,被视为子标签 ((a)/(b) 这类),保留;
   /// 超长的视为正文噪声,跳过.
   ///
-  /// PR-6 会在此处加: PDF 图形元素聚类作为第二条 figure 候选源.
+  /// **Previous anchor 模式**: 按 block 出现顺序遍历整页，记录前一个
+  /// 视觉 anchor（image/chart → `image`, table → `table`）。遇到
+  /// `vision_footnote` 时将 anchor type 标记到 `_FigureBlock.anchorType`，
+  /// 下游聚类/配对可据此消歧 figure 与 table 脚注。
   List<_FigureBlock> _collectFigureCandidates(
     _PageData page,
     Set<String> excludeBlockIds,
   ) {
+    // 先遍历全页 block 建立 previous anchor 映射
+    String? previousAnchor;
+    final anchorMap = <String, String?>{};
+    for (final b in page.blocks) {
+      if (b.blockLabel == 'image' || b.blockLabel == 'chart') {
+        previousAnchor = 'image';
+      } else if (b.blockLabel == 'table') {
+        previousAnchor = 'table';
+      }
+      if (b.blockLabel == 'vision_footnote') {
+        anchorMap[b.blockId] = previousAnchor;
+      }
+    }
+
     final result = <_FigureBlock>[];
     for (final b in page.blocks) {
       if (!figureLabels.contains(b.blockLabel)) continue;
       if (excludeBlockIds.contains(b.blockId)) continue;
-      // figure_title 但内容过长 → 正文噪声(否则 (a)/(b) 这类短标签会被错误剔除)
       if (b.blockLabel == 'figure_title' &&
           b.blockContent.trim().length > _maxSubLabelLength) {
         continue;
       }
-      result.add(_FigureBlock(page.pageIndex, b));
+      result.add(_FigureBlock(
+        page.pageIndex,
+        b,
+        anchorType: anchorMap[b.blockId],
+      ));
     }
     return result;
   }
@@ -775,6 +919,12 @@ class FigureExtractService {
       captionsByPage.putIfAbsent(c.pageIndex, () => []).add(c);
     }
 
+    // 每页栏位检测——双栏页面在 Pass 1 中约束同栏配对
+    final columnsByPage = <int, _PageColumns>{
+      for (final page in inv.pages)
+        page.pageIndex: _PageColumns.detect(page.blocks),
+    };
+
     final totalClusters = clustersByPage.values.fold<int>(
       0,
       (sum, list) => sum + list.length,
@@ -794,8 +944,12 @@ class FigureExtractService {
       final pageCaptions = captionsByPage[pi] ?? const [];
       final pageDiag = pageDiagonals[pi] ?? 0;
       final threshold = pageDiag * _captionMatchRatio;
+      final columns = columnsByPage[pi];
       for (final cluster in entry.value) {
-        final anchor = _nearestCaption(cluster, pageCaptions, threshold);
+        final anchor = _nearestCaption(
+          cluster, pageCaptions, threshold,
+          pageColumns: columns,
+        );
         if (anchor == null) continue;
         byCaption.putIfAbsent(anchor, () => []).add(cluster);
       }
@@ -963,26 +1117,57 @@ class FigureExtractService {
     );
   }
 
-  /// 按邻近距离把 figure block 聚成簇.
+  /// 按 groupId + 邻近距离把 figure block 聚成簇.
+  ///
+  /// Phase 1: 按 PaddleOCR 的 groupId 预分组——同 groupId 的 block 保证
+  ///   在同一个簇内（OCR 模型的语义分组比纯几何距离可靠）。
+  /// Phase 2: 在预分组基础上做 agglomerative 空间聚类——不同 group 或
+  ///   无 group 的 block 如果空间邻近仍会合并。
   List<_Cluster> _clusterFigureBlocks(
     int pageIndex,
     List<_FigureBlock> blocks,
     double maxGap,
   ) {
-    final remaining = List<_FigureBlock>.from(blocks);
+    // Phase 1: 按 groupId 预分组
+    final byGroup = <int, List<_FigureBlock>>{};
+    final ungrouped = <List<_FigureBlock>>[];
+    for (final b in blocks) {
+      final gid = b.block.groupId;
+      if (gid != null) {
+        byGroup.putIfAbsent(gid, () => []).add(b);
+      } else {
+        ungrouped.add([b]);
+      }
+    }
+    // 多 block 的 group → 作为不可拆分的聚类单元；
+    // 单 block group → 退化为普通 block，交给空间聚类
+    final units = <List<_FigureBlock>>[];
+    for (final group in byGroup.values) {
+      if (group.length >= 2) {
+        units.add(group);
+      } else {
+        ungrouped.add(group);
+      }
+    }
+    units.addAll(ungrouped);
+
+    // Phase 2: agglomerative 聚类（单元粒度）
+    final remaining = [for (final u in units) List<_FigureBlock>.of(u)];
     final order = {for (var i = 0; i < blocks.length; i++) blocks[i]: i};
     final clusters = <_Cluster>[];
 
     while (remaining.isNotEmpty) {
-      final cluster = <_FigureBlock>[remaining.removeAt(0)];
+      final cluster = remaining.removeAt(0);
       var expanded = true;
       while (expanded) {
         expanded = false;
         for (var i = remaining.length - 1; i >= 0; i--) {
-          final cand = remaining[i];
-          final touches = cluster.any((b) => b.bbox.gapTo(cand.bbox) <= maxGap);
+          final unit = remaining[i];
+          final touches = cluster.any(
+            (cb) => unit.any((ub) => cb.bbox.gapTo(ub.bbox) <= maxGap),
+          );
           if (!touches) continue;
-          cluster.add(cand);
+          cluster.addAll(unit);
           remaining.removeAt(i);
           expanded = true;
         }
@@ -993,22 +1178,42 @@ class FigureExtractService {
     return clusters;
   }
 
-  /// 在 [candidates] 中找最近 caption(基于 cluster.bbox 到 caption.bbox 的距离).
+  /// 在 [candidates] 中找最近 caption(空间距离 + 栏位约束).
   /// markdown-only caption(无 bbox) 走"同页且 cluster 找不到其他候选"的兜底.
+  ///
+  /// [pageColumns] 非 null 且为双栏时，跳过与 cluster 不在同栏的 caption，
+  /// 防止双栏排版下跨栏误配。
   _CaptionCandidate? _nearestCaption(
     _Cluster cluster,
     List<_CaptionCandidate> candidates,
-    double threshold,
-  ) {
+    double threshold, {
+    _PageColumns? pageColumns,
+  }) {
     final boxed = candidates.where((c) => c.bbox != null).toList();
     final unboxed = candidates.where((c) => c.bbox == null).toList();
 
-    // 同类亲和:cluster 全是 table/vision_footnote 时优先 Table N. caption
-    final isTableCluster = cluster.blocks.every(
-      (b) =>
-          b.block.blockLabel == 'table' ||
-          b.block.blockLabel == 'vision_footnote',
+    // 同类亲和: 判断 cluster 是否为 table cluster.
+    // 优先用 previous anchor 标记 (anchorType)：如果 cluster 含 vision_footnote
+    // 且其 anchorType 明确为 table/image，以此为准.
+    // 否则退化为原有启发式: cluster 全是 table/vision_footnote → table cluster.
+    final hasTableAnchor = cluster.blocks.any(
+      (b) => b.anchorType == 'table',
     );
+    final hasImageAnchor = cluster.blocks.any(
+      (b) => b.anchorType == 'image',
+    );
+    final bool isTableCluster;
+    if (hasTableAnchor && !hasImageAnchor) {
+      isTableCluster = true;
+    } else if (hasImageAnchor && !hasTableAnchor) {
+      isTableCluster = false;
+    } else {
+      isTableCluster = cluster.blocks.every(
+        (b) =>
+            b.block.blockLabel == 'table' ||
+            b.block.blockLabel == 'vision_footnote',
+      );
+    }
     final preferred = boxed.where((c) => _isTableCaption(c) == isTableCluster);
     final rest = boxed.where((c) => _isTableCaption(c) != isTableCluster);
     final ordered = [...preferred, ...rest];
@@ -1016,6 +1221,11 @@ class FigureExtractService {
     _CaptionCandidate? best;
     var bestGap = double.infinity;
     for (final c in ordered) {
+      // 双栏约束：cluster 与 caption 必须在同一栏（或任一跨栏）
+      if (pageColumns != null &&
+          !pageColumns.sameColumn(cluster.bbox, c.bbox!)) {
+        continue;
+      }
       final gap = cluster.bbox.gapTo(c.bbox!);
       if (gap < bestGap) {
         bestGap = gap;
@@ -1936,8 +2146,17 @@ class FigureExtractService {
                 ? pages[pageIdx].blocks
                 : const <LayoutBlock>[];
             for (final (idx, seg) in entry.value) {
+              // 跨页 segment: caption 在另一页，其 bbox 坐标在当前页无意义，
+              // 必须排除以避免 trimCaptionFromRegion 误剪。
+              final cropBlocks = seg.pairMethod == PairMethod.crossPage
+                  ? seg.blocks
+                      .where((b) =>
+                          b.blockLabel != 'figure_title' ||
+                          !_mainCaptionRe.hasMatch(b.blockContent.trim()))
+                      .toList()
+                  : seg.blocks;
               final cropInfo = _computeCropInfo(
-                seg.blocks,
+                cropBlocks,
                 pageBlocks: pageBlocks,
               );
               final renderBbox = scaleBbox(cropInfo.bbox);

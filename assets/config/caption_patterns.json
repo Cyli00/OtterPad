@@ -17,6 +17,6 @@
         "그림", "표",
         "Hình", "Bảng"
     ],
-    "number_pattern": "\\s*(?:\\d+(?:\\.\\d+)?|[A-Z](?:\\.\\d+)?|S\\d+)",
+    "number_pattern": "\\s*(?:\\d+(?:[.\\-]\\d+)?|[A-Z](?:\\.\\d+)?|S\\d+)",
     "suffix_pattern": "(?:[.:()\uff1a\uff0e\u3001]|\\s|$)"
 }
