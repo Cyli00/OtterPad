@@ -487,39 +487,44 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     final isHorizontal =
         widget.settings.paginationMode == ReaderPaginationMode.horizontal;
 
-    final webView = InAppWebView(
+    // _webViewKey 挂在 SizedBox 而非 InAppWebView：PlatformView 的 RenderBox
+    // 在 release 模式下 localToGlobal 可能返回 (0,0)，导致坐标转换偏移缺失。
+    // SizedBox 是普通 Flutter Widget，localToGlobal 在所有构建模式下均可靠。
+    final webView = SizedBox.expand(
       key: _webViewKey,
-      keepAlive: _keepAlive,
-      initialUrlRequest: URLRequest(url: WebUri(url)),
-      initialSettings: InAppWebViewSettings(
-        javaScriptEnabled: true,
-        // 原生 WebView 从创建到 HTML 首帧 paint 之间默认刷系统白底，暗色/
-        // 纸色主题下表现为进入时闪白。透明后这段空窗透出底层纸色背景
-        // （view 层 contentBg），配合上方的揭幕幕布彻底消除闪白。
-        transparentBackground: true,
-        // 必须开 hybrid composition：VD 模式（false）下 WebView 的原生文本选择
-        // 手柄与放大镜（PopupWindow）无法叠加到 Flutter 纹理上——表现为手柄消失、
-        // 放大镜渲染成黑色圆角矩形。代价是键盘/对话框动画期间 WebView 会逐帧
-        // 重合成（ART GC 抖动/掉帧），但阅读器的文本选择是核心交互，优先保证。
-        useHybridComposition: true,
-        disableContextMenu: true,
-        supportZoom: false,
-        // 必须允许 WebView 横向滚动：horizontal 模式下 #content 通过
-        // scrollLeft 翻页；同时 vertical 模式下也让代码块/表格的
-        // overflow-x: auto 能正常工作。
-        disableHorizontalScroll: false,
-        // 关掉原生滚动条——本组件用 Flutter 覆盖层 [_OverlayScrollbar]
-        // 接管视觉 + 拖动交互。Android 原生条 OS 层绘制，CSS 无法接管，
-        // 且不可触摸拖动（仅指示器）。
-        verticalScrollBarEnabled: false,
-        horizontalScrollBarEnabled: false,
+      child: InAppWebView(
+        keepAlive: _keepAlive,
+        initialUrlRequest: URLRequest(url: WebUri(url)),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          // 原生 WebView 从创建到 HTML 首帧 paint 之间默认刷系统白底，暗色/
+          // 纸色主题下表现为进入时闪白。透明后这段空窗透出底层纸色背景
+          // （view 层 contentBg），配合上方的揭幕幕布彻底消除闪白。
+          transparentBackground: true,
+          // 必须开 hybrid composition：VD 模式（false）下 WebView 的原生文本选择
+          // 手柄与放大镜（PopupWindow）无法叠加到 Flutter 纹理上——表现为手柄消失、
+          // 放大镜渲染成黑色圆角矩形。代价是键盘/对话框动画期间 WebView 会逐帧
+          // 重合成（ART GC 抖动/掉帧），但阅读器的文本选择是核心交互，优先保证。
+          useHybridComposition: true,
+          disableContextMenu: true,
+          supportZoom: false,
+          // 必须允许 WebView 横向滚动：horizontal 模式下 #content 通过
+          // scrollLeft 翻页；同时 vertical 模式下也让代码块/表格的
+          // overflow-x: auto 能正常工作。
+          disableHorizontalScroll: false,
+          // 关掉原生滚动条——本组件用 Flutter 覆盖层 [_OverlayScrollbar]
+          // 接管视觉 + 拖动交互。Android 原生条 OS 层绘制，CSS 无法接管，
+          // 且不可触摸拖动（仅指示器）。
+          verticalScrollBarEnabled: false,
+          horizontalScrollBarEnabled: false,
+        ),
+        onWebViewCreated: (controller) {
+          _bridge = ReaderJsBridge(controller, this)..attachHandlers();
+        },
+        onRenderProcessGone: (controller, detail) async {
+          await controller.reload();
+        },
       ),
-      onWebViewCreated: (controller) {
-        _bridge = ReaderJsBridge(controller, this)..attachHandlers();
-      },
-      onRenderProcessGone: (controller, detail) async {
-        await controller.reload();
-      },
     );
 
     // 冻结态：InAppWebView 不挂载（原生 View detach 出 ViewRoot），改用截图占位。
