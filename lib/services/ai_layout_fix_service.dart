@@ -226,7 +226,10 @@ class AiLayoutFixService {
   }) async {
     final modelId = agentState.defaultModelId;
     if (modelId == null) throw Exception('未设置专家模型');
-    final modelParams = agentState.paramsFor(modelId);
+    // 排版修复是结构化 JSON 输出，不需要深度推理——强制关闭思考以节省 token
+    final modelParams = agentState.paramsFor(modelId).copyWith(
+          thinkingLevel: ThinkingLevel.off,
+        );
 
     // Gemini 原生 bbox 训练约定是 [ymin,xmin,ymax,xmax]，沿用可提高定位精度
     final yFirst = agentState.provider == AgentApiProvider.gemini;
@@ -357,8 +360,15 @@ class AiLayoutFixService {
     }
 
     // 3. 新增漏检图：文件名由客户端生成，避开 manifest 与磁盘已有名字
+    //    防御性去重：同页同 figure_title 的 addition 转为对现有条目的 bbox 更新
     final outputDir = DocPaths.figuresDir(analysis.documentId);
     final usedImgs = kept.map((f) => f['img'] as String).toSet();
+    final titleByPage = <(int, String), Map<String, dynamic>>{
+      for (final f in kept)
+        if (f['figure_title'] is String &&
+            (f['figure_title'] as String).isNotEmpty)
+          (f['page_idx'] as int, f['figure_title'] as String): f,
+    };
     for (final add in result.additions) {
       final pageIdx = add['page_idx'] as int;
       final trimmed = _trimCaptionOverlap(
@@ -367,6 +377,21 @@ class AiLayoutFixService {
             .toList(),
         analysis.captionBlocksByPage[pageIdx] ?? const [],
       );
+      final title = add['figure_title'];
+      final existingKey = title is String && title.isNotEmpty
+          ? titleByPage[(pageIdx, title)]
+          : null;
+      if (existingKey != null) {
+        if (_bboxChanged(
+            existingKey['crop_bbox'] as List<dynamic>?, trimmed)) {
+          existingKey['crop_bbox'] = trimmed;
+          existingKey['region_method'] = 'ai_layout_fix';
+          figuresToRecrop.add(existingKey);
+          adjusted++;
+        }
+        subfigureDiag[existingKey['img'] as String] = add['subfigures'];
+        continue;
+      }
       final img = _nextAiFixName(outputDir, usedImgs, pageIdx);
       usedImgs.add(img);
       final entry = <String, dynamic>{
@@ -378,6 +403,9 @@ class AiLayoutFixService {
         'region_method': 'ai_layout_fix',
       };
       kept.add(entry);
+      if (title is String && title.isNotEmpty) {
+        titleByPage[(pageIdx, title)] = entry;
+      }
       figuresToRecrop.add(entry);
       subfigureDiag[img] = add['subfigures'];
     }
