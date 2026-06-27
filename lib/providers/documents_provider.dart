@@ -15,7 +15,9 @@ import '../services/chinese_metadata_extractor.dart';
 import '../services/chinese_text_detector.dart';
 import '../services/document_metadata_checks.dart';
 import '../services/document_metadata_parser.dart';
+import '../services/document_structure.dart';
 import '../services/identifier_resolver.dart';
+import '../services/layout_metadata_extractor.dart';
 import '../services/metadata_search_service.dart';
 import '../services/pdf_identifier_extractor.dart';
 import '../services/pdf_metadata_extractor.dart';
@@ -606,6 +608,19 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         doc = doc.copyWith(title: titleSplit.title);
         if (doc.authors.isEmpty) {
           doc = doc.copyWith(authors: titleSplit.authors);
+        }
+      }
+
+      // OCR 版面结构中的 doc_title / 作者行补全（教材等非期刊文献）
+      final extractJsonPath = DocPaths.json(doc.id);
+      if (File(extractJsonPath).existsSync()) {
+        final structure = await DocumentStructure.load(extractJsonPath);
+        if (structure.pages.isNotEmpty) {
+          final layoutMeta = LayoutMetadataExtractor.extractFromFirstPage(
+            structure.pages.first.blocks,
+          );
+          combinedMetadata = combinedMetadata.merge(layoutMeta);
+          doc = _applyMetadata(doc, combinedMetadata);
         }
       }
 
