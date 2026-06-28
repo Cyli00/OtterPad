@@ -430,18 +430,20 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   // ─── 坐标转换 ───
 
-  Rect? _normalizedToScreen(Map<String, dynamic> data) {
+  /// JS 端传来的是 getBoundingClientRect() 的绝对 CSS 像素值（viewport 坐标），
+  /// viewport meta = device-width,initial-scale=1 → 1 CSS px = 1 Flutter 逻辑 px。
+  /// 只需加上 Widget 在屏幕中的偏移即可转为全局坐标。
+  Rect? _viewportToScreen(Map<String, dynamic> data) {
     final box = _webViewKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return null;
 
-    final size = box.size;
     final offset = box.localToGlobal(Offset.zero);
 
     return Rect.fromLTRB(
-      (data['left'] as num).toDouble() * size.width + offset.dx,
-      (data['top'] as num).toDouble() * size.height + offset.dy,
-      (data['right'] as num).toDouble() * size.width + offset.dx,
-      (data['bottom'] as num).toDouble() * size.height + offset.dy,
+      (data['left'] as num).toDouble() + offset.dx,
+      (data['top'] as num).toDouble() + offset.dy,
+      (data['right'] as num).toDouble() + offset.dx,
+      (data['bottom'] as num).toDouble() + offset.dy,
     );
   }
 
@@ -624,7 +626,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   @override
   void onSelectionEnd(String text, Map<String, dynamic> rawRect) {
-    final rect = _normalizedToScreen(rawRect);
+    final rect = _viewportToScreen(rawRect);
     if (rect == null) return;
     widget.onSelectionEnd?.call(text, rect);
   }
@@ -636,7 +638,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   void onHighlightClick(String highlightId, Map<String, dynamic> rawPos) {
     final hl = widget.highlights.where((h) => h.id == highlightId).firstOrNull;
     if (hl == null) return;
-    final rect = _normalizedToScreen(rawPos);
+    final rect = _viewportToScreen(rawPos);
     if (rect == null) return;
     widget.onHighlightClick?.call(hl, rect);
   }

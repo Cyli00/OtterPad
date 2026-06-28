@@ -195,13 +195,12 @@ class Overlayer {
       window.getSelection()?.removeAllRanges();
       if (!window.flutter_inappwebview) return;
       const rect = g.getBoundingClientRect();
-      const vw = window.innerWidth, vh = window.innerHeight;
       window.flutter_inappwebview.callHandler('onHighlightClick', {
         id: id,
-        left: rect.left / vw,
-        top: rect.top / vh,
-        right: rect.right / vw,
-        bottom: rect.bottom / vh,
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
       });
     });
     return g;
@@ -421,7 +420,6 @@ function _handleSelection() {
     }
     const text = sel.toString();
     const rect = sel.getRangeAt(0).getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
 
     // 签名相同 → 同一选区被多次终止信号触发，已经显示过工具栏，跳过 IPC
     // 节省 Flutter 端 OverlayEntry remove/insert 的开销与视觉闪烁。
@@ -435,10 +433,10 @@ function _handleSelection() {
     if (window.flutter_inappwebview) {
       window.flutter_inappwebview.callHandler('onSelectionEnd', {
         text: text,
-        left: rect.left / vw,
-        top: rect.top / vh,
-        right: rect.right / vw,
-        bottom: rect.bottom / vh,
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
       });
     }
   }, 200);
