@@ -36,6 +36,12 @@
 
 组件视觉参数定义在 [flutter-design](.claude/skills/flutter-design/SKILL.md) skill 中，编码前必须查阅。
 
+## 布局边界与窄屏适配
+
+- `x.clamp(lo, hi)` 中 `hi` 由「尺寸 − 内容」算出时，必须 `hi = math.max(lo, …)` 兜底。否则窄屏上 `hi < lo` 抛 `ArgumentError`，release 下被静默吞成灰框——表现为整个 overlay/widget 不可见、只在窄机型复现，极难定位。
+- 工具栏/浮层等按内容自适应宽度的组件，必须约束 `maxWidth ≤ 屏宽 − 边距`，超出时横向滚动。最窄主流机型逻辑宽度按 **360dp** 计，不要假设内容一定放得下。
+- 禁止硬编码可能超出窄屏的固定宽度，或假设逻辑宽度/高度 ≥ 某常量。机型不兼容多源于此，本地 debug 屏宽够大测不出，必须按最窄机型推演。
+
 ## 多语言 (i18n)
 
 - 用户可见字符串必须 ARB 国际化。模板 `lib/l10n/app_en.arb`，中文 `app_zh.arb`。改后 `flutter gen-l10n`。
@@ -56,6 +62,7 @@
 
 - **main** (`lib/main.dart`) — 新增启动态服务挂在这里。禁止绕过 `GStorage` 自行推断根目录。
 - **ReaderLocalhostServer** (`lib/services/reader_localhost_server.dart`) — 禁止 WebView 直接加载 `file://`。
+- **ShareReceiverService** (`lib/services/share_receiver_service.dart`) — 移动端分享/打开文件唯一入口（MethodChannel）。禁止 UI 自己监听 share intent 或绕过它导入。
 
 ### 通知与任务
 
@@ -73,6 +80,7 @@
 - **SecureCredentialVault** (`lib/core/storage/secure_credential_vault.dart`) — API key / secret 唯一存取。禁止写进 `GStorage`。
 - **DocPaths** (`lib/utils/doc_paths.dart`) — 禁止 `p.basenameWithoutExtension` 或持久化绝对路径拼接。
 - **StorageCleanupService** (`lib/services/storage_cleanup_service.dart`) — 禁止 UI 层直接删缓存目录。
+- **StorageUsageService** (`lib/services/storage_usage_service.dart`) — 存储用量统计唯一来源。禁止 UI 自行遍历目录算大小。
 - **BackupProvider** (`lib/providers/backup_provider.dart`) — 禁止散落保存备份凭据。
 - **BackupRestoreService** (`lib/services/backup_restore_service.dart`) — 禁止手写 ZIP 或直接覆盖 Hive 不经 `GStorage.close()`/`reopen()`。
 - **BackupMergeService** (`lib/services/backup_merge_service.dart`) — 禁止在 restore/merge 流程外拼装 Hive box 合并。
@@ -102,6 +110,7 @@
 - **DocumentTranslationService** (`lib/services/document_translation_service.dart`) — 文档级翻译（段落粒度，8 worker）。
 - **BackMatterDetector** (`lib/services/back_matter_detector.dart`) — 禁止新增硬编码 References 正则。
 - **ProtectedSpans** (`lib/services/translation_protected_spans.dart`) — 禁止在译路自写公式/代码保护正则。
+- **TranslationHighlightParser** (`lib/services/translation_highlight_parser.dart`) — 翻译弹窗 `%%%%` 分隔符高亮解析。禁止在 UI 层自写分隔/定位逻辑。
 
 ### 图像生成
 
@@ -124,12 +133,14 @@
 - **ZoteroItemMapper** (`lib/services/zotero_item_mapper.dart`) — 禁止让 Zotero 字段渗入 `Document`。
 - **ZoteroSyncProvider** (`lib/providers/zotero_sync_provider.dart`) — 禁止散落保存 Zotero 凭据。
 - **DocumentStructure** (`lib/services/document_structure.dart`) — `extract.json` 唯一防腐层。禁止 `jsonDecode` 后直挖 `parsing_res_list`。
+- **LayoutMetadataExtractor** (`lib/services/layout_metadata_extractor.dart`) — 从 `extract.json` 首页提取中文书籍题录，是否中文走 `ChineseTextDetector`。禁止自写 CJK 题录正则。
 
 ### 阅读器
 
 - **ReaderSettingsProvider** (`lib/providers/reader_settings_provider.dart`) — 主题色走 `resolveReaderPalette()`。枚举只能尾追。
 - **ReaderSessionProvider** (`lib/providers/reader_session_provider.dart`) — 禁止在 `ReaderPage` 散落维护缓存/搜索状态。
 - **webview_reader_html** (`lib/pages/reader/widgets/webview_reader_html.dart`) — 静态样式/脚本在 `assets/reader/`。禁止内联回 Dart、禁止依赖 CDN。
+- **escapeJsLiteral** (`lib/utils/js_string_escape.dart`) — 向 WebView 注入 JS 时字符串转义唯一函数。禁止手拼 JS 字符串字面量。
 - **ReaderSheetHost** (`lib/pages/reader/widgets/reader_sheet_host.dart`) — 禁止在阅读器内用 `showModalBottomSheet`。
 - **MajorSectionMatcher** (`lib/services/major_section_matcher.dart`) — 主章节判定（配置 `assets/config/major_sections.json`）。禁止自写章节标题正则。
 - **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — 复制图片用 `Pasteboard.writeImage()`，禁止 `Clipboard.setData`。
@@ -146,5 +157,6 @@
 - **TactilePress** (`lib/widgets/tactile_press.dart`) — 新增可点击卡片/列表项优先使用。
 - **showAppDialog** (`lib/widgets/app_dialog.dart`) — 禁止自行编写 `showGeneralDialog` 转场。
 - **WindowChrome** (`lib/widgets/window_chrome.dart`) — 禁止在页面级 Scaffold 挂 chrome。
+- **OnboardingNotifier** (`lib/providers/onboarding_provider.dart`) — 首启引导状态机，`hasSeenOnboarding` 存 `GStorage.setting`。禁止自行判断/持久化首启标志。
 
 @TODO.md

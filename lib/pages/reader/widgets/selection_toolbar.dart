@@ -177,7 +177,8 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = _activeHighlight?.color ?? widget.existingHighlight?.color;
+    final activeColor =
+        _activeHighlight?.color ?? widget.existingHighlight?.color;
     // 键盘 inset 让 delegate 把"可用高度"压缩，否则展开笔记面板 TextField
     // autofocus 触发输入法弹出时，工具栏定位仍按全屏高度算，会被键盘遮挡。
     // AndroidManifest 已设 windowSoftInputMode="adjustResize"，viewInsets 会
@@ -186,6 +187,9 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
     final mq = MediaQuery.of(context);
     final keyboardInset = mq.viewInsets.bottom;
     final topPadding = mq.padding.top;
+    // 工具栏最大宽度 = 屏宽 - 两侧各 8px 边距。窄屏（如 360dp 机型）上操作栏
+    // 内容可能超出此宽度，由 _buildActionBar 横向滚动兜底，保证所有按钮可触达。
+    final maxToolbarWidth = mq.size.width - 16;
 
     return Stack(
       children: [
@@ -218,11 +222,11 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // 操作栏
-                _buildActionBar(activeColor),
+                _buildActionBar(activeColor, maxToolbarWidth),
                 // 笔记面板（展开时显示）
                 if (_showNotePanel) ...[
                   const SizedBox(height: 6),
-                  _buildNotePanel(),
+                  _buildNotePanel(maxToolbarWidth),
                 ],
               ],
             ),
@@ -232,73 +236,85 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
     );
   }
 
-  Widget _buildActionBar(String? activeColor) {
+  Widget _buildActionBar(String? activeColor, double maxWidth) {
     return Material(
       elevation: 6,
       color: const Color(0xF0282828),
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _ActionIcon(
-              icon: Symbols.content_copy_rounded,
-              tooltip: context.l10n.copy,
-              onTap: widget.onCopy,
+      // 约束到屏宽内：内容放得下时按内容自适应（窄于 maxWidth），放不下时
+      // SingleChildScrollView 横向滚动，绝不溢出屏幕被裁。
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ActionIcon(
+                  icon: Symbols.content_copy_rounded,
+                  tooltip: context.l10n.copy,
+                  onTap: widget.onCopy,
+                ),
+                const _Divider(),
+                for (final color in kHighlightColors)
+                  _ColorDot(
+                    hexColor: color,
+                    isActive: activeColor == color,
+                    onTap: () => widget.onHighlight(color),
+                  ),
+                const _Divider(),
+                _ActionIcon(
+                  icon: _showNotePanel
+                      ? Symbols.edit_note_rounded
+                      : Symbols.edit_note_rounded,
+                  tooltip: context.l10n.notes,
+                  onTap: _handleNoteTap,
+                  color: _showNotePanel
+                      ? const Color(0xFF4FC3F7)
+                      : Colors.white,
+                ),
+                _ActionIcon(
+                  icon: Symbols.auto_awesome_rounded,
+                  tooltip: context.l10n.askAi,
+                  onTap: widget.onAskAi,
+                ),
+                _ActionIcon(
+                  icon: Symbols.translate_rounded,
+                  tooltip: context.l10n.translateText,
+                  onTap: widget.onTranslate,
+                ),
+                if (widget.onDelete != null) ...[
+                  const _Divider(),
+                  _ActionIcon(
+                    icon: Symbols.delete_rounded,
+                    tooltip: context.l10n.deleteHighlight,
+                    onTap: widget.onDelete!,
+                    color: const Color(0xFFEF5350),
+                  ),
+                ],
+              ],
             ),
-            const _Divider(),
-            for (final color in kHighlightColors)
-              _ColorDot(
-                hexColor: color,
-                isActive: activeColor == color,
-                onTap: () => widget.onHighlight(color),
-              ),
-            const _Divider(),
-            _ActionIcon(
-              icon: _showNotePanel
-                  ? Symbols.edit_note_rounded
-                  : Symbols.edit_note_rounded,
-              tooltip: context.l10n.notes,
-              onTap: _handleNoteTap,
-              color: _showNotePanel
-                  ? const Color(0xFF4FC3F7)
-                  : Colors.white,
-            ),
-            _ActionIcon(
-              icon: Symbols.auto_awesome_rounded,
-              tooltip: context.l10n.askAi,
-              onTap: widget.onAskAi,
-            ),
-            _ActionIcon(
-              icon: Symbols.translate_rounded,
-              tooltip: context.l10n.translateText,
-              onTap: widget.onTranslate,
-            ),
-            if (widget.onDelete != null) ...[
-              const _Divider(),
-              _ActionIcon(
-                icon: Symbols.delete_rounded,
-                tooltip: context.l10n.deleteHighlight,
-                onTap: widget.onDelete!,
-                color: const Color(0xFFEF5350),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildNotePanel() {
+  Widget _buildNotePanel(double maxWidth) {
     return Material(
       elevation: 6,
       color: const Color(0xF0282828),
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320, maxHeight: 160),
+        // 默认 320，窄屏收窄到屏宽内，避免笔记面板溢出被裁。
+        constraints: BoxConstraints(
+          maxWidth: math.min(320, maxWidth),
+          maxHeight: 160,
+        ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
           child: Row(
@@ -309,14 +325,14 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
                   autofocus: true,
                   maxLines: 4,
                   minLines: 1,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
                     border: InputBorder.none,
                     hintText: context.l10n.writeYourThoughts,
-                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                    hintStyle: const TextStyle(
+                      color: Colors.white38,
+                      fontSize: 13,
+                    ),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
                   ),
@@ -380,12 +396,10 @@ class _ColorDot extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: color.withAlpha(200),
-            border:
-                isActive ? Border.all(color: Colors.white, width: 2) : null,
+            border: isActive ? Border.all(color: Colors.white, width: 2) : null,
           ),
           child: isActive
-              ? const Icon(Symbols.check_rounded,
-                  size: 13, color: Colors.white)
+              ? const Icon(Symbols.check_rounded, size: 13, color: Colors.white)
               : null,
         ),
       ),
@@ -462,8 +476,11 @@ class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
     // 切换到"选区上方"或贴到键盘上沿。
     final availableHeight = size.height - keyboardInset;
     final cx = selectionRect.center.dx;
-    final clampedX =
-        (cx - childSize.width / 2).clamp(8.0, size.width - childSize.width - 8);
+    // 窄屏上工具栏可能比 (屏宽 - 16) 还宽，此时 size.width - childSize.width - 8
+    // 会小于 8，直接 clamp(8.0, <8) 会抛 ArgumentError 导致整个 overlay 布局
+    // 失败、工具栏不可见。用 math.max 兜底：放不下时左对齐到 8。
+    final maxX = math.max(8.0, size.width - childSize.width - 8);
+    final clampedX = (cx - childSize.width / 2).clamp(8.0, maxX);
 
     if (selectionRect.bottom + _gap + childSize.height <= availableHeight) {
       return Offset(
@@ -474,7 +491,10 @@ class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
     final upperBound = math.max(topPadding, availableHeight - childSize.height);
     return Offset(
       clampedX,
-      (selectionRect.top - _gap - childSize.height).clamp(topPadding, upperBound),
+      (selectionRect.top - _gap - childSize.height).clamp(
+        topPadding,
+        upperBound,
+      ),
     );
   }
 

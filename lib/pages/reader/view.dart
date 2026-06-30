@@ -357,8 +357,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _onSearchResultTap(int hitIndex, String query) {
-    final count =
-        _session.searchResultCount > 0 ? _session.searchResultCount : hitIndex + 1;
+    final count = _session.searchResultCount > 0
+        ? _session.searchResultCount
+        : hitIndex + 1;
     _sessionNotifier.selectSearchResult(hitIndex, query, count);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -1027,8 +1028,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       ),
                     ),
                   // ── 浮动搜索结果导航器 ──
-                  if (isMarkdownHighlightMode &&
-                      session.searchResultCount > 0)
+                  if (isMarkdownHighlightMode && session.searchResultCount > 0)
                     Positioned(
                       right: 16,
                       bottom: 32,
@@ -1049,25 +1049,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     Positioned.fill(
                       child: SearchOverlay(
                         readerSettings: readerSettings,
-                        onSearch: (
-                          String query, {
-                          bool caseSensitive = false,
-                          bool wholeWord = false,
-                        }) async {
-                          final results = await _webViewReaderKey.currentState
-                                  ?.searchContent(
-                                query,
-                                caseSensitive: caseSensitive,
-                                wholeWord: wholeWord,
-                              ) ??
-                              const [];
-                          if (mounted) {
-                            _sessionNotifier.updateSearchResults(
-                              results.length,
-                            );
-                          }
-                          return results;
-                        },
+                        onSearch:
+                            (
+                              String query, {
+                              bool caseSensitive = false,
+                              bool wholeWord = false,
+                            }) async {
+                              final results =
+                                  await _webViewReaderKey.currentState
+                                      ?.searchContent(
+                                        query,
+                                        caseSensitive: caseSensitive,
+                                        wholeWord: wholeWord,
+                                      ) ??
+                                  const [];
+                              if (mounted) {
+                                _sessionNotifier.updateSearchResults(
+                                  results.length,
+                                );
+                              }
+                              return results;
+                            },
                         onResultTap: _onSearchResultTap,
                         onDismiss: _closeSearch,
                         initialQuery: session.highlightQuery,
@@ -1388,16 +1390,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                         pagePaintCallbacks: _pdfSearch.searcher == null
                             ? null
                             : [_pdfSearch.searcher!.pageTextMatchPaintCallback],
-                        viewerOverlayBuilder:
-                            (context, size, handleLinkTap) => [
+                        viewerOverlayBuilder: (context, size, handleLinkTap) =>
+                            [
                               PdfViewerScrollThumb(
                                 controller: _pdfController,
                                 orientation: ScrollbarOrientation.right,
                                 thumbSize: const Size(8, 48),
                                 margin: 2,
                                 thumbBuilder:
-                                    (context, thumbSize, pageNumber,
-                                        controller) {
+                                    (
+                                      context,
+                                      thumbSize,
+                                      pageNumber,
+                                      controller,
+                                    ) {
                                       return _PdfScrollThumb(size: thumbSize);
                                     },
                               ),
