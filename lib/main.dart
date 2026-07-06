@@ -12,6 +12,7 @@ import 'core/storage/secure_credential_vault.dart';
 import 'core/storage/storage.dart';
 import 'providers/auto_backup_provider.dart';
 import 'providers/proxy_provider.dart';
+import 'providers/update_check_scheduler.dart';
 import 'services/agent_model_capability.dart';
 import 'services/back_matter_detector.dart';
 import 'services/figure_extract_service.dart';
@@ -93,6 +94,9 @@ Future<void> main() async {
 
   // 自动备份调度：启动 2 分钟后首查，之后每小时检查一次到期与变更
   container.read(autoBackupSchedulerProvider).start();
+
+  // 检查更新：启动 3 秒后自动检查一次（受"启动时检查更新"设置开关控制）
+  container.read(updateCheckSchedulerProvider).start();
 
   // 移动端：接收分享/打开 PDF 文件的 intent
   ShareReceiverService? shareReceiver;

@@ -2427,6 +2427,36 @@ class AppLocalizationsZh extends AppLocalizations {
   String get generalAutoCheckUpdateDesc => '应用启动时自动检查新版本';
 
   @override
+  String get updateNewVersionFound => '发现新版本';
+
+  @override
+  String get updateViewFullChangelog => '查看完整更新日志';
+
+  @override
+  String get updateNow => '立即更新';
+
+  @override
+  String get updateIgnoreVersion => '忽略此版本';
+
+  @override
+  String get updateLater => '稍后';
+
+  @override
+  String get updateOpenReleasePage => '打开发布页';
+
+  @override
+  String get updateUpToDate => '已是最新版本';
+
+  @override
+  String get updateCheckFailed => '检查更新失败';
+
+  @override
+  String get updateDownloading => '下载更新中';
+
+  @override
+  String get updateDownloadFailed => '下载更新失败';
+
+  @override
   String get generalEnableHttp2 => 'HTTP/2';
 
   @override
@@ -4915,6 +4945,36 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get generalAutoCheckUpdateDesc => '應用程式啟動時自動檢查新版本';
+
+  @override
+  String get updateNewVersionFound => '發現新版本';
+
+  @override
+  String get updateViewFullChangelog => '查看完整更新日誌';
+
+  @override
+  String get updateNow => '立即更新';
+
+  @override
+  String get updateIgnoreVersion => '忽略此版本';
+
+  @override
+  String get updateLater => '稍後';
+
+  @override
+  String get updateOpenReleasePage => '開啟發布頁';
+
+  @override
+  String get updateUpToDate => '已是最新版本';
+
+  @override
+  String get updateCheckFailed => '檢查更新失敗';
+
+  @override
+  String get updateDownloading => '下載更新中';
+
+  @override
+  String get updateDownloadFailed => '下載更新失敗';
 
   @override
   String get generalEnableHttp2 => 'HTTP/2';

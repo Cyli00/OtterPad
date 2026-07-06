@@ -4413,6 +4413,66 @@ abstract class AppLocalizations {
   /// **'Automatically check for new versions when the app launches'**
   String get generalAutoCheckUpdateDesc;
 
+  /// No description provided for @updateNewVersionFound.
+  ///
+  /// In en, this message translates to:
+  /// **'New Version Available'**
+  String get updateNewVersionFound;
+
+  /// No description provided for @updateViewFullChangelog.
+  ///
+  /// In en, this message translates to:
+  /// **'View Full Changelog'**
+  String get updateViewFullChangelog;
+
+  /// No description provided for @updateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Now'**
+  String get updateNow;
+
+  /// No description provided for @updateIgnoreVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Ignore This Version'**
+  String get updateIgnoreVersion;
+
+  /// No description provided for @updateLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get updateLater;
+
+  /// No description provided for @updateOpenReleasePage.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Release Page'**
+  String get updateOpenReleasePage;
+
+  /// No description provided for @updateUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re up to date'**
+  String get updateUpToDate;
+
+  /// No description provided for @updateCheckFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to check for updates'**
+  String get updateCheckFailed;
+
+  /// No description provided for @updateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading update'**
+  String get updateDownloading;
+
+  /// No description provided for @updateDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to download update'**
+  String get updateDownloadFailed;
+
   /// No description provided for @generalEnableHttp2.
   ///
   /// In en, this message translates to:

@@ -7,10 +7,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/l10n.dart';
+import '../../services/snackbar_service.dart';
+import '../../services/update_flow.dart';
+import '../../services/update_service.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/tactile_press.dart';
 
-const _kGitHubRepo = 'Cyli00/NightReader';
+const _kGitHubRepo = 'Cyli00/OtterPad';
 const _kGitHubUrl = 'https://github.com/$_kGitHubRepo';
 
 class AboutPage extends ConsumerStatefulWidget {
@@ -22,6 +25,7 @@ class AboutPage extends ConsumerStatefulWidget {
 
 class _AboutPageState extends ConsumerState<AboutPage> {
   PackageInfo? _packageInfo;
+  bool _checkingUpdate = false;
 
   @override
   void initState() {
@@ -137,7 +141,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                 _AboutTile(
                   icon: Symbols.update_rounded,
                   title: l10n.aboutCheckUpdate,
-                  onTap: () => _openUrl('$_kGitHubUrl/releases'),
+                  onTap: _checkForUpdate,
                 ),
                 _divider(cs),
                 _AboutTile(
@@ -174,6 +178,30 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    if (_checkingUpdate) return;
+    setState(() => _checkingUpdate = true);
+    try {
+      final info = await UpdateService.instance.checkForUpdate();
+      if (!mounted) return;
+      if (info.hasUpdate) {
+        await presentUpdateDialog(context: context, info: info);
+      } else {
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(message: context.l10n.updateUpToDate);
+      }
+    } catch (_) {
+      if (mounted) {
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(message: context.l10n.updateCheckFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
     }
   }
 

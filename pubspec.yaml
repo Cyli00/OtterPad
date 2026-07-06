@@ -1,7 +1,7 @@
 name: otter_pad
 description: "A cross-platform reading app inspired by Zotero, built with Flutter and Material Design 3."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ^3.11.0
@@ -78,6 +78,9 @@ dependencies:
 
   # 文件选择
   file_picker: ^8.1.7
+
+  # 应用内触发 APK 安装（自更新）
+  open_filex: ^4.7.0
 
   # XML 解析（arXiv API 响应）
   xml: ^6.6.0

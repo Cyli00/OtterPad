@@ -2489,6 +2489,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatically check for new versions when the app launches';
 
   @override
+  String get updateNewVersionFound => 'New Version Available';
+
+  @override
+  String get updateViewFullChangelog => 'View Full Changelog';
+
+  @override
+  String get updateNow => 'Update Now';
+
+  @override
+  String get updateIgnoreVersion => 'Ignore This Version';
+
+  @override
+  String get updateLater => 'Later';
+
+  @override
+  String get updateOpenReleasePage => 'Open Release Page';
+
+  @override
+  String get updateUpToDate => 'You\'re up to date';
+
+  @override
+  String get updateCheckFailed => 'Failed to check for updates';
+
+  @override
+  String get updateDownloading => 'Downloading update';
+
+  @override
+  String get updateDownloadFailed => 'Failed to download update';
+
+  @override
   String get generalEnableHttp2 => 'HTTP/2';
 
   @override

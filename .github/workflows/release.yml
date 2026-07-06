@@ -26,6 +26,18 @@ jobs:
           channel: stable
           cache: true
 
+      # 恢复签名密钥（仓库 Settings → Secrets → Actions 需配置）：
+      #   ANDROID_KEYSTORE_BASE64   release.jks 的 base64
+      #   ANDROID_KEY_PROPERTIES    key.properties 内容（keyAlias/keyPassword/storePassword）
+      - name: Restore Android signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+        shell: bash
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.jks
+          echo "$ANDROID_KEY_PROPERTIES" > android/key.properties
+
       - run: flutter pub get
 
       # 从 tag 取版本号 (去掉前导 v)；手动触发时回退为 0.0.0-dev
@@ -84,6 +96,7 @@ jobs:
           prev=$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)
           range="${prev:+$prev..}$tag"
           {
+            echo
             git log --no-merges --pretty=format:'- %s' "$range" | grep -v 'Update changelog' || true
             echo
           } >> notes.md

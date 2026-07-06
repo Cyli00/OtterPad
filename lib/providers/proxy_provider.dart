@@ -8,6 +8,8 @@ import '../services/doc_extract_service.dart';
 import '../services/identifier_resolver.dart';
 import '../services/metadata_search_service.dart';
 import '../services/tavily_search_service.dart';
+import '../services/update_download_service.dart';
+import '../services/update_service.dart';
 import '../services/url_context_service.dart';
 import '../services/zotero_sync_service.dart';
 
@@ -84,6 +86,12 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
     );
     UrlContextService.instance.applyProxy(state.mode, state.host, state.port);
     TavilySearchService.instance.applyProxy(state.mode, state.host, state.port);
+    UpdateService.instance.applyProxy(state.mode, state.host, state.port);
+    UpdateDownloadService.instance.applyProxy(
+      state.mode,
+      state.host,
+      state.port,
+    );
   }
 
   /// 启动时调用，将已保存的配置应用到 Dio
