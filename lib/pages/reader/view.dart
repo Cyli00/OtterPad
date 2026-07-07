@@ -453,8 +453,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _scrollToCharOffset(offset);
           _tryFlashImageAtOffset(offset);
         },
-        onRegenerateSummary: () {
-          _handleGenerateSummaryImage(openOutline: false);
+        onUploadSummaryImage: () {
+          _summaryCoordinator.uploadFromGallery();
         },
       ),
     );
@@ -939,8 +939,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       _scrollToCharOffset(offset);
                       _tryFlashImageAtOffset(offset);
                     },
-                    onRegenerateSummary: () {
-                      _handleGenerateSummaryImage(openOutline: false);
+                    onUploadSummaryImage: () {
+                      _summaryCoordinator.uploadFromGallery();
                     },
                   ),
                 )

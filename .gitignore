@@ -6,6 +6,9 @@ patch.txt
 .codex_tmp*
 /.agents/
 
+# mcp
+/mcps/
+
 # Miscellaneous
 *.class
 *.log

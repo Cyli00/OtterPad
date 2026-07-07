@@ -221,9 +221,12 @@
 
   "closeImage": "關閉",
   "copyImage": "複製圖片",
+  "shareImage": "分享圖片",
   "saveImage": "儲存圖片",
   "imageNotFound": "圖片檔案不存在",
   "saveImageTitle": "儲存圖片",
+  "savedToGallery": "已儲存到相簿",
+  "galleryAccessDenied": "未取得相簿存取權限",
   "showOriginal": "顯示原文",
   "showTranslation": "顯示翻譯",
 
@@ -552,7 +555,7 @@
   "s3PathStyleHint": "MinIO / R2 等 S3 相容服務通常建議開啟",
 
   "selectImageModelFirst": "請先在「AI 設定」中選擇生圖模型",
-  "summaryApiCostHint": "摘要圖由第三方生圖模型產生，可能產生 API 呼叫費用",
+  "summaryUploadFailed": "上傳摘要圖失敗",
   "estimatedCost": "目前設定預估費用約 {dollar}{cost} / 張",
   "@estimatedCost": { "placeholders": { "dollar": { "type": "String" }, "cost": { "type": "String" } } },
   "useAppImageGen": "若希望使用 App 生圖，請點擊 App 生圖，手動上傳素材",
@@ -589,7 +592,7 @@
   "aspectWide": "橫屏影片 · 桌面桌布",
   "aspectUltraWide": "超寬螢幕 · 電影",
   "aspectTall": "直屏 · 手機桌布",
-  "imageRefCountHint": "從文獻擷取的 figure 中按順序選擇參考圖；不同模型會按自身上限自動裁剪",
+  "imageRefCountHint": "從文獻 figure 按順序選取參考圖，最多 10 張；超出時優先剔除補充圖（Supplementary / Extended Data 等）",
   "aspectRatioHint": "OpenAI 會對應到最接近的輸出尺寸，並在 prompt 中保留比例要求",
   "summaryPromptHint": "用於控制文獻摘要圖的視覺風格和資訊組織方式；執行時會自動追加文獻標題、中繼資料、Markdown 和參考 figure",
   "summaryPromptLabel": "摘要圖 Prompt",
@@ -699,6 +702,8 @@
 
   "copyFailed": "複製失敗：{error}",
   "@copyFailed": { "placeholders": { "error": { "type": "String" } } },
+  "shareFailed": "分享失敗：{error}",
+  "@shareFailed": { "placeholders": { "error": { "type": "String" } } },
   "saveFailed": "儲存失敗：{error}",
   "@saveFailed": { "placeholders": { "error": { "type": "String" } } },
   "savedToPath": "已儲存到 {path}",

@@ -605,6 +605,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get copyImage => '复制图片';
 
   @override
+  String get shareImage => '分享图片';
+
+  @override
   String get saveImage => '保存图片';
 
   @override
@@ -612,6 +615,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get saveImageTitle => '保存图片';
+
+  @override
+  String get savedToGallery => '已保存到相册';
+
+  @override
+  String get galleryAccessDenied => '未获得相册访问权限';
 
   @override
   String get showOriginal => '显示原文';
@@ -627,9 +636,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generatingSummary => '正在生成总结图…';
-
-  @override
-  String get noSummary => '暂无总结图';
 
   @override
   String get referencesNotFound => '未找到参考文献';
@@ -1481,7 +1487,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get selectImageModelFirst => '请先在「AI 设置」中选择生图模型';
 
   @override
-  String get summaryApiCostHint => '总结图由第三方生图模型生成，可能产生 API 调用费用';
+  String get summaryUploadFailed => '上传总结图失败';
 
   @override
   String estimatedCost(String dollar, String cost) {
@@ -1584,7 +1590,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aspectTall => '竖屏 · 手机壁纸';
 
   @override
-  String get imageRefCountHint => '从文献提取的 figure 中按顺序选择参考图；不同模型会按自身上限自动裁剪';
+  String get imageRefCountHint =>
+      '从文献 figure 按顺序选取参考图，最多 10 张；超出时优先剔除补充图（Supplementary / Extended Data 等）';
 
   @override
   String get aspectRatioHint => 'OpenAI 会映射到最接近的输出尺寸，并在 prompt 中保留比例要求';
@@ -1861,6 +1868,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String copyFailed(String error) {
     return '复制失败：$error';
+  }
+
+  @override
+  String shareFailed(String error) {
+    return '分享失败：$error';
   }
 
   @override
@@ -3125,6 +3137,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get copyImage => '複製圖片';
 
   @override
+  String get shareImage => '分享圖片';
+
+  @override
   String get saveImage => '儲存圖片';
 
   @override
@@ -3132,6 +3147,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get saveImageTitle => '儲存圖片';
+
+  @override
+  String get savedToGallery => '已儲存到相簿';
+
+  @override
+  String get galleryAccessDenied => '未取得相簿存取權限';
 
   @override
   String get showOriginal => '顯示原文';
@@ -3147,9 +3168,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get generatingSummary => '正在產生摘要圖…';
-
-  @override
-  String get noSummary => '暫無摘要圖';
 
   @override
   String get referencesNotFound => '未找到參考文獻';
@@ -4001,7 +4019,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get selectImageModelFirst => '請先在「AI 設定」中選擇生圖模型';
 
   @override
-  String get summaryApiCostHint => '摘要圖由第三方生圖模型產生，可能產生 API 呼叫費用';
+  String get summaryUploadFailed => '上傳摘要圖失敗';
 
   @override
   String estimatedCost(String dollar, String cost) {
@@ -4104,7 +4122,8 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get aspectTall => '直屏 · 手機桌布';
 
   @override
-  String get imageRefCountHint => '從文獻擷取的 figure 中按順序選擇參考圖；不同模型會按自身上限自動裁剪';
+  String get imageRefCountHint =>
+      '從文獻 figure 按順序選取參考圖，最多 10 張；超出時優先剔除補充圖（Supplementary / Extended Data 等）';
 
   @override
   String get aspectRatioHint => 'OpenAI 會對應到最接近的輸出尺寸，並在 prompt 中保留比例要求';
@@ -4381,6 +4400,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String copyFailed(String error) {
     return '複製失敗：$error';
+  }
+
+  @override
+  String shareFailed(String error) {
+    return '分享失敗：$error';
   }
 
   @override

@@ -1148,6 +1148,110 @@ void main() {
       expect(tblSeg.blocks.any((b) => b.blockId == 'vf'), isTrue);
     });
   });
+
+  group('caption_patterns 等价性', () {
+    final service = FigureExtractService.instance;
+
+    test('isMainCaption 覆盖各语言正文前缀', () {
+      const cases = [
+        'Figure 1.',
+        'Fig. 2',
+        'FIGURE 3:',
+        'Table 1.',
+        'TABLE 2',
+        'Scheme 1.',
+        'Chart 2:',
+        '图1',
+        '表 2',
+        '附图 3',
+        'Abbildung 1',
+        'Abb. 2',
+        'Tabelle 3',
+        'Figura 1',
+        'Tabla 2',
+        'Cuadro 3',
+        '図1',
+        '表 2',
+        'Рис. 1',
+        'Рисунок 2',
+        'Таблица 3',
+        '그림 1',
+        '표 2',
+        'Hình 1',
+        'Bảng 2',
+        'Supplementary Figure S1.',
+      ];
+      for (final caption in cases) {
+        expect(service.isMainCaption(caption), isTrue, reason: caption);
+      }
+    });
+
+    test('无前缀编号的主 caption 应拒绝', () {
+      const rejected = ['Figure', 'Fig', 'Table', '图', '表'];
+      for (final caption in rejected) {
+        expect(service.isMainCaption(caption), isFalse, reason: caption);
+      }
+    });
+
+    test('isSupplementaryCaption 覆盖补充图前缀', () {
+      const cases = [
+        'Supplementary Figure S1.',
+        'Extended Data Fig. 2',
+        'Supporting Information Figure 3',
+        'SI Fig. 4',
+        'Appendix Figure 5',
+        '补充图1',
+        '附录 图 2',
+        '補足図1',
+        'Ergänzende Abbildung 3',
+        'Figura suplementaria 4',
+        'Доп. рис. 5',
+        '보조 그림 6',
+        'Hình bổ sung 7',
+        'Figure supplémentaire 8',
+      ];
+      for (final caption in cases) {
+        expect(service.isSupplementaryCaption(caption), isTrue,
+            reason: caption);
+      }
+    });
+  });
+
+  group('isSupplementaryCaption', () {
+    final service = FigureExtractService.instance;
+
+    test('识别多语言补充图 caption', () {
+      const supplementary = [
+        'Supplementary Figure S1. Extra data.',
+        'Extended Data Fig. 2',
+        '补充图1 实验流程',
+        '補充圖2 實驗流程',
+        '補足図1 実験手順',
+        'Ergänzende Abbildung 3',
+        'Figura suplementaria 4',
+        'Доп. рис. 5',
+        '보조 그림 6',
+        'Hình bổ sung 7',
+      ];
+      for (final caption in supplementary) {
+        expect(service.isSupplementaryCaption(caption), isTrue,
+            reason: caption);
+      }
+    });
+
+    test('正文 figure caption 不算补充图', () {
+      const primary = [
+        'Figure 1. Main result.',
+        '图 2 主要结果',
+        'Abbildung 3',
+        '図 4',
+      ];
+      for (final caption in primary) {
+        expect(service.isSupplementaryCaption(caption), isFalse,
+            reason: caption);
+      }
+    });
+  });
 }
 
 LayoutBlock _block(

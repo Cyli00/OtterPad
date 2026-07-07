@@ -13,7 +13,7 @@ class ReaderOutlineSheetBody extends StatelessWidget {
   final ValueNotifier<SummaryImageState> summaryImageState;
   final ValueListenable<int>? figuresEpoch;
   final ValueChanged<int> onNavigate;
-  final VoidCallback onRegenerateSummary;
+  final VoidCallback onUploadSummaryImage;
 
   const ReaderOutlineSheetBody({
     super.key,
@@ -22,7 +22,7 @@ class ReaderOutlineSheetBody extends StatelessWidget {
     required this.summaryImageState,
     this.figuresEpoch,
     required this.onNavigate,
-    required this.onRegenerateSummary,
+    required this.onUploadSummaryImage,
   });
 
   @override
@@ -52,7 +52,7 @@ class ReaderOutlineSheetBody extends StatelessWidget {
               figuresEpoch: figuresEpoch,
               inSheet: true,
               onNavigate: onNavigate,
-              onRegenerateSummary: onRegenerateSummary,
+              onUploadSummaryImage: onUploadSummaryImage,
             ),
           ),
         ],

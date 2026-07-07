@@ -171,15 +171,27 @@ class DocumentSummaryImageService {
     String pdfPath, {
     required int maxCount,
   }) async {
-    final paths = <String>[];
+    final primary = <String>[];
+    final supplementary = <String>[];
     final manifest = await FigureExtractService.loadManifest(pdfPath);
     if (manifest != null) {
+      await FigureExtractService.instance.init();
+      final extractor = FigureExtractService.instance;
       for (final entry in manifest) {
-        if (paths.length >= maxCount) break;
-        if (await File(entry.imagePath).exists()) paths.add(entry.imagePath);
+        if (!await File(entry.imagePath).exists()) continue;
+        if (extractor.isSupplementaryCaption(entry.captionText)) {
+          supplementary.add(entry.imagePath);
+        } else {
+          primary.add(entry.imagePath);
+        }
       }
+      final selected = <String>[
+        ...primary.take(maxCount),
+        if (primary.length < maxCount)
+          ...supplementary.take(maxCount - primary.length),
+      ];
+      if (selected.isNotEmpty) return selected;
     }
-    if (paths.isNotEmpty) return paths;
 
     final figuresDir = Directory(DocPaths.figuresDir(pdfPath));
     if (!await figuresDir.exists()) return const [];
@@ -200,13 +212,10 @@ class DocumentSummaryImageService {
   }
 
   int _maxReferencesForProvider(AgentApiProvider provider, int configured) {
-    final normalized = configured.clamp(1, 14).toInt();
-    return switch (provider) {
-      AgentApiProvider.gemini => normalized,
-      AgentApiProvider.openai => normalized.clamp(1, 10),
-      AgentApiProvider.openAICompatible => normalized.clamp(1, 10),
-      AgentApiProvider.anthropic => 0,
-    };
+    if (provider == AgentApiProvider.anthropic) return 0;
+    return configured
+        .clamp(kSummaryReferenceImageMin, kSummaryReferenceImageMax)
+        .toInt();
   }
 
   String _buildPrompt({

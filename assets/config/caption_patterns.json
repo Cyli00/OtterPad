@@ -1,22 +1,80 @@
 {
-    "prefixes": [
-        "Figure", "Fig.", "Fig", "FIGURE", "FIG.", "FIG",
-        "Table", "TABLE",
-        "Scheme", "Chart", "Plate", "Map", "Box", "Diagram", "Exhibit",
-        "Supplementary Figure", "Supplementary Fig.", "Supplementary Fig",
-        "Extended Data Figure", "Extended Data Fig.", "Extended Data Fig",
-        "Ext. Data Fig.", "Ext Data Fig.",
-        "Suppl. Fig.", "Suppl Fig.", "Suppl. Fig", "Suppl Fig",
-        "S1 Fig.", "S1 Fig",
-        "Appendix Figure",
-        "图", "表", "附图",
-        "Abbildung", "Abb.", "Tabelle",
-        "Figura", "Tabla", "Cuadro",
-        "図", "表",
-        "Рис.", "Рисунок", "Таблица",
-        "그림", "표",
-        "Hình", "Bảng"
-    ],
     "number_pattern": "\\s*(?:\\d+(?:[.\\-]\\d+)?|[A-Z](?:\\.\\d+)?|S\\d+)",
-    "suffix_pattern": "(?:[.:()\uff1a\uff0e\u3001]|\\s|$)"
+    "suffix_pattern": "(?:[.:()\\uff1a\\uff0e\\u3001]|\\s|$)",
+    "en": {
+        "figure": ["Figure", "Fig.", "Fig"],
+        "table": ["Table"],
+        "other": ["Scheme", "Chart", "Plate", "Map", "Box", "Diagram", "Exhibit"]
+    },
+    "zh": {
+        "figure": ["图", "附图"],
+        "table": ["表"]
+    },
+    "de": {
+        "figure": ["Abbildung", "Abb."],
+        "table": ["Tabelle"]
+    },
+    "es": {
+        "figure": ["Figura"],
+        "table": ["Tabla", "Cuadro"]
+    },
+    "ja": {
+        "figure": ["図"],
+        "table": ["表"]
+    },
+    "ru": {
+        "figure": ["Рис.", "Рисунок"],
+        "table": ["Таблица"]
+    },
+    "ko": {
+        "figure": ["그림"],
+        "table": ["표"]
+    },
+    "vi": {
+        "figure": ["Hình"],
+        "table": ["Bảng"]
+    },
+    "supplementary": {
+        "modifiers": {
+            "en": [
+                "Supplementary", "Extended Data", "Ext. Data", "Ext Data",
+                "Supporting Information", "Supporting", "SI", "Online", "ESM",
+                "Suppl.", "Suppl", "Appendix"
+            ],
+            "zh": ["补充材料", "补充", "附录", "附"],
+            "zh-Hant": ["補充材料", "補充", "附錄", "附"],
+            "ja": ["補足", "付録", "サプリメント"],
+            "de": ["Ergänzende", "Ergänzungs", "Zusatz", "Erweiterte Daten", "Suppl.", "Suppl.-", "Suppl"],
+            "es": ["Datos ampliados"],
+            "ru": ["Дополнительный", "Дополнительная", "Доп.", "Доп"],
+            "ko": ["보조", "보충", "부록", "보충자료"],
+            "vi": ["bổ sung", "phụ", "phụ lục"]
+        },
+        "standalone": [
+            "S1 Fig.", "S1 Fig",
+            "Figure supplémentaire", "Fig. suppl.", "Fig. suppl",
+            "Figura suplementaria", "Fig. suplementaria",
+            "Figura complementaria", "Fig. complementaria",
+            "Figura adicional", "Fig. adicional",
+            "Datos ampliados Figura", "Datos ampliados Fig.",
+            "Figura supplementare", "Fig. supplementare",
+            "Figura integrativa", "Fig. integrativa",
+            "Ergänzungsabbildung", "Zusatzabbildung",
+            "Erweiterte Daten Abbildung", "Erweiterte Daten Abb.",
+            "Suppl. Abb.", "Suppl.-Abb.", "Suppl. Abb", "Suppl Abb",
+            "Дополнительный рисунок", "Дополнительная фигура",
+            "Доп. рис.", "Доп. Рис.", "Доп. рисунок",
+            "Рис. S", "Рисунок S",
+            "보조 그림", "보충 그림", "부록 그림", "보충자료 그림",
+            "Hình bổ sung", "Hình phụ", "Hình phụ lục",
+            "补充材料图", "补充 图", "补充图",
+            "附录图", "附录 图", "附表",
+            "補充材料圖", "補充 圖", "補充圖",
+            "附錄圖", "附錄 圖",
+            "補足図", "補足 図", "補図",
+            "付録図", "付録 図",
+            "サプリメント図", "サプリメント 図",
+            "補足表", "補足 表"
+        ]
+    }
 }

@@ -502,8 +502,115 @@ class FigureExtractService {
 
   // ─── caption 配置(从 assets 加载) ────────────────────
 
+  static const _captionLangCodes = [
+    'en',
+    'zh',
+    'de',
+    'es',
+    'ja',
+    'ru',
+    'ko',
+    'vi',
+  ];
+
+  static const _cjkModifierLangs = {'zh', 'zh-Hant', 'ja', 'ko'};
+
   late final RegExp _mainCaptionRe;
+  late final RegExp _supplementaryCaptionRe;
+  late final RegExp _tableCaptionRe;
   bool _initialized = false;
+
+  static List<String> _collectCategoryPrefixes(
+    Map<String, dynamic> conf,
+    String category,
+  ) {
+    final prefixes = <String>[];
+    for (final code in _captionLangCodes) {
+      final node = conf[code];
+      if (node is! Map<String, dynamic>) continue;
+      final items = node[category];
+      if (items is List) {
+        prefixes.addAll(items.cast<String>());
+      }
+    }
+    return prefixes;
+  }
+
+  static List<String> _collectMainPrefixes(Map<String, dynamic> conf) {
+    return [
+      ..._collectCategoryPrefixes(conf, 'figure'),
+      ..._collectCategoryPrefixes(conf, 'table'),
+      ..._collectCategoryPrefixes(conf, 'other'),
+    ];
+  }
+
+  static List<String> _collectSupplementaryPrefixes(Map<String, dynamic> conf) {
+    final supplementary = conf['supplementary'];
+    if (supplementary is! Map<String, dynamic>) return const [];
+
+    final prefixes = <String>{};
+    final standalone = supplementary['standalone'];
+    if (standalone is List) {
+      prefixes.addAll(standalone.cast<String>());
+    }
+
+    final modifiers = supplementary['modifiers'];
+    if (modifiers is! Map<String, dynamic>) {
+      return prefixes.toList();
+    }
+
+    final basesByLang = <String, List<String>>{
+      for (final code in _captionLangCodes) code: _langFigureAndOther(conf, code),
+      'zh-Hant': _langFigureAndOther(conf, 'zh'),
+    };
+
+    for (final entry in modifiers.entries) {
+      final lang = entry.key;
+      final mods = entry.value;
+      if (mods is! List) continue;
+      final bases = basesByLang[lang] ?? const <String>[];
+      for (final rawMod in mods) {
+        final modifier = rawMod as String;
+        for (final base in bases) {
+          prefixes.add('$modifier $base');
+          if (_cjkModifierLangs.contains(lang)) {
+            prefixes.add('$modifier$base');
+          }
+        }
+      }
+    }
+
+    return prefixes.toList();
+  }
+
+  static List<String> _langFigureAndOther(
+    Map<String, dynamic> conf,
+    String code,
+  ) {
+    final node = conf[code];
+    if (node is! Map<String, dynamic>) return const [];
+    final result = <String>[];
+    for (final category in ['figure', 'other']) {
+      final items = node[category];
+      if (items is List) {
+        result.addAll(items.cast<String>());
+      }
+    }
+    return result;
+  }
+
+  static RegExp _buildCaptionPrefixRe(
+    List<String> prefixes,
+    String numberPattern,
+    String suffixPattern,
+  ) {
+    final sorted = [...prefixes]..sort((a, b) => b.length.compareTo(a.length));
+    final group = sorted.map(RegExp.escape).join('|');
+    return RegExp(
+      '^(?:$group)$numberPattern$suffixPattern',
+      caseSensitive: false,
+    );
+  }
 
   Future<void> init() async {
     if (_initialized) return;
@@ -511,14 +618,29 @@ class FigureExtractService {
       'assets/config/caption_patterns.json',
     );
     final conf = jsonDecode(raw) as Map<String, dynamic>;
+    final numberPattern = conf['number_pattern'] as String;
+    final suffixPattern = conf['suffix_pattern'] as String;
 
-    final prefixes =
-        (conf['prefixes'] as List<dynamic>).map((e) => e as String).toList()
-          ..sort((a, b) => b.length.compareTo(a.length));
+    final mainPrefixes = _collectMainPrefixes(conf);
+    final supplementaryPrefixes = _collectSupplementaryPrefixes(conf);
 
-    final prefixGroup = prefixes.map(RegExp.escape).join('|');
-    _mainCaptionRe = RegExp(
-      '^(?:$prefixGroup)${conf['number_pattern']}${conf['suffix_pattern']}',
+    // 主正则 = 正文前缀 ∪ 补充前缀，保持 figure 提取对补充图 caption 的召回。
+    _mainCaptionRe = _buildCaptionPrefixRe(
+      {...mainPrefixes, ...supplementaryPrefixes}.toList(),
+      numberPattern,
+      suffixPattern,
+    );
+    _supplementaryCaptionRe = _buildCaptionPrefixRe(
+      supplementaryPrefixes,
+      numberPattern,
+      suffixPattern,
+    );
+
+    final tablePrefixes = _collectCategoryPrefixes(conf, 'table')
+      ..sort((a, b) => b.length.compareTo(a.length));
+    final tableGroup = tablePrefixes.map(RegExp.escape).join('|');
+    _tableCaptionRe = RegExp(
+      '^(?:$tableGroup)',
       caseSensitive: false,
     );
     _initialized = true;
@@ -529,6 +651,11 @@ class FigureExtractService {
   /// 与本服务 trimCaptionFromRegion 的判定保持同源。使用前须 [init]。
   bool isMainCaption(String text) =>
       _mainCaptionRe.hasMatch(_normalizeCaptionText(text));
+
+  /// 判断文本是否为补充 figure caption（Supplementary / Extended Data 等）。
+  /// 生图参考图超限时优先剔除此类条目。使用前须 [init]。
+  bool isSupplementaryCaption(String text) =>
+      _supplementaryCaptionRe.hasMatch(_normalizeCaptionText(text));
 
   /// 从 caption 文本提取文件名标识(如 "Figure 1." → "Figure_1")
   String _extractCaptionName(String text) {
@@ -571,11 +698,6 @@ class FigureExtractService {
     }
     return merged.join(' ');
   }
-
-  static final _tableCaptionRe = RegExp(
-    r'^(?:table|tab|tabelle|tabla|cuadro|таблица|表|표|bảng)',
-    caseSensitive: false,
-  );
 
   bool _isTableCaption(_CaptionCandidate c) => _tableCaptionRe.hasMatch(c.text);
 

@@ -7,9 +7,11 @@ import '../services/prompts.dart';
 // 默认提示词文本在 Prompt Registry（services/prompts.dart）——
 // 本文件只管理生图域的非 prompt 配置，prompt 的存取委托 PromptStore。
 
-const kDefaultSummaryAspectRatio = '16:9';
-const kDefaultSummaryFidelity = 'high';
-const kDefaultSummaryMaxReferenceImages = 10;
+const kDefaultSummaryAspectRatio = '9:16';
+const kDefaultSummaryFidelity = 'auto';
+const kSummaryReferenceImageMin = 1;
+const kSummaryReferenceImageMax = 10;
+const kDefaultSummaryMaxReferenceImages = kSummaryReferenceImageMax;
 
 const kSummaryAspectRatios = <String>[
   '1:1',
@@ -81,7 +83,9 @@ class ImageGenerationConfigNotifier
           ? fidelity
           : kDefaultSummaryFidelity,
       prompt: prompt,
-      maxReferenceImages: maxReferenceImages.clamp(1, 14).toInt(),
+      maxReferenceImages: maxReferenceImages
+          .clamp(kSummaryReferenceImageMin, kSummaryReferenceImageMax)
+          .toInt(),
     );
   }
 
@@ -110,7 +114,8 @@ class ImageGenerationConfigNotifier
   }
 
   Future<void> setMaxReferenceImages(int value) async {
-    final normalized = value.clamp(1, 14).toInt();
+    final normalized =
+        value.clamp(kSummaryReferenceImageMin, kSummaryReferenceImageMax).toInt();
     state = state.copyWith(maxReferenceImages: normalized);
     await GStorage.setting.put(_kMaxReferenceImages, normalized);
   }

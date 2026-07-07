@@ -179,9 +179,9 @@ class _ImageGenerationSettingsSectionState
           ),
           child: Slider(
             value: value.toDouble(),
-            min: 1,
-            max: 14,
-            divisions: 13,
+            min: kSummaryReferenceImageMin.toDouble(),
+            max: kSummaryReferenceImageMax.toDouble(),
+            divisions: kSummaryReferenceImageMax - kSummaryReferenceImageMin,
             onChanged: (v) {
               Haptics.soft();
               onChanged(v.round());

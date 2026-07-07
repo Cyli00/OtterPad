@@ -4,7 +4,7 @@
 
 # OtterPad
 
-**AI-Powered Cross-Platform Academic Paper Reader**
+**AI-Powered Academic Literature Reader & Manager**
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![License](https://img.shields.io/github/license/Cyli00/NightReader)](./LICENSE)
@@ -16,7 +16,7 @@ English | [简体中文](docs/README_zh.md)
 
 ## What is this?
 
-OtterPad is a cross-platform academic literature reading and management tool with integrated AI workflows, helping researchers efficiently read, understand, and manage papers.
+OtterPad is an academic literature reading and management tool with integrated AI workflows, helping researchers efficiently read, understand, and manage papers.
 
 - 📖 Immersive PDF reading with customizable themes and typography
 - 🤖 AI-powered full-text Q&A grounded in extracted text and figures
@@ -74,12 +74,13 @@ Download the APK for your architecture from [Releases](https://github.com/Cyli00
 
 ## Acknowledgements
 
-OtterPad stands on the shoulders of these excellent open-source projects:
+OtterPad stands on the shoulders of these excellent open-source projects and communities:
 
 - [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) — Third-party BiliBili client built with Flutter
 - [PDFMathTranslate](https://github.com/PDFMathTranslate/PDFMathTranslate) — AI-powered PDF translation preserving full layout (EMNLP 2025)
 - [FlClash](https://github.com/chen08209/FlClash) — Multi-platform proxy client based on ClashMeta
 - [Kelivo](https://github.com/Chevey339/kelivo) — Multi-platform LLM chat client built with Flutter
+- [LINUX DO](https://linux.do/) — A sincere, friendly, united, and professional tech community for invaluable feedback and support
 
 ## License
 

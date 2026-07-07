@@ -1,12 +1,13 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:extended_image/extended_image.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gal/gal.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:share_plus/share_plus.dart';
@@ -99,6 +100,9 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
 
   bool get _isGallery => widget.figures.length > 1;
 
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
   static const _kCaptionStyle = TextStyle(
     color: Colors.white,
     fontSize: 15,
@@ -109,6 +113,9 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   static const _kMinCaptionH = 60.0;
 
   double _captionHeight = 120.0;
+
+  /// 放大后禁用 PageView 水平翻页，避免与图片平移手势竞争。
+  bool _isZoomed = false;
 
   // ── 翻译状态（per-figure）──
   /// figureIndex → 翻译结果
@@ -186,8 +193,13 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                         ExtendedImageGesturePageView.builder(
                           controller: _pageController,
                           itemCount: widget.figures.length,
-                          onPageChanged: (i) =>
-                              setState(() => _currentIndex = i),
+                          canScrollPage: (details) =>
+                              !_isZoomed &&
+                              (details?.totalScale ?? 1.0) <= 1.01,
+                          onPageChanged: (i) => setState(() {
+                            _currentIndex = i;
+                            _isZoomed = false;
+                          }),
                           itemBuilder: (_, i) =>
                               _buildImage(widget.figures[i]),
                         ),
@@ -296,11 +308,19 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           speed: 1.0,
           inertialSpeed: 500.0,
           initialScale: 1.0,
-          inPageView: _isGallery,
+          inPageView: _isGallery && !_isZoomed,
+          gestureDetailsIsChanged: _onGestureDetailsChanged,
         ),
         onDoubleTap: _handleDoubleTap,
       ),
     );
+  }
+
+  void _onGestureDetailsChanged(GestureDetails? details) {
+    if (!_isGallery) return;
+    final zoomed = (details?.totalScale ?? 1.0) > 1.01;
+    if (zoomed == _isZoomed) return;
+    setState(() => _isZoomed = zoomed);
   }
 
   Future<void> _showSaveMenu(
@@ -319,24 +339,41 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         overlay.size.height - globalPosition.dy,
       ),
       items: [
-        PopupMenuItem<String>(
-          value: 'copy',
-          height: 40,
-          child: Row(
-            children: [
-              const Icon(Symbols.content_copy_rounded, size: 18, color: Colors.white70),
-              const SizedBox(width: 12),
-              Text(context.l10n.copyImage,
-                  style: const TextStyle(color: Colors.white, fontSize: 14)),
-            ],
+        if (_isDesktop)
+          PopupMenuItem<String>(
+            value: 'copy',
+            height: 40,
+            child: Row(
+              children: [
+                const Icon(Symbols.content_copy_rounded,
+                    size: 18, color: Colors.white70),
+                const SizedBox(width: 12),
+                Text(context.l10n.copyImage,
+                    style: const TextStyle(color: Colors.white, fontSize: 14)),
+              ],
+            ),
+          )
+        else
+          PopupMenuItem<String>(
+            value: 'share',
+            height: 40,
+            child: Row(
+              children: [
+                const Icon(Symbols.share_rounded,
+                    size: 18, color: Colors.white70),
+                const SizedBox(width: 12),
+                Text(context.l10n.shareImage,
+                    style: const TextStyle(color: Colors.white, fontSize: 14)),
+              ],
+            ),
           ),
-        ),
         PopupMenuItem<String>(
           value: 'save',
           height: 40,
           child: Row(
             children: [
-              const Icon(Symbols.download_rounded, size: 18, color: Colors.white70),
+              const Icon(Symbols.download_rounded,
+                  size: 18, color: Colors.white70),
               const SizedBox(width: 12),
               Text(context.l10n.saveImage,
                   style: const TextStyle(color: Colors.white, fontSize: 14)),
@@ -346,6 +383,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       ],
     );
     if (selected == 'copy') await _copyFigure(fig);
+    if (selected == 'share') await _shareFigure(fig);
     if (selected == 'save') await _saveFigure(fig);
   }
 
@@ -368,6 +406,26 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     }
   }
 
+  Future<void> _shareFigure(FigureManifestEntry fig) async {
+    final snackBar = ref.read(snackBarServiceProvider);
+    final source = File(fig.imagePath);
+    if (!await source.exists()) {
+      if (!mounted) return;
+      snackBar.showResult(message: context.l10n.imageNotFound);
+      return;
+    }
+    final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
+    try {
+      await Share.shareXFiles(
+        [XFile(fig.imagePath)],
+        subject: fileName,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      snackBar.showResult(message: context.l10n.shareFailed('$e'));
+    }
+  }
+
   Future<void> _saveFigure(FigureManifestEntry fig) async {
     final snackBar = ref.read(snackBarServiceProvider);
     final source = File(fig.imagePath);
@@ -379,9 +437,8 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
 
     try {
-      if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      if (_isDesktop) {
         if (!mounted) return;
-        // 桌面：系统保存对话框 + File.copy
         final targetPath = await FilePicker.platform.saveFile(
           dialogTitle: context.l10n.saveImageTitle,
           fileName: fileName,
@@ -394,13 +451,25 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         await source.copy(target.path);
         if (!mounted) return;
         snackBar.showResult(message: context.l10n.savedToPath(target.path));
-      } else {
-        // 移动：交给系统分享面板，用户从中选"保存到相册"/"保存到文件"
-        await Share.shareXFiles(
-          [XFile(fig.imagePath)],
-          subject: fileName,
-        );
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        if (!await Gal.hasAccess()) {
+          await Gal.requestAccess();
+          if (!await Gal.hasAccess()) {
+            if (!mounted) return;
+            snackBar.showResult(message: context.l10n.galleryAccessDenied);
+            return;
+          }
+        }
+        await Gal.putImage(fig.imagePath);
+        if (!mounted) return;
+        snackBar.showResult(message: context.l10n.savedToGallery);
       }
+    } on GalException catch (e) {
+      if (!mounted) return;
+      final message = e.type == GalExceptionType.accessDenied
+          ? context.l10n.galleryAccessDenied
+          : context.l10n.saveFailed(e.type.message);
+      snackBar.showResult(message: message);
     } catch (e) {
       if (!mounted) return;
       snackBar.showResult(message: context.l10n.saveFailed('$e'));

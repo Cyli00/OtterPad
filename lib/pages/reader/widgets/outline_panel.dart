@@ -143,7 +143,7 @@ class OutlinePanel extends StatefulWidget {
   final String? documentId;
   final ValueListenable<SummaryImageState> summaryImageState;
   final void Function(int charOffset) onNavigate;
-  final VoidCallback? onRegenerateSummary;
+  final VoidCallback? onUploadSummaryImage;
 
   /// AI 排版修复完成后递增，触发 manifest 重读 + ImageCache evict。
   final ValueListenable<int>? figuresEpoch;
@@ -160,7 +160,7 @@ class OutlinePanel extends StatefulWidget {
     required this.summaryImageState,
     this.figuresEpoch,
     required this.onNavigate,
-    this.onRegenerateSummary,
+    this.onUploadSummaryImage,
     this.inSheet = false,
   });
 
@@ -275,7 +275,7 @@ class _OutlinePanelState extends State<OutlinePanel>
                     documentId: widget.documentId,
                     onNavigate: widget.onNavigate,
                     summaryState: summaryState,
-                    onRegenerateSummary: widget.onRegenerateSummary,
+                    onUploadSummaryImage: widget.onUploadSummaryImage,
                   );
                 },
               ),
@@ -314,7 +314,7 @@ class _FiguresTab extends StatelessWidget {
   final String? documentId;
   final void Function(int charOffset) onNavigate;
   final SummaryImageState summaryState;
-  final VoidCallback? onRegenerateSummary;
+  final VoidCallback? onUploadSummaryImage;
 
   const _FiguresTab({
     required this.figures,
@@ -324,7 +324,7 @@ class _FiguresTab extends StatelessWidget {
     this.documentId,
     required this.onNavigate,
     required this.summaryState,
-    this.onRegenerateSummary,
+    this.onUploadSummaryImage,
   });
 
   @override
@@ -343,16 +343,10 @@ class _FiguresTab extends StatelessWidget {
         summaryImagePath != null && File(summaryImagePath).existsSync();
     final hasFigures = figures != null && figures!.isNotEmpty;
 
-    if (!summaryState.generating && !hasSummary && !hasFigures) {
-      return _EmptyState(
-        icon: Symbols.image_not_supported_rounded,
-        message: context.l10n.figuresNotFoundHint,
-      );
-    }
-
+    // Graphical Summary 栏始终显示（标题 + 添加按钮），即使无图也无 figure。
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final summaryOffset = (summaryState.generating || hasSummary) ? 1 : 0;
+    const summaryOffset = 1;
     final totalCount = summaryOffset + (hasFigures ? figures!.length : 0);
 
     return ListView.separated(
@@ -459,6 +453,7 @@ class _FiguresTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 标题行：始终显示，刷新按钮 → 添加按钮（从相册上传）
         Row(
           children: [
             Icon(Symbols.auto_awesome_rounded, size: 18, color: cs.primary),
@@ -483,15 +478,15 @@ class _FiguresTab extends StatelessWidget {
               ),
               const SizedBox(width: 8),
             ],
-            if (onRegenerateSummary != null)
+            if (onUploadSummaryImage != null)
               TactilePress(
                 onTap: summaryState.generating ? null : () {
-                  onRegenerateSummary!();
+                  onUploadSummaryImage!();
                 },
                 baseColor: Colors.transparent,
                 padding: const EdgeInsets.all(4),
                 child: Icon(
-                  Symbols.refresh_rounded,
+                  Symbols.add_photo_alternate_rounded,
                   size: 18,
                   color: summaryState.generating
                       ? cs.onSurfaceVariant.withAlpha(90)
@@ -500,8 +495,9 @@ class _FiguresTab extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 10),
-        if (hasSummary && imagePath != null)
+        // 内容区：有图显示图，仅 generating 时显示占位框，否则不渲染
+        if (hasSummary && imagePath != null) ...[
+          const SizedBox(height: 10),
           GestureDetector(
             onTap: () {
               Haptics.soft();
@@ -526,8 +522,9 @@ class _FiguresTab extends StatelessWidget {
                 ),
               ),
             ),
-          )
-        else
+          ),
+        ] else if (summaryState.generating) ...[
+          const SizedBox(height: 10),
           Container(
             height: 160,
             decoration: BoxDecoration(
@@ -536,12 +533,13 @@ class _FiguresTab extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text(
-              summaryState.generating ? context.l10n.generatingSummary : context.l10n.noSummary,
+              context.l10n.generatingSummary,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
             ),
           ),
+        ],
       ],
     );
   }

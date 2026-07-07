@@ -22,10 +22,12 @@ import '../../../providers/translation_config_provider.dart';
 import '../../../router/app_routes.dart';
 import '../../../services/document_summary_image_service.dart';
 import '../../../services/figure_extract_service.dart';
+import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
 import '../../../utils/doc_paths.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../setting/setting_picker.dart';
 import '../widgets/figure_viewer.dart';
 
 class ReaderSummaryImageCoordinator {
@@ -134,134 +136,47 @@ class ReaderSummaryImageCoordinator {
     await showFigureViewer(context, [entry]);
   }
 
+  /// 从相册上传一张图片作为总结图。
+  /// 走 `file_picker`（Android 13+ 免权限 Photo Picker，低版本/iOS 需相册权限）。
+  Future<void> uploadFromGallery() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result == null || result.files.isEmpty) return;
+    final sourcePath = result.files.first.path;
+    if (sourcePath == null) return;
+
+    final destPath = DocumentSummaryImageService.imagePathFor(document.id);
+    final destFile = File(destPath);
+    try {
+      await destFile.parent.create(recursive: true);
+      await File(sourcePath).copy(destPath);
+      await FileImage(destFile).evict();
+      final current = summaryImageState.value;
+      final revision = current.revision + 1;
+      sessionNotifier.setSummaryImagePath(destPath);
+      summaryImageState.value = SummaryImageState(
+        imagePath: destPath,
+        revision: revision,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: context.l10n.summaryUploadFailed);
+    }
+  }
+
   Future<_SummaryImageChoice?> _showCostDialog({
     required bool hasImageRole,
   }) async {
-    final cfg = ref.read(imageGenerationConfigProvider);
-    final role = AgentApiNotifier.globalImageRole;
-    final protocol = role.id == null
-        ? null
-        : AgentApiNotifier.loadInstance(role.id!)?.provider;
-    final cost = protocol == AgentApiProvider.openai
-        ? estimateOpenAICost(
-            aspectRatio: cfg.aspectRatio,
-            fidelity: cfg.fidelity,
-          )
-        : null;
-    final costLine = cost != null
-        ? context.l10n.estimatedCost('\$', cost.toStringAsFixed(3))
-        : '';
-
     return showDialog<_SummaryImageChoice>(
       context: context,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        final cs = theme.colorScheme;
-        return AlertDialog(
-          backgroundColor: cs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          title: Text(
-            context.l10n.generateSummaryTitle,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.l10n.summaryApiCostHint,
-                style: theme.textTheme.bodyMedium,
-              ),
-              if (costLine.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  costLine,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: cs.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              Text(
-                context.l10n.useAppImageGen,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-              if (!hasImageRole) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cs.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Symbols.warning_rounded,
-                        color: cs.onErrorContainer,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          context.l10n.selectImageModelFirst,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onErrorContainer,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          context.push(AppRoutes.settingsApi);
-                        },
-                        child: Text(
-                          context.l10n.goToSettings,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(ctx).pop(_SummaryImageChoice.cancel),
-              child: Text(context.l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(ctx).pop(_SummaryImageChoice.official),
-              child: Text(context.l10n.appImageGen),
-            ),
-            TextButton(
-              onPressed: hasImageRole
-                  ? () => Navigator.of(ctx).pop(_SummaryImageChoice.confirm)
-                  : null,
-              child: Text(context.l10n.confirm),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => _CostDialog(
+        hasImageRole: hasImageRole,
+        onGoToSettings: () {
+          Navigator.of(ctx).pop();
+          context.push(AppRoutes.settingsApi);
+        },
+      ),
     );
   }
 
@@ -380,6 +295,329 @@ class ReaderSummaryImageCoordinator {
 }
 
 enum _SummaryImageChoice { cancel, official, confirm }
+
+/// 生成总结图对话框：内联画幅/清晰度/参考图数量三个生图设置，
+/// 实时读写 imageGenerationConfigProvider（与设置页共享同一份配置）。
+class _CostDialog extends ConsumerStatefulWidget {
+  final bool hasImageRole;
+  final VoidCallback onGoToSettings;
+
+  const _CostDialog({
+    required this.hasImageRole,
+    required this.onGoToSettings,
+  });
+
+  @override
+  ConsumerState<_CostDialog> createState() => _CostDialogState();
+}
+
+class _CostDialogState extends ConsumerState<_CostDialog> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final l10n = context.l10n;
+    final cfg = ref.watch(imageGenerationConfigProvider);
+    final notifier = ref.read(imageGenerationConfigProvider.notifier);
+
+    // 预估费用随设置实时刷新
+    final role = AgentApiNotifier.globalImageRole;
+    final protocol = role.id == null
+        ? null
+        : AgentApiNotifier.loadInstance(role.id!)?.provider;
+    final cost = protocol == AgentApiProvider.openai
+        ? estimateOpenAICost(
+            aspectRatio: cfg.aspectRatio,
+            fidelity: cfg.fidelity,
+          )
+        : null;
+    final costLine = cost != null
+        ? l10n.estimatedCost('\$', cost.toStringAsFixed(3))
+        : '';
+
+    return AlertDialog(
+      backgroundColor: cs.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      title: Text(
+        l10n.generateSummaryTitle,
+        style: theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── 画幅比例 ──
+              _titleRow(l10n.aspectRatio, l10n.aspectRatioHint),
+              const SizedBox(height: 12),
+              SettingPicker<String>(
+                current: cfg.aspectRatio,
+                options: kSummaryAspectRatios,
+                labelFor: (v) => v,
+                subtitleFor: (v) => switch (v) {
+                  '1:1' => l10n.aspectSquare,
+                  '4:3' => l10n.aspectClassic,
+                  '16:9' => l10n.aspectWide,
+                  '21:9' => l10n.aspectUltraWide,
+                  '9:16' => l10n.aspectTall,
+                  '3:2' => l10n.classicPhotography,
+                  _ => '',
+                },
+                sheetTitle: l10n.aspectRatio,
+                onChanged: (v) {
+                  Haptics.soft();
+                  notifier.setAspectRatio(v);
+                },
+              ),
+              const SizedBox(height: 20),
+              // ── 清晰度 ──
+              _titleRow(l10n.resolution, l10n.resolutionHint),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<String>(
+                  style: SegmentedButton.styleFrom(
+                    backgroundColor: cs.surface,
+                    selectedBackgroundColor: cs.primaryContainer,
+                    foregroundColor: cs.onSurfaceVariant,
+                    selectedForegroundColor: cs.onPrimaryContainer,
+                    side: BorderSide(
+                      color: cs.outlineVariant.withAlpha(100),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    textStyle: theme.textTheme.bodyMedium,
+                  ),
+                  showSelectedIcon: false,
+                  segments: kSummaryFidelityKeys
+                      .map(
+                        (v) => ButtonSegment<String>(
+                          value: v,
+                          label: Text(
+                            switch (v) {
+                              'auto' => l10n.fidelityAuto,
+                              'standard' => l10n.fidelityStandard,
+                              'high' => l10n.fidelityHigh,
+                              _ => v,
+                            },
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  selected: {cfg.fidelity},
+                  onSelectionChanged: (set) {
+                    Haptics.soft();
+                    notifier.setFidelity(set.first);
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              // ── 参考图数量 ──
+              _buildSliderRow(
+                value: cfg.maxReferenceImages,
+                onChanged: notifier.setMaxReferenceImages,
+              ),
+              const SizedBox(height: 16),
+              Divider(color: cs.outlineVariant.withAlpha(60), height: 1),
+              const SizedBox(height: 12),
+              // ── 预估费用（随设置实时变化） ──
+              if (costLine.isNotEmpty) ...[
+                Text(
+                  costLine,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              // ── App 生图引导小字 ──
+              Text(
+                l10n.useAppImageGen,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              // ── 未配置模型警告 ──
+              if (!widget.hasImageRole) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Symbols.warning_rounded,
+                        color: cs.onErrorContainer,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          l10n.selectImageModelFirst,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: widget.onGoToSettings,
+                        child: Text(
+                          l10n.goToSettings,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.of(context).pop(_SummaryImageChoice.cancel),
+          child: Text(l10n.cancel),
+        ),
+        TextButton(
+          onPressed: () =>
+              Navigator.of(context).pop(_SummaryImageChoice.official),
+          child: Text(l10n.appImageGen),
+        ),
+        TextButton(
+          onPressed: widget.hasImageRole
+              ? () =>
+                  Navigator.of(context).pop(_SummaryImageChoice.confirm)
+              : null,
+          child: Text(l10n.confirm),
+        ),
+      ],
+    );
+  }
+
+  /// 设置项标题行：titleSmall w600 + 帮助图标。
+  Widget _titleRow(String title, String tooltip) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: tooltip,
+          triggerMode: TooltipTriggerMode.tap,
+          showDuration: const Duration(seconds: 5),
+          preferBelow: true,
+          verticalOffset: 16,
+          decoration: BoxDecoration(
+            color: cs.inverseSurface,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Icon(
+              Symbols.help_rounded,
+              size: 16,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 参考图数量滑块行：标题 + primaryContainer 徽标 + Slider。
+  Widget _buildSliderRow({
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _titleRow(
+                l10n.referenceImageCount,
+                l10n.imageRefCountHint,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$value',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: cs.onPrimaryContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: value.toDouble(),
+            min: kSummaryReferenceImageMin.toDouble(),
+            max: kSummaryReferenceImageMax.toDouble(),
+            divisions: kSummaryReferenceImageMax - kSummaryReferenceImageMin,
+            onChanged: (v) {
+              Haptics.soft();
+              onChanged(v.round());
+            },
+            padding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _OfficialGenDialog extends StatefulWidget {
   final Future<String?> Function() onExportAll;

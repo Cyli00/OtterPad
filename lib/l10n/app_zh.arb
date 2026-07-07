@@ -217,16 +217,18 @@
 
   "closeImage": "关闭",
   "copyImage": "复制图片",
+  "shareImage": "分享图片",
   "saveImage": "保存图片",
   "imageNotFound": "图片文件不存在",
   "saveImageTitle": "保存图片",
+  "savedToGallery": "已保存到相册",
+  "galleryAccessDenied": "未获得相册访问权限",
   "showOriginal": "显示原文",
   "showTranslation": "显示翻译",
 
   "viewInDocument": "在文中查看",
   "viewOriginalImage": "查看原图",
   "generatingSummary": "正在生成总结图…",
-  "noSummary": "暂无总结图",
   "referencesNotFound": "未找到参考文献",
 
   "author": "作者",
@@ -523,7 +525,7 @@
   "s3PathStyleHint": "MinIO / R2 等 S3 兼容服务通常建议开启",
 
   "selectImageModelFirst": "请先在「AI 设置」中选择生图模型",
-  "summaryApiCostHint": "总结图由第三方生图模型生成，可能产生 API 调用费用",
+  "summaryUploadFailed": "上传总结图失败",
   "estimatedCost": "当前设置预估费用约 {dollar}{cost} / 张",
   "useAppImageGen": "若希望使用 App 生图，请点击 App 生图，手动上传素材",
   "appImageGen": "App 生图",
@@ -556,7 +558,7 @@
   "aspectWide": "横屏视频 · 桌面壁纸",
   "aspectUltraWide": "超宽屏 · 电影",
   "aspectTall": "竖屏 · 手机壁纸",
-  "imageRefCountHint": "从文献提取的 figure 中按顺序选择参考图；不同模型会按自身上限自动裁剪",
+  "imageRefCountHint": "从文献 figure 按顺序选取参考图，最多 10 张；超出时优先剔除补充图（Supplementary / Extended Data 等）",
   "aspectRatioHint": "OpenAI 会映射到最接近的输出尺寸，并在 prompt 中保留比例要求",
   "summaryPromptHint": "用于控制文献总结图的视觉风格和信息组织方式；运行时会自动追加文献标题、元数据、Markdown 和参考 figure",
   "summaryPromptLabel": "总结图 Prompt",
@@ -632,6 +634,7 @@
   "markdownIgnoreLabels": "Markdown 忽略标签",
 
   "copyFailed": "复制失败：{error}",
+  "shareFailed": "分享失败：{error}",
   "saveFailed": "保存失败：{error}",
   "savedToPath": "已保存到 {path}",
   "figuresNotFoundHint": "未找到图表\n请先提取文档",

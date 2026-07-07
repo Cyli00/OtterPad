@@ -4,7 +4,7 @@
 
 # 獭祭鱼 OtterPad
 
-**AI 驱动的跨平台学术文献阅读器**
+**AI 驱动的学术文献阅读与管理工具**
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![License](https://img.shields.io/github/license/Cyli00/NightReader)](../LICENSE)
@@ -16,7 +16,7 @@
 
 ## 这是什么？
 
-OtterPad 是一款跨平台学术文献阅读与管理工具，集成 AI 工作流，帮助科研工作者高效阅读、理解和管理文献。
+OtterPad 是一款学术文献阅读与管理工具，集成 AI 工作流，帮助科研工作者高效阅读、理解和管理文献。
 
 - 📖 沉浸式 PDF 阅读，自定义主题与排版
 - 🤖 AI 全文问答，基于提取的完整文本和图表回答问题
@@ -71,6 +71,16 @@ OtterPad 是一款跨平台学术文献阅读与管理工具，集成 AI 工作�
 - **存储** — Hive (本地) + Flutter Secure Storage (凭据)
 - **网络** — Dio + HTTP/2
 - **设计语言** — Material Design 3
+
+## 致谢
+
+OtterPad 站在以下优秀开源项目和社区的肩膀上：
+
+- [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) — 基于 Flutter 的第三方 BiliBili 客户端
+- [PDFMathTranslate](https://github.com/PDFMathTranslate/PDFMathTranslate) — AI 驱动的 PDF 翻译，完整保留排版（EMNLP 2025）
+- [FlClash](https://github.com/chen08209/FlClash) — 基于 ClashMeta 的多平台代理客户端
+- [Kelivo](https://github.com/Chevey339/kelivo) — 基于 Flutter 的多平台 LLM 聊天客户端
+- [LINUX DO](https://linux.do/) — 真诚、友善、团结、专业的技术社区，感谢宝贵的反馈与支持
 
 ## 开源协议
 
