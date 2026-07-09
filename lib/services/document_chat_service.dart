@@ -99,6 +99,7 @@ class DocumentChatService {
     required String question,
     required bool supportsImages,
     String? quotedText,
+    String? figureImagePath,
     String? urlContext,
     ThinkingLevel? thinkingOverride,
     bool webSearch = false,
@@ -128,7 +129,11 @@ class DocumentChatService {
     });
 
     final figureImages = supportsImages
-        ? await _loadFigureImages(documentId)
+        ? await _loadFigureImages(
+            documentId,
+            onlyImagePath: figureImagePath,
+            onlyImageLabel: quotedText,
+          )
         : const <AgentChatImage>[];
 
     var params = state.paramsFor(modelId);
@@ -293,8 +298,28 @@ class DocumentChatService {
   /// figures 全量读为 base64，caption 作为图片标签（模型据此把图片与正文
   /// 中的 Figure 引用对上）。manifest 缺失/为空返回空列表。
   static Future<List<AgentChatImage>> _loadFigureImages(
-    String documentId,
-  ) async {
+    String documentId, {
+    String? onlyImagePath,
+    String? onlyImageLabel,
+  }) async {
+    if (onlyImagePath != null) {
+      final path = p.isAbsolute(onlyImagePath)
+          ? onlyImagePath
+          : p.join(
+              DocPaths.figuresDir(documentId),
+              p.basename(onlyImagePath),
+            );
+      final file = File(path);
+      if (!await file.exists()) return const [];
+      final label = onlyImageLabel?.trim();
+      return [
+        AgentChatImage(
+          base64Png: base64Encode(await file.readAsBytes()),
+          label: label != null && label.isNotEmpty ? label : p.basename(path),
+        ),
+      ];
+    }
+
     final manifest = await FigureExtractService.loadManifest(documentId);
     if (manifest == null || manifest.isEmpty) return const [];
     final images = <AgentChatImage>[];
