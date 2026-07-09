@@ -6,7 +6,8 @@
 
 **移动端学术文献阅读与管理工具**
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Flutter](https://img.shields.io/badge/Flutter-3.41.3-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.11.1-0175C2?logo=dart&logoColor=white)](https://dart.dev)
 [![License](https://img.shields.io/github/license/Cyli00/NightReader)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android-brightgreen)]()
 
@@ -21,15 +22,24 @@
 OtterPad 在 PaddleOCR-VL 的基础上做了一套图表提取与版面重排引擎，把 PDF 转成适合小屏阅读的排版，同时保留图表和公式。再加上全文翻译和 AI 问答，让读论文这件事在手机上不再痛苦。
 
 <div align="center">
-
-| PDF 阅读 | 沉浸式阅读 |
-|:---:|:---:|
-| <img src="./PDF_reader_framed.png" width="280px" alt="PDF 阅读"/> | <img src="./immersive_reading_experience_framed.png" width="280px" alt="沉浸式阅读"/> |
-
-| 图表提取 | AI 全文问答 |
-|:---:|:---:|
-| <img src="./extract_figures_for_reading_framed.png" width="280px" alt="图表提取"/> | <img src="./ask_anything_with_fullcontext_framed.png" width="280px" alt="AI 全文问答"/> |
-
+<table>
+  <tr>
+    <td align="center" width="50%"><b>PDF 阅读</b><br/>
+      <img src="./PDF_reader_framed.png" width="280" alt="PDF 阅读"/>
+    </td>
+    <td align="center" width="50%"><b>沉浸式阅读</b><br/>
+      <img src="./immersive_reading_experience_framed.png" width="280" alt="沉浸式阅读"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%"><b>图表提取</b><br/>
+      <img src="./extract_figures_for_reading_framed.png" width="280" alt="图表提取"/>
+    </td>
+    <td align="center" width="50%"><b>AI 全文问答</b><br/>
+      <img src="./ask_anything_with_fullcontext_framed.png" width="280" alt="AI 全文问答"/>
+    </td>
+  </tr>
+</table>
 </div>
 
 ## 主要功能
@@ -61,17 +71,14 @@ OtterPad 在 PaddleOCR-VL 的基础上做了一套图表提取与版面重排引
 从 [Releases](https://github.com/Cyli00/NightReader/releases) 下载对应架构的 APK：
 - `arm64-v8a` — 大多数现代 Android 设备
 - `armeabi-v7a` — 较旧的 32 位设备
-- `x86_64` — 模拟器 / ChromeOS
-
-> 桌面端和 iOS 版本尚在开发中。
 
 ## 开发
 
-本项目使用 [Claude Code](https://claude.com/claude-code) 辅助开发，基于 Flutter 3.x + Dart 3.x。
+本项目使用 [Claude Code](https://claude.com/claude-code) 辅助开发，基于 Flutter 3.41.3 + Dart 3.11.1。
 
 | 层面 | 选型 |
 | :--- | :--- |
-| 框架 | Flutter 3.x + Dart 3.x |
+| 框架 | Flutter 3.41.3 + Dart 3.11.1 |
 | 状态管理 | Riverpod |
 | 路由 | GoRouter |
 | 本地存储 | Hive + Flutter Secure Storage（凭据） |

@@ -6,7 +6,8 @@
 
 **Mobile Academic Literature Reader & Manager**
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Flutter](https://img.shields.io/badge/Flutter-3.41.3-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.11.1-0175C2?logo=dart&logoColor=white)](https://dart.dev)
 [![License](https://img.shields.io/github/license/Cyli00/NightReader)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android-brightgreen)]()
 
@@ -21,15 +22,24 @@ Reading PDF papers on a phone is a miserable experience — cramped layout, tiny
 OtterPad uses PaddleOCR-VL under the hood to power a figure extraction and layout reflow engine that adapts PDF content for small screens while keeping figures, tables, and formulas intact. Full-text translation and AI Q&A round it out, so you can actually get through a paper on your phone.
 
 <div align="center">
-
-| PDF Reader | Immersive Reading |
-|:---:|:---:|
-| <img src="./docs/PDF_reader_framed.png" width="280px" alt="PDF Reader"/> | <img src="./docs/immersive_reading_experience_framed.png" width="280px" alt="Immersive Reading"/> |
-
-| Figure Extraction | AI Full-Text Q&A |
-|:---:|:---:|
-| <img src="./docs/extract_figures_for_reading_framed.png" width="280px" alt="Figure Extraction"/> | <img src="./docs/ask_anything_with_fullcontext_framed.png" width="280px" alt="AI Full-Text Q&A"/> |
-
+<table>
+  <tr>
+    <td align="center" width="50%"><b>PDF Reader</b><br/>
+      <img src="./docs/PDF_reader_framed.png" width="280" alt="PDF Reader"/>
+    </td>
+    <td align="center" width="50%"><b>Immersive Reading</b><br/>
+      <img src="./docs/immersive_reading_experience_framed.png" width="280" alt="Immersive Reading"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%"><b>Figure Extraction</b><br/>
+      <img src="./docs/extract_figures_for_reading_framed.png" width="280" alt="Figure Extraction"/>
+    </td>
+    <td align="center" width="50%"><b>AI Full-Text Q&A</b><br/>
+      <img src="./docs/ask_anything_with_fullcontext_framed.png" width="280" alt="AI Full-Text Q&A"/>
+    </td>
+  </tr>
+</table>
 </div>
 
 ## What It Does
@@ -61,17 +71,14 @@ OtterPad uses PaddleOCR-VL under the hood to power a figure extraction and layou
 Grab the APK for your architecture from [Releases](https://github.com/Cyli00/NightReader/releases):
 - `arm64-v8a` — Most modern Android devices
 - `armeabi-v7a` — Older 32-bit devices
-- `x86_64` — Emulators / ChromeOS
-
-> Desktop and iOS builds are in progress.
 
 ## Development
 
-This project was built with the help of [Claude Code](https://claude.com/claude-code), using Flutter 3.x + Dart 3.x.
+This project was built with the help of [Claude Code](https://claude.com/claude-code), using Flutter 3.41.3 + Dart 3.11.1.
 
 | Layer | Stack |
 | :--- | :--- |
-| Framework | Flutter 3.x + Dart 3.x |
+| Framework | Flutter 3.41.3 + Dart 3.11.1 |
 | State Management | Riverpod |
 | Routing | GoRouter |
 | Local Storage | Hive + Flutter Secure Storage (credentials) |
