@@ -76,6 +76,10 @@ dependencies:
   url_launcher: ^6.3.1
   crypto: ^3.0.7
 
+  # 设备系统版本（Android RELEASE 等，避免误读 Build.DISPLAY）
+  # 13.x 依赖 win32 ^6，与当前 package_info_plus 的 win32 ^5 冲突
+  device_info_plus: ^12.4.0
+
   # 文件选择
   file_picker: ^8.1.7
 
