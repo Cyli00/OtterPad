@@ -141,20 +141,42 @@ class ReaderSummaryImageCoordinator {
     );
   }
 
-  /// 从相册上传一张图片作为总结图。
-  /// 走 `file_picker`（Android 13+ 免权限 Photo Picker，低版本/iOS 需相册权限）。
+  /// 从相册/文件选择一张图片作为总结图（覆盖已有图）。
+  ///
+  /// 走 `file_picker`（Android 13+ 系统 Photo Picker）。
+  /// **必须**关闭压缩：file_picker 默认 compressionQuality=30 会在 Android
+  /// 的 Pictures 目录写出压缩副本，表现为相册多出一张所选图的新副本。
   Future<void> uploadFromGallery() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowCompression: false,
+      compressionQuality: 0,
+    );
     if (result == null || result.files.isEmpty) return;
     final sourcePath = result.files.first.path;
     if (sourcePath == null) return;
 
     final destPath = DocumentSummaryImageService.imagePathFor(document.id);
     final destFile = File(destPath);
+    final metaFile = File(DocPaths.summaryMeta(document.id));
     try {
       await destFile.parent.create(recursive: true);
-      await File(sourcePath).copy(destPath);
-      await FileImage(destFile).evict();
+
+      // 先驱逐缓存，再删旧文件，避免解码器锁住 summary.png 导致覆盖失败
+      // 或 UI 仍显示旧图 A。
+      await _evictSummaryImageCaches(destPath);
+      if (await destFile.exists()) {
+        await destFile.delete();
+      }
+      if (await metaFile.exists()) {
+        await metaFile.delete();
+      }
+
+      // 读字节再写入固定路径，语义是「替换」而非「另存一份」
+      final bytes = await File(sourcePath).readAsBytes();
+      await destFile.writeAsBytes(bytes, flush: true);
+      await _evictSummaryImageCaches(destPath);
+
       final current = summaryImageState.value;
       final revision = current.revision + 1;
       sessionNotifier.setSummaryImagePath(destPath);
@@ -162,12 +184,24 @@ class ReaderSummaryImageCoordinator {
         imagePath: destPath,
         revision: revision,
       );
+      // 与 document_task / 其它订阅 summaryImageProvider 的路径保持一致
+      ref.read(summaryImageProvider(document.id).notifier).generated(destPath);
     } catch (e) {
       if (!context.mounted) return;
       ref
           .read(snackBarServiceProvider)
           .showResult(message: context.l10n.summaryUploadFailed);
     }
+  }
+
+  /// 驱逐 summary 图相关的 ImageCache 条目。
+  ///
+  /// [Image.file] 在 outline 中带 `cacheWidth: 600`，实际缓存键是
+  /// [ResizeImage]，只 evict [FileImage] 不够，旧图 A 仍会残留。
+  Future<void> _evictSummaryImageCaches(String path) async {
+    final provider = FileImage(File(path));
+    await provider.evict();
+    await ResizeImage(provider, width: 600).evict();
   }
 
   Future<_SummaryImageChoice?> _showCostDialog({
