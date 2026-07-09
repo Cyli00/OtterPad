@@ -1,6 +1,7 @@
 import 'dart:ffi';
 import 'dart:io';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,7 +18,7 @@ const kBugReportTemplate = 'bug_report.yml';
 /// 精简 system specs，供 issue 粘贴与剪贴板复制。
 Future<String> buildSystemSpecs() async {
   final info = await PackageInfo.fromPlatform();
-  final os = _osLabel();
+  final os = await resolveOsLabel();
   final arch = Abi.current().toString().replaceFirst('Abi.', '');
   final locale = Platform.localeName;
   return 'OtterPad ${info.version} (${info.buildNumber})\n'
@@ -26,14 +27,65 @@ Future<String> buildSystemSpecs() async {
       'Locale: $locale';
 }
 
-String _osLabel() {
-  final v = Platform.operatingSystemVersion;
-  if (Platform.isWindows) return 'Windows $v';
-  if (Platform.isMacOS) return 'macOS $v';
-  if (Platform.isLinux) return 'Linux $v';
-  if (Platform.isAndroid) return 'Android $v';
-  if (Platform.isIOS) return 'iOS $v';
-  return '${Platform.operatingSystem} $v';
+/// About 页短标签：Android 用真实 RELEASE（如 15），避免误读 Build.DISPLAY。
+///
+/// [Platform.operatingSystemVersion] 在 Android 上常是 `AP3A.240905.015`
+/// 这类 build 串，取首个数字会得到错误的「Android 3」。
+Future<String> resolveOsShortLabel() async {
+  try {
+    final plugin = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      final info = await plugin.androidInfo;
+      final release = info.version.release.trim();
+      return release.isEmpty ? 'Android' : 'Android $release';
+    }
+    if (Platform.isIOS) {
+      final info = await plugin.iosInfo;
+      final v = info.systemVersion.trim();
+      return v.isEmpty ? 'iOS' : 'iOS $v';
+    }
+    if (Platform.isWindows) return 'Windows';
+    if (Platform.isMacOS) return 'macOS';
+    if (Platform.isLinux) return 'Linux';
+  } catch (_) {
+    // 回退到平台名
+  }
+  return Platform.operatingSystem;
+}
+
+/// Issue / 剪贴板用的稍完整 OS 描述。
+Future<String> resolveOsLabel() async {
+  try {
+    final plugin = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      final info = await plugin.androidInfo;
+      final release = info.version.release.trim();
+      final sdk = info.version.sdkInt;
+      if (release.isEmpty) return 'Android (SDK $sdk)';
+      return 'Android $release (SDK $sdk)';
+    }
+    if (Platform.isIOS) {
+      final info = await plugin.iosInfo;
+      final v = info.systemVersion.trim();
+      return v.isEmpty ? 'iOS' : 'iOS $v';
+    }
+    if (Platform.isWindows) {
+      final info = await plugin.windowsInfo;
+      final build = info.buildNumber;
+      return 'Windows ${info.majorVersion}.${info.minorVersion} (Build $build)';
+    }
+    if (Platform.isMacOS) {
+      final info = await plugin.macOsInfo;
+      return 'macOS ${info.majorVersion}.${info.minorVersion}.${info.patchVersion}';
+    }
+    if (Platform.isLinux) {
+      final info = await plugin.linuxInfo;
+      return info.prettyName.isNotEmpty ? info.prettyName : 'Linux';
+    }
+  } catch (_) {
+    // 回退
+  }
+  return '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
 }
 
 /// 复制 system specs 到剪贴板。
