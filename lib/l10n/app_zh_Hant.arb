@@ -769,6 +769,7 @@
   "chatHistory": "對話歷史",
   "chatInputHint": "針對這篇文獻提問…",
   "chatLocateSource": "定位原文",
+  "chatReturnToAi": "返回問 AI",
   "chatMessageCount": "{count} 則訊息",
   "chatNewSessionHint": "新對話仍將基於《{title}》的全文與圖表進行問答",
   "chatNoHistory": "還沒有對話",
@@ -851,6 +852,11 @@
   "aboutSubtitle": "開源 AI 文獻閱讀助手",
   "aboutVersion": "版本",
   "aboutSystem": "系統",
+  "aboutSystemCopyHint": "點擊複製系統資訊",
+  "aboutReportIssue": "回報問題",
+  "aboutReportIssueDesc": "複製系統資訊並開啟 GitHub 缺陷表單",
+  "aboutSpecsCopied": "系統資訊已複製 — 貼上到 issue 表單中",
+  "aboutOpenIssueFailed": "無法開啟 GitHub",
   "aboutCheckUpdate": "檢查更新",
   "aboutLicense": "許可證",
   "aboutDisclaimer": "免責聲明",
@@ -869,6 +875,18 @@
   "generalLogLevelInfo": "資訊",
   "generalLogLevelWarning": "警告",
   "generalLogLevelError": "錯誤",
+  "generalExportTodayLog": "匯出目前日誌",
+  "generalExportTodayLogDesc": "分享或儲存今日日誌檔，便於提交缺陷回報",
+  "generalExportLogEmpty": "尚無日誌檔 — 請開啟日誌記錄、重現問題後再匯出",
+  "generalExportLogFailed": "匯出日誌失敗",
+  "generalExportLogSaved": "日誌已儲存到 {path}",
+  "@generalExportLogSaved": {
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "generalReportIssue": "回報問題",
+  "generalReportIssueDesc": "複製系統資訊並開啟 GitHub 缺陷表單",
   "generalHapticFeedback": "震動回饋",
   "generalHapticFeedbackDesc": "點擊與互動時提供振動回饋",
   "generalCacheAutoCleanup": "自動清理快取",

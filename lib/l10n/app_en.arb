@@ -884,6 +884,7 @@
   "chatSend": "Send",
   "chatRemoveQuote": "Remove quote",
   "chatLocateSource": "Locate in document",
+  "chatReturnToAi": "Return to Ask AI",
   "chatNewSessionHint": "The new chat will still be grounded in the full text and figures of \"{title}\"",
   "@chatNewSessionHint": { "placeholders": { "title": { "type": "String" } } },
   "chatCopyMessage": "Copy message",
@@ -896,6 +897,11 @@
   "aboutSubtitle": "Open Source AI Literature Reading Assistant",
   "aboutVersion": "Version",
   "aboutSystem": "System",
+  "aboutSystemCopyHint": "Tap to copy system specs",
+  "aboutReportIssue": "Report an Issue",
+  "aboutReportIssueDesc": "Copy specs and open the GitHub bug form",
+  "aboutSpecsCopied": "System specs copied — paste into the issue form",
+  "aboutOpenIssueFailed": "Could not open GitHub",
   "aboutCheckUpdate": "Check for Updates",
   "aboutLicense": "License",
   "aboutDisclaimer": "Disclaimer",
@@ -914,6 +920,18 @@
   "generalLogLevelInfo": "Info",
   "generalLogLevelWarning": "Warning",
   "generalLogLevelError": "Error",
+  "generalExportTodayLog": "Export Today's Log",
+  "generalExportTodayLogDesc": "Share or save today's log file for bug reports",
+  "generalExportLogEmpty": "No log file yet — enable logging, reproduce the issue, then export",
+  "generalExportLogFailed": "Failed to export log",
+  "generalExportLogSaved": "Log saved to {path}",
+  "@generalExportLogSaved": {
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "generalReportIssue": "Report an Issue",
+  "generalReportIssueDesc": "Copy system specs and open the GitHub bug form",
   "generalHapticFeedback": "Haptic Feedback",
   "generalHapticFeedbackDesc": "Vibration feedback for taps and interactions",
   "generalCacheAutoCleanup": "Auto Cleanup Cache",

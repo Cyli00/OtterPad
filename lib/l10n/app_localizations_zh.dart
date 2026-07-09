@@ -2336,6 +2336,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatLocateSource => '定位原文';
 
   @override
+  String get chatReturnToAi => '返回问 AI';
+
+  @override
   String chatNewSessionHint(String title) {
     return '新会话仍将基于《$title》的全文与图表进行问答';
   }
@@ -2366,6 +2369,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutSystem => '系统';
+
+  @override
+  String get aboutSystemCopyHint => '点击复制系统信息';
+
+  @override
+  String get aboutReportIssue => '报告问题';
+
+  @override
+  String get aboutReportIssueDesc => '复制系统信息并打开 GitHub 缺陷表单';
+
+  @override
+  String get aboutSpecsCopied => '系统信息已复制 — 粘贴到 issue 表单中';
+
+  @override
+  String get aboutOpenIssueFailed => '无法打开 GitHub';
 
   @override
   String get aboutCheckUpdate => '检查更新';
@@ -2419,6 +2437,29 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generalLogLevelError => '错误';
+
+  @override
+  String get generalExportTodayLog => '导出当前日志';
+
+  @override
+  String get generalExportTodayLogDesc => '分享或保存今日日志文件，便于提交缺陷报告';
+
+  @override
+  String get generalExportLogEmpty => '尚无日志文件 — 请开启日志记录、复现问题后再导出';
+
+  @override
+  String get generalExportLogFailed => '导出日志失败';
+
+  @override
+  String generalExportLogSaved(String path) {
+    return '日志已保存到 $path';
+  }
+
+  @override
+  String get generalReportIssue => '报告问题';
+
+  @override
+  String get generalReportIssueDesc => '复制系统信息并打开 GitHub 缺陷表单';
 
   @override
   String get generalHapticFeedback => '震动反馈';
@@ -4868,6 +4909,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get chatLocateSource => '定位原文';
 
   @override
+  String get chatReturnToAi => '返回問 AI';
+
+  @override
   String chatNewSessionHint(String title) {
     return '新對話仍將基於《$title》的全文與圖表進行問答';
   }
@@ -4898,6 +4942,21 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get aboutSystem => '系統';
+
+  @override
+  String get aboutSystemCopyHint => '點擊複製系統資訊';
+
+  @override
+  String get aboutReportIssue => '回報問題';
+
+  @override
+  String get aboutReportIssueDesc => '複製系統資訊並開啟 GitHub 缺陷表單';
+
+  @override
+  String get aboutSpecsCopied => '系統資訊已複製 — 貼上到 issue 表單中';
+
+  @override
+  String get aboutOpenIssueFailed => '無法開啟 GitHub';
 
   @override
   String get aboutCheckUpdate => '檢查更新';
@@ -4951,6 +5010,29 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get generalLogLevelError => '錯誤';
+
+  @override
+  String get generalExportTodayLog => '匯出目前日誌';
+
+  @override
+  String get generalExportTodayLogDesc => '分享或儲存今日日誌檔，便於提交缺陷回報';
+
+  @override
+  String get generalExportLogEmpty => '尚無日誌檔 — 請開啟日誌記錄、重現問題後再匯出';
+
+  @override
+  String get generalExportLogFailed => '匯出日誌失敗';
+
+  @override
+  String generalExportLogSaved(String path) {
+    return '日誌已儲存到 $path';
+  }
+
+  @override
+  String get generalReportIssue => '回報問題';
+
+  @override
+  String get generalReportIssueDesc => '複製系統資訊並開啟 GitHub 缺陷表單';
 
   @override
   String get generalHapticFeedback => '震動回饋';

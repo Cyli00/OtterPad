@@ -4233,6 +4233,12 @@ abstract class AppLocalizations {
   /// **'Locate in document'**
   String get chatLocateSource;
 
+  /// No description provided for @chatReturnToAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to Ask AI'**
+  String get chatReturnToAi;
+
   /// No description provided for @chatNewSessionHint.
   ///
   /// In en, this message translates to:
@@ -4292,6 +4298,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'System'**
   String get aboutSystem;
+
+  /// No description provided for @aboutSystemCopyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to copy system specs'**
+  String get aboutSystemCopyHint;
+
+  /// No description provided for @aboutReportIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Report an Issue'**
+  String get aboutReportIssue;
+
+  /// No description provided for @aboutReportIssueDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy specs and open the GitHub bug form'**
+  String get aboutReportIssueDesc;
+
+  /// No description provided for @aboutSpecsCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'System specs copied — paste into the issue form'**
+  String get aboutSpecsCopied;
+
+  /// No description provided for @aboutOpenIssueFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open GitHub'**
+  String get aboutOpenIssueFailed;
 
   /// No description provided for @aboutCheckUpdate.
   ///
@@ -4394,6 +4430,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error'**
   String get generalLogLevelError;
+
+  /// No description provided for @generalExportTodayLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Export Today\'s Log'**
+  String get generalExportTodayLog;
+
+  /// No description provided for @generalExportTodayLogDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Share or save today\'s log file for bug reports'**
+  String get generalExportTodayLogDesc;
+
+  /// No description provided for @generalExportLogEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No log file yet — enable logging, reproduce the issue, then export'**
+  String get generalExportLogEmpty;
+
+  /// No description provided for @generalExportLogFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to export log'**
+  String get generalExportLogFailed;
+
+  /// No description provided for @generalExportLogSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Log saved to {path}'**
+  String generalExportLogSaved(String path);
+
+  /// No description provided for @generalReportIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Report an Issue'**
+  String get generalReportIssue;
+
+  /// No description provided for @generalReportIssueDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy system specs and open the GitHub bug form'**
+  String get generalReportIssueDesc;
 
   /// No description provided for @generalHapticFeedback.
   ///

@@ -2390,6 +2390,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatLocateSource => 'Locate in document';
 
   @override
+  String get chatReturnToAi => 'Return to Ask AI';
+
+  @override
   String chatNewSessionHint(String title) {
     return 'The new chat will still be grounded in the full text and figures of \"$title\"';
   }
@@ -2421,6 +2424,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutSystem => 'System';
+
+  @override
+  String get aboutSystemCopyHint => 'Tap to copy system specs';
+
+  @override
+  String get aboutReportIssue => 'Report an Issue';
+
+  @override
+  String get aboutReportIssueDesc => 'Copy specs and open the GitHub bug form';
+
+  @override
+  String get aboutSpecsCopied =>
+      'System specs copied — paste into the issue form';
+
+  @override
+  String get aboutOpenIssueFailed => 'Could not open GitHub';
 
   @override
   String get aboutCheckUpdate => 'Check for Updates';
@@ -2476,6 +2495,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get generalLogLevelError => 'Error';
+
+  @override
+  String get generalExportTodayLog => 'Export Today\'s Log';
+
+  @override
+  String get generalExportTodayLogDesc =>
+      'Share or save today\'s log file for bug reports';
+
+  @override
+  String get generalExportLogEmpty =>
+      'No log file yet — enable logging, reproduce the issue, then export';
+
+  @override
+  String get generalExportLogFailed => 'Failed to export log';
+
+  @override
+  String generalExportLogSaved(String path) {
+    return 'Log saved to $path';
+  }
+
+  @override
+  String get generalReportIssue => 'Report an Issue';
+
+  @override
+  String get generalReportIssueDesc =>
+      'Copy system specs and open the GitHub bug form';
 
   @override
   String get generalHapticFeedback => 'Haptic Feedback';

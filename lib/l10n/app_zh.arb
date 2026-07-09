@@ -770,6 +770,7 @@
   "chatSend": "发送",
   "chatRemoveQuote": "移除引用",
   "chatLocateSource": "定位原文",
+  "chatReturnToAi": "返回问 AI",
   "chatNewSessionHint": "新会话仍将基于《{title}》的全文与图表进行问答",
   "@chatNewSessionHint": { "placeholders": { "title": { "type": "String" } } },
   "chatCopyMessage": "复制消息",
@@ -782,6 +783,11 @@
   "aboutSubtitle": "开源 AI 文献阅读助手",
   "aboutVersion": "版本",
   "aboutSystem": "系统",
+  "aboutSystemCopyHint": "点击复制系统信息",
+  "aboutReportIssue": "报告问题",
+  "aboutReportIssueDesc": "复制系统信息并打开 GitHub 缺陷表单",
+  "aboutSpecsCopied": "系统信息已复制 — 粘贴到 issue 表单中",
+  "aboutOpenIssueFailed": "无法打开 GitHub",
   "aboutCheckUpdate": "检查更新",
   "aboutLicense": "许可证",
   "aboutDisclaimer": "免责声明",
@@ -800,6 +806,18 @@
   "generalLogLevelInfo": "信息",
   "generalLogLevelWarning": "警告",
   "generalLogLevelError": "错误",
+  "generalExportTodayLog": "导出当前日志",
+  "generalExportTodayLogDesc": "分享或保存今日日志文件，便于提交缺陷报告",
+  "generalExportLogEmpty": "尚无日志文件 — 请开启日志记录、复现问题后再导出",
+  "generalExportLogFailed": "导出日志失败",
+  "generalExportLogSaved": "日志已保存到 {path}",
+  "@generalExportLogSaved": {
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "generalReportIssue": "报告问题",
+  "generalReportIssueDesc": "复制系统信息并打开 GitHub 缺陷表单",
   "generalHapticFeedback": "震动反馈",
   "generalHapticFeedbackDesc": "点击与交互时提供振动反馈",
   "generalCacheAutoCleanup": "自动清理缓存",
