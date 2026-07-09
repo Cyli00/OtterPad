@@ -2442,10 +2442,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutOpenIssueFailed => 'Could not open GitHub';
 
   @override
+  String get aboutProject => 'Repository';
+
+  @override
   String get aboutCheckUpdate => 'Check for Updates';
 
   @override
-  String get aboutLicense => 'License';
+  String get aboutLicense => 'Open Source License';
 
   @override
   String get aboutDisclaimer => 'Disclaimer';

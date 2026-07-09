@@ -2386,10 +2386,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aboutOpenIssueFailed => '无法打开 GitHub';
 
   @override
+  String get aboutProject => '项目地址';
+
+  @override
   String get aboutCheckUpdate => '检查更新';
 
   @override
-  String get aboutLicense => '许可证';
+  String get aboutLicense => '开源协议说明';
 
   @override
   String get aboutDisclaimer => '免责声明';
@@ -4959,10 +4962,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get aboutOpenIssueFailed => '無法開啟 GitHub';
 
   @override
+  String get aboutProject => '專案地址';
+
+  @override
   String get aboutCheckUpdate => '檢查更新';
 
   @override
-  String get aboutLicense => '許可證';
+  String get aboutLicense => '開源協議說明';
 
   @override
   String get aboutDisclaimer => '免責聲明';

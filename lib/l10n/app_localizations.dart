@@ -4329,6 +4329,12 @@ abstract class AppLocalizations {
   /// **'Could not open GitHub'**
   String get aboutOpenIssueFailed;
 
+  /// No description provided for @aboutProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Repository'**
+  String get aboutProject;
+
   /// No description provided for @aboutCheckUpdate.
   ///
   /// In en, this message translates to:
@@ -4338,7 +4344,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutLicense.
   ///
   /// In en, this message translates to:
-  /// **'License'**
+  /// **'Open Source License'**
   String get aboutLicense;
 
   /// No description provided for @aboutDisclaimer.
