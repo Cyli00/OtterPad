@@ -1,11 +1,21 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as p;
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../core/storage/storage.dart';
 import '../../services/agent_http.dart';
 import '../../services/haptics.dart';
+import '../../services/snackbar_service.dart';
+import '../../services/system_specs.dart';
+import '../../widgets/tactile_press.dart';
 
 // ── GStorage keys ──
 
@@ -37,6 +47,9 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
       GStorage.setting.get(_kAutoCheckUpdate) as bool? ?? true;
   late bool _http2Enabled =
       GStorage.setting.get(_kHttp2Enabled) as bool? ?? false;
+
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +150,20 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
                         )
                       : const SizedBox.shrink(),
                 ),
+                _divider(cs, indent: 80),
+                _ActionTile(
+                  icon: Symbols.upload_file_rounded,
+                  title: l10n.generalExportTodayLog,
+                  subtitle: l10n.generalExportTodayLogDesc,
+                  onTap: _exportTodayLog,
+                ),
+                _divider(cs, indent: 80),
+                _ActionTile(
+                  icon: Symbols.bug_report_rounded,
+                  title: l10n.generalReportIssue,
+                  subtitle: l10n.generalReportIssueDesc,
+                  onTap: _reportIssue,
+                ),
               ],
             ),
           ),
@@ -200,6 +227,55 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
     );
   }
 
+  Future<void> _exportTodayLog() async {
+    final l10n = context.l10n;
+    final snackBar = ref.read(snackBarServiceProvider);
+    Haptics.soft();
+
+    try {
+      final file = await prepareTodayLogForExport();
+      if (file == null) {
+        snackBar.showResult(message: l10n.generalExportLogEmpty);
+        return;
+      }
+
+      if (_isDesktop) {
+        final targetPath = await FilePicker.platform.saveFile(
+          dialogTitle: l10n.generalExportTodayLog,
+          fileName: p.basename(file.path),
+          type: FileType.custom,
+          allowedExtensions: const ['log'],
+          lockParentWindow: true,
+        );
+        if (targetPath == null) return;
+        final target = File(targetPath);
+        if (await target.exists()) await target.delete();
+        await file.copy(target.path);
+        if (!mounted) return;
+        snackBar.showResult(
+          message: l10n.generalExportLogSaved(target.path),
+        );
+      } else {
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: p.basename(file.path),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      snackBar.showResult(message: l10n.generalExportLogFailed);
+    }
+  }
+
+  Future<void> _reportIssue() async {
+    final l10n = context.l10n;
+    await openBugReportForm(
+      snackBar: ref.read(snackBarServiceProvider),
+      copiedMessage: l10n.aboutSpecsCopied,
+      openFailedMessage: l10n.aboutOpenIssueFailed,
+    );
+  }
+
   Widget _buildGroup(
     BuildContext context, {
     required String title,
@@ -233,11 +309,11 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
     );
   }
 
-  Widget _divider(ColorScheme cs) {
+  Widget _divider(ColorScheme cs, {double indent = 20}) {
     return Divider(
       height: 1,
       thickness: 1,
-      indent: 20,
+      indent: indent,
       endIndent: 20,
       color: cs.outlineVariant.withAlpha(70),
     );
@@ -291,6 +367,74 @@ class _SwitchTile extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Switch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Action Tile（与数据管理页卡片按钮一致）──
+
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return TactilePress(
+      onTap: onTap,
+      baseColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: cs.primary, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Symbols.chevron_right_rounded,
+            color: cs.onSurfaceVariant.withAlpha(120),
+          ),
         ],
       ),
     );

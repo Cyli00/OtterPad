@@ -8,13 +8,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/l10n.dart';
 import '../../services/snackbar_service.dart';
+import '../../services/system_specs.dart';
 import '../../services/update_flow.dart';
 import '../../services/update_service.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/tactile_press.dart';
-
-const _kGitHubRepo = 'Cyli00/OtterPad';
-const _kGitHubUrl = 'https://github.com/$_kGitHubRepo';
 
 class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key});
@@ -26,6 +24,7 @@ class AboutPage extends ConsumerStatefulWidget {
 class _AboutPageState extends ConsumerState<AboutPage> {
   PackageInfo? _packageInfo;
   bool _checkingUpdate = false;
+  String _systemLabel = '...';
 
   @override
   void initState() {
@@ -33,16 +32,9 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     PackageInfo.fromPlatform().then((info) {
       if (mounted) setState(() => _packageInfo = info);
     });
-  }
-
-  String get _systemLabel {
-    final v = Platform.operatingSystemVersion;
-    if (Platform.isWindows) return 'Windows $v';
-    if (Platform.isMacOS) return 'macOS $v';
-    if (Platform.isLinux) return 'Linux $v';
-    if (Platform.isAndroid) return 'Android $v';
-    if (Platform.isIOS) return 'iOS $v';
-    return '${Platform.operatingSystem} $v';
+    resolveOsShortLabel().then((label) {
+      if (mounted) setState(() => _systemLabel = label);
+    });
   }
 
   @override
@@ -99,15 +91,6 @@ class _AboutPageState extends ConsumerState<AboutPage> {
               ),
             ),
           ),
-          const SizedBox(height: 4),
-          Center(
-            child: Text(
-              l10n.aboutSubtitle,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-          ),
           const SizedBox(height: 32),
 
           // ── Info & Action Card ──
@@ -126,28 +109,34 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                 ),
                 _divider(cs),
                 _AboutTile(
-                  icon: Symbols.computer_rounded,
-                  title: l10n.aboutSystem,
-                  trailing: _systemLabel,
-                ),
-                _divider(cs),
-                _AboutTile(
-                  icon: Symbols.code_rounded,
-                  title: 'GitHub',
-                  subtitle: _kGitHubRepo,
-                  onTap: () => _openUrl(_kGitHubUrl),
-                ),
-                _divider(cs),
-                _AboutTile(
                   icon: Symbols.update_rounded,
                   title: l10n.aboutCheckUpdate,
                   onTap: _checkForUpdate,
                 ),
                 _divider(cs),
                 _AboutTile(
+                  icon: Symbols.computer_rounded,
+                  title: l10n.aboutSystem,
+                  trailing: _systemLabel,
+                  onTap: _copySpecs,
+                ),
+                _divider(cs),
+                _AboutTile(
+                  icon: Symbols.bug_report_rounded,
+                  title: l10n.aboutReportIssue,
+                  onTap: _reportIssue,
+                ),
+                _divider(cs),
+                _AboutTile(
+                  icon: Symbols.code_rounded,
+                  title: l10n.aboutProject,
+                  trailing: kGitHubRepo,
+                  onTap: () => _openUrl(kGitHubUrl),
+                ),
+                _divider(cs),
+                _AboutTile(
                   icon: Symbols.description_rounded,
                   title: l10n.aboutLicense,
-                  subtitle: 'GPL-3.0',
                   onTap: () => _showLicenseDialog(context),
                 ),
                 _divider(cs),
@@ -171,6 +160,23 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       indent: 80,
       endIndent: 20,
       color: cs.outlineVariant.withAlpha(80),
+    );
+  }
+
+  Future<void> _copySpecs() async {
+    final l10n = context.l10n;
+    await copySystemSpecs(
+      snackBar: ref.read(snackBarServiceProvider),
+      copiedMessage: l10n.aboutSpecsCopied,
+    );
+  }
+
+  Future<void> _reportIssue() async {
+    final l10n = context.l10n;
+    await openBugReportForm(
+      snackBar: ref.read(snackBarServiceProvider),
+      copiedMessage: l10n.aboutSpecsCopied,
+      openFailedMessage: l10n.aboutOpenIssueFailed,
     );
   }
 
@@ -252,7 +258,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                       TextButton(
                         onPressed: () {
                           Navigator.pop(context);
-                          _openUrl('$_kGitHubUrl/blob/main/LICENSE');
+                          _openUrl('$kGitHubUrl/blob/main/LICENSE');
                         },
                         child: Text(l10n.aboutViewFullLicense),
                       ),
@@ -346,14 +352,12 @@ class _AboutPageState extends ConsumerState<AboutPage> {
 class _AboutTile extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String? subtitle;
   final String? trailing;
   final VoidCallback? onTap;
 
   const _AboutTile({
     required this.icon,
     required this.title,
-    this.subtitle,
     this.trailing,
     this.onTap,
   });
@@ -376,31 +380,17 @@ class _AboutTile extends StatelessWidget {
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  subtitle!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
+          child: Text(
+            title,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface,
+            ),
           ),
         ),
         if (trailing != null)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 200),
+            constraints: const BoxConstraints(maxWidth: 160),
             child: Text(
               trailing!,
               style: theme.textTheme.bodyMedium?.copyWith(
