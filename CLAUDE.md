@@ -158,5 +158,7 @@
 - **showAppDialog** (`lib/widgets/app_dialog.dart`) — 禁止自行编写 `showGeneralDialog` 转场。
 - **WindowChrome** (`lib/widgets/window_chrome.dart`) — 禁止在页面级 Scaffold 挂 chrome。
 - **OnboardingNotifier** (`lib/providers/onboarding_provider.dart`) — 首启引导状态机，`hasSeenOnboarding` 存 `GStorage.setting`。禁止自行判断/持久化首启标志。
+- **SystemSpecs** (`lib/services/system_specs.dart`) — About 系统标签 / issue 系统信息。Android 版本走 `device_info_plus` 的 `version.release`。禁止用 `Platform.operatingSystemVersion` 取首段数字推断 Android 版本（Build.DISPLAY 会误判成 3 等）。
 
 @TODO.md
+
