@@ -7,14 +7,16 @@ import 'package:path/path.dart' as p;
 
 import 'storage/storage.dart';
 
+final _fileLogOutput = _FileLogOutput();
+
 /// 全局日志实例——debug 模式输出纯文本到控制台，
-/// release 模式下控制台静默但按用户配置持久化到磁盘。
+/// 用户开启日志记录时按级别持久化到磁盘（debug / release 均写文件）。
 final log = Logger(
   filter: _AppLogFilter(),
   printer: _PlainPrinter(),
   output: MultiOutput([
     _DebugPrintOutput(),
-    _FileLogOutput(),
+    _fileLogOutput,
   ]),
 );
 
@@ -39,7 +41,20 @@ Level _configuredMinLevel() {
   }
 }
 
-/// debug 全放行；release 按用户配置的最低级别过滤。
+/// 刷新文件日志缓冲，确保导出前内容落盘。
+Future<void> flushAppLogs() => _fileLogOutput.flush();
+
+/// 今日日志文件（存在且非空时返回）。
+File? todayAppLogFile() {
+  try {
+    final dateStr = _logDateFmt.format(DateTime.now());
+    final file = File(p.join(GStorage.logsDirPath, 'app_$dateStr.log'));
+    if (file.existsSync() && file.lengthSync() > 0) return file;
+  } catch (_) {}
+  return null;
+}
+
+/// debug 全放行到输出端；各 Output 自行决定控制台/文件策略。
 class _AppLogFilter extends LogFilter {
   @override
   bool shouldLog(LogEvent event) {
@@ -84,13 +99,16 @@ const _levelLabel = {
 const _maxLogAgeDays = 7;
 
 /// 将日志写入磁盘——按日滚动，保留 7 天。
+/// 用户开启日志时 debug/release 均落盘；级别按设置过滤。
 class _FileLogOutput extends LogOutput {
   IOSink? _sink;
   String? _currentDate;
 
   @override
   void output(OutputEvent event) {
-    if (kDebugMode) return;
+    final min = _configuredMinLevel();
+    if (min == Level.off) return;
+    if (event.level.value < min.value) return;
 
     final now = DateTime.now();
     final dateStr = _logDateFmt.format(now);
@@ -108,6 +126,10 @@ class _FileLogOutput extends LogOutput {
     for (final line in event.lines) {
       sink.writeln('$time [$label] $line');
     }
+  }
+
+  Future<void> flush() async {
+    await _sink?.flush();
   }
 
   void _rotateSink(String dateStr) {
