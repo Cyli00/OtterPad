@@ -43,6 +43,7 @@ import 'widgets/figure_viewer.dart';
 import 'widgets/webview_markdown_reader.dart';
 import 'widgets/outline_panel.dart';
 import 'widgets/reader_bottom_bar.dart';
+import 'widgets/reader_chat_return_prompt.dart';
 import 'widgets/reader_background.dart';
 import 'widgets/reader_document_info_sheet.dart';
 import 'widgets/reader_notes_sheet.dart';
@@ -98,6 +99,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _sheetHostKey = GlobalKey<ReaderSheetHostState>();
   late final ReaderSessionArgs _sessionArgs;
   ReaderSheetType? _activeSheet;
+
+  /// 定位原文后暂存的问 AI 返回参数；非空时展示返回引导条。
+  DocumentChatPageArgs? _chatReturnArgs;
 
   static _MainBuildKey _mainBuildSelector(ReaderSessionState s) => (
     s.initialized,
@@ -446,6 +450,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       builder: (_) => ReaderOutlineSheetBody(
         markdownContent: session.markdownContent!,
         documentId: widget.document.id,
+        document: widget.document,
+        onLocateQuote: _locateQuoteInReader,
         summaryImageState: _summaryImageState,
         figuresEpoch: _figuresEpoch,
         onNavigate: (offset) {
@@ -781,6 +787,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// 打开问 AI 对话页。[quote] 是划词引用；底栏入口不带引用。
   void _openAiChat({String? quote}) {
+    setState(() => _chatReturnArgs = null);
     // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"新路由显示
     _webViewReaderKey.currentState?.clearSelection();
     context.push(
@@ -796,7 +803,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 会话历史「定位原文」——按引用文本在 markdown 源里找偏移，复用大纲
   /// 跳转的滚动管线。渲染文本与源文本可能因 Markdown 标记不一致，全文
   /// 匹配失败时退化为引用前 30 字符。
-  void _locateQuoteInReader(String quote) {
+  void _locateQuoteInReader(String quote, DocumentChatPageArgs returnArgs) {
     final md = _session.markdownContent;
     final trimmed = quote.trim();
     if (md == null || trimmed.isEmpty) return;
@@ -805,6 +812,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       idx = md.indexOf(trimmed.substring(0, 30));
     }
     if (idx >= 0) _scrollToCharOffset(idx);
+    setState(() => _chatReturnArgs = returnArgs);
+  }
+
+  void _returnToChat() {
+    final args = _chatReturnArgs;
+    if (args == null) return;
+    Haptics.soft();
+    setState(() => _chatReturnArgs = null);
+    _webViewReaderKey.currentState?.clearSelection();
+    context.push(AppRoutes.readerChat, extra: args);
+  }
+
+  double _chatReturnPromptBottom(ReaderSessionState session) {
+    final padding = MediaQuery.paddingOf(context).bottom;
+    const barHeight = 56.0;
+    final barVisible = session.showPreview &&
+        session.hasResult &&
+        session.markdownContent != null &&
+        session.toolbarsVisible;
+    return (barVisible ? barHeight + padding : padding) + 16;
   }
 
   // ─── 选择/标记工具栏 ───
@@ -932,6 +959,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     key: ValueKey(session.markdownContent.hashCode),
                     markdownContent: session.markdownContent!,
                     documentId: widget.document.id,
+                    document: widget.document,
+                    onLocateQuote: _locateQuoteInReader,
                     summaryImageState: _summaryImageState,
                     figuresEpoch: _figuresEpoch,
                     onNavigate: (offset) {
@@ -1025,6 +1054,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                               : const Offset(0, 1),
                           child: _buildBottomBar(readerSettings),
                         ),
+                      ),
+                    ),
+                  // ── 定位原文后返回问 AI 引导条 ──
+                  if (_chatReturnArgs != null)
+                    AnimatedPositioned(
+                      duration: kAnim,
+                      curve: kAnimCurve,
+                      right: 16,
+                      bottom: _chatReturnPromptBottom(session),
+                      child: ReaderChatReturnPrompt(
+                        onCancel: () {
+                          Haptics.soft();
+                          setState(() => _chatReturnArgs = null);
+                        },
+                        onReturn: _returnToChat,
                       ),
                     ),
                   // ── 浮动搜索结果导航器 ──
@@ -1556,6 +1600,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       figures,
       initialIndex: index,
       documentId: documentId,
+      document: widget.document,
+      onLocateQuote: _locateQuoteInReader,
     );
   }
 
