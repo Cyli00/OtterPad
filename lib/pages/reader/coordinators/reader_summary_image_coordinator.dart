@@ -133,7 +133,12 @@ class ReaderSummaryImageCoordinator {
       pageIndex: 0,
       blockIds: const [],
     );
-    await showFigureViewer(context, [entry]);
+    await showFigureViewer(
+      context,
+      [entry],
+      documentId: document.id,
+      document: document,
+    );
   }
 
   /// 从相册上传一张图片作为总结图。

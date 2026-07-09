@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,20 +28,34 @@ import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
 import '../widgets/md_widget/nr_markdown_config.dart';
 
+/// 定位原文：阅读器滚动后展示「返回问 AI」引导。
+typedef LocateQuoteInReader = void Function(
+  String quote,
+  DocumentChatPageArgs returnArgs,
+);
+
 class DocumentChatPageArgs {
   final Document document;
 
   /// 划词进入时的引用文本；底栏入口为 null。
   final String? initialQuote;
 
+  /// 从 Figure 查看器进入时附带的单张图片路径；非空时仅向模型发送此图。
+  final String? figureImagePath;
+
   /// 会话历史「定位原文」回调——由阅读器注入（按引用文本找 markdown 偏移
   /// 并滚动）。阅读器在导航栈下层保持存活，回调可直接驱动它。
-  final void Function(String quote)? onLocateQuote;
+  final LocateQuoteInReader? onLocateQuote;
+
+  /// 定位原文返回后重新打开时保留当前会话，不重置为草稿。
+  final bool preserveSession;
 
   const DocumentChatPageArgs({
     required this.document,
     this.initialQuote,
+    this.figureImagePath,
     this.onLocateQuote,
+    this.preserveSession = false,
   });
 }
 
@@ -58,6 +74,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _inputController = TextEditingController();
   String? _quote;
+  String? _figureImagePath;
   ChatModelRole _role = ChatModelRole.expert;
 
   /// 编辑模式：被编辑的 user 消息在 messages 中的 index。
@@ -80,12 +97,15 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     super.initState();
     _quote = widget.args.initialQuote?.trim();
     if (_quote?.isEmpty ?? false) _quote = null;
-    // 每次进入都从新会话草稿开始；历史会话经右上角入口切换。
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(documentChatProvider(_documentId).notifier).startNewSession();
-      }
-    });
+    _figureImagePath = widget.args.figureImagePath;
+    // 每次进入都从新会话草稿开始；定位原文返回时保留会话。
+    if (!widget.args.preserveSession) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(documentChatProvider(_documentId).notifier).startNewSession();
+        }
+      });
+    }
   }
 
   @override
@@ -109,6 +129,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             text: text,
             role: _role,
             quotedText: _quote,
+            figureImagePath: _figureImagePath,
             thinkingOverride: _thinking,
             webSearch: _webSearch,
             streaming: _stream,
@@ -120,6 +141,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             text: text,
             role: _role,
             quotedText: _quote,
+            figureImagePath: _figureImagePath,
             thinkingOverride: _thinking,
             webSearch: _webSearch,
             streaming: _stream,
@@ -289,10 +311,14 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         GStorage.setting.get(_kNewChatHintDismissedKey) as bool? ?? false;
     if (dismissed) {
       notifier.startNewSession();
+      setState(() => _figureImagePath = null);
       return;
     }
     final confirmed = await _showNewChatDialog();
-    if (confirmed == true && mounted) notifier.startNewSession();
+    if (confirmed == true && mounted) {
+      notifier.startNewSession();
+      setState(() => _figureImagePath = null);
+    }
   }
 
   Future<bool?> _showNewChatDialog() {
@@ -384,7 +410,15 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   void _locateQuote(String quote) {
     final locate = widget.args.onLocateQuote;
     if (locate == null) return;
-    locate(quote);
+    Haptics.soft();
+    locate(
+      quote,
+      DocumentChatPageArgs(
+        document: widget.args.document,
+        preserveSession: true,
+        onLocateQuote: widget.args.onLocateQuote,
+      ),
+    );
     context.pop();
   }
 
@@ -825,6 +859,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           text: userMsg.content,
           role: _role,
           quotedText: userMsg.quotedText,
+          figureImagePath: _figureImagePath,
           thinkingOverride: _thinking,
           webSearch: _webSearch,
           streaming: _stream,
@@ -856,12 +891,16 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                 ),
                 const SizedBox(height: 8),
               ],
-              if (_quote != null) ...[
+              if (_quote != null || _figureImagePath != null) ...[
                 _QuoteCard(
-                  text: _quote!,
+                  text: _quote ?? '',
+                  imagePath: _figureImagePath,
                   onRemove: () {
                     Haptics.soft();
-                    setState(() => _quote = null);
+                    setState(() {
+                      _quote = null;
+                      _figureImagePath = null;
+                    });
                   },
                 ),
                 const SizedBox(height: 8),
@@ -1369,9 +1408,14 @@ class _QuoteBlock extends StatelessWidget {
 /// 输入区上方的待发送引用卡（可移除）。
 class _QuoteCard extends StatefulWidget {
   final String text;
+  final String? imagePath;
   final VoidCallback onRemove;
 
-  const _QuoteCard({required this.text, required this.onRemove});
+  const _QuoteCard({
+    required this.text,
+    this.imagePath,
+    required this.onRemove,
+  });
 
   @override
   State<_QuoteCard> createState() => _QuoteCardState();
@@ -1412,13 +1456,34 @@ class _QuoteCardState extends State<_QuoteCard> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Text(
-                      widget.text,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                      maxLines: _expanded ? null : 2,
-                      overflow: _expanded ? null : TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (widget.imagePath != null &&
+                            File(widget.imagePath!).existsSync()) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(widget.imagePath!),
+                              height: 72,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              cacheWidth: 360,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        if (widget.text.isNotEmpty)
+                          Text(
+                            widget.text,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                            maxLines: _expanded ? null : 2,
+                            overflow:
+                                _expanded ? null : TextOverflow.ellipsis,
+                          ),
+                      ],
                     ),
                   ),
                 ),

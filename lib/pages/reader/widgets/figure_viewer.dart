@@ -7,13 +7,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gal/gal.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/animation_constants.dart';
+import '../../../data/models/book/document.dart';
 import '../../../providers/api_provider.dart';
+import '../../../router/app_routes.dart';
+import '../chat/document_chat_page.dart';
 import '../../../services/haptics.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../services/ai_settings_prompt.dart';
@@ -32,6 +36,8 @@ Future<void> showFigureViewer(
   List<FigureManifestEntry> figures, {
   int initialIndex = 0,
   String? documentId,
+  Document? document,
+  LocateQuoteInReader? onLocateQuote,
 }) async {
   // 截取背景：找到最外层 RepaintBoundary（包含阅读器 + Drawer 全屏画面）
   Uint8List? bgSnapshot;
@@ -64,6 +70,8 @@ Future<void> showFigureViewer(
         initialIndex: initialIndex,
         backgroundSnapshot: bgSnapshot,
         documentId: documentId,
+        document: document,
+        onLocateQuote: onLocateQuote,
       ),
       transitionsBuilder: (_, animation, _, child) =>
           FadeTransition(opacity: animation, child: child),
@@ -77,6 +85,8 @@ class FigureViewer extends ConsumerStatefulWidget {
   final int initialIndex;
   final Uint8List? backgroundSnapshot;
   final String? documentId;
+  final Document? document;
+  final LocateQuoteInReader? onLocateQuote;
 
   const FigureViewer({
     super.key,
@@ -84,6 +94,8 @@ class FigureViewer extends ConsumerStatefulWidget {
     this.initialIndex = 0,
     this.backgroundSnapshot,
     this.documentId,
+    this.document,
+    this.onLocateQuote,
   });
 
   @override
@@ -561,7 +573,14 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                     ),
                   ),
                   const SizedBox(width: 12),
-                  _buildTranslateButton(idx, fig, isTranslated),
+                  Column(
+                    children: [
+                      if (widget.document != null)
+                        _buildAskAiButton(fig),
+                      if (widget.document != null) const SizedBox(height: 8),
+                      _buildTranslateButton(idx, fig, isTranslated),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -569,6 +588,44 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         ],
       ),
     );
+  }
+
+  Widget _buildAskAiButton(FigureManifestEntry fig) {
+    return SizedBox(
+      width: 36,
+      height: 36,
+      child: IconButton(
+        icon: const Icon(Symbols.auto_awesome_rounded, size: 18),
+        style: IconButton.styleFrom(
+          backgroundColor: const Color(0x1AFFFFFF),
+          foregroundColor: Colors.white60,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: EdgeInsets.zero,
+        ),
+        tooltip: context.l10n.askAi,
+        onPressed: () => _openAskAi(fig),
+      ),
+    );
+  }
+
+  void _openAskAi(FigureManifestEntry fig) {
+    final document = widget.document;
+    if (document == null) return;
+    Haptics.soft();
+
+    final quote = fig.captionText.trim();
+    final args = DocumentChatPageArgs(
+      document: document,
+      initialQuote: quote.isEmpty ? null : quote,
+      figureImagePath: fig.imagePath,
+      onLocateQuote: widget.onLocateQuote,
+    );
+
+    final router = GoRouter.of(context);
+    Navigator.of(context, rootNavigator: true).pop();
+    router.push(AppRoutes.readerChat, extra: args);
   }
 
   Widget _buildTranslateButton(

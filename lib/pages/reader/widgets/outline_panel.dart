@@ -7,9 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../widgets/tactile_press.dart';
 
+import '../../../data/models/book/document.dart';
 import '../../../providers/summary_image_provider.dart';
 import '../../../services/figure_extract_service.dart';
 import '../../../services/haptics.dart';
+import '../chat/document_chat_page.dart';
 import 'figure_viewer.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/animation_constants.dart';
@@ -141,6 +143,8 @@ bool _looksLikeReference(String text) {
 class OutlinePanel extends StatefulWidget {
   final String markdownContent;
   final String? documentId;
+  final Document? document;
+  final LocateQuoteInReader? onLocateQuote;
   final ValueListenable<SummaryImageState> summaryImageState;
   final void Function(int charOffset) onNavigate;
   final VoidCallback? onUploadSummaryImage;
@@ -157,6 +161,8 @@ class OutlinePanel extends StatefulWidget {
     super.key,
     required this.markdownContent,
     this.documentId,
+    this.document,
+    this.onLocateQuote,
     required this.summaryImageState,
     this.figuresEpoch,
     required this.onNavigate,
@@ -273,6 +279,8 @@ class _OutlinePanelState extends State<OutlinePanel>
                     loaded: _figuresLoaded,
                     markdownContent: widget.markdownContent,
                     documentId: widget.documentId,
+                    document: widget.document,
+                    onLocateQuote: widget.onLocateQuote,
                     onNavigate: widget.onNavigate,
                     summaryState: summaryState,
                     onUploadSummaryImage: widget.onUploadSummaryImage,
@@ -312,6 +320,8 @@ class _FiguresTab extends StatelessWidget {
   final bool loaded;
   final String markdownContent;
   final String? documentId;
+  final Document? document;
+  final LocateQuoteInReader? onLocateQuote;
   final void Function(int charOffset) onNavigate;
   final SummaryImageState summaryState;
   final VoidCallback? onUploadSummaryImage;
@@ -322,6 +332,8 @@ class _FiguresTab extends StatelessWidget {
     required this.loaded,
     required this.markdownContent,
     this.documentId,
+    this.document,
+    this.onLocateQuote,
     required this.onNavigate,
     required this.summaryState,
     this.onUploadSummaryImage,
@@ -381,9 +393,14 @@ class _FiguresTab extends StatelessWidget {
               GestureDetector(
                 onTap: () {
                   Haptics.soft();
-                  showFigureViewer(context, figures!,
-                      initialIndex: figIndex,
-                      documentId: documentId);
+                  showFigureViewer(
+                    context,
+                    figures!,
+                    initialIndex: figIndex,
+                    documentId: documentId,
+                    document: document,
+                    onLocateQuote: onLocateQuote,
+                  );
                 },
                 child: Hero(
                   tag: 'figure_${fig.imagePath}',
@@ -432,6 +449,8 @@ class _FiguresTab extends StatelessWidget {
                       figures!,
                       initialIndex: figIndex,
                       documentId: documentId,
+                      document: document,
+                      onLocateQuote: onLocateQuote,
                     ),
                   ),
               ],
@@ -507,7 +526,13 @@ class _FiguresTab extends StatelessWidget {
                 pageIndex: 0,
                 blockIds: const [],
               );
-              showFigureViewer(context, [entry]);
+              showFigureViewer(
+                context,
+                [entry],
+                documentId: documentId,
+                document: document,
+                onLocateQuote: onLocateQuote,
+              );
             },
             child: Hero(
               tag: 'figure_$imagePath',

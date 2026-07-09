@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../data/models/book/document.dart';
+import '../chat/document_chat_page.dart';
 import '../../../providers/summary_image_provider.dart';
 import 'outline_panel.dart';
 
@@ -10,6 +12,8 @@ import 'outline_panel.dart';
 class ReaderOutlineSheetBody extends StatelessWidget {
   final String markdownContent;
   final String documentId;
+  final Document document;
+  final LocateQuoteInReader? onLocateQuote;
   final ValueNotifier<SummaryImageState> summaryImageState;
   final ValueListenable<int>? figuresEpoch;
   final ValueChanged<int> onNavigate;
@@ -19,6 +23,8 @@ class ReaderOutlineSheetBody extends StatelessWidget {
     super.key,
     required this.markdownContent,
     required this.documentId,
+    required this.document,
+    this.onLocateQuote,
     required this.summaryImageState,
     this.figuresEpoch,
     required this.onNavigate,
@@ -48,6 +54,8 @@ class ReaderOutlineSheetBody extends StatelessWidget {
               key: ValueKey(markdownContent.hashCode),
               markdownContent: markdownContent,
               documentId: documentId,
+              document: document,
+              onLocateQuote: onLocateQuote,
               summaryImageState: summaryImageState,
               figuresEpoch: figuresEpoch,
               inSheet: true,
