@@ -1,0 +1,38 @@
+name: Feature Request
+description: Suggest a new capability or improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem you want solved and the behavior you would like.
+        Focus on user value — implementation details are optional.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What pain point or workflow is missing? Who is affected?
+      placeholder: |
+        As a researcher, I need to … because …
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Expected solution / behavior
+      description: What should OtterPad do differently? Describe the ideal outcome.
+      placeholder: |
+        I would like OtterPad to …
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
+      description: Workarounds or other products you already tried.
+    validations:
+      required: false

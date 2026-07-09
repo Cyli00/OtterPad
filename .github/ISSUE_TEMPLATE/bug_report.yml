@@ -1,0 +1,62 @@
+name: Bug Report
+description: Report a crash, incorrect behavior, or regression
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve OtterPad.
+
+        **In the app:**
+        1. **Settings → About → System** — tap to copy system specs (or use **Report an Issue**)
+        2. **Settings → General → Export Today's Log** — share/save `app_yyyy-MM-dd.log` and attach it below if possible
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Exact steps to reproduce the problem. Include what you expected vs what happened.
+      placeholder: |
+        1. Open …
+        2. Tap …
+        3. Observe …
+    validations:
+      required: true
+
+  - type: textarea
+    id: specs
+    attributes:
+      label: OtterPad version and system specs
+      description: Paste the text copied from **About → System** (or Report an Issue).
+      placeholder: |
+        OtterPad 0.1.1 (2)
+        OS: Android …
+        Arch: …
+        Locale: …
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log files
+      description: |
+        Paste relevant log lines, **or** write that you attached today's export
+        (e.g. `Attached app_2026-07-09.log`). Export via **Settings → General → Export Today's Log**.
+      placeholder: |
+        Attached app_yyyy-MM-dd.log
+
+        — or paste excerpt —
+
+        12:34:56.789 [ERROR] …
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context (optional)
+      description: Screenshots, screen recordings, related issues, workarounds.
+    validations:
+      required: false
