@@ -181,7 +181,13 @@ class StorageUsageService {
           await _clearLibraryMatching(
             (sub, name) => !sub.startsWith('chats/') && name != '.reader.html',
           );
-          await GStorage.db.delete(GStorage.db.highlights).go();
+          // 删 documents：外键 CASCADE 自动清 highlights/history/
+          // favorite_documents/zotero_items 关联行，FTS 触发器同步清
+          // documents_fts。favorites 收藏夹分组保留（用户自定义容器，
+          // 清理文献不清分组结构）。
+          await GStorage.db.delete(GStorage.db.documents).go();
+          // SQLite DELETE 不释放磁盘空间，VACUUM 收缩 otter.db 文件。
+          await GStorage.db.customStatement('VACUUM');
         case StorageGroupKey.chat:
           await _clearLibraryMatching(
             (sub, name) => sub.startsWith('chats/'),
