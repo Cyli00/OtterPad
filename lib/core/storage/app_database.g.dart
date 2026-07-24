@@ -1037,7 +1037,8 @@ class History extends Table with TableInfo<History, HistoryData> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    $customConstraints: 'NOT NULL PRIMARY KEY',
+    $customConstraints:
+        'NOT NULL PRIMARY KEY REFERENCES documents(id)ON DELETE CASCADE',
   );
   static const VerificationMeta _openedAtMeta = const VerificationMeta(
     'openedAt',
@@ -2649,6 +2650,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
+        'documents',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('history', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
         'favorites',
         limitUpdateKind: UpdateKind.delete,
       ),
@@ -2716,6 +2724,25 @@ final class $DocumentsReferences
     ).filter((f) => f.docId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_highlightsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<History, List<HistoryData>> _historyRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.history,
+    aliasName: 'documents__id__history__docId',
+  );
+
+  $HistoryProcessedTableManager get historyRefs {
+    final manager = $HistoryTableManager(
+      $_db,
+      $_db.history,
+    ).filter((f) => f.docId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_historyRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -2830,6 +2857,31 @@ class $DocumentsFilterComposer extends Composer<_$AppDatabase, Documents> {
           }) => $HighlightsFilterComposer(
             $db: $db,
             $table: $db.highlights,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> historyRefs(
+    Expression<bool> Function($HistoryFilterComposer f) f,
+  ) {
+    final $HistoryFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.history,
+      getReferencedColumn: (t) => t.docId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $HistoryFilterComposer(
+            $db: $db,
+            $table: $db.history,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3006,6 +3058,31 @@ class $DocumentsAnnotationComposer extends Composer<_$AppDatabase, Documents> {
     return f(composer);
   }
 
+  Expression<T> historyRefs<T extends Object>(
+    Expression<T> Function($HistoryAnnotationComposer a) f,
+  ) {
+    final $HistoryAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.history,
+      getReferencedColumn: (t) => t.docId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $HistoryAnnotationComposer(
+            $db: $db,
+            $table: $db.history,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> favoriteDocumentsRefs<T extends Object>(
     Expression<T> Function($FavoriteDocumentsAnnotationComposer a) f,
   ) {
@@ -3072,6 +3149,7 @@ class $DocumentsTableManager
           Document,
           PrefetchHooks Function({
             bool highlightsRefs,
+            bool historyRefs,
             bool favoriteDocumentsRefs,
             bool zoteroItemsRefs,
           })
@@ -3143,6 +3221,7 @@ class $DocumentsTableManager
           prefetchHooksCallback:
               ({
                 highlightsRefs = false,
+                historyRefs = false,
                 favoriteDocumentsRefs = false,
                 zoteroItemsRefs = false,
               }) {
@@ -3150,6 +3229,7 @@ class $DocumentsTableManager
                   db: db,
                   explicitlyWatchedTables: [
                     if (highlightsRefs) db.highlights,
+                    if (historyRefs) db.history,
                     if (favoriteDocumentsRefs) db.favoriteDocuments,
                     if (zoteroItemsRefs) db.zoteroItems,
                   ],
@@ -3170,6 +3250,23 @@ class $DocumentsTableManager
                             table,
                             p0,
                           ).highlightsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.docId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (historyRefs)
+                        await $_getPrefetchedData<
+                          Document,
+                          Documents,
+                          HistoryData
+                        >(
+                          currentTable: table,
+                          referencedTable: $DocumentsReferences
+                              ._historyRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $DocumentsReferences(db, table, p0).historyRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.docId == item.id,
@@ -3238,6 +3335,7 @@ typedef $DocumentsProcessedTableManager =
       Document,
       PrefetchHooks Function({
         bool highlightsRefs,
+        bool historyRefs,
         bool favoriteDocumentsRefs,
         bool zoteroItemsRefs,
       })
@@ -3610,6 +3708,28 @@ typedef $HistoryUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $HistoryReferences
+    extends BaseReferences<_$AppDatabase, History, HistoryData> {
+  $HistoryReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static Documents _docIdTable(_$AppDatabase db) =>
+      db.documents.createAlias('history__docId__documents__id');
+
+  $DocumentsProcessedTableManager get docId {
+    final $_column = $_itemColumn<String>('docId')!;
+
+    final manager = $DocumentsTableManager(
+      $_db,
+      $_db.documents,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_docIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
 class $HistoryFilterComposer extends Composer<_$AppDatabase, History> {
   $HistoryFilterComposer({
     required super.$db,
@@ -3618,11 +3738,6 @@ class $HistoryFilterComposer extends Composer<_$AppDatabase, History> {
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get docId => $composableBuilder(
-    column: $table.docId,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<int> get openedAt => $composableBuilder(
     column: $table.openedAt,
     builder: (column) => ColumnFilters(column),
@@ -3637,6 +3752,29 @@ class $HistoryFilterComposer extends Composer<_$AppDatabase, History> {
     column: $table.anchorBlock,
     builder: (column) => ColumnFilters(column),
   );
+
+  $DocumentsFilterComposer get docId {
+    final $DocumentsFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.docId,
+      referencedTable: $db.documents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $DocumentsFilterComposer(
+            $db: $db,
+            $table: $db.documents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $HistoryOrderingComposer extends Composer<_$AppDatabase, History> {
@@ -3647,11 +3785,6 @@ class $HistoryOrderingComposer extends Composer<_$AppDatabase, History> {
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get docId => $composableBuilder(
-    column: $table.docId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<int> get openedAt => $composableBuilder(
     column: $table.openedAt,
     builder: (column) => ColumnOrderings(column),
@@ -3666,6 +3799,29 @@ class $HistoryOrderingComposer extends Composer<_$AppDatabase, History> {
     column: $table.anchorBlock,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $DocumentsOrderingComposer get docId {
+    final $DocumentsOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.docId,
+      referencedTable: $db.documents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $DocumentsOrderingComposer(
+            $db: $db,
+            $table: $db.documents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $HistoryAnnotationComposer extends Composer<_$AppDatabase, History> {
@@ -3676,9 +3832,6 @@ class $HistoryAnnotationComposer extends Composer<_$AppDatabase, History> {
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get docId =>
-      $composableBuilder(column: $table.docId, builder: (column) => column);
-
   GeneratedColumn<int> get openedAt =>
       $composableBuilder(column: $table.openedAt, builder: (column) => column);
 
@@ -3689,6 +3842,29 @@ class $HistoryAnnotationComposer extends Composer<_$AppDatabase, History> {
     column: $table.anchorBlock,
     builder: (column) => column,
   );
+
+  $DocumentsAnnotationComposer get docId {
+    final $DocumentsAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.docId,
+      referencedTable: $db.documents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $DocumentsAnnotationComposer(
+            $db: $db,
+            $table: $db.documents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $HistoryTableManager
@@ -3702,9 +3878,9 @@ class $HistoryTableManager
           $HistoryAnnotationComposer,
           $HistoryCreateCompanionBuilder,
           $HistoryUpdateCompanionBuilder,
-          (HistoryData, BaseReferences<_$AppDatabase, History, HistoryData>),
+          (HistoryData, $HistoryReferences),
           HistoryData,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool docId})
         > {
   $HistoryTableManager(_$AppDatabase db, History table)
     : super(
@@ -3746,9 +3922,52 @@ class $HistoryTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (e.readTable(table), $HistoryReferences(db, table, e)),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({docId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (docId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.docId,
+                                referencedTable: $HistoryReferences._docIdTable(
+                                  db,
+                                ),
+                                referencedColumn: $HistoryReferences
+                                    ._docIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
         ),
       );
 }
@@ -3763,9 +3982,9 @@ typedef $HistoryProcessedTableManager =
       $HistoryAnnotationComposer,
       $HistoryCreateCompanionBuilder,
       $HistoryUpdateCompanionBuilder,
-      (HistoryData, BaseReferences<_$AppDatabase, History, HistoryData>),
+      (HistoryData, $HistoryReferences),
       HistoryData,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool docId})
     >;
 typedef $FavoritesCreateCompanionBuilder =
     FavoritesCompanion Function({

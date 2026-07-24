@@ -32,7 +32,7 @@ CREATE TABLE highlights (
 CREATE INDEX idx_highlights_docId ON highlights(docId);
 
 CREATE TABLE history (
-  docId        TEXT NOT NULL PRIMARY KEY,  -- unique = bubble 语义
+  docId        TEXT NOT NULL PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,  -- unique = bubble 语义
   openedAt     INTEGER NOT NULL,
   progress     REAL NOT NULL DEFAULT 0,
   anchorBlock  INTEGER

@@ -83,8 +83,8 @@ class ShelfPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final favorites = ref.watch(favoritesProvider);
-    final docs = ref.watch(documentsProvider);
+    final favorites = ref.watch(favoritesProvider).value ?? const [];
+    final docs = ref.watch(documentsProvider).value ?? const [];
     final historyCount = ref.watch(historyCountProvider);
     final noFileCount = ref.watch(noFileDocsCountProvider);
     final byId = {for (final doc in docs) doc.id: doc};

@@ -1,11 +1,10 @@
 import 'dart:async';
 
-// ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// ignore: depend_on_referenced_packages
-import 'package:flutter_riverpod/legacy.dart';
-import '../core/storage/db_convert.dart';
+import 'package:drift/drift.dart' show OrderingTerm;
 
+import '../core/storage/app_database_provider.dart';
+import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import 'documents_provider.dart' show validDocsProvider;
@@ -14,11 +13,11 @@ import '../data/models/book/history_entry.dart';
 
 export '../data/models/book/history_entry.dart';
 
-/// 阅读历史：按时间倒序的 HistoryEntry 列表。
+/// 阅读历史：按时间倒序的 HistoryEntry 列表（ADR-0001：Drift `watch()` 异步视图）。
 ///
 /// 语义：同一 docId 只保留最近一次（重新打开 = 冒泡到顶），
-/// 这样列表恒为"去重的最近阅读序列"。
-class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
+/// 这样列表恒为"去重的最近阅读序列"。查询取最近 500（bubble 语义）。
+class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
   static const _maxEntries = 500;
 
   /// 进度写盘防抖：阅读器内部高频更新（Markdown 滚动每 500ms 触发一次）
@@ -28,11 +27,20 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
   static const _progressDebounceDelay = Duration(seconds: 2);
   HistoryEntry? _pendingProgress;
 
-  HistoryNotifier() : super(GStorage.cache.history);
-
-  void reload() {
-    state = GStorage.cache.history;
+  @override
+  Stream<List<HistoryEntry>> build() {
+    final db = ref.watch(appDatabaseProvider);
+    ref.onDispose(() => _progressDebounce?.cancel());
+    return (db.select(db.history)
+          ..orderBy([(t) => OrderingTerm.desc(t.openedAt)])
+          ..limit(_maxEntries))
+        .map(historyFromRow)
+        .watch();
   }
+
+  void reload() => ref.invalidateSelf();
+
+  List<HistoryEntry> get _current => state.value ?? const <HistoryEntry>[];
 
   Future<void> _upsert(HistoryEntry e) async {
     await GStorage.db
@@ -61,61 +69,47 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
     );
   }
 
-  /// 记录一次阅读：已存在同 docId 时先移除再插入顶部（冒泡）。
+  /// 记录一次阅读：已存在同 docId 时 upsert（冒泡到顶，进度/锚点继承旧 entry）。
   /// 进度/锚点从旧 entry 继承——否则重开文档瞬间进度归零，
   /// 阅读位置恢复（view.dart initState 读取）拿到的永远是 0。
   void record(String docId) {
     final now = DateTime.now();
-    final idx = state.indexWhere((e) => e.docId == docId);
-    final prev = idx >= 0 ? state[idx] : null;
+    final idx = _current.indexWhere((e) => e.docId == docId);
+    final prev = idx >= 0 ? _current[idx] : null;
     final entry = HistoryEntry(
       docId: docId,
       openedAt: now,
       progress: prev?.progress ?? 0.0,
       anchorBlock: prev?.anchorBlock,
     );
-    final next = <HistoryEntry>[
-      entry,
-      ...state.where((e) => e.docId != docId),
-    ];
-    if (next.length > _maxEntries) {
-      next.removeRange(_maxEntries, next.length);
-    }
-    state = next;
     unawaited(_upsert(entry).then((_) => _cap()));
   }
 
   void removeDoc(String docId) {
-    final next = state.where((e) => e.docId != docId).toList();
-    if (next.length == state.length) return;
-    state = next;
+    if (!_current.any((e) => e.docId == docId)) return;
     unawaited(_delete(docId));
   }
 
   void removeMany(Set<String> docIds) {
     if (docIds.isEmpty) return;
-    final next = state.where((e) => !docIds.contains(e.docId)).toList();
-    if (next.length == state.length) return;
-    state = next;
     unawaited(_deleteMany(docIds));
   }
 
   void clear() {
-    if (state.isEmpty) return;
-    state = <HistoryEntry>[];
+    if (_current.isEmpty) return;
     unawaited(GStorage.db.delete(GStorage.db.history).go());
   }
 
-  /// 更新阅读进度。state 立即更新（让网格卡片 UI 实时刷新），写盘走 2s 防抖。
+  /// 更新阅读进度。写盘走 2s 防抖；流自动刷新 state（ADR-0001 非乐观）。
   ///
   /// 注意：仅更新已存在 entry 的 progress；如果文献从未打开过（无 HistoryEntry）
   /// 则直接忽略——`record(docId)` 在 reader 入口已经先建好 entry 了。
   void setProgress(String docId, double progress, {int? anchorBlock}) {
     final clamped = progress.clamp(0.0, 1.0);
-    final idx = state.indexWhere((e) => e.docId == docId);
+    final idx = _current.indexWhere((e) => e.docId == docId);
     if (idx < 0) return;
-    final old = state[idx];
-    // 同进度同锚点不动 state，避免无谓 rebuild
+    final old = _current[idx];
+    // 同进度同锚点不写盘，避免无谓磁盘 IO
     if ((old.progress - clamped).abs() < 1e-4 &&
         old.anchorBlock == anchorBlock) {
       return;
@@ -126,9 +120,6 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
       progress: clamped,
       anchorBlock: anchorBlock,
     );
-    final next = [...state];
-    next[idx] = updated;
-    state = next;
 
     _pendingProgress = updated;
     _progressDebounce?.cancel();
@@ -149,25 +140,19 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
       if (pending != null) await _upsert(pending);
     }
   }
-
-  @override
-  void dispose() {
-    _progressDebounce?.cancel();
-    super.dispose();
-  }
 }
 
 final historyProvider =
-    StateNotifierProvider<HistoryNotifier, List<HistoryEntry>>((ref) {
-  return HistoryNotifier();
-});
+    StreamNotifierProvider<HistoryNotifier, List<HistoryEntry>>(
+      HistoryNotifier.new,
+    );
 
 /// 派生：docId → 阅读进度。中间层隔离高频 progress 更新——
 /// 卡片经 [docProgressProvider] 按 docId select 订阅，只在自己那一条进度
 /// 变化时重建；书架顶层不再 watch 整个 historyProvider（此前阅读器每
 /// 500ms 的 setProgress 会让导航栈下层的书架页全列表 rebuild）。
 final _progressByDocProvider = Provider<Map<String, double>>((ref) {
-  final history = ref.watch(historyProvider);
+  final history = ref.watch(historyProvider).value ?? const <HistoryEntry>[];
   return {for (final e in history) e.docId: e.progress};
 });
 
@@ -188,7 +173,7 @@ class HistorySection {
 /// 桶顺序（从上到下）：今天 / 昨天 / 本周 / 本月 / YYYY年M月…
 /// 每个桶互斥——靠分支顺序隐式保证优先级。
 final historySectionsProvider = Provider<List<HistorySection>>((ref) {
-  final history = ref.watch(historyProvider);
+  final history = ref.watch(historyProvider).value ?? const <HistoryEntry>[];
   // 只索引有文件的文献——无 PDF 的元数据条目（contentHash == null）不能打开阅读器，
   // 出现在历史里只会让人困惑、点了无反应。
   final docs = ref.watch(validDocsProvider);

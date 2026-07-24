@@ -148,7 +148,7 @@ class AutoBackupScheduler {
   }
 
   Future<bool> _hasChanges(BackupSnapshot snapshot) async {
-    final docs = _ref.read(documentsProvider);
+    final docs = _ref.read(documentsProvider).value ?? const [];
     if (docs.length != snapshot.docs.length) return true;
     final current = await BackupFingerprintService.compute(docs);
     for (final entry in current.entries) {

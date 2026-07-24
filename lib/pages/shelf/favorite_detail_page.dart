@@ -36,8 +36,8 @@ class FavoriteDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final docs = ref.watch(documentsProvider);
-    final favorites = ref.watch(favoritesProvider);
+    final docs = ref.watch(documentsProvider).value ?? const [];
+    final favorites = ref.watch(favoritesProvider).value ?? const [];
     final currentFavorite = favorites.firstWhere(
       (f) => f.id == favorite.id,
       orElse: () => favorite,

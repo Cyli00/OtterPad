@@ -1,21 +1,33 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart';
-// ignore: depend_on_referenced_packages
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/storage/app_database_provider.dart';
 import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/highlight.dart';
 
-/// 按文献 ID 管理划线标注的状态管理器。
+/// 按文献 ID 管理划线标注（ADR-0001：Drift `watch()` 异步视图，family by docId）。
 ///
-/// 使用 `ref.watch(highlightProvider(documentId))` 获取当前文献的所有划线。
-class HighlightNotifier extends StateNotifier<List<Highlight>> {
+/// `build()` 返回该 docId 的 highlights `watch()` 流；写方法非乐观——只写 DB，
+/// 流自动刷新 `state`。删除文献时 FK CASCADE 清 highlights 行，流自动重发空。
+class HighlightNotifier extends StreamNotifier<List<Highlight>> {
+  HighlightNotifier(this.documentId);
+
   final String documentId;
 
-  HighlightNotifier(this.documentId)
-      : super(GStorage.cache.highlightsByDoc[documentId] ?? const []);
+  @override
+  Stream<List<Highlight>> build() {
+    final database = ref.watch(appDatabaseProvider);
+    return (database.select(database.highlights)
+          ..where((t) => t.docId.equals(documentId)))
+        .map(highlightFromRow)
+        .watch();
+  }
+
+  List<Highlight> get _current =>
+      state.value ?? const <Highlight>[];
 
   Future<void> _upsert(Highlight h) async {
     await GStorage.db
@@ -38,8 +50,8 @@ class HighlightNotifier extends StateNotifier<List<Highlight>> {
         .go();
   }
 
-  void add(String text, {String color = kDefaultHighlightColor}) {
-    if (state.any((h) => h.text == text)) return;
+  Highlight? add(String text, {String color = kDefaultHighlightColor}) {
+    if (_current.any((h) => h.text == text)) return null;
 
     final highlight = Highlight(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -48,42 +60,38 @@ class HighlightNotifier extends StateNotifier<List<Highlight>> {
       color: color,
       createdAt: DateTime.now(),
     );
-    state = [...state, highlight];
     unawaited(_upsert(highlight));
+    return highlight;
   }
 
   void remove(String highlightId) {
-    final idx = state.indexWhere((h) => h.id == highlightId);
+    final idx = _current.indexWhere((h) => h.id == highlightId);
     if (idx < 0) return;
-    final target = state[idx];
+    final target = _current[idx];
 
     if (target.groupId != null) {
-      state = state.where((h) => h.groupId != target.groupId).toList();
       unawaited(_deleteByGroup(target.groupId!));
     } else {
-      state = state.where((h) => h.id != highlightId).toList();
       unawaited(_delete(highlightId));
     }
   }
 
   void updateColor(String highlightId, String color) {
-    final match = state.where((h) => h.id == highlightId).toList();
+    final match = _current.where((h) => h.id == highlightId).toList();
     if (match.isEmpty) return;
     final updated = match.first.withColor(color);
-    state = [for (final h in state) if (h.id == highlightId) updated else h];
     unawaited(_upsert(updated));
   }
 
   void updateNote(String highlightId, String note) {
-    final match = state.where((h) => h.id == highlightId).toList();
+    final match = _current.where((h) => h.id == highlightId).toList();
     if (match.isEmpty) return;
     final updated = match.first.withNote(note.isEmpty ? null : note);
-    state = [for (final h in state) if (h.id == highlightId) updated else h];
     unawaited(_upsert(updated));
   }
 }
 
 final highlightProvider =
-    StateNotifierProvider.family<HighlightNotifier, List<Highlight>, String>(
-  (ref, documentId) => HighlightNotifier(documentId),
-);
+    StreamNotifierProvider.family<HighlightNotifier, List<Highlight>, String>(
+      HighlightNotifier.new,
+    );

@@ -11,10 +11,8 @@ import '../services/backup_restore_service.dart';
 import 'api_provider.dart';
 import 'auto_backup_provider.dart';
 import 'backup_provider.dart';
+import '../core/storage/app_database_provider.dart';
 import 'documents_provider.dart';
-import 'favorites_provider.dart';
-import 'highlight_provider.dart';
-import 'history_provider.dart';
 import 'proxy_provider.dart';
 import 'reader_settings_provider.dart';
 import 'sync_status_provider.dart';
@@ -53,7 +51,7 @@ class BackupOrchestrator {
     if (target == null) {
       throw StateError('远端备份未配置');
     }
-    final docs = _ref.read(documentsProvider);
+    final docs = _ref.read(documentsProvider).value ?? const [];
     String? tempArchivePath;
     try {
       // 指纹在打包前算（flush 后、打包中内容稳定），快照在上传成功后落。
@@ -161,7 +159,8 @@ class BackupOrchestrator {
   }
 
   /// 恢复后刷新受影响的 provider。设置类 notifier 从重开的 Drift 缓存
-  /// 重新加载；文献类 provider 直接 invalidate 重建。
+  /// 重新加载；文献类数据 provider 经 [appDatabaseProvider] 失效自动重建
+  /// 并重订阅新库（ADR-0001）。
   void _refreshAfterRestore(BackupRestoreScope scope) {
     if (scope.restoreSettings) {
       _ref.read(themeProvider.notifier).reload();
@@ -177,20 +176,9 @@ class BackupOrchestrator {
     }
 
     if (scope.restoreLibrary) {
-      final previousDocIds = _ref
-          .read(documentsProvider)
-          .map((doc) => doc.id)
-          .toSet();
-      _ref.invalidate(documentsProvider);
-      _ref.invalidate(favoritesProvider);
-      _ref.invalidate(historyProvider);
-      final currentDocIds = _ref
-          .read(documentsProvider)
-          .map((doc) => doc.id)
-          .toSet();
-      for (final docId in {...previousDocIds, ...currentDocIds}) {
-        _ref.invalidate(highlightProvider(docId));
-      }
+      // invalidate 数据库 provider → 所有 watch() 它的数据 provider（含
+      // highlightProvider(docId) family 全部实例）重建并重订阅新库。
+      _ref.invalidate(appDatabaseProvider);
     }
     _ref.invalidate(syncStatusProvider);
   }

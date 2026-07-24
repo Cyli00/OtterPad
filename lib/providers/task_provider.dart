@@ -270,7 +270,9 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
           versions.add((item['version'] as num?)?.toInt() ?? 0);
         }
 
-        final before = _ref.read(documentsProvider).map((d) => d.id).toSet();
+        final before = (_ref.read(documentsProvider).value ?? const [])
+            .map((d) => d.id)
+            .toSet();
         final imported = await _lifecycle.importDocuments(docs);
         for (var i = 0; i < imported.length; i++) {
           await ZoteroSyncStore.recordItem(keys[i], imported[i].id, versions[i]);

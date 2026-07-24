@@ -2,39 +2,80 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:drift/drift.dart';
-// ignore: depend_on_referenced_packages
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/storage/app_database_provider.dart';
 import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
 import '../data/models/collection/favorite.dart';
 
-/// 收藏夹状态管理
+/// 收藏夹列表（ADR-0001：Drift `watch()` 异步视图）。
 ///
-/// 收藏夹通过稳定 documentId 引用文献，不保存 PDF 绝对路径。
-/// 持久化：favorites 表 + favorite_documents 关联表（Drift）。
-class FavoritesNotifier extends StateNotifier<List<Favorite>> {
-  FavoritesNotifier() : super([]) {
-    _init();
+/// `build()` 订阅 `favorites` + `favorite_documents` 两表 `watch()`，任一变更都重发，
+/// 组装成带 `documentIds` 的 [Favorite] 列表（默认收藏夹置顶）。写方法非乐观——
+/// 只写 DB，流自动刷新 `state`。
+class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
+  @override
+  Stream<List<Favorite>> build() {
+    final database = ref.watch(appDatabaseProvider);
+    // 默认收藏夹幂等补建（首次启动或恢复的备份缺默认夹时）。写不触发 build 重跑
+    // （build 只在 appDatabaseProvider 失效时重跑），故无自激循环。
+    unawaited(_ensureDefault());
+    // favorites 与 favorite_documents 任一表变更都重发组装结果（ADR-0001）。
+    final controller = StreamController<List<Favorite>>();
+    Future<void> emit() async {
+      final favs = await database.select(database.favorites).get();
+      final fds = await database.select(database.favoriteDocuments).get();
+      final docsByFav = <String, List<String>>{};
+      for (final fd in fds) {
+        docsByFav.putIfAbsent(fd.favoriteId, () => []).add(fd.docId);
+      }
+      final list = [
+        for (final f in favs)
+          Favorite(
+            id: f.id,
+            emoji: f.emoji,
+            name: f.name,
+            documentIds: docsByFav[f.id] ?? const <String>[],
+            createdAt: DateTime.fromMillisecondsSinceEpoch(f.createdAt),
+          ),
+      ];
+      list.sort((a, b) {
+        if (a.isDefault && !b.isDefault) return -1;
+        if (!a.isDefault && b.isDefault) return 1;
+        return a.createdAt.compareTo(b.createdAt);
+      });
+      controller.add(list);
+    }
+
+    final sub1 = database
+        .select(database.favorites)
+        .watch()
+        .listen((_) => emit());
+    final sub2 = database
+        .select(database.favoriteDocuments)
+        .watch()
+        .listen((_) => emit());
+    emit();
+    ref.onDispose(() {
+      sub1.cancel();
+      sub2.cancel();
+      controller.close();
+    });
+    return controller.stream;
   }
 
-  void _init() {
-    state = GStorage.cache.favorites;
-    _ensureDefault();
-  }
+  void reload() => ref.invalidateSelf();
 
-  void reload() {
-    _init();
-  }
+  List<Favorite> get _current => state.value ?? const <Favorite>[];
 
   /// 首次启动或数据缺失时确保默认"我的收藏"存在且置顶。
-  void _ensureDefault() {
-    if (!state.any((f) => f.isDefault)) {
-      final def = _createDefault();
-      state = [def, ...state];
-      unawaited(_upsertFav(def));
-    } else if (!state.first.isDefault) {
-      final def = state.firstWhere((f) => f.isDefault);
-      state = [def, ...state.where((f) => !f.isDefault)];
+  Future<void> _ensureDefault() async {
+    final exists = await (GStorage.db.select(GStorage.db.favorites)
+          ..where((t) => t.id.equals(Favorite.defaultId)))
+        .getSingleOrNull();
+    if (exists == null) {
+      await _upsertFav(_createDefault());
     }
   }
 
@@ -91,42 +132,32 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
       documentIds: [],
       createdAt: DateTime.now(),
     );
-    state = [...state, favorite];
     await _upsertFav(favorite);
     return favorite;
   }
 
   /// 重命名收藏夹
   Future<void> rename(String id, {String? emoji, String? name}) async {
-    final match = state.where((f) => f.id == id).toList();
+    final match = _current.where((f) => f.id == id).toList();
     if (match.isEmpty) return;
     final updated = match.first.copyWith(emoji: emoji, name: name);
-    state = [for (final f in state) if (f.id == id) updated else f];
     await _upsertFav(updated);
   }
 
   /// 删除收藏夹（默认收藏夹不可删除）
   Future<void> delete(String id) async {
     if (id == Favorite.defaultId) return;
-    state = state.where((f) => f.id != id).toList();
     await _deleteFav(id);
   }
 
   /// 向收藏夹添加文献。
   Future<void> addDocument(String favoriteId, String documentId) async {
-    final target = state.firstWhere(
+    final target = _current.firstWhere(
       (f) => f.id == favoriteId,
       orElse: () => _createDefault(),
     );
     if (target.id != favoriteId) return;
     if (target.documentIds.contains(documentId)) return;
-    state = [
-      for (final f in state)
-        if (f.id == favoriteId)
-          f.copyWith(documentIds: [...f.documentIds, documentId])
-        else
-          f,
-    ];
     await _link(favoriteId, documentId);
   }
 
@@ -137,7 +168,7 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     String favoriteId,
     Iterable<String> documentIds,
   ) async {
-    final target = state.firstWhere(
+    final target = _current.firstWhere(
       (f) => f.id == favoriteId,
       orElse: () => _createDefault(),
     );
@@ -150,13 +181,6 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     }
     if (toAdd.isEmpty) return 0;
 
-    state = [
-      for (final f in state)
-        if (f.id == favoriteId)
-          f.copyWith(documentIds: [...f.documentIds, ...toAdd])
-        else
-          f,
-    ];
     await GStorage.db.batch((b) {
       for (final id in toAdd) {
         b.insert(
@@ -169,44 +193,19 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     return toAdd.length;
   }
 
-  /// 从所有收藏夹中移除指定文献（级联删除时使用）。
+  /// 从所有收藏夹中移除指定文献（不删文献本身）。
   Future<void> removeDocumentFromAll(String documentId) async {
-    bool changed = false;
-    final updated = <Favorite>[];
-    for (final f in state) {
-      if (f.documentIds.contains(documentId)) {
-        changed = true;
-        updated.add(
-          f.copyWith(
-            documentIds: f.documentIds.where((id) => id != documentId).toList(),
-          ),
-        );
-      } else {
-        updated.add(f);
-      }
-    }
-    if (changed) {
-      state = updated;
-      await _unlinkByDoc(documentId);
-    }
+    if (!_current.any((f) => f.documentIds.contains(documentId))) return;
+    await _unlinkByDoc(documentId);
   }
 
   /// 从收藏夹移除文献。
   Future<void> removeDocument(String favoriteId, String documentId) async {
-    state = [
-      for (final f in state)
-        if (f.id == favoriteId)
-          f.copyWith(
-            documentIds: f.documentIds.where((id) => id != documentId).toList(),
-          )
-        else
-          f,
-    ];
     await _unlink(favoriteId, documentId);
   }
 }
 
 final favoritesProvider =
-    StateNotifierProvider<FavoritesNotifier, List<Favorite>>((ref) {
-      return FavoritesNotifier();
-    });
+    StreamNotifierProvider<FavoritesNotifier, List<Favorite>>(
+      FavoritesNotifier.new,
+    );

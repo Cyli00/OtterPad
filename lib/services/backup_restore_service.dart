@@ -316,7 +316,6 @@ class BackupRestoreService {
       await _rollbackFromBackup(docsDir);
       rethrow;
     }
-    await GStorage.refreshCache();
   }
 
   /// settingsOnly 覆盖：表级替换 settings 表（保留其余）。
@@ -339,7 +338,7 @@ class BackupRestoreService {
     } finally {
       await backupDb.close();
     }
-    await GStorage.refreshCache();
+    await GStorage.reloadSettings();
   }
 
   /// 把备份表的全部行批量插入活库（已先清空活库对应表）。

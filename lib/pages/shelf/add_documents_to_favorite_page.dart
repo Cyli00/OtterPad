@@ -95,7 +95,7 @@ class _AddDocumentsToFavoritePageState
     // 只展示有文件的文献——无文件条目按全应用规则不可收藏，需先挂载 PDF 后
     // 才会出现在 validDocsProvider 中。
     final docs = ref.watch(validDocsProvider);
-    final favorites = ref.watch(favoritesProvider);
+    final favorites = ref.watch(favoritesProvider).value ?? const [];
 
     final currentFavorite = favorites.firstWhere(
       (f) => f.id == widget.favorite.id,

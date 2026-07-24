@@ -96,7 +96,7 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
   }
 
   Widget _buildBody(BuildContext context, SyncStatusResult result) {
-    final docs = ref.watch(documentsProvider);
+    final docs = ref.watch(documentsProvider).value ?? const [];
     final byId = {for (final doc in docs) doc.id: doc};
 
     List<Document> docsIn(DocSyncState state) => [

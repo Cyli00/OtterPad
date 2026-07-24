@@ -164,8 +164,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // 经 initialScrollProgress / initialAnchorBlock 传入 WebView 在
     // onContentReady 时恢复。横向翻页优先锚点（比率在字号/窗口尺寸
     // 变化后会落错页），纵向按比率。
-    final entry = ref
-        .read(historyProvider)
+    final entry = (ref.read(historyProvider).value ?? const [])
         .where((e) => e.docId == widget.document.id)
         .firstOrNull;
     if (entry != null) {
@@ -574,7 +573,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final result = await _showFavoritePickerSheet(
       title: context.l10n.moveToFavorite,
-      favorites: ref.read(favoritesProvider),
+      favorites: ref.read(favoritesProvider).value ?? const [],
       documentId: documentId,
       mode: ReaderFavoritePickerMode.add,
     );
@@ -609,7 +608,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _showFavoriteRemovalPicker() async {
     final documentId = widget.document.id;
 
-    final favorites = _favoritesContainingDoc(ref.read(favoritesProvider));
+    final favorites = _favoritesContainingDoc(
+      ref.read(favoritesProvider).value ?? const [],
+    );
     if (favorites.isEmpty) {
       ref
           .read(snackBarServiceProvider)
@@ -1145,7 +1146,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ReaderSessionState session, {
     bool extracting = false,
   }) {
-    final favorites = ref.watch(favoritesProvider);
+    final favorites = ref.watch(favoritesProvider).value ?? const [];
     final inFavorite = _isInAnyFavorite(favorites);
     final translation = ref.watch(
       documentTranslationProvider(widget.document.id),
@@ -1522,7 +1523,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final cs = theme.colorScheme;
     final palette = resolveReaderPalette(settings.theme, cs);
-    final highlights = ref.watch(highlightProvider(widget.document.id));
+    final highlights =
+        ref.watch(highlightProvider(widget.document.id)).value ??
+        const [];
     final documentDir = DocPaths.docDir(widget.document.id);
 
     // 用实时安全区把 WebView 控件整体内缩——滚动区不覆盖状态栏/小白条。
