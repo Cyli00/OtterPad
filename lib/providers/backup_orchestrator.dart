@@ -146,9 +146,9 @@ class BackupOrchestrator {
     return result;
   }
 
-  /// 恢复会 close 全部 Hive box（overwrite）或整批读写 box（merge）——
+  /// 恢复会 close Drift 连接（overwrite）或整批读写 DB（merge）——
   /// 先取消所有 Active Task 并等活集合清空，避免在飞任务（翻译写盘、
-  /// 提取 saveResult 等）撞上 close 窗口炸出 "Box has already been closed"。
+  /// 提取 saveResult 等）撞上 close 窗口炸出 "database has been closed"。
   /// 取消是协作式的，已在飞的网络请求要跑完才退出，超时后尽力而为继续。
   Future<void> _drainActiveTasks() async {
     final notifier = _ref.read(taskActivityProvider.notifier);
@@ -160,7 +160,7 @@ class BackupOrchestrator {
     }
   }
 
-  /// 恢复后刷新受影响的 provider。设置类 notifier 从重开的 Hive box
+  /// 恢复后刷新受影响的 provider。设置类 notifier 从重开的 Drift 缓存
   /// 重新加载；文献类 provider 直接 invalidate 重建。
   void _refreshAfterRestore(BackupRestoreScope scope) {
     if (scope.restoreSettings) {

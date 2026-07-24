@@ -3,10 +3,14 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
+import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../core/storage/app_database.dart' as db;
+import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
+import '../data/models/collection/favorite.dart';
 import 'backup_merge_service.dart';
 
 /// 备份创建范围（与恢复侧 [BackupRestoreScope] 对称的另一半）。
@@ -46,15 +50,16 @@ enum RestoreMode {
   final String description;
 }
 
+/// 备份/恢复服务。备份形态：单个 SQLite 文件（otter.db，经 VACUUM INTO
+/// 一致快照）+ library/ 目录 + manifest，打包成 ZIP。
 class BackupRestoreService {
   static const _archiveRoot = 'otter_pad_backup';
   static const _manifestPath = '$_archiveRoot/manifest.json';
   static const _libraryDir = '$_archiveRoot/library';
   static const _dbDir = '$_archiveRoot/db';
-  static const _formatVersion = 2;
-
-  static const _settingsBoxNames = {'settings'};
-  static const _libraryBoxNames = {'favorites', 'documents', 'highlights'};
+  static const _dbFileName = 'otter.db';
+  // formatVersion 3：Hive box 文件 → 单个 SQLite 文件。
+  static const _formatVersion = 3;
 
   static String buildBackupFileName([DateTime? time]) {
     final value = time ?? DateTime.now();
@@ -71,7 +76,6 @@ class BackupRestoreService {
     Map<String, dynamic>? manifestExtra,
   }) async {
     final createdAt = DateTime.now();
-
     await GStorage.flush();
 
     final manifest = <String, dynamic>{
@@ -81,30 +85,36 @@ class BackupRestoreService {
       'scope': scope.name,
       'libraryRoot': GStorage.libraryDirPath,
       'dbRoot': GStorage.dbDirPath,
+      'dbFile': _dbFileName,
       ...?manifestExtra,
     };
 
     final tempDir = await _getBackupTempDir();
     final outputPath = p.join(tempDir.path, buildBackupFileName(createdAt));
+    // VACUUM INTO 生成一致快照（不阻塞写、不撕裂 WAL）。
+    final snapshotPath = p.join(tempDir.path, 'snapshot_$_dbFileName');
+    await GStorage.db.customStatement("VACUUM INTO '$snapshotPath'");
 
-    // 打包在后台 isolate 流式进行：旧实现把整库 readAsBytes 进 Archive、
-    // encodeBytes 再生成第二份完整字节（1GB 库瞬时内存 2GB+），且同步压缩
-    // 期间 UI 完全冻结。ZipFileEncoder 逐文件流式读写，内存 O(单文件)；
-    // 解压方向（_extractInIsolate）早已用 compute，此处对齐。
+    // 打包在后台 isolate 流式进行（只 zip 文件，不碰 DB 连接）。
     await compute(_createArchiveInIsolate, <String>[
       outputPath,
       GStorage.libraryDirPath,
-      GStorage.dbDirPath,
+      snapshotPath,
       const JsonEncoder.withIndent('  ').convert(manifest),
       scope.name,
     ]);
+
+    // 清理临时快照
+    try {
+      await File(snapshotPath).delete();
+    } catch (_) {}
     return outputPath;
   }
 
   static Future<void> _createArchiveInIsolate(List<String> args) async {
     final outputPath = args[0];
     final libraryDir = Directory(args[1]);
-    final dbDir = Directory(args[2]);
+    final snapshotPath = args[2];
     final manifestJson = args[3];
     final scope = BackupScope.values.byName(args[4]);
 
@@ -126,7 +136,8 @@ class BackupRestoreService {
         _libraryDir,
         include: scope.includeHeavyFiles ? null : includeInDataOnly,
       );
-      await _addDirectoryStreamed(encoder, dbDir, _dbDir);
+      // 单个 SQLite 快照作为 db/otter.db
+      await encoder.addFile(File(snapshotPath), '$_dbDir/$_dbFileName');
     } finally {
       await encoder.close();
     }
@@ -135,7 +146,6 @@ class BackupRestoreService {
   /// dataOnly 范围的文献目录过滤：排除 PDF 原文 / extract 提取产物 /
   /// figures / summary 生成图，保留 translations.json、chats 等用户数据。
   /// [relativePath] 相对 library 根，形如 `{docId}/source.pdf`。
-  ///
   /// 也是备份指纹的「数据文件」判定来源（BackupFingerprintService）——
   /// 两处必须共用同一规则，否则状态显示与实际打包内容漂移。
   static bool includeInDataOnly(String relativePath) {
@@ -153,9 +163,6 @@ class BackupRestoreService {
         : !excludedDirs.contains(parts[1]);
   }
 
-  /// 逐文件流式加入 zip。空目录条目不再写入——恢复侧写文件时
-  /// `create(recursive: true)` 会按需重建目录。[include] 非空时按
-  /// 相对路径过滤（返回 false 跳过）。
   static Future<void> _addDirectoryStreamed(
     ZipFileEncoder encoder,
     Directory sourceDir,
@@ -179,8 +186,8 @@ class BackupRestoreService {
   }) async {
     onProgress?.call('正在解压备份文件...');
     final tempRoot = await _createRestoreTempRoot();
+    final extractedDbPath = p.join(tempRoot.path, 'db', _dbFileName);
     final extractedDocsDir = Directory(p.join(tempRoot.path, 'library'));
-    final extractedDataDir = Directory(p.join(tempRoot.path, 'db'));
 
     try {
       await _extractArchiveToDirectory(archivePath, tempRoot.path);
@@ -188,63 +195,175 @@ class BackupRestoreService {
 
       if (mode == RestoreMode.merge) {
         return await BackupMergeService.merge(
-          extractedDataDir: extractedDataDir,
+          backupDbPath: extractedDbPath,
           extractedDocsDir: scope.restoreLibrary ? extractedDocsDir : null,
           scope: scope,
           onProgress: onProgress,
         );
       }
 
-      // ── Overwrite 原逻辑 ────────────────────────────────────────────
-      final docsDir = Directory(GStorage.libraryDirPath);
-      final dataDir = Directory(GStorage.dbDirPath);
-
-      await GStorage.close();
-
-      // 两步替换的跨步骤回滚：第一步（library）成功后保留 .bak，第二步
-      // （db/box）失败时连第一步一起恢复——否则会留下「文献=备份版、
-      // 数据库=旧版」的错位状态（_replaceDirectory 自身的回滚只覆盖单步）。
+      // ── Overwrite ───────────────────────────────────────────────────
       if (scope == BackupRestoreScope.full) {
-        await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
-        try {
-          await _replaceDirectory(dataDir, extractedDataDir);
-        } catch (_) {
-          await _rollbackFromBackup(docsDir);
-          rethrow;
-        }
-        if (backupScope == BackupScope.dataOnly) {
-          await _restoreHeavyFilesFromBak(docsDir);
-        }
-        await _deleteBackupOf(docsDir);
+        await _overwriteFull(extractedDbPath, extractedDocsDir, backupScope);
       } else if (scope == BackupRestoreScope.libraryOnly) {
-        await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
-        try {
-          await _replaceBoxFiles(
-            fromDir: extractedDataDir,
-            toDir: dataDir,
-            boxNames: _libraryBoxNames,
-          );
-        } catch (_) {
-          await _rollbackFromBackup(docsDir);
-          rethrow;
-        }
-        if (backupScope == BackupScope.dataOnly) {
-          await _restoreHeavyFilesFromBak(docsDir);
-        }
-        await _deleteBackupOf(docsDir);
-      } else if (scope == BackupRestoreScope.settingsOnly) {
-        await _replaceBoxFiles(
-          fromDir: extractedDataDir,
-          toDir: dataDir,
-          boxNames: _settingsBoxNames,
-        );
+        await _overwriteLibraryTables(extractedDbPath, extractedDocsDir);
+      } else {
+        // settingsOnly
+        await _overwriteSettings(extractedDbPath);
       }
       return null;
     } finally {
-      await GStorage.reopen();
       if (await tempRoot.exists()) {
         await tempRoot.delete(recursive: true);
       }
+    }
+  }
+
+  /// full 覆盖：close → 替换 otter.db + library/ → reopen。
+  static Future<void> _overwriteFull(
+    String extractedDbPath,
+    Directory extractedDocsDir,
+    BackupScope backupScope,
+  ) async {
+    final docsDir = Directory(GStorage.libraryDirPath);
+    final dbFile = File(p.join(GStorage.dbDirPath, _dbFileName));
+
+    await GStorage.close();
+
+    // 两步替换的跨步骤回滚：第一步（library）成功后保留 .bak，第二步
+    // （db）失败时连第一步一起恢复。
+    await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
+    try {
+      await _replaceFile(File(extractedDbPath), dbFile);
+    } catch (_) {
+      await _rollbackFromBackup(docsDir);
+      await GStorage.reopen();
+      rethrow;
+    }
+    if (backupScope == BackupScope.dataOnly) {
+      await _restoreHeavyFilesFromBak(docsDir);
+    }
+    await _deleteBackupOf(docsDir);
+    await GStorage.reopen();
+  }
+
+  /// libraryOnly 覆盖：表级替换 library 表（保留 settings/meta）+ library/ 目录。
+  static Future<void> _overwriteLibraryTables(
+    String extractedDbPath,
+    Directory extractedDocsDir,
+  ) async {
+    final docsDir = Directory(GStorage.libraryDirPath);
+    await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
+    try {
+      final backupDb = db.AppDatabase.file(extractedDbPath);
+      try {
+        await GStorage.db.transaction(() async {
+          // 先删活库的 library 表（CASCADE 自动清 highlights/history/
+          // favorite_documents/zotero_items；favorites 单独删清关联表）。
+          await GStorage.db.delete(GStorage.db.favorites).go();
+          await GStorage.db.delete(GStorage.db.documents).go();
+          // 再从备份插入（父表先，子表后，满足 FK）
+          await _copyTable(
+            backupDb,
+            backupDb.documents,
+            GStorage.db.documents,
+            (r) => documentCompanion(documentFromRow(r)),
+          );
+          await _copyTable(
+            backupDb,
+            backupDb.favorites,
+            GStorage.db.favorites,
+            (r) => favoriteCompanion(
+              Favorite(
+                id: r.id,
+                emoji: r.emoji,
+                name: r.name,
+                documentIds: const [],
+                createdAt: DateTime.fromMillisecondsSinceEpoch(r.createdAt),
+              ),
+            ),
+          );
+          await _copyTable(
+            backupDb,
+            backupDb.highlights,
+            GStorage.db.highlights,
+            (r) => highlightCompanion(highlightFromRow(r)),
+          );
+          await _copyTable(
+            backupDb,
+            backupDb.history,
+            GStorage.db.history,
+            (r) => historyCompanion(historyFromRow(r)),
+          );
+          await _copyTable(
+            backupDb,
+            backupDb.favoriteDocuments,
+            GStorage.db.favoriteDocuments,
+            (r) => favoriteDocumentCompanion(r.favoriteId, r.docId),
+          );
+          await _copyTable(
+            backupDb,
+            backupDb.zoteroItems,
+            GStorage.db.zoteroItems,
+            (r) => zoteroItemCompanion(r.zoteroKey, r.docId, r.version),
+          );
+        });
+      } finally {
+        await backupDb.close();
+      }
+      await _deleteBackupOf(docsDir);
+    } catch (_) {
+      await _rollbackFromBackup(docsDir);
+      rethrow;
+    }
+    await GStorage.refreshCache();
+  }
+
+  /// settingsOnly 覆盖：表级替换 settings 表（保留其余）。
+  static Future<void> _overwriteSettings(String extractedDbPath) async {
+    final backupDb = db.AppDatabase.file(extractedDbPath);
+    try {
+      await GStorage.db.transaction(() async {
+        await GStorage.db.delete(GStorage.db.settings).go();
+        final backupRows = await backupDb.select(backupDb.settings).get();
+        await GStorage.db.batch((b) {
+          for (final r in backupRows) {
+            b.insert(
+              GStorage.db.settings,
+              settingCompanion(r.settingKey, _decode(r.value)),
+              mode: InsertMode.insertOrReplace,
+            );
+          }
+        });
+      });
+    } finally {
+      await backupDb.close();
+    }
+    await GStorage.refreshCache();
+  }
+
+  /// 把备份表的全部行批量插入活库（已先清空活库对应表）。
+  static Future<void> _copyTable(
+    db.AppDatabase backupDb,
+    dynamic backupTable,
+    dynamic liveTable,
+    dynamic Function(dynamic row) toCompanion,
+  ) async {
+    final rows = await backupDb.select(backupTable).get();
+    if (rows.isEmpty) return;
+    await GStorage.db.batch((b) {
+      for (final r in rows) {
+        b.insert(liveTable, toCompanion(r), mode: InsertMode.insertOrReplace);
+      }
+    });
+  }
+
+  static Object? _decode(String raw) {
+    if (raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      return raw;
     }
   }
 
@@ -301,7 +420,7 @@ class BackupRestoreService {
   }
 
   /// [keepBackup] 为 true 时成功后保留 `.bak` 目录——供调用方做跨步骤
-  /// 回滚（见 restoreBackupArchive），用完须调 [_deleteBackupOf] 清理。
+  /// 回滚（见 _overwriteFull），用完须调 [_deleteBackupOf] 清理。
   static Future<void> _replaceDirectory(
     Directory targetDir,
     Directory sourceDir, {
@@ -333,13 +452,27 @@ class BackupRestoreService {
     }
   }
 
-  /// 解压根的 manifest.json 里记录的备份范围；缺失（v2 之前的旧备份）
-  /// 或解析失败按 full 处理。
+  /// 原子替换单个文件（otter.db）：旧文件先改名 .bak，复制新文件，失败回滚。
+  static Future<void> _replaceFile(File source, File target) async {
+    final backup = File('${target.path}.bak');
+    if (await backup.exists()) await backup.delete();
+    final hadTarget = await target.exists();
+    if (hadTarget) await target.rename(backup.path);
+    try {
+      await Directory(p.dirname(target.path)).create(recursive: true);
+      await source.copy(target.path);
+      if (await backup.exists()) await backup.delete();
+    } catch (error) {
+      if (await target.exists()) await target.delete();
+      if (await backup.exists()) await backup.rename(target.path);
+      rethrow;
+    }
+  }
+
+  /// 解压根的 manifest.json 里记录的备份范围；缺失或解析失败按 full 处理。
   static BackupScope _readManifestScope(String tempRootPath) {
     try {
-      final raw = File(
-        p.join(tempRootPath, 'manifest.json'),
-      ).readAsStringSync();
+      final raw = File(p.join(tempRootPath, 'manifest.json')).readAsStringSync();
       final json = jsonDecode(raw) as Map<String, dynamic>;
       return BackupScope.values.asNameMap()[json['scope']] ?? BackupScope.full;
     } catch (_) {
@@ -372,7 +505,6 @@ class BackupRestoreService {
   }
 
   /// 用 `.bak` 把 [targetDir] 恢复到替换前状态（跨步骤回滚用）。
-  /// `.bak` 不存在时为 no-op（替换前目标目录本就不存在的情况）。
   static Future<void> _rollbackFromBackup(Directory targetDir) async {
     final backupDir = Directory('${targetDir.path}.bak');
     if (!await backupDir.exists()) return;
@@ -387,65 +519,6 @@ class BackupRestoreService {
     if (await backupDir.exists()) {
       await backupDir.delete(recursive: true);
     }
-  }
-
-  static Future<void> _replaceBoxFiles({
-    required Directory fromDir,
-    required Directory toDir,
-    required Set<String> boxNames,
-  }) async {
-    if (!await toDir.exists()) {
-      await toDir.create(recursive: true);
-    }
-
-    final backups = <String, String>{};
-    try {
-      for (final boxName in boxNames) {
-        for (final fileName in _boxRelatedFileNames(boxName)) {
-          final sourceFile = File(p.join(fromDir.path, fileName));
-          final targetFile = File(p.join(toDir.path, fileName));
-          final backupFile = File('${targetFile.path}.bak');
-
-          if (await backupFile.exists()) {
-            await backupFile.delete();
-          }
-          if (await targetFile.exists()) {
-            await targetFile.rename(backupFile.path);
-            backups[targetFile.path] = backupFile.path;
-          }
-
-          if (await sourceFile.exists()) {
-            await File(sourceFile.path).copy(targetFile.path);
-          } else if (await backupFile.exists()) {
-            await backupFile.rename(targetFile.path);
-            backups.remove(targetFile.path);
-          }
-        }
-      }
-
-      for (final backupPath in backups.values) {
-        final file = File(backupPath);
-        if (await file.exists()) {
-          await file.delete();
-        }
-      }
-    } catch (_) {
-      for (final entry in backups.entries) {
-        final targetFile = File(entry.key);
-        final backupFile = File(entry.value);
-        if (await targetFile.exists()) {
-          await targetFile.delete();
-        }
-        if (await backupFile.exists()) {
-          await backupFile.rename(targetFile.path);
-        }
-      }
-      rethrow;
-    }
-  }
-
-  static List<String> _boxRelatedFileNames(String boxName) {
-    return ['$boxName.hive', '$boxName.lock'];
   }
 
   static Future<void> _copyDirectory(

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import 'backup_restore_service.dart';
@@ -96,7 +97,12 @@ class BackupFingerprintService {
   ) async {
     final result = <String, DocFingerprint>{};
     for (final doc in docs) {
-      final highlightsJson = GStorage.highlights.get(doc.id) as String? ?? '';
+      final hlRows = await (GStorage.db.select(GStorage.db.highlights)
+            ..where((t) => t.docId.equals(doc.id)))
+          .get();
+      final highlightsJson = jsonEncode(
+        [for (final r in hlRows) highlightFromRow(r).toJson()],
+      );
       final meta = _sha256Text(
         '${jsonEncode(doc.toJson())}\x00$highlightsJson',
       );

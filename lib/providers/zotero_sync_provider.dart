@@ -1,6 +1,7 @@
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/db_convert.dart';
 import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/storage.dart';
 
@@ -42,61 +43,64 @@ final zoteroSyncProvider =
       return ZoteroSyncNotifier();
     });
 
-/// Zotero 同步簿记表（`GStorage.zoteroSync` box）。
+/// Zotero 同步簿记：zotero_items 表 + meta.zotero_library_version（Drift）。
 ///
-/// 记录 `zoteroKey → {documentId, version}` 作为幂等键，以及库级
-/// `_libraryVersion` 增量游标。结构按双向同步预留：单向导入暂只读 version 游标
-/// 和判重，回写时可直接复用 documentId/version。
+/// 记录 `zoteroKey → {documentId, version}` 作为幂等键，以及库级版本增量游标。
+/// 静态类被多处直接调用，故每次写都同步更新 GStorage.cache + 写穿透 Drift。
 class ZoteroSyncStore {
   ZoteroSyncStore._();
 
-  static const _libraryVersionKey = '_libraryVersion';
-
-  static String _itemKey(String zoteroKey) => 'item:$zoteroKey';
+  static const _libraryVersionMetaKey = 'zotero_library_version';
 
   /// 上次同步到的库版本号，用于 `?since=` 增量拉取。
-  static int get libraryVersion =>
-      GStorage.zoteroSync.get(_libraryVersionKey, defaultValue: 0) as int;
+  static int get libraryVersion => GStorage.cache.zoteroLibraryVersion;
 
-  static Future<void> setLibraryVersion(int version) =>
-      GStorage.zoteroSync.put(_libraryVersionKey, version);
+  static Future<void> setLibraryVersion(int version) async {
+    GStorage.cache.zoteroLibraryVersion = version;
+    await GStorage.db.into(GStorage.db.meta).insertOnConflictUpdate(
+          metaCompanion(_libraryVersionMetaKey, version.toString()),
+        );
+  }
 
   static bool hasItem(String zoteroKey) =>
-      GStorage.zoteroSync.containsKey(_itemKey(zoteroKey));
+      GStorage.cache.zoteroItems.containsKey(zoteroKey);
 
-  /// 已导入条目数（不含库版本标量）。
-  static int get importedCount => GStorage.zoteroSync.keys
-      .whereType<String>()
-      .where((key) => key.startsWith('item:'))
-      .length;
+  /// 已导入条目数。
+  static int get importedCount => GStorage.cache.zoteroItems.length;
 
   static Future<void> recordItem(
     String zoteroKey,
     String documentId,
     int version,
-  ) {
-    return GStorage.zoteroSync.put(_itemKey(zoteroKey), {
-      'documentId': documentId,
-      'version': version,
-    });
+  ) async {
+    GStorage.cache.zoteroItems[zoteroKey] =
+        (docId: documentId, version: version);
+    await GStorage.db.into(GStorage.db.zoteroItems).insertOnConflictUpdate(
+          zoteroItemCompanion(zoteroKey, documentId, version),
+        );
   }
 
   /// 本地删除文献时回收对应簿记，保持 [importedCount] 与 [hasItem] 判重诚实。
   /// 内容去重可能让多个 zoteroKey 映射到同一 documentId，故清掉全部匹配记录。
   static Future<void> removeByDocumentId(String documentId) async {
-    final box = GStorage.zoteroSync;
-    final stale = box.keys
-        .whereType<String>()
-        .where((key) => key.startsWith('item:'))
-        .where((key) {
-          final value = box.get(key);
-          return value is Map && value['documentId'] == documentId;
-        })
+    final stale = GStorage.cache.zoteroItems.entries
+        .where((e) => e.value.docId == documentId)
+        .map((e) => e.key)
         .toList();
     for (final key in stale) {
-      await box.delete(key);
+      GStorage.cache.zoteroItems.remove(key);
     }
+    await (GStorage.db.delete(GStorage.db.zoteroItems)
+          ..where((t) => t.docId.equals(documentId)))
+        .go();
   }
 
-  static Future<void> clear() => GStorage.zoteroSync.clear();
+  static Future<void> clear() async {
+    GStorage.cache.zoteroItems.clear();
+    GStorage.cache.zoteroLibraryVersion = 0;
+    await GStorage.db.delete(GStorage.db.zoteroItems).go();
+    await (GStorage.db.delete(GStorage.db.meta)
+          ..where((t) => t.metaKey.equals(_libraryVersionMetaKey)))
+        .go();
+  }
 }

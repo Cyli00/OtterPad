@@ -1,16 +1,23 @@
 import 'dart:io';
 
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:sqlite3/sqlite3.dart';
+import 'package:sqlite3_simple/sqlite3_simple.dart';
 
-/// 全局键值存储单例（Hive）+ 文件系统根目录管理。
+import 'app_database.dart';
+import 'settings_store.dart';
+import 'startup_cache.dart';
+
+/// 全局存储单例：Drift（关系化 + FTS5）主存储 + 文件系统根目录管理。
 ///
 /// **目录布局**：
 /// ```
 /// <AppSupport>/OtterPad/        ← appRootPath（server root）
-/// ├── db/                       ← Hive 数据库（dbDirPath）
-/// │   └── *.hive *.lock
+/// ├── db/                       ← Drift SQLite + jieba 字典
+/// │   ├── otter.db / otter.db-wal / otter.db-shm
+/// │   └── cpp_jieba/            ← jieba 分词字典
 /// └── library/                  ← 文献库（libraryDirPath）
 ///     └── <documentId>/          ← 每篇文献自包含目录
 ///         ├── source.pdf
@@ -21,18 +28,24 @@ import 'package:path_provider/path_provider.dart';
 ///         └── .reader.html      ← WebView HTML 缓存（自包含）
 /// ```
 ///
+/// **启动时序**（init）：建目录 → 全局加载 Simple 扩展（jieba tokenizer）
+/// → 开 Drift（migration 建表 + ensureFts5 建 FTS5 虚表/触发器）→ jieba 字典 + 预热
+/// → 预加载缓存（settings + 6 表进内存，provider 同步读）。
+///
 /// **跨平台 path 策略**：所有平台统一用 `getApplicationSupportDirectory()`：
 /// - iOS：`~/Library/Application Support/...`，不暴露 Files App
 /// - Android：`/data/data/<pkg>/files/`，应用沙箱私有
 /// - macOS：`~/Library/Application Support/...`，不暴露 Finder
 /// - Windows：`<AppData>\Roaming\...`，用户配置目录
 class GStorage {
-  static late Box _settingBox;
-  static late Box _favoritesBox;
-  static late Box _documentsBox;
-  static late Box _highlightsBox;
-  static late Box _historyBox;
-  static late Box _zoteroSyncBox;
+  // Drift 主存储
+  static late AppDatabase _db;
+  static late StartupCache _cache;
+  static late SettingsStore _settings;
+  static const _dbFileName = 'otter.db';
+  static const _jiebaDictName = 'cpp_jieba';
+  static bool _simpleLoaded = false;
+
   static late String _dbDirPath;
   static late String _libraryDirPath;
   static late String _logsDirPath;
@@ -54,11 +67,35 @@ class GStorage {
     _libraryDirPath = libraryDir.path;
     _logsDirPath = logsDir.path;
 
-    if (!_initialized) {
-      Hive.init(dbDir.path);
-      _initialized = true;
+    _db = AppDatabase.file(p.join(dbDir.path, _dbFileName));
+    // FTS5/jieba 扩展：加载失败（目标平台缺预编译 simple 库）不致开库崩溃，
+    // 搜索降级为 LIKE（见 searchDocuments）。
+    try {
+      if (!_simpleLoaded) {
+        sqlite3.loadSimpleExtension();
+        _simpleLoaded = true;
+      }
+      await _db.ensureFts5();
+      await _setupJieba();
+    } catch (e) {
+      debugPrint('OtterPad: FTS5/jieba 扩展加载失败，搜索降级为 LIKE: $e');
     }
-    await _openBoxes();
+
+    // 预加载缓存（G2）：settings + 6 表进内存，provider 构造时同步读。
+    _settings = SettingsStore(_db);
+    await _settings.preload();
+    _cache = await StartupCache.load(_db);
+
+    _initialized = true;
+  }
+
+  /// jieba 字典落盘 + 告知扩展字典路径 + 预热查询。
+  /// 字典文件首启写入后复用；reopen（备份恢复后）时文件已存在，重跑后两步。
+  static Future<void> _setupJieba() async {
+    final dictPath = p.join(_dbDirPath, _jiebaDictName);
+    final dictSql = await sqlite3.saveJiebaDict(dictPath);
+    await _db.customStatement(dictSql);
+    await _db.customStatement("SELECT jieba_query('OtterPad 初始化（预热）')");
   }
 
   static Future<void> reopen() async {
@@ -66,73 +103,59 @@ class GStorage {
       await init();
       return;
     }
-    await _openBoxes();
+    // Drift 重开（备份恢复后替换了 .db 文件；Simple 扩展已全局加载，新连接自带）
+    _db = AppDatabase.file(p.join(_dbDirPath, _dbFileName));
+    try {
+      await _db.ensureFts5();
+      await _setupJieba();
+    } catch (e) {
+      debugPrint('OtterPad: FTS5/jieba 重载失败，搜索降级为 LIKE: $e');
+    }
+    _settings = SettingsStore(_db);
+    await _settings.preload();
+    _cache = await StartupCache.load(_db);
   }
 
-  static Future<void> _openBoxes() async {
-    final results = await Future.wait([
-      Hive.isBoxOpen('settings')
-          ? Future.value(Hive.box('settings'))
-          : Hive.openBox('settings'),
-      Hive.isBoxOpen('favorites')
-          ? Future.value(Hive.box('favorites'))
-          : Hive.openBox('favorites'),
-      Hive.isBoxOpen('documents')
-          ? Future.value(Hive.box('documents'))
-          : Hive.openBox('documents'),
-      Hive.isBoxOpen('highlights')
-          ? Future.value(Hive.box('highlights'))
-          : Hive.openBox('highlights'),
-      Hive.isBoxOpen('history')
-          ? Future.value(Hive.box('history'))
-          : Hive.openBox('history'),
-      Hive.isBoxOpen('zotero_sync')
-          ? Future.value(Hive.box('zotero_sync'))
-          : Hive.openBox('zotero_sync'),
-    ]);
-    _settingBox = results[0];
-    _favoritesBox = results[1];
-    _documentsBox = results[2];
-    _highlightsBox = results[3];
-    _historyBox = results[4];
-    _zoteroSyncBox = results[5];
+  /// 重新从 Drift 预加载缓存（不重开连接）。备份 merge/部分 scope restore 后，
+  /// 内存缓存已陈旧，调此刷新，再由 backup_orchestrator invalidate 各 provider。
+  static Future<void> refreshCache() async {
+    _settings = SettingsStore(_db);
+    await _settings.preload();
+    _cache = await StartupCache.load(_db);
+  }
+
+  /// 测试专用：注入内存 AppDatabase + 预加载缓存，不走扩展/文件系统。
+  @visibleForTesting
+  static Future<void> initForTest(AppDatabase database) async {
+    _db = database;
+    _settings = SettingsStore(database);
+    await _settings.preload();
+    _cache = await StartupCache.load(database);
+    _initialized = false;
   }
 
   // ─── 生命周期 ──────────────────────────────────────────────────────────────
 
-  static Future<void> flush() async {
-    final futures = <Future<void>>[];
-    if (Hive.isBoxOpen('settings')) futures.add(Hive.box('settings').flush());
-    if (Hive.isBoxOpen('favorites')) futures.add(Hive.box('favorites').flush());
-    if (Hive.isBoxOpen('documents')) futures.add(Hive.box('documents').flush());
-    if (Hive.isBoxOpen('highlights')) {
-      futures.add(Hive.box('highlights').flush());
-    }
-    if (Hive.isBoxOpen('history')) futures.add(Hive.box('history').flush());
-    if (Hive.isBoxOpen('zotero_sync')) {
-      futures.add(Hive.box('zotero_sync').flush());
-    }
-    await Future.wait(futures);
-  }
+  /// Drift 每次写已即时落盘，无需 flush；保留空实现供备份流程调用。
+  static Future<void> flush() async {}
 
   static Future<void> close() async {
     if (!_initialized) return;
-    await Hive.close();
+    await _db.close();
   }
 
   // ─── 公开 getter ──────────────────────────────────────────────────────────
 
-  static Box get setting => _settingBox;
-  static Box get favorites => _favoritesBox;
-  static Box get documents => _documentsBox;
-  static Box get highlights => _highlightsBox;
-  static Box get history => _historyBox;
+  /// Drift 主库（关系化 + FTS5）。
+  static AppDatabase get db => _db;
 
-  /// Zotero 同步簿记：`item:<zoteroKey>` → {documentId, version}，
-  /// 以及标量 `_libraryVersion`（增量拉取游标）。
-  static Box get zoteroSync => _zoteroSyncBox;
+  /// 启动预加载缓存（documents/history/favorites/highlights/zotero）。
+  static StartupCache get cache => _cache;
 
-  /// `<AppSupport>/OtterPad/db/`——Hive 数据库目录。
+  /// settings：Drift 后端 + 同步读缓存，对外模仿 Hive Box API。
+  static SettingsStore get setting => _settings;
+
+  /// `<AppSupport>/OtterPad/db/`——Drift SQLite + jieba 字典。
   static String get dbDirPath => _dbDirPath;
 
   /// `<AppSupport>/OtterPad/library/`——所有文献子目录的父目录。

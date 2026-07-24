@@ -4,81 +4,61 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:hive/hive.dart';
+import '../core/storage/db_convert.dart';
 
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import 'documents_provider.dart' show validDocsProvider;
 
-/// 单次阅读事件：记录文档 id、打开时间、阅读进度。
-///
-/// 阅读历史作为独立事件流存储，而非 Document 模型的衍生字段——
-/// 这样后续要加阅读时长/进度/次数等维度时不必改动 Document。
-///
-/// `progress` 含义：0.0 = 未读/未滚动；1.0 = 读到底。PDF 模式用
-/// `currentPage / totalPages`，Markdown 模式用 `scrollTop / (scrollHeight - viewHeight)`。
-/// 老版本 Hive 数据无 `progress` 字段时回退 0.0。
-///
-/// `anchorBlock` 是 Markdown 阅读位置的内容块锚点（`#content` 顶层块索引）：
-/// 比率在布局参数（字号/窗口尺寸）变化后会落错页，横向翻页恢复时优先用它。
-/// null = 老数据或 PDF 进度。
-class HistoryEntry {
-  final String docId;
-  final DateTime openedAt;
-  final double progress;
-  final int? anchorBlock;
+import '../data/models/book/history_entry.dart';
 
-  const HistoryEntry({
-    required this.docId,
-    required this.openedAt,
-    this.progress = 0.0,
-    this.anchorBlock,
-  });
-
-  Map<String, dynamic> toMap() => {
-        'docId': docId,
-        'openedAt': openedAt.toIso8601String(),
-        'progress': progress,
-        if (anchorBlock != null) 'anchorBlock': anchorBlock,
-      };
-
-  factory HistoryEntry.fromMap(Map map) => HistoryEntry(
-        docId: map['docId'] as String,
-        openedAt: DateTime.parse(map['openedAt'] as String),
-        progress: (map['progress'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0,
-        anchorBlock: (map['anchorBlock'] as num?)?.toInt(),
-      );
-}
+export '../data/models/book/history_entry.dart';
 
 /// 阅读历史：按时间倒序的 HistoryEntry 列表。
 ///
 /// 语义：同一 docId 只保留最近一次（重新打开 = 冒泡到顶），
 /// 这样列表恒为"去重的最近阅读序列"。
 class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
-  final Box _box;
-  static const _key = 'entries';
   static const _maxEntries = 500;
 
   /// 进度写盘防抖：阅读器内部高频更新（Markdown 滚动每 500ms 触发一次）
-  /// 时不立即 flush 到 Hive，2s 内最多一次磁盘写；reader dispose 时
+  /// 时不立即 flush 到 Drift，2s 内最多一次磁盘写；reader dispose 时
   /// 调 [flushProgress] 强制立即落盘。
   Timer? _progressDebounce;
   static const _progressDebounceDelay = Duration(seconds: 2);
+  HistoryEntry? _pendingProgress;
 
-  HistoryNotifier(this._box) : super(<HistoryEntry>[]) {
-    _load();
+  HistoryNotifier() : super(GStorage.cache.history);
+
+  void reload() {
+    state = GStorage.cache.history;
   }
 
-  void _load() {
-    final raw = _box.get(_key) as List<dynamic>?;
-    if (raw == null) return;
-    state = raw
-        .map((e) => HistoryEntry.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
+  Future<void> _upsert(HistoryEntry e) async {
+    await GStorage.db
+        .into(GStorage.db.history)
+        .insertOnConflictUpdate(historyCompanion(e));
   }
 
-  Future<void> _save() async {
-    await _box.put(_key, state.map((e) => e.toMap()).toList());
+  Future<void> _delete(String docId) async {
+    await (GStorage.db.delete(GStorage.db.history)
+          ..where((t) => t.docId.equals(docId)))
+        .go();
+  }
+
+  Future<void> _deleteMany(Iterable<String> docIds) async {
+    if (docIds.isEmpty) return;
+    await (GStorage.db.delete(GStorage.db.history)
+          ..where((t) => t.docId.isIn(docIds)))
+        .go();
+  }
+
+  /// 仅保留最近 _maxEntries 条（按 openedAt 倒序），其余从 Drift 删除。
+  Future<void> _cap() async {
+    await GStorage.db.customStatement(
+      'DELETE FROM history WHERE docId NOT IN '
+      '(SELECT docId FROM history ORDER BY openedAt DESC LIMIT $_maxEntries)',
+    );
   }
 
   /// 记录一次阅读：已存在同 docId 时先移除再插入顶部（冒泡）。
@@ -88,27 +68,28 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
     final now = DateTime.now();
     final idx = state.indexWhere((e) => e.docId == docId);
     final prev = idx >= 0 ? state[idx] : null;
+    final entry = HistoryEntry(
+      docId: docId,
+      openedAt: now,
+      progress: prev?.progress ?? 0.0,
+      anchorBlock: prev?.anchorBlock,
+    );
     final next = <HistoryEntry>[
-      HistoryEntry(
-        docId: docId,
-        openedAt: now,
-        progress: prev?.progress ?? 0.0,
-        anchorBlock: prev?.anchorBlock,
-      ),
+      entry,
       ...state.where((e) => e.docId != docId),
     ];
     if (next.length > _maxEntries) {
       next.removeRange(_maxEntries, next.length);
     }
     state = next;
-    _save();
+    unawaited(_upsert(entry).then((_) => _cap()));
   }
 
   void removeDoc(String docId) {
     final next = state.where((e) => e.docId != docId).toList();
     if (next.length == state.length) return;
     state = next;
-    _save();
+    unawaited(_delete(docId));
   }
 
   void removeMany(Set<String> docIds) {
@@ -116,13 +97,13 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
     final next = state.where((e) => !docIds.contains(e.docId)).toList();
     if (next.length == state.length) return;
     state = next;
-    _save();
+    unawaited(_deleteMany(docIds));
   }
 
   void clear() {
     if (state.isEmpty) return;
     state = <HistoryEntry>[];
-    _save();
+    unawaited(GStorage.db.delete(GStorage.db.history).go());
   }
 
   /// 更新阅读进度。state 立即更新（让网格卡片 UI 实时刷新），写盘走 2s 防抖。
@@ -139,17 +120,23 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
         old.anchorBlock == anchorBlock) {
       return;
     }
-    final next = [...state];
-    next[idx] = HistoryEntry(
+    final updated = HistoryEntry(
       docId: old.docId,
       openedAt: old.openedAt,
       progress: clamped,
       anchorBlock: anchorBlock,
     );
+    final next = [...state];
+    next[idx] = updated;
     state = next;
 
+    _pendingProgress = updated;
     _progressDebounce?.cancel();
-    _progressDebounce = Timer(_progressDebounceDelay, _save);
+    _progressDebounce = Timer(_progressDebounceDelay, () {
+      final pending = _pendingProgress;
+      _pendingProgress = null;
+      if (pending != null) unawaited(_upsert(pending));
+    });
   }
 
   /// reader dispose / 退出阅读器时调，强制立即写盘，避免崩溃丢最后一次更新。
@@ -157,7 +144,9 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
     if (_progressDebounce?.isActive ?? false) {
       _progressDebounce!.cancel();
       _progressDebounce = null;
-      await _save();
+      final pending = _pendingProgress;
+      _pendingProgress = null;
+      if (pending != null) await _upsert(pending);
     }
   }
 
@@ -170,7 +159,7 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
 
 final historyProvider =
     StateNotifierProvider<HistoryNotifier, List<HistoryEntry>>((ref) {
-  return HistoryNotifier(GStorage.history);
+  return HistoryNotifier();
 });
 
 /// 派生：docId → 阅读进度。中间层隔离高频 progress 更新——

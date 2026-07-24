@@ -106,7 +106,9 @@ class StorageUsageService {
       await for (final entity in dbDir.list(followLinks: false)) {
         if (entity is! File) continue;
         final name = p.basename(entity.path).toLowerCase();
-        if (!name.startsWith('highlights')) continue;
+        // Drift SQLite 文件（otter.db / -wal / -shm）——含标注/元数据，计入 notes。
+        // jieba 字典目录与遗留 Hive 文件不计入。
+        if (name != 'otter.db' && !name.startsWith('otter.db-')) continue;
         int bytes = 0;
         try {
           bytes = await entity.length();
@@ -179,7 +181,7 @@ class StorageUsageService {
           await _clearLibraryMatching(
             (sub, name) => !sub.startsWith('chats/') && name != '.reader.html',
           );
-          await GStorage.highlights.clear();
+          await GStorage.db.delete(GStorage.db.highlights).go();
         case StorageGroupKey.chat:
           await _clearLibraryMatching(
             (sub, name) => sub.startsWith('chats/'),

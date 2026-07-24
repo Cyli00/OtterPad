@@ -1,12 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:hive/hive.dart';
+import 'package:drift/drift.dart' show InsertMode;
+import '../core/storage/db_convert.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/storage/storage.dart';
@@ -83,35 +83,35 @@ class _MetadataRepairResult {
 }
 
 class DocumentsNotifier extends StateNotifier<List<Document>> {
-  final Box _box;
-
-  DocumentsNotifier(this._box) : super([]) {
-    _load();
-  }
-
-  void _load() {
-    final raw = _box.get('documents') as List<dynamic>?;
-    if (raw == null) {
-      state = [];
-      return;
-    }
-
-    state = raw
-        .map(
-          (entry) => Document.fromJson(
-            Map<String, dynamic>.from(jsonDecode(entry as String)),
-          ),
-        )
-        .toList();
-  }
+  DocumentsNotifier() : super(GStorage.cache.documents);
 
   void reload() {
-    _load();
+    state = GStorage.cache.documents;
   }
 
-  Future<void> _save() async {
-    final encoded = state.map((doc) => jsonEncode(doc.toJson())).toList();
-    await _box.put('documents', encoded);
+  /// upsert 单篇到 Drift（FTS5 触发器自动同步 documents_fts）。
+  Future<void> _upsertDoc(Document d) async {
+    await GStorage.db
+        .into(GStorage.db.documents)
+        .insertOnConflictUpdate(documentCompanion(d));
+  }
+
+  Future<void> _upsertDocs(Iterable<Document> docs) async {
+    await GStorage.db.batch((b) {
+      for (final d in docs) {
+        b.insert(
+          GStorage.db.documents,
+          documentCompanion(d),
+          mode: InsertMode.insertOrReplace,
+        );
+      }
+    });
+  }
+
+  Future<void> _deleteDoc(String id) async {
+    await (GStorage.db.delete(GStorage.db.documents)
+          ..where((t) => t.id.equals(id)))
+        .go();
   }
 
   /// 文献库根目录——所有文献自包含目录的父目录。
@@ -167,7 +167,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       for (final entry in state)
         if (entry.id == doc.id) doc else entry,
     ];
-    await _save();
+    await _upsertDoc(doc);
 
     unawaited(
       PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(doc.id)),
@@ -208,7 +208,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     }
 
     state = [...state, doc];
-    await _save();
+    await _upsertDoc(doc);
     if (doc.contentHash != null) {
       unawaited(
         PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(doc.id)),
@@ -245,7 +245,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
     if (additions.isNotEmpty) {
       state = [...state, ...additions];
-      await _save();
+      await _upsertDocs(additions);
     }
     return results;
   }
@@ -343,7 +343,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       }
     }
 
-    await _save();
+    await _upsertDocs(state);
 
     final noFileCount = state.where((doc) => doc.contentHash == null).length;
     final unresolvedCount = state
@@ -368,20 +368,17 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     String? year,
     String? doi,
   }) async {
-    state = [
-      for (final doc in state)
-        if (doc.id == id)
-          doc.copyWith(
-            title: title,
-            authors: authors,
-            journal: journal,
-            year: year,
-            doi: doi,
-          )
-        else
-          doc,
-    ];
-    await _save();
+    final match = state.where((d) => d.id == id).toList();
+    if (match.isEmpty) return;
+    final updated = match.first.copyWith(
+      title: title,
+      authors: authors,
+      journal: journal,
+      year: year,
+      doi: doi,
+    );
+    state = [for (final doc in state) if (doc.id == id) updated else doc];
+    await _upsertDoc(updated);
   }
 
   Future<void> attachFile(String docId, String sourcePath) async {
@@ -406,7 +403,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
       for (final doc in state)
         if (doc.id == docId) updated else doc,
     ];
-    await _save();
+    await _upsertDoc(updated);
     unawaited(
       PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(docId)),
     );
@@ -436,7 +433,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
             for (final entry in state)
               if (entry.id == docId) doc else entry,
           ];
-          await _save();
+          await _upsertDoc(doc);
         }
       } catch (e) {
         log.d('标题搜索补全 DOI 失败: $e');
@@ -491,7 +488,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
         for (final entry in state)
           if (entry.id == docId) updated else entry,
       ];
-      await _save();
+      await _upsertDoc(updated);
       unawaited(PdfThumbnailService.instance.getThumbnailPath(pdfPath));
       return true;
     } catch (error) {
@@ -523,7 +520,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
     }
 
     state = state.where((doc) => doc.id != id).toList();
-    await _save();
+    await _deleteDoc(id);
   }
 
   Future<Document?> _downloadPdfIntoDocument(
@@ -742,7 +739,7 @@ class DocumentsNotifier extends StateNotifier<List<Document>> {
 
 final documentsProvider =
     StateNotifierProvider<DocumentsNotifier, List<Document>>((ref) {
-      return DocumentsNotifier(GStorage.documents);
+      return DocumentsNotifier();
     });
 
 final viewModeProvider = StateProvider<bool>((ref) => true);

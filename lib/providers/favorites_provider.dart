@@ -1,45 +1,40 @@
-import 'dart:convert';
+import 'dart:async';
 import 'dart:ui';
 
+import 'package:drift/drift.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:hive/hive.dart';
+import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
 import '../data/models/collection/favorite.dart';
 
 /// 收藏夹状态管理
 ///
 /// 收藏夹通过稳定 documentId 引用文献，不保存 PDF 绝对路径。
+/// 持久化：favorites 表 + favorite_documents 关联表（Drift）。
 class FavoritesNotifier extends StateNotifier<List<Favorite>> {
-  final Box _box;
-
-  FavoritesNotifier(this._box) : super([]) {
-    _load();
+  FavoritesNotifier() : super([]) {
+    _init();
   }
 
-  /// 从 Hive 加载收藏夹列表，确保默认"我的收藏"始终存在且置顶
-  void _load() {
-    final raw = _box.get('favorites') as List<dynamic>?;
-    var needsSchemaUpgrade = false;
-    if (raw != null) {
-      state = raw.map((e) {
-        final json = Map<String, dynamic>.from(jsonDecode(e as String));
-        if (json.containsKey('docPaths') && !json.containsKey('documentIds')) {
-          needsSchemaUpgrade = true;
-        }
-        return Favorite.fromJson(json);
-      }).toList();
-    }
-    // 首次启动或数据迁移：确保默认收藏夹存在
+  void _init() {
+    state = GStorage.cache.favorites;
+    _ensureDefault();
+  }
+
+  void reload() {
+    _init();
+  }
+
+  /// 首次启动或数据缺失时确保默认"我的收藏"存在且置顶。
+  void _ensureDefault() {
     if (!state.any((f) => f.isDefault)) {
-      state = [_createDefault(), ...state];
-      _save();
+      final def = _createDefault();
+      state = [def, ...state];
+      unawaited(_upsertFav(def));
     } else if (!state.first.isDefault) {
       final def = state.firstWhere((f) => f.isDefault);
       state = [def, ...state.where((f) => !f.isDefault)];
-      _save();
-    } else if (needsSchemaUpgrade) {
-      _save();
     }
   }
 
@@ -54,14 +49,37 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     );
   }
 
-  void reload() {
-    _load();
+  Future<void> _upsertFav(Favorite f) async {
+    await GStorage.db
+        .into(GStorage.db.favorites)
+        .insertOnConflictUpdate(favoriteCompanion(f));
   }
 
-  /// 持久化到 Hive
-  Future<void> _save() async {
-    final encoded = state.map((f) => jsonEncode(f.toJson())).toList();
-    await _box.put('favorites', encoded);
+  Future<void> _deleteFav(String id) async {
+    await (GStorage.db.delete(GStorage.db.favorites)
+          ..where((t) => t.id.equals(id)))
+        .go();
+  }
+
+  Future<void> _link(String favoriteId, String docId) async {
+    await GStorage.db.into(GStorage.db.favoriteDocuments).insert(
+          favoriteDocumentCompanion(favoriteId, docId),
+          mode: InsertMode.insertOrIgnore,
+        );
+  }
+
+  Future<void> _unlinkByDoc(String docId) async {
+    await (GStorage.db.delete(GStorage.db.favoriteDocuments)
+          ..where((t) => t.docId.equals(docId)))
+        .go();
+  }
+
+  Future<void> _unlink(String favoriteId, String docId) async {
+    await (GStorage.db.delete(GStorage.db.favoriteDocuments)
+          ..where(
+            (t) => t.favoriteId.equals(favoriteId) & t.docId.equals(docId),
+          ))
+        .go();
   }
 
   /// 创建新收藏夹
@@ -74,42 +92,51 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
       createdAt: DateTime.now(),
     );
     state = [...state, favorite];
-    await _save();
+    await _upsertFav(favorite);
     return favorite;
   }
 
   /// 重命名收藏夹
   Future<void> rename(String id, {String? emoji, String? name}) async {
-    state = [
-      for (final f in state)
-        if (f.id == id) f.copyWith(emoji: emoji, name: name) else f,
-    ];
-    await _save();
+    final match = state.where((f) => f.id == id).toList();
+    if (match.isEmpty) return;
+    final updated = match.first.copyWith(emoji: emoji, name: name);
+    state = [for (final f in state) if (f.id == id) updated else f];
+    await _upsertFav(updated);
   }
 
   /// 删除收藏夹（默认收藏夹不可删除）
   Future<void> delete(String id) async {
     if (id == Favorite.defaultId) return;
     state = state.where((f) => f.id != id).toList();
-    await _save();
+    await _deleteFav(id);
   }
 
   /// 向收藏夹添加文献。
   Future<void> addDocument(String favoriteId, String documentId) async {
+    final target = state.firstWhere(
+      (f) => f.id == favoriteId,
+      orElse: () => _createDefault(),
+    );
+    if (target.id != favoriteId) return;
+    if (target.documentIds.contains(documentId)) return;
     state = [
       for (final f in state)
-        if (f.id == favoriteId && !f.documentIds.contains(documentId))
+        if (f.id == favoriteId)
           f.copyWith(documentIds: [...f.documentIds, documentId])
         else
           f,
     ];
-    await _save();
+    await _link(favoriteId, documentId);
   }
 
   /// 批量向收藏夹添加文献（已存在的自动跳过，单次写盘）。
   ///
   /// 返回真正新增的篇数——用于 UI 区分"已经在里面跳过了 N 篇"vs"全是新加的"。
-  Future<int> addDocuments(String favoriteId, Iterable<String> documentIds) async {
+  Future<int> addDocuments(
+    String favoriteId,
+    Iterable<String> documentIds,
+  ) async {
     final target = state.firstWhere(
       (f) => f.id == favoriteId,
       orElse: () => _createDefault(),
@@ -130,7 +157,15 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
         else
           f,
     ];
-    await _save();
+    await GStorage.db.batch((b) {
+      for (final id in toAdd) {
+        b.insert(
+          GStorage.db.favoriteDocuments,
+          favoriteDocumentCompanion(favoriteId, id),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    });
     return toAdd.length;
   }
 
@@ -152,7 +187,7 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
     }
     if (changed) {
       state = updated;
-      await _save();
+      await _unlinkByDoc(documentId);
     }
   }
 
@@ -167,11 +202,11 @@ class FavoritesNotifier extends StateNotifier<List<Favorite>> {
         else
           f,
     ];
-    await _save();
+    await _unlink(favoriteId, documentId);
   }
 }
 
 final favoritesProvider =
     StateNotifierProvider<FavoritesNotifier, List<Favorite>>((ref) {
-      return FavoritesNotifier(GStorage.favorites);
+      return FavoritesNotifier();
     });
