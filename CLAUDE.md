@@ -76,14 +76,15 @@
 
 ### 数据存储
 
-- **GStorage** (`lib/core/storage/storage.dart`) — 禁止直接 `Hive.openBox()` 或 `getApplicationSupportDirectory()` 拼路径。
+- **GStorage** (`lib/core/storage/storage.dart`) — Drift 主库 + 文件系统根目录管理。禁止绕过 `appDatabaseProvider` 直接自建 AppDatabase 实例。禁止直接 `getApplicationSupportDirectory()` 拼路径。
+- **appDatabaseProvider** (`lib/core/storage/app_database_provider.dart`) — 数据 provider 的 Drift 实例唯一来源。reopen（备份恢复）后必须 `ref.invalidate(appDatabaseProvider)`，禁止自建 AppDatabase 实例或绕过它直接 `GStorage.db`。
 - **SecureCredentialVault** (`lib/core/storage/secure_credential_vault.dart`) — API key / secret 唯一存取。禁止写进 `GStorage`。
 - **DocPaths** (`lib/utils/doc_paths.dart`) — 禁止 `p.basenameWithoutExtension` 或持久化绝对路径拼接。
-- **StorageCleanupService** (`lib/services/storage_cleanup_service.dart`) — 禁止 UI 层直接删缓存目录。
+- **SettingsStore** (`lib/core/storage/settings_store.dart`) — 设置读写唯一入口（Drift 后端 + 同步读缓存）。禁止直接写 `settings` 表或自建缓存。
 - **StorageUsageService** (`lib/services/storage_usage_service.dart`) — 存储用量统计唯一来源。禁止 UI 自行遍历目录算大小。
 - **BackupProvider** (`lib/providers/backup_provider.dart`) — 禁止散落保存备份凭据。
-- **BackupRestoreService** (`lib/services/backup_restore_service.dart`) — 禁止手写 ZIP 或直接覆盖 Hive 不经 `GStorage.close()`/`reopen()`。
-- **BackupMergeService** (`lib/services/backup_merge_service.dart`) — 禁止在 restore/merge 流程外拼装 Hive box 合并。
+- **BackupRestoreService** (`lib/services/backup_restore_service.dart`) — 禁止手写 ZIP 或直接覆盖数据库文件不经 `GStorage.close()`/`reopen()`。
+- **BackupMergeService** (`lib/services/backup_merge_service.dart`) — 禁止在 restore/merge 流程外拼装数据库表合并。
 - **BackupS3Service** (`lib/services/backup_s3_service.dart`) — 禁止 UI 层拼 S3 签名请求。
 - **BackupRemote** (`lib/services/backup_remote.dart`) — S3/WebDAV 唯一接缝。禁止按 `remoteType` 自写 if/else 分发。
 - **BackupOrchestrator** (`lib/providers/backup_orchestrator.dart`) — 备份/恢复编排唯一入口。禁止自行拼接 RestoreService + Remote 链路。
@@ -117,6 +118,10 @@
 - **ImageGenerationService** (`lib/services/image_generation_service.dart`) — 支持 OpenAI / Gemini，不支持 Anthropic。
 - **SummaryImageProvider** (`lib/providers/summary_image_provider.dart`) — 禁止多个 Widget 各自维护生成态。
 
+### 全文搜索
+
+- **FTS5 / jieba 分词** — 全文搜索唯一实现（`documents_fts` 虚表 + jieba tokenizer）。禁止自写中文分词、拼音搜索或 LIKE 替代逻辑。搜索降级（LIKE）由 `searchDocuments` 自动处理，调用点不应自行判断降级时机。
+
 ### 网络 / PDF / 标识符
 
 - **ProxyProvider** (`lib/providers/proxy_provider.dart`) — 禁止在单个服务上单独配置代理。
@@ -132,6 +137,7 @@
 - **ZoteroSyncService** (`lib/services/zotero_sync_service.dart`) — 禁止在此落盘或做 `Document` 映射。
 - **ZoteroItemMapper** (`lib/services/zotero_item_mapper.dart`) — 禁止让 Zotero 字段渗入 `Document`。
 - **ZoteroSyncProvider** (`lib/providers/zotero_sync_provider.dart`) — 禁止散落保存 Zotero 凭据。
+- **ZoteroSnapshot** (`lib/core/storage/zotero_snapshot.dart`) — Zotero 同步快照（watch() 驱动）。禁止自写 Zotero 数据缓存或绕过它读 `zotero_items` 表。
 - **DocumentStructure** (`lib/services/document_structure.dart`) — `extract.json` 唯一防腐层。禁止 `jsonDecode` 后直挖 `parsing_res_list`。
 - **LayoutMetadataExtractor** (`lib/services/layout_metadata_extractor.dart`) — 从 `extract.json` 首页提取中文书籍题录，是否中文走 `ChineseTextDetector`。禁止自写 CJK 题录正则。
 
@@ -142,7 +148,6 @@
 - **webview_reader_html** (`lib/pages/reader/widgets/webview_reader_html.dart`) — 静态样式/脚本在 `assets/reader/`。禁止内联回 Dart、禁止依赖 CDN。
 - **escapeJsLiteral** (`lib/utils/js_string_escape.dart`) — 向 WebView 注入 JS 时字符串转义唯一函数。禁止手拼 JS 字符串字面量。
 - **ReaderSheetHost** (`lib/pages/reader/widgets/reader_sheet_host.dart`) — 禁止在阅读器内用 `showModalBottomSheet`。
-- **MajorSectionMatcher** (`lib/services/major_section_matcher.dart`) — 主章节判定（配置 `assets/config/major_sections.json`）。禁止自写章节标题正则。
 - **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — 复制图片用 `Pasteboard.writeImage()`，禁止 `Clipboard.setData`。
 - 底部面板禁止直接 `settings.backgroundColor`，用 `resolveReaderPalette()`。
 

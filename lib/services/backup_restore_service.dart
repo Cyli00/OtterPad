@@ -93,7 +93,10 @@ class BackupRestoreService {
     final outputPath = p.join(tempDir.path, buildBackupFileName(createdAt));
     // VACUUM INTO 生成一致快照（不阻塞写、不撕裂 WAL）。
     final snapshotPath = p.join(tempDir.path, 'snapshot_$_dbFileName');
-    await GStorage.db.customStatement("VACUUM INTO '$snapshotPath'");
+    // SQLite VACUUM INTO 不支持参数化，路径须字面拼入；转义单引号防破坏 SQL
+    // （snapshotPath 来自系统临时目录，正常不含单引号，此处为防御性兜底）。
+    final safeSnapshotPath = snapshotPath.replaceAll("'", "''");
+    await GStorage.db.customStatement("VACUUM INTO '$safeSnapshotPath'");
 
     // 打包在后台 isolate 流式进行（只 zip 文件，不碰 DB 连接）。
     await compute(_createArchiveInIsolate, <String>[
@@ -342,11 +345,15 @@ class BackupRestoreService {
   }
 
   /// 把备份表的全部行批量插入活库（已先清空活库对应表）。
-  static Future<void> _copyTable(
+  ///
+  /// 泛型化（替代原 dynamic）：T 为 Drift 表类，R 为生成行类，
+  /// [toCompanion] 在 `R` → `UpdateCompanion<R>` 间转换，编译期即守住
+  /// 「表 ↔ 行 ↔ companion」三方类型对应，避免调用方传错转换函数。
+  static Future<void> _copyTable<T extends Table, R extends DataClass>(
     db.AppDatabase backupDb,
-    dynamic backupTable,
-    dynamic liveTable,
-    dynamic Function(dynamic row) toCompanion,
+    TableInfo<T, R> backupTable,
+    TableInfo<T, R> liveTable,
+    UpdateCompanion<R> Function(R row) toCompanion,
   ) async {
     final rows = await backupDb.select(backupTable).get();
     if (rows.isEmpty) return;

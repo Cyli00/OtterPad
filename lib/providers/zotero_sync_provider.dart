@@ -99,7 +99,7 @@ class ZoteroSyncStore {
   }
 
   static Future<void> clear() async {
-    ZoteroSnapshot.items = const {};
+    ZoteroSnapshot.items = {};
     ZoteroSnapshot.libraryVersion = 0;
     await GStorage.db.delete(GStorage.db.zoteroItems).go();
     await (GStorage.db.delete(GStorage.db.meta)

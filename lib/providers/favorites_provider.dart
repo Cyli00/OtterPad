@@ -18,9 +18,7 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
   @override
   Stream<List<Favorite>> build() {
     final database = ref.watch(appDatabaseProvider);
-    // 默认收藏夹幂等补建（首次启动或恢复的备份缺默认夹时）。写不触发 build 重跑
-    // （build 只在 appDatabaseProvider 失效时重跑），故无自激循环。
-    unawaited(_ensureDefault());
+    // 默认收藏夹补建已移至 GStorage.init/reopen（副作用归 init 钩子，build 纯读）。
     // favorites 与 favorite_documents 任一表变更都重发组装结果（ADR-0001）。
     final controller = StreamController<List<Favorite>>();
     Future<void> emit() async {
@@ -70,25 +68,8 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
   List<Favorite> get _current => state.value ?? const <Favorite>[];
 
   /// 首次启动或数据缺失时确保默认"我的收藏"存在且置顶。
-  Future<void> _ensureDefault() async {
-    final exists = await (GStorage.db.select(GStorage.db.favorites)
-          ..where((t) => t.id.equals(Favorite.defaultId)))
-        .getSingleOrNull();
-    if (exists == null) {
-      await _upsertFav(_createDefault());
-    }
-  }
-
-  static Favorite _createDefault() {
-    final lang = PlatformDispatcher.instance.locale.languageCode;
-    return Favorite(
-      id: Favorite.defaultId,
-      emoji: '📖',
-      name: lang == 'zh' ? '我的收藏' : 'My Favorites',
-      documentIds: [],
-      createdAt: DateTime.now(),
-    );
-  }
+  static Favorite _createDefault() =>
+      Favorite.defaultFor(PlatformDispatcher.instance.locale.languageCode);
 
   Future<void> _upsertFav(Favorite f) async {
     await GStorage.db

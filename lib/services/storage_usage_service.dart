@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/storage/storage.dart';
 
-enum StorageGroupKey { papers, chat, cache, logs }
+enum StorageGroupKey { papers, chat, cache, logs, database }
 
 class StorageSubInfo {
   final String id;
@@ -63,7 +63,7 @@ class StorageUsageService {
   static Future<StorageReport> computeReport() async {
     final filesC = _Counter();
     final imagesC = _Counter();
-    final notesC = _Counter();
+    final dbC = _Counter();
     final chatC = _Counter();
     final cacheC = _Counter();
     final logsC = _Counter();
@@ -106,14 +106,15 @@ class StorageUsageService {
       await for (final entity in dbDir.list(followLinks: false)) {
         if (entity is! File) continue;
         final name = p.basename(entity.path).toLowerCase();
-        // Drift SQLite 文件（otter.db / -wal / -shm）——含标注/元数据，计入 notes。
-        // jieba 字典目录与遗留 Hive 文件不计入。
+        // Drift SQLite 文件（otter.db / -wal / -shm）——含文献行 + 非文献数据
+        // （settings/favorites/meta）+ schema，计入 database 类。jieba 字典目录
+        // 与遗留 Hive 文件不计入。
         if (name != 'otter.db' && !name.startsWith('otter.db-')) continue;
         int bytes = 0;
         try {
           bytes = await entity.length();
         } catch (_) {}
-        notesC.add(bytes);
+        dbC.add(bytes);
       }
     }
 
@@ -121,8 +122,11 @@ class StorageUsageService {
     await _countDir(await _tempDir(), cacheC);
     await _countDir(Directory(GStorage.logsDirPath), logsC);
 
-    final papersBytes = filesC.bytes + imagesC.bytes + notesC.bytes;
-    final papersFiles = filesC.fileCount + imagesC.fileCount + notesC.fileCount;
+    // papers 只含 library 文献文件（source.pdf / extract / figures）；
+    // db 文件（otter.db）含文献行 + 非文献数据（settings/favorites/meta）
+    // + schema，单独归 database 类——清除文献后 papers 归零，db 骨架单独可见。
+    final papersBytes = filesC.bytes + imagesC.bytes;
+    final papersFiles = filesC.fileCount + imagesC.fileCount;
 
     final groups = [
       StorageGroupInfo(
@@ -140,11 +144,6 @@ class StorageUsageService {
             bytes: imagesC.bytes,
             fileCount: imagesC.fileCount,
           ),
-          StorageSubInfo(
-            id: 'notes',
-            bytes: notesC.bytes,
-            fileCount: notesC.fileCount,
-          ),
         ],
       ),
       StorageGroupInfo(
@@ -161,6 +160,11 @@ class StorageUsageService {
         key: StorageGroupKey.logs,
         bytes: logsC.bytes,
         fileCount: logsC.fileCount,
+      ),
+      StorageGroupInfo(
+        key: StorageGroupKey.database,
+        bytes: dbC.bytes,
+        fileCount: dbC.fileCount,
       ),
     ];
 
@@ -182,11 +186,14 @@ class StorageUsageService {
             (sub, name) => !sub.startsWith('chats/') && name != '.reader.html',
           );
           // 删 documents：外键 CASCADE 自动清 highlights/history/
-          // favorite_documents/zotero_items 关联行，FTS 触发器同步清
-          // documents_fts。favorites 收藏夹分组保留（用户自定义容器，
-          // 清理文献不清分组结构）。
-          await GStorage.db.delete(GStorage.db.documents).go();
-          // SQLite DELETE 不释放磁盘空间，VACUUM 收缩 otter.db 文件。
+          // favorite_documents/zotero_items 关联行。favorites 收藏夹分组保留
+          // （用户自定义容器，清理文献不清分组结构）。走 AppDatabase.clearAllDocuments
+          // ——直接 DELETE 会触发 documents_ad 维护 FTS 索引，documents/fts 历史不一致
+          // 时同步失败报 SQL logic error；clearAllDocuments 摘除同步触发器后清空，
+          // 清理不依赖触发器是否健壮。
+          await GStorage.db.clearAllDocuments();
+          // SQLite DELETE 不释放磁盘空间，VACUUM 收缩 otter.db 文件
+          // （clearAllDocuments 事务结束后在事务外执行）。
           await GStorage.db.customStatement('VACUUM');
         case StorageGroupKey.chat:
           await _clearLibraryMatching(
@@ -198,6 +205,10 @@ class StorageUsageService {
           await _clearLibraryMatching((sub, name) => name == '.reader.html');
         case StorageGroupKey.logs:
           await _deleteContents(Directory(GStorage.logsDirPath));
+        case StorageGroupKey.database:
+          // db 文件含非文献数据（settings/favorites/meta），不能删文件。
+          // 文献数据通过 papers 清除（删 documents + VACUUM）；此处仅 VACUUM 回收空闲页。
+          await GStorage.db.customStatement('VACUUM');
       }
     }
   }

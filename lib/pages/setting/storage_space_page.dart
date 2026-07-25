@@ -130,6 +130,8 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return Symbols.cached_rounded;
       case StorageGroupKey.logs:
         return Symbols.receipt_long_rounded;
+      case StorageGroupKey.database:
+        return Symbols.database_rounded;
     }
   }
 
@@ -144,6 +146,8 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return l10n.storageCategoryCache;
       case StorageGroupKey.logs:
         return l10n.storageCategoryLogs;
+      case StorageGroupKey.database:
+        return l10n.storageCategoryDatabase;
     }
   }
 
@@ -157,6 +161,8 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return cs.error;
       case StorageGroupKey.logs:
         return cs.outline;
+      case StorageGroupKey.database:
+        return cs.tertiary;
     }
   }
 

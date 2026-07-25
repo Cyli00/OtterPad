@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:drift/drift.dart' show InsertMode, OrderingTerm;
 import '../core/storage/db_convert.dart';
 import 'package:path/path.dart' as p;
@@ -24,6 +22,7 @@ import '../services/pdf_identifier_extractor.dart';
 import '../services/pdf_metadata_extractor.dart';
 import '../services/pdf_thumbnail_service.dart';
 import '../utils/doc_paths.dart';
+import '../utils/uuid.dart';
 import '../core/app_logger.dart';
 
 enum AddByIdentifierResult { success, duplicate }
@@ -131,6 +130,21 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   /// 当前列表（流尚未首次 emit 时为空）。
   List<Document> get _docs => state.value ?? const <Document>[];
 
+  /// 按 id 从 DB 查单篇（唯一真值源）——替代 _docs 流 state 查找，
+  /// 避免 StreamNotifier 流未 emit 时漏判。
+  Future<Document?> _findById(String id) async {
+    final row = await (GStorage.db.select(GStorage.db.documents)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    return row == null ? null : documentFromRow(row);
+  }
+
+  /// 从 DB 读全部文献（唯一真值源）——替代 _docs 流 state 查重。
+  Future<List<Document>> _allDocsFromDb() async {
+    final rows = await GStorage.db.select(GStorage.db.documents).get();
+    return rows.map(documentFromRow).toList();
+  }
+
   /// 文献库根目录——所有文献自包含目录的父目录。
   static Future<Directory> getDocsDir() async {
     final dir = Directory(GStorage.libraryDirPath);
@@ -150,14 +164,16 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     }
 
     final contentHash = await DocPaths.computeHash(sourceFile);
-    final existingDoc = _docs.cast<Document?>().firstWhere(
-      (doc) => doc != null && doc.contentHash == contentHash,
-      orElse: () => null,
-    );
-    if (existingDoc != null) {
+    // 判重走 DB 查询（唯一真值源）——不依赖 watch() 流 state：StreamNotifier
+    // 异步，流未 emit 时 _docs 为空会漏判，导致 _upsertDoc 触发 contentHash
+    // UNIQUE 约束冲突，addFile 抛异常、文件成孤儿。
+    final existingRow = await (GStorage.db.select(GStorage.db.documents)
+          ..where((t) => t.contentHash.equals(contentHash)))
+        .getSingleOrNull();
+    if (existingRow != null) {
       return AddFileResult(
         type: AddFileResultType.duplicate,
-        document: existingDoc,
+        document: documentFromRow(existingRow),
       );
     }
 
@@ -165,7 +181,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     await _writePdfForDocument(documentId, sourceFile);
 
     final initialMetadata = DocumentMetadataParser.parseFilePath(sourcePath);
-    var doc = Document(
+    final doc = Document(
       id: documentId,
       title: initialMetadata.title ?? p.basenameWithoutExtension(sourcePath),
       authors: initialMetadata.authors,
@@ -176,19 +192,30 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       addedAt: DateTime.now(),
     );
 
-    final repaired = await _repairDocument(doc, cancelToken: cancelToken);
-    doc = repaired.document;
+    // 立即入库：卡片先出现（文件名级初始元数据），元数据后台提取更新。
     await _upsertDoc(doc);
 
     unawaited(
       PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(doc.id)),
     );
 
+    // 元数据提取异步：不阻塞 addFile 返回，批量导入时多个文件快速建卡，
+    // 元数据后台逐篇提取 + upsert（watch() 流自动刷新卡片）。
+    unawaited(_repairAndUpdate(doc, cancelToken: cancelToken));
+
     return AddFileResult(
       type: AddFileResultType.imported,
       document: doc,
-      metadataStatus: repaired.status,
+      metadataStatus: MetadataStatus.none,
     );
+  }
+
+  /// 后台提取元数据并更新（异步，不阻塞 addFile）。提取期间文献可能被删除，
+  /// 完成后确认存在再 upsert，避免重新插入已删除的行。
+  Future<void> _repairAndUpdate(Document doc, {CancelToken? cancelToken}) async {
+    final repaired = await _repairDocument(doc, cancelToken: cancelToken);
+    if (await _findById(doc.id) == null) return;
+    await _upsertDoc(repaired.document);
   }
 
   Future<(Document, AddByIdentifierResult)> addByIdentifier(
@@ -201,7 +228,10 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       cancelToken: cancelToken,
     );
 
-    final duplicate = _docs.any(
+    // 判重走 DB 查询（唯一真值源）——不依赖 watch() 流 state（StreamNotifier
+    // 异步，流未 emit 时 _docs 为空会漏判，导致重复纯元数据条目入库）。
+    final allDocs = await _allDocsFromDb();
+    final duplicate = allDocs.any(
       (doc) => DocumentMetadataChecks.isDuplicate(doc, resolved),
     );
     if (duplicate) {
@@ -236,7 +266,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   Future<List<Document>> importDocuments(List<Document> incoming) async {
     if (incoming.isEmpty) return const [];
 
-    final base = _docs;
+    final base = await _allDocsFromDb();
     final results = <Document>[];
     final additions = <Document>[];
     for (final candidate in incoming) {
@@ -379,9 +409,10 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     String? year,
     String? doi,
   }) async {
-    final match = _docs.where((d) => d.id == id).toList();
-    if (match.isEmpty) return;
-    final updated = match.first.copyWith(
+    // 按 id 走 DB 查询（流未 emit 时 _docs 为空会找不到，导致编辑静默不生效）。
+    final existing = await _findById(id);
+    if (existing == null) return;
+    final updated = existing.copyWith(
       title: title,
       authors: authors,
       journal: journal,
@@ -392,10 +423,8 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }
 
   Future<void> attachFile(String docId, String sourcePath) async {
-    final existing = _docs.cast<Document?>().firstWhere(
-      (doc) => doc != null && doc.id == docId,
-      orElse: () => null,
-    );
+    // 按 id 走 DB 查询（流未 emit 时 _docs 为空会找不到，导致补文件静默不执行）。
+    final existing = await _findById(docId);
     if (existing == null) return;
 
     final sourceFile = File(sourcePath);
@@ -416,13 +445,9 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }
 
   Future<bool> redownloadPdf(String docId, {CancelToken? cancelToken}) async {
-    final found = _docs.cast<Document?>().firstWhere(
-      (entry) => entry != null && entry.id == docId,
-      orElse: () => null,
-    );
+    // 按 id 走 DB 查询（流未 emit 时 _docs 为空会找不到，导致重下载静默不执行）。
+    final found = await _findById(docId);
     if (found == null) return false;
-    // found 已被空检查提升为非空，var doc 因此推断为非空 Document，
-    // 后续条件块内的重新赋值不会丢失类型提升。
     var doc = found;
 
     // 无 DOI 时，用标题搜索补全元数据（可能拿到 DOI）
@@ -501,20 +526,15 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }
 
   Future<void> delete(String id) async {
-    final doc = _docs.cast<Document?>().firstWhere(
-      (entry) => entry != null && entry.id == id,
-      orElse: () => null,
-    );
-    if (doc != null) {
-      try {
-        final docDir = Directory(DocPaths.docDir(id));
-        if (await docDir.exists()) {
-          await docDir.delete(recursive: true);
-        }
-        await PdfThumbnailService.instance.deleteCacheEntry(DocPaths.pdf(id));
-      } catch (error) {
-        log.d('删除文件失败: $error');
+    // 删文件只需 id，不依赖 _docs（流未 emit 时 _docs 为空会漏删文件，留孤儿）。
+    try {
+      final docDir = Directory(DocPaths.docDir(id));
+      if (await docDir.exists()) {
+        await docDir.delete(recursive: true);
       }
+      await PdfThumbnailService.instance.deleteCacheEntry(DocPaths.pdf(id));
+    } catch (error) {
+      log.d('删除文件失败: $error');
     }
 
     // DELETE FROM documents → FK CASCADE 清 4 子表 + FTS 触发器清 documents_fts；
@@ -725,15 +745,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
         : MetadataStatus.partial;
   }
 
-  String _newDocumentId() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    String hex(int start, int end) => bytes
-        .sublist(start, end)
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join();
-    return '${hex(0, 4)}-${hex(4, 6)}-${hex(6, 8)}-${hex(8, 10)}-${hex(10, 16)}';
-  }
+  String _newDocumentId() => generateUuid();
 }
 
 /// 文献库列表（AsyncValue；流自动反映 DB 变更）。
@@ -742,7 +754,15 @@ final documentsProvider =
       DocumentsNotifier.new,
     );
 
-final viewModeProvider = StateProvider<bool>((ref) => true);
+class ViewModeNotifier extends Notifier<bool> {
+  @override
+  bool build() => true;
+
+  void toggle() => state = !state;
+}
+
+final viewModeProvider =
+    NotifierProvider<ViewModeNotifier, bool>(ViewModeNotifier.new);
 
 /// 派生 provider 保持同步：内部解包 [documentsProvider] 的 AsyncValue，
 /// 让 bookshelf / no_file 等消费点零改动（ADR-0001）。
@@ -762,11 +782,4 @@ final validDocsProvider = Provider<List<Document>>((ref) {
   return (ref.watch(documentsProvider).value ?? const <Document>[])
       .where((doc) => doc.contentHash != null)
       .toList();
-});
-
-/// 过滤出尚未提取（尚未生成 .md 文件）的有效文献。
-final unextractedDocsProvider = Provider<List<Document>>((ref) {
-  return ref.watch(validDocsProvider).where((doc) {
-    return !File(DocPaths.md(doc.id)).existsSync();
-  }).toList();
 });

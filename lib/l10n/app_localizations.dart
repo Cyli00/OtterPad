@@ -1947,6 +1947,12 @@ abstract class AppLocalizations {
   /// **'Logs'**
   String get storageCategoryLogs;
 
+  /// No description provided for @storageCategoryDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'Database'**
+  String get storageCategoryDatabase;
+
   /// No description provided for @storageSpaceSelected.
   ///
   /// In en, this message translates to:
@@ -3837,11 +3843,11 @@ abstract class AppLocalizations {
   /// **'Importing files, please wait'**
   String get importingFilesBusy;
 
-  /// No description provided for @extractingMetadataFile.
+  /// No description provided for @importingFile.
   ///
   /// In en, this message translates to:
-  /// **'Extracting metadata: {fileName}'**
-  String extractingMetadataFile(String fileName);
+  /// **'Importing: {fileName}'**
+  String importingFile(String fileName);
 
   /// No description provided for @documentAlreadyExists.
   ///
@@ -4011,24 +4017,6 @@ abstract class AppLocalizations {
   /// **'Already in library: {title}'**
   String existsInLibrary(String title);
 
-  /// No description provided for @importedWithFullMetadata.
-  ///
-  /// In en, this message translates to:
-  /// **'Imported with full metadata: {title}'**
-  String importedWithFullMetadata(String title);
-
-  /// No description provided for @importedPartialMetadata.
-  ///
-  /// In en, this message translates to:
-  /// **'Imported {title}, only partial metadata'**
-  String importedPartialMetadata(String title);
-
-  /// No description provided for @importedNoMetadata.
-  ///
-  /// In en, this message translates to:
-  /// **'Imported {title}, no metadata recognized'**
-  String importedNoMetadata(String title);
-
   /// No description provided for @importedCountPart.
   ///
   /// In en, this message translates to:
@@ -4041,23 +4029,11 @@ abstract class AppLocalizations {
   /// **'Duplicate {count}'**
   String duplicateCountPart(int count);
 
-  /// No description provided for @fullMetadataCountPart.
+  /// No description provided for @importedFile.
   ///
   /// In en, this message translates to:
-  /// **'Full metadata {count}'**
-  String fullMetadataCountPart(int count);
-
-  /// No description provided for @partialMetadataCountPart.
-  ///
-  /// In en, this message translates to:
-  /// **'Partial metadata {count}'**
-  String partialMetadataCountPart(int count);
-
-  /// No description provided for @unrecognizedMetadataCountPart.
-  ///
-  /// In en, this message translates to:
-  /// **'Unrecognized metadata {count}'**
-  String unrecognizedMetadataCountPart(int count);
+  /// **'Imported: {title}'**
+  String importedFile(String title);
 
   /// No description provided for @importCancelledLabel.
   ///

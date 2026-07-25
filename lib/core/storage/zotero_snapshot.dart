@@ -13,7 +13,9 @@ import 'app_database.dart';
 class ZoteroSnapshot {
   static const libraryVersionKey = 'zotero_library_version';
 
-  static Map<String, ({String? docId, int version})> items = const {};
+  // 可变空 Map：attach() 前任何写入（如同步控制流的 recordItem）才不会
+  // 抛 UnsupportedError。attach() 后会被字面量 Map 覆盖，clear() 也赋可变 {}。
+  static Map<String, ({String? docId, int version})> items = {};
   static int libraryVersion = 0;
 
   static StreamSubscription<List<Object>>? _itemsSub;

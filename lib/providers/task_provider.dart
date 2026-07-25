@@ -83,8 +83,6 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
     // 这些计数器在 body 内累加，在 onSuccess 内被 _buildAddFileMessage 消费
     var importedCount = 0;
     var duplicateCount = 0;
-    var completeMetadataCount = 0;
-    var partialMetadataCount = 0;
     AddFileResult? lastResult;
 
     await runTask<void>(
@@ -100,7 +98,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ListenableProgress(
               current: i + 1,
               total: paths.length,
-              status: _l10n?.extractingMetadataFile(p.basename(paths[i])) ?? '正在提取元数据: ${p.basename(paths[i])}',
+              status: _l10n?.importingFile(p.basename(paths[i])) ?? '正在导入: ${p.basename(paths[i])}',
             ),
           );
 
@@ -111,25 +109,15 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             continue;
           }
           importedCount++;
-          if (lastResult!.metadataStatus == MetadataStatus.complete) {
-            completeMetadataCount++;
-          } else if (lastResult!.metadataStatus == MetadataStatus.partial) {
-            partialMetadataCount++;
-          }
         }
       },
       onSuccess: (_) {
-        final unresolvedMetadataCount =
-            importedCount - completeMetadataCount - partialMetadataCount;
         return TaskFinish.text(
           _buildAddFileMessage(
             cancelled: false,
             totalFiles: paths.length,
             importedCount: importedCount,
             duplicateCount: duplicateCount,
-            completeMetadataCount: completeMetadataCount,
-            partialMetadataCount: partialMetadataCount,
-            unresolvedMetadataCount: unresolvedMetadataCount,
             lastResult: lastResult,
           ),
         );
@@ -298,9 +286,6 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
     required int totalFiles,
     required int importedCount,
     required int duplicateCount,
-    required int completeMetadataCount,
-    required int partialMetadataCount,
-    required int unresolvedMetadataCount,
     required AddFileResult? lastResult,
   }) {
     if (totalFiles == 1 && lastResult?.document != null) {
@@ -308,28 +293,13 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       if (lastResult.type == AddFileResultType.duplicate) {
         return _l10n?.existsInLibrary(doc.title) ?? '文库中已存在: ${doc.title}';
       }
-      switch (lastResult.metadataStatus) {
-        case MetadataStatus.complete:
-          return _l10n?.importedWithFullMetadata(doc.title) ?? '已导入并提取元数据: ${doc.title}';
-        case MetadataStatus.partial:
-          return _l10n?.importedPartialMetadata(doc.title) ?? '已导入 ${doc.title}，仅提取到部分元数据';
-        case MetadataStatus.none:
-          return _l10n?.importedNoMetadata(doc.title) ?? '已导入 ${doc.title}，未识别到可用元数据';
-      }
+      // 元数据异步提取，不在此报告状态
+      return _l10n?.importedFile(doc.title) ?? '已导入: ${doc.title}';
     }
 
     final parts = <String>[];
     if (importedCount > 0) parts.add(_l10n?.importedCountPart(importedCount) ?? '导入 $importedCount 篇');
     if (duplicateCount > 0) parts.add(_l10n?.duplicateCountPart(duplicateCount) ?? '重复 $duplicateCount 篇');
-    if (completeMetadataCount > 0) {
-      parts.add(_l10n?.fullMetadataCountPart(completeMetadataCount) ?? '完整元数据 $completeMetadataCount 篇');
-    }
-    if (partialMetadataCount > 0) {
-      parts.add(_l10n?.partialMetadataCountPart(partialMetadataCount) ?? '部分元数据 $partialMetadataCount 篇');
-    }
-    if (unresolvedMetadataCount > 0) {
-      parts.add(_l10n?.unrecognizedMetadataCountPart(unresolvedMetadataCount) ?? '未识别元数据 $unresolvedMetadataCount 篇');
-    }
     if (parts.isEmpty) {
       return cancelled ? _l10n?.importCancelledLabel ?? '已取消导入' : _l10n?.noFilesImported ?? '未导入任何文件';
     }

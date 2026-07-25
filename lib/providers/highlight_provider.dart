@@ -7,6 +7,7 @@ import '../core/storage/app_database_provider.dart';
 import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/highlight.dart';
+import '../utils/uuid.dart';
 
 /// 按文献 ID 管理划线标注（ADR-0001：Drift `watch()` 异步视图，family by docId）。
 ///
@@ -54,7 +55,7 @@ class HighlightNotifier extends StreamNotifier<List<Highlight>> {
     if (_current.any((h) => h.text == text)) return null;
 
     final highlight = Highlight(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: generateUuid(),
       documentId: documentId,
       text: text,
       color: color,
