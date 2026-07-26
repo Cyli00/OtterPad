@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/storage.dart';
 import '../services/agent_model_capability.dart';
+import '../services/model_capability_store.dart';
 
 enum AgentApiProvider { openai, anthropic, gemini, openAICompatible }
 
@@ -331,10 +332,14 @@ class AgentProviderInstance {
   AgentModelParams paramsFor(String modelId) =>
       modelParams[modelId] ?? const AgentModelParams();
 
-  /// 取模型能力：优先用户持久化的覆盖值，缺失则按 id 即时推断。
-  AgentModelCapability capabilityFor(String modelId) =>
-      modelCaps[modelId] ??
-      AgentModelCapability.infer(provider: protocol, modelId: modelId);
+  /// 取模型能力，优先级：用户手动覆写 > 远程能力表(geosite 订阅) > 正则推断。
+  AgentModelCapability capabilityFor(String modelId) {
+    final manual = modelCaps[modelId];
+    if (manual != null) return manual;
+    final remote = ModelCapabilityStore.instance.lookup(modelId);
+    if (remote != null) return remote;
+    return AgentModelCapability.infer(provider: protocol, modelId: modelId);
+  }
 }
 
 /// 单实例的「已解析视图」：实例自身字段 + 三个全局角色中**指向本实例**的那部分。

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -14,6 +15,7 @@ import 'providers/auto_backup_provider.dart';
 import 'providers/proxy_provider.dart';
 import 'providers/update_check_scheduler.dart';
 import 'services/agent_model_capability.dart';
+import 'services/model_capability_store.dart';
 import 'services/back_matter_detector.dart';
 import 'services/figure_extract_service.dart';
 import 'services/haptics.dart';
@@ -60,6 +62,11 @@ Future<void> main() async {
     // init() 的加载延迟与“忘记初始化 → 运行时断言”隐患（init 内部幂等）。
     FigureExtractService.instance.init(),
   ]);
+
+  // 模型能力规则集（geosite 订阅）：加载本地缓存（依赖 GStorage.dbDirPath），
+  // 后台按 TTL 检查远程更新（不阻塞启动）。
+  await ModelCapabilityStore.instance.init();
+  unawaited(ModelCapabilityStore.instance.checkUpdateIfNeeded());
 
   // 凭据安全存储：必须在 GStorage.init 之后、任何 provider 读取凭据之前完成——
   // 同步 read() 依赖此处填充的内存缓存。

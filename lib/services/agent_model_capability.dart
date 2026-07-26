@@ -21,6 +21,10 @@ class AgentModelCapability {
   /// 推理 / 思考能力。embedding 模型恒为 false。
   final bool reasoning;
 
+  /// 联网搜索能力。正则不兜底（厂商私有参数繁多，如小米 forced_search），
+  /// 由远程能力表（modelcaps 仓库）或用户手动覆写提供。
+  final bool webSearch;
+
   const AgentModelCapability({
     this.textInput = true,
     this.imageInput = false,
@@ -29,6 +33,7 @@ class AgentModelCapability {
     this.embedding = false,
     this.tool = false,
     this.reasoning = false,
+    this.webSearch = false,
   });
 
   bool get canGenerateImage => imageOutput && !embedding;
@@ -41,6 +46,7 @@ class AgentModelCapability {
     bool? embedding,
     bool? tool,
     bool? reasoning,
+    bool? webSearch,
   }) => AgentModelCapability(
     textInput: textInput ?? this.textInput,
     imageInput: imageInput ?? this.imageInput,
@@ -49,6 +55,7 @@ class AgentModelCapability {
     embedding: embedding ?? this.embedding,
     tool: tool ?? this.tool,
     reasoning: reasoning ?? this.reasoning,
+    webSearch: webSearch ?? this.webSearch,
   );
 
   Map<String, dynamic> toJson() => {
@@ -59,6 +66,7 @@ class AgentModelCapability {
     'embedding': embedding,
     'tool': tool,
     'reasoning': reasoning,
+    'webSearch': webSearch,
   };
 
   factory AgentModelCapability.fromJson(Map<String, dynamic> json) =>
@@ -70,6 +78,7 @@ class AgentModelCapability {
         embedding: json['embedding'] as bool? ?? false,
         tool: json['tool'] as bool? ?? false,
         reasoning: json['reasoning'] as bool? ?? false,
+        webSearch: json['webSearch'] as bool? ?? false,
       );
 
   factory AgentModelCapability.infer({

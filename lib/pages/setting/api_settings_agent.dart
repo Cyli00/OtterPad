@@ -12,6 +12,7 @@ import '../../providers/api_provider.dart';
 import '../../providers/model_test_provider.dart';
 import '../../providers/onboarding_provider.dart';
 import '../../services/agent_model_capability.dart';
+import '../../services/model_capability_store.dart';
 import '../../services/haptics.dart';
 import '../../services/tavily_search_service.dart';
 import '../../services/snackbar_service.dart';
@@ -679,10 +680,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       modelId: modelId,
       protocol: inst.protocol,
       initial: inst.capabilityFor(modelId),
-      inferred: AgentModelCapability.infer(
-        provider: inst.protocol,
-        modelId: modelId,
-      ),
+      inferred: ModelCapabilityStore.instance.lookup(modelId) ??
+          AgentModelCapability.infer(
+            provider: inst.protocol,
+            modelId: modelId,
+          ),
       onSave: (cap) => ref
           .read(agentApiProvider.notifier)
           .setModelCapability(inst.id, modelId, cap),
