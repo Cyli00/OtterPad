@@ -4149,6 +4149,12 @@ abstract class AppLocalizations {
   /// **'Expert model must support image input'**
   String get expertRequiresVision;
 
+  /// No description provided for @switchedToExpertForImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Fast model doesn\'t support images; switched to expert model'**
+  String get switchedToExpertForImage;
+
   /// No description provided for @askAi.
   ///
   /// In en, this message translates to:

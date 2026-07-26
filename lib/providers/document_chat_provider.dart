@@ -182,7 +182,7 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
         quotedText: quotedText,
         figureImagePath: figureImagePath,
         urlContext: urlContext,
-        supportsImages: _supportsImages(role),
+        supportsImages: supportsImages(role),
         thinkingOverride: thinkingOverride,
         webSearch: webSearch,
         onDelta: streaming ? pushDelta : null,
@@ -276,7 +276,8 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
 
   /// 图片输入能力判定：优先读实例上（含用户在设置里手动覆盖的）能力标记，
   /// 实例不可达时回退 id 推断——两条路都在 AgentModelCapability 接缝内。
-  bool _supportsImages(ChatModelRole role) {
+  /// public：供 page 发图时判定是否需自动转专家模型。
+  bool supportsImages(ChatModelRole role) {
     final roleState = DocumentChatService.resolveRoleState(role);
     final modelId = roleState == null
         ? null

@@ -864,6 +864,7 @@
   "aiLayoutFixRevertHint": "Revert via \"Re-extract\" if needed",
   "expertModelNotSet": "Please set up the expert model first",
   "expertRequiresVision": "Expert model must support image input",
+  "switchedToExpertForImage": "Fast model doesn't support images; switched to expert model",
   "askAi": "Ask AI",
   "newChat": "New chat",
   "chatHistory": "Chat history",

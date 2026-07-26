@@ -2335,6 +2335,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get expertRequiresVision => 'Expert model must support image input';
 
   @override
+  String get switchedToExpertForImage =>
+      'Fast model doesn\'t support images; switched to expert model';
+
+  @override
   String get askAi => 'Ask AI';
 
   @override

@@ -2282,6 +2282,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get expertRequiresVision => '专家模型需要支持图片输入';
 
   @override
+  String get switchedToExpertForImage => '快速模型不支持图片，已切换至专家模型';
+
+  @override
   String get askAi => '问 AI';
 
   @override
@@ -4834,6 +4837,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get expertRequiresVision => '專家模型需要支援圖片輸入';
+
+  @override
+  String get switchedToExpertForImage => '快速模型不支持圖片，已切換至專家模型';
 
   @override
   String get askAi => '問 AI';

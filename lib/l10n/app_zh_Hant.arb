@@ -757,6 +757,7 @@
   "aiLayoutFixRevertHint": "如需還原，可透過「重新擷取」恢復",
   "expertModelNotSet": "請先設定專家模型",
   "expertRequiresVision": "專家模型需要支援圖片輸入",
+  "switchedToExpertForImage": "快速模型不支持圖片，已切換至專家模型",
 
   "addFailedError": "新增失敗: {error}",
   "addToNote": "新增到筆記",

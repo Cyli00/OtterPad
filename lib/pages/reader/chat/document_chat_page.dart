@@ -114,11 +114,35 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     super.dispose();
   }
 
+  /// 发图前角色解析：带图且当前 role 模型不支持图片 → 切专家 + 提示；
+  /// 专家也不支持 → 提示 expertRequiresVision 并返回 null（中止）。无图或
+  /// 当前模型已支持则原样返回 _role。切回快速由用户手动操作。
+  ChatModelRole? _ensureRoleForFigure() {
+    if (_figureImagePath == null) return _role;
+    if (_role == ChatModelRole.expert) return _role;
+    final notifier = ref.read(documentChatProvider(_documentId).notifier);
+    if (notifier.supportsImages(_role)) return _role;
+    if (!notifier.supportsImages(ChatModelRole.expert)) {
+      ref.read(snackBarServiceProvider).showResult(
+        message: context.l10n.expertRequiresVision,
+      );
+      return null;
+    }
+    setState(() => _role = ChatModelRole.expert);
+    ref.read(snackBarServiceProvider).showResult(
+      message: context.l10n.switchedToExpertForImage,
+    );
+    return ChatModelRole.expert;
+  }
+
   void _send() {
     final chat = ref.read(documentChatProvider(_documentId));
     final text = _inputController.text.trim();
     if (text.isEmpty || chat.sending) return;
     Haptics.soft();
+
+    final role = _ensureRoleForFigure();
+    if (role == null) return;
 
     final editIdx = _editingIndex;
     if (editIdx != null) {
@@ -127,7 +151,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           .resendFrom(
             keepCount: editIdx,
             text: text,
-            role: _role,
+            role: role,
             quotedText: _quote,
             figureImagePath: _figureImagePath,
             thinkingOverride: _thinking,
@@ -139,7 +163,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           .read(documentChatProvider(_documentId).notifier)
           .send(
             text: text,
-            role: _role,
+            role: role,
             quotedText: _quote,
             figureImagePath: _figureImagePath,
             thinkingOverride: _thinking,
@@ -852,12 +876,14 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       }
     }
     if (userMsg == null) return;
+    final role = _ensureRoleForFigure();
+    if (role == null) return;
     ref
         .read(documentChatProvider(_documentId).notifier)
         .resendFrom(
           keepCount: assistantIndex,
           text: userMsg.content,
-          role: _role,
+          role: role,
           quotedText: userMsg.quotedText,
           figureImagePath: _figureImagePath,
           thinkingOverride: _thinking,
