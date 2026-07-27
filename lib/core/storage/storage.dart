@@ -101,6 +101,7 @@ class GStorage {
       await _syncFtsIfStale();
     } catch (e) {
       debugPrint('OtterPad: FTS5 建表失败（documents_fts），搜索降级为 LIKE: $e');
+      await _degradeFts();
     }
 
     // ADR-0002：SettingsStore 私有写穿透缓存（非 StartupCache），启动加载。
@@ -151,6 +152,23 @@ class GStorage {
       'INSERT INTO documents_fts(rowid, id, title, authors, journal, keywords) '
       'SELECT rowid, id, title, authors, journal, keywords FROM documents',
     );
+  }
+
+  /// FTS 不可用时的降级兜底：摘除 documents 上的三个 FTS 同步触发器。
+  /// 场景：把带 FTS 表的备份恢复到 simple 扩展加载失败的环境——虚表还在、
+  /// 触发器还挂着，任何文献增删改都会因触发器写 documents_fts 报
+  /// "no such tokenizer" 而整体失败。虚表尝试一并删（让搜索干净走 LIKE），
+  /// 删不掉（DROP 可能需实例化 tokenizer）就留着，MATCH 抛错仍会被
+  /// searchDocuments 捕获降级。
+  static Future<void> _degradeFts() async {
+    try {
+      await _db.customStatement('DROP TRIGGER IF EXISTS documents_ai');
+      await _db.customStatement('DROP TRIGGER IF EXISTS documents_ad');
+      await _db.customStatement('DROP TRIGGER IF EXISTS documents_au');
+      await _db.customStatement('DROP TABLE IF EXISTS documents_fts');
+    } catch (e) {
+      debugPrint('OtterPad: FTS 降级清理失败: $e');
+    }
   }
 
   /// Debug 自检：确认 documents_fts 存在 + jieba_query 可调（ADR-0005 #5）。
@@ -218,6 +236,7 @@ class GStorage {
       await _syncFtsIfStale();
     } catch (e) {
       debugPrint('OtterPad: FTS5 建表失败（documents_fts），搜索降级为 LIKE: $e');
+      await _degradeFts();
     }
     _settings = SettingsStore(_db);
     await _settings.preload();

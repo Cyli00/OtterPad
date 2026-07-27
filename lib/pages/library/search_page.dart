@@ -42,7 +42,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final l10n = context.l10n;
-    // FTS5 检索（异步）——唯一被异步化的页面，其余 provider 仍是同步内存缓存。
+    // FTS5 检索（异步，ADR-0001：数据 provider 均为 DB 直读异步视图）。
     final asyncDocs = ref.watch(documentSearchProvider(_query));
 
     return Scaffold(
