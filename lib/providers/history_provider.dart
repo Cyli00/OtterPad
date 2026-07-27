@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' show OrderingTerm;
 
+import '../core/storage/app_database.dart' show AppDatabase;
 import '../core/storage/app_database_provider.dart';
 import '../core/storage/db_convert.dart';
-import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import 'documents_provider.dart' show validDocsProvider;
 
@@ -40,75 +40,77 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
 
   void reload() => ref.invalidateSelf();
 
-  List<HistoryEntry> get _current => state.value ?? const <HistoryEntry>[];
+  /// Drift 实例统一经 [appDatabaseProvider] 取（唯一来源，禁止直用 GStorage.db）。
+  AppDatabase get _db => ref.read(appDatabaseProvider);
 
   Future<void> _upsert(HistoryEntry e) async {
-    await GStorage.db
-        .into(GStorage.db.history)
-        .insertOnConflictUpdate(historyCompanion(e));
+    await _db.into(_db.history).insertOnConflictUpdate(historyCompanion(e));
   }
 
   Future<void> _delete(String docId) async {
-    await (GStorage.db.delete(GStorage.db.history)
-          ..where((t) => t.docId.equals(docId)))
-        .go();
+    await (_db.delete(_db.history)..where((t) => t.docId.equals(docId))).go();
   }
 
   Future<void> _deleteMany(Iterable<String> docIds) async {
     if (docIds.isEmpty) return;
-    await (GStorage.db.delete(GStorage.db.history)
-          ..where((t) => t.docId.isIn(docIds)))
-        .go();
+    await (_db.delete(_db.history)..where((t) => t.docId.isIn(docIds))).go();
   }
 
   /// 仅保留最近 _maxEntries 条（按 openedAt 倒序），其余从 Drift 删除。
   Future<void> _cap() async {
-    await GStorage.db.customStatement(
+    await _db.customStatement(
       'DELETE FROM history WHERE docId NOT IN '
       '(SELECT docId FROM history ORDER BY openedAt DESC LIMIT $_maxEntries)',
     );
   }
 
+  /// 按 docId 从 DB 查单条（唯一真值源）——不读 watch() 流 state，
+  /// 避免冷启动流未 emit 时误判无记录。
+  Future<HistoryEntry?> _findByDocId(String docId) async {
+    final row = await (_db.select(_db.history)
+          ..where((t) => t.docId.equals(docId)))
+        .getSingleOrNull();
+    return row == null ? null : historyFromRow(row);
+  }
+
   /// 记录一次阅读：已存在同 docId 时 upsert（冒泡到顶，进度/锚点继承旧 entry）。
-  /// 进度/锚点从旧 entry 继承——否则重开文档瞬间进度归零，
-  /// 阅读位置恢复（view.dart initState 读取）拿到的永远是 0。
-  void record(String docId) {
-    final now = DateTime.now();
-    final idx = _current.indexWhere((e) => e.docId == docId);
-    final prev = idx >= 0 ? _current[idx] : null;
+  /// 旧 entry 从 DB 读——冷启动经「继续阅读」直入阅读器时流未 emit，
+  /// 若读流 state 会误判 prev=null 把进度清零，阅读位置恢复
+  /// （view.dart initState 读取）拿到的永远是 0。
+  Future<void> record(String docId) async {
+    final prev = await _findByDocId(docId);
     final entry = HistoryEntry(
       docId: docId,
-      openedAt: now,
+      openedAt: DateTime.now(),
       progress: prev?.progress ?? 0.0,
       anchorBlock: prev?.anchorBlock,
     );
-    unawaited(_upsert(entry).then((_) => _cap()));
+    await _upsert(entry);
+    await _cap();
   }
 
-  void removeDoc(String docId) {
-    if (!_current.any((e) => e.docId == docId)) return;
-    unawaited(_delete(docId));
-  }
+  Future<void> removeDoc(String docId) => _delete(docId);
 
-  void removeMany(Set<String> docIds) {
-    if (docIds.isEmpty) return;
-    unawaited(_deleteMany(docIds));
-  }
+  Future<void> removeMany(Set<String> docIds) => _deleteMany(docIds);
 
-  void clear() {
-    if (_current.isEmpty) return;
-    unawaited(GStorage.db.delete(GStorage.db.history).go());
+  Future<void> clear() async {
+    await _db.delete(_db.history).go();
   }
 
   /// 更新阅读进度。写盘走 2s 防抖；流自动刷新 state（ADR-0001 非乐观）。
   ///
-  /// 注意：仅更新已存在 entry 的 progress；如果文献从未打开过（无 HistoryEntry）
-  /// 则直接忽略——`record(docId)` 在 reader 入口已经先建好 entry 了。
-  void setProgress(String docId, double progress, {int? anchorBlock}) {
-    final clamped = progress.clamp(0.0, 1.0);
-    final idx = _current.indexWhere((e) => e.docId == docId);
-    if (idx < 0) return;
-    final old = _current[idx];
+  /// 仅更新已存在 entry 的 progress——`record(docId)` 在 reader 入口已建好
+  /// entry，从未打开过的文献忽略。基准行优先取防抖窗口内的 pending，其次
+  /// 查 DB（不读流 state：冷启动流未 emit 会误判无 entry 而丢进度）。
+  Future<void> setProgress(
+    String docId,
+    double progress, {
+    int? anchorBlock,
+  }) async {
+    final clamped = progress.clamp(0.0, 1.0).toDouble();
+    var old = _pendingProgress?.docId == docId ? _pendingProgress : null;
+    old ??= await _findByDocId(docId);
+    if (old == null) return;
     // 同进度同锚点不写盘，避免无谓磁盘 IO
     if ((old.progress - clamped).abs() < 1e-4 &&
         old.anchorBlock == anchorBlock) {

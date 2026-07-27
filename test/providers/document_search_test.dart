@@ -33,8 +33,9 @@ void main() {
     );
     await db.into(db.documents).insertOnConflictUpdate(documentCompanion(doc));
 
-    expect((await searchDocuments('信号')).any((d) => d.id == 'd1'), isTrue);
-    expect((await searchDocuments('白细胞')).any((d) => d.id == 'd1'), isTrue);
+    expect((await searchDocuments(db, '信号')).any((d) => d.id == 'd1'), isTrue);
+    expect(
+        (await searchDocuments(db, '白细胞')).any((d) => d.id == 'd1'), isTrue);
   });
 
   test('LIKE 降级：doi / year 命中', () async {
@@ -49,8 +50,9 @@ void main() {
     );
     await db.into(db.documents).insertOnConflictUpdate(documentCompanion(doc));
 
-    expect((await searchDocuments('10.9999')).any((d) => d.id == 'd2'), isTrue);
-    expect((await searchDocuments('2024')).any((d) => d.id == 'd2'), isTrue);
+    expect(
+        (await searchDocuments(db, '10.9999')).any((d) => d.id == 'd2'), isTrue);
+    expect((await searchDocuments(db, '2024')).any((d) => d.id == 'd2'), isTrue);
   });
 
   test('LIKE 降级：作者 / 期刊 / 关键词命中', () async {
@@ -65,13 +67,15 @@ void main() {
     );
     await db.into(db.documents).insertOnConflictUpdate(documentCompanion(doc));
 
-    expect((await searchDocuments('Smith')).any((d) => d.id == 'd3'), isTrue);
-    expect((await searchDocuments('Nature')).any((d) => d.id == 'd3'), isTrue);
-    expect((await searchDocuments('kinase')).any((d) => d.id == 'd3'), isTrue);
+    expect((await searchDocuments(db, 'Smith')).any((d) => d.id == 'd3'), isTrue);
+    expect(
+        (await searchDocuments(db, 'Nature')).any((d) => d.id == 'd3'), isTrue);
+    expect(
+        (await searchDocuments(db, 'kinase')).any((d) => d.id == 'd3'), isTrue);
   });
 
   test('空查询返回空', () async {
-    expect(await searchDocuments(''), const []);
-    expect(await searchDocuments('   '), const []);
+    expect(await searchDocuments(db, ''), const []);
+    expect(await searchDocuments(db, '   '), const []);
   });
 }

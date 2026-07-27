@@ -3,27 +3,30 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/storage/app_database.dart' show AppDatabase;
+import '../core/storage/app_database_provider.dart';
 import '../core/storage/db_convert.dart';
-import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 
-/// 全文检索（FTS5 jieba 分词 + 拼音）+ doi/year LIKE 兜底。
+/// 全文检索（FTS5 jieba 分词 + 拼音）+ 全字段 LIKE 兜底。
 ///
 /// FTS5 索引 title/authors/journal/keywords（[AppDatabase.ensureFts5] 建的
-/// documents_fts 虚表 + 触发器自动同步）。doi（标识符）与 year（数字）不进 FTS，
-/// 用列 LIKE 兜底，保持与旧 `Document.matchesQuery` 行为对齐。
+/// documents_fts 虚表 + 触发器自动同步），提供分词/拼音召回。LIKE 恒查全
+/// 字段（title/authors/journal/keywords/doi/year）：doi/year 不进 FTS 靠它
+/// 覆盖，同时补足 FTS 分词召不回的任意子串命中（如搜 "nation" 命中
+/// "information..."），对齐旧 `Document.matchesQuery` 行为。
 ///
 /// **降级**：FTS5 扩展（sqlite3_simple）不可用或 documents_fts 表缺失时，
-/// FTS5 查询抛错被吞，搜索退化为全字段 LIKE（含 title/authors/journal/keywords），
-/// 保证搜索始终可用——见 GStorage.init 的扩展加载 try-catch。
-Future<List<Document>> searchDocuments(String query) async {
+/// FTS5 查询抛错被吞、命中并入为空，结果即纯全字段 LIKE，搜索始终可用
+/// （ADR-0005；扩展加载见 GStorage.init）。
+Future<List<Document>> searchDocuments(AppDatabase db, String query) async {
   final q = query.trim();
   if (q.isEmpty) return const [];
 
   // FTS5 命中（jieba 分词 + 拼音）。扩展/表缺失时降级。
   final ftsDocs = <Document>[];
   try {
-    final ftsRows = await GStorage.db.customSelect(
+    final ftsRows = await db.customSelect(
       'SELECT d.id, d.title, d.authors, d.journal, d.year, d.doi, d.keywords, '
       'd.contentHash, d.addedAt '
       'FROM documents_fts f JOIN documents d ON d.id = f.id '
@@ -45,22 +48,20 @@ Future<List<Document>> searchDocuments(String query) async {
       ));
     }
   } catch (_) {
-    // FTS5 不可用：ftsDocs 留空，下方 LIKE 兜底覆盖全字段。
+    // FTS5 不可用：ftsDocs 留空，纯靠下方全字段 LIKE。
   }
 
-  // doi/year 列 LIKE 兜底；FTS5 不可用时再覆盖 title/authors/journal/keywords。
-  final likeRows = await (GStorage.db.select(GStorage.db.documents)
-        ..where((t) {
-          var expr = t.doi.like('%$q%') | t.year.like('%$q%');
-          if (ftsDocs.isEmpty) {
-            expr = expr |
-                t.title.like('%$q%') |
-                t.authors.like('%$q%') |
-                t.journal.like('%$q%') |
-                t.keywords.like('%$q%');
-          }
-          return expr;
-        }))
+  // 全字段 LIKE（见文档注释），与 FTS 命中合并。
+  final likeRows = await (db.select(db.documents)
+        ..where(
+          (t) =>
+              t.title.like('%$q%') |
+              t.authors.like('%$q%') |
+              t.journal.like('%$q%') |
+              t.keywords.like('%$q%') |
+              t.doi.like('%$q%') |
+              t.year.like('%$q%'),
+        ))
       .get();
   final likeDocs = likeRows.map(documentFromRow).toList();
 
@@ -74,7 +75,9 @@ Future<List<Document>> searchDocuments(String query) async {
 }
 
 /// 搜索结果（异步）。autoDispose：查询串变更后旧 family 项自动释放。
+/// 库实例经 [appDatabaseProvider]（唯一来源）：备份恢复 reopen 后
+/// invalidate 连带失效缓存的搜索结果，重查新库。
 final documentSearchProvider =
     FutureProvider.autoDispose.family<List<Document>, String>(
-  (ref, query) => searchDocuments(query),
+  (ref, query) => searchDocuments(ref.watch(appDatabaseProvider), query),
 );

@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/storage/app_database.dart' show AppDatabase;
 import '../core/storage/app_database_provider.dart';
 import '../core/storage/db_convert.dart';
-import '../core/storage/storage.dart';
 import '../data/models/collection/favorite.dart';
 
 /// 收藏夹列表（ADR-0001：Drift `watch()` 异步视图）。
@@ -65,39 +64,43 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
 
   void reload() => ref.invalidateSelf();
 
-  List<Favorite> get _current => state.value ?? const <Favorite>[];
+  /// Drift 实例统一经 [appDatabaseProvider] 取（唯一来源，禁止直用 GStorage.db）。
+  AppDatabase get _db => ref.read(appDatabaseProvider);
 
-  /// 首次启动或数据缺失时确保默认"我的收藏"存在且置顶。
-  static Favorite _createDefault() =>
-      Favorite.defaultFor(PlatformDispatcher.instance.locale.languageCode);
+  /// 收藏夹存在性走 DB 查询（唯一真值源）——不读 watch() 流 state，
+  /// 避免流未 emit 时误判不存在而静默丢弃写入。
+  Future<bool> _favExists(String favoriteId) async {
+    final row = await (_db.select(_db.favorites)
+          ..where((t) => t.id.equals(favoriteId)))
+        .getSingleOrNull();
+    return row != null;
+  }
 
   Future<void> _upsertFav(Favorite f) async {
-    await GStorage.db
-        .into(GStorage.db.favorites)
+    await _db
+        .into(_db.favorites)
         .insertOnConflictUpdate(favoriteCompanion(f));
   }
 
   Future<void> _deleteFav(String id) async {
-    await (GStorage.db.delete(GStorage.db.favorites)
-          ..where((t) => t.id.equals(id)))
-        .go();
+    await (_db.delete(_db.favorites)..where((t) => t.id.equals(id))).go();
   }
 
   Future<void> _link(String favoriteId, String docId) async {
-    await GStorage.db.into(GStorage.db.favoriteDocuments).insert(
+    await _db.into(_db.favoriteDocuments).insert(
           favoriteDocumentCompanion(favoriteId, docId),
           mode: InsertMode.insertOrIgnore,
         );
   }
 
   Future<void> _unlinkByDoc(String docId) async {
-    await (GStorage.db.delete(GStorage.db.favoriteDocuments)
+    await (_db.delete(_db.favoriteDocuments)
           ..where((t) => t.docId.equals(docId)))
         .go();
   }
 
   Future<void> _unlink(String favoriteId, String docId) async {
-    await (GStorage.db.delete(GStorage.db.favoriteDocuments)
+    await (_db.delete(_db.favoriteDocuments)
           ..where(
             (t) => t.favoriteId.equals(favoriteId) & t.docId.equals(docId),
           ))
@@ -117,12 +120,21 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
     return favorite;
   }
 
-  /// 重命名收藏夹
+  /// 重命名收藏夹（存在性走 DB 查询，见 [_favExists] 注释）
   Future<void> rename(String id, {String? emoji, String? name}) async {
-    final match = _current.where((f) => f.id == id).toList();
-    if (match.isEmpty) return;
-    final updated = match.first.copyWith(emoji: emoji, name: name);
-    await _upsertFav(updated);
+    final row = await (_db.select(_db.favorites)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return;
+    await _upsertFav(
+      Favorite(
+        id: row.id,
+        emoji: emoji ?? row.emoji,
+        name: name ?? row.name,
+        documentIds: const [],
+        createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt),
+      ),
+    );
   }
 
   /// 删除收藏夹（默认收藏夹不可删除）
@@ -131,14 +143,9 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
     await _deleteFav(id);
   }
 
-  /// 向收藏夹添加文献。
+  /// 向收藏夹添加文献。重复添加由 _link 的 insertOrIgnore 天然去重。
   Future<void> addDocument(String favoriteId, String documentId) async {
-    final target = _current.firstWhere(
-      (f) => f.id == favoriteId,
-      orElse: () => _createDefault(),
-    );
-    if (target.id != favoriteId) return;
-    if (target.documentIds.contains(documentId)) return;
+    if (!await _favExists(favoriteId)) return;
     await _link(favoriteId, documentId);
   }
 
@@ -149,23 +156,24 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
     String favoriteId,
     Iterable<String> documentIds,
   ) async {
-    final target = _current.firstWhere(
-      (f) => f.id == favoriteId,
-      orElse: () => _createDefault(),
-    );
-    if (target.id != favoriteId) return 0;
+    if (!await _favExists(favoriteId)) return 0;
 
-    final existing = target.documentIds.toSet();
+    // 已有关联从 DB 读（唯一真值源），计算真正新增集
+    final existing = (await (_db.select(_db.favoriteDocuments)
+              ..where((t) => t.favoriteId.equals(favoriteId)))
+            .get())
+        .map((r) => r.docId)
+        .toSet();
     final toAdd = <String>[];
     for (final id in documentIds) {
       if (existing.add(id)) toAdd.add(id);
     }
     if (toAdd.isEmpty) return 0;
 
-    await GStorage.db.batch((b) {
+    await _db.batch((b) {
       for (final id in toAdd) {
         b.insert(
-          GStorage.db.favoriteDocuments,
+          _db.favoriteDocuments,
           favoriteDocumentCompanion(favoriteId, id),
           mode: InsertMode.insertOrIgnore,
         );
@@ -174,9 +182,8 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
     return toAdd.length;
   }
 
-  /// 从所有收藏夹中移除指定文献（不删文献本身）。
+  /// 从所有收藏夹中移除指定文献（不删文献本身；无关联时删除为 no-op）。
   Future<void> removeDocumentFromAll(String documentId) async {
-    if (!_current.any((f) => f.documentIds.contains(documentId))) return;
     await _unlinkByDoc(documentId);
   }
 

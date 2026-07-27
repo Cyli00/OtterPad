@@ -3,10 +3,11 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:drift/drift.dart' show InsertMode, OrderingTerm;
+import 'package:drift/drift.dart' show OrderingTerm;
 import '../core/storage/db_convert.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/storage/app_database.dart' show AppDatabase;
 import '../core/storage/app_database_provider.dart';
 import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
@@ -102,46 +103,43 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   /// 此处保留给少数直接调用点）。
   void reload() => ref.invalidateSelf();
 
+  /// Drift 实例统一经 [appDatabaseProvider] 取（唯一来源，禁止直用 GStorage.db）。
+  AppDatabase get _db => ref.read(appDatabaseProvider);
+
   /// upsert 单篇到 Drift（FTS5 触发器自动同步 documents_fts）。
   Future<void> _upsertDoc(Document d) async {
-    await GStorage.db
-        .into(GStorage.db.documents)
-        .insertOnConflictUpdate(documentCompanion(d));
+    await _db.into(_db.documents).insertOnConflictUpdate(documentCompanion(d));
   }
 
+  /// 批量 upsert。必须走 `ON CONFLICT DO UPDATE`（insertAllOnConflictUpdate）：
+  /// SQLite 的 `INSERT OR REPLACE` 是 DELETE+INSERT，foreign_keys=ON 时内部
+  /// 删除会执行 ON DELETE CASCADE——对已存在文档 REPLACE 会把它的高亮/历史/
+  /// 收藏关联/Zotero 映射整批级联清空。
   Future<void> _upsertDocs(Iterable<Document> docs) async {
-    await GStorage.db.batch((b) {
-      for (final d in docs) {
-        b.insert(
-          GStorage.db.documents,
-          documentCompanion(d),
-          mode: InsertMode.insertOrReplace,
-        );
-      }
+    await _db.batch((b) {
+      b.insertAllOnConflictUpdate(
+        _db.documents,
+        [for (final d in docs) documentCompanion(d)],
+      );
     });
   }
 
   Future<void> _deleteDoc(String id) async {
-    await (GStorage.db.delete(GStorage.db.documents)
-          ..where((t) => t.id.equals(id)))
-        .go();
+    await (_db.delete(_db.documents)..where((t) => t.id.equals(id))).go();
   }
 
-  /// 当前列表（流尚未首次 emit 时为空）。
-  List<Document> get _docs => state.value ?? const <Document>[];
-
-  /// 按 id 从 DB 查单篇（唯一真值源）——替代 _docs 流 state 查找，
+  /// 按 id 从 DB 查单篇（唯一真值源）——不读 watch() 流 state，
   /// 避免 StreamNotifier 流未 emit 时漏判。
   Future<Document?> _findById(String id) async {
-    final row = await (GStorage.db.select(GStorage.db.documents)
+    final row = await (_db.select(_db.documents)
           ..where((t) => t.id.equals(id)))
         .getSingleOrNull();
     return row == null ? null : documentFromRow(row);
   }
 
-  /// 从 DB 读全部文献（唯一真值源）——替代 _docs 流 state 查重。
+  /// 从 DB 读全部文献（唯一真值源）——不读 watch() 流 state 查重。
   Future<List<Document>> _allDocsFromDb() async {
-    final rows = await GStorage.db.select(GStorage.db.documents).get();
+    final rows = await _db.select(_db.documents).get();
     return rows.map(documentFromRow).toList();
   }
 
@@ -165,9 +163,9 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
 
     final contentHash = await DocPaths.computeHash(sourceFile);
     // 判重走 DB 查询（唯一真值源）——不依赖 watch() 流 state：StreamNotifier
-    // 异步，流未 emit 时 _docs 为空会漏判，导致 _upsertDoc 触发 contentHash
+    // 异步，流未 emit 时列表为空会漏判，导致 _upsertDoc 触发 contentHash
     // UNIQUE 约束冲突，addFile 抛异常、文件成孤儿。
-    final existingRow = await (GStorage.db.select(GStorage.db.documents)
+    final existingRow = await (_db.select(_db.documents)
           ..where((t) => t.contentHash.equals(contentHash)))
         .getSingleOrNull();
     if (existingRow != null) {
@@ -210,12 +208,56 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     );
   }
 
-  /// 后台提取元数据并更新（异步，不阻塞 addFile）。提取期间文献可能被删除，
-  /// 完成后确认存在再 upsert，避免重新插入已删除的行。
+  /// 后台提取元数据并更新（异步，不阻塞 addFile）。提取耗时数秒（联网），
+  /// 期间文献可能被删除或被用户编辑：回写做字段级合并（用户改过的字段不
+  /// 覆盖），并用带 where 的 UPDATE 落库——行已删时更新 0 行，不复活已删文献。
   Future<void> _repairAndUpdate(Document doc, {CancelToken? cancelToken}) async {
+    // 提前取库实例：本方法 fire-and-forget，避免 await 之后 ref 已被释放。
+    final database = _db;
     final repaired = await _repairDocument(doc, cancelToken: cancelToken);
-    if (await _findById(doc.id) == null) return;
-    await _upsertDoc(repaired.document);
+    final row = await (database.select(database.documents)
+          ..where((t) => t.id.equals(doc.id)))
+        .getSingleOrNull();
+    if (row == null) return;
+    final merged = _mergeRepaired(doc, documentFromRow(row), repaired.document);
+    await (database.update(database.documents)
+          ..where((t) => t.id.equals(doc.id)))
+        .write(documentCompanion(merged));
+  }
+
+  /// 字段级合并提取结果：以 addFile 时的快照为基线，用户在提取窗口内改过的
+  /// 字段（当前行 ≠ 快照）保留当前值，未动过的字段采用提取结果。
+  Document _mergeRepaired(
+    Document snapshot,
+    Document current,
+    Document repaired,
+  ) {
+    bool sameList(List<String> a, List<String> b) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] != b[i]) return false;
+      }
+      return true;
+    }
+
+    return Document(
+      id: current.id,
+      title: current.title == snapshot.title ? repaired.title : current.title,
+      authors: sameList(current.authors, snapshot.authors)
+          ? repaired.authors
+          : current.authors,
+      journal:
+          current.journal == snapshot.journal ? repaired.journal : current.journal,
+      year: current.year == snapshot.year ? repaired.year : current.year,
+      doi: current.doi == snapshot.doi ? repaired.doi : current.doi,
+      keywords: sameList(current.keywords, snapshot.keywords)
+          ? repaired.keywords
+          : current.keywords,
+      contentHash: current.contentHash == snapshot.contentHash
+          ? repaired.contentHash
+          : current.contentHash,
+      addedAt: current.addedAt,
+    );
   }
 
   Future<(Document, AddByIdentifierResult)> addByIdentifier(
@@ -229,7 +271,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     );
 
     // 判重走 DB 查询（唯一真值源）——不依赖 watch() 流 state（StreamNotifier
-    // 异步，流未 emit 时 _docs 为空会漏判，导致重复纯元数据条目入库）。
+    // 异步，流未 emit 时列表为空会漏判，导致重复纯元数据条目入库）。
     final allDocs = await _allDocsFromDb();
     final duplicate = allDocs.any(
       (doc) => DocumentMetadataChecks.isDuplicate(doc, resolved),
@@ -303,7 +345,9 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       const RebuildProgress(fileName: 'OtterPad 文库', status: '正在扫描 PDF 文件...'),
     );
 
-    var docs = _docs;
+    // 基线从 DB 读（唯一真值源）：流未 emit 时 state 为空，若以空基线 upsert，
+    // 全部已有文档会被 title=UUID 的占位行覆盖，元数据尽失。
+    var docs = await _allDocsFromDb();
     final knownIds = docs.map((doc) => doc.id).toSet();
     await for (final entity in docsDir.list()) {
       if (cancelToken?.isCancelled == true) break;
@@ -409,7 +453,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     String? year,
     String? doi,
   }) async {
-    // 按 id 走 DB 查询（流未 emit 时 _docs 为空会找不到，导致编辑静默不生效）。
+    // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致编辑静默不生效）。
     final existing = await _findById(id);
     if (existing == null) return;
     final updated = existing.copyWith(
@@ -423,7 +467,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }
 
   Future<void> attachFile(String docId, String sourcePath) async {
-    // 按 id 走 DB 查询（流未 emit 时 _docs 为空会找不到，导致补文件静默不执行）。
+    // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致补文件静默不执行）。
     final existing = await _findById(docId);
     if (existing == null) return;
 
@@ -445,7 +489,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }
 
   Future<bool> redownloadPdf(String docId, {CancelToken? cancelToken}) async {
-    // 按 id 走 DB 查询（流未 emit 时 _docs 为空会找不到，导致重下载静默不执行）。
+    // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致重下载静默不执行）。
     final found = await _findById(docId);
     if (found == null) return false;
     var doc = found;
@@ -526,7 +570,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }
 
   Future<void> delete(String id) async {
-    // 删文件只需 id，不依赖 _docs（流未 emit 时 _docs 为空会漏删文件，留孤儿）。
+    // 删文件只需 id，不依赖流 state（流未 emit 时为空会漏删文件，留孤儿）。
     try {
       final docDir = Directory(DocPaths.docDir(id));
       if (await docDir.exists()) {
