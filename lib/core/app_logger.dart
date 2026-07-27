@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:path/path.dart' as p;
 
+import 'storage/settings_keys.dart';
 import 'storage/storage.dart';
 
 final _fileLogOutput = _FileLogOutput();
@@ -20,8 +21,8 @@ final log = Logger(
   ]),
 );
 
-const _kLogEnabled = 'general_log_enabled';
-const _kLogLevel = 'general_log_level';
+const _kLogEnabled = SettingsKeys.logEnabled;
+const _kLogLevel = SettingsKeys.logLevel;
 
 Level _levelFromString(String s) => switch (s) {
       'info' => Level.info,

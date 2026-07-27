@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
 /// 阅读器背景模式
@@ -186,11 +187,11 @@ class ReaderSettingsState {
 }
 
 class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
-  static const _kTheme = 'reader_theme';
-  static const _kFont = 'reader_font';
-  static const _kFontSize = 'reader_font_size';
-  static const _kDefaultMode = 'reader_default_mode';
-  static const _kPaginationMode = 'reader_pagination_mode';
+  static const _kTheme = SettingsKeys.readerTheme;
+  static const _kFont = SettingsKeys.readerFont;
+  static const _kFontSize = SettingsKeys.readerFontSize;
+  static const _kDefaultMode = SettingsKeys.readerDefaultMode;
+  static const _kPaginationMode = SettingsKeys.readerPaginationMode;
 
   ReaderSettingsNotifier() : super(_load());
 

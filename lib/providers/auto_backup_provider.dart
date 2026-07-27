@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/app_logger.dart';
 import '../core/l10n.dart';
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../router/app_router.dart';
 import '../services/backup_fingerprint.dart';
@@ -43,8 +44,8 @@ class AutoBackupState {
 }
 
 class AutoBackupNotifier extends StateNotifier<AutoBackupState> {
-  static const _intervalKey = 'auto_backup_interval';
-  static const _scopeKey = 'auto_backup_scope';
+  static const _intervalKey = SettingsKeys.autoBackupInterval;
+  static const _scopeKey = SettingsKeys.autoBackupScope;
 
   AutoBackupNotifier() : super(_load());
 

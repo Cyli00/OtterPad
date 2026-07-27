@@ -4,9 +4,10 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:dio_http2_adapter/dio_http2_adapter.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
-const _kHttp2Enabled = 'general_http2_enabled';
+const _kHttp2Enabled = SettingsKeys.http2Enabled;
 
 /// AI 请求统一 HTTP 出口：所有 Agent 调用（对话 / 翻译 / 生图 / 连通性
 /// 测试）从这里取 Dio，禁止各自 `Dio(BaseOptions(...))`。

@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
+import '../../../core/storage/settings_keys.dart';
 import '../../../core/storage/storage.dart';
 import '../../../data/models/book/document.dart';
 import '../../../data/models/chat/chat_session.dart';
@@ -87,7 +88,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   bool _webSearch = false;
 
   /// 流式输出开关（全局持久化偏好，默认开）。关闭时回答一次性整体呈现。
-  static const _kChatStreamKey = 'chat_stream_enabled';
+  static const _kChatStreamKey = SettingsKeys.chatStreamEnabled;
   late bool _stream = GStorage.setting.get(_kChatStreamKey) as bool? ?? true;
 
   String get _documentId => widget.args.document.id;
@@ -232,7 +233,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
 
   /// 「不再提醒」的持久化 key——MiMo 联网搜索插件提示，全局一次性偏好。
   static const _kMimoSearchHintDismissedKey =
-      'mimo_search_plugin_hint_dismissed';
+      SettingsKeys.mimoSearchPluginHintDismissed;
 
   static const _kMimoPluginConsoleUrl =
       'https://platform.xiaomimimo.com/console/plugin';
@@ -321,7 +322,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   }
 
   /// 「不再提醒」的持久化 key——全局一次性偏好，不分文献。
-  static const _kNewChatHintDismissedKey = 'chat_new_session_hint_dismissed';
+  static const _kNewChatHintDismissedKey = SettingsKeys.chatNewSessionHintDismissed;
 
   /// 新建会话：首次（未勾选不再提醒）先确认「新会话仍基于当前文献」，
   /// 避免用户误以为开新会话 = 脱离文献的自由聊天。

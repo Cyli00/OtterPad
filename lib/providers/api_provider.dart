@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/secure_credential_vault.dart';
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../services/agent_model_capability.dart';
 import '../services/model_capability_store.dart';
@@ -458,23 +459,23 @@ const ({String? id, String? modelId}) _noRole = (id: null, modelId: null);
 
 class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   // per-instance 存储键，均以实例 id 结尾。
-  static String _nameKey(String id) => 'agent_api_name_$id';
-  static String _protocolKey(String id) => 'agent_api_protocol_$id';
-  static String _baseUrlKey(String id) => 'agent_api_base_url_$id';
+  static String _nameKey(String id) => SettingsKeys.agentApiName(id);
+  static String _protocolKey(String id) => SettingsKeys.agentApiProtocol(id);
+  static String _baseUrlKey(String id) => SettingsKeys.agentApiBaseUrl(id);
   static String _apiKeyKey(String id) => 'agent_api_key_$id';
-  static String _modelsKey(String id) => 'agent_api_models_$id';
-  static String _modelParamsKey(String id) => 'agent_api_model_params_$id';
-  static String _modelCapsKey(String id) => 'agent_api_model_caps_$id';
-  static String _modelToolsKey(String id) => 'agent_api_model_tools_$id';
+  static String _modelsKey(String id) => SettingsKeys.agentApiModels(id);
+  static String _modelParamsKey(String id) => SettingsKeys.agentApiModelParams(id);
+  static String _modelCapsKey(String id) => SettingsKeys.agentApiModelCaps(id);
+  static String _modelToolsKey(String id) => SettingsKeys.agentApiModelTools(id);
 
   /// 有序实例 id 列表——定义「有哪些实例、什么顺序」。
-  static const _idsKey = 'agent_api_provider_ids';
+  static const _idsKey = SettingsKeys.agentApiProviderIds;
 
   // 专家 / 快速 / 生图模型角色**全局唯一**；存储为 "instanceId:modelId"。
   // 空字符串或缺失均视为未设置。
-  static const _globalDefaultKey = 'agent_api_default_model_global';
-  static const _globalFastKey = 'agent_api_fast_model_global';
-  static const _globalImageKey = 'agent_api_image_model_global';
+  static const _globalDefaultKey = SettingsKeys.agentApiDefaultModelGlobal;
+  static const _globalFastKey = SettingsKeys.agentApiFastModelGlobal;
+  static const _globalImageKey = SettingsKeys.agentApiImageModelGlobal;
 
   /// 内置服务商——永远常驻列表、不可删除、名字锁定。前三家直连各自协议，
   /// id 固定为协议名（兼容历史数据）；其余为主流 OpenAI 兼容厂商预设
@@ -1099,7 +1100,7 @@ class DocExtractApiState {
 
 class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
   static const _apiKeyKey = 'doc_extract_api_key';
-  static const _prefix = 'doc_extract_';
+  static const _prefix = SettingsKeys.docExtractPrefix;
 
   DocExtractApiNotifier() : super(_load());
 
@@ -1206,20 +1207,7 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
   /// 重置除 API Key 外的所有提取配置为默认值（清除持久化键，state 回落到默认构造）。
   Future<void> resetExceptApiKey() async {
     final box = GStorage.setting;
-    const fields = [
-      'useChartRecognition',
-      'useDocOrientationClassify',
-      'useDocUnwarping',
-      'useSealRecognition',
-      'useOcrForImageBlock',
-      'restructurePages',
-      'layoutNms',
-      'mergeTables',
-      'layoutShapeMode',
-      'repetitionPenalty',
-      'temperature',
-      'markdownIgnoreLabels',
-    ];
+    const fields = SettingsKeys.docExtractFields;
     for (final f in fields) {
       await box.delete('$_prefix$f');
     }

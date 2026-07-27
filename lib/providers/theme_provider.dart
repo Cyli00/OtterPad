@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
 class ThemeState {
@@ -33,10 +34,10 @@ class ThemeState {
 }
 
 class ThemeNotifier extends StateNotifier<ThemeState> {
-  static const String _themeModeKey = 'theme_mode';
-  static const String _seedColorKey = 'seed_color';
-  static const String _dynamicColorKey = 'use_dynamic_color';
-  static const String _textScaleKey = 'text_scale';
+  static const String _themeModeKey = SettingsKeys.themeMode;
+  static const String _seedColorKey = SettingsKeys.seedColor;
+  static const String _dynamicColorKey = SettingsKeys.useDynamicColor;
+  static const String _textScaleKey = SettingsKeys.textScale;
 
   /// 系统文字缩放预设：标准 / 大 / 特大
   static const List<double> textScalePresets = [1.0, 1.15, 1.3];

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
 enum OnboardingStep {
@@ -19,7 +20,7 @@ enum OnboardingStep {
 class OnboardingNotifier extends StateNotifier<OnboardingStep> {
   OnboardingNotifier() : super(_initialStep());
 
-  static const _key = 'hasSeenOnboarding';
+  static const _key = SettingsKeys.hasSeenOnboarding;
 
   static OnboardingStep _initialStep() {
     final seen = GStorage.setting.get(_key) as bool? ?? false;

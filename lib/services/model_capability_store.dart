@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import 'agent_http.dart';
 import 'agent_model_capability.dart';
@@ -27,10 +28,10 @@ class ModelCapabilityStore {
   static const _cacheFileName = 'model_caps_cache.json';
 
   // ── settings keys ──
-  static const _kLastFetched = 'model_caps_last_fetched_at';
-  static const _kEtag = 'model_caps_etag';
-  static const _kLastModified = 'model_caps_last_modified';
-  static const _kVersion = 'model_caps_version';
+  static const _kLastFetched = SettingsKeys.modelCapsLastFetchedAt;
+  static const _kEtag = SettingsKeys.modelCapsEtag;
+  static const _kLastModified = SettingsKeys.modelCapsLastModified;
+  static const _kVersion = SettingsKeys.modelCapsVersion;
 
   final Map<String, AgentModelCapability> _models = {};
   String? _version;

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
 /// GitHub release 里匹配到的 arm64-v8a APK 资源。
@@ -77,7 +78,7 @@ class UpdateService {
   static const _repoName = 'OtterPad';
   static const _apiUrl =
       'https://api.github.com/repos/$_repoOwner/$_repoName/releases/latest';
-  static const _kIgnoredVersionKey = 'general_ignored_update_version';
+  static const _kIgnoredVersionKey = SettingsKeys.ignoredUpdateVersion;
 
   late final Dio _dio = Dio(
     BaseOptions(

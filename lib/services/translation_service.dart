@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../providers/api_provider.dart';
 import '../providers/translation_config_provider.dart';
@@ -34,7 +35,7 @@ class _CacheEntry {
   }
 }
 
-const _cacheBoxKey = 'translation_cache';
+const _cacheBoxKey = SettingsKeys.translationCache;
 
 /// 轻量翻译服务——使用用户已配置的 Agent API（快速模型优先）完成文本翻译。
 ///

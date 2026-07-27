@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../services/prompt_store.dart';
 import '../services/prompts.dart';
@@ -42,10 +43,10 @@ const kTargetLanguages = <String>[
 
 // ── Hive 存储 key（prompt 的 key 在 PromptDef.storageKey）──────────────
 
-const _kTargetLang = 'translation_config_target_language';
-const _kTemperature = 'translation_config_temperature';
-const _kDisplayStyle = 'translation_config_display_style';
-const _kIgnoreSections = 'translation_config_ignore_sections';
+const _kTargetLang = SettingsKeys.translationTargetLang;
+const _kTemperature = SettingsKeys.translationTemperature;
+const _kDisplayStyle = SettingsKeys.translationDisplayStyle;
+const _kIgnoreSections = SettingsKeys.translationIgnoreSections;
 
 // ── 数据模型 ───────────────────────────────────────────────────────────
 

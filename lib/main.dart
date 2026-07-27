@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'core/storage/secure_credential_vault.dart';
+import 'core/storage/settings_keys.dart';
 import 'core/storage/storage.dart';
 import 'providers/auto_backup_provider.dart';
 import 'providers/proxy_provider.dart';
@@ -74,12 +75,12 @@ Future<void> main() async {
 
   // 应用通用设置中的持久化偏好
   final hapticsOn =
-      GStorage.setting.get('general_haptics_enabled') as bool? ?? true;
+      GStorage.setting.get(SettingsKeys.hapticsEnabled) as bool? ?? true;
   Haptics.setEnabled(hapticsOn);
 
   // 缓存自动清理（fire-and-forget，不阻塞启动）
   final cacheCleanup =
-      GStorage.setting.get('general_cache_auto_cleanup') as bool? ?? false;
+      GStorage.setting.get(SettingsKeys.cacheAutoCleanup) as bool? ?? false;
   if (cacheCleanup) {
     StorageUsageService.clearGroups({StorageGroupKey.cache});
   }

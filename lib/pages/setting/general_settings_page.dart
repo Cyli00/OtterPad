@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
+import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
 import '../../services/agent_http.dart';
 import '../../services/haptics.dart';
@@ -19,12 +20,12 @@ import '../../widgets/tactile_press.dart';
 
 // ── GStorage keys ──
 
-const _kLogEnabled = 'general_log_enabled';
-const _kLogLevel = 'general_log_level';
-const _kHapticsEnabled = 'general_haptics_enabled';
-const _kCacheAutoCleanup = 'general_cache_auto_cleanup';
-const _kAutoCheckUpdate = 'general_auto_check_update';
-const _kHttp2Enabled = 'general_http2_enabled';
+const _kLogEnabled = SettingsKeys.logEnabled;
+const _kLogLevel = SettingsKeys.logLevel;
+const _kHapticsEnabled = SettingsKeys.hapticsEnabled;
+const _kCacheAutoCleanup = SettingsKeys.cacheAutoCleanup;
+const _kAutoCheckUpdate = SettingsKeys.autoCheckUpdate;
+const _kHttp2Enabled = SettingsKeys.http2Enabled;
 
 class GeneralSettingsPage extends ConsumerStatefulWidget {
   const GeneralSettingsPage({super.key});

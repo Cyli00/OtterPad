@@ -1,6 +1,7 @@
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../services/agent_http.dart';
 import '../services/batch_extract_service.dart';
@@ -38,9 +39,9 @@ class ProxyState {
 }
 
 class ProxyNotifier extends StateNotifier<ProxyState> {
-  static const String _modeKey = 'proxy_mode';
-  static const String _hostKey = 'proxy_host';
-  static const String _portKey = 'proxy_port';
+  static const String _modeKey = SettingsKeys.proxyMode;
+  static const String _hostKey = SettingsKeys.proxyHost;
+  static const String _portKey = SettingsKeys.proxyPort;
 
   ProxyNotifier() : super(_load());
 

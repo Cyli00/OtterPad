@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
+import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
 import '../../providers/api_provider.dart';
 import '../../providers/model_test_provider.dart';
@@ -45,7 +46,7 @@ class AgentApiSection extends ConsumerStatefulWidget {
 }
 
 class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
-  static const _lastInstanceKey = 'agent_api_last_instance';
+  static const _lastInstanceKey = SettingsKeys.agentApiLastInstance;
 
   final _expertRoleKey = GlobalKey(debugLabel: 'expertRole');
   final _fastRoleKey = GlobalKey(debugLabel: 'fastRole');
