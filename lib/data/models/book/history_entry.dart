@@ -21,18 +21,4 @@ class HistoryEntry {
     this.progress = 0.0,
     this.anchorBlock,
   });
-
-  Map<String, dynamic> toMap() => {
-        'docId': docId,
-        'openedAt': openedAt.toIso8601String(),
-        'progress': progress,
-        if (anchorBlock != null) 'anchorBlock': anchorBlock,
-      };
-
-  factory HistoryEntry.fromMap(Map map) => HistoryEntry(
-        docId: map['docId'] as String,
-        openedAt: DateTime.parse(map['openedAt'] as String),
-        progress: (map['progress'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0,
-        anchorBlock: (map['anchorBlock'] as num?)?.toInt(),
-      );
 }

@@ -83,21 +83,6 @@ class ZoteroSyncStore {
         );
   }
 
-  /// 本地删除文献时回收对应簿记，保持 [importedCount] 与 [hasItem] 判重诚实。
-  /// 内容去重可能让多个 zoteroKey 映射到同一 documentId，故清掉全部匹配记录。
-  static Future<void> removeByDocumentId(String documentId) async {
-    final stale = ZoteroSnapshot.items.entries
-        .where((e) => e.value.docId == documentId)
-        .map((e) => e.key)
-        .toList();
-    for (final key in stale) {
-      ZoteroSnapshot.items.remove(key);
-    }
-    await (GStorage.db.delete(GStorage.db.zoteroItems)
-          ..where((t) => t.docId.equals(documentId)))
-        .go();
-  }
-
   static Future<void> clear() async {
     ZoteroSnapshot.items = {};
     ZoteroSnapshot.libraryVersion = 0;

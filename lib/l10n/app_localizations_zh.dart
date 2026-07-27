@@ -944,9 +944,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storageCategoryChat => '聊天记录';
 
   @override
-  String get storageCategoryNotes => '笔记';
-
-  @override
   String get storageCategoryCache => '缓存';
 
   @override
@@ -3499,9 +3496,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get storageCategoryChat => '聊天紀錄';
-
-  @override
-  String get storageCategoryNotes => '筆記';
 
   @override
   String get storageCategoryCache => '快取';

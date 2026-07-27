@@ -953,9 +953,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageCategoryChat => 'Chat History';
 
   @override
-  String get storageCategoryNotes => 'Notes';
-
-  @override
   String get storageCategoryCache => 'Cache';
 
   @override

@@ -1929,12 +1929,6 @@ abstract class AppLocalizations {
   /// **'Chat History'**
   String get storageCategoryChat;
 
-  /// No description provided for @storageCategoryNotes.
-  ///
-  /// In en, this message translates to:
-  /// **'Notes'**
-  String get storageCategoryNotes;
-
   /// No description provided for @storageCategoryCache.
   ///
   /// In en, this message translates to:

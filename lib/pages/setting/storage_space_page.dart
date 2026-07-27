@@ -173,8 +173,6 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return l10n.storageCategoryFiles;
       case 'images':
         return l10n.storageCategoryImages;
-      case 'notes':
-        return l10n.storageCategoryNotes;
       default:
         return id;
     }
@@ -186,8 +184,6 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return cs.primary;
       case 'images':
         return cs.tertiary;
-      case 'notes':
-        return cs.secondary;
       default:
         return cs.outline;
     }
