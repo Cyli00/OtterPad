@@ -80,7 +80,7 @@ class BackupMergeService {
         if (extractedDocsDir != null) {
           onProgress?.call('正在合并文献文件...');
           stats = stats.copyWith(
-            filesCopied: await _mergeLibraryFiles(extractedDocsDir),
+            filesCopied: await _mergeLibraryFiles(extractedDocsDir, idMap),
           );
         }
       }
@@ -163,14 +163,14 @@ class BackupMergeService {
     }
 
     if (toUpsert.isNotEmpty) {
+      // 必须 ON CONFLICT DO UPDATE：INSERT OR REPLACE 是 DELETE+INSERT，
+      // foreign_keys=ON 时对同 id 已存在文档（_enrichDocument 命中）REPLACE
+      // 会 CASCADE 清空它本地独有的高亮/历史/收藏关联/Zotero 映射。
       await GStorage.db.batch((b) {
-        for (final d in toUpsert) {
-          b.insert(
-            GStorage.db.documents,
-            documentCompanion(d),
-            mode: InsertMode.insertOrReplace,
-          );
-        }
+        b.insertAllOnConflictUpdate(
+          GStorage.db.documents,
+          [for (final d in toUpsert) documentCompanion(d)],
+        );
       });
     }
     return (additions.length, idMap);
@@ -494,7 +494,10 @@ class BackupMergeService {
 
   // ─── Library files ──────────────────────────────────────────────────────────
 
-  static Future<int> _mergeLibraryFiles(Directory extractedDocsDir) async {
+  static Future<int> _mergeLibraryFiles(
+    Directory extractedDocsDir,
+    Map<String, String> idMap,
+  ) async {
     if (!await extractedDocsDir.exists()) return 0;
     final libraryDir = Directory(GStorage.libraryDirPath);
     if (!await libraryDir.exists()) {
@@ -504,7 +507,12 @@ class BackupMergeService {
     await for (final entity in extractedDocsDir.list()) {
       if (entity is! Directory) continue;
       final docId = p.basename(entity.path);
-      final targetDir = Directory(p.join(libraryDir.path, docId));
+      // 目标目录经 idMap 重映射（ADR-0004）：DOI/题录判重命中时备份文档映射
+      // 到本地文档，文件必须落进本地 id 的目录——按备份原 id 拷会成孤儿目录，
+      // 文献显示"有文件"却打不开。备份库中无对应文档行的悬空目录跳过。
+      final liveDocId = idMap[docId];
+      if (liveDocId == null) continue;
+      final targetDir = Directory(p.join(libraryDir.path, liveDocId));
       if (!await targetDir.exists()) {
         await _copyDirectory(entity, targetDir);
         filesCopied += await _countFiles(entity);

@@ -93,24 +93,30 @@ class BackupRestoreService {
     final outputPath = p.join(tempDir.path, buildBackupFileName(createdAt));
     // VACUUM INTO 生成一致快照（不阻塞写、不撕裂 WAL）。
     final snapshotPath = p.join(tempDir.path, 'snapshot_$_dbFileName');
+    final snapshotFile = File(snapshotPath);
+    // VACUUM INTO 要求目标文件不存在：快照路径固定，上次备份中途失败或进程
+    // 被杀会留下残留，不先清掉则之后每次备份都报 output file already exists。
+    if (await snapshotFile.exists()) await snapshotFile.delete();
     // SQLite VACUUM INTO 不支持参数化，路径须字面拼入；转义单引号防破坏 SQL
     // （snapshotPath 来自系统临时目录，正常不含单引号，此处为防御性兜底）。
     final safeSnapshotPath = snapshotPath.replaceAll("'", "''");
     await GStorage.db.customStatement("VACUUM INTO '$safeSnapshotPath'");
 
-    // 打包在后台 isolate 流式进行（只 zip 文件，不碰 DB 连接）。
-    await compute(_createArchiveInIsolate, <String>[
-      outputPath,
-      GStorage.libraryDirPath,
-      snapshotPath,
-      const JsonEncoder.withIndent('  ').convert(manifest),
-      scope.name,
-    ]);
-
-    // 清理临时快照
     try {
-      await File(snapshotPath).delete();
-    } catch (_) {}
+      // 打包在后台 isolate 流式进行（只 zip 文件，不碰 DB 连接）。
+      await compute(_createArchiveInIsolate, <String>[
+        outputPath,
+        GStorage.libraryDirPath,
+        snapshotPath,
+        const JsonEncoder.withIndent('  ').convert(manifest),
+        scope.name,
+      ]);
+    } finally {
+      // 打包失败也要清快照，防残留卡死后续所有备份。
+      try {
+        await snapshotFile.delete();
+      } catch (_) {}
+    }
     return outputPath;
   }
 
@@ -233,21 +239,26 @@ class BackupRestoreService {
 
     await GStorage.close();
 
-    // 两步替换的跨步骤回滚：第一步（library）成功后保留 .bak，第二步
-    // （db）失败时连第一步一起恢复。
-    await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
     try {
-      await _replaceFile(File(extractedDbPath), dbFile);
-    } catch (_) {
-      await _rollbackFromBackup(docsDir);
+      // 两步替换的跨步骤回滚：第一步（library）成功后保留 .bak，第二步
+      // （db）失败时连第一步一起恢复。
+      await _replaceDirectory(docsDir, extractedDocsDir, keepBackup: true);
+      try {
+        await _replaceFile(File(extractedDbPath), dbFile);
+      } catch (_) {
+        await _rollbackFromBackup(docsDir);
+        rethrow;
+      }
+      if (backupScope == BackupScope.dataOnly) {
+        await _restoreHeavyFilesFromBak(docsDir);
+      }
+      await _deleteBackupOf(docsDir);
+    } finally {
+      // 任何一步失败（如 Windows 文件被占用致替换抛错）都必须重开库：
+      // close 后停在 closed 状态会让此后所有 DB 访问抛错直到重启。
+      // 失败路径上库文件或已回滚或未动，reopen 同样成立。
       await GStorage.reopen();
-      rethrow;
     }
-    if (backupScope == BackupScope.dataOnly) {
-      await _restoreHeavyFilesFromBak(docsDir);
-    }
-    await _deleteBackupOf(docsDir);
-    await GStorage.reopen();
   }
 
   /// libraryOnly 覆盖：表级替换 library 表（保留 settings/meta）+ library/ 目录。
@@ -310,6 +321,21 @@ class BackupRestoreService {
             GStorage.db.zoteroItems,
             (r) => zoteroItemCompanion(r.zoteroKey, r.docId, r.version),
           );
+          // zotero_items 已整体替换为备份状态，同步游标必须一并回到备份时点：
+          // 否则本地游标高于备份 items 状态，增量同步 `?since=游标` 会永远
+          // 跳过备份时点到本地游标之间新增的条目。
+          final backupVerRow = await (backupDb.select(backupDb.meta)
+                ..where((t) => t.metaKey.equals('zotero_library_version')))
+              .getSingleOrNull();
+          if (backupVerRow != null) {
+            await GStorage.db.into(GStorage.db.meta).insertOnConflictUpdate(
+                  metaCompanion('zotero_library_version', backupVerRow.value),
+                );
+          } else {
+            await (GStorage.db.delete(GStorage.db.meta)
+                  ..where((t) => t.metaKey.equals('zotero_library_version')))
+                .go();
+          }
         });
       } finally {
         await backupDb.close();
@@ -322,6 +348,10 @@ class BackupRestoreService {
   }
 
   /// settingsOnly 覆盖：表级替换 settings 表（保留其余）。
+  ///
+  /// 直接 delete/insert settings 表是 SettingsStore 禁令的**有意豁免**：
+  /// 此处语义是事务内整表原子替换，逐键走 `SettingsStore.put` 会失去原子性；
+  /// 写完由 `GStorage.reloadSettings()` 重建缓存，保证缓存与表一致。
   static Future<void> _overwriteSettings(String extractedDbPath) async {
     final backupDb = db.AppDatabase.file(extractedDbPath);
     try {
