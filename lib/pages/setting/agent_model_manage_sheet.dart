@@ -140,9 +140,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     if (_imageGenOnly) {
       result = result
           .where(
-            (m) => AgentModelCapability.isImageGenerationModel(
-              modelId: m,
-            ),
+            (m) => ModelCapabilityStore.instance.isImageGenerationModel(m),
           )
           .toList();
     }
@@ -161,9 +159,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   bool _isAdded(String id) => _localAdded.contains(id);
 
   Future<void> _showAddConfirm(String id) async {
-    final isImageModel = AgentModelCapability.isImageGenerationModel(
-      modelId: id,
-    );
+    final isImageModel = ModelCapabilityStore.instance.isImageGenerationModel(id);
 
     if (isImageModel) {
       widget.onAdd(id, setAsImage: true);
@@ -513,9 +509,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     final added = _isAdded(id);
     final isDefault = _localDefault == id;
     final isFast = _localFast == id;
-    final isImageModel = AgentModelCapability.isImageGenerationModel(
-      modelId: id,
-    );
     final cap = _capOf(id);
 
     return Material(
@@ -580,14 +573,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                 label: context.l10n.fast,
                 bg: cs.tertiaryContainer,
                 fg: cs.onTertiaryContainer,
-              ),
-            ],
-            if (isImageModel) ...[
-              const SizedBox(width: 4),
-              RoleBadge(
-                label: context.l10n.imageGen,
-                bg: cs.secondaryContainer,
-                fg: cs.onSecondaryContainer,
               ),
             ],
             const SizedBox(width: 8),

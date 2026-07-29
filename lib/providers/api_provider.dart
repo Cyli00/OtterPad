@@ -577,8 +577,46 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
         <String>[];
   }
 
+  /// 一次性迁移：清除旧 addModel 写入的「全默认值」手动覆写（imageInput/
+  /// imageOutput/embedding/tool/reasoning/webSearch 全 false）。这种覆写会把
+  /// capabilityFor 锁死在全 false、屏蔽远程表（见 addModel 注释）。迁移后
+  /// capabilityFor 重新走远程表 > 正则兜底。用户 deliberate 的手改通常含某
+  /// 能力 true，不会被误清。idempotent：标志位 _kCapsMigrationV1 守护。
+  static const _kCapsMigrationV1 = 'agent_api_caps_migration_v1';
+
+  static void _migrateCapsV1() {
+    final box = GStorage.setting;
+    if (box.get(_kCapsMigrationV1) == true) return;
+    final ids = <String>[
+      for (final p in _builtinPresets) p.id,
+      ..._loadIds(),
+    ];
+    for (final id in ids) {
+      final key = _modelCapsKey(id);
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      final caps = Map<String, dynamic>.from(raw);
+      caps.removeWhere((_, v) {
+        if (v is! Map) return false;
+        return (v['imageInput'] as bool? ?? false) == false &&
+            (v['imageOutput'] as bool? ?? false) == false &&
+            (v['embedding'] as bool? ?? false) == false &&
+            (v['tool'] as bool? ?? false) == false &&
+            (v['reasoning'] as bool? ?? false) == false &&
+            (v['webSearch'] as bool? ?? false) == false;
+      });
+      if (caps.isEmpty) {
+        box.delete(key);
+      } else {
+        box.put(key, caps);
+      }
+    }
+    box.put(_kCapsMigrationV1, true);
+  }
+
   /// 列表 = 内置预设（恒在）+ _idsKey 里的自定义实例（按序）。
   static AgentProvidersState _load() {
+    _migrateCapsV1();
     final box = GStorage.setting;
     final instances = <AgentProviderInstance>[
       for (final p in _builtinPresets)
@@ -794,18 +832,10 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
         : [...inst.models, modelId];
 
     await box.put(_modelsKey(id), updated);
-    // 新增模型时推断并持久化能力（已存在则不动，保留用户可能的手改）
-    if (!inst.models.contains(modelId)) {
-      final caps = Map<String, AgentModelCapability>.from(inst.modelCaps);
-      caps[modelId] = AgentModelCapability.infer(
-        provider: inst.protocol,
-        modelId: modelId,
-      );
-      await box.put(
-        _modelCapsKey(id),
-        caps.map((k, v) => MapEntry(k, v.toJson())),
-      );
-    }
+    // 不在此持久化推断能力：旧逻辑把推断结果当「手动覆写」写进 modelCaps，
+    // 而 capabilityFor 中手动覆写优先级最高 → 远程表日更被永久屏蔽（正是
+    // 「卡片全无能力 / 专家模型不显示」回归根因）。现在留空，让 capabilityFor
+    // 实时走「手动覆写(无) > 远程表 > 正则兜底」。用户手改仍经 setModelCapability。
     if (setAsDefault) {
       await box.put(_globalDefaultKey, _serializeRole(id, modelId));
     }

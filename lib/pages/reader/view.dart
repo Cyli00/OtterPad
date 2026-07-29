@@ -294,10 +294,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           .showResult(message: context.l10n.expertModelNotSet);
       return;
     }
-    final cap = AgentModelCapability.infer(
-      provider: agentState.provider,
-      modelId: modelId,
-    );
+    // 走完整能力链（手动覆写 > 远程表 > 兜底）：直接 infer 会绕过远程表与
+    // 手动覆写，命中远程表 / 用户已手动开启 imageInput 的模型也被判 false，
+    // 误提示「专家模型需要支持图片输入」。instance 不可达才回退 infer
+    //（与 document_chat_provider.supportsImages 同款）。
+    final cap =
+        ref.read(agentApiProvider).byId(agentState.id)?.capabilityFor(modelId) ??
+            AgentModelCapability.infer(
+              provider: agentState.provider,
+              modelId: modelId,
+            );
     if (!cap.imageInput) {
       ref
           .read(snackBarServiceProvider)

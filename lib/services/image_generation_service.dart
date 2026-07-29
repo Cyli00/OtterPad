@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import '../providers/api_provider.dart';
 import 'agent_http.dart';
 import 'agent_model_capability.dart';
+import 'model_capability_store.dart';
 
 class ImageGenerationRequest {
   final AgentApiProvider provider;
@@ -17,6 +18,7 @@ class ImageGenerationRequest {
   final List<String> referenceImagePaths;
   final String aspectRatio;
   final String fidelity;
+  final AgentModelCapability? capability;
   final CancelToken? cancelToken;
 
   const ImageGenerationRequest({
@@ -28,6 +30,7 @@ class ImageGenerationRequest {
     required this.referenceImagePaths,
     required this.aspectRatio,
     required this.fidelity,
+    this.capability,
     this.cancelToken,
   });
 }
@@ -64,9 +67,12 @@ class ImageGenerationService {
     if (request.apiKey.trim().isEmpty) {
       throw const ImageGenerationException('请先在「AI 设置」中填写生图模型 API Key');
     }
-    if (!AgentModelCapability.isImageGenerationModel(
-      modelId: request.modelId,
-    )) {
+    // 走完整能力链：调用方传 capabilityFor 结果（手动覆写 > 远程表 > 兜底），
+    // 命中即放行；未传时回退远程表判定。避免用户手动设为生图、但远程表未收录
+    // 的模型被拒（isImageGenerationModel 只查远程表，绕过手动覆写）。
+    final canGenerate = request.capability?.canGenerateImage ??
+        ModelCapabilityStore.instance.isImageGenerationModel(request.modelId);
+    if (!canGenerate) {
       throw ImageGenerationException('当前模型不支持图片生成：${request.modelId}');
     }
 

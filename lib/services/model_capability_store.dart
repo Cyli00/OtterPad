@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/storage/settings_keys.dart';
@@ -14,7 +15,7 @@ import 'agent_model_capability.dart';
 /// ETag/Last-Modified 条件请求 + TTL 后台刷新 + 手动强制更新。
 ///
 /// 优先级链在 `AgentProviderInstance.capabilityFor` 内：用户手动覆写 > 本
-/// 远程表 > 正则推断。本 Store 只负责远程表的拉取/缓存/查询，不参与优先级。
+/// 远程表 > 兜底（全 false）。本 Store 只负责远程表的拉取/缓存/查询，不参与优先级。
 ///
 /// 缓存文件落 `GStorage.dbDirPath`（app 数据目录，非文献库）；ETag/时间/
 /// 版本/间隔走 `GStorage.setting`（SettingsStore 唯一入口）。HTTP 复用
@@ -45,12 +46,12 @@ class ModelCapabilityStore {
   DateTime? get fetchedAt => _fetchedAt;
 
   /// 启动加载本地缓存。不阻塞网络：读缓存文件 + settings 元数据；
-  /// 缓存不存在时 _models 为空，capabilityFor 回退正则。
+  /// 缓存不存在时 _models 为空，capabilityFor 回退兜底（全 false）。
   Future<void> init() async {
     if (_loaded) return;
     await _loadCache();
     _loaded = true;
-    // 首启无本地缓存 → 同步拉一次远程表，确保能力判定有数据（不回退正则）。
+    // 首启无本地缓存 → 同步拉一次远程表，确保能力判定有数据（不回退兜底）。
     // 有缓存时由 checkUpdateIfNeeded 按 TTL 后台刷新。
     if (_models.isEmpty) {
       await _fetch();
@@ -67,7 +68,7 @@ class ModelCapabilityStore {
       final fetched = GStorage.setting.get(_kLastFetched) as String?;
       _fetchedAt = fetched == null ? null : DateTime.tryParse(fetched);
     } catch (_) {
-      _models.clear(); // 缓存损坏 → 视为无缓存，回退正则
+      _models.clear(); // 缓存损坏 → 视为无缓存，回退兜底（全 false）
     }
   }
 
@@ -97,11 +98,35 @@ class ModelCapabilityStore {
     );
   }
 
-  /// 查询：纯 model id → 能力（远程表命中），未命中返回 null（调用方
-  /// 回退正则推断）。key 比较忽略大小写。
+  /// 查询：model id → 能力（远程表命中），未命中返回 null。
+  ///
+  /// 入参可为全 id（如 `xiaomi/mimo-v2.5-pro`、
+  /// `openrouter/thinkingmachines/inkling`）或纯 id（`mimo-v2.5-pro`）：内部
+  /// 剥到最后一段 `/` 之后，与远程表 key（纯 model id）对齐再小写比较。否则
+  /// 全 id 查纯 id key 永远 miss，被迫回退兜底（全 false）→ 能力漏标。
   AgentModelCapability? lookup(String modelId) {
     if (!_loaded) return null;
-    return _models[modelId.toLowerCase()];
+    final pureId = modelId.split('/').last.toLowerCase();
+    return _models[pureId];
+  }
+
+  /// 生图模型判定：查远程表 imageOutput，未命中（modelcaps 未收录/离线）返回
+  /// false——这类模型能力置空，由用户在能力卡片手动指定（方案 C）。
+  /// lookup 内部已做纯 id 提取。
+  bool isImageGenerationModel(String modelId) =>
+      lookup(modelId)?.imageOutput ?? false;
+
+  /// 仅测试用：注入远程表数据（绕过网络/缓存），验证 lookup 纯 id 提取、生图
+  /// 判定、未知模型默认无能力。生产代码不应调用。
+  @visibleForTesting
+  void debugInject(Map<String, AgentModelCapability> models, {String? version}) {
+    _models
+      ..clear()
+      ..addEntries([
+        for (final e in models.entries) MapEntry(e.key.toLowerCase(), e.value),
+      ]);
+    _version = version;
+    _loaded = true;
   }
 
   bool get _dueForUpdate {

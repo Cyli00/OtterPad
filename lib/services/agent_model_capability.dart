@@ -1,7 +1,3 @@
-import 'dart:convert';
-
-import 'package:flutter/services.dart';
-
 import '../providers/api_provider.dart';
 
 enum AgentModelModality { text, image }
@@ -21,8 +17,8 @@ class AgentModelCapability {
   /// 推理 / 思考能力。embedding 模型恒为 false。
   final bool reasoning;
 
-  /// 联网搜索能力。正则不兜底（厂商私有参数繁多，如小米 forced_search），
-  /// 由远程能力表（modelcaps 仓库）或用户手动覆写提供。
+  /// 联网搜索能力。厂商私有参数繁多（如小米 forced_search），远程表未收录时
+  /// 默认 false，由用户手动覆写提供。
   final bool webSearch;
 
   const AgentModelCapability({
@@ -119,68 +115,15 @@ class AgentModelCapability {
     return inferred;
   }
 
+  /// 兜底构造：远程表未命中时的默认能力（modelcaps 未收录的模型默认无能力，
+  /// 由用户在能力卡片手动指定）。能力判定优先级链在 `capabilityFor`：
+  /// 用户手动覆写 > 远程能力表 > 本兜底（全 false）。
   factory AgentModelCapability.fromModelId({
     required AgentApiProvider provider,
     required String modelId,
   }) {
-    final id = modelId.toLowerCase();
-    if (_isLikelyEmbedding(id)) {
-      return const AgentModelCapability(embedding: true);
-    }
-
-    final imageOutput = isImageGenerationModel(modelId: id);
-    final imageInput = imageOutput || _isKnownVisionModel(id);
-    // 生图模型不带工具/推理能力（对齐 kelivo）
-    final tool = !imageOutput && _isToolModel(id);
-    final reasoning = !imageOutput && _isReasoningModel(id);
-    return AgentModelCapability(
-      imageInput: imageInput,
-      imageOutput: imageOutput,
-      tool: tool,
-      reasoning: reasoning,
-    );
+    return const AgentModelCapability();
   }
-
-  // ─── 能力识别（从 assets/config/model_capabilities.json 统一加载） ───
-  // 正则移植自 kelivo ModelRegistry，并按各厂 API 文档补充。
-  // 新增/修改模型能力只需改 JSON，不动 Dart 代码。
-
-  static RegExp? _embeddingRe;
-  static RegExp? _visionRe;
-  static RegExp? _imageGenRe;
-  static RegExp? _toolRe;
-  static RegExp? _reasoningRe;
-
-  static Future<void> init() async {
-    final raw = await rootBundle.loadString(
-      'assets/config/model_capabilities.json',
-    );
-    final data = jsonDecode(raw) as Map<String, dynamic>;
-    RegExp compile(String key) {
-      final patterns = (data[key] as List).cast<String>();
-      return RegExp(patterns.join('|'), caseSensitive: false);
-    }
-    _embeddingRe = compile('embedding');
-    _visionRe = compile('vision');
-    _imageGenRe = compile('imageGen');
-    _toolRe = compile('tool');
-    _reasoningRe = compile('reasoning');
-  }
-
-  static bool isImageGenerationModel({required String modelId}) {
-    return _imageGenRe?.hasMatch(modelId.toLowerCase()) ?? false;
-  }
-
-  static bool _isLikelyEmbedding(String id) =>
-      _embeddingRe?.hasMatch(id) ?? false;
-
-  static bool _isKnownVisionModel(String id) =>
-      _visionRe?.hasMatch(id) ?? false;
-
-  static bool _isToolModel(String id) => _toolRe?.hasMatch(id) ?? false;
-
-  static bool _isReasoningModel(String id) =>
-      _reasoningRe?.hasMatch(id) ?? false;
 
   // ─── Thinking / reasoning 版本识别 ───────────────────────────────────
   // 这些方法服务于请求构造层把统一的 ThinkingLevel 翻译成各家具体字段。

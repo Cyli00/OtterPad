@@ -15,7 +15,6 @@ import 'core/storage/storage.dart';
 import 'providers/auto_backup_provider.dart';
 import 'providers/proxy_provider.dart';
 import 'providers/update_check_scheduler.dart';
-import 'services/agent_model_capability.dart';
 import 'services/model_capability_store.dart';
 import 'services/back_matter_detector.dart';
 import 'services/figure_extract_service.dart';
@@ -57,7 +56,6 @@ Future<void> main() async {
   // 并行初始化
   await Future.wait([
     GStorage.init(),
-    AgentModelCapability.init(),
     BackMatterDetector.instance.init(),
     // figure 提取的 caption 正则配置预热——避免 saveResult 路径里隐式首次
     // init() 的加载延迟与“忘记初始化 → 运行时断言”隐患（init 内部幂等）。

@@ -412,6 +412,12 @@ class DocumentTaskNotifier
           config: config,
           language: language,
           cancelToken: token,
+          // 走完整能力链（手动覆写 > 远程表 > 兜底）：避免手动设为生图但远程表未
+          // 收录的模型在 ImageGenerationService 校验时被拒。
+          capability: _ref
+              .read(agentApiProvider)
+              .byId(agentState.id)
+              ?.capabilityFor(agentState.imageModelId!),
         );
       },
       onSuccess: (result) {
