@@ -1,24 +1,32 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:hive/hive.dart';
+import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
+import '../core/storage/app_database.dart' as db;
+import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
+import '../core/storage/zotero_snapshot.dart';
 import '../data/models/book/document.dart';
 import '../data/models/book/highlight.dart';
+import '../data/models/book/history_entry.dart';
 import '../data/models/collection/favorite.dart';
-import '../providers/history_provider.dart';
+import '../providers/zotero_sync_provider.dart';
 import 'backup_restore_service.dart';
 
 /// 备份合并服务：将备份数据与本地数据合并（增量同步），而非覆盖。
 ///
 /// 核心策略：按 ID 去重、只添加不存在的数据，不做版本比较。
-/// 参考 kelivo 的 merge 模式设计，适配 OtterPad 的 Hive + JSON 存储模型。
+/// 备份是单个 SQLite 文件（otter.db）；merge 在临时目录打开备份库为第二个
+/// Drift 连接，按表读出后用领域规则并入活库（GStorage.db）。
+///
+/// 文档去重产生 `backupDocId → liveDocId` 重映射（ADR-0004）：DOI/题录判重
+/// 命中时，备份文档不插入，但其子记录（标注/收藏关联/Zotero/历史）的 `docId`
+/// 经该映射指向保留的本地文档；引用不存在文档的孤儿子记录跳过并计数。
+/// live 基线直读 Drift（对齐 G7），watch() 流自动反映合并结果（ADR-0001）。
 class BackupMergeService {
-  static const _mergePrefix = '_merge_';
-
+  /// 这些 settings 键是本地独占（代理 / 远端备份凭据等），不从备份合并。
   static const _localOnlySettingsKeys = {
     'proxy_mode',
     'proxy_host',
@@ -39,159 +47,133 @@ class BackupMergeService {
   };
 
   static Future<MergeResult> merge({
-    required Directory extractedDataDir,
+    required String backupDbPath,
     required Directory? extractedDocsDir,
     required BackupRestoreScope scope,
     void Function(String message)? onProgress,
   }) async {
-    final mergeTempDir = await _createMergeTempDir();
     var stats = const MergeResult();
-
+    final backupDb = db.AppDatabase.file(backupDbPath);
+    var idMap = <String, String>{};
     try {
-      final boxNames = _boxNamesForScope(scope);
-
-      for (final name in boxNames) {
-        final src = File(p.join(extractedDataDir.path, '$name.hive'));
-        if (await src.exists()) {
-          await src.copy(p.join(mergeTempDir.path, '$_mergePrefix$name.hive'));
-        }
-      }
-
-      final backupBoxes = <String, Box>{};
-      for (final name in boxNames) {
-        final mergeFile = File(
-          p.join(mergeTempDir.path, '$_mergePrefix$name.hive'),
+      if (scope.restoreLibrary) {
+        onProgress?.call('正在合并文献...');
+        final (additions, docIdMap) = await _mergeDocuments(backupDb);
+        idMap = docIdMap;
+        stats = stats.copyWith(documentsAdded: additions);
+        onProgress?.call('正在合并标注...');
+        final (hlAdded, hlSkipped) = await _mergeHighlights(backupDb, idMap);
+        stats = stats.copyWith(
+          highlightsAdded: hlAdded,
+          skippedOrphans: stats.skippedOrphans + hlSkipped,
         );
-        if (await mergeFile.exists()) {
-          backupBoxes[name] = await Hive.openBox(
-            '$_mergePrefix$name',
-            path: mergeTempDir.path,
+        onProgress?.call('正在合并收藏夹...');
+        final favSkipped = await _mergeFavorites(backupDb, idMap);
+        stats = stats.copyWith(
+          skippedOrphans: stats.skippedOrphans + favSkipped,
+        );
+        onProgress?.call('正在合并阅读历史...');
+        final histSkipped = await _mergeHistory(backupDb, idMap);
+        stats = stats.copyWith(
+          skippedOrphans: stats.skippedOrphans + histSkipped,
+        );
+        if (extractedDocsDir != null) {
+          onProgress?.call('正在合并文献文件...');
+          stats = stats.copyWith(
+            filesCopied: await _mergeLibraryFiles(extractedDocsDir, idMap),
           );
         }
       }
-
-      try {
-        if (scope.restoreLibrary) {
-          if (backupBoxes.containsKey('documents')) {
-            onProgress?.call('正在合并文献...');
-            stats = stats.copyWith(
-              documentsAdded: await _mergeDocuments(backupBoxes['documents']!),
-            );
-          }
-          if (backupBoxes.containsKey('highlights')) {
-            onProgress?.call('正在合并标注...');
-            stats = stats.copyWith(
-              highlightsAdded: await _mergeHighlights(
-                backupBoxes['highlights']!,
-              ),
-            );
-          }
-          if (backupBoxes.containsKey('favorites')) {
-            onProgress?.call('正在合并收藏夹...');
-            await _mergeFavorites(backupBoxes['favorites']!);
-          }
-          if (backupBoxes.containsKey('history')) {
-            onProgress?.call('正在合并阅读历史...');
-            await _mergeHistory(backupBoxes['history']!);
-          }
-          if (extractedDocsDir != null) {
-            onProgress?.call('正在合并文献文件...');
-            stats = stats.copyWith(
-              filesCopied: await _mergeLibraryFiles(extractedDocsDir),
-            );
-          }
-        }
-
-        if (scope.restoreSettings && backupBoxes.containsKey('settings')) {
-          onProgress?.call('正在合并设置...');
-          stats = stats.copyWith(
-            settingsAdded: await _mergeSettings(backupBoxes['settings']!),
-          );
-        }
-
-        if (scope == BackupRestoreScope.full &&
-            backupBoxes.containsKey('zotero_sync')) {
-          onProgress?.call('正在合并 Zotero 同步数据...');
-          await _mergeZoteroSync(backupBoxes['zotero_sync']!);
-        }
-      } finally {
-        for (final box in backupBoxes.values) {
-          await box.close();
-        }
+      if (scope.restoreSettings) {
+        onProgress?.call('正在合并设置...');
+        stats = stats.copyWith(
+          settingsAdded: await _mergeSettings(backupDb),
+        );
+      }
+      if (scope == BackupRestoreScope.full) {
+        onProgress?.call('正在合并 Zotero 同步数据...');
+        final zotSkipped = await _mergeZoteroSync(backupDb, idMap);
+        stats = stats.copyWith(
+          skippedOrphans: stats.skippedOrphans + zotSkipped,
+        );
       }
     } finally {
-      if (await mergeTempDir.exists()) {
-        await mergeTempDir.delete(recursive: true);
-      }
+      await backupDb.close();
     }
-
-    await GStorage.flush();
+    // ADR-0001：不再 refreshCache——活库 watch() 流自动反映合并写入，
+    // 编排者经 appDatabaseProvider 失效让 provider 重订阅。
     return stats;
   }
 
   // ─── Documents ──────────────────────────────────────────────────────────────
 
-  static Future<int> _mergeDocuments(Box backupBox) async {
-    final currentBox = GStorage.documents;
-
-    final currentRaw = currentBox.get('documents') as List<dynamic>? ?? [];
-    final currentDocs = currentRaw
-        .map(
-          (e) => Document.fromJson(
-            Map<String, dynamic>.from(jsonDecode(e as String)),
-          ),
-        )
+  /// 返回 (新增篇数, backupDocId → liveDocId 重映射)。
+  static Future<(int, Map<String, String>)> _mergeDocuments(
+    db.AppDatabase backupDb,
+  ) async {
+    final live = (await GStorage.db.select(GStorage.db.documents).get())
+        .map(documentFromRow)
         .toList();
-
-    final currentById = {for (final d in currentDocs) d.id: d};
-    final currentByDoi = <String, Document>{};
-    for (final d in currentDocs) {
+    final liveById = {for (final d in live) d.id: d};
+    final liveByDoi = <String, Document>{};
+    for (final d in live) {
       final doi = d.doi?.trim().toLowerCase();
-      if (doi != null && doi.isNotEmpty) currentByDoi[doi] = d;
+      if (doi != null && doi.isNotEmpty) liveByDoi[doi] = d;
     }
 
-    final backupRaw = backupBox.get('documents') as List<dynamic>? ?? [];
-    final backupDocs = backupRaw
-        .map(
-          (e) => Document.fromJson(
-            Map<String, dynamic>.from(jsonDecode(e as String)),
-          ),
-        )
-        .toList();
+    final backupDocs =
+        (await backupDb.select(backupDb.documents).get())
+            .map(documentFromRow)
+            .toList();
 
-    bool enriched = false;
+    final toUpsert = <Document>[];
     final additions = <Document>[];
+    final idMap = <String, String>{};
 
     for (final bd in backupDocs) {
-      if (currentById.containsKey(bd.id)) {
-        final cd = currentById[bd.id]!;
+      if (liveById.containsKey(bd.id)) {
+        final cd = liveById[bd.id]!;
         final result = _enrichDocument(cd, bd);
         if (!identical(result, cd)) {
-          currentById[bd.id] = result;
-          enriched = true;
+          liveById[bd.id] = result;
+          toUpsert.add(result);
         }
+        idMap[bd.id] = bd.id;
         continue;
       }
 
       final bdDoi = bd.doi?.trim().toLowerCase();
-      if (bdDoi != null &&
-          bdDoi.isNotEmpty &&
-          currentByDoi.containsKey(bdDoi)) {
+      if (bdDoi != null && bdDoi.isNotEmpty && liveByDoi.containsKey(bdDoi)) {
+        // DOI 判重：不插入，映射到命中的本地文档
+        idMap[bd.id] = liveByDoi[bdDoi]!.id;
         continue;
       }
 
-      if (_hasTitleMatch(currentDocs, additions, bd)) continue;
+      final titleMatch = _findTitleMatch(live, additions, bd);
+      if (titleMatch != null) {
+        // 题录判重：不插入，映射到命中的本地文档
+        idMap[bd.id] = titleMatch.id;
+        continue;
+      }
 
       additions.add(bd);
-      if (bdDoi != null && bdDoi.isNotEmpty) currentByDoi[bdDoi] = bd;
+      toUpsert.add(bd);
+      idMap[bd.id] = bd.id;
+      if (bdDoi != null && bdDoi.isNotEmpty) liveByDoi[bdDoi] = bd;
     }
 
-    if (enriched || additions.isNotEmpty) {
-      final merged = [...currentById.values, ...additions];
-      final encoded = merged.map((d) => jsonEncode(d.toJson())).toList();
-      await currentBox.put('documents', encoded);
+    if (toUpsert.isNotEmpty) {
+      // 必须 ON CONFLICT DO UPDATE：INSERT OR REPLACE 是 DELETE+INSERT，
+      // foreign_keys=ON 时对同 id 已存在文档（_enrichDocument 命中）REPLACE
+      // 会 CASCADE 清空它本地独有的高亮/历史/收藏关联/Zotero 映射。
+      await GStorage.db.batch((b) {
+        b.insertAllOnConflictUpdate(
+          GStorage.db.documents,
+          [for (final d in toUpsert) documentCompanion(d)],
+        );
+      });
     }
-    return additions.length;
+    return (additions.length, idMap);
   }
 
   static Document _enrichDocument(Document current, Document backup) {
@@ -227,13 +209,14 @@ class BackupMergeService {
     );
   }
 
-  static bool _hasTitleMatch(
+  /// 题录判重：标题匹配 + (年份 | 首作者)。返回命中的已存在文档（用于重映射）。
+  static Document? _findTitleMatch(
     List<Document> existingDocs,
     List<Document> pendingAdditions,
     Document candidate,
   ) {
     final candidateTitle = _normalizeKey(candidate.title);
-    if (candidateTitle.isEmpty) return false;
+    if (candidateTitle.isEmpty) return null;
 
     for (final existing in [...existingDocs, ...pendingAdditions]) {
       final existingTitle = _normalizeKey(existing.title);
@@ -241,7 +224,9 @@ class BackupMergeService {
 
       final eYear = _normalizeKey(existing.year);
       final cYear = _normalizeKey(candidate.year);
-      if (eYear.isNotEmpty && cYear.isNotEmpty && eYear == cYear) return true;
+      if (eYear.isNotEmpty && cYear.isNotEmpty && eYear == cYear) {
+        return existing;
+      }
 
       final eAuthor = existing.authors.isEmpty
           ? ''
@@ -250,202 +235,284 @@ class BackupMergeService {
           ? ''
           : _normalizeKey(candidate.authors.first);
       if (eAuthor.isNotEmpty && cAuthor.isNotEmpty && eAuthor == cAuthor) {
-        return true;
+        return existing;
       }
     }
-    return false;
+    return null;
   }
 
   // ─── Highlights ─────────────────────────────────────────────────────────────
 
-  static Future<int> _mergeHighlights(Box backupBox) async {
-    final currentBox = GStorage.highlights;
-    var added = 0;
-
-    for (final key in backupBox.keys) {
-      final backupRaw = backupBox.get(key) as String?;
-      if (backupRaw == null) continue;
-
-      final backupHighlights = (jsonDecode(backupRaw) as List<dynamic>)
-          .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
-          .toList();
-
-      final currentRaw = currentBox.get(key) as String?;
-      if (currentRaw == null) {
-        await currentBox.put(key, backupRaw);
-        added += backupHighlights.length;
+  /// 返回 (新增条数, 因 docId 无映射跳过的孤儿数)。
+  static Future<(int, int)> _mergeHighlights(
+    db.AppDatabase backupDb,
+    Map<String, String> idMap,
+  ) async {
+    final liveIds = (await GStorage.db.select(GStorage.db.highlights).get())
+        .map((r) => r.id)
+        .toSet();
+    final backupRows = await backupDb.select(backupDb.highlights).get();
+    var skipped = 0;
+    final remapped = <Highlight>[];
+    for (final r in backupRows) {
+      final h = highlightFromRow(r);
+      final liveDocId = idMap[h.documentId];
+      if (liveDocId == null) {
+        skipped++;
         continue;
       }
-
-      final currentHighlights = (jsonDecode(currentRaw) as List<dynamic>)
-          .map((e) => Highlight.fromJson(e as Map<String, dynamic>))
-          .toList();
-      final currentIds = currentHighlights.map((h) => h.id).toSet();
-
-      final additions = backupHighlights
-          .where((h) => !currentIds.contains(h.id))
-          .toList();
-      if (additions.isEmpty) continue;
-
-      final merged = [...currentHighlights, ...additions];
-      final json = jsonEncode(merged.map((h) => h.toJson()).toList());
-      await currentBox.put(key, json);
-      added += additions.length;
+      // highlight id 冲突 → insertOrIgnore 语义（跳过，不改既有冲突策略）
+      if (liveIds.contains(h.id)) continue;
+      remapped.add(
+        Highlight(
+          id: h.id,
+          documentId: liveDocId,
+          text: h.text,
+          note: h.note,
+          color: h.color,
+          groupId: h.groupId,
+          createdAt: h.createdAt,
+        ),
+      );
     }
-    return added;
+    if (remapped.isEmpty) return (0, skipped);
+    await GStorage.db.batch((b) {
+      for (final h in remapped) {
+        b.insert(
+          GStorage.db.highlights,
+          highlightCompanion(h),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    });
+    return (remapped.length, skipped);
   }
 
   // ─── Favorites ──────────────────────────────────────────────────────────────
 
-  static Future<void> _mergeFavorites(Box backupBox) async {
-    final currentBox = GStorage.favorites;
+  /// 返回因 docId 无映射跳过的孤儿关联数。
+  static Future<int> _mergeFavorites(
+    db.AppDatabase backupDb,
+    Map<String, String> idMap,
+  ) async {
+    var skipped = 0;
+    final liveFavIds = (await GStorage.db.select(GStorage.db.favorites).get())
+        .map((r) => r.id)
+        .toSet();
+    final backupFavRows = await backupDb.select(backupDb.favorites).get();
+    final backupFdRows =
+        await backupDb.select(backupDb.favoriteDocuments).get();
+    final backupDocsByFav = <String, List<String>>{};
+    for (final r in backupFdRows) {
+      backupDocsByFav.putIfAbsent(r.favoriteId, () => []).add(r.docId);
+    }
 
-    final currentRaw = currentBox.get('favorites') as List<dynamic>? ?? [];
-    final currentFavs = currentRaw
-        .map(
-          (e) => Favorite.fromJson(
-            Map<String, dynamic>.from(jsonDecode(e as String)),
-          ),
-        )
-        .toList();
-    final currentById = {for (final f in currentFavs) f.id: f};
-
-    final backupRaw = backupBox.get('favorites') as List<dynamic>? ?? [];
-    final backupFavs = backupRaw
-        .map(
-          (e) => Favorite.fromJson(
-            Map<String, dynamic>.from(jsonDecode(e as String)),
-          ),
-        )
-        .toList();
-
-    bool changed = false;
-    final additions = <Favorite>[];
-
-    for (final bf in backupFavs) {
-      if (currentById.containsKey(bf.id)) {
-        final cf = currentById[bf.id]!;
-        final existingIds = cf.documentIds.toSet();
-        final newIds = bf.documentIds
-            .where((id) => !existingIds.contains(id))
-            .toList();
-        if (newIds.isNotEmpty) {
-          currentById[bf.id] = cf.copyWith(
-            documentIds: [...cf.documentIds, ...newIds],
-          );
-          changed = true;
+    for (final bf in backupFavRows) {
+      final rawDocIds = backupDocsByFav[bf.id] ?? const <String>[];
+      // 重映射每个关联 docId；孤儿跳过计数
+      final remappedDocIds = <String>[];
+      for (final docId in rawDocIds) {
+        final live = idMap[docId];
+        if (live == null) {
+          skipped++;
+          continue;
         }
+        remappedDocIds.add(live);
+      }
+
+      if (liveFavIds.contains(bf.id)) {
+        // 已存在：documentIds 取并集（新关联 insert-or-ignore）
+        final liveDocIds = (await (GStorage.db.select(
+                  GStorage.db.favoriteDocuments,
+                )
+                      ..where((t) => t.favoriteId.equals(bf.id)))
+                .get())
+            .map((r) => r.docId)
+            .toSet();
+        final newDocIds =
+            remappedDocIds.where((id) => !liveDocIds.contains(id)).toList();
+        if (newDocIds.isEmpty) continue;
+        await GStorage.db.batch((b) {
+          for (final id in newDocIds) {
+            b.insert(
+              GStorage.db.favoriteDocuments,
+              favoriteDocumentCompanion(bf.id, id),
+              mode: InsertMode.insertOrIgnore,
+            );
+          }
+        });
       } else {
-        additions.add(bf);
-        changed = true;
+        // 新增收藏夹 + 其关联
+        await GStorage.db.into(GStorage.db.favorites).insertOnConflictUpdate(
+              favoriteCompanion(
+                Favorite(
+                  id: bf.id,
+                  emoji: bf.emoji,
+                  name: bf.name,
+                  documentIds: const [],
+                  createdAt: DateTime.fromMillisecondsSinceEpoch(
+                    bf.createdAt,
+                  ),
+                ),
+              ),
+            );
+        if (remappedDocIds.isNotEmpty) {
+          await GStorage.db.batch((b) {
+            for (final id in remappedDocIds) {
+              b.insert(
+                GStorage.db.favoriteDocuments,
+                favoriteDocumentCompanion(bf.id, id),
+                mode: InsertMode.insertOrIgnore,
+              );
+            }
+          });
+        }
       }
     }
-
-    if (changed) {
-      final merged = [...currentById.values, ...additions];
-      merged.sort((a, b) {
-        if (a.isDefault) return -1;
-        if (b.isDefault) return 1;
-        return 0;
-      });
-      final encoded = merged.map((f) => jsonEncode(f.toJson())).toList();
-      await currentBox.put('favorites', encoded);
-    }
+    return skipped;
   }
 
   // ─── History ────────────────────────────────────────────────────────────────
 
-  static Future<void> _mergeHistory(Box backupBox) async {
-    final currentBox = GStorage.history;
-
-    final currentRaw = currentBox.get('entries') as List<dynamic>? ?? [];
-    final currentEntries = currentRaw
-        .map((e) => HistoryEntry.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
-    final byDocId = {for (final e in currentEntries) e.docId: e};
-
-    final backupRaw = backupBox.get('entries') as List<dynamic>? ?? [];
-    final backupEntries = backupRaw
-        .map((e) => HistoryEntry.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
-
-    bool changed = false;
-    for (final be in backupEntries) {
-      final ce = byDocId[be.docId];
+  /// 返回因 docId 无映射跳过的孤儿数。500 上限事务化强制修剪（ADR-0004/P1-1）。
+  static Future<int> _mergeHistory(
+    db.AppDatabase backupDb,
+    Map<String, String> idMap,
+  ) async {
+    var skipped = 0;
+    final liveRows = await GStorage.db.select(GStorage.db.history).get();
+    final liveByDocId = {for (final r in liveRows) r.docId: historyFromRow(r)};
+    final backupRows = await backupDb.select(backupDb.history).get();
+    final merged = Map<String, HistoryEntry>.from(liveByDocId);
+    var changed = false;
+    for (final r in backupRows) {
+      final be = historyFromRow(r);
+      final liveDocId = idMap[be.docId];
+      if (liveDocId == null) {
+        skipped++;
+        continue;
+      }
+      final remapped = HistoryEntry(
+        docId: liveDocId,
+        openedAt: be.openedAt,
+        progress: be.progress,
+        anchorBlock: be.anchorBlock,
+      );
+      final ce = liveByDocId[remapped.docId];
       if (ce == null) {
-        byDocId[be.docId] = be;
+        merged[remapped.docId] = remapped;
         changed = true;
       } else if (be.openedAt.isAfter(ce.openedAt)) {
-        byDocId[be.docId] = be;
+        merged[remapped.docId] = remapped;
         changed = true;
       } else if (be.openedAt == ce.openedAt && be.progress > ce.progress) {
-        byDocId[be.docId] = be;
+        merged[remapped.docId] = remapped;
         changed = true;
       }
     }
+    final list = merged.values.toList()
+      ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
+    final capped = list.length > 500 ? list.sublist(0, 500) : list;
+    final cappedDocIds = {for (final e in capped) e.docId};
 
-    if (changed) {
-      final merged = byDocId.values.toList()
-        ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
-      if (merged.length > 500) merged.removeRange(500, merged.length);
-      await currentBox.put('entries', merged.map((e) => e.toMap()).toList());
-    }
+    // 事务：upsert capped（仅当有变更）+ 删除集合外旧行（始终修剪）。
+    await GStorage.db.transaction(() async {
+      if (changed) {
+        for (final e in capped) {
+          await GStorage.db
+              .into(GStorage.db.history)
+              .insertOnConflictUpdate(historyCompanion(e));
+        }
+      }
+      if (cappedDocIds.isEmpty) {
+        await GStorage.db.delete(GStorage.db.history).go();
+      } else {
+        await (GStorage.db.delete(GStorage.db.history)
+              ..where((t) => t.docId.isNotIn(cappedDocIds)))
+            .go();
+      }
+    });
+    return skipped;
   }
 
   // ─── Settings ───────────────────────────────────────────────────────────────
 
-  static Future<int> _mergeSettings(Box backupBox) async {
-    final currentBox = GStorage.setting;
+  static Future<int> _mergeSettings(db.AppDatabase backupDb) async {
+    final liveKeys = GStorage.setting.keys.toSet();
     var added = 0;
-
-    for (final key in backupBox.keys) {
-      if (key is! String) continue;
-      if (_localOnlySettingsKeys.contains(key)) continue;
-      if (currentBox.containsKey(key)) continue;
-
-      await currentBox.put(key, backupBox.get(key));
+    final backupRows = await backupDb.select(backupDb.settings).get();
+    for (final r in backupRows) {
+      if (_localOnlySettingsKeys.contains(r.settingKey)) continue;
+      if (liveKeys.contains(r.settingKey)) continue;
+      await GStorage.setting.put(r.settingKey, _decode(r.value));
       added++;
     }
     return added;
   }
 
+  static Object? _decode(String raw) {
+    if (raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      return raw;
+    }
+  }
+
   // ─── Zotero Sync ───────────────────────────────────────────────────────────
 
-  static Future<void> _mergeZoteroSync(Box backupBox) async {
-    final currentBox = GStorage.zoteroSync;
-
-    final currentVersion =
-        currentBox.get('_libraryVersion', defaultValue: 0) as int;
-    final backupVersion =
-        backupBox.get('_libraryVersion', defaultValue: 0) as int;
-    if (backupVersion > currentVersion) {
-      await currentBox.put('_libraryVersion', backupVersion);
+  /// 返回因 docId 无映射跳过的孤儿数。
+  static Future<int> _mergeZoteroSync(
+    db.AppDatabase backupDb,
+    Map<String, String> idMap,
+  ) async {
+    var skipped = 0;
+    // 库版本取 max
+    final backupVerRow = await (backupDb.select(backupDb.meta)
+          ..where((t) => t.metaKey.equals('zotero_library_version')))
+        .getSingleOrNull();
+    final backupVer =
+        backupVerRow == null ? 0 : (int.tryParse(backupVerRow.value) ?? 0);
+    if (backupVer > ZoteroSnapshot.libraryVersion) {
+      await ZoteroSyncStore.setLibraryVersion(backupVer);
     }
-
-    for (final key in backupBox.keys) {
-      if (key is! String || !key.startsWith('item:')) continue;
-      if (currentBox.containsKey(key)) continue;
-      await currentBox.put(key, backupBox.get(key));
+    // zotero_items 只补缺（docId 重映射）
+    final liveKeys = ZoteroSnapshot.items.keys.toSet();
+    final backupRows = await backupDb.select(backupDb.zoteroItems).get();
+    for (final r in backupRows) {
+      if (liveKeys.contains(r.zoteroKey)) continue;
+      if (r.docId == null) continue;
+      final liveDocId = idMap[r.docId!];
+      if (liveDocId == null) {
+        skipped++;
+        continue;
+      }
+      await ZoteroSyncStore.recordItem(r.zoteroKey, liveDocId, r.version);
     }
+    return skipped;
   }
 
   // ─── Library files ──────────────────────────────────────────────────────────
 
-  static Future<int> _mergeLibraryFiles(Directory extractedDocsDir) async {
+  static Future<int> _mergeLibraryFiles(
+    Directory extractedDocsDir,
+    Map<String, String> idMap,
+  ) async {
     if (!await extractedDocsDir.exists()) return 0;
-
     final libraryDir = Directory(GStorage.libraryDirPath);
     if (!await libraryDir.exists()) {
       await libraryDir.create(recursive: true);
     }
-
     var filesCopied = 0;
-
     await for (final entity in extractedDocsDir.list()) {
       if (entity is! Directory) continue;
       final docId = p.basename(entity.path);
-      final targetDir = Directory(p.join(libraryDir.path, docId));
-
+      // 目标目录经 idMap 重映射（ADR-0004）：DOI/题录判重命中时备份文档映射
+      // 到本地文档，文件必须落进本地 id 的目录——按备份原 id 拷会成孤儿目录，
+      // 文献显示"有文件"却打不开。备份库中无对应文档行的悬空目录跳过。
+      final liveDocId = idMap[docId];
+      if (liveDocId == null) continue;
+      final targetDir = Directory(p.join(libraryDir.path, liveDocId));
       if (!await targetDir.exists()) {
         await _copyDirectory(entity, targetDir);
         filesCopied += await _countFiles(entity);
@@ -495,39 +562,6 @@ class BackupMergeService {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  static Set<String> _boxNamesForScope(BackupRestoreScope scope) {
-    switch (scope) {
-      case BackupRestoreScope.full:
-        return {
-          'documents',
-          'highlights',
-          'favorites',
-          'history',
-          'settings',
-          'zotero_sync',
-        };
-      case BackupRestoreScope.libraryOnly:
-        return {'documents', 'highlights', 'favorites', 'history'};
-      case BackupRestoreScope.settingsOnly:
-        return {'settings'};
-    }
-  }
-
-  static Future<Directory> _createMergeTempDir() async {
-    final tempDir = await getTemporaryDirectory();
-    final mergeDir = Directory(
-      p.join(
-        tempDir.path,
-        'OtterPad',
-        'merge_${DateTime.now().microsecondsSinceEpoch}',
-      ),
-    );
-    if (!await mergeDir.exists()) {
-      await mergeDir.create(recursive: true);
-    }
-    return mergeDir;
-  }
-
   static bool _isBlank(String? value) => value == null || value.trim().isEmpty;
 
   static String _normalizeKey(String? value) {
@@ -540,12 +574,14 @@ class MergeResult {
   final int highlightsAdded;
   final int filesCopied;
   final int settingsAdded;
+  final int skippedOrphans;
 
   const MergeResult({
     this.documentsAdded = 0,
     this.highlightsAdded = 0,
     this.filesCopied = 0,
     this.settingsAdded = 0,
+    this.skippedOrphans = 0,
   });
 
   MergeResult copyWith({
@@ -553,12 +589,14 @@ class MergeResult {
     int? highlightsAdded,
     int? filesCopied,
     int? settingsAdded,
+    int? skippedOrphans,
   }) {
     return MergeResult(
       documentsAdded: documentsAdded ?? this.documentsAdded,
       highlightsAdded: highlightsAdded ?? this.highlightsAdded,
       filesCopied: filesCopied ?? this.filesCopied,
       settingsAdded: settingsAdded ?? this.settingsAdded,
+      skippedOrphans: skippedOrphans ?? this.skippedOrphans,
     );
   }
 

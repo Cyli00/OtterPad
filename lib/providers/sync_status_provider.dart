@@ -45,7 +45,7 @@ class SyncStatusResult {
 /// 变化经 watch 自动重算。批注等不经 documentsProvider 的变更在打开
 /// 云同步页时手动 invalidate 兜底。
 final syncStatusProvider = FutureProvider<SyncStatusResult>((ref) async {
-  final docs = ref.watch(documentsProvider);
+  final docs = ref.watch(documentsProvider).value ?? const [];
   final remoteType = ref.watch(backupRemoteTypeProvider);
   final s3 = ref.watch(backupS3Provider);
   final webDav = ref.watch(backupWebDavProvider);

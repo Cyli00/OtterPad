@@ -120,7 +120,7 @@ class HomeHeader extends ConsumerWidget {
             size: isMobile ? 36 : 40,
             onPressed: () {
               Haptics.soft();
-              ref.read(viewModeProvider.notifier).state = !isGrid;
+              ref.read(viewModeProvider.notifier).toggle();
             },
           ),
           const SizedBox(width: 8.0),

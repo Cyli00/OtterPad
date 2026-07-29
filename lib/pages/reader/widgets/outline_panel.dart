@@ -19,13 +19,13 @@ import '../../../core/l10n.dart';
 
 // ─── 数据模型 ───
 
-class ReferenceItem {
+class _ReferenceItem {
   final int number;
   final String text;
   final int charOffset;
   final bool isNumbered;
 
-  const ReferenceItem({
+  const _ReferenceItem({
     required this.number,
     required this.text,
     required this.charOffset,
@@ -39,7 +39,7 @@ class ReferenceItem {
 ///
 /// 优先识别编号格式（`1.` / `1)` / `[1]`），无编号时回退到按空行切分的段落模式
 /// （适用于 APA 等 Author-Year 格式）。
-List<ReferenceItem> parseReferences(String markdown) {
+List<_ReferenceItem> _parseReferences(String markdown) {
   final refHeadingRe = RegExp(
     r'^#{1,3}\s+(?:References|参考文献|Bibliography|Works?\s+Cited)',
     multiLine: true,
@@ -63,8 +63,8 @@ List<ReferenceItem> parseReferences(String markdown) {
   return _parseParagraphRefs(refSection, refMatch.end);
 }
 
-List<ReferenceItem> _parseNumberedRefs(String refSection, int baseOffset) {
-  final items = <ReferenceItem>[];
+List<_ReferenceItem> _parseNumberedRefs(String refSection, int baseOffset) {
+  final items = <_ReferenceItem>[];
   // 同时支持 "1. "、"1) " 与 "[1] " 三种前缀
   final refItemRe = RegExp(r'^\s*(?:\[(\d+)\]|(\d+)[.\)])\s+', multiLine: true);
   final matches = refItemRe.allMatches(refSection).toList();
@@ -84,7 +84,7 @@ List<ReferenceItem> _parseNumberedRefs(String refSection, int baseOffset) {
 
     if (text.isNotEmpty) {
       items.add(
-        ReferenceItem(
+        _ReferenceItem(
           number: num,
           text: text,
           charOffset: baseOffset + match.start,
@@ -95,8 +95,8 @@ List<ReferenceItem> _parseNumberedRefs(String refSection, int baseOffset) {
   return items;
 }
 
-List<ReferenceItem> _parseParagraphRefs(String refSection, int baseOffset) {
-  final items = <ReferenceItem>[];
+List<_ReferenceItem> _parseParagraphRefs(String refSection, int baseOffset) {
+  final items = <_ReferenceItem>[];
   // 按空行切分段落：每条引用默认是一个独立段落
   final boundary = RegExp(r'\n[ \t]*\n');
   final matches = boundary.allMatches(refSection).toList();
@@ -119,7 +119,7 @@ List<ReferenceItem> _parseParagraphRefs(String refSection, int baseOffset) {
     if (!_looksLikeReference(normalized)) continue;
 
     items.add(
-      ReferenceItem(
+      _ReferenceItem(
         number: num++,
         text: normalized,
         charOffset: baseOffset + chunk.start + leadingWs,
@@ -177,7 +177,7 @@ class OutlinePanel extends StatefulWidget {
 class _OutlinePanelState extends State<OutlinePanel>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  late final List<ReferenceItem> _references;
+  late final List<_ReferenceItem> _references;
   List<FigureManifestEntry>? _figures;
   Set<String> _existingImages = const {};
   bool _figuresLoaded = false;
@@ -186,7 +186,7 @@ class _OutlinePanelState extends State<OutlinePanel>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _references = parseReferences(widget.markdownContent);
+    _references = _parseReferences(widget.markdownContent);
     _loadFigures();
     widget.figuresEpoch?.addListener(_loadFigures);
   }
@@ -196,7 +196,11 @@ class _OutlinePanelState extends State<OutlinePanel>
       if (mounted) setState(() => _figuresLoaded = true);
       return;
     }
-    final figures = await FigureExtractService.loadManifest(widget.documentId!);
+    final all = await FigureExtractService.loadManifest(widget.documentId!);
+    // Outline 只展示有 caption 身份的 figure；visualOnly 匿名图留在 manifest
+    // 供 AI 补检，但不进列表（避免空白标题刷屏）。
+    final figures =
+        all == null ? null : FigureManifestEntry.forDisplay(all);
     // 重新提取会原地覆盖 figures/*.png,但 Flutter 全局 ImageCache 以
     // FileImage(path) 为 key,不感知 mtime,导致 Image.file 还显示旧字节.
     // 显式 evict 这批 path,下次构建时 Image.file 重读磁盘.
@@ -220,6 +224,7 @@ class _OutlinePanelState extends State<OutlinePanel>
       if (mounted) {
         setState(() {
           _figures = figures;
+          _existingImages = const {};
           _figuresLoaded = true;
         });
       }
@@ -579,7 +584,7 @@ class _FiguresTab extends StatelessWidget {
 // ─── References Tab ───
 
 class _ReferencesTab extends ConsumerStatefulWidget {
-  final List<ReferenceItem> references;
+  final List<_ReferenceItem> references;
 
   const _ReferencesTab({required this.references});
 
@@ -599,7 +604,7 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
     super.dispose();
   }
 
-  Future<void> _copy(int index, ReferenceItem item) async {
+  Future<void> _copy(int index, _ReferenceItem item) async {
     final text =
         item.isNumbered ? '[${item.number}] ${item.text}' : item.text;
     await Clipboard.setData(ClipboardData(text: text));

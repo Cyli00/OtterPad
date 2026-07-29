@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -9,11 +10,12 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'core/storage/secure_credential_vault.dart';
+import 'core/storage/settings_keys.dart';
 import 'core/storage/storage.dart';
 import 'providers/auto_backup_provider.dart';
 import 'providers/proxy_provider.dart';
 import 'providers/update_check_scheduler.dart';
-import 'services/agent_model_capability.dart';
+import 'services/model_capability_store.dart';
 import 'services/back_matter_detector.dart';
 import 'services/figure_extract_service.dart';
 import 'services/haptics.dart';
@@ -54,12 +56,16 @@ Future<void> main() async {
   // 并行初始化
   await Future.wait([
     GStorage.init(),
-    AgentModelCapability.init(),
     BackMatterDetector.instance.init(),
     // figure 提取的 caption 正则配置预热——避免 saveResult 路径里隐式首次
     // init() 的加载延迟与“忘记初始化 → 运行时断言”隐患（init 内部幂等）。
     FigureExtractService.instance.init(),
   ]);
+
+  // 模型能力规则集（geosite 订阅）：加载本地缓存（依赖 GStorage.dbDirPath），
+  // 后台按 TTL 检查远程更新（不阻塞启动）。
+  await ModelCapabilityStore.instance.init();
+  unawaited(ModelCapabilityStore.instance.checkUpdateIfNeeded());
 
   // 凭据安全存储：必须在 GStorage.init 之后、任何 provider 读取凭据之前完成——
   // 同步 read() 依赖此处填充的内存缓存。
@@ -67,12 +73,12 @@ Future<void> main() async {
 
   // 应用通用设置中的持久化偏好
   final hapticsOn =
-      GStorage.setting.get('general_haptics_enabled') as bool? ?? true;
+      GStorage.setting.get(SettingsKeys.hapticsEnabled) as bool? ?? true;
   Haptics.setEnabled(hapticsOn);
 
   // 缓存自动清理（fire-and-forget，不阻塞启动）
   final cacheCleanup =
-      GStorage.setting.get('general_cache_auto_cleanup') as bool? ?? false;
+      GStorage.setting.get(SettingsKeys.cacheAutoCleanup) as bool? ?? false;
   if (cacheCleanup) {
     StorageUsageService.clearGroups({StorageGroupKey.cache});
   }

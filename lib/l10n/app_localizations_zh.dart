@@ -944,13 +944,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storageCategoryChat => '聊天记录';
 
   @override
-  String get storageCategoryNotes => '笔记';
-
-  @override
   String get storageCategoryCache => '缓存';
 
   @override
   String get storageCategoryLogs => '日志';
+
+  @override
+  String get storageCategoryDatabase => '数据库';
 
   @override
   String get storageSpaceSelected => '已选择';
@@ -2084,8 +2084,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importingFilesBusy => '正在导入文件，请稍候';
 
   @override
-  String extractingMetadataFile(String fileName) {
-    return '正在提取元数据: $fileName';
+  String importingFile(String fileName) {
+    return '正在导入: $fileName';
   }
 
   @override
@@ -2197,21 +2197,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String importedWithFullMetadata(String title) {
-    return '已导入并提取元数据: $title';
-  }
-
-  @override
-  String importedPartialMetadata(String title) {
-    return '已导入 $title，仅提取到部分元数据';
-  }
-
-  @override
-  String importedNoMetadata(String title) {
-    return '已导入 $title，未识别到可用元数据';
-  }
-
-  @override
   String importedCountPart(int count) {
     return '导入 $count 篇';
   }
@@ -2222,18 +2207,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String fullMetadataCountPart(int count) {
-    return '完整元数据 $count 篇';
-  }
-
-  @override
-  String partialMetadataCountPart(int count) {
-    return '部分元数据 $count 篇';
-  }
-
-  @override
-  String unrecognizedMetadataCountPart(int count) {
-    return '未识别元数据 $count 篇';
+  String importedFile(String title) {
+    return '已导入: $title';
   }
 
   @override
@@ -2302,6 +2277,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get expertRequiresVision => '专家模型需要支持图片输入';
+
+  @override
+  String get switchedToExpertForImage => '快速模型不支持图片，已切换至专家模型';
 
   @override
   String get askAi => '问 AI';
@@ -3520,13 +3498,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get storageCategoryChat => '聊天紀錄';
 
   @override
-  String get storageCategoryNotes => '筆記';
-
-  @override
   String get storageCategoryCache => '快取';
 
   @override
   String get storageCategoryLogs => '日誌';
+
+  @override
+  String get storageCategoryDatabase => '資料庫';
 
   @override
   String get storageSpaceSelected => '已選擇';
@@ -4660,8 +4638,8 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get importingFilesBusy => '正在匯入檔案，請稍候';
 
   @override
-  String extractingMetadataFile(String fileName) {
-    return '正在擷取中繼資料: $fileName';
+  String importingFile(String fileName) {
+    return '正在匯入: $fileName';
   }
 
   @override
@@ -4773,21 +4751,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String importedWithFullMetadata(String title) {
-    return '已匯入並擷取中繼資料: $title';
-  }
-
-  @override
-  String importedPartialMetadata(String title) {
-    return '已匯入 $title，僅擷取到部分中繼資料';
-  }
-
-  @override
-  String importedNoMetadata(String title) {
-    return '已匯入 $title，未辨識到可用中繼資料';
-  }
-
-  @override
   String importedCountPart(int count) {
     return '匯入 $count 篇';
   }
@@ -4798,18 +4761,8 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String fullMetadataCountPart(int count) {
-    return '完整中繼資料 $count 篇';
-  }
-
-  @override
-  String partialMetadataCountPart(int count) {
-    return '部分中繼資料 $count 篇';
-  }
-
-  @override
-  String unrecognizedMetadataCountPart(int count) {
-    return '未辨識中繼資料 $count 篇';
+  String importedFile(String title) {
+    return '已匯入: $title';
   }
 
   @override
@@ -4878,6 +4831,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get expertRequiresVision => '專家模型需要支援圖片輸入';
+
+  @override
+  String get switchedToExpertForImage => '快速模型不支持圖片，已切換至專家模型';
 
   @override
   String get askAi => '問 AI';

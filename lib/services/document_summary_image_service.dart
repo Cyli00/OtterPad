@@ -8,6 +8,7 @@ import '../data/models/book/document.dart';
 import '../providers/api_provider.dart';
 import '../providers/image_generation_config_provider.dart';
 import '../utils/doc_paths.dart';
+import 'agent_model_capability.dart';
 import 'back_matter_detector.dart';
 import 'figure_extract_service.dart';
 import 'image_generation_service.dart';
@@ -81,6 +82,7 @@ class DocumentSummaryImageService {
     required ImageGenerationConfig config,
     String? language,
     CancelToken? cancelToken,
+    AgentModelCapability? capability,
   }) async {
     final modelId = agentState.imageModelId;
     if (modelId == null || modelId.isEmpty) {
@@ -130,6 +132,7 @@ class DocumentSummaryImageService {
         referenceImagePaths: references,
         aspectRatio: config.aspectRatio,
         fidelity: config.fidelity,
+        capability: capability,
         cancelToken: cancelToken,
       ),
     );

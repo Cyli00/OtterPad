@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../services/prompt_store.dart';
 import '../services/prompts.dart';
@@ -53,9 +54,9 @@ class ImageGenerationConfig {
   );
 }
 
-const _kAspectRatio = 'image_generation_aspect_ratio';
-const _kFidelity = 'image_generation_fidelity';
-const _kMaxReferenceImages = 'image_generation_max_reference_images';
+const _kAspectRatio = SettingsKeys.imageAspectRatio;
+const _kFidelity = SettingsKeys.imageFidelity;
+const _kMaxReferenceImages = SettingsKeys.imageMaxReferenceImages;
 
 class ImageGenerationConfigNotifier
     extends StateNotifier<ImageGenerationConfig> {

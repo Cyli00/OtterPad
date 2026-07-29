@@ -195,13 +195,13 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Dialog(
-      backgroundColor: cs.surfaceContainerHigh,
+      backgroundColor: cs.surfaceContainerLow,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 560),
+        constraints: const BoxConstraints(maxWidth: 540, maxHeight: 560),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -223,16 +223,24 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
   Widget _buildHeader(ThemeData theme, ColorScheme cs) {
     return Row(
       children: [
-        Icon(
-          Symbols.translate_rounded,
-          color: cs.primary,
-          size: 22,
-          weight: 600,
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: cs.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            Symbols.translate_rounded,
+            color: cs.onPrimaryContainer,
+            size: 22,
+            weight: 600,
+          ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Text(
           context.l10n.translateText,
-          style: theme.textTheme.titleMedium?.copyWith(
+          style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -254,7 +262,9 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
   Widget _buildSource(ThemeData theme, ColorScheme cs) {
     final readerFont = ref.watch(readerSettingsProvider).font;
     final baseStyle = theme.textTheme.bodySmall?.copyWith(
-      color: cs.onSurfaceVariant,
+      color: _hasHighlight
+          ? cs.onSurfaceVariant.withAlpha(72)
+          : cs.onSurfaceVariant,
       height: 1.5,
       fontFamily: readerFont.fontFamily,
       fontFamilyFallback: readerFont.fontFamilyFallback,
@@ -263,7 +273,10 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     final fullText = _effectiveFullText;
     TextSpan sourceSpan;
     if (_hasHighlight) {
-      final range = TranslationHighlightParser.findInFullText(fullText, widget.sourceText);
+      final range = TranslationHighlightParser.findInFullText(
+        fullText,
+        widget.sourceText,
+      );
       if (range != null) {
         final (s, e) = range;
         sourceSpan = TextSpan(
@@ -273,7 +286,10 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
             WidgetSpan(child: SizedBox.shrink(key: _sourceAnchorKey)),
             TextSpan(
               text: fullText.substring(s, e),
-              style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             if (e < fullText.length) TextSpan(text: fullText.substring(e)),
           ],
@@ -286,12 +302,11 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     }
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 140),
+      constraints: const BoxConstraints(maxHeight: 120),
       child: Container(
-        margin: const EdgeInsets.only(right: 8),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: cs.surfaceContainerLowest.withValues(alpha: 0.6),
+          color: cs.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: cs.outlineVariant.withAlpha(80)),
         ),
@@ -352,9 +367,10 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
 
     final readerFont = ref.watch(readerSettingsProvider).font;
     final displayText = parsed.text;
+    final hasFocusedTranslation = parsed.hlStart != null && _hasHighlight;
 
     final List<InlineSpan> spans;
-    if (parsed.hlStart != null && _hasHighlight) {
+    if (hasFocusedTranslation) {
       final s = parsed.hlStart!.clamp(0, displayText.length);
       final e = parsed.hlEnd!.clamp(s, displayText.length);
       spans = [
@@ -362,7 +378,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         WidgetSpan(child: SizedBox.shrink(key: _bodyAnchorKey)),
         TextSpan(
           text: displayText.substring(s, e),
-          style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+          style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),
         if (e < displayText.length) TextSpan(text: displayText.substring(e)),
         if (!_done)
@@ -391,7 +407,9 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         child: SelectableText.rich(
           TextSpan(children: spans),
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: cs.onSurface,
+            color: hasFocusedTranslation
+                ? cs.onSurfaceVariant.withAlpha(72)
+                : cs.onSurface,
             height: 1.65,
             fontFamily: readerFont.fontFamily,
             fontFamilyFallback: readerFont.fontFamilyFallback,

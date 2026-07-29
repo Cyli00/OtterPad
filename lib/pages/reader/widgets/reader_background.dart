@@ -16,7 +16,7 @@ String cssColor(Color c) {
 }
 
 /// [Color] + 指定 alpha → CSS `rgba(...)` 字符串。
-String cssColorWithAlpha(Color c, double a) {
+String _cssColorWithAlpha(Color c, double a) {
   final r = (c.r * 255).round();
   final g = (c.g * 255).round();
   final b = (c.b * 255).round();
@@ -57,10 +57,10 @@ class ReaderPalette {
     '--link': cssColor(link),
     '--divider': cssColor(divider),
     '--code-bg': cssColor(codeBlock),
-    '--tr-weak': cssColorWithAlpha(text, ReaderTypography.trWeakAlpha),
-    '--tr-hl-bg': cssColorWithAlpha(link, ReaderTypography.trHlBgAlpha),
-    '--tr-hl-text': cssColorWithAlpha(link, ReaderTypography.trHlTextAlpha),
-    '--tr-deco': cssColorWithAlpha(link, ReaderTypography.trDecoAlpha),
+    '--tr-weak': _cssColorWithAlpha(text, ReaderTypography.trWeakAlpha),
+    '--tr-hl-bg': _cssColorWithAlpha(link, ReaderTypography.trHlBgAlpha),
+    '--tr-hl-text': _cssColorWithAlpha(link, ReaderTypography.trHlTextAlpha),
+    '--tr-deco': _cssColorWithAlpha(link, ReaderTypography.trDecoAlpha),
   };
 
   @override

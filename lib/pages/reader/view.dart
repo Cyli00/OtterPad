@@ -129,7 +129,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _pdfSearch = ReaderPdfSearchController();
 
   // 选择工具栏 Overlay（WebView 选择走 JS 桥接）
-  OverlayEntry? _selectionToolbarEntry;
+  ReaderContextMenuHandle? _selectionToolbarEntry;
+  String _webViewSelectionText = '';
+  int? _webViewSelectionLineCount;
 
   // 桌面端工具栏自动隐藏
   static const _kEdgeTriggerZone = 16.0;
@@ -164,8 +166,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // 经 initialScrollProgress / initialAnchorBlock 传入 WebView 在
     // onContentReady 时恢复。横向翻页优先锚点（比率在字号/窗口尺寸
     // 变化后会落错页），纵向按比率。
-    final entry = ref
-        .read(historyProvider)
+    final entry = (ref.read(historyProvider).value ?? const [])
         .where((e) => e.docId == widget.document.id)
         .firstOrNull;
     if (entry != null) {
@@ -295,10 +296,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           .showResult(message: context.l10n.expertModelNotSet);
       return;
     }
-    final cap = AgentModelCapability.infer(
-      provider: agentState.provider,
-      modelId: modelId,
-    );
+    // 走完整能力链（手动覆写 > 远程表 > 兜底）：直接 infer 会绕过远程表与
+    // 手动覆写，命中远程表 / 用户已手动开启 imageInput 的模型也被判 false，
+    // 误提示「专家模型需要支持图片输入」。instance 不可达才回退 infer
+    //（与 document_chat_provider.supportsImages 同款）。
+    final cap =
+        ref.read(agentApiProvider).byId(agentState.id)?.capabilityFor(modelId) ??
+            AgentModelCapability.infer(
+              provider: agentState.provider,
+              modelId: modelId,
+            );
     if (!cap.imageInput) {
       ref
           .read(snackBarServiceProvider)
@@ -574,7 +581,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final result = await _showFavoritePickerSheet(
       title: context.l10n.moveToFavorite,
-      favorites: ref.read(favoritesProvider),
+      favorites: ref.read(favoritesProvider).value ?? const [],
       documentId: documentId,
       mode: ReaderFavoritePickerMode.add,
     );
@@ -609,7 +616,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _showFavoriteRemovalPicker() async {
     final documentId = widget.document.id;
 
-    final favorites = _favoritesContainingDoc(ref.read(favoritesProvider));
+    final favorites = _favoritesContainingDoc(
+      ref.read(favoritesProvider).value ?? const [],
+    );
     if (favorites.isEmpty) {
       ref
           .read(snackBarServiceProvider)
@@ -720,17 +729,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  void _handleWebViewSelectionEnd(String text, Rect rect) {
+  void _handleWebViewSelectionEnd(String text, Rect rect, int lineCount) {
     if (!mounted) return;
+    _webViewSelectionText = text;
+    final toolbar = _selectionToolbarEntry;
+    if (toolbar != null && _webViewSelectionLineCount != null) {
+      if (_webViewSelectionLineCount != lineCount) {
+        _webViewSelectionLineCount = lineCount;
+        toolbar.updateVerticalAnchor(rect);
+      }
+      return;
+    }
     _dismissSelectionToolbar();
     if (text.trim().isEmpty) return;
+    _webViewSelectionText = text;
+    _webViewSelectionLineCount = lineCount;
     _selectionToolbarEntry = showReaderContextMenu(
       context: context,
       selectionRect: rect,
       selectedText: text,
-      onHighlight: (color) => _addHighlight(text, color),
+      onHighlight: (color) {
+        final selectedText = _webViewSelectionText;
+        if (selectedText.trim().isNotEmpty) {
+          _addHighlight(selectedText, color);
+        }
+      },
       onCopy: () {
-        Clipboard.setData(ClipboardData(text: text));
+        Clipboard.setData(ClipboardData(text: _webViewSelectionText));
         ref
             .read(snackBarServiceProvider)
             .showResult(
@@ -738,9 +763,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               duration: const Duration(seconds: 1),
             );
       },
-      onAskAi: () => _openAiChat(quote: text.trim()),
+      onAskAi: () => _openAiChat(quote: _webViewSelectionText.trim()),
       onTranslate: () {
-        final trimmed = text.trim();
+        final trimmed = _webViewSelectionText.trim();
         final fullText = _expandToParagraphContext(trimmed);
         // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"弹窗显示
         _webViewReaderKey.currentState?.clearSelection();
@@ -758,10 +783,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         );
       },
       onCreateForNote: () {
-        return _sessionNotifier.addHighlight(text, kDefaultHighlightColor);
+        return _sessionNotifier.addHighlight(
+          _webViewSelectionText,
+          kDefaultHighlightColor,
+        );
       },
       onNoteChanged: _sessionNotifier.updateHighlightNote,
-      onDismiss: () => _selectionToolbarEntry = null,
+      onDismiss: _clearWebViewSelectionToolbarState,
     );
   }
 
@@ -838,7 +866,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _dismissSelectionToolbar() {
     _selectionToolbarEntry?.remove();
+    _clearWebViewSelectionToolbarState();
+  }
+
+  void _clearWebViewSelectionToolbarState() {
     _selectionToolbarEntry = null;
+    _webViewSelectionText = '';
+    _webViewSelectionLineCount = null;
   }
 
   // 旧原生选择基础设施已移除，由 WebView 选择处理替代
@@ -1145,7 +1179,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ReaderSessionState session, {
     bool extracting = false,
   }) {
-    final favorites = ref.watch(favoritesProvider);
+    final favorites = ref.watch(favoritesProvider).value ?? const [];
     final inFavorite = _isInAnyFavorite(favorites);
     final translation = ref.watch(
       documentTranslationProvider(widget.document.id),
@@ -1522,7 +1556,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final cs = theme.colorScheme;
     final palette = resolveReaderPalette(settings.theme, cs);
-    final highlights = ref.watch(highlightProvider(widget.document.id));
+    final highlights =
+        ref.watch(highlightProvider(widget.document.id)).value ??
+        const [];
     final documentDir = DocPaths.docDir(widget.document.id);
 
     // 用实时安全区把 WebView 控件整体内缩——滚动区不覆盖状态栏/小白条。

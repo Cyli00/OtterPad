@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 
 import '../core/storage/secure_credential_vault.dart';
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
 enum BackupRemoteType {
@@ -136,7 +137,7 @@ class BackupS3State {
 }
 
 class BackupRemoteTypeNotifier extends StateNotifier<BackupRemoteType> {
-  static const _remoteTypeKey = 'backup_remote_type';
+  static const _remoteTypeKey = SettingsKeys.backupRemoteType;
 
   BackupRemoteTypeNotifier() : super(_load());
 
@@ -162,11 +163,11 @@ class BackupRemoteTypeNotifier extends StateNotifier<BackupRemoteType> {
 }
 
 class BackupWebDavNotifier extends StateNotifier<BackupWebDavState> {
-  static const _serverUrlKey = 'backup_webdav_server_url';
-  static const _usernameKey = 'backup_webdav_username';
+  static const _serverUrlKey = SettingsKeys.backupWebdavServerUrl;
+  static const _usernameKey = SettingsKeys.backupWebdavUsername;
   static const _passwordKey = 'backup_webdav_password';
-  static const _remoteDirKey = 'backup_webdav_remote_dir';
-  static const _fileNameKey = 'backup_webdav_file_name';
+  static const _remoteDirKey = SettingsKeys.backupWebdavRemoteDir;
+  static const _fileNameKey = SettingsKeys.backupWebdavFileName;
 
   BackupWebDavNotifier() : super(_load());
 
@@ -211,13 +212,13 @@ class BackupWebDavNotifier extends StateNotifier<BackupWebDavState> {
 }
 
 class BackupS3Notifier extends StateNotifier<BackupS3State> {
-  static const _endpointKey = 'backup_s3_endpoint';
-  static const _regionKey = 'backup_s3_region';
-  static const _bucketKey = 'backup_s3_bucket';
-  static const _accessKeyIdKey = 'backup_s3_access_key_id';
+  static const _endpointKey = SettingsKeys.backupS3Endpoint;
+  static const _regionKey = SettingsKeys.backupS3Region;
+  static const _bucketKey = SettingsKeys.backupS3Bucket;
+  static const _accessKeyIdKey = SettingsKeys.backupS3AccessKeyId;
   static const _secretAccessKeyKey = 'backup_s3_secret_access_key';
-  static const _objectKeyKey = 'backup_s3_object_key';
-  static const _usePathStyleKey = 'backup_s3_use_path_style';
+  static const _objectKeyKey = SettingsKeys.backupS3ObjectKey;
+  static const _usePathStyleKey = SettingsKeys.backupS3UsePathStyle;
 
   BackupS3Notifier() : super(_load());
 

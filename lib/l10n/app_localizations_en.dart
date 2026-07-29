@@ -953,13 +953,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageCategoryChat => 'Chat History';
 
   @override
-  String get storageCategoryNotes => 'Notes';
-
-  @override
   String get storageCategoryCache => 'Cache';
 
   @override
   String get storageCategoryLogs => 'Logs';
+
+  @override
+  String get storageCategoryDatabase => 'Database';
 
   @override
   String get storageSpaceSelected => 'Selected';
@@ -2135,8 +2135,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importingFilesBusy => 'Importing files, please wait';
 
   @override
-  String extractingMetadataFile(String fileName) {
-    return 'Extracting metadata: $fileName';
+  String importingFile(String fileName) {
+    return 'Importing: $fileName';
   }
 
   @override
@@ -2250,21 +2250,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String importedWithFullMetadata(String title) {
-    return 'Imported with full metadata: $title';
-  }
-
-  @override
-  String importedPartialMetadata(String title) {
-    return 'Imported $title, only partial metadata';
-  }
-
-  @override
-  String importedNoMetadata(String title) {
-    return 'Imported $title, no metadata recognized';
-  }
-
-  @override
   String importedCountPart(int count) {
     return 'Imported $count';
   }
@@ -2275,18 +2260,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String fullMetadataCountPart(int count) {
-    return 'Full metadata $count';
-  }
-
-  @override
-  String partialMetadataCountPart(int count) {
-    return 'Partial metadata $count';
-  }
-
-  @override
-  String unrecognizedMetadataCountPart(int count) {
-    return 'Unrecognized metadata $count';
+  String importedFile(String title) {
+    return 'Imported: $title';
   }
 
   @override
@@ -2355,6 +2330,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get expertRequiresVision => 'Expert model must support image input';
+
+  @override
+  String get switchedToExpertForImage =>
+      'Fast model doesn\'t support images; switched to expert model';
 
   @override
   String get askAi => 'Ask AI';

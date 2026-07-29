@@ -31,6 +31,10 @@ import '../../../services/translation_service.dart';
 /// 以 fade 转场打开 [FigureViewer]。
 ///
 /// 打开前自动截取当前屏幕的超低分辨率缩略图作为模糊背景。
+///
+/// [figures] 由调用方决定范围：Outline 画廊应传
+/// [FigureManifestEntry.forDisplay] 过滤后的列表；正文内点图可传全量
+/// manifest，以便 visualOnly 仍可单张查看。
 Future<void> showFigureViewer(
   BuildContext context,
   List<FigureManifestEntry> figures, {
@@ -227,8 +231,12 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  _buildCaptionPanel(bottomPadding),
+                  // 无 caption 时不占底部栏（匿名 visualOnly / 空标题）
+                  if (widget.figures[_currentIndex].captionText.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _buildCaptionPanel(bottomPadding),
+                  ] else
+                    SizedBox(height: bottomPadding + 8),
                 ],
               ),
             ),
@@ -613,12 +621,13 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   void _openAskAi(FigureManifestEntry fig) {
     final document = widget.document;
     if (document == null) return;
+    final quote = fig.captionText.trim();
+    if (quote.isEmpty) return;
     Haptics.soft();
 
-    final quote = fig.captionText.trim();
     final args = DocumentChatPageArgs(
       document: document,
-      initialQuote: quote.isEmpty ? null : quote,
+      initialQuote: quote,
       figureImagePath: fig.imagePath,
       onLocateQuote: widget.onLocateQuote,
     );
@@ -673,6 +682,8 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   }
 
   Future<void> _handleTranslate(int idx, FigureManifestEntry fig) async {
+    if (fig.captionText.trim().isEmpty) return;
+
     // 已有翻译：切换显示
     if (_translations.containsKey(idx)) {
       setState(() => _showTranslation[idx] = !(_showTranslation[idx] ?? false));

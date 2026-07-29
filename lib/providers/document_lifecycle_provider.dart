@@ -1,12 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import 'documents_provider.dart';
 import 'favorites_provider.dart';
 import 'history_provider.dart';
-import 'zotero_sync_provider.dart';
 
 /// 文献生命周期入口：页面和任务编排通过这里表达文献写操作。
 ///
@@ -54,12 +52,10 @@ class DocumentLifecycleNotifier {
   }
 
   Future<void> deleteDocument(String documentId) async {
-    await _ref
-        .read(favoritesProvider.notifier)
-        .removeDocumentFromAll(documentId);
-    await GStorage.highlights.delete(documentId);
-    _ref.read(historyProvider.notifier).removeDoc(documentId);
-    await ZoteroSyncStore.removeByDocumentId(documentId);
+    // SQL delete 触发 FK CASCADE（清 highlights/history/favorite_documents/
+    // zotero_items 的 DB 行）+ FTS5 触发器清 documents_fts + FS 清理 +
+    // watch() 流自动刷新各数据 provider；ZoteroSnapshot 经其流自动同步。
+    // 故删除编排塌缩为这一句（ADR-0001 / ADR-0003）。
     await _documents.delete(documentId);
   }
 

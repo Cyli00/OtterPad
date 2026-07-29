@@ -130,7 +130,7 @@ class _Header extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final count = ref.watch(
-      highlightProvider(documentId).select((list) => list.length),
+      highlightProvider(documentId).select((av) => av.value?.length ?? 0),
     );
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -212,7 +212,9 @@ class _NotesListState extends ConsumerState<_NotesList> {
 
   @override
   Widget build(BuildContext context) {
-    final highlights = ref.watch(highlightProvider(widget.documentId));
+    final highlights =
+        ref.watch(highlightProvider(widget.documentId)).value ??
+        const [];
     if (highlights.isEmpty) {
       final theme = Theme.of(context);
       final cs = theme.colorScheme;

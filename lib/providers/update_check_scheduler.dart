@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/app_logger.dart';
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../router/app_router.dart';
 import '../services/update_flow.dart';
@@ -23,7 +24,7 @@ class UpdateCheckScheduler {
 
   Future<void> _tick() async {
     final autoCheck =
-        GStorage.setting.get('general_auto_check_update') as bool? ?? true;
+        GStorage.setting.get(SettingsKeys.autoCheckUpdate) as bool? ?? true;
     if (!autoCheck) return;
 
     UpdateInfo info;

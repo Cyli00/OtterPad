@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/secure_credential_vault.dart';
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../services/agent_model_capability.dart';
+import '../services/model_capability_store.dart';
 
 enum AgentApiProvider { openai, anthropic, gemini, openAICompatible }
 
@@ -331,10 +333,14 @@ class AgentProviderInstance {
   AgentModelParams paramsFor(String modelId) =>
       modelParams[modelId] ?? const AgentModelParams();
 
-  /// 取模型能力：优先用户持久化的覆盖值，缺失则按 id 即时推断。
-  AgentModelCapability capabilityFor(String modelId) =>
-      modelCaps[modelId] ??
-      AgentModelCapability.infer(provider: protocol, modelId: modelId);
+  /// 取模型能力，优先级：用户手动覆写 > 远程能力表(geosite 订阅) > 正则推断。
+  AgentModelCapability capabilityFor(String modelId) {
+    final manual = modelCaps[modelId];
+    if (manual != null) return manual;
+    final remote = ModelCapabilityStore.instance.lookup(modelId);
+    if (remote != null) return remote;
+    return AgentModelCapability.infer(provider: protocol, modelId: modelId);
+  }
 }
 
 /// 单实例的「已解析视图」：实例自身字段 + 三个全局角色中**指向本实例**的那部分。
@@ -453,23 +459,23 @@ const ({String? id, String? modelId}) _noRole = (id: null, modelId: null);
 
 class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   // per-instance 存储键，均以实例 id 结尾。
-  static String _nameKey(String id) => 'agent_api_name_$id';
-  static String _protocolKey(String id) => 'agent_api_protocol_$id';
-  static String _baseUrlKey(String id) => 'agent_api_base_url_$id';
+  static String _nameKey(String id) => SettingsKeys.agentApiName(id);
+  static String _protocolKey(String id) => SettingsKeys.agentApiProtocol(id);
+  static String _baseUrlKey(String id) => SettingsKeys.agentApiBaseUrl(id);
   static String _apiKeyKey(String id) => 'agent_api_key_$id';
-  static String _modelsKey(String id) => 'agent_api_models_$id';
-  static String _modelParamsKey(String id) => 'agent_api_model_params_$id';
-  static String _modelCapsKey(String id) => 'agent_api_model_caps_$id';
-  static String _modelToolsKey(String id) => 'agent_api_model_tools_$id';
+  static String _modelsKey(String id) => SettingsKeys.agentApiModels(id);
+  static String _modelParamsKey(String id) => SettingsKeys.agentApiModelParams(id);
+  static String _modelCapsKey(String id) => SettingsKeys.agentApiModelCaps(id);
+  static String _modelToolsKey(String id) => SettingsKeys.agentApiModelTools(id);
 
   /// 有序实例 id 列表——定义「有哪些实例、什么顺序」。
-  static const _idsKey = 'agent_api_provider_ids';
+  static const _idsKey = SettingsKeys.agentApiProviderIds;
 
   // 专家 / 快速 / 生图模型角色**全局唯一**；存储为 "instanceId:modelId"。
   // 空字符串或缺失均视为未设置。
-  static const _globalDefaultKey = 'agent_api_default_model_global';
-  static const _globalFastKey = 'agent_api_fast_model_global';
-  static const _globalImageKey = 'agent_api_image_model_global';
+  static const _globalDefaultKey = SettingsKeys.agentApiDefaultModelGlobal;
+  static const _globalFastKey = SettingsKeys.agentApiFastModelGlobal;
+  static const _globalImageKey = SettingsKeys.agentApiImageModelGlobal;
 
   /// 内置服务商——永远常驻列表、不可删除、名字锁定。前三家直连各自协议，
   /// id 固定为协议名（兼容历史数据）；其余为主流 OpenAI 兼容厂商预设
@@ -571,8 +577,46 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
         <String>[];
   }
 
+  /// 一次性迁移：清除旧 addModel 写入的「全默认值」手动覆写（imageInput/
+  /// imageOutput/embedding/tool/reasoning/webSearch 全 false）。这种覆写会把
+  /// capabilityFor 锁死在全 false、屏蔽远程表（见 addModel 注释）。迁移后
+  /// capabilityFor 重新走远程表 > 正则兜底。用户 deliberate 的手改通常含某
+  /// 能力 true，不会被误清。idempotent：标志位 _kCapsMigrationV1 守护。
+  static const _kCapsMigrationV1 = 'agent_api_caps_migration_v1';
+
+  static void _migrateCapsV1() {
+    final box = GStorage.setting;
+    if (box.get(_kCapsMigrationV1) == true) return;
+    final ids = <String>[
+      for (final p in _builtinPresets) p.id,
+      ..._loadIds(),
+    ];
+    for (final id in ids) {
+      final key = _modelCapsKey(id);
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      final caps = Map<String, dynamic>.from(raw);
+      caps.removeWhere((_, v) {
+        if (v is! Map) return false;
+        return (v['imageInput'] as bool? ?? false) == false &&
+            (v['imageOutput'] as bool? ?? false) == false &&
+            (v['embedding'] as bool? ?? false) == false &&
+            (v['tool'] as bool? ?? false) == false &&
+            (v['reasoning'] as bool? ?? false) == false &&
+            (v['webSearch'] as bool? ?? false) == false;
+      });
+      if (caps.isEmpty) {
+        box.delete(key);
+      } else {
+        box.put(key, caps);
+      }
+    }
+    box.put(_kCapsMigrationV1, true);
+  }
+
   /// 列表 = 内置预设（恒在）+ _idsKey 里的自定义实例（按序）。
   static AgentProvidersState _load() {
+    _migrateCapsV1();
     final box = GStorage.setting;
     final instances = <AgentProviderInstance>[
       for (final p in _builtinPresets)
@@ -788,18 +832,10 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
         : [...inst.models, modelId];
 
     await box.put(_modelsKey(id), updated);
-    // 新增模型时推断并持久化能力（已存在则不动，保留用户可能的手改）
-    if (!inst.models.contains(modelId)) {
-      final caps = Map<String, AgentModelCapability>.from(inst.modelCaps);
-      caps[modelId] = AgentModelCapability.infer(
-        provider: inst.protocol,
-        modelId: modelId,
-      );
-      await box.put(
-        _modelCapsKey(id),
-        caps.map((k, v) => MapEntry(k, v.toJson())),
-      );
-    }
+    // 不在此持久化推断能力：旧逻辑把推断结果当「手动覆写」写进 modelCaps，
+    // 而 capabilityFor 中手动覆写优先级最高 → 远程表日更被永久屏蔽（正是
+    // 「卡片全无能力 / 专家模型不显示」回归根因）。现在留空，让 capabilityFor
+    // 实时走「手动覆写(无) > 远程表 > 正则兜底」。用户手改仍经 setModelCapability。
     if (setAsDefault) {
       await box.put(_globalDefaultKey, _serializeRole(id, modelId));
     }
@@ -1094,7 +1130,7 @@ class DocExtractApiState {
 
 class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
   static const _apiKeyKey = 'doc_extract_api_key';
-  static const _prefix = 'doc_extract_';
+  static const _prefix = SettingsKeys.docExtractPrefix;
 
   DocExtractApiNotifier() : super(_load());
 
@@ -1201,20 +1237,7 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
   /// 重置除 API Key 外的所有提取配置为默认值（清除持久化键，state 回落到默认构造）。
   Future<void> resetExceptApiKey() async {
     final box = GStorage.setting;
-    const fields = [
-      'useChartRecognition',
-      'useDocOrientationClassify',
-      'useDocUnwarping',
-      'useSealRecognition',
-      'useOcrForImageBlock',
-      'restructurePages',
-      'layoutNms',
-      'mergeTables',
-      'layoutShapeMode',
-      'repetitionPenalty',
-      'temperature',
-      'markdownIgnoreLabels',
-    ];
+    const fields = SettingsKeys.docExtractFields;
     for (final f in fields) {
       await box.delete('$_prefix$f');
     }

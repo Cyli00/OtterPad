@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/l10n.dart';
 import '../../services/haptics.dart';
-import '../../providers/documents_provider.dart';
+import '../../providers/document_search_provider.dart';
 import 'widgets/doc_card_actions.dart';
 import 'widgets/doc_list_card.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -41,11 +41,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    // 搜索结果只覆盖有文件的文献——无 PDF 条目搜出来也打不开。
-    final docs = ref.watch(validDocsProvider);
-    final filtered = _query.isEmpty
-        ? []
-        : docs.where((d) => d.matchesQuery(_query)).toList();
+    final l10n = context.l10n;
+    // FTS5 检索（异步，ADR-0001：数据 provider 均为 DB 直读异步视图）。
+    final asyncDocs = ref.watch(documentSearchProvider(_query));
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -71,7 +69,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       focusNode: _focusNode,
                       onChanged: (v) => setState(() => _query = v.trim()),
                       decoration: InputDecoration(
-                        hintText: context.l10n.searchDocumentsHintDesktop,
+                        hintText: l10n.searchDocumentsHintDesktop,
                         filled: true,
                         fillColor: colorScheme.surfaceContainerHighest
                             .withAlpha(150),
@@ -120,7 +118,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            context.l10n.enterKeywordToSearch,
+                            l10n.enterKeywordToSearch,
                             style: theme.textTheme.bodyLarge?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -128,32 +126,46 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                         ],
                       ),
                     )
-                  : filtered.isEmpty
-                  ? Center(
-                      child: Text(
-                        context.l10n.noDocumentsFound,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                  : asyncDocs.when(
+                      loading: () => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                      error: (error, _) => Center(
+                        child: Text(
+                          '$error',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.error,
+                          ),
                         ),
                       ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final doc = filtered[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: DocListCard(
-                            doc: doc,
-                            onTap: () => DocCardActions.openReader(
-                              context,
-                              ref,
-                              doc,
+                      data: (docs) => docs.isEmpty
+                          ? Center(
+                              child: Text(
+                                l10n.noDocumentsFound,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                              itemCount: docs.length,
+                              itemBuilder: (context, index) {
+                                final doc = docs[index];
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: DocListCard(
+                                    doc: doc,
+                                    onTap: () => DocCardActions.openReader(
+                                      context,
+                                      ref,
+                                      doc,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                          ),
-                        );
-                      },
                     ),
             ),
           ],

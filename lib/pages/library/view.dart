@@ -135,7 +135,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     final selection = ref.read(selectionProvider);
     if (selection.selectedIds.isEmpty) return;
 
-    final favorites = ref.read(favoritesProvider);
+    final favorites = ref.read(favoritesProvider).value ?? const [];
     final selectedIds = selection.selectedIds.toSet();
 
     final result = await showPickFavoriteSheet(

@@ -28,9 +28,10 @@ dependencies:
   pdfrx: ^2.2.24
 
 
-  # 键值存储（设置/偏好）
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
+  # 关系数据库（Drift + sqlite3 v3 Dart Hooks + 中文/拼音 FTS5）
+  drift: ^2.34.2
+  sqlite3: ^3.5.0
+  sqlite3_simple: ^2.2.0
 
   # 凭据安全存储（API key / secret / 密码），后端走各平台 Keystore/Keychain/DPAPI
   flutter_secure_storage: ^10.3.1
@@ -114,6 +115,7 @@ dev_dependencies:
   # 代码生成
   build_runner: ^2.4.0
   json_serializable: ^6.8.0
+  drift_dev: 2.34.0  # 钉 <2.34.1+1：之后 require analyzer 13，与本机 flutter_test/test 冲突
 
 
   # 图标生成

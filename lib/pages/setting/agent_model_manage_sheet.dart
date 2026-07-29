@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
+import '../../services/model_capability_store.dart';
 import '../../services/haptics.dart';
 import '../../widgets/tactile_press.dart';
 import 'agent_add_model_dialog.dart';
@@ -128,25 +129,25 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     }
   }
 
+  /// 能力判定走远程表优先（modelcaps geosite 订阅），未命中回退正则推断。
+  AgentModelCapability _capOf(String id) =>
+      ModelCapabilityStore.instance.lookup(id) ??
+      AgentModelCapability.infer(provider: widget.providerType, modelId: id);
+
   List<String> get _filtered {
     if (_models == null) return [];
     var result = _models!;
     if (_imageGenOnly) {
       result = result
           .where(
-            (m) => AgentModelCapability.isImageGenerationModel(
-              modelId: m,
-            ),
+            (m) => ModelCapabilityStore.instance.isImageGenerationModel(m),
           )
           .toList();
     }
     if (_multimodalOnly) {
       result = result
           .where(
-            (m) => AgentModelCapability.infer(
-              provider: widget.providerType,
-              modelId: m,
-            ).imageInput,
+            (m) => _capOf(m).imageInput,
           )
           .toList();
     }
@@ -158,9 +159,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   bool _isAdded(String id) => _localAdded.contains(id);
 
   Future<void> _showAddConfirm(String id) async {
-    final isImageModel = AgentModelCapability.isImageGenerationModel(
-      modelId: id,
-    );
+    final isImageModel = ModelCapabilityStore.instance.isImageGenerationModel(id);
 
     if (isImageModel) {
       widget.onAdd(id, setAsImage: true);
@@ -171,10 +170,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       return;
     }
 
-    final cap = AgentModelCapability.infer(
-      provider: widget.providerType,
-      modelId: id,
-    );
+    final cap = _capOf(id);
     final choice = await showAgentAddModelDialog(
       context: context,
       modelId: id,
@@ -513,13 +509,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     final added = _isAdded(id);
     final isDefault = _localDefault == id;
     final isFast = _localFast == id;
-    final isImageModel = AgentModelCapability.isImageGenerationModel(
-      modelId: id,
-    );
-    final cap = AgentModelCapability.infer(
-      provider: widget.providerType,
-      modelId: id,
-    );
+    final cap = _capOf(id);
 
     return Material(
       color: added ? cs.primaryContainer.withAlpha(60) : Colors.transparent,
@@ -583,14 +573,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                 label: context.l10n.fast,
                 bg: cs.tertiaryContainer,
                 fg: cs.onTertiaryContainer,
-              ),
-            ],
-            if (isImageModel) ...[
-              const SizedBox(width: 4),
-              RoleBadge(
-                label: context.l10n.imageGen,
-                bg: cs.secondaryContainer,
-                fg: cs.onSecondaryContainer,
               ),
             ],
             const SizedBox(width: 8),

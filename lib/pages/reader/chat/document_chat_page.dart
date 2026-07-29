@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
+import '../../../core/storage/settings_keys.dart';
 import '../../../core/storage/storage.dart';
 import '../../../data/models/book/document.dart';
 import '../../../data/models/chat/chat_session.dart';
@@ -87,7 +88,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   bool _webSearch = false;
 
   /// 流式输出开关（全局持久化偏好，默认开）。关闭时回答一次性整体呈现。
-  static const _kChatStreamKey = 'chat_stream_enabled';
+  static const _kChatStreamKey = SettingsKeys.chatStreamEnabled;
   late bool _stream = GStorage.setting.get(_kChatStreamKey) as bool? ?? true;
 
   String get _documentId => widget.args.document.id;
@@ -114,11 +115,35 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     super.dispose();
   }
 
+  /// 发图前角色解析：带图且当前 role 模型不支持图片 → 切专家 + 提示；
+  /// 专家也不支持 → 提示 expertRequiresVision 并返回 null（中止）。无图或
+  /// 当前模型已支持则原样返回 _role。切回快速由用户手动操作。
+  ChatModelRole? _ensureRoleForFigure() {
+    if (_figureImagePath == null) return _role;
+    if (_role == ChatModelRole.expert) return _role;
+    final notifier = ref.read(documentChatProvider(_documentId).notifier);
+    if (notifier.supportsImages(_role)) return _role;
+    if (!notifier.supportsImages(ChatModelRole.expert)) {
+      ref.read(snackBarServiceProvider).showResult(
+        message: context.l10n.expertRequiresVision,
+      );
+      return null;
+    }
+    setState(() => _role = ChatModelRole.expert);
+    ref.read(snackBarServiceProvider).showResult(
+      message: context.l10n.switchedToExpertForImage,
+    );
+    return ChatModelRole.expert;
+  }
+
   void _send() {
     final chat = ref.read(documentChatProvider(_documentId));
     final text = _inputController.text.trim();
     if (text.isEmpty || chat.sending) return;
     Haptics.soft();
+
+    final role = _ensureRoleForFigure();
+    if (role == null) return;
 
     final editIdx = _editingIndex;
     if (editIdx != null) {
@@ -127,7 +152,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           .resendFrom(
             keepCount: editIdx,
             text: text,
-            role: _role,
+            role: role,
             quotedText: _quote,
             figureImagePath: _figureImagePath,
             thinkingOverride: _thinking,
@@ -139,7 +164,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           .read(documentChatProvider(_documentId).notifier)
           .send(
             text: text,
-            role: _role,
+            role: role,
             quotedText: _quote,
             figureImagePath: _figureImagePath,
             thinkingOverride: _thinking,
@@ -208,7 +233,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
 
   /// 「不再提醒」的持久化 key——MiMo 联网搜索插件提示，全局一次性偏好。
   static const _kMimoSearchHintDismissedKey =
-      'mimo_search_plugin_hint_dismissed';
+      SettingsKeys.mimoSearchPluginHintDismissed;
 
   static const _kMimoPluginConsoleUrl =
       'https://platform.xiaomimimo.com/console/plugin';
@@ -297,7 +322,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   }
 
   /// 「不再提醒」的持久化 key——全局一次性偏好，不分文献。
-  static const _kNewChatHintDismissedKey = 'chat_new_session_hint_dismissed';
+  static const _kNewChatHintDismissedKey = SettingsKeys.chatNewSessionHintDismissed;
 
   /// 新建会话：首次（未勾选不再提醒）先确认「新会话仍基于当前文献」，
   /// 避免用户误以为开新会话 = 脱离文献的自由聊天。
@@ -852,12 +877,14 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       }
     }
     if (userMsg == null) return;
+    final role = _ensureRoleForFigure();
+    if (role == null) return;
     ref
         .read(documentChatProvider(_documentId).notifier)
         .resendFrom(
           keepCount: assistantIndex,
           text: userMsg.content,
-          role: _role,
+          role: role,
           quotedText: userMsg.quotedText,
           figureImagePath: _figureImagePath,
           thinkingOverride: _thinking,

@@ -442,17 +442,10 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
   Highlight? addHighlight(String text, String color) {
     final trimmed = text.trim();
     if (trimmed.isEmpty || args.documentId.isEmpty) return null;
-
-    final before = _ref.read(highlightProvider(args.documentId));
-    final beforeIds = before.map((h) => h.id).toSet();
-    _ref
+    // 非乐观（ADR-0001）：add 返回它构造的 Highlight，不靠流即时反映做 diff。
+    return _ref
         .read(highlightProvider(args.documentId).notifier)
         .add(trimmed, color: color);
-    final after = _ref.read(highlightProvider(args.documentId));
-    for (final highlight in after.reversed) {
-      if (!beforeIds.contains(highlight.id)) return highlight;
-    }
-    return null;
   }
 
   void removeHighlight(String highlightId) {

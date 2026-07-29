@@ -1,8 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 
+import '../core/storage/app_database.dart';
 import '../core/storage/storage.dart';
 import '../providers/api_provider.dart';
 import '../providers/translation_config_provider.dart';
@@ -10,35 +12,10 @@ import 'agent_chat_service.dart';
 import 'prompts.dart';
 import 'translation_protected_spans.dart';
 
-/// 翻译缓存条目
-class _CacheEntry {
-  final String translation;
-  final int timestampMs;
-
-  _CacheEntry({required this.translation, required this.timestampMs});
-
-  Map<String, dynamic> toJson() => {
-    'translation': translation,
-    'ts': timestampMs,
-  };
-
-  factory _CacheEntry.fromJson(Map<String, dynamic> json) => _CacheEntry(
-    translation: json['translation'] as String? ?? '',
-    timestampMs: json['ts'] as int? ?? 0,
-  );
-
-  bool get isExpired {
-    const maxAge = Duration(days: 7);
-    return DateTime.now().millisecondsSinceEpoch - timestampMs >
-        maxAge.inMilliseconds;
-  }
-}
-
-const _cacheBoxKey = 'translation_cache';
-
 /// 轻量翻译服务——使用用户已配置的 Agent API（快速模型优先）完成文本翻译。
 ///
-/// 缓存策略：以原文 SHA 为 key 存入 GStorage.setting，保留 7 天。
+/// 缓存策略：以 [TranslationService._buildCacheKey] 为 key 落 Drift `translations`
+/// 表，保留 7 天。Drift 行级读写替代旧 GStorage.setting 全量 JSON 序列化。
 class TranslationService {
   TranslationService._();
 
@@ -64,7 +41,7 @@ class TranslationService {
     // ── 查缓存 ──
     final cacheKey = _buildCacheKey(text, translationConfig.targetLanguage);
     if (useCache) {
-      final cached = _getCache(cacheKey);
+      final cached = await _getCache(cacheKey);
       if (cached != null) return cached;
     }
 
@@ -116,7 +93,7 @@ class TranslationService {
     );
 
     // ── 写缓存 ──
-    _putCache(cacheKey, result);
+    await _putCache(cacheKey, result);
 
     return result;
   }
@@ -144,7 +121,7 @@ class TranslationService {
 
     final cacheKey = _buildCacheKey(text, translationConfig.targetLanguage);
     if (useCache) {
-      final cached = _getCache(cacheKey);
+      final cached = await _getCache(cacheKey);
       if (cached != null) {
         yield cached;
         return;
@@ -228,7 +205,7 @@ class TranslationService {
 
     // 仅在确认无错误时写缓存——残缺译文不得持久化。
     if (useCache && streamErr == null && accumulated.isNotEmpty) {
-      _putCache(cacheKey, protected.restore(accumulated));
+      await _putCache(cacheKey, protected.restore(accumulated));
     }
   }
 
@@ -325,65 +302,57 @@ class TranslationService {
   }
 
   // ── 缓存 ──────────────────────────────────────────────────────────────────
+  // 落 Drift translations 表：key = _buildCacheKey（tr_<lang>_<hashCode>），
+  // createdAt 驱动 7 天 TTL。行级读写替代旧 GStorage.setting 全量 JSON
+  // 序列化——旧实现的内存 map + 2s 防抖落盘绕路已无必要（Drift 索引插入
+  // 不触发主 isolate 反复序列化，8 worker 高频 put 不再掉帧）。
+
+  static const _cacheTtl = Duration(days: 7);
 
   static String _buildCacheKey(String text, String targetLang) {
-    // 简单 hash：取文本前 200 字 + 目标语言
+    // 简单 hash：取文本 + 目标语言。hashCode 跨 Dart 版本不稳定，但同 build
+    // 内稳定——缓存可重建，跨版本升级 miss 重译可接受（与旧实现行为一致）。
     final normalized = text.trim();
     return 'tr_${targetLang}_${normalized.hashCode}';
   }
 
-  // ── 缓存：内存单一真值 + 防抖落盘 ──
-  //
-  // 旧实现每次 get/put 都对整个缓存 map（可达数 MB、上千条）全量
-  // jsonDecode/jsonEncode——文档翻译 8 worker 高频 put 时主 isolate 反复
-  // 同步序列化，表现为翻译进行中 UI 掉帧。改为：首次访问 decode 一次进
-  // 内存，读写全打内存 map（O(1)），落盘走 2s 防抖批量。进程被杀最多丢
-  // 最近 2s 的新缓存条目——缓存可重建，可接受。过期清理也移到落盘时做。
-  static Map<String, dynamic>? _cacheMap;
-  static Timer? _cacheSaveDebounce;
-
-  static Map<String, dynamic> _loadCacheMap() {
-    final loaded = _cacheMap;
-    if (loaded != null) return loaded;
-    Map<String, dynamic> map = {};
-    final raw = GStorage.setting.get(_cacheBoxKey);
-    if (raw is String) {
-      try {
-        map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-      } catch (_) {}
-    }
-    return _cacheMap = map;
+  /// 命中且未过 7 天 TTL 返回译文，否则 null。过期行不在此清，交给写路径顺带清理。
+  static Future<String?> _getCache(String key) async {
+    final row = await (GStorage.db.select(GStorage.db.translations)
+          ..where((t) => t.cacheKey.equals(key)))
+        .getSingleOrNull();
+    if (row == null) return null;
+    final cutoff =
+        DateTime.now().millisecondsSinceEpoch - _cacheTtl.inMilliseconds;
+    if (row.createdAt <= cutoff) return null;
+    return row.translation;
   }
 
-  static String? _getCache(String key) {
-    final entryRaw = _loadCacheMap()[key];
-    if (entryRaw is Map<String, dynamic>) {
-      final entry = _CacheEntry.fromJson(entryRaw);
-      if (!entry.isExpired) return entry.translation;
-    }
-    return null;
+  /// 写入（PK 冲突即覆盖）并顺带清掉过期行，替代旧的「落盘时清」。
+  static Future<void> _putCache(String key, String translation) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await GStorage.db.into(GStorage.db.translations).insertOnConflictUpdate(
+      TranslationsCompanion(
+        cacheKey: Value(key),
+        translation: Value(translation),
+        createdAt: Value(now),
+      ),
+    );
+    final cutoff = now - _cacheTtl.inMilliseconds;
+    await (GStorage.db.delete(GStorage.db.translations)
+          ..where((t) => t.createdAt.isSmallerThanValue(cutoff)))
+        .go();
   }
 
-  static void _putCache(String key, String translation) {
-    _loadCacheMap()[key] = _CacheEntry(
-      translation: translation,
-      timestampMs: DateTime.now().millisecondsSinceEpoch,
-    ).toJson();
-    _scheduleCacheSave();
-  }
+  // ── 测试缝（@visibleForTesting）：脱离 LLM 单测 Drift 缓存 ──
+  @visibleForTesting
+  static String debugBuildCacheKey(String text, String targetLang) =>
+      _buildCacheKey(text, targetLang);
 
-  static void _scheduleCacheSave() {
-    _cacheSaveDebounce?.cancel();
-    _cacheSaveDebounce = Timer(const Duration(seconds: 2), () {
-      final map = _cacheMap;
-      if (map == null) return;
-      map.removeWhere((_, v) {
-        if (v is Map<String, dynamic>) {
-          return _CacheEntry.fromJson(v).isExpired;
-        }
-        return true;
-      });
-      GStorage.setting.put(_cacheBoxKey, jsonEncode(map));
-    });
-  }
+  @visibleForTesting
+  static Future<String?> debugGetCacheByKey(String key) => _getCache(key);
+
+  @visibleForTesting
+  static Future<void> debugPutCacheByKey(String key, String translation) =>
+      _putCache(key, translation);
 }

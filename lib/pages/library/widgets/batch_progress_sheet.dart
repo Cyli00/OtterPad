@@ -287,7 +287,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                     documentId: s.documentId,
                   );
                   final task = ref.read(documentTaskProvider)[key];
-                  return JobStatusTile(
+                  return _JobStatusTile(
                     title: s.title,
                     state: s.state,
                     extractedPages: s.extractedPages,
@@ -356,7 +356,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
 
 // ─── 单个 Job 状态行 ──────────────────────────────────────────────────────────
 
-class JobStatusTile extends StatelessWidget {
+class _JobStatusTile extends StatelessWidget {
   final String title;
   final BatchJobState state;
   final int extractedPages;
@@ -364,8 +364,7 @@ class JobStatusTile extends StatelessWidget {
   final String? error;
   final String? statusText;
 
-  const JobStatusTile({
-    super.key,
+  const _JobStatusTile({
     required this.title,
     required this.state,
     this.extractedPages = 0,

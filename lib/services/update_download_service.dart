@@ -10,7 +10,7 @@ import 'update_service.dart';
 
 /// 下载 APK 并触发系统安装界面。
 ///
-/// 存放路径 `<tempDir>/OtterPad/updates/` 落在 `StorageCleanupService`
+/// 存放路径 `<tempDir>/OtterPad/updates/` 落在 `StorageUsageService`
 /// 现有"临时文件"缓存条目（`<tempDir>/OtterPad`）下，随现有清理逻辑一并回收，
 /// 不需要新增追踪项。
 class UpdateDownloadService {

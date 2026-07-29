@@ -27,12 +27,12 @@ InlineSpan buildNrSelectableMathSpan({
           trailingText: trailingText,
         ),
       ),
-      nrInvisibleSourceSpan(source, style),
+      _nrInvisibleSourceSpan(source, style),
     ],
   );
 }
 
-TextSpan nrInvisibleSourceSpan(String source, TextStyle baseStyle) {
+TextSpan _nrInvisibleSourceSpan(String source, TextStyle baseStyle) {
   return TextSpan(
     text: source,
     style: baseStyle.copyWith(
@@ -101,19 +101,26 @@ class _SelectableMath extends StatelessWidget {
       ),
     );
 
-    final body = trailingText == null || trailingText!.isEmpty
+    // 内联公式自然宽度可能超过行宽（AI 回复里的长公式）。flutter_math_fork 的
+    // RenderLine 在 maxWidth 约束下内容超宽会溢出（黄黑条纹）。FittedBox.scaleDown
+    // 给子节点无限约束让公式按自然尺寸排版（不溢出），再经 paint transform 缩放到
+    // 可用宽度。display 模式外层 SingleChildScrollView 给 maxWidth=∞，故不缩放、
+    // 保持原大小横向滚动。
+    final Widget inlineChild = trailingText == null || trailingText!.isEmpty
         ? math
-        : FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                math,
-                Text(trailingText!, style: style),
-              ],
-            ),
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              math,
+              Text(trailingText!, style: style),
+            ],
           );
+
+    final body = FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: inlineChild,
+    );
 
     final selectedBody = DecoratedBox(
       decoration: BoxDecoration(

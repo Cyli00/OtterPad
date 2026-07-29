@@ -130,6 +130,8 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return Symbols.cached_rounded;
       case StorageGroupKey.logs:
         return Symbols.receipt_long_rounded;
+      case StorageGroupKey.database:
+        return Symbols.database_rounded;
     }
   }
 
@@ -144,6 +146,8 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return l10n.storageCategoryCache;
       case StorageGroupKey.logs:
         return l10n.storageCategoryLogs;
+      case StorageGroupKey.database:
+        return l10n.storageCategoryDatabase;
     }
   }
 
@@ -157,6 +161,8 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return cs.error;
       case StorageGroupKey.logs:
         return cs.outline;
+      case StorageGroupKey.database:
+        return cs.tertiary;
     }
   }
 
@@ -167,8 +173,6 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return l10n.storageCategoryFiles;
       case 'images':
         return l10n.storageCategoryImages;
-      case 'notes':
-        return l10n.storageCategoryNotes;
       default:
         return id;
     }
@@ -180,8 +184,6 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         return cs.primary;
       case 'images':
         return cs.tertiary;
-      case 'notes':
-        return cs.secondary;
       default:
         return cs.outline;
     }

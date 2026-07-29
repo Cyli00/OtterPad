@@ -3,10 +3,11 @@ import 'dart:ui';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
 class LocaleNotifier extends StateNotifier<Locale?> {
-  static const _kLocale = 'app_locale';
+  static const _kLocale = SettingsKeys.locale;
 
   LocaleNotifier() : super(_load());
 
