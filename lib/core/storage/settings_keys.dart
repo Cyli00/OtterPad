@@ -48,7 +48,6 @@ class SettingsKeys {
   static const translationTemperature = 'translation_config_temperature';
   static const translationDisplayStyle = 'translation_config_display_style';
   static const translationIgnoreSections = 'translation_config_ignore_sections';
-  static const translationCache = 'translation_cache';
 
   // ── 图片生成 ──
   static const imageAspectRatio = 'image_generation_aspect_ratio';

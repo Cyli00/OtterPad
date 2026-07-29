@@ -67,3 +67,14 @@ CREATE TABLE meta (
   metaKey  TEXT NOT NULL PRIMARY KEY,
   value    TEXT NOT NULL               -- zotero_library_version 等 app 级标量
 );
+
+-- 翻译缓存（选区/段落/figure caption 翻译共用）。
+-- cacheKey 由 TranslationService._buildCacheKey 产出（tr_<lang>_<hashCode>），
+-- targetLang 已编码进 key，不单列。createdAt 驱动 7 天 TTL 过滤。
+-- 全局缓存，不绑 documents（不 CASCADE）——文档删除不清理，与旧行为一致。
+CREATE TABLE translations (
+  cacheKey    TEXT NOT NULL PRIMARY KEY,
+  translation TEXT NOT NULL,
+  createdAt   INTEGER NOT NULL        -- epoch ms
+);
+CREATE INDEX idx_translations_createdAt ON translations(createdAt);

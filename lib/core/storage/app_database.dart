@@ -19,7 +19,7 @@ class AppDatabase extends _$AppDatabase {
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
-          // 8 张普通表 + 索引（来自 tables.drift）。FTS5 虚表与触发器在
+          // 9 张普通表 + 索引（来自 tables.drift）。FTS5 虚表与触发器在
           // [ensureFts5] 里建——它依赖 simple 扩展（simple tokenizer = jieba 分词 + 拼音），与 Drift 迁移
           // 解耦，使数据库无扩展也能打开（测试友好 + 扩展加载失败不致开库崩溃）。
           await m.createAll();

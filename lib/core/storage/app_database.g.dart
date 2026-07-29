@@ -2589,6 +2589,282 @@ class MetaCompanion extends UpdateCompanion<MetaData> {
   }
 }
 
+class Translations extends Table with TableInfo<Translations, Translation> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  Translations(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _cacheKeyMeta = const VerificationMeta(
+    'cacheKey',
+  );
+  late final GeneratedColumn<String> cacheKey = GeneratedColumn<String>(
+    'cacheKey',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL PRIMARY KEY',
+  );
+  static const VerificationMeta _translationMeta = const VerificationMeta(
+    'translation',
+  );
+  late final GeneratedColumn<String> translation = GeneratedColumn<String>(
+    'translation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL',
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'createdAt',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    $customConstraints: 'NOT NULL',
+  );
+  @override
+  List<GeneratedColumn> get $columns => [cacheKey, translation, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'translations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Translation> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('cacheKey')) {
+      context.handle(
+        _cacheKeyMeta,
+        cacheKey.isAcceptableOrUnknown(data['cacheKey']!, _cacheKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cacheKeyMeta);
+    }
+    if (data.containsKey('translation')) {
+      context.handle(
+        _translationMeta,
+        translation.isAcceptableOrUnknown(
+          data['translation']!,
+          _translationMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_translationMeta);
+    }
+    if (data.containsKey('createdAt')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['createdAt']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {cacheKey};
+  @override
+  Translation map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Translation(
+      cacheKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cacheKey'],
+      )!,
+      translation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}translation'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}createdAt'],
+      )!,
+    );
+  }
+
+  @override
+  Translations createAlias(String alias) {
+    return Translations(attachedDatabase, alias);
+  }
+
+  @override
+  bool get dontWriteConstraints => true;
+}
+
+class Translation extends DataClass implements Insertable<Translation> {
+  final String cacheKey;
+  final String translation;
+  final int createdAt;
+  const Translation({
+    required this.cacheKey,
+    required this.translation,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['cacheKey'] = Variable<String>(cacheKey);
+    map['translation'] = Variable<String>(translation);
+    map['createdAt'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  TranslationsCompanion toCompanion(bool nullToAbsent) {
+    return TranslationsCompanion(
+      cacheKey: Value(cacheKey),
+      translation: Value(translation),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Translation.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Translation(
+      cacheKey: serializer.fromJson<String>(json['cacheKey']),
+      translation: serializer.fromJson<String>(json['translation']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'cacheKey': serializer.toJson<String>(cacheKey),
+      'translation': serializer.toJson<String>(translation),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  Translation copyWith({
+    String? cacheKey,
+    String? translation,
+    int? createdAt,
+  }) => Translation(
+    cacheKey: cacheKey ?? this.cacheKey,
+    translation: translation ?? this.translation,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Translation copyWithCompanion(TranslationsCompanion data) {
+    return Translation(
+      cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
+      translation: data.translation.present
+          ? data.translation.value
+          : this.translation,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Translation(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('translation: $translation, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(cacheKey, translation, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Translation &&
+          other.cacheKey == this.cacheKey &&
+          other.translation == this.translation &&
+          other.createdAt == this.createdAt);
+}
+
+class TranslationsCompanion extends UpdateCompanion<Translation> {
+  final Value<String> cacheKey;
+  final Value<String> translation;
+  final Value<int> createdAt;
+  final Value<int> rowid;
+  const TranslationsCompanion({
+    this.cacheKey = const Value.absent(),
+    this.translation = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TranslationsCompanion.insert({
+    required String cacheKey,
+    required String translation,
+    required int createdAt,
+    this.rowid = const Value.absent(),
+  }) : cacheKey = Value(cacheKey),
+       translation = Value(translation),
+       createdAt = Value(createdAt);
+  static Insertable<Translation> custom({
+    Expression<String>? cacheKey,
+    Expression<String>? translation,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (cacheKey != null) 'cacheKey': cacheKey,
+      if (translation != null) 'translation': translation,
+      if (createdAt != null) 'createdAt': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TranslationsCompanion copyWith({
+    Value<String>? cacheKey,
+    Value<String>? translation,
+    Value<int>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return TranslationsCompanion(
+      cacheKey: cacheKey ?? this.cacheKey,
+      translation: translation ?? this.translation,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (cacheKey.present) {
+      map['cacheKey'] = Variable<String>(cacheKey.value);
+    }
+    if (translation.present) {
+      map['translation'] = Variable<String>(translation.value);
+    }
+    if (createdAt.present) {
+      map['createdAt'] = Variable<int>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TranslationsCompanion(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('translation: $translation, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2620,6 +2896,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final Settings settings = Settings(this);
   late final Meta meta = Meta(this);
+  late final Translations translations = Translations(this);
+  late final Index idxTranslationsCreatedAt = Index(
+    'idx_translations_createdAt',
+    'CREATE INDEX idx_translations_createdAt ON translations (createdAt)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2638,6 +2919,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     idxZoteroItemsDocId,
     settings,
     meta,
+    translations,
+    idxTranslationsCreatedAt,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -5154,6 +5437,167 @@ typedef $MetaProcessedTableManager =
       MetaData,
       PrefetchHooks Function()
     >;
+typedef $TranslationsCreateCompanionBuilder =
+    TranslationsCompanion Function({
+      required String cacheKey,
+      required String translation,
+      required int createdAt,
+      Value<int> rowid,
+    });
+typedef $TranslationsUpdateCompanionBuilder =
+    TranslationsCompanion Function({
+      Value<String> cacheKey,
+      Value<String> translation,
+      Value<int> createdAt,
+      Value<int> rowid,
+    });
+
+class $TranslationsFilterComposer
+    extends Composer<_$AppDatabase, Translations> {
+  $TranslationsFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get translation => $composableBuilder(
+    column: $table.translation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $TranslationsOrderingComposer
+    extends Composer<_$AppDatabase, Translations> {
+  $TranslationsOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get translation => $composableBuilder(
+    column: $table.translation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $TranslationsAnnotationComposer
+    extends Composer<_$AppDatabase, Translations> {
+  $TranslationsAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get cacheKey =>
+      $composableBuilder(column: $table.cacheKey, builder: (column) => column);
+
+  GeneratedColumn<String> get translation => $composableBuilder(
+    column: $table.translation,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $TranslationsTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          Translations,
+          Translation,
+          $TranslationsFilterComposer,
+          $TranslationsOrderingComposer,
+          $TranslationsAnnotationComposer,
+          $TranslationsCreateCompanionBuilder,
+          $TranslationsUpdateCompanionBuilder,
+          (
+            Translation,
+            BaseReferences<_$AppDatabase, Translations, Translation>,
+          ),
+          Translation,
+          PrefetchHooks Function()
+        > {
+  $TranslationsTableManager(_$AppDatabase db, Translations table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $TranslationsFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $TranslationsOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $TranslationsAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> cacheKey = const Value.absent(),
+                Value<String> translation = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TranslationsCompanion(
+                cacheKey: cacheKey,
+                translation: translation,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String cacheKey,
+                required String translation,
+                required int createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TranslationsCompanion.insert(
+                cacheKey: cacheKey,
+                translation: translation,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $TranslationsProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      Translations,
+      Translation,
+      $TranslationsFilterComposer,
+      $TranslationsOrderingComposer,
+      $TranslationsAnnotationComposer,
+      $TranslationsCreateCompanionBuilder,
+      $TranslationsUpdateCompanionBuilder,
+      (Translation, BaseReferences<_$AppDatabase, Translations, Translation>),
+      Translation,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5172,4 +5616,6 @@ class $AppDatabaseManager {
   $SettingsTableManager get settings =>
       $SettingsTableManager(_db, _db.settings);
   $MetaTableManager get meta => $MetaTableManager(_db, _db.meta);
+  $TranslationsTableManager get translations =>
+      $TranslationsTableManager(_db, _db.translations);
 }
