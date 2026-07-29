@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,11 +40,39 @@ class ShareReceiverService {
   }
 
   Future<void> _importFiles(List<String> paths) async {
-    final pdfPaths =
-        paths.where((p) => p.toLowerCase().endsWith('.pdf')).toList();
-    if (pdfPaths.isEmpty) return;
-    await _container.read(taskProvider.notifier).addFiles(pdfPaths);
-    _cleanupTempFiles(pdfPaths);
+    final pdfPaths = <String>[];
+    for (final path in paths) {
+      if (path.toLowerCase().endsWith('.pdf') && await hasPdfHeader(path)) {
+        pdfPaths.add(path);
+      }
+    }
+
+    try {
+      if (pdfPaths.isNotEmpty) {
+        await _container.read(taskProvider.notifier).addFiles(pdfPaths);
+      }
+    } finally {
+      _cleanupTempFiles(paths);
+    }
+  }
+
+  @visibleForTesting
+  static Future<bool> hasPdfHeader(String path) async {
+    RandomAccessFile? handle;
+    try {
+      handle = await File(path).open();
+      final bytes = await handle.read(5);
+      return bytes.length == 5 &&
+          bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46 &&
+          bytes[4] == 0x2D;
+    } catch (_) {
+      return false;
+    } finally {
+      await handle?.close();
+    }
   }
 
   void _cleanupTempFiles(List<String> paths) {

@@ -130,6 +130,15 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.library,
+    // 防御：即便系统把 content:// / file:// 等 URI 塞进路由，也回到首页。
+    // 真正的文件导入由 ShareReceiverService（MethodChannel）处理。
+    redirect: (context, state) {
+      final scheme = state.uri.scheme;
+      if (scheme == 'content' || scheme == 'file') {
+        return AppRoutes.library;
+      }
+      return null;
+    },
     routes: [
       // 全屏页面（不含底部/侧边导航栏）
       GoRoute(

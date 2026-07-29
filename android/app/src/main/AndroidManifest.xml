@@ -29,6 +29,12 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- 文件打开走 MethodChannel（ShareReceiverService），不走 Flutter deep link。
+                 否则 ACTION_VIEW 的 content:// URI 会被当成路由，触发 GoException。
+                 必须挂在 activity 上：FlutterActivity.getMetaData() 只读 ActivityInfo. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
