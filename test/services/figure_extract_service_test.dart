@@ -98,16 +98,141 @@ void main() {
     expect(segments.single.blocks.first.blockId, '2');
   });
 
-  test('无 caption 的 image cluster 被丢弃(防误识别图标/装饰图)', () {
-    // 与下一条"纯 table 孤儿"语义对齐: caption 召回失败时,视觉簇宁可漏也不要错.
-    // 后续 PR-4 (Stage D + inline reference) 会用正文引用做弱兜底,
-    // 替代旧的"无 caption 也产出匿名 segment"路线.
+  test('paper profile: 无 caption 的 image cluster 被丢弃', () {
+    // Paper 路径保持"宁可漏不可错"：无编号 caption 不产出 figure。
     final service = FigureExtractService.instance;
     final pages = [
       [_block('1', 'image', [101, 196, 732, 1196])],
     ];
 
+    final segments = service.findFigures(
+      pages,
+      markdowns: [''],
+      profile: FigureExtractProfile.paper,
+    );
+    expect(segments, isEmpty);
+  });
+
+  test('auto/general: 无 caption 的合格 image 保留为 visualOnly', () {
+    // 非论文 Failure surface：手册/无编号插图不能因缺 Figure N 被整页丢弃。
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('t', 'text', [50, 50, 900, 100], 'Some body text around the figure.'),
+        _block('1', 'image', [101, 196, 732, 1196]),
+      ],
+    ];
+
     final segments = service.findFigures(pages, markdowns: ['']);
+    expect(segments.length, 1);
+    expect(segments.single.pairMethod, PairMethod.visualOnly);
+    expect(segments.single.captionName, isEmpty);
+    expect(segments.single.captionSource, CaptionSource.none);
+    expect(segments.single.blocks.any((b) => b.blockId == '1'), isTrue);
+  });
+
+  test('auto: table caption 不计入 figure caption 密度', () {
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _block('t1', 'table', [100, 100, 900, 350]),
+        _block('tc1', 'figure_title', [100, 360, 900, 390],
+            'Table 1. First data table.'),
+        _block('t2', 'table', [100, 500, 900, 750]),
+        _block('tc2', 'figure_title', [100, 760, 900, 790],
+            'Table 2. Second data table.'),
+      ],
+      const <LayoutBlock>[],
+      [_block('i1', 'image', [100, 100, 700, 900])],
+      const <LayoutBlock>[],
+      [_block('i2', 'image', [100, 100, 700, 900])],
+      const <LayoutBlock>[],
+      [_block('i3', 'image', [100, 100, 700, 900])],
+    ];
+
+    final segments = service.findFigures(pages);
+    final anonymous = segments
+        .where((segment) => segment.pairMethod == PairMethod.visualOnly)
+        .toList();
+
+    expect(anonymous.length, 3);
+  });
+
+  test('auto: visual 密度按 cluster 而不是原始 block 计数', () {
+    final service = FigureExtractService.instance;
+    final pages = [
+      [
+        _blockEx('p1', 'chart', [100, 100, 350, 350], groupId: 7),
+        _blockEx('p2', 'chart', [360, 100, 610, 350], groupId: 7),
+        _blockEx('p3', 'chart', [620, 100, 870, 350], groupId: 7),
+        _block('cap', 'figure_title', [100, 370, 870, 410],
+            'Figure 1. Multi-panel result.'),
+      ],
+      const <LayoutBlock>[],
+      const <LayoutBlock>[],
+      [_block('orphan', 'image', [100, 100, 700, 900])],
+    ];
+
+    final segments = service.findFigures(pages);
+
+    expect(segments.length, 1);
+    expect(segments.single.captionName, 'Figure_1');
+    expect(segments.single.pairMethod, PairMethod.samePage);
+  });
+
+  test('FigureManifestEntry.forDisplay 过滤匿名 visualOnly', () {
+    const named = FigureManifestEntry(
+      imagePath: '/tmp/Figure_1.png',
+      captionText: 'Figure 1. Result.',
+      pageIndex: 0,
+      blockIds: ['a'],
+      pairMethod: 'samePage',
+      captionSource: 'blockMatch',
+    );
+    const anonymous = FigureManifestEntry(
+      imagePath: '/tmp/fig0.png',
+      captionText: '',
+      pageIndex: 1,
+      blockIds: ['b'],
+      pairMethod: 'visualOnly',
+      captionSource: 'none',
+    );
+    const emptyCaptionLegacy = FigureManifestEntry(
+      imagePath: '/tmp/fig1.png',
+      captionText: '   ',
+      pageIndex: 2,
+      blockIds: ['c'],
+      pairMethod: 'samePage',
+    );
+
+    expect(named.isDisplayFigure, isTrue);
+    expect(anonymous.isAnonymous, isTrue);
+    expect(anonymous.isDisplayFigure, isFalse);
+    expect(emptyCaptionLegacy.isDisplayFigure, isFalse);
+
+    final shown = FigureManifestEntry.forDisplay([
+      named,
+      anonymous,
+      emptyCaptionLegacy,
+    ]);
+    expect(shown, [named]);
+  });
+
+  test('general: 过小 image 被 filtered_noise 丢弃', () {
+    final service = FigureExtractService.instance;
+    // 页上有大范围 text 撑开 page bounds；角上 20×20 图标应滤掉。
+    final pages = [
+      [
+        _block('t', 'text', [0, 0, 1000, 1400], 'body ' * 40),
+        _block('icon', 'image', [20, 20, 40, 40]),
+      ],
+    ];
+
+    final segments = service.findFigures(
+      pages,
+      markdowns: [''],
+      profile: FigureExtractProfile.general,
+    );
     expect(segments, isEmpty);
   });
 
@@ -117,7 +242,12 @@ void main() {
       [_block('1', 'table', [100, 100, 700, 700])],
     ];
 
-    final segments = service.findFigures(pages, markdowns: ['']);
+    // general 也不保留纯 table 孤儿（侧栏定义框）
+    final segments = service.findFigures(
+      pages,
+      markdowns: [''],
+      profile: FigureExtractProfile.general,
+    );
     expect(segments, isEmpty);
   });
 
@@ -831,22 +961,26 @@ void main() {
 
     test('数量差 >1 的安全守卫——4 caption + 2 cluster = 不触发', () {
       final service = FigureExtractService.instance;
-      final segments = service.findFigures([
-        // page 0: Figure Legends (4 个 caption)
+      final segments = service.findFigures(
         [
-          _block('c1', 'figure_title', [100, 100, 700, 130],
-              'Figure 1. A.'),
-          _block('c2', 'figure_title', [100, 200, 700, 230],
-              'Figure 2. B.'),
-          _block('c3', 'figure_title', [100, 300, 700, 330],
-              'Figure 3. C.'),
-          _block('c4', 'figure_title', [100, 400, 700, 430],
-              'Figure 4. D.'),
+          // page 0: Figure Legends (4 个 caption)
+          [
+            _block('c1', 'figure_title', [100, 100, 700, 130],
+                'Figure 1. A.'),
+            _block('c2', 'figure_title', [100, 200, 700, 230],
+                'Figure 2. B.'),
+            _block('c3', 'figure_title', [100, 300, 700, 330],
+                'Figure 3. C.'),
+            _block('c4', 'figure_title', [100, 400, 700, 430],
+                'Figure 4. D.'),
+          ],
+          // page 1-2: 只有 2 个 figure image
+          [_block('i1', 'image', [100, 100, 700, 900])],
+          [_block('i2', 'image', [100, 100, 700, 900])],
         ],
-        // page 1-2: 只有 2 个 figure image
-        [_block('i1', 'image', [100, 100, 700, 900])],
-        [_block('i2', 'image', [100, 100, 700, 900])],
-      ]);
+        // 锁 paper：ordinal 未触发时 uncaptioned 仍 drop，不走 general 匿名
+        profile: FigureExtractProfile.paper,
+      );
 
       // 数量差 2 > 1 → 不触发 ordinal match, cluster 被 drop
       expect(segments.length, 0);

@@ -24,6 +24,9 @@ enum CaptionSource {
 
   /// Phase 3: markdown 行兜底
   markdownFallback,
+
+  /// General profile: 无编号 caption 的匿名 figure
+  none,
 }
 
 /// Figure-Caption 配对方式
@@ -39,6 +42,20 @@ enum PairMethod {
 
   /// Pass 4: 分离式排版序号配对（预印本 Figure Legends 布局）
   ordinalMatch,
+
+  /// General profile: 无 caption，仅靠 visual cluster 成图
+  visualOnly,
+}
+
+/// 提取策略 profile。
+///
+/// * [paper] — caption-first：无编号 caption 的 visual 丢弃（论文/编号教材）。
+/// * [general] — visual-first：合格 visual 匿名保留（手册/无编号插图）。
+/// * [auto] — 按编号 caption 密度相对 image/chart 数量自动分流。
+enum FigureExtractProfile {
+  auto,
+  paper,
+  general,
 }
 
 // ─── 公开数据模型 ─────────────────────────────────────────
@@ -115,6 +132,23 @@ class FigureManifestEntry {
     this.regionMethod,
     this.kind,
   });
+
+  /// 无编号 caption 的匿名 visual（General profile 产出）。
+  ///
+  /// 仍写入 manifest 供 AI 补检 / 重处理，但默认不进阅读器 Figures 列表。
+  bool get isAnonymous =>
+      pairMethod == PairMethod.visualOnly.name || captionSource == 'none';
+
+  /// 是否适合出现在 Outline Figures tab / viewer 画廊。
+  /// 要求有可读 caption；匿名 visualOnly 默认隐藏，避免空白标题污染列表。
+  bool get isDisplayFigure =>
+      !isAnonymous && captionText.trim().isNotEmpty;
+
+  /// 展示用子集：过滤掉匿名 figure。正文内点图等路径仍应用全量 manifest。
+  static List<FigureManifestEntry> forDisplay(
+    Iterable<FigureManifestEntry> all,
+  ) =>
+      [for (final e in all) if (e.isDisplayFigure) e];
 
   Map<String, dynamic> toJson() {
     final m = <String, dynamic>{
@@ -542,6 +576,21 @@ class FigureExtractService {
   static const _minClusterGap = 24.0;
   static const _maxClusterGap = 56.0;
 
+  /// General profile 噪声过滤：visual 面积占页面积的下限。
+  /// 低于此值视为图标/装饰，过滤为 filtered_noise。
+  static const _minVisualAreaRatio = 0.008;
+
+  /// General profile 噪声过滤：visual 宽或高占页对应边的下限。
+  static const _minVisualSideRatio = 0.06;
+
+  /// General profile 噪声过滤：贴顶/贴底页边带占页高的比例。
+  /// 中心落入该带且自身高度不超过页高 15% → header/footer 装饰。
+  static const _edgeBandRatio = 0.08;
+  static const _edgeBandMaxHeightRatio = 0.15;
+
+  /// Auto profile：编号 caption 数 / image·chart 簇数 ≥ 此值 → paper。
+  /// 低于此值（或无编号 caption）→ general。
+  static const _autoPaperCaptionRatio = 0.5;
 
   // ─── caption 配置(从 assets 加载) ────────────────────
 
@@ -1072,9 +1121,20 @@ class FigureExtractService {
   /// 配对策略(按优先级):
   ///   1. 视觉块按空间相邻聚成簇,每簇找同页最近 caption.
   ///   2. 同页 caption 未配上 + ±1 页 cluster 未配上 → 跨页双向唯一配对.
-  ///   3. 仍剩的 cluster 含 image/chart → 匿名 figure(若有同页未占用 markdown
-  ///      caption 也带上文字).
-  ({List<FigureSegment> segments, List<Map<String, dynamic>> dropped, int totalClusters}) _pair(_Inventory inv) {
+  ///   3. 同页晚到 caption 认领.
+  ///   4. 分离式排版序号配对.
+  ///   5. 剩余 orphan:
+  ///        paper   → drop (uncaptioned)
+  ///        general → 噪声过滤后匿名保留 (visualOnly)
+  ({
+    List<FigureSegment> segments,
+    List<Map<String, dynamic>> dropped,
+    int totalClusters,
+    FigureExtractProfile resolvedProfile,
+  }) _pair(
+    _Inventory inv, {
+    FigureExtractProfile profile = FigureExtractProfile.auto,
+  }) {
     final pageDiagonals = <int, double>{
       for (final page in inv.pages) page.pageIndex: _pageDiagonal(page.blocks),
     };
@@ -1096,6 +1156,21 @@ class FigureExtractService {
         gap,
       );
     }
+    final visualClusterCount = clustersByPage.values
+        .expand((clusters) => clusters)
+        .where(
+          (cluster) => cluster.blocks.any(
+            (block) =>
+                block.block.blockLabel == 'image' ||
+                block.block.blockLabel == 'chart',
+          ),
+        )
+        .length;
+    final resolvedProfile = _resolveProfile(
+      inv,
+      profile,
+      visualClusterCount: visualClusterCount,
+    );
 
     final captionsByPage = <int, List<_CaptionCandidate>>{};
     for (final c in inv.captions) {
@@ -1273,16 +1348,66 @@ class FigureExtractService {
       }
     }
 
-    // 剩余未配对的 pass3Orphans → dropped
+    // 剩余未配对的 pass3Orphans：
+    //   paper   → drop (uncaptioned) — 宁可漏不可错
+    //   general → 噪声过滤后匿名 figure (visualOnly)
+    final pageBounds = <int, _Bbox>{
+      for (final page in inv.pages)
+        if (page.blocks.isNotEmpty)
+          page.pageIndex: _Bbox.union(page.blocks),
+    };
     for (final cluster in pass3Orphans) {
       if (usedClusters.contains(cluster)) continue;
-      dropped.add({
-        'page_idx': cluster.pageIndex,
-        'block_count': cluster.blocks.length,
-        'reason': 'uncaptioned',
-      });
+
+      if (resolvedProfile == FigureExtractProfile.paper) {
+        dropped.add({
+          'page_idx': cluster.pageIndex,
+          'block_count': cluster.blocks.length,
+          'reason': 'uncaptioned',
+        });
+        log.d(
+          '[FigureExtract] dropped uncaptioned cluster on page '
+          '${cluster.pageIndex} (${cluster.blocks.length} blocks)',
+        );
+        continue;
+      }
+
+      // general: 只保留含 image/chart 的 visual；table 孤儿仍丢（sidebar）
+      final hasImageOrChart = cluster.blocks.any(
+        (b) =>
+            b.block.blockLabel == 'image' || b.block.blockLabel == 'chart',
+      );
+      if (!hasImageOrChart) {
+        dropped.add({
+          'page_idx': cluster.pageIndex,
+          'block_count': cluster.blocks.length,
+          'reason': 'uncaptioned_table',
+        });
+        continue;
+      }
+
+      final bounds = pageBounds[cluster.pageIndex];
+      final noiseReason = bounds == null
+          ? null
+          : _visualNoiseReason(cluster.bbox, bounds);
+      if (noiseReason != null) {
+        dropped.add({
+          'page_idx': cluster.pageIndex,
+          'block_count': cluster.blocks.length,
+          'reason': 'filtered_noise',
+          'noise': noiseReason,
+        });
+        log.d(
+          '[FigureExtract] filtered noise cluster on page '
+          '${cluster.pageIndex} ($noiseReason)',
+        );
+        continue;
+      }
+
+      usedClusters.add(cluster);
+      segments.add(_buildAnonymousSegment(cluster));
       log.d(
-        '[FigureExtract] dropped uncaptioned cluster on page '
+        '[FigureExtract] visual-only figure on page '
         '${cluster.pageIndex} (${cluster.blocks.length} blocks)',
       );
     }
@@ -1297,6 +1422,74 @@ class FigureExtractService {
       segments: [for (final t in tagged) t.$2],
       dropped: dropped,
       totalClusters: totalClusters,
+      resolvedProfile: resolvedProfile,
+    );
+  }
+
+  /// Auto 分流：编号 caption 相对 image/chart 数量足够密 → paper，否则 general。
+  ///
+  /// 无 image/chart 时退回 paper（避免空文档误入 general）。
+  /// 显式 [FigureExtractProfile.paper]/[FigureExtractProfile.general] 原样返回。
+  FigureExtractProfile _resolveProfile(
+    _Inventory inv,
+    FigureExtractProfile requested, {
+    required int visualClusterCount,
+  }) {
+    if (requested != FigureExtractProfile.auto) return requested;
+
+    final captionCount =
+        inv.captions.where((c) => !_isTableCaption(c)).length;
+
+    if (visualClusterCount == 0) return FigureExtractProfile.paper;
+    if (captionCount == 0) return FigureExtractProfile.general;
+
+    final ratio = captionCount / visualClusterCount;
+    return ratio >= _autoPaperCaptionRatio
+        ? FigureExtractProfile.paper
+        : FigureExtractProfile.general;
+  }
+
+  /// 判断 visual bbox 是否为噪声。返回 reason 字符串；合格则 null。
+  ///
+  /// 过滤：
+  ///   * 面积过小（图标）
+  ///   * 宽/高过短（装饰条）
+  ///   * 贴顶/贴底且自身较矮（页眉页脚图）
+  String? _visualNoiseReason(_Bbox visual, _Bbox page) {
+    final pageW = page.right - page.left;
+    final pageH = page.bottom - page.top;
+    if (pageW <= 0 || pageH <= 0) return null;
+
+    final w = visual.right - visual.left;
+    final h = visual.bottom - visual.top;
+    if (w <= 0 || h <= 0) return 'degenerate';
+
+    final areaRatio = (w * h) / (pageW * pageH);
+    if (areaRatio < _minVisualAreaRatio) return 'too_small';
+
+    if (w / pageW < _minVisualSideRatio || h / pageH < _minVisualSideRatio) {
+      return 'thin_strip';
+    }
+
+    final band = pageH * _edgeBandRatio;
+    final maxH = pageH * _edgeBandMaxHeightRatio;
+    final cy = (visual.top + visual.bottom) / 2;
+    final nearTop = cy - page.top <= band;
+    final nearBottom = page.bottom - cy <= band;
+    if ((nearTop || nearBottom) && h <= maxH) return 'edge_band';
+
+    return null;
+  }
+
+  /// General profile：无 caption 的 visual cluster → 匿名 FigureSegment。
+  FigureSegment _buildAnonymousSegment(_Cluster cluster) {
+    return FigureSegment(
+      pageIndex: cluster.pageIndex,
+      blocks: [for (final b in cluster.blocks) b.block],
+      captionText: '',
+      captionName: '',
+      captionSource: CaptionSource.none,
+      pairMethod: PairMethod.visualOnly,
     );
   }
 
@@ -2272,10 +2465,14 @@ class FigureExtractService {
   }
 
   /// 测试入口:跑完整 inventory + pair,返回 segment.
+  ///
+  /// [profile] 默认 [FigureExtractProfile.auto]：按编号 caption 密度分流。
+  /// 单测若要锁 paper 行为（无 caption 必丢），传 [FigureExtractProfile.paper]。
   @visibleForTesting
   List<FigureSegment> findFigures(
     List<List<LayoutBlock>> pages, {
     List<String>? markdowns,
+    FigureExtractProfile profile = FigureExtractProfile.auto,
   }) {
     assert(_initialized, 'FigureExtractService.init() 未调用');
     final pageData = [
@@ -2287,7 +2484,7 @@ class FigureExtractService {
         ),
     ];
     final inv = _buildInventory(pageData);
-    return _pair(inv).segments;
+    return _pair(inv, profile: profile).segments;
   }
 
   /// 测试入口:单页用 `List<LayoutBlock>` 输入,返回 `List<List<LayoutBlock>>`.
@@ -2298,10 +2495,13 @@ class FigureExtractService {
   }
 
   /// 从版面解析 JSON + PDF 中提取所有 figure,保存到 `{hash}/figures/`.
+  ///
+  /// [profile] 默认 auto：编号 caption 密 → paper；稀疏/无 → general（匿名 figure）。
   Future<FigureExtractResult> extractFigures({
     required String resultPath,
     required String pdfPath,
     void Function(int done, int total)? onProgress,
+    FigureExtractProfile profile = FigureExtractProfile.auto,
   }) async {
     assert(_initialized, 'FigureExtractService.init() 未调用');
 
@@ -2317,7 +2517,7 @@ class FigureExtractService {
     final content = await resultFile.readAsString();
     final pages = _parsePages(content);
     final inv = _buildInventory(pages);
-    final pairResult = _pair(inv);
+    final pairResult = _pair(inv, profile: profile);
     final segments = pairResult.segments;
 
     final totalSegments = segments.length;
@@ -2464,7 +2664,8 @@ class FigureExtractService {
 
     log.d(
       '[FigureExtract] 共提取 $figureIndex 个 figure → $outputDir '
-      '(captions=${inv.captions.length}, clusters=${pairResult.totalClusters}, '
+      '(profile=${pairResult.resolvedProfile.name}, '
+      'captions=${inv.captions.length}, clusters=${pairResult.totalClusters}, '
       'dropped=${pairResult.dropped.length})',
     );
     return FigureExtractResult(
