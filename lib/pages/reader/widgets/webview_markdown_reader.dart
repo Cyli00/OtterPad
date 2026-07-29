@@ -41,7 +41,8 @@ class WebViewMarkdownReader extends StatefulWidget {
   final int? initialAnchorBlock;
   final String? highlightQuery;
 
-  final void Function(String text, Rect selectionRect)? onSelectionEnd;
+  final void Function(String text, Rect selectionRect, int lineCount)?
+  onSelectionEnd;
   final VoidCallback? onSelectionCleared;
   final void Function(Highlight highlight, Rect rect)? onHighlightClick;
   final void Function(String imageSource)? onImageClick;
@@ -628,7 +629,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   void onSelectionEnd(String text, Map<String, dynamic> rawRect) {
     final rect = _viewportToScreen(rawRect);
     if (rect == null) return;
-    widget.onSelectionEnd?.call(text, rect);
+    final lineCount = (rawRect['lineCount'] as num?)?.toInt() ?? 1;
+    widget.onSelectionEnd?.call(text, rect, math.max(1, lineCount));
   }
 
   @override

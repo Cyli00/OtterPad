@@ -129,7 +129,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _pdfSearch = ReaderPdfSearchController();
 
   // 选择工具栏 Overlay（WebView 选择走 JS 桥接）
-  OverlayEntry? _selectionToolbarEntry;
+  ReaderContextMenuHandle? _selectionToolbarEntry;
+  String _webViewSelectionText = '';
+  int? _webViewSelectionLineCount;
 
   // 桌面端工具栏自动隐藏
   static const _kEdgeTriggerZone = 16.0;
@@ -727,17 +729,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  void _handleWebViewSelectionEnd(String text, Rect rect) {
+  void _handleWebViewSelectionEnd(String text, Rect rect, int lineCount) {
     if (!mounted) return;
+    _webViewSelectionText = text;
+    final toolbar = _selectionToolbarEntry;
+    if (toolbar != null && _webViewSelectionLineCount != null) {
+      if (_webViewSelectionLineCount != lineCount) {
+        _webViewSelectionLineCount = lineCount;
+        toolbar.updateVerticalAnchor(rect);
+      }
+      return;
+    }
     _dismissSelectionToolbar();
     if (text.trim().isEmpty) return;
+    _webViewSelectionText = text;
+    _webViewSelectionLineCount = lineCount;
     _selectionToolbarEntry = showReaderContextMenu(
       context: context,
       selectionRect: rect,
       selectedText: text,
-      onHighlight: (color) => _addHighlight(text, color),
+      onHighlight: (color) {
+        final selectedText = _webViewSelectionText;
+        if (selectedText.trim().isNotEmpty) {
+          _addHighlight(selectedText, color);
+        }
+      },
       onCopy: () {
-        Clipboard.setData(ClipboardData(text: text));
+        Clipboard.setData(ClipboardData(text: _webViewSelectionText));
         ref
             .read(snackBarServiceProvider)
             .showResult(
@@ -745,9 +763,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               duration: const Duration(seconds: 1),
             );
       },
-      onAskAi: () => _openAiChat(quote: text.trim()),
+      onAskAi: () => _openAiChat(quote: _webViewSelectionText.trim()),
       onTranslate: () {
-        final trimmed = text.trim();
+        final trimmed = _webViewSelectionText.trim();
         final fullText = _expandToParagraphContext(trimmed);
         // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"弹窗显示
         _webViewReaderKey.currentState?.clearSelection();
@@ -765,10 +783,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         );
       },
       onCreateForNote: () {
-        return _sessionNotifier.addHighlight(text, kDefaultHighlightColor);
+        return _sessionNotifier.addHighlight(
+          _webViewSelectionText,
+          kDefaultHighlightColor,
+        );
       },
       onNoteChanged: _sessionNotifier.updateHighlightNote,
-      onDismiss: () => _selectionToolbarEntry = null,
+      onDismiss: _clearWebViewSelectionToolbarState,
     );
   }
 
@@ -845,7 +866,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _dismissSelectionToolbar() {
     _selectionToolbarEntry?.remove();
+    _clearWebViewSelectionToolbarState();
+  }
+
+  void _clearWebViewSelectionToolbarState() {
     _selectionToolbarEntry = null;
+    _webViewSelectionText = '';
+    _webViewSelectionLineCount = null;
   }
 
   // 旧原生选择基础设施已移除，由 WebView 选择处理替代

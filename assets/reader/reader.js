@@ -394,52 +394,87 @@ let _scrollIdleTimer = null;
 let _lastEmittedSig = '';
 let _pointerIsDown = false;
 let _pointerDownTimer = null;
+let _selectionDirty = false;
 
 document.addEventListener('pointerdown', () => {
   _pointerIsDown = true;
-  // Android WebView 吞掉 pointerup——800ms 无 pointerup 自动解锁 selectionchange
+  _selectionDirty = false;
+  // Android WebView 可能吞掉 pointerup。兜底解锁后必须补处理长按期间
+  // 被拦下的 selectionchange，否则操作栏要等到第一次拖动手柄才出现。
   clearTimeout(_pointerDownTimer);
-  _pointerDownTimer = setTimeout(() => { _pointerIsDown = false; }, 800);
+  _pointerDownTimer = setTimeout(() => {
+    _pointerIsDown = false;
+    if (_selectionDirty) _scheduleSelection(120);
+  }, 800);
 });
 
-function _handleSelection() {
+function _scheduleSelection(delay) {
   clearTimeout(_selectionTimeout);
-  _selectionTimeout = setTimeout(() => {
-    if (_isScrolling) return;
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-      _currentSelectionRange = null;
-      _lastEmittedSig = '';
-      if (_suppressNextClear) {
-        _suppressNextClear = false;
-        return;
-      }
-      if (window.flutter_inappwebview)
-        window.flutter_inappwebview.callHandler('onSelectionCleared');
+  _selectionTimeout = setTimeout(_emitSelection, delay);
+}
+
+function _selectionLineCount(range) {
+  const rects = Array.from(range.getClientRects())
+      .filter(r => r.width > 0.5 && r.height > 0.5)
+      .sort((a, b) => a.top - b.top);
+  if (!rects.length) return 1;
+
+  let count = 0;
+  let lineBottom = -Infinity;
+  for (const rect of rects) {
+    // 同一视觉行里的内联元素可能产生多个 rect；垂直区间仍会重叠。
+    if (rect.top >= lineBottom - 2) {
+      count++;
+      lineBottom = rect.bottom;
+    } else {
+      lineBottom = Math.max(lineBottom, rect.bottom);
+    }
+  }
+  return Math.max(1, count);
+}
+
+function _emitSelection() {
+  if (_isScrolling) {
+    _selectionDirty = true;
+    return;
+  }
+  _selectionDirty = false;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+    _currentSelectionRange = null;
+    _lastEmittedSig = '';
+    if (_suppressNextClear) {
+      _suppressNextClear = false;
       return;
     }
-    const text = sel.toString();
-    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    if (window.flutter_inappwebview)
+      window.flutter_inappwebview.callHandler('onSelectionCleared');
+    return;
+  }
+  const text = sel.toString();
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  const lineCount = _selectionLineCount(range);
 
-    // 签名相同 → 同一选区被多次终止信号触发，已经显示过工具栏，跳过 IPC
-    // 节省 Flutter 端 OverlayEntry remove/insert 的开销与视觉闪烁。
-    const sig = text + '|' +
-        rect.left.toFixed(1) + '|' + rect.top.toFixed(1) + '|' +
-        rect.right.toFixed(1) + '|' + rect.bottom.toFixed(1);
-    if (sig === _lastEmittedSig) return;
-    _lastEmittedSig = sig;
+  // 签名相同 → 同一选区被多次终止信号触发，已经显示过工具栏，跳过 IPC
+  // 节省 Flutter 端 OverlayEntry remove/insert 的开销与视觉闪烁。
+  const sig = text + '|' +
+      rect.left.toFixed(1) + '|' + rect.top.toFixed(1) + '|' +
+      rect.right.toFixed(1) + '|' + rect.bottom.toFixed(1);
+  if (sig === _lastEmittedSig) return;
+  _lastEmittedSig = sig;
 
-    _currentSelectionRange = sel.getRangeAt(0).cloneRange();
-    if (window.flutter_inappwebview) {
-      window.flutter_inappwebview.callHandler('onSelectionEnd', {
-        text: text,
-        left: rect.left,
-        top: rect.top,
-        right: rect.right,
-        bottom: rect.bottom,
-      });
-    }
-  }, 200);
+  _currentSelectionRange = range.cloneRange();
+  if (window.flutter_inappwebview) {
+    window.flutter_inappwebview.callHandler('onSelectionEnd', {
+      text: text,
+      lineCount: lineCount,
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+    });
+  }
 }
 
 // 三路"选择变化"信号：
@@ -451,26 +486,29 @@ function _handleSelection() {
 //   DOM——必须依赖 selectionchange 感知"选区出现"。
 //
 // **关键约束**：selectionchange listener 只在当前**有非空选区**时 schedule
-// _handleSelection。Selection 从有→无（被系统/SVG handler 清空）**不**调
-// _handleSelection，否则会和 _suppressNextClear 的"消耗一次"模式冲突——
+// _emitSelection。Selection 从有→无（被系统/SVG handler 清空）**不**调
+// _emitSelection，否则会和 _suppressNextClear 的"消耗一次"模式冲突——
 // 点击已有高亮时 SVG g handler 同步清 selection，触发 selectionchange，
-// 若让它驱动 _handleSelection，第一次能被 _suppressNextClear 拦住，但后续
+// 若让它驱动 _emitSelection，第一次能被 _suppressNextClear 拦住，但后续
 // 任何 selection 状态扰动（Overlay 让 WebView 失焦等）就会裸奔 emit clear，
-// 工具栏 500ms 后被错误 dismiss。
+// 工具栏稍后会被错误 dismiss。
 // "用户主动点空白"清工具栏的需求由 pointerup（桌面）和 Flutter 端
 // Overlay 的 outside-tap dismiss（Android）承担。
-let _selectionChangeTimer = null;
 document.addEventListener('pointerup', (e) => {
   _pointerIsDown = false;
   clearTimeout(_pointerDownTimer);
-  _handleSelection();
+  _scheduleSelection(80);
 });
 document.addEventListener('selectionchange', () => {
-  if (_pointerIsDown) return;
+  if (_pointerIsDown) {
+    _selectionDirty = true;
+    return;
+  }
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
-  clearTimeout(_selectionChangeTimer);
-  _selectionChangeTimer = setTimeout(_handleSelection, 350);
+  // 原生手柄拖动会连续触发 selectionchange；单层防抖确保只在手势
+  // 空闲后更新一次 Flutter Overlay，同时缩短松手后的等待时间。
+  _scheduleSelection(160);
 });
 document.addEventListener('keyup', (e) => {
   // 仅在"可能改变选区的键"上响应，避免输入框/快捷键噪音
@@ -479,7 +517,7 @@ document.addEventListener('keyup', (e) => {
       e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
       e.key === 'Home' || e.key === 'End' ||
       (e.ctrlKey && (e.key === 'a' || e.key === 'A'))) {
-    _handleSelection();
+    _scheduleSelection(80);
   }
 });
 
@@ -491,7 +529,10 @@ window.addEventListener('scroll', () => {
   // 标记滚动状态，抑制 selectionchange 噪音
   _isScrolling = true;
   clearTimeout(_scrollIdleTimer);
-  _scrollIdleTimer = setTimeout(() => { _isScrolling = false; }, 200);
+  _scrollIdleTimer = setTimeout(() => {
+    _isScrolling = false;
+    if (_selectionDirty) _scheduleSelection(120);
+  }, 200);
 
   if (_scrollRAF) return;
   _scrollRAF = requestAnimationFrame(() => {

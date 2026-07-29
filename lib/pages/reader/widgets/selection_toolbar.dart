@@ -9,8 +9,41 @@ import '../../../data/models/book/highlight.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/tactile_press.dart';
 
+class ReaderContextMenuHandle {
+  final OverlayEntry _entry;
+  final VoidCallback? _onDismiss;
+  Rect _selectionRect;
+  bool _removed = false;
+
+  ReaderContextMenuHandle._({
+    required OverlayEntry entry,
+    required Rect selectionRect,
+    VoidCallback? onDismiss,
+  }) : _entry = entry,
+       _selectionRect = selectionRect,
+       _onDismiss = onDismiss;
+
+  void updateVerticalAnchor(Rect selectionRect) {
+    if (_removed) return;
+    _selectionRect = Rect.fromLTRB(
+      _selectionRect.left,
+      selectionRect.top,
+      _selectionRect.right,
+      selectionRect.bottom,
+    );
+    _entry.markNeedsBuild();
+  }
+
+  void remove() {
+    if (_removed) return;
+    _removed = true;
+    _entry.remove();
+    _onDismiss?.call();
+  }
+}
+
 /// 在选区附近显示阅读上下文菜单 Overlay（含可展开的笔记面板）。
-OverlayEntry showReaderContextMenu({
+ReaderContextMenuHandle showReaderContextMenu({
   required BuildContext context,
   required Rect selectionRect,
   required String selectedText,
@@ -25,24 +58,13 @@ OverlayEntry showReaderContextMenu({
   VoidCallback? onDismiss,
 }) {
   late OverlayEntry entry;
-  // **幂等 close**：6 个 action callback + 全屏 tap-to-dismiss + 调用方
-  // (`view.dart` 的 `_dismissSelectionToolbar`) 都会调 entry.remove()。
-  // 任意两条路径在同一帧/相邻事件中触发——比如双击、按钮 onTap 与背景
-  // GestureDetector 同帧命中、dispose 中 `_saveNoteIfDirty` 引发外部
-  // setState 触发 listener 链——都会触发"OverlayEntry should be removed
-  // only once" assertion。这里用 closure-local bool 守门，多次调用静默忽略。
-  bool removed = false;
-  void close() {
-    if (removed) return;
-    removed = true;
-    entry.remove();
-    onDismiss?.call();
-  }
+  late ReaderContextMenuHandle handle;
+  void close() => handle.remove();
 
   entry = OverlayEntry(
     builder: (ctx) {
       return _ContextMenuOverlay(
-        selectionRect: selectionRect,
+        selectionRect: handle._selectionRect,
         existingHighlight: existingHighlight,
         onHighlight: (color) {
           onHighlight(color);
@@ -72,8 +94,13 @@ OverlayEntry showReaderContextMenu({
       );
     },
   );
+  handle = ReaderContextMenuHandle._(
+    entry: entry,
+    selectionRect: selectionRect,
+    onDismiss: onDismiss,
+  );
   Overlay.of(context).insert(entry);
-  return entry;
+  return handle;
 }
 
 // ─── Overlay 根组件（有状态，管理笔记面板展开） ───
