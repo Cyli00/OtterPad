@@ -1252,6 +1252,95 @@ void main() {
       }
     });
   });
+
+  group('classifyKind', () {
+    test('figure / table / chart / supplementary 分类', () {
+      final service = FigureExtractService.instance;
+      expect(service.classifyKind('Figure 1. Optical paths.'), 'figure');
+      expect(service.classifyKind('Fig. 2 Result.'), 'figure');
+      expect(service.classifyKind('Table 1. Parameters.'), 'table');
+      expect(service.classifyKind('表 3-1 基本参数'), 'table');
+      expect(service.classifyKind('Chart 1. Data.'), 'chart');
+      expect(service.classifyKind('Scheme 1. Synthesis.'), 'chart');
+      expect(service.classifyKind('Box 3. Definition.'), 'chart');
+      // supplementary 归 figure。
+      expect(service.classifyKind('Supplementary Figure 1.'), 'figure');
+      expect(service.classifyKind('Extended Data Figure 2.'), 'figure');
+    });
+  });
+
+  group('collectTitleInventory', () {
+    test('含 orphan 标题：未配对的 caption 也进入 inventory', () {
+      final service = FigureExtractService.instance;
+      // 页面上有 Figure 1 caption + 一个无 caption 的 image，外加一个
+      // orphan Figure 2 caption（无视觉块对应）。
+      final blocks = [
+        _block('img1', 'image', [100, 100, 400, 400]),
+        _block('cap1', 'figure_title', [100, 410, 400, 430],
+            'Figure 1. Main result.'),
+        _block('cap2', 'figure_title', [600, 100, 900, 120],
+            'Figure 2. Orphan caption.'),
+      ];
+      final titles = service.collectTitleInventory(blocks, '', 0);
+      final texts = titles.map((t) => t.text).toList();
+      expect(texts, containsAll(['Figure 1. Main result.', 'Figure 2. Orphan caption.']));
+      final fig2 = titles.firstWhere((t) => t.text.startsWith('Figure 2'));
+      expect(fig2.kind, 'figure');
+      expect(fig2.bbox.length, 4);
+    });
+
+    test('多行 caption 合并后作为单条标题', () {
+      final service = FigureExtractService.instance;
+      final blocks = [
+        _block('c0', 'figure_title', [100, 410, 400, 430],
+            'Figure 3. Multi-line caption.'),
+        _block('c1', 'figure_title', [100, 432, 400, 450],
+            'Second line of the caption.'),
+      ];
+      final titles = service.collectTitleInventory(blocks, '', 0);
+      expect(titles.length, 1);
+      expect(titles.single.text, contains('Multi-line caption.'));
+      expect(titles.single.text, contains('Second line'));
+    });
+
+    test('table caption 分类为 table', () {
+      final service = FigureExtractService.instance;
+      final blocks = [
+        _block('t0', 'figure_title', [100, 410, 400, 430],
+            'Table 1. Parameters.'),
+      ];
+      final titles = service.collectTitleInventory(blocks, '', 0);
+      expect(titles.single.kind, 'table');
+    });
+  });
+
+  group('detectColumns', () {
+    test('单栏页面返回 isDoubleColumn=false', () {
+      final blocks = [
+        _block('t1', 'text', [100, 100, 900, 130]),
+        _block('t2', 'text', [100, 140, 900, 170]),
+      ];
+      final col = FigureExtractService.detectColumns(blocks);
+      expect(col.isDoubleColumn, isFalse);
+    });
+
+    test('双栏页面返回 isDoubleColumn=true 且有栏边界', () {
+      // 左栏文字 100..480，右栏文字 520..900，中点 500。
+      final blocks = [
+        _block('l1', 'text', [100, 100, 480, 130]),
+        _block('l2', 'text', [100, 140, 480, 170]),
+        _block('l3', 'text', [100, 180, 480, 210]),
+        _block('r1', 'text', [520, 100, 900, 130]),
+        _block('r2', 'text', [520, 140, 900, 170]),
+        _block('r3', 'text', [520, 180, 900, 210]),
+      ];
+      final col = FigureExtractService.detectColumns(blocks);
+      expect(col.isDoubleColumn, isTrue);
+      expect(col.leftColRight, isNotNull);
+      expect(col.rightColLeft, isNotNull);
+      expect(col.leftColRight! < col.rightColLeft!, isTrue);
+    });
+  });
 }
 
 LayoutBlock _block(

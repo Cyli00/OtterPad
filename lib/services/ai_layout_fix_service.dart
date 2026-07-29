@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
@@ -40,6 +41,13 @@ class AiLayoutFixAnalysis {
   /// "caption 不入框" 的机械校验（与 FigureExtractService 的
   /// trimCaptionFromRegion 契约对齐）。
   final Map<int, List<List<double>>> captionBlocksByPage;
+
+  /// 每页完整标题清单（含 orphan），供 _buildUserPrompt 生成 title inventory 段。
+  final Map<int, List<TitleInfo>> titleInventoryByPage;
+
+  /// 每页栏位布局，供 _buildUserPrompt 生成 column layout 段，让模型判断跨栏图/表。
+  final Map<int, ColumnLayout> columnLayoutByPage;
+
   final int estimatedTokens;
 
   const AiLayoutFixAnalysis({
@@ -49,6 +57,8 @@ class AiLayoutFixAnalysis {
     required this.currentManifest,
     required this.chunks,
     required this.captionBlocksByPage,
+    required this.titleInventoryByPage,
+    required this.columnLayoutByPage,
     required this.estimatedTokens,
   });
 
@@ -136,10 +146,11 @@ class AiLayoutFixService {
 
     final targetPages = <int>{};
     final captionBlocksByPage = <int, List<List<double>>>{};
-    for (final page in (await DocumentStructure.load(jsonPath)).pages) {
+    final structurePages = (await DocumentStructure.load(jsonPath)).pages;
+    for (final page in structurePages) {
       for (final block in page.blocks) {
         final label = block.blockLabel;
-        if (label == 'image' || label == 'chart') {
+        if (label == 'image' || label == 'chart' || label == 'table') {
           targetPages.add(page.pageIndex);
         } else if (label == 'figure_title' &&
             FigureExtractService.instance.isMainCaption(block.blockContent)) {
@@ -174,6 +185,26 @@ class AiLayoutFixService {
 
     // ── 组装批次 ──
     final sortedPages = targetPages.toList()..sort();
+
+    // 仅对会渲染的页（sortedPages）计算 title inventory + 栏位布局：
+    // _buildUserPrompt 只按 imagesByPage.keys（=sortedPages 子集）消费，全页
+    // 计算是纯浪费。跨页 caption 归属已由 manifest pair_method 表达。
+    final pageByIndex = {for (final p in structurePages) p.pageIndex: p};
+    final titleInventoryByPage = <int, List<TitleInfo>>{};
+    final columnLayoutByPage = <int, ColumnLayout>{};
+    for (final pageIdx in sortedPages) {
+      final page = pageByIndex[pageIdx];
+      if (page == null) continue;
+      titleInventoryByPage[pageIdx] =
+          FigureExtractService.instance.collectTitleInventory(
+        page.blocks,
+        page.markdown,
+        pageIdx,
+      );
+      columnLayoutByPage[pageIdx] =
+          FigureExtractService.detectColumns(page.blocks);
+    }
+
     final chunks = <AiLayoutFixChunk>[];
     for (var i = 0; i < sortedPages.length; i += _maxPagesPerChunk) {
       chunks.add(AiLayoutFixChunk(
@@ -195,6 +226,9 @@ class AiLayoutFixService {
         'figure_title': f['figure_title'],
         'page_idx': f['page_idx'],
         'crop_bbox': f['crop_bbox'],
+        'kind': f['kind'],
+        'caption_bbox': f['caption_bbox'],
+        'pair_method': f['pair_method'],
       });
     }
 
@@ -212,6 +246,8 @@ class AiLayoutFixService {
       currentManifest: manifest,
       chunks: chunks,
       captionBlocksByPage: captionBlocksByPage,
+      titleInventoryByPage: titleInventoryByPage,
+      columnLayoutByPage: columnLayoutByPage,
       estimatedTokens: imageTokens + textTokens + outputTokens,
     );
   }
@@ -263,6 +299,8 @@ class AiLayoutFixService {
       final userPrompt = _buildUserPrompt(
         figures: figures,
         imagesByPage: imagesByPage,
+        titleInventoryByPage: analysis.titleInventoryByPage,
+        columnLayoutByPage: analysis.columnLayoutByPage,
         yFirst: yFirst,
       );
       final response = await AgentChatService.send(
@@ -336,6 +374,8 @@ class AiLayoutFixService {
       final title = fix['figure_title'];
       if (title is String && title != target['figure_title']) {
         target['figure_title'] = title;
+        // 标题被重写（含重配对到另一标题）→ 按新标题重算 kind。
+        target['kind'] = FigureExtractService.instance.classifyKind(title);
         changed = true;
       }
       final newBbox = fix['crop_bbox'];
@@ -394,6 +434,11 @@ class AiLayoutFixService {
       }
       final img = _nextAiFixName(outputDir, usedImgs, pageIdx);
       usedImgs.add(img);
+      // kind：优先取模型输出；否则按标题分类；标题也缺时兜底 figure。
+      final addTitle = title is String ? title : '';
+      final kind = add['kind'] is String
+          ? add['kind'] as String
+          : FigureExtractService.instance.classifyKind(addTitle);
       final entry = <String, dynamic>{
         'img': img,
         'figure_title': add['figure_title'],
@@ -401,6 +446,7 @@ class AiLayoutFixService {
         'crop_bbox': trimmed,
         'block_ids': <String>[],
         'region_method': 'ai_layout_fix',
+        'kind': kind,
       };
       kept.add(entry);
       if (title is String && title.isNotEmpty) {
@@ -504,48 +550,137 @@ class AiLayoutFixService {
   static String _buildUserPrompt({
     required List<Map<String, dynamic>> figures,
     required Map<int, _PageImage> imagesByPage,
+    required Map<int, List<TitleInfo>> titleInventoryByPage,
+    required Map<int, ColumnLayout> columnLayoutByPage,
     required bool yFirst,
   }) {
     final promptFigures = figures.map((f) {
       final pi = imagesByPage[f['page_idx'] as int]!;
+      final capBbox = f['caption_bbox'];
       return {
         'img': f['img'],
+        'kind': f['kind'] ?? 'figure',
         'figure_title': f['figure_title'],
         'page_idx': f['page_idx'],
+        'pair_method': f['pair_method'],
         'bbox': _bboxTo1000(f['crop_bbox'] as List<dynamic>, pi, yFirst),
+        // caption 自身框（0-1000），让模型核对标题-图归属；无则 null。
+        if (capBbox is List && capBbox.length == 4)
+          'caption_bbox':
+              _bboxTo1000(capBbox, pi, yFirst),
       };
     }).toList();
 
-    return (StringBuffer()
-          ..writeln(Prompts.layoutFixUserManifestHeader)
-          ..writeln('```json')
-          ..writeln(const JsonEncoder.withIndent('  ').convert(promptFigures))
-          ..writeln('```')
-          ..writeln()
-          ..writeln(promptFigures.isEmpty
-              ? Prompts.layoutFixUserScanHint
-              : Prompts.layoutFixUserAuditHint))
-        .toString();
+    final buf = StringBuffer()
+      ..writeln(Prompts.layoutFixUserManifestHeader)
+      ..writeln('```json')
+      ..writeln(const JsonEncoder.withIndent('  ').convert(promptFigures))
+      ..writeln('```')
+      ..writeln()
+      ..writeln(promptFigures.isEmpty
+          ? Prompts.layoutFixUserScanHint
+          : Prompts.layoutFixUserAuditHint);
+
+    // 按页追加 title inventory + column layout（仅本批实际渲染成功的页）。
+    final pageIdxs = imagesByPage.keys.toList()..sort();
+    for (final pageIdx in pageIdxs) {
+      final pi = imagesByPage[pageIdx]!;
+      final titles = titleInventoryByPage[pageIdx] ?? const <TitleInfo>[];
+      if (titles.isNotEmpty) {
+        _appendJsonSection(
+          buf,
+          Prompts.layoutFixUserTitleInventoryHeader(pageIdx),
+          [
+            for (final t in titles)
+              {
+                'kind': t.kind,
+                'text': t.text,
+                if (t.bbox.length == 4)
+                  'bbox': _bboxTo1000(t.bbox, pi, yFirst),
+              },
+          ],
+        );
+      }
+      final col = columnLayoutByPage[pageIdx];
+      if (col != null) {
+        _appendJsonSection(
+          buf,
+          Prompts.layoutFixUserColumnLayoutHeader(pageIdx),
+          {
+            'double_column': col.isDoubleColumn,
+            if (col.leftColRight != null)
+              'left_col_right': _xTo1000(col.leftColRight!, pi),
+            if (col.rightColLeft != null)
+              'right_col_left': _xTo1000(col.rightColLeft!, pi),
+          },
+        );
+      }
+    }
+
+    return buf.toString();
   }
 
   static String _pageLabel(_PageImage img) =>
       'Page ${img.pageIdx} (${img.widthPx.round()}x${img.heightPx.round()} px):';
 
+  /// 测试入口：用原始页尺寸 (widthPx, heightPx) 构造内部 [_PageImage] 并调用
+  /// [_buildUserPrompt]，使 test 文件无需依赖私有 [_PageImage] 类型即可验证
+  /// prompt 组装（kind/caption_bbox/pair_method 转发、title inventory、column
+  /// layout、0-1000 归一化与 yFirst 顺序）。
+  @visibleForTesting
+  static String buildUserPromptForTest({
+    required List<Map<String, dynamic>> figures,
+    required Map<int, (double, double)> pageSizes,
+    required Map<int, List<TitleInfo>> titleInventoryByPage,
+    required Map<int, ColumnLayout> columnLayoutByPage,
+    required bool yFirst,
+  }) {
+    final imagesByPage = <int, _PageImage>{
+      for (final e in pageSizes.entries)
+        e.key: _PageImage(
+          pageIdx: e.key,
+          base64Png: '',
+          widthPx: e.value.$1,
+          heightPx: e.value.$2,
+        ),
+    };
+    return _buildUserPrompt(
+      figures: figures,
+      imagesByPage: imagesByPage,
+      titleInventoryByPage: titleInventoryByPage,
+      columnLayoutByPage: columnLayoutByPage,
+      yFirst: yFirst,
+    );
+  }
+
+  /// 向 prompt 追加一段 ```json 代码块（空行 + 标题 + json + 闭合）。
+  static void _appendJsonSection(StringBuffer buf, String header, Object data) {
+    buf
+      ..writeln()
+      ..writeln(header)
+      ..writeln('```json')
+      ..writeln(const JsonEncoder.withIndent('  ').convert(data))
+      ..writeln('```');
+  }
+
   // ── bbox 坐标换算（manifest 144 DPI ↔ 0–1000 归一化） ────
+
+  // 144 DPI → 0-1000 归一化原语：x / y 各一，bbox 四角与 column 边界共用。
+  static int _xTo1000(num v, _PageImage pi) =>
+      (v / (pi.widthPx / _llmZoom * _apiZoom) * 1000).round().clamp(0, 1000);
+
+  static int _yTo1000(num v, _PageImage pi) =>
+      (v / (pi.heightPx / _llmZoom * _apiZoom) * 1000).round().clamp(0, 1000);
 
   static List<int> _bboxTo1000(
     List<dynamic> bbox144,
     _PageImage pi,
     bool yFirst,
   ) {
-    final w144 = pi.widthPx / _llmZoom * _apiZoom;
-    final h144 = pi.heightPx / _llmZoom * _apiZoom;
-    int nx(num v) => (v / w144 * 1000).round().clamp(0, 1000);
-    int ny(num v) => (v / h144 * 1000).round().clamp(0, 1000);
-    final l = nx(bbox144[0] as num);
-    final t = ny(bbox144[1] as num);
-    final r = nx(bbox144[2] as num);
-    final b = ny(bbox144[3] as num);
+    final l = _xTo1000(bbox144[0] as num, pi);
+    final t = _yTo1000(bbox144[1] as num, pi);
+    final r = _xTo1000(bbox144[2] as num, pi);
+    final b = _yTo1000(bbox144[3] as num, pi);
     return yFirst ? [t, l, b, r] : [l, t, r, b];
   }
 
@@ -592,12 +727,14 @@ class AiLayoutFixService {
       final crop = _bbox1000ToCrop(entry['bbox'], pi, yFirst);
       if (crop == null) continue; // 新增条目必须有有效框
       final title = entry['figure_title'];
+      final kind = entry['kind'];
       outAdditions.add({
         'page_idx': pageIdx,
         'crop_bbox': crop,
         'figure_title': (title is String && title.trim().isNotEmpty)
             ? title.trim()
             : null,
+        if (kind is String && kind.trim().isNotEmpty) 'kind': kind.trim(),
         'subfigures': _stringList(entry['subfigures']),
       });
     }
@@ -853,8 +990,20 @@ class AiLayoutFixService {
               'figure_title': {
                 'type': ['string', 'null'],
               },
+              'kind': {
+                'type': 'string',
+                'description':
+                    'One of: figure, table, chart. chart covers Scheme/Plate/'
+                        'Map/Box/Diagram/Exhibit captions.',
+              },
             },
-            'required': ['page_idx', 'subfigures', 'bbox', 'figure_title'],
+            'required': [
+              'page_idx',
+              'subfigures',
+              'bbox',
+              'figure_title',
+              'kind',
+            ],
             'additionalProperties': false,
           },
         },

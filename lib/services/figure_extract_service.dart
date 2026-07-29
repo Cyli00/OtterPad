@@ -96,6 +96,10 @@ class FigureManifestEntry {
   /// 裁剪区域推断方式 (caption_anchored / visual_union / legacy_fallback)
   final String? regionMethod;
 
+  /// 条目种类：`figure` / `table` / `chart`（chart 覆盖 Scheme/Plate/Map 等
+  /// `other` 类别 caption）。旧 manifest 无此字段 → null，消费方按 figure 兜底。
+  final String? kind;
+
   const FigureManifestEntry({
     required this.imagePath,
     required this.captionText,
@@ -109,6 +113,7 @@ class FigureManifestEntry {
     this.direction,
     this.pairMethod,
     this.regionMethod,
+    this.kind,
   });
 
   Map<String, dynamic> toJson() {
@@ -126,6 +131,7 @@ class FigureManifestEntry {
     if (direction != null) m['direction'] = direction;
     if (pairMethod != null) m['pair_method'] = pairMethod;
     if (regionMethod != null) m['region_method'] = regionMethod;
+    if (kind != null) m['kind'] = kind;
     return m;
   }
 
@@ -149,6 +155,7 @@ class FigureManifestEntry {
       direction: json['direction'] as String?,
       pairMethod: json['pair_method'] as String?,
       regionMethod: json['region_method'] as String?,
+      kind: json['kind'] as String?,
     );
   }
 }
@@ -189,6 +196,42 @@ class FigureExtractResult {
     required this.outputDir,
     required this.entries,
     required this.diagnostics,
+  });
+}
+
+/// 页面上一个 caption 标题的公开视图，用于 AI 排版修复的 title inventory。
+/// bbox 为 144 DPI [left, top, right, bottom]；markdown 兜底来源时为空数组。
+class TitleInfo {
+  final int pageIndex;
+  final String text;
+  final String kind; // figure / table / chart
+  final List<double> bbox;
+  final String? blockId;
+  final CaptionSource source;
+
+  const TitleInfo({
+    required this.pageIndex,
+    required this.text,
+    required this.kind,
+    required this.bbox,
+    required this.blockId,
+    required this.source,
+  });
+}
+
+/// 页面栏位布局的公开视图，用于 AI 排版修复判断跨栏图/表。
+/// 坐标为 144 DPI。单栏时 leftColRight/rightColLeft 为 null。
+class ColumnLayout {
+  final bool isDoubleColumn;
+  final double pageLeft, pageRight;
+  final double? leftColRight, rightColLeft;
+
+  const ColumnLayout({
+    required this.isDoubleColumn,
+    required this.pageLeft,
+    required this.pageRight,
+    this.leftColRight,
+    this.rightColLeft,
   });
 }
 
@@ -518,6 +561,7 @@ class FigureExtractService {
   late final RegExp _mainCaptionRe;
   late final RegExp _supplementaryCaptionRe;
   late final RegExp _tableCaptionRe;
+  late final RegExp _otherCaptionRe;
   bool _initialized = false;
 
   static List<String> _collectCategoryPrefixes(
@@ -612,6 +656,15 @@ class FigureExtractService {
     );
   }
 
+  /// prefix-only 正则构造（无 number/suffix）：`table` / `other` 类别用，
+  /// 按 caption 前缀把这类 caption 与 figure 区分开。
+  static RegExp _buildPrefixOnlyRe(Map<String, dynamic> conf, String category) {
+    final prefixes = _collectCategoryPrefixes(conf, category)
+      ..sort((a, b) => b.length.compareTo(a.length));
+    final group = prefixes.map(RegExp.escape).join('|');
+    return RegExp('^(?:$group)', caseSensitive: false);
+  }
+
   Future<void> init() async {
     if (_initialized) return;
     final raw = await rootBundle.loadString(
@@ -636,13 +689,10 @@ class FigureExtractService {
       suffixPattern,
     );
 
-    final tablePrefixes = _collectCategoryPrefixes(conf, 'table')
-      ..sort((a, b) => b.length.compareTo(a.length));
-    final tableGroup = tablePrefixes.map(RegExp.escape).join('|');
-    _tableCaptionRe = RegExp(
-      '^(?:$tableGroup)',
-      caseSensitive: false,
-    );
+    // table / other 类别（other = Scheme/Chart/Plate/Map/Box/Diagram/Exhibit）
+    // prefix-only 正则，用于 classifyKind 把这类 caption 与 figure 区分开。
+    _tableCaptionRe = _buildPrefixOnlyRe(conf, 'table');
+    _otherCaptionRe = _buildPrefixOnlyRe(conf, 'other');
     _initialized = true;
   }
 
@@ -656,6 +706,17 @@ class FigureExtractService {
   /// 生图参考图超限时优先剔除此类条目。使用前须 [init]。
   bool isSupplementaryCaption(String text) =>
       _supplementaryCaptionRe.hasMatch(_normalizeCaptionText(text));
+
+  /// 按 caption 文本分类 kind：`figure` / `table` / `chart`。
+  /// `chart` = caption 配置的 `other` 类别（Scheme/Chart/Plate/Map/Box/Diagram/
+  /// Exhibit）；supplementary 归 `figure`。AiLayoutFixService 用它给 manifest
+  /// 条目定 kind、以及在标题被模型重写后重算 kind。使用前须 [init]。
+  String classifyKind(String text) {
+    final normalized = _normalizeCaptionText(text);
+    if (_tableCaptionRe.hasMatch(normalized)) return 'table';
+    if (_otherCaptionRe.hasMatch(normalized)) return 'chart';
+    return 'figure';
+  }
 
   /// 从 caption 文本提取文件名标识(如 "Figure 1." → "Figure_1")
   String _extractCaptionName(String text) {
@@ -1621,6 +1682,13 @@ class FigureExtractService {
       b.blockLabel == 'chart' ||
       b.blockLabel == 'table';
 
+  /// 无 caption 的匿名 segment 的 kind 兜底：按视觉 block label 推断。
+  static String _visualKindFallback(List<LayoutBlock> blocks) {
+    if (blocks.any((b) => b.blockLabel == 'table')) return 'table';
+    if (blocks.any((b) => b.blockLabel == 'chart')) return 'chart';
+    return 'figure';
+  }
+
   /// "稳定阻塞" labels——这些 block 出现在 caption 同 column 一侧意味着
   /// figure 区域不应跨过它. **不包括 figure_title / vision_footnote / 视觉块**,
   /// 它们要么是 figure 本身的一部分,要么是另一 figure 的内部细节.
@@ -2167,6 +2235,42 @@ class FigureExtractService {
 
   // ─── 公开入口 ─────────────────────────────────────────
 
+  /// 检测页面栏位布局（单栏/双栏 + 左右栏边界），用于 AI 排版修复判断
+  /// 跨栏图/表。包装 [_PageColumns.detect]，不需 [init]。
+  static ColumnLayout detectColumns(List<LayoutBlock> pageBlocks) {
+    final pc = _PageColumns.detect(pageBlocks);
+    return ColumnLayout(
+      isDoubleColumn: pc.isDoubleColumn,
+      pageLeft: pc.pageLeft,
+      pageRight: pc.pageRight,
+      leftColRight: pc.leftColRight,
+      rightColLeft: pc.rightColLeft,
+    );
+  }
+
+  /// 收集单页所有 caption 标题（含 orphan），用于 AI 排版修复的 title
+  /// inventory。复用 [_collectCaptionCandidates] 的多行合并 + markdown 兜底，
+  /// 按 [classifyKind] 分类 kind。bbox 为 144 DPI，markdown 兜底来源时为空。
+  /// 使用前须 [init]。
+  List<TitleInfo> collectTitleInventory(
+    List<LayoutBlock> pageBlocks,
+    String markdown,
+    int pageIndex,
+  ) {
+    assert(_initialized, 'FigureExtractService.init() 未调用');
+    final page = _PageData(pageIndex, pageBlocks, markdown);
+    return _collectCaptionCandidates(page)
+        .map((c) => TitleInfo(
+              pageIndex: c.pageIndex,
+              text: c.text,
+              kind: classifyKind(c.text),
+              bbox: c.bbox?.toList() ?? const <double>[],
+              blockId: c.blockId,
+              source: c.source,
+            ))
+        .toList();
+  }
+
   /// 测试入口:跑完整 inventory + pair,返回 segment.
   @visibleForTesting
   List<FigureSegment> findFigures(
@@ -2323,6 +2427,9 @@ class FigureExtractService {
                   direction: cropInfo.direction,
                   pairMethod: seg.pairMethod.name,
                   regionMethod: cropInfo.regionMethod,
+                  kind: seg.captionText.isNotEmpty
+                      ? classifyKind(seg.captionText)
+                      : _visualKindFallback(seg.blocks),
                 ),
               );
 
