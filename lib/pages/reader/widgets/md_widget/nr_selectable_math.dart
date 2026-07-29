@@ -27,12 +27,12 @@ InlineSpan buildNrSelectableMathSpan({
           trailingText: trailingText,
         ),
       ),
-      nrInvisibleSourceSpan(source, style),
+      _nrInvisibleSourceSpan(source, style),
     ],
   );
 }
 
-TextSpan nrInvisibleSourceSpan(String source, TextStyle baseStyle) {
+TextSpan _nrInvisibleSourceSpan(String source, TextStyle baseStyle) {
   return TextSpan(
     text: source,
     style: baseStyle.copyWith(

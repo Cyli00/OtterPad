@@ -104,9 +104,6 @@ db.FavoriteDocumentsCompanion favoriteDocumentCompanion(
 
 // ─── zotero_items ───────────────────────────────────────────────────────────
 
-({String? docId, int version}) zoteroItemFromRow(db.ZoteroItem r) =>
-    (docId: r.docId, version: r.version);
-
 db.ZoteroItemsCompanion zoteroItemCompanion(
   String zoteroKey,
   String? docId,
