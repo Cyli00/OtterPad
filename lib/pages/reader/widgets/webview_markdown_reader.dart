@@ -54,10 +54,6 @@ class WebViewMarkdownReader extends StatefulWidget {
   /// 横向模式边缘点击成功翻页——view 层触发轻触觉反馈。
   final VoidCallback? onPageFlip;
 
-  /// 显式重载纪元：md 内容未变但 figures/*.png 被原地覆盖（AI 排版修复）
-  /// 时由 view 层递增，强制 WebView 整页重载以重新请求图片。
-  final int reloadEpoch;
-
   /// 横向翻页模式下点击页面中央触发——view 层据此 toggle 沉浸式工具栏。
   /// vertical 模式下不会被调（JS 侧已 mode 短路）。
   final VoidCallback? onToggleToolbar;
@@ -83,7 +79,6 @@ class WebViewMarkdownReader extends StatefulWidget {
     this.onScrollProgress,
     this.onPageFlip,
     this.onToggleToolbar,
-    this.reloadEpoch = 0,
   });
 
   @override
@@ -298,7 +293,6 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     translationStyleId: w.translationStyleId,
     highlights: w.highlights,
     highlightQuery: w.highlightQuery,
-    reloadEpoch: w.reloadEpoch,
   );
 
   void _applyUpdate(ReaderUpdate update) {
