@@ -746,7 +746,6 @@ class FigureExtractService {
   }
 
   /// 判断文本是否为 main caption（"Figure 1." / "图 1" 等主标题）。
-  /// AiLayoutFixService 用它收集 caption 块做"caption 不入框"输出校验，
   /// 与本服务 trimCaptionFromRegion 的判定保持同源。使用前须 [init]。
   bool isMainCaption(String text) =>
       _mainCaptionRe.hasMatch(_normalizeCaptionText(text));
@@ -758,8 +757,7 @@ class FigureExtractService {
 
   /// 按 caption 文本分类 kind：`figure` / `table` / `chart`。
   /// `chart` = caption 配置的 `other` 类别（Scheme/Chart/Plate/Map/Box/Diagram/
-  /// Exhibit）；supplementary 归 `figure`。AiLayoutFixService 用它给 manifest
-  /// 条目定 kind、以及在标题被模型重写后重算 kind。使用前须 [init]。
+  /// Exhibit）；supplementary 归 `figure`。使用前须 [init]。
   String classifyKind(String text) {
     final normalized = _normalizeCaptionText(text);
     if (_tableCaptionRe.hasMatch(normalized)) return 'table';
