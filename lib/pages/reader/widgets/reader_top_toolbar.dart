@@ -19,7 +19,6 @@ class ReaderTopToolbar extends StatelessWidget {
   final VoidCallback onAddFavorite;
   final VoidCallback onRemoveFavorite;
   final VoidCallback onExtract;
-  final VoidCallback onAiLayoutFix;
   final VoidCallback onShowInfo;
   final VoidCallback onReprocess;
   final VoidCallback onRetranslate;
@@ -42,7 +41,6 @@ class ReaderTopToolbar extends StatelessWidget {
     required this.onAddFavorite,
     required this.onRemoveFavorite,
     required this.onExtract,
-    required this.onAiLayoutFix,
     required this.onShowInfo,
     required this.onReprocess,
     required this.onRetranslate,
@@ -117,20 +115,6 @@ class ReaderTopToolbar extends StatelessWidget {
                 onPressed: () {
                   Haptics.soft();
                   (inFavorite ? onRemoveFavorite : onAddFavorite)();
-                },
-              ),
-            if (showPreview && hasResult && !extracting)
-              IconButton(
-                icon: Icon(
-                  Symbols.automation_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: l10n.aiLayoutFix,
-                onPressed: () {
-                  Haptics.soft();
-                  onAiLayoutFix();
                 },
               ),
             if (!showPreview && hasResult && !extracting)

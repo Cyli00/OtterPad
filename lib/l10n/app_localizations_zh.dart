@@ -539,9 +539,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get reExtract => '重新提取';
 
   @override
-  String get aiLayoutFix => 'AI 排版修复';
-
-  @override
   String get documentInfo => '文献信息';
 
   @override
@@ -2224,53 +2221,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get taskBusy => '任务正在进行中';
 
   @override
-  String aiLayoutFixConfirmMessage(String tokens) {
-    return 'AI 排版修复将使用专家模型审核图片裁剪区域（子图完整性、标题排除）并补提漏检图片，预计消耗约 $tokens Token';
-  }
-
-  @override
-  String get aiLayoutFixAnalyzing => '正在分析文档…';
-
-  @override
-  String get aiLayoutFixRendering => '正在渲染 PDF 页面…';
-
-  @override
-  String get aiLayoutFixCalling => '正在调用 AI 模型…';
-
-  @override
-  String get aiLayoutFixApplying => '正在应用修复…';
-
-  @override
-  String get aiLayoutFixCropping => '正在重新裁剪图片…';
-
-  @override
-  String get aiLayoutFixComplete => '排版修复完成';
-
-  @override
-  String aiLayoutFixSummary(int adjusted, int added, int removed) {
-    return '调整 $adjusted · 新增 $added · 移除 $removed';
-  }
-
-  @override
-  String aiLayoutFixFailed(String error) {
-    return '排版修复失败: $error';
-  }
-
-  @override
-  String get aiLayoutFixNoContent => '未找到需要审核的图片';
-
-  @override
   String promptMissingPlaceholders(String placeholders) {
     return '缺少必需占位符：$placeholders';
   }
-
-  @override
-  String aiLayoutFixFigureCount(int count) {
-    return '$count 张图片';
-  }
-
-  @override
-  String get aiLayoutFixRevertHint => '如需还原，可通过「重新提取」恢复';
 
   @override
   String get expertModelNotSet => '请先配置专家模型';
@@ -3091,9 +3044,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get reExtract => '重新擷取';
-
-  @override
-  String get aiLayoutFix => 'AI 排版修復';
 
   @override
   String get documentInfo => '文獻資訊';
@@ -4778,53 +4728,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get taskBusy => '任務正在進行中';
 
   @override
-  String aiLayoutFixConfirmMessage(String tokens) {
-    return 'AI 排版修復將使用專家模型審核圖片裁剪區域（子圖完整性、標題排除）並補提漏檢圖片，預計消耗約 $tokens Token';
-  }
-
-  @override
-  String get aiLayoutFixAnalyzing => '正在分析文檔…';
-
-  @override
-  String get aiLayoutFixRendering => '正在渲染 PDF 頁面…';
-
-  @override
-  String get aiLayoutFixCalling => '正在呼叫 AI 模型…';
-
-  @override
-  String get aiLayoutFixApplying => '正在套用修復…';
-
-  @override
-  String get aiLayoutFixCropping => '正在重新裁剪圖片…';
-
-  @override
-  String get aiLayoutFixComplete => '排版修復完成';
-
-  @override
-  String aiLayoutFixSummary(int adjusted, int added, int removed) {
-    return '調整 $adjusted · 新增 $added · 移除 $removed';
-  }
-
-  @override
-  String aiLayoutFixFailed(String error) {
-    return '排版修復失敗: $error';
-  }
-
-  @override
-  String get aiLayoutFixNoContent => '未找到需要審核的圖片';
-
-  @override
   String promptMissingPlaceholders(String placeholders) {
     return '缺少必需佔位符：$placeholders';
   }
-
-  @override
-  String aiLayoutFixFigureCount(int count) {
-    return '$count 張圖片';
-  }
-
-  @override
-  String get aiLayoutFixRevertHint => '如需還原，可透過「重新擷取」恢復';
 
   @override
   String get expertModelNotSet => '請先設定專家模型';

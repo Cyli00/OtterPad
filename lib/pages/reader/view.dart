@@ -25,10 +25,8 @@ import '../../providers/reader_session_provider.dart';
 import '../../providers/summary_image_provider.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../router/app_routes.dart';
-import '../../services/agent_model_capability.dart';
 import '../../services/ai_settings_prompt.dart';
 import '../../services/doc_extract_service.dart';
-import '../../widgets/app_dialog.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
 import '../../data/models/book/highlight.dart';
@@ -54,7 +52,6 @@ import 'widgets/reader_search_bars.dart';
 import 'widgets/reader_search_navigator.dart';
 import 'widgets/reader_sheet_host.dart';
 import 'widgets/reader_theme_sheet.dart';
-import 'widgets/ai_layout_fix_dialog.dart';
 import 'widgets/reader_top_toolbar.dart';
 import 'widgets/search_overlay.dart';
 import 'widgets/selection_toolbar.dart';
@@ -155,9 +152,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   double _markdownScrollProgress = 0;
   int? _markdownAnchorBlock;
-
-  // AI 排版修复后强制 WebView 重载的纪元计数（见 ReaderProps.reloadEpoch）
-  int _readerReloadEpoch = 0;
 
   @override
   void initState() {
@@ -285,53 +279,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           .read(snackBarServiceProvider)
           .showResult(message: context.l10n.reformatFailed('$e'));
     }
-  }
-
-  void _handleAiLayoutFix(BuildContext context) {
-    final agentState = ref.read(effectiveAgentApiProvider);
-    final modelId = agentState.defaultModelId;
-    if (modelId == null) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.expertModelNotSet);
-      return;
-    }
-    // 走完整能力链（手动覆写 > 远程表 > 兜底）：直接 infer 会绕过远程表与
-    // 手动覆写，命中远程表 / 用户已手动开启 imageInput 的模型也被判 false，
-    // 误提示「专家模型需要支持图片输入」。instance 不可达才回退 infer
-    //（与 document_chat_provider.supportsImages 同款）。
-    final cap =
-        ref.read(agentApiProvider).byId(agentState.id)?.capabilityFor(modelId) ??
-            AgentModelCapability.infer(
-              provider: agentState.provider,
-              modelId: modelId,
-            );
-    if (!cap.imageInput) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.expertRequiresVision);
-      return;
-    }
-    showAppDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AiLayoutFixDialog(
-        documentId: widget.document.id,
-        agentState: agentState,
-        onComplete: () {
-          // AI 修复只改 manifest + 原地覆盖 figures/*.png，md 内容不变——
-          // 内容驱动的刷新链路（useExtractedMarkdown → cacheKey）会短路，
-          // 用显式 reloadEpoch 强制 WebView 重载以取回新图（server 端
-          // 图片已 no-store）；大纲面板自带 manifest 重读 + ImageCache evict。
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            setState(() => _readerReloadEpoch++);
-            _figuresFuture = null;
-            _figuresEpoch.value++;
-          });
-        },
-      ),
-    );
   }
 
   void _togglePreview() {
@@ -1204,7 +1151,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onAddFavorite: _showFavoritePicker,
       onRemoveFavorite: _showFavoriteRemovalPicker,
       onExtract: _onExtractPressed,
-      onAiLayoutFix: () => _handleAiLayoutFix(context),
       onShowInfo: () => _showDocumentInfo(context),
       onReprocess: _onReprocessPressed,
       onRetranslate: _handleRetranslate,
@@ -1577,7 +1523,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         translationStyleId: displayStyle.id,
         initialScrollProgress: _markdownScrollProgress,
         initialAnchorBlock: _markdownAnchorBlock,
-        reloadEpoch: _readerReloadEpoch,
         topInset: topPad,
         bottomInset: bottomPad,
         highlightQuery: session.highlightQuery,

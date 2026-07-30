@@ -4,7 +4,7 @@
 /// - **可定制 prompt**：[PromptDef] 声明（默认文本 + 占位符契约），用户覆盖
 ///   经 PromptStore（`prompt_store.dart`）按 `storageKey` 持久化，设置页
 ///   提供编辑/重置入口；
-/// - **不可定制 prompt**（带逻辑变体，如排版修复的坐标序）：同文件顶层
+/// - **不可定制 prompt**：同文件顶层
 ///   函数/常量，调用方直接引用。
 ///
 /// 边界约定：成段的措辞进这里；带变量的数据标签（"Aspect ratio: ..."、
@@ -147,102 +147,4 @@ abstract final class Prompts {
       'protected content (formulas or code). Keep every placeholder exactly '
       'as-is at its corresponding position in the translation. Never '
       'translate, alter, merge, or drop a placeholder.';
-
-  // ── 不可定制：AI 排版修复（坐标序随 provider 变体，函数形态）──
-
-  /// 排版修复 system prompt。Gemini 用其原生 [ymin,xmin,ymax,xmax]
-  /// 训练约定（yFirst），其余服务商 [left,top,right,bottom]。
-  static String layoutFixSystem({required bool yFirst}) {
-    final order =
-        yFirst ? '[ymin, xmin, ymax, xmax]' : '[left, top, right, bottom]';
-    final example = yFirst
-        ? 'on a page image 1584 px tall, y = 792 px -> 500'
-        : 'on a page image 1224 px wide, x = 612 px -> 500';
-    return 'You are an academic-document figure-extraction auditor. You '
-        'receive rendered PDF page images (each labeled with its page index '
-        'and pixel size), the current figures manifest for those pages, a '
-        'per-page title inventory, and a per-page column layout.\n\n'
-        'Your task: audit and repair figure/table crop regions, fix '
-        'caption-title disconnection, and recover missed figures/tables. '
-        'Large multi-panel figures, cross-column figures, and cross-column '
-        'tables are the priority — extraction pipelines often clip their '
-        'edges or split them by column.\n\n'
-        'Each manifest entry has a "kind" (figure / table / chart), a '
-        '"figure_title", a "bbox" (the crop region), a "caption_bbox" (where '
-        'its title sits on the page, when available), and a "pair_method" '
-        '(how the title was paired with the visual region: samePage / '
-        'crossPage / lateBound / ordinalMatch). pair_method is informational '
-        'only — NOT a confidence score. Always verify against the page image '
-        'regardless of pair_method.\n\n'
-        'For EACH manifest entry, work through this checklist:\n'
-        '1. Locate the figure/table on its page image.\n'
-        '2. Enumerate every subfigure panel and its sequence label — (a), '
-        '(b), (c), A, B, ... — and report them in "subfigures" (empty list '
-        'for single-panel figures).\n'
-        '3. The bbox MUST fully contain: every subfigure panel, every '
-        'sequence label, and explanatory text that sits inside the figure '
-        'region.\n'
-        '4. The bbox MUST exclude: the main caption line (text starting '
-        'with "Figure N" / "Fig. N" / "Table N"), body paragraphs, page '
-        'headers/footers, and other figures.\n'
-        '5. Check every edge for clipping — axis labels, legends, curve '
-        'extremes and bottom-row subfigure labels are the most common '
-        'victims.\n'
-        '6. CROSS-COLUMN: in two-column layouts a large figure or table may '
-        'span both columns. The column layout tells you where the column '
-        'boundary is. If the bbox covers only one column but the visual '
-        'content clearly spans both columns, expand the bbox to full page '
-        'width.\n'
-        '7. TITLE DISCONNECTION: compare figure_title against the title '
-        'inventory for that page. If the entry is paired with the wrong '
-        'title, set figure_title to the correct title text copied from the '
-        'inventory (this reassigns the title). If the printed title has OCR '
-        'errors or is missing, correct or fill it. If a title in the '
-        'inventory has no matching manifest entry and its figure is visible '
-        'on the page, report that figure as an addition with that title.\n\n'
-        'Then scan each page for real figures/tables not covered by any '
-        'manifest entry (report in "additions", with the correct "kind"), '
-        'and manifest entries that are not actually figures (report their '
-        'img in "remove").\n\n'
-        'Coordinates: every bbox is $order, integers normalized to 0-1000 '
-        "relative to that page image's width and height — the SAME "
-        'convention as the manifest bboxes you receive ($example).\n\n'
-        'Respond with JSON only, exactly this shape:\n'
-        '{"fixes":[{"img":"...","page_idx":0,"subfigures":["a","b"],'
-        '"bbox":[0,0,0,0],"figure_title":"..."}],'
-        '"additions":[{"page_idx":0,"subfigures":[],"bbox":[0,0,0,0],'
-        '"figure_title":"...","kind":"figure"}],"remove":["..."]}\n\n'
-        'Rules:\n'
-        '- "fixes": include an entry ONLY when you change something; "img" '
-        'must be copied exactly from the manifest; set "bbox" to null if '
-        'only the title changes, set "figure_title" to null if only the '
-        'bbox changes.\n'
-        '- "additions": ONLY for figures/tables that have NO matching '
-        'manifest entry at all. If a figure with the same figure_title '
-        'already exists in the manifest, adjust it via "fixes" instead — '
-        'never duplicate it as an addition. Every addition MUST include '
-        '"kind" (figure / table / chart).\n'
-        '- "remove": only img values from the manifest; anything you do '
-        'not mention stays unchanged.\n'
-        '- If everything is already correct, return '
-        '{"fixes":[],"additions":[],"remove":[]}.\n'
-        '- No text outside the JSON.';
-  }
-
-  /// 排版修复 user prompt 的文案行（manifest JSON 组装在 service 侧）。
-  static const layoutFixUserManifestHeader =
-      '## Current figures manifest (for the pages shown)';
-  static const layoutFixUserAuditHint =
-      'Audit each entry against its page image; also scan for missed '
-      'figures.';
-  static const layoutFixUserScanHint =
-      'No manifest entries for these pages — scan them for missed figures.';
-
-  /// 排版修复 user prompt 的 title inventory 段头（按页）。
-  static String layoutFixUserTitleInventoryHeader(int pageIdx) =>
-      '## Title inventory (page $pageIdx)';
-
-  /// 排版修复 user prompt 的 column layout 段头（按页）。
-  static String layoutFixUserColumnLayoutHeader(int pageIdx) =>
-      '## Column layout (page $pageIdx)';
 }

@@ -546,9 +546,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reExtract => 'Re-extract';
 
   @override
-  String get aiLayoutFix => 'AI Layout Fix';
-
-  @override
   String get documentInfo => 'Document Info';
 
   @override
@@ -2277,53 +2274,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get taskBusy => 'A task is already running';
 
   @override
-  String aiLayoutFixConfirmMessage(String tokens) {
-    return 'AI layout fix will use the expert model to audit figure crop regions (subfigure completeness, caption exclusion) and recover missed figures. Estimated token usage: ~$tokens';
-  }
-
-  @override
-  String get aiLayoutFixAnalyzing => 'Analyzing document...';
-
-  @override
-  String get aiLayoutFixRendering => 'Rendering PDF pages...';
-
-  @override
-  String get aiLayoutFixCalling => 'Calling AI model...';
-
-  @override
-  String get aiLayoutFixApplying => 'Applying fixes...';
-
-  @override
-  String get aiLayoutFixCropping => 'Re-cropping figures...';
-
-  @override
-  String get aiLayoutFixComplete => 'Layout fix complete';
-
-  @override
-  String aiLayoutFixSummary(int adjusted, int added, int removed) {
-    return '$adjusted adjusted · $added added · $removed removed';
-  }
-
-  @override
-  String aiLayoutFixFailed(String error) {
-    return 'Layout fix failed: $error';
-  }
-
-  @override
-  String get aiLayoutFixNoContent => 'No figures to audit';
-
-  @override
   String promptMissingPlaceholders(String placeholders) {
     return 'Missing required placeholder: $placeholders';
   }
-
-  @override
-  String aiLayoutFixFigureCount(int count) {
-    return '$count figures';
-  }
-
-  @override
-  String get aiLayoutFixRevertHint => 'Revert via \"Re-extract\" if needed';
 
   @override
   String get expertModelNotSet => 'Please set up the expert model first';

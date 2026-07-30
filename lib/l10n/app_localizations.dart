@@ -1131,12 +1131,6 @@ abstract class AppLocalizations {
   /// **'Re-extract'**
   String get reExtract;
 
-  /// No description provided for @aiLayoutFix.
-  ///
-  /// In en, this message translates to:
-  /// **'AI Layout Fix'**
-  String get aiLayoutFix;
-
   /// No description provided for @documentInfo.
   ///
   /// In en, this message translates to:
@@ -4053,83 +4047,11 @@ abstract class AppLocalizations {
   /// **'A task is already running'**
   String get taskBusy;
 
-  /// No description provided for @aiLayoutFixConfirmMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'AI layout fix will use the expert model to audit figure crop regions (subfigure completeness, caption exclusion) and recover missed figures. Estimated token usage: ~{tokens}'**
-  String aiLayoutFixConfirmMessage(String tokens);
-
-  /// No description provided for @aiLayoutFixAnalyzing.
-  ///
-  /// In en, this message translates to:
-  /// **'Analyzing document...'**
-  String get aiLayoutFixAnalyzing;
-
-  /// No description provided for @aiLayoutFixRendering.
-  ///
-  /// In en, this message translates to:
-  /// **'Rendering PDF pages...'**
-  String get aiLayoutFixRendering;
-
-  /// No description provided for @aiLayoutFixCalling.
-  ///
-  /// In en, this message translates to:
-  /// **'Calling AI model...'**
-  String get aiLayoutFixCalling;
-
-  /// No description provided for @aiLayoutFixApplying.
-  ///
-  /// In en, this message translates to:
-  /// **'Applying fixes...'**
-  String get aiLayoutFixApplying;
-
-  /// No description provided for @aiLayoutFixCropping.
-  ///
-  /// In en, this message translates to:
-  /// **'Re-cropping figures...'**
-  String get aiLayoutFixCropping;
-
-  /// No description provided for @aiLayoutFixComplete.
-  ///
-  /// In en, this message translates to:
-  /// **'Layout fix complete'**
-  String get aiLayoutFixComplete;
-
-  /// No description provided for @aiLayoutFixSummary.
-  ///
-  /// In en, this message translates to:
-  /// **'{adjusted} adjusted · {added} added · {removed} removed'**
-  String aiLayoutFixSummary(int adjusted, int added, int removed);
-
-  /// No description provided for @aiLayoutFixFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Layout fix failed: {error}'**
-  String aiLayoutFixFailed(String error);
-
-  /// No description provided for @aiLayoutFixNoContent.
-  ///
-  /// In en, this message translates to:
-  /// **'No figures to audit'**
-  String get aiLayoutFixNoContent;
-
   /// No description provided for @promptMissingPlaceholders.
   ///
   /// In en, this message translates to:
   /// **'Missing required placeholder: {placeholders}'**
   String promptMissingPlaceholders(String placeholders);
-
-  /// No description provided for @aiLayoutFixFigureCount.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} figures'**
-  String aiLayoutFixFigureCount(int count);
-
-  /// No description provided for @aiLayoutFixRevertHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Revert via \"Re-extract\" if needed'**
-  String get aiLayoutFixRevertHint;
 
   /// No description provided for @expertModelNotSet.
   ///
