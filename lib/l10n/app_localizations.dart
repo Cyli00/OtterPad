@@ -4053,12 +4053,6 @@ abstract class AppLocalizations {
   /// **'Missing required placeholder: {placeholders}'**
   String promptMissingPlaceholders(String placeholders);
 
-  /// No description provided for @expertModelNotSet.
-  ///
-  /// In en, this message translates to:
-  /// **'Please set up the expert model first'**
-  String get expertModelNotSet;
-
   /// No description provided for @expertRequiresVision.
   ///
   /// In en, this message translates to:

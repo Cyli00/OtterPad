@@ -2226,9 +2226,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get expertModelNotSet => '请先配置专家模型';
-
-  @override
   String get expertRequiresVision => '专家模型需要支持图片输入';
 
   @override
@@ -4731,9 +4728,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String promptMissingPlaceholders(String placeholders) {
     return '缺少必需佔位符：$placeholders';
   }
-
-  @override
-  String get expertModelNotSet => '請先設定專家模型';
 
   @override
   String get expertRequiresVision => '專家模型需要支援圖片輸入';

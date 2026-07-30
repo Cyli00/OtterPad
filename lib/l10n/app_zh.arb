@@ -737,7 +737,6 @@
 
   "promptMissingPlaceholders": "缺少必需占位符：{placeholders}",
   "@promptMissingPlaceholders": { "placeholders": { "placeholders": { "type": "String" } } },
-  "expertModelNotSet": "请先配置专家模型",
   "expertRequiresVision": "专家模型需要支持图片输入",
   "switchedToExpertForImage": "快速模型不支持图片，已切换至专家模型",
   "askAi": "问 AI",

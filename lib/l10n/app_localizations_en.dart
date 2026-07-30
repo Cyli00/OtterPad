@@ -2279,9 +2279,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get expertModelNotSet => 'Please set up the expert model first';
-
-  @override
   String get expertRequiresVision => 'Expert model must support image input';
 
   @override
