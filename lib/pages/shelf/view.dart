@@ -30,7 +30,7 @@ class ShelfPage extends ConsumerWidget {
       initialName: fav.name,
     );
     if (result != null) {
-      ref
+      await ref
           .read(favoritesProvider.notifier)
           .rename(fav.id, emoji: result['emoji'], name: result['name']);
     }
@@ -76,7 +76,7 @@ class ShelfPage extends ConsumerWidget {
       ),
     );
     if (confirmed == true) {
-      ref.read(favoritesProvider.notifier).delete(fav.id);
+      await ref.read(favoritesProvider.notifier).delete(fav.id);
     }
   }
 
@@ -205,7 +205,7 @@ class ShelfPage extends ConsumerWidget {
                         Haptics.soft();
                         final result = await showCreateFavoriteDialog(context);
                         if (result != null) {
-                          ref
+                          await ref
                               .read(favoritesProvider.notifier)
                               .create(
                                 emoji: result['emoji']!,

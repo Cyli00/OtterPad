@@ -132,8 +132,9 @@ class ReadingHistoryPage extends ConsumerWidget {
             final doc = section.docs[index];
             return SpringDismissible(
               key: ValueKey(doc.id),
-              onDismissed: () {
-                ref.read(historyProvider.notifier).removeDoc(doc.id);
+              onDismissed: () async {
+                await ref.read(historyProvider.notifier).removeDoc(doc.id);
+                if (!context.mounted) return;
                 ref
                     .read(snackBarServiceProvider)
                     .showResult(message: context.l10n.removedFromHistory);
@@ -185,7 +186,7 @@ class ReadingHistoryPage extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    ref.read(historyProvider.notifier).clear();
+    await ref.read(historyProvider.notifier).clear();
     if (!context.mounted) return;
     ref.read(snackBarServiceProvider).showResult(message: context.l10n.readingHistoryCleared);
   }
