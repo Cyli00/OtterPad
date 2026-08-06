@@ -3213,6 +3213,78 @@ abstract class AppLocalizations {
   /// **'Reformat failed: {error}'**
   String reformatFailed(String error);
 
+  /// No description provided for @aiFixFigures.
+  ///
+  /// In en, this message translates to:
+  /// **'AI repair figures'**
+  String get aiFixFigures;
+
+  /// No description provided for @aiFixFiguresAnalyzing.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyzing layout...'**
+  String get aiFixFiguresAnalyzing;
+
+  /// No description provided for @aiFixFiguresCalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Calling AI model...'**
+  String get aiFixFiguresCalling;
+
+  /// No description provided for @aiFixFiguresApplying.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying repairs...'**
+  String get aiFixFiguresApplying;
+
+  /// No description provided for @aiFixFiguresCropping.
+  ///
+  /// In en, this message translates to:
+  /// **'Cropping figures ({done}/{total})'**
+  String aiFixFiguresCropping(int done, int total);
+
+  /// No description provided for @aiFixFiguresDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Figures repaired. To revert, use \"Reformat\"'**
+  String get aiFixFiguresDone;
+
+  /// No description provided for @aiFixFiguresFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'AI repair failed: {error}'**
+  String aiFixFiguresFailed(String error);
+
+  /// No description provided for @aiFixFiguresCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'AI repair cancelled'**
+  String get aiFixFiguresCancelled;
+
+  /// No description provided for @aiFixFiguresMissingExtract.
+  ///
+  /// In en, this message translates to:
+  /// **'Please extract the document first, then repair figures.'**
+  String get aiFixFiguresMissingExtract;
+
+  /// No description provided for @aiFixFiguresModelNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Please set an expert or fast model first.'**
+  String get aiFixFiguresModelNotSet;
+
+  /// No description provided for @aiFixFiguresInvalidLlmOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'AI output could not be parsed. Please try again.'**
+  String get aiFixFiguresInvalidLlmOutput;
+
+  /// No description provided for @aiFixFiguresFailedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'AI repair failed. Please try again.'**
+  String get aiFixFiguresFailedGeneric;
+
   /// No description provided for @addedToFavorite.
   ///
   /// In en, this message translates to:

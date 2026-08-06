@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart' show CancelToken;
 
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
@@ -29,6 +30,8 @@ import '../../services/ai_settings_prompt.dart';
 import '../../services/doc_extract_service.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
+import '../../services/figure_fix_service.dart';
+import 'widgets/figure_fix_progress_dialog.dart';
 import '../../data/models/book/highlight.dart';
 import '../../providers/highlight_provider.dart';
 import '../../services/haptics.dart';
@@ -150,21 +153,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // 滚动 / zoom / fit）都触发一次 reportProgress——只有 pageNumber 真变了才上报。
   int? _lastReportedPdfPage;
 
-  double _markdownScrollProgress = 0;
+  double _readingProgress = 0;
   int? _markdownAnchorBlock;
 
   @override
   void initState() {
     super.initState();
-    // 重开文档恢复阅读位置：进度/锚点持久化在 HistoryEntry（事实源），
-    // 经 initialScrollProgress / initialAnchorBlock 传入 WebView 在
-    // onContentReady 时恢复。横向翻页优先锚点（比率在字号/窗口尺寸
-    // 变化后会落错页），纵向按比率。
+    // 重开文档恢复阅读位置：进度/锚点跨会话持久化在 HistoryEntry（事实源），
+    // initState 读入 _readingProgress / _markdownAnchorBlock。会话内 _readingProgress
+    // 由 PDF 翻页 + Markdown 滚动两路实时更新（不经过 history 2s 防抖），切换视图
+    // 时目标侧直接读它——PDF 经 onViewerReady goToPage、Markdown 经 initialScrollProgress
+    // 在 onContentReady 恢复，实现「PDF 当前页 ↔ WebView 位置」粗略比率对应。
+    // 横向翻页优先锚点（比率在字号/窗口尺寸变化后会落错页），纵向按比率。
     final entry = (ref.read(historyProvider).value ?? const [])
         .where((e) => e.docId == widget.document.id)
         .firstOrNull;
     if (entry != null) {
-      _markdownScrollProgress = entry.progress;
+      _readingProgress = entry.progress;
       _markdownAnchorBlock = entry.anchorBlock;
     }
     _sessionArgs = ReaderSessionArgs(
@@ -187,6 +192,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// PDF 控制器变化回调：仅在当前页号变化时上报。pdfrx 的 PdfViewerController
   /// 是 ChangeNotifier，滚动、zoom、fit 都会通知；筛 pageNumber 防抖。
+  ///
+  /// 同步把页号比率写进 [_readingProgress] 并清空 [_markdownAnchorBlock]——
+  /// 切到 WebView 时直接读这个活字段恢复（不经过 history 2s 防抖，永远新鲜），
+  /// 实现「PDF 当前页 ↔ WebView 位置」的粗略比率对应。anchorBlock 是 Markdown
+  /// 横向翻页的块锚点，PDF 无此概念，清掉避免下次切 WebView 用到陈旧锚点。
   void _onPdfControllerChanged() {
     if (!_pdfController.isReady) return;
     final pageNumber = _pdfController.pageNumber;
@@ -195,6 +205,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (_lastReportedPdfPage == pageNumber) return;
     _lastReportedPdfPage = pageNumber;
     final progress = pageNumber / totalPages;
+    _readingProgress = progress;
+    _markdownAnchorBlock = null;
     _sessionNotifier.reportProgress(progress);
   }
 
@@ -278,6 +290,110 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       ref
           .read(snackBarServiceProvider)
           .showResult(message: context.l10n.reformatFailed('$e'));
+    }
+  }
+
+  Future<void> _onAiFixFiguresPressed() async {
+    final filePath = DocPaths.pdf(widget.document.id);
+    if (widget.document.contentHash == null || !File(filePath).existsSync()) {
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: context.l10n.pdfNotFound);
+      return;
+    }
+
+    final agentState = ref.read(effectiveAgentApiProvider);
+    if (!await AiSettingsPrompt.ensureTextModelConfigured(
+      context: context,
+      agentState: agentState,
+    )) {
+      return;
+    }
+
+    final stageNotifier = ValueNotifier<String>(
+      context.l10n.aiFixFiguresAnalyzing,
+    );
+    final cancelToken = CancelToken();
+    var dialogClosed = false;
+    showFigureFixProgressDialog(
+      context: context,
+      stageNotifier: stageNotifier,
+      onCancel: () => cancelToken.cancel(),
+    );
+
+    void closeDialog() {
+      if (dialogClosed) return;
+      dialogClosed = true;
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+
+    Future<void> fail(String message) async {
+      closeDialog();
+      if (!mounted) return;
+      ref.read(snackBarServiceProvider).showResult(message: message);
+    }
+
+    try {
+      final analysis = await FigureFixService.instance.analyze(
+        pdfPath: filePath,
+      );
+      if (cancelToken.isCancelled) {
+        await fail(context.l10n.aiFixFiguresCancelled);
+        return;
+      }
+      if (!mounted) return;
+
+      stageNotifier.value = context.l10n.aiFixFiguresCalling;
+      final result = await FigureFixService.instance.execute(
+        analysis: analysis,
+        agentState: agentState,
+        cancelToken: cancelToken,
+      );
+      if (cancelToken.isCancelled) {
+        await fail(context.l10n.aiFixFiguresCancelled);
+        return;
+      }
+      if (!mounted) return;
+
+      stageNotifier.value = context.l10n.aiFixFiguresApplying;
+      final (mdPath, content, _) = await FigureFixService.instance.apply(
+        analysis: analysis,
+        result: result,
+        title: widget.document.title,
+        cancelToken: cancelToken,
+        onProgress: (done, total) {
+          stageNotifier.value = context.l10n.aiFixFiguresCropping(done, total);
+        },
+      );
+      closeDialog();
+      if (!mounted) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _sessionNotifier.useExtractedMarkdown(
+          markdownPath: mdPath,
+          markdownContent: content,
+        );
+        _figuresFuture = null;
+        _figuresEpoch.value++;
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(message: context.l10n.aiFixFiguresDone);
+      });
+    } on FigureFixException catch (e) {
+      await fail(switch (e.kind) {
+        FigureFixError.missingExtractJson =>
+          context.l10n.aiFixFiguresMissingExtract,
+        FigureFixError.modelNotSet => context.l10n.aiFixFiguresModelNotSet,
+        FigureFixError.cancelled => context.l10n.aiFixFiguresCancelled,
+        FigureFixError.invalidLlmOutput =>
+          context.l10n.aiFixFiguresInvalidLlmOutput,
+      });
+    } catch (_) {
+      // 泛型错误不上屏技术原文，统一走通用文案。
+      await fail(context.l10n.aiFixFiguresFailedGeneric);
+    } finally {
+      stageNotifier.dispose();
     }
   }
 
@@ -802,7 +918,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   double _chatReturnPromptBottom(ReaderSessionState session) {
     final padding = MediaQuery.paddingOf(context).bottom;
     const barHeight = 56.0;
-    final barVisible = session.showPreview &&
+    final barVisible =
+        session.showPreview &&
         session.hasResult &&
         session.markdownContent != null &&
         session.toolbarsVisible;
@@ -1155,6 +1272,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onReprocess: _onReprocessPressed,
       onRetranslate: _handleRetranslate,
       onOpenSummaryImage: () => _summaryCoordinator.openSummaryImage(),
+      onAiFixFigures: _onAiFixFiguresPressed,
     );
   }
 
@@ -1407,8 +1525,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       controller: _pdfController,
                       params: PdfViewerParams(
                         backgroundColor: Colors.transparent,
+                        // 触摸 fling 惯性摩擦（pdfrx 默认 0.0000135）：调小让一次
+                        // 手势滑得更远，连续滚动下不必反复 fling 才能翻一页。真机实测微调。
+                        interactionEndFrictionCoefficient: 5e-6,
                         matchTextColor: cs.primaryContainer.withAlpha(150),
                         activeMatchTextColor: cs.primary.withAlpha(72),
+                        // PDF 初始页 = 按比率反算的恢复页（_readingProgress 来自
+                        // Markdown 滚动或上次 PDF 翻页）。让 pdfrx 自己从恢复页起步，
+                        // 避免在 onViewerReady 里 goToPage 与内部初始 _goToPage 竞争
+                        // 造成「先跳第 1 页再动画到恢复页」的闪烁。修掉「PDF 打开
+                        // 永远停在第 1 页」+ 实现 Markdown→PDF 位置对应。
+                        calculateInitialPageNumber: (document, controller) {
+                          final total = controller.pages.length;
+                          if (_readingProgress > 0 && total > 0) {
+                            return (_readingProgress * total).round().clamp(
+                              1,
+                              total,
+                            );
+                          }
+                          return 1;
+                        },
                         onViewerReady: (document, controller) =>
                             _pdfSearch.bind(controller),
                         pagePaintCallbacks: _pdfSearch.searcher == null
@@ -1503,8 +1639,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final cs = theme.colorScheme;
     final palette = resolveReaderPalette(settings.theme, cs);
     final highlights =
-        ref.watch(highlightProvider(widget.document.id)).value ??
-        const [];
+        ref.watch(highlightProvider(widget.document.id)).value ?? const [];
     final documentDir = DocPaths.docDir(widget.document.id);
 
     // 用实时安全区把 WebView 控件整体内缩——滚动区不覆盖状态栏/小白条。
@@ -1521,7 +1656,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         highlights: highlights,
         documentDir: documentDir,
         translationStyleId: displayStyle.id,
-        initialScrollProgress: _markdownScrollProgress,
+        initialScrollProgress: _readingProgress,
         initialAnchorBlock: _markdownAnchorBlock,
         topInset: topPad,
         bottomInset: bottomPad,
@@ -1533,7 +1668,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onScrollDirection: _handleWebViewScrollDirection,
         onScrollProgress: (p, anchor) {
           if (!mounted) return;
-          _markdownScrollProgress = p;
+          _readingProgress = p;
           _markdownAnchorBlock = anchor;
           _sessionNotifier.reportProgress(p, anchorBlock: anchor);
         },
@@ -1546,6 +1681,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ///
   /// 匹配策略：从 url 提取 basename（`Figure_N.png`）与 manifest entry
   /// 的 `imagePath` basename 比对，和 outline_panel 保持一致。
+  ///
+  /// 范围分流：先在**全量 manifest** 按 basename 定位正文实际点击的条目
+  /// （匿名 visual 也能被找到）；若命中匿名条目（visual-only / 空 caption
+  /// legacy）则以 singleton 列表打开，避免混入有标题画廊；若是可展示条目则对
+  /// 全量 manifest 调 [FigureManifestEntry.forDisplay]，在过滤后的列表里
+  /// 重新按 basename 定位 index，保证画廊只含可展示条目。
   Future<void> _handleMarkdownImageTap(String url) async {
     final documentId = widget.document.id;
 
@@ -1571,15 +1712,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!mounted) return;
     if (figures == null || figures.isEmpty) return;
 
-    final index = figures.indexWhere(
-      (e) => p.basename(e.imagePath) == fileName,
-    );
-    if (index < 0) return;
+    FigureManifestEntry? selected;
+    for (final e in figures) {
+      if (p.basename(e.imagePath) == fileName) {
+        selected = e;
+        break;
+      }
+    }
+    if (selected == null) return;
+
+    final List<FigureManifestEntry> viewerFigures;
+    final int initialIndex;
+    if (!selected.isDisplayFigure) {
+      // 匿名正文 visual（visual-only / 无 caption legacy）：单图打开，
+      // 无画廊页码，也不与有标题图表同画廊。
+      viewerFigures = [selected];
+      initialIndex = 0;
+    } else {
+      viewerFigures = FigureManifestEntry.forDisplay(figures);
+      final filteredIndex = viewerFigures.indexWhere(
+        (e) => p.basename(e.imagePath) == fileName,
+      );
+      if (filteredIndex < 0) return; // forDisplay 保留 isDisplayFigure，理论不可达
+      initialIndex = filteredIndex;
+    }
 
     await showFigureViewer(
       context,
-      figures,
-      initialIndex: index,
+      viewerFigures,
+      initialIndex: initialIndex,
       documentId: documentId,
       document: widget.document,
       onLocateQuote: _locateQuoteInReader,

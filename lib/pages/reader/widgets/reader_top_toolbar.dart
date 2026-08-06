@@ -23,6 +23,7 @@ class ReaderTopToolbar extends StatelessWidget {
   final VoidCallback onReprocess;
   final VoidCallback onRetranslate;
   final VoidCallback onOpenSummaryImage;
+  final VoidCallback onAiFixFigures;
 
   const ReaderTopToolbar({
     super.key,
@@ -45,6 +46,7 @@ class ReaderTopToolbar extends StatelessWidget {
     required this.onReprocess,
     required this.onRetranslate,
     required this.onOpenSummaryImage,
+    required this.onAiFixFigures,
   });
 
   @override
@@ -87,6 +89,20 @@ class ReaderTopToolbar extends StatelessWidget {
                 },
               ),
             extractButton,
+            if (showPreview && hasResult && !extracting)
+              IconButton(
+                icon: Icon(
+                  Symbols.auto_fix_high_rounded,
+                  size: 22,
+                  fill: 1,
+                  color: cs.onSurfaceVariant,
+                ),
+                tooltip: l10n.aiFixFigures,
+                onPressed: () {
+                  Haptics.soft();
+                  onAiFixFigures();
+                },
+              ),
             if (showPreview && hasResult && hasMarkdownContent)
               IconButton(
                 icon: Icon(

@@ -13,14 +13,21 @@ void main() {
     // 模拟 Figure_4 排版:image+chart 在上半页,主图注与 vision_footnote 子图注
     // 在下半页. 旧实现会把子图注高度也算进裁剪框.
     final segment = [
-      _block('a', 'figure_title', [114, 1019, 751, 1040],
-          'Figure 4. Optical paths.'),
+      _block('a', 'figure_title', [
+        114,
+        1019,
+        751,
+        1040,
+      ], 'Figure 4. Optical paths.'),
       _block('b', 'image', [223, 214, 644, 662]),
       _block('c', 'chart', [186, 691, 624, 981]),
-      _block('d', 'vision_footnote', [114, 1055, 665, 1072],
-          '(B) 2-photon optical path.'),
-      _block('e', 'vision_footnote', [115, 1069, 1100, 1093],
-          '(C and D) ...'),
+      _block('d', 'vision_footnote', [
+        114,
+        1055,
+        665,
+        1072,
+      ], '(B) 2-photon optical path.'),
+      _block('e', 'vision_footnote', [115, 1069, 1100, 1093], '(C and D) ...'),
     ];
 
     final bbox = service.computeMergedBbox(segment);
@@ -37,19 +44,34 @@ void main() {
     final blocks = [
       _block('2', 'image', [182, 197, 634, 777]),
       _block('3', 'image', [638, 203, 1040, 783]),
-      _block('4', 'figure_title', [114, 807, 711, 827],
-          'Figure 2. Optical implant assemblies.'),
-      _block('5', 'figure_title', [116, 813, 1100, 862],
-          'Figure 2. Optical implant assemblies. (A) Cartoon visualizations of the assemblies.'),
-      _block('6', 'vision_footnote', [115, 857, 1103, 914], '(B) Schematic ...'),
+      _block('4', 'figure_title', [
+        114,
+        807,
+        711,
+        827,
+      ], 'Figure 2. Optical implant assemblies.'),
+      _block(
+        '5',
+        'figure_title',
+        [116, 813, 1100, 862],
+        'Figure 2. Optical implant assemblies. (A) Cartoon visualizations of the assemblies.',
+      ),
+      _block('6', 'vision_footnote', [
+        115,
+        857,
+        1103,
+        914,
+      ], '(B) Schematic ...'),
     ];
 
     final segments = service.findFigures([blocks]);
 
     expect(segments.length, 1);
     // 用更长的 caption 文本(来自 block 5)
-    expect(segments.single.captionText,
-        startsWith('Figure 2. Optical implant assemblies. (A)'));
+    expect(
+      segments.single.captionText,
+      startsWith('Figure 2. Optical implant assemblies. (A)'),
+    );
     expect(segments.single.captionName, 'Figure_2');
     // 视觉块 + vision_footnote 都进 blocks(用于 markdown 替换清理)
     final ids = segments.single.blocks.map((b) => b.blockId).toSet();
@@ -75,8 +97,10 @@ void main() {
 
     expect(segments.length, 1);
     expect(segments.single.captionName, 'Figure_1');
-    expect(segments.single.captionText,
-        startsWith('Figure 1. Deep-brain fluorescence'));
+    expect(
+      segments.single.captionText,
+      startsWith('Figure 1. Deep-brain fluorescence'),
+    );
     // image 块进 blocks 列表
     expect(segments.single.blocks.any((b) => b.blockId == '1'), true);
   });
@@ -87,8 +111,12 @@ void main() {
     final pages = [
       [
         _block('1', 'image', [100, 100, 700, 600]),
-        _block('2', 'text', [100, 620, 700, 660],
-            'Figure 3. A correctly identified caption.'),
+        _block('2', 'text', [
+          100,
+          620,
+          700,
+          660,
+        ], 'Figure 3. A correctly identified caption.'),
       ],
     ];
 
@@ -102,7 +130,9 @@ void main() {
     // Paper 路径保持"宁可漏不可错"：无编号 caption 不产出 figure。
     final service = FigureExtractService.instance;
     final pages = [
-      [_block('1', 'image', [101, 196, 732, 1196])],
+      [
+        _block('1', 'image', [101, 196, 732, 1196]),
+      ],
     ];
 
     final segments = service.findFigures(
@@ -118,7 +148,12 @@ void main() {
     final service = FigureExtractService.instance;
     final pages = [
       [
-        _block('t', 'text', [50, 50, 900, 100], 'Some body text around the figure.'),
+        _block('t', 'text', [
+          50,
+          50,
+          900,
+          100,
+        ], 'Some body text around the figure.'),
         _block('1', 'image', [101, 196, 732, 1196]),
       ],
     ];
@@ -136,18 +171,32 @@ void main() {
     final pages = [
       [
         _block('t1', 'table', [100, 100, 900, 350]),
-        _block('tc1', 'figure_title', [100, 360, 900, 390],
-            'Table 1. First data table.'),
+        _block('tc1', 'figure_title', [
+          100,
+          360,
+          900,
+          390,
+        ], 'Table 1. First data table.'),
         _block('t2', 'table', [100, 500, 900, 750]),
-        _block('tc2', 'figure_title', [100, 760, 900, 790],
-            'Table 2. Second data table.'),
+        _block('tc2', 'figure_title', [
+          100,
+          760,
+          900,
+          790,
+        ], 'Table 2. Second data table.'),
       ],
       const <LayoutBlock>[],
-      [_block('i1', 'image', [100, 100, 700, 900])],
+      [
+        _block('i1', 'image', [100, 100, 700, 900]),
+      ],
       const <LayoutBlock>[],
-      [_block('i2', 'image', [100, 100, 700, 900])],
+      [
+        _block('i2', 'image', [100, 100, 700, 900]),
+      ],
       const <LayoutBlock>[],
-      [_block('i3', 'image', [100, 100, 700, 900])],
+      [
+        _block('i3', 'image', [100, 100, 700, 900]),
+      ],
     ];
 
     final segments = service.findFigures(pages);
@@ -165,12 +214,18 @@ void main() {
         _blockEx('p1', 'chart', [100, 100, 350, 350], groupId: 7),
         _blockEx('p2', 'chart', [360, 100, 610, 350], groupId: 7),
         _blockEx('p3', 'chart', [620, 100, 870, 350], groupId: 7),
-        _block('cap', 'figure_title', [100, 370, 870, 410],
-            'Figure 1. Multi-panel result.'),
+        _block('cap', 'figure_title', [
+          100,
+          370,
+          870,
+          410,
+        ], 'Figure 1. Multi-panel result.'),
       ],
       const <LayoutBlock>[],
       const <LayoutBlock>[],
-      [_block('orphan', 'image', [100, 100, 700, 900])],
+      [
+        _block('orphan', 'image', [100, 100, 700, 900]),
+      ],
     ];
 
     final segments = service.findFigures(pages);
@@ -204,16 +259,28 @@ void main() {
       blockIds: ['c'],
       pairMethod: 'samePage',
     );
+    // AI 修缮产出的匿名 figure（pair_method=ai_fix，无 caption）同样不进展示子集。
+    const aiAnonymous = FigureManifestEntry(
+      imagePath: '/tmp/fig2.png',
+      captionText: '',
+      pageIndex: 3,
+      blockIds: ['d'],
+      pairMethod: 'ai_fix',
+      captionSource: 'none',
+    );
 
     expect(named.isDisplayFigure, isTrue);
     expect(anonymous.isAnonymous, isTrue);
     expect(anonymous.isDisplayFigure, isFalse);
     expect(emptyCaptionLegacy.isDisplayFigure, isFalse);
+    expect(aiAnonymous.isAnonymous, isTrue);
+    expect(aiAnonymous.isDisplayFigure, isFalse);
 
     final shown = FigureManifestEntry.forDisplay([
       named,
       anonymous,
       emptyCaptionLegacy,
+      aiAnonymous,
     ]);
     expect(shown, [named]);
   });
@@ -239,7 +306,9 @@ void main() {
   test('纯 table 孤儿同样被丢弃(防 sidebar 误识别)', () {
     final service = FigureExtractService.instance;
     final pages = [
-      [_block('1', 'table', [100, 100, 700, 700])],
+      [
+        _block('1', 'table', [100, 100, 700, 700]),
+      ],
     ];
 
     // general 也不保留纯 table 孤儿（侧栏定义框）
@@ -265,8 +334,12 @@ void main() {
       _block('4', 'chart', [671, 605, 1029, 779]),
       _block('5', 'chart', [188, 785, 659, 1070]),
       _block('6', 'chart', [666, 798, 993, 1065]),
-      _block('7', 'figure_title', [115, 1099, 783, 1118],
-          'Figure 5. Calcium imaging pipeline.'),
+      _block('7', 'figure_title', [
+        115,
+        1099,
+        783,
+        1118,
+      ], 'Figure 5. Calcium imaging pipeline.'),
       _block('12', 'text', [114, 1318, 601, 1382], 'mean...'),
     ];
     final segment = pageBlocks
@@ -287,8 +360,12 @@ void main() {
     final pageBlocks = [
       _block('1', 'text', [100, 200, 1000, 580], 'preceding paragraph'),
       _block('2', 'chart', [193, 605, 1029, 1070]),
-      _block('3', 'figure_title', [115, 1099, 783, 1118],
-          'Figure 5. Calcium imaging pipeline.'),
+      _block('3', 'figure_title', [
+        115,
+        1099,
+        783,
+        1118,
+      ], 'Figure 5. Calcium imaging pipeline.'),
     ];
     final segment = pageBlocks
         .where((b) => {'2', '3'}.contains(b.blockId))
@@ -307,8 +384,12 @@ void main() {
       _block('r1', 'text', [610, 200, 1100, 800], 'right column text'),
       // 左栏 figure (left=100, right=580)
       _block('1', 'chart', [100, 700, 580, 1000]),
-      _block('2', 'figure_title', [100, 1020, 580, 1040],
-          'Figure 1. Left column.'),
+      _block('2', 'figure_title', [
+        100,
+        1020,
+        580,
+        1040,
+      ], 'Figure 1. Left column.'),
     ];
     final segment = pageBlocks
         .where((b) => {'1', '2'}.contains(b.blockId))
@@ -327,8 +408,12 @@ void main() {
     // 远大于上方 → below,沿下方扩展.
     final service = FigureExtractService.instance;
     final pageBlocks = [
-      _block('cap', 'figure_title', [115, 200, 783, 220],
-          'Figure 5. Caption on top.'),
+      _block('cap', 'figure_title', [
+        115,
+        200,
+        783,
+        220,
+      ], 'Figure 5. Caption on top.'),
       // 已检出的视觉块在 caption 下方紧邻 (panel A 被检出)
       _block('v1', 'chart', [193, 250, 524, 410]),
       _block('v2', 'chart', [520, 255, 680, 408]),
@@ -366,8 +451,12 @@ void main() {
       _block('R3', 'text', [610, 420, 1100, 520], 'R3'),
       // 跨栏 figure: caption [100, 1098, 1100, 1118] 跨整页
       _block('v1', 'chart', [100, 700, 1100, 1080]),
-      _block('cap', 'figure_title', [100, 1098, 1100, 1118],
-          'Figure 1. Full-width figure.'),
+      _block('cap', 'figure_title', [
+        100,
+        1098,
+        1100,
+        1118,
+      ], 'Figure 1. Full-width figure.'),
     ];
     final segment = pageBlocks
         .where((b) => {'v1', 'cap'}.contains(b.blockId))
@@ -386,8 +475,12 @@ void main() {
     final pageBlocks = [
       _block('h1', 'header', [100, 50, 1100, 110], 'Journal Name'),
       _block('v1', 'chart', [200, 400, 1000, 800]),
-      _block('cap', 'figure_title', [200, 820, 1000, 840],
-          'Figure 1. Single column.'),
+      _block('cap', 'figure_title', [
+        200,
+        820,
+        1000,
+        840,
+      ], 'Figure 1. Single column.'),
       _block('p1', 'text', [100, 900, 1100, 1000], 'body text'),
     ];
     final segment = pageBlocks
@@ -406,8 +499,12 @@ void main() {
     final pageBlocks = [
       _block('1', 'text', [100, 100, 1000, 200], 'header line'),
       _block('2', 'chart', [100, 400, 1000, 1400]),
-      _block('3', 'figure_title', [100, 1420, 800, 1440],
-          'Figure 1. Tall figure.'),
+      _block('3', 'figure_title', [
+        100,
+        1420,
+        800,
+        1440,
+      ], 'Figure 1. Tall figure.'),
     ];
     final segment = pageBlocks
         .where((b) => {'2', '3'}.contains(b.blockId))
@@ -427,8 +524,12 @@ void main() {
     final pages = [
       [
         _block('1', 'image', [100, 100, 700, 600]),
-        _block('2', 'image_caption', [100, 620, 700, 660],
-            'Figure 3. Caption with custom label.'),
+        _block('2', 'image_caption', [
+          100,
+          620,
+          700,
+          660,
+        ], 'Figure 3. Caption with custom label.'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -446,12 +547,24 @@ void main() {
     final pages = [
       [
         _block('img', 'image', [100, 100, 700, 600]),
-        _block('cap1', 'figure_title', [100, 620, 700, 640],
-            'Figure 1. First line of a long caption that continues'),
-        _block('cap2', 'figure_title', [100, 645, 700, 665],
-            'across multiple lines and includes detailed methodology'),
-        _block('cap3', 'figure_title', [100, 670, 700, 690],
-            'about the experimental setup.'),
+        _block(
+          'cap1',
+          'figure_title',
+          [100, 620, 700, 640],
+          'Figure 1. First line of a long caption that continues',
+        ),
+        _block(
+          'cap2',
+          'figure_title',
+          [100, 645, 700, 665],
+          'across multiple lines and includes detailed methodology',
+        ),
+        _block('cap3', 'figure_title', [
+          100,
+          670,
+          700,
+          690,
+        ], 'about the experimental setup.'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -475,11 +588,19 @@ void main() {
     final pages = [
       [
         _block('img1', 'image', [100, 100, 700, 400]),
-        _block('cap1', 'figure_title', [100, 420, 700, 440],
-            'Figure 1. First.'),
+        _block('cap1', 'figure_title', [
+          100,
+          420,
+          700,
+          440,
+        ], 'Figure 1. First.'),
         _block('img2', 'image', [100, 500, 700, 800]),
-        _block('cap2', 'figure_title', [100, 820, 700, 840],
-            'Figure 2. Second.'),
+        _block('cap2', 'figure_title', [
+          100,
+          820,
+          700,
+          840,
+        ], 'Figure 2. Second.'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -500,17 +621,24 @@ void main() {
     final pages = [
       [
         _block('img', 'image', [100, 100, 700, 30]),
-        _block('cap', 'figure_title', [100, 20, 700, 40],
-            'Figure 1. Short caption.'),
-        _block('far', 'text', [100, 250, 700, 270],
-            'unrelated paragraph far below'),
+        _block('cap', 'figure_title', [
+          100,
+          20,
+          700,
+          40,
+        ], 'Figure 1. Short caption.'),
+        _block('far', 'text', [
+          100,
+          250,
+          700,
+          270,
+        ], 'unrelated paragraph far below'),
       ],
     ];
     final segments = service.findFigures(pages);
     expect(segments.length, 1);
     // 不应该把远处文字吃进 caption
-    expect(segments.single.captionText,
-        equals('Figure 1. Short caption.'));
+    expect(segments.single.captionText, equals('Figure 1. Short caption.'));
   });
 
   // ─── PR-5b: vision_footnote 双角色 (子图标签 vs caption 说明) ────
@@ -528,8 +656,12 @@ void main() {
       _block('vb', 'image', [600, 200, 1000, 400]),
       _block('vc', 'image', [600, 500, 1000, 900]),
       _block('vd', 'image', [600, 600, 1000, 900]),
-      _block('cap', 'figure_title', [100, 950, 900, 970],
-          'Figure 1. Four-panel composite.'),
+      _block('cap', 'figure_title', [
+        100,
+        950,
+        900,
+        970,
+      ], 'Figure 1. Four-panel composite.'),
     ];
     final segment = pageBlocks
         .where((b) => {'vfa', 'vb', 'vc', 'vd', 'cap'}.contains(b.blockId))
@@ -548,8 +680,11 @@ void main() {
     // 期望: bbox.left = 110 (vfa 锚定), 而不是 600 (visuals 单独).
     final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
 
-    expect(bbox[0], 110.0,
-        reason: 'vision_footnote (a) 应作为左上角锚点, 把 left 从 600 拉到 110');
+    expect(
+      bbox[0],
+      110.0,
+      reason: 'vision_footnote (a) 应作为左上角锚点, 把 left 从 600 拉到 110',
+    );
     expect(bbox[1], 200.0); // top 不变 (vb.top=200 = vfa.top+10 中较小者)
     expect(bbox[2], 1000.0);
     expect(bbox[3], 900.0);
@@ -563,12 +698,20 @@ void main() {
     final pageBlocks = [
       _block('p', 'text', [50, 50, 1100, 150], 'preceding paragraph'),
       _block('v', 'image', [200, 200, 800, 900]),
-      _block('cap', 'figure_title', [100, 950, 900, 970],
-          'Figure 1. Composite.'),
+      _block('cap', 'figure_title', [
+        100,
+        950,
+        900,
+        970,
+      ], 'Figure 1. Composite.'),
       // 这条 vision_footnote 在 caption 下方 (top=985 > caption.bottom=970)
       // → 反侧 → 不并入. 即使它的 left=50 比 visual.left=200 小, bbox.left 也应仍是 200.
-      _block('vfBelow', 'vision_footnote', [50, 985, 1100, 1010],
-          '(A) Description below caption.'),
+      _block('vfBelow', 'vision_footnote', [
+        50,
+        985,
+        1100,
+        1010,
+      ], '(A) Description below caption.'),
     ];
     final segment = pageBlocks
         .where((b) => {'v', 'cap', 'vfBelow'}.contains(b.blockId))
@@ -577,10 +720,116 @@ void main() {
     final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
 
     // bbox.left 必须是 200 (visual), 而不是 50 (vfBelow)
-    expect(bbox[0], 200.0,
-        reason: 'caption 下方的 vision_footnote 是说明文字, 不该污染 bbox.left');
-    expect(bbox[2], 800.0,
-        reason: '同上, 不该影响 bbox.right');
+    expect(
+      bbox[0],
+      200.0,
+      reason: 'caption 下方的 vision_footnote 是说明文字, 不该污染 bbox.left',
+    );
+    expect(bbox[2], 800.0, reason: '同上, 不该影响 bbox.right');
+  });
+
+  test('子图序号 helper 只接受短纯序号', () {
+    final service = FigureExtractService.instance;
+    expect(
+      service.isSubfigureLabelBlock(_block('a', 'text', [0, 0, 10, 10], 'a')),
+      isTrue,
+    );
+    expect(
+      service.isSubfigureLabelBlock(
+        _block('b', 'vision_footer', [0, 0, 10, 10], '(b)'),
+      ),
+      isTrue,
+    );
+    expect(
+      service.isSubfigureLabelBlock(
+        _block('note', 'text', [0, 0, 10, 10], '(a) panel description'),
+      ),
+      isFalse,
+    );
+  });
+
+  test('text 子图序号与 caption 同侧时并入 bbox', () {
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('p', 'text', [50, 50, 1100, 150], 'preceding paragraph'),
+      _block('label', 'text', [110, 210, 140, 230], '(a)'),
+      _block('v', 'image', [600, 200, 1000, 900]),
+      _block('cap', 'figure_title', [
+        100,
+        950,
+        900,
+        970,
+      ], 'Figure 1. Four-panel composite.'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'label', 'v', 'cap'}.contains(b.blockId))
+        .toList();
+
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+
+    expect(bbox, [110.0, 200.0, 1000.0, 900.0]);
+  });
+
+  test('text 子图序号在 caption 反侧时不并入 bbox', () {
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('v', 'image', [200, 200, 800, 900]),
+      _block('cap', 'figure_title', [
+        100,
+        950,
+        900,
+        970,
+      ], 'Figure 1. Composite.'),
+      _block('label', 'text', [50, 985, 80, 1005], '(a)'),
+    ];
+    final segment = pageBlocks.toList();
+
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+
+    expect(bbox, [200.0, 200.0, 800.0, 900.0]);
+  });
+
+  test('仅有子图序号时仍使用 caption-anchored 路径', () {
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('p', 'text', [50, 50, 1100, 150], 'preceding paragraph'),
+      _block('label', 'text', [110, 210, 140, 230], '(a)'),
+      _block('cap', 'figure_title', [
+        100,
+        950,
+        900,
+        970,
+      ], 'Figure 1. Missing panel.'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'label', 'cap'}.contains(b.blockId))
+        .toList();
+
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+
+    expect(bbox, [110.0, 210.0, 140.0, 230.0]);
+  });
+
+  test('未归属的 text 子图序号不会阻断区域扩展', () {
+    final service = FigureExtractService.instance;
+    final pageBlocks = [
+      _block('header', 'text', [50, 100, 1100, 250], 'header line'),
+      _block('label', 'text', [100, 400, 120, 420], '(a)'),
+      _block('v', 'chart', [400, 250, 800, 900]),
+      _block('cap', 'figure_title', [
+        820,
+        400,
+        1100,
+        440,
+      ], 'Figure 1. Right sidebar caption.'),
+    ];
+    final segment = pageBlocks
+        .where((b) => {'v', 'cap'}.contains(b.blockId))
+        .toList();
+
+    final bbox = service.computeMergedBbox(segment, pageBlocks: pageBlocks);
+
+    expect(bbox, [8.0, 250.0, 800.0, 900.0]);
   });
 
   // ─── PR-5a: left/right 方向扩展 ───────────────────────────
@@ -593,8 +842,12 @@ void main() {
     final pageBlocks = [
       _block('h', 'text', [50, 100, 1100, 250], 'header line'),
       _block('v', 'chart', [400, 250, 800, 900]),
-      _block('cap', 'figure_title', [820, 400, 1100, 440],
-          'Figure 1. Right sidebar caption.'),
+      _block('cap', 'figure_title', [
+        820,
+        400,
+        1100,
+        440,
+      ], 'Figure 1. Right sidebar caption.'),
     ];
     final segment = pageBlocks
         .where((b) => {'v', 'cap'}.contains(b.blockId))
@@ -615,8 +868,12 @@ void main() {
     final service = FigureExtractService.instance;
     final pageBlocks = [
       _block('h', 'text', [50, 100, 1100, 250], 'header line'),
-      _block('cap', 'figure_title', [50, 400, 280, 440],
-          'Figure 1. Left sidebar caption.'),
+      _block('cap', 'figure_title', [
+        50,
+        400,
+        280,
+        440,
+      ], 'Figure 1. Left sidebar caption.'),
       _block('v', 'chart', [300, 250, 700, 900]),
     ];
     final segment = pageBlocks
@@ -645,12 +902,20 @@ void main() {
     // → trim left → newLeft = 200 + 8 = 208
     final service = FigureExtractService.instance;
     final segment = [
-      _block('cap', 'figure_title', [120, 400, 200, 440],
-          'Figure 1. Left edge caption inside region.'),
+      _block('cap', 'figure_title', [
+        120,
+        400,
+        200,
+        440,
+      ], 'Figure 1. Left edge caption inside region.'),
       _block('v', 'image', [100, 100, 1000, 1000]),
     ];
-    final trimmed =
-        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    final trimmed = service.trimCaptionFromRegion([
+      100,
+      100,
+      1000,
+      1000,
+    ], segment);
     expect(trimmed, [208.0, 100.0, 1000.0, 1000.0]);
   });
 
@@ -664,12 +929,20 @@ void main() {
     // → trim right → newRight = 900 - 8 = 892
     final service = FigureExtractService.instance;
     final segment = [
-      _block('cap', 'figure_title', [900, 400, 980, 440],
-          'Figure 1. Right edge caption inside region.'),
+      _block('cap', 'figure_title', [
+        900,
+        400,
+        980,
+        440,
+      ], 'Figure 1. Right edge caption inside region.'),
       _block('v', 'image', [100, 100, 1000, 1000]),
     ];
-    final trimmed =
-        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    final trimmed = service.trimCaptionFromRegion([
+      100,
+      100,
+      1000,
+      1000,
+    ], segment);
     expect(trimmed, [100.0, 100.0, 892.0, 1000.0]);
   });
 
@@ -683,28 +956,44 @@ void main() {
   test('硬契约: caption 在 region 上半 + 横向重叠 → top 收缩', () {
     final service = FigureExtractService.instance;
     final segment = [
-      _block('cap', 'figure_title', [200, 200, 800, 250],
-          'Figure 1. Top caption inside region.'),
+      _block('cap', 'figure_title', [
+        200,
+        200,
+        800,
+        250,
+      ], 'Figure 1. Top caption inside region.'),
       _block('v', 'image', [100, 100, 1000, 1000]),
     ];
     // distFromTop = 250-100 = 150, distFromBottom = 1000-200 = 800
     // → top 收缩: newTop = 250 + 8 = 258
-    final trimmed =
-        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    final trimmed = service.trimCaptionFromRegion([
+      100,
+      100,
+      1000,
+      1000,
+    ], segment);
     expect(trimmed, [100.0, 258.0, 1000.0, 1000.0]);
   });
 
   test('硬契约: caption 在 region 下半 + 横向重叠 → bottom 收缩', () {
     final service = FigureExtractService.instance;
     final segment = [
-      _block('cap', 'figure_title', [200, 900, 800, 950],
-          'Figure 1. Bottom caption inside region.'),
+      _block('cap', 'figure_title', [
+        200,
+        900,
+        800,
+        950,
+      ], 'Figure 1. Bottom caption inside region.'),
       _block('v', 'image', [100, 100, 1000, 1000]),
     ];
     // distFromTop = 950-100 = 850, distFromBottom = 1000-900 = 100
     // → bottom 收缩: newBottom = 900 - 8 = 892
-    final trimmed =
-        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    final trimmed = service.trimCaptionFromRegion([
+      100,
+      100,
+      1000,
+      1000,
+    ], segment);
     expect(trimmed, [100.0, 100.0, 1000.0, 892.0]);
   });
 
@@ -717,8 +1006,12 @@ void main() {
       _block('subB', 'figure_title', [600, 200, 620, 220], '(b)'),
       _block('v', 'image', [100, 100, 1000, 1000]),
     ];
-    final trimmed =
-        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    final trimmed = service.trimCaptionFromRegion([
+      100,
+      100,
+      1000,
+      1000,
+    ], segment);
     expect(trimmed, [100.0, 100.0, 1000.0, 1000.0]);
   });
 
@@ -727,12 +1020,20 @@ void main() {
     // 这条用例确保不相交时 trim 一次都不动 region.
     final service = FigureExtractService.instance;
     final segment = [
-      _block('cap', 'figure_title', [200, 1100, 800, 1150],
-          'Figure 1. Below region.'),
+      _block('cap', 'figure_title', [
+        200,
+        1100,
+        800,
+        1150,
+      ], 'Figure 1. Below region.'),
       _block('v', 'image', [100, 100, 1000, 1000]),
     ];
-    final trimmed =
-        service.trimCaptionFromRegion([100, 100, 1000, 1000], segment);
+    final trimmed = service.trimCaptionFromRegion([
+      100,
+      100,
+      1000,
+      1000,
+    ], segment);
     expect(trimmed, [100.0, 100.0, 1000.0, 1000.0]);
   });
 
@@ -772,11 +1073,15 @@ void main() {
     final segments = service.findFigureSegments(blocks);
 
     expect(_idsForCaption(segments, 'Figure 6'), containsAllInOrder(['5']));
-    expect(_idsForCaption(segments, 'Figure 6'),
-        containsAll(['1', '2', '3', '4']));
+    expect(
+      _idsForCaption(segments, 'Figure 6'),
+      containsAll(['1', '2', '3', '4']),
+    );
     expect(_idsForCaption(segments, 'Figure 7'), containsAllInOrder(['11']));
-    expect(_idsForCaption(segments, 'Figure 7'),
-        containsAll(['6', '7', '8', '9', '10']));
+    expect(
+      _idsForCaption(segments, 'Figure 7'),
+      containsAll(['6', '7', '8', '9', '10']),
+    );
     expect(_idsForCaption(segments, 'Table 1'), ['13', '12']);
   });
   // ─── caption 延续行 body-text 过度合并 ──────────────────
@@ -790,12 +1095,24 @@ void main() {
     final pages = [
       [
         _block('img', 'image', [101, 118, 582, 597]),
-        _block('sub', 'figure_title', [125, 580, 519, 621],
-            'Accessing large brain regions'),
-        _block('cap', 'figure_title', [97, 635, 588, 798],
-            'Figure 2. Current challenges in all-optical brain interrogation.'),
-        _block('body', 'text', [96, 826, 588, 1202],
-            'microscopy techniques must be developed to record and manipulate the activity of multiple brain areas.'),
+        _block('sub', 'figure_title', [
+          125,
+          580,
+          519,
+          621,
+        ], 'Accessing large brain regions'),
+        _block(
+          'cap',
+          'figure_title',
+          [97, 635, 588, 798],
+          'Figure 2. Current challenges in all-optical brain interrogation.',
+        ),
+        _block(
+          'body',
+          'text',
+          [96, 826, 588, 1202],
+          'microscopy techniques must be developed to record and manipulate the activity of multiple brain areas.',
+        ),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -814,10 +1131,13 @@ void main() {
     final pages = [
       [
         _block('img', 'image', [100, 100, 700, 600]),
-        _block('cap', 'figure_title', [100, 620, 700, 640],
-            'Figure 1.'),
-        _block('desc', 'text', [100, 645, 700, 680],
-            'Detailed description of the experimental setup.'),
+        _block('cap', 'figure_title', [100, 620, 700, 640], 'Figure 1.'),
+        _block('desc', 'text', [
+          100,
+          645,
+          700,
+          680,
+        ], 'Detailed description of the experimental setup.'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -832,10 +1152,13 @@ void main() {
     final pages = [
       [
         _block('img', 'image', [100, 100, 700, 600]),
-        _block('cap', 'figure_title', [100, 620, 700, 640],
-            'Figure 1. Detailed description of the experimental'),
-        _block('cont', 'text', [100, 645, 700, 680],
-            'setup and methodology.'),
+        _block(
+          'cap',
+          'figure_title',
+          [100, 620, 700, 640],
+          'Figure 1. Detailed description of the experimental',
+        ),
+        _block('cont', 'text', [100, 645, 700, 680], 'setup and methodology.'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -851,8 +1174,7 @@ void main() {
     final pages = [
       [
         _block('1', 'image', [100, 100, 700, 600]),
-        _block('2', 'figure_title', [100, 620, 700, 660],
-            '图3-9 折射球面光路图'),
+        _block('2', 'figure_title', [100, 620, 700, 660], '图3-9 折射球面光路图'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -866,11 +1188,9 @@ void main() {
     final pages = [
       [
         _block('img', 'image', [100, 100, 500, 400]),
-        _block('cap1', 'figure_title', [100, 420, 500, 450],
-            '图4-1 光路示意图'),
+        _block('cap1', 'figure_title', [100, 420, 500, 450], '图4-1 光路示意图'),
         _block('tbl', 'table', [100, 500, 900, 800]),
-        _block('cap2', 'figure_title', [100, 820, 900, 850],
-            '表3-1 常用玻璃的折射率'),
+        _block('cap2', 'figure_title', [100, 820, 900, 850], '表3-1 常用玻璃的折射率'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -885,8 +1205,12 @@ void main() {
     final pages = [
       [
         _block('1', 'image', [100, 100, 700, 600]),
-        _block('2', 'figure_title', [100, 620, 700, 660],
-            'Figure 1.2 Optical layout.'),
+        _block('2', 'figure_title', [
+          100,
+          620,
+          700,
+          660,
+        ], 'Figure 1.2 Optical layout.'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -905,22 +1229,42 @@ void main() {
       // Page 2-4: 每页一张 figure image
       final segments = service.findFigures([
         // page 0: 正文
-        [_block('t1', 'text', [100, 100, 700, 200], 'Introduction...')],
+        [
+          _block('t1', 'text', [100, 100, 700, 200], 'Introduction...'),
+        ],
         // page 1: Figure Legends
         [
-          _block('c1', 'figure_title', [100, 100, 700, 130],
-              'Figure 1. Experimental setup.'),
-          _block('c2', 'figure_title', [100, 300, 700, 330],
-              'Figure 2. Results overview.'),
-          _block('c3', 'figure_title', [100, 500, 700, 530],
-              'Figure 3. Statistical analysis.'),
+          _block('c1', 'figure_title', [
+            100,
+            100,
+            700,
+            130,
+          ], 'Figure 1. Experimental setup.'),
+          _block('c2', 'figure_title', [
+            100,
+            300,
+            700,
+            330,
+          ], 'Figure 2. Results overview.'),
+          _block('c3', 'figure_title', [
+            100,
+            500,
+            700,
+            530,
+          ], 'Figure 3. Statistical analysis.'),
         ],
         // page 2: figure image 1
-        [_block('i1', 'image', [100, 100, 700, 900])],
+        [
+          _block('i1', 'image', [100, 100, 700, 900]),
+        ],
         // page 3: figure image 2
-        [_block('i2', 'image', [100, 100, 700, 900])],
+        [
+          _block('i2', 'image', [100, 100, 700, 900]),
+        ],
         // page 4: figure image 3
-        [_block('i3', 'image', [100, 100, 700, 900])],
+        [
+          _block('i3', 'image', [100, 100, 700, 900]),
+        ],
       ]);
 
       expect(segments.length, 3);
@@ -940,16 +1284,27 @@ void main() {
       final segments = service.findFigures([
         // page 0: Figure Legends
         [
-          _block('c1', 'figure_title', [100, 100, 700, 130],
-              'Figure 1. Setup.'),
-          _block('c2', 'figure_title', [100, 300, 700, 330],
-              'Figure 2. Data.'),
-          _block('c3', 'figure_title', [100, 500, 700, 530],
-              'Figure 3. Stats.'),
+          _block('c1', 'figure_title', [
+            100,
+            100,
+            700,
+            130,
+          ], 'Figure 1. Setup.'),
+          _block('c2', 'figure_title', [100, 300, 700, 330], 'Figure 2. Data.'),
+          _block('c3', 'figure_title', [
+            100,
+            500,
+            700,
+            530,
+          ], 'Figure 3. Stats.'),
         ],
         // page 1-2: 只有 2 个 figure image
-        [_block('i1', 'image', [100, 100, 700, 900])],
-        [_block('i2', 'image', [100, 100, 700, 900])],
+        [
+          _block('i1', 'image', [100, 100, 700, 900]),
+        ],
+        [
+          _block('i2', 'image', [100, 100, 700, 900]),
+        ],
       ]);
 
       expect(segments.length, 2);
@@ -965,18 +1320,18 @@ void main() {
         [
           // page 0: Figure Legends (4 个 caption)
           [
-            _block('c1', 'figure_title', [100, 100, 700, 130],
-                'Figure 1. A.'),
-            _block('c2', 'figure_title', [100, 200, 700, 230],
-                'Figure 2. B.'),
-            _block('c3', 'figure_title', [100, 300, 700, 330],
-                'Figure 3. C.'),
-            _block('c4', 'figure_title', [100, 400, 700, 430],
-                'Figure 4. D.'),
+            _block('c1', 'figure_title', [100, 100, 700, 130], 'Figure 1. A.'),
+            _block('c2', 'figure_title', [100, 200, 700, 230], 'Figure 2. B.'),
+            _block('c3', 'figure_title', [100, 300, 700, 330], 'Figure 3. C.'),
+            _block('c4', 'figure_title', [100, 400, 700, 430], 'Figure 4. D.'),
           ],
           // page 1-2: 只有 2 个 figure image
-          [_block('i1', 'image', [100, 100, 700, 900])],
-          [_block('i2', 'image', [100, 100, 700, 900])],
+          [
+            _block('i1', 'image', [100, 100, 700, 900]),
+          ],
+          [
+            _block('i2', 'image', [100, 100, 700, 900]),
+          ],
         ],
         // 锁 paper：ordinal 未触发时 uncaptioned 仍 drop，不走 general 匿名
         profile: FigureExtractProfile.paper,
@@ -991,16 +1346,27 @@ void main() {
       final segments = service.findFigures([
         // page 0: Figure Legends 含 table caption 夹在中间
         [
-          _block('c1', 'figure_title', [100, 100, 700, 130],
-              'Figure 1. Setup.'),
-          _block('ct', 'figure_title', [100, 250, 700, 280],
-              'Table 1. Summary of results.'),
-          _block('c2', 'figure_title', [100, 400, 700, 430],
-              'Figure 2. Data.'),
+          _block('c1', 'figure_title', [
+            100,
+            100,
+            700,
+            130,
+          ], 'Figure 1. Setup.'),
+          _block('ct', 'figure_title', [
+            100,
+            250,
+            700,
+            280,
+          ], 'Table 1. Summary of results.'),
+          _block('c2', 'figure_title', [100, 400, 700, 430], 'Figure 2. Data.'),
         ],
         // page 1-2: 2 个 figure image
-        [_block('i1', 'image', [100, 100, 700, 900])],
-        [_block('i2', 'image', [100, 100, 700, 900])],
+        [
+          _block('i1', 'image', [100, 100, 700, 900]),
+        ],
+        [
+          _block('i2', 'image', [100, 100, 700, 900]),
+        ],
       ]);
 
       expect(segments.length, 2);
@@ -1015,17 +1381,22 @@ void main() {
       final segments = service.findFigures([
         // page 0: caption + image 在同一页 (Pass 1 能处理)
         [
-          _block('c1', 'figure_title', [100, 800, 700, 830],
-              'Figure 1. Setup.'),
+          _block('c1', 'figure_title', [
+            100,
+            800,
+            700,
+            830,
+          ], 'Figure 1. Setup.'),
           _block('i1', 'image', [100, 100, 700, 780]),
         ],
         // page 1: 独立 caption (无 cluster 在此页)
         [
-          _block('c2', 'figure_title', [100, 100, 700, 130],
-              'Figure 2. Data.'),
+          _block('c2', 'figure_title', [100, 100, 700, 130], 'Figure 2. Data.'),
         ],
         // page 2: 独立 cluster (无 caption 在此页)
-        [_block('i2', 'image', [100, 100, 700, 900])],
+        [
+          _block('i2', 'image', [100, 100, 700, 900]),
+        ],
       ]);
 
       // Figure 1 由 Pass 1 同页配对, Figure 2 + i2 只有各 1 个 → < 2 不触发
@@ -1042,17 +1413,35 @@ void main() {
       final segments = service.findFigures([
         // page 0: Figure Legends 含 supplementary
         [
-          _block('c1', 'figure_title', [100, 100, 700, 130],
-              'Figure 1. Main result.'),
-          _block('c2', 'figure_title', [100, 250, 700, 280],
-              'Figure 2. Secondary.'),
-          _block('cs', 'figure_title', [100, 400, 700, 430],
-              'Supplementary Figure S1. Extra data.'),
+          _block('c1', 'figure_title', [
+            100,
+            100,
+            700,
+            130,
+          ], 'Figure 1. Main result.'),
+          _block('c2', 'figure_title', [
+            100,
+            250,
+            700,
+            280,
+          ], 'Figure 2. Secondary.'),
+          _block('cs', 'figure_title', [
+            100,
+            400,
+            700,
+            430,
+          ], 'Supplementary Figure S1. Extra data.'),
         ],
         // page 1-3: 按顺序排列
-        [_block('i1', 'image', [100, 100, 700, 900])],
-        [_block('i2', 'image', [100, 100, 700, 900])],
-        [_block('is', 'image', [100, 100, 700, 900])],
+        [
+          _block('i1', 'image', [100, 100, 700, 900]),
+        ],
+        [
+          _block('i2', 'image', [100, 100, 700, 900]),
+        ],
+        [
+          _block('is', 'image', [100, 100, 700, 900]),
+        ],
       ]);
 
       expect(segments.length, 3);
@@ -1080,8 +1469,12 @@ void main() {
           _blockEx('b', 'image', [800, 50, 950, 200], groupId: 1),
           _blockEx('c', 'image', [50, 800, 200, 950], groupId: 1),
           _blockEx('d', 'image', [800, 800, 950, 950], groupId: 1),
-          _block('cap', 'figure_title', [300, 980, 700, 1010],
-              'Figure 1. Four-panel composite.'),
+          _block('cap', 'figure_title', [
+            300,
+            980,
+            700,
+            1010,
+          ], 'Figure 1. Four-panel composite.'),
         ],
       ];
       final segments = service.findFigures(pages);
@@ -1097,11 +1490,19 @@ void main() {
         [
           _blockEx('a', 'image', [100, 100, 400, 400], groupId: 1),
           _blockEx('b', 'image', [100, 420, 400, 500], groupId: 1),
-          _block('cap1', 'figure_title', [100, 510, 400, 530],
-              'Figure 1. First.'),
+          _block('cap1', 'figure_title', [
+            100,
+            510,
+            400,
+            530,
+          ], 'Figure 1. First.'),
           _blockEx('c', 'image', [600, 100, 900, 400], groupId: 2),
-          _block('cap2', 'figure_title', [600, 410, 900, 430],
-              'Figure 2. Second.'),
+          _block('cap2', 'figure_title', [
+            600,
+            410,
+            900,
+            430,
+          ], 'Figure 2. Second.'),
         ],
       ];
       final segments = service.findFigures(pages);
@@ -1119,8 +1520,12 @@ void main() {
         [
           _block('a', 'image', [100, 100, 400, 400]),
           _block('b', 'image', [100, 410, 400, 500]),
-          _block('cap', 'figure_title', [100, 510, 400, 530],
-              'Figure 1. Grouped by spatial proximity.'),
+          _block('cap', 'figure_title', [
+            100,
+            510,
+            400,
+            530,
+          ], 'Figure 1. Grouped by spatial proximity.'),
         ],
       ];
       final segments = service.findFigures(pages);
@@ -1150,12 +1555,20 @@ void main() {
           _block('t6', 'text', [550, 130, 1050, 160], 'Right column text 3'),
           // 左栏 figure
           _block('L_img', 'image', [50, 200, 500, 700]),
-          _block('L_cap', 'figure_title', [50, 710, 500, 740],
-              'Figure 1. Left column figure.'),
+          _block('L_cap', 'figure_title', [
+            50,
+            710,
+            500,
+            740,
+          ], 'Figure 1. Left column figure.'),
           // 右栏 figure
           _block('R_img', 'image', [550, 200, 1050, 700]),
-          _block('R_cap', 'figure_title', [550, 710, 1050, 740],
-              'Figure 2. Right column figure.'),
+          _block('R_cap', 'figure_title', [
+            550,
+            710,
+            1050,
+            740,
+          ], 'Figure 2. Right column figure.'),
         ],
       ];
       final segments = service.findFigures(pages);
@@ -1171,8 +1584,12 @@ void main() {
       final pages = [
         [
           _block('img', 'image', [100, 100, 900, 600]),
-          _block('cap', 'figure_title', [100, 620, 900, 660],
-              'Figure 1. Single column.'),
+          _block('cap', 'figure_title', [
+            100,
+            620,
+            900,
+            660,
+          ], 'Figure 1. Single column.'),
         ],
       ];
       final segments = service.findFigures(pages);
@@ -1191,10 +1608,20 @@ void main() {
       final pages = [
         [
           _block('img', 'image', [100, 100, 700, 400]),
-          _blockEx('cap', 'text', [100, 420, 700, 440],
-              content: 'Figure 1. First part of a caption that', groupId: 5),
-          _blockEx('cont', 'text', [100, 550, 700, 570],
-              content: 'continues across a large gap.', groupId: 5),
+          _blockEx(
+            'cap',
+            'text',
+            [100, 420, 700, 440],
+            content: 'Figure 1. First part of a caption that',
+            groupId: 5,
+          ),
+          _blockEx(
+            'cont',
+            'text',
+            [100, 550, 700, 570],
+            content: 'continues across a large gap.',
+            groupId: 5,
+          ),
         ],
       ];
       final segments = service.findFigures(pages);
@@ -1209,12 +1636,27 @@ void main() {
       final pages = [
         [
           _block('img', 'image', [100, 100, 700, 400]),
-          _blockEx('cap', 'text', [100, 420, 700, 440],
-              content: 'Figure 1. Complete caption.', groupId: 5),
-          _blockEx('para1', 'text', [100, 450, 700, 470],
-              content: 'This is body text paragraph', groupId: 6),
-          _blockEx('para2', 'text', [100, 475, 700, 495],
-              content: 'that should not be merged.', groupId: 6),
+          _blockEx(
+            'cap',
+            'text',
+            [100, 420, 700, 440],
+            content: 'Figure 1. Complete caption.',
+            groupId: 5,
+          ),
+          _blockEx(
+            'para1',
+            'text',
+            [100, 450, 700, 470],
+            content: 'This is body text paragraph',
+            groupId: 6,
+          ),
+          _blockEx(
+            'para2',
+            'text',
+            [100, 475, 700, 495],
+            content: 'that should not be merged.',
+            groupId: 6,
+          ),
         ],
       ];
       final segments = service.findFigures(pages);
@@ -1239,8 +1681,12 @@ void main() {
         _block('14', 'figure_title', [455, 1030, 521, 1049], '图3-10'),
         _block('15', 'image', [620, 908, 839, 1012]),
         _block('16', 'figure_title', [697, 1029, 763, 1049], '图3-11'),
-        _block('17', 'text', [95, 1062, 931, 1149],
-            '若需经一次反射使光轴转过若干角度，根据反射定律和几何关系...'),
+        _block('17', 'text', [
+          95,
+          1062,
+          931,
+          1149,
+        ], '若需经一次反射使光轴转过若干角度，根据反射定律和几何关系...'),
       ],
     ];
     final segments = service.findFigures(pages);
@@ -1264,13 +1710,25 @@ void main() {
       final pages = [
         [
           _block('img', 'image', [100, 100, 900, 400]),
-          _block('cap1', 'figure_title', [100, 410, 900, 440],
-              'Figure 1. Image result.'),
+          _block('cap1', 'figure_title', [
+            100,
+            410,
+            900,
+            440,
+          ], 'Figure 1. Image result.'),
           _block('tbl', 'table', [100, 500, 900, 800]),
-          _block('cap2', 'figure_title', [100, 810, 900, 840],
-              'Table 1. Data summary.'),
-          _block('vf', 'vision_footnote', [100, 845, 900, 870],
-              'Note: values are means ± SD.'),
+          _block('cap2', 'figure_title', [
+            100,
+            810,
+            900,
+            840,
+          ], 'Table 1. Data summary.'),
+          _block('vf', 'vision_footnote', [
+            100,
+            845,
+            900,
+            870,
+          ], 'Note: values are means ± SD.'),
         ],
       ];
       final segments = service.findFigures(pages);
@@ -1345,8 +1803,11 @@ void main() {
         'Figure supplémentaire 8',
       ];
       for (final caption in cases) {
-        expect(service.isSupplementaryCaption(caption), isTrue,
-            reason: caption);
+        expect(
+          service.isSupplementaryCaption(caption),
+          isTrue,
+          reason: caption,
+        );
       }
     });
   });
@@ -1368,8 +1829,11 @@ void main() {
         'Hình bổ sung 7',
       ];
       for (final caption in supplementary) {
-        expect(service.isSupplementaryCaption(caption), isTrue,
-            reason: caption);
+        expect(
+          service.isSupplementaryCaption(caption),
+          isTrue,
+          reason: caption,
+        );
       }
     });
 
@@ -1381,8 +1845,11 @@ void main() {
         '図 4',
       ];
       for (final caption in primary) {
-        expect(service.isSupplementaryCaption(caption), isFalse,
-            reason: caption);
+        expect(
+          service.isSupplementaryCaption(caption),
+          isFalse,
+          reason: caption,
+        );
       }
     });
   });
@@ -1410,14 +1877,25 @@ void main() {
       // orphan Figure 2 caption（无视觉块对应）。
       final blocks = [
         _block('img1', 'image', [100, 100, 400, 400]),
-        _block('cap1', 'figure_title', [100, 410, 400, 430],
-            'Figure 1. Main result.'),
-        _block('cap2', 'figure_title', [600, 100, 900, 120],
-            'Figure 2. Orphan caption.'),
+        _block('cap1', 'figure_title', [
+          100,
+          410,
+          400,
+          430,
+        ], 'Figure 1. Main result.'),
+        _block('cap2', 'figure_title', [
+          600,
+          100,
+          900,
+          120,
+        ], 'Figure 2. Orphan caption.'),
       ];
       final titles = service.collectTitleInventory(blocks, '', 0);
       final texts = titles.map((t) => t.text).toList();
-      expect(texts, containsAll(['Figure 1. Main result.', 'Figure 2. Orphan caption.']));
+      expect(
+        texts,
+        containsAll(['Figure 1. Main result.', 'Figure 2. Orphan caption.']),
+      );
       final fig2 = titles.firstWhere((t) => t.text.startsWith('Figure 2'));
       expect(fig2.kind, 'figure');
       expect(fig2.bbox.length, 4);
@@ -1426,10 +1904,18 @@ void main() {
     test('多行 caption 合并后作为单条标题', () {
       final service = FigureExtractService.instance;
       final blocks = [
-        _block('c0', 'figure_title', [100, 410, 400, 430],
-            'Figure 3. Multi-line caption.'),
-        _block('c1', 'figure_title', [100, 432, 400, 450],
-            'Second line of the caption.'),
+        _block('c0', 'figure_title', [
+          100,
+          410,
+          400,
+          430,
+        ], 'Figure 3. Multi-line caption.'),
+        _block('c1', 'figure_title', [
+          100,
+          432,
+          400,
+          450,
+        ], 'Second line of the caption.'),
       ];
       final titles = service.collectTitleInventory(blocks, '', 0);
       expect(titles.length, 1);
@@ -1440,8 +1926,12 @@ void main() {
     test('table caption 分类为 table', () {
       final service = FigureExtractService.instance;
       final blocks = [
-        _block('t0', 'figure_title', [100, 410, 400, 430],
-            'Table 1. Parameters.'),
+        _block('t0', 'figure_title', [
+          100,
+          410,
+          400,
+          430,
+        ], 'Table 1. Parameters.'),
       ];
       final titles = service.collectTitleInventory(blocks, '', 0);
       expect(titles.single.kind, 'table');

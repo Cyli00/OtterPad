@@ -235,19 +235,11 @@ class DocExtractService {
     }
 
     // 3. 清理残留标签 + 格式预处理
-    processedMarkdown = _stripApiImageTags(processedMarkdown);
-    processedMarkdown = _convertCenteredDivs(processedMarkdown);
-    processedMarkdown = MarkdownPreprocessor.process(processedMarkdown);
-    processedMarkdown = MarkdownPreprocessor.filterBeforeTitle(
+    processedMarkdown = _cleanPipeline(
       processedMarkdown,
-      title,
+      jsonContent: result.jsonContent,
+      title: title,
     );
-    if (result.jsonContent != null) {
-      processedMarkdown = _normalizeSectionHeadingLevels(
-        processedMarkdown,
-        result.jsonContent!,
-      );
-    }
 
     await File(mdPath).writeAsString(processedMarkdown, flush: true);
     result.processedMarkdown = processedMarkdown;
@@ -271,7 +263,7 @@ class DocExtractService {
 
     final rawMdFile = File(rawMdPath);
     if (!rawMdFile.existsSync()) {
-      throw FileSystemException('raw.md 文件不存在，请先提取文档', rawMdPath);
+      throw FileSystemException('raw.md not found; run extraction first', rawMdPath);
     }
 
     var processedMarkdown = await rawMdFile.readAsString();
@@ -298,19 +290,51 @@ class DocExtractService {
     }
 
     // 清理 + 预处理（与 saveResult 完全一致）
-    processedMarkdown = _stripApiImageTags(processedMarkdown);
-    processedMarkdown = _convertCenteredDivs(processedMarkdown);
-    processedMarkdown = MarkdownPreprocessor.process(processedMarkdown);
-    processedMarkdown = MarkdownPreprocessor.filterBeforeTitle(
+    processedMarkdown = _cleanPipeline(
       processedMarkdown,
-      title,
+      jsonContent: jsonContent,
+      title: title,
     );
-    if (jsonContent != null) {
-      processedMarkdown = _normalizeSectionHeadingLevels(
-        processedMarkdown,
-        jsonContent,
-      );
+
+    await File(mdPath).writeAsString(processedMarkdown, flush: true);
+    return (mdPath, processedMarkdown);
+  }
+
+  /// 用已裁决的 [figures] manifest 重生成 `.md`（AI 修缮 figure 的落盘入口）。
+  ///
+  /// 读 `raw.md` → [replaceFigureRegions] 用 [figures] 替换 figure 区域 →
+  /// [_cleanPipeline] 清理 + 预处理 → 写 `extract.md`。**不删 figures 目录**、
+  /// **不重跑 [FigureExtractService.extractFigures]**——figures 由调用方已
+  /// 裁好写入。回滚靠 [reprocessMarkdown]（重跑启发式覆盖 AI 产物）。
+  ///
+  /// [jsonContent] 是 extract.json 文本（[_normalizeSectionHeadingLevels] 与
+  /// [replaceFigureRegions] 均需）。
+  Future<(String mdPath, String content)> applyFigureManifest({
+    required String pdfPath,
+    required String jsonContent,
+    required List<FigureManifestEntry> figures,
+    String? title,
+  }) async {
+    final dir = p.dirname(pdfPath);
+    final rawMdPath = DocPaths.rawMd(pdfPath);
+    final mdPath = DocPaths.md(pdfPath);
+
+    final rawMdFile = File(rawMdPath);
+    if (!rawMdFile.existsSync()) {
+      throw FileSystemException('raw.md not found; run extraction first', rawMdPath);
     }
+
+    var processedMarkdown = await rawMdFile.readAsString();
+    processedMarkdown = replaceFigureRegions(
+      jsonContent: jsonContent,
+      figures: figures,
+      mdDir: dir,
+    );
+    processedMarkdown = _cleanPipeline(
+      processedMarkdown,
+      jsonContent: jsonContent,
+      title: title,
+    );
 
     await File(mdPath).writeAsString(processedMarkdown, flush: true);
     return (mdPath, processedMarkdown);
@@ -726,6 +750,28 @@ class DocExtractService {
         j++;
       }
     }
+  }
+
+  /// 清理 + 预处理管线（saveResult / reprocessMarkdown / applyFigureManifest 共用）。
+  ///
+  /// 顺序固定：[_stripApiImageTags] → [_convertCenteredDivs] →
+  /// [MarkdownPreprocessor.process] → [MarkdownPreprocessor.filterBeforeTitle] →
+  /// [_normalizeSectionHeadingLevels]（仅 [jsonContent] 非空时）。
+  /// 改顺序即改三处渲染结果，禁止调整。
+  static String _cleanPipeline(
+    String markdown, {
+    String? jsonContent,
+    String? title,
+  }) {
+    var md = markdown;
+    md = _stripApiImageTags(md);
+    md = _convertCenteredDivs(md);
+    md = MarkdownPreprocessor.process(md);
+    md = MarkdownPreprocessor.filterBeforeTitle(md, title);
+    if (jsonContent != null) {
+      md = _normalizeSectionHeadingLevels(md, jsonContent);
+    }
+    return md;
   }
 
   /// 将 JSON paragraph_title 对应的 ATX heading 统一为 ##（二级标题）。

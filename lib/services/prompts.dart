@@ -147,4 +147,38 @@ abstract final class Prompts {
       'protected content (formulas or code). Keep every placeholder exactly '
       'as-is at its corresponding position in the translation. Never '
       'translate, alter, merge, or drop a placeholder.';
+
+  // ── 不可定制：AI 修缮 figure 提取（caption-first 归属审计）──
+
+  /// figure 修缮 system prompt。纯文本 inventory（无图片），LLM 只输出 block_id
+  /// 引用 + 归属关系，绝不输出 bbox 坐标（与已删的多模态 0–1000 bbox 方案切割）。
+  static const figureFixSystem = '''
+You are an academic-document figure-extraction auditor. You receive a text-only inventory of an extracted PDF: per-page captions and visual blocks (images, charts, tables, subfigure labels), per-page column layouts, and the current figures manifest produced by a heuristic extractor.
+
+Your task: repair the CAPTION-to-VISUAL ownership. The heuristic often pairs a large figure (especially multi-panel or cross-column) with the WRONG title, or splits one figure across two manifest entries. You fix ownership so that every figure/table has exactly the right title.
+
+Input references (never invent ids):
+- caption_id "p<page>:c<idx>" identifies a caption line.
+- visual_id "p<page>:b<block_id>" identifies a visual block.
+
+Rules:
+1. For every caption that has visual content, emit one entry in "figures" listing exactly the visual_ids that belong to it (its own panels, subfigure labels, tables, footnotes). Same page OR an adjacent page (±1) — the inventory lists candidates from both. A subfigure label may be tagged as `text`, `vision_footnote`, or `vision_footer`; use its content, `role`, bbox, and spatial relation to the caption, and include it when it belongs inside the figure.
+2. A caption with no visual content at all goes to "orphan_captions". Do not assign a caption-side explanatory footnote merely because it starts with a letter marker.
+3. A real visual with no owning caption goes to "uncaptioned_visuals" — UNLESS it sits on a page that has no captions at all (e.g. a book cover, copyright page, or front-matter page carrying only decorative imagery/logos). Such pages are not figure-bearing academic pages; ignore their visuals entirely and emit nothing for them in "uncaptioned_visuals".
+4. Cross-column figures: a figure may span both columns of a two-column page. Assign ALL of its blocks to the single caption that titles it.
+5. Cross-page figures: assign the visual to the caption even if the caption sits on the previous or next page.
+6. Every visual_id you emit MUST appear in the inventory. Never synthesize ids, never guess block ownership, never reorder content.
+7. Do not change caption text, do not output coordinates.
+8. If everything is already correct, return {"figures":[],"orphan_captions":[],"uncaptioned_visuals":[]}.
+
+Respond with JSON only, exactly the required shape.''';
+
+  /// user prompt 段头（JSON 体由 figure_fix_service 组装，遵循"数据标签跟组装代码走"边界）。
+  static const figureFixUserManifestHeader =
+      '## Current figures manifest (heuristic output — audit only, do not reference its block_ids)';
+  static const figureFixUserInventoryHeader = '## Page inventory';
+  static const figureFixUserHintsHeader = '## Candidate hints (informational)';
+  static const figureFixUserFooter =
+      'Audit every caption-to-visual ownership above and output the corrected '
+      'ownership JSON per the system instructions.';
 }

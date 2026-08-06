@@ -159,6 +159,56 @@ void main() {
     expect(result, contains('A crucial consideration should remain'));
     expect(result, contains('GRIN lenses suffer primarily'));
   });
+
+  test('replaceFigureRegions 匿名 entry 独立还原到 Markdown', () {
+    final jsonContent = jsonEncode([
+      {
+        'markdown': {
+          'text': [
+            '<div style="text-align: center;"><img src="imgs/img_in_image_box_100_200_400_500.jpg" alt="Image" width="37%" /></div>',
+            '',
+            'Adjacent body text before the anonymous visual.',
+            '',
+            'Another body paragraph that must remain.',
+          ].join('\n'),
+        },
+        'prunedResult': {
+          'parsing_res_list': [
+            _block(7, 'image', [100, 200, 400, 500], ''),
+          ],
+        },
+      },
+    ]);
+
+    // 匿名 visual（无 caption）以独立图片写回 Markdown，不吞掉相邻正文。
+    final result = DocExtractService.replaceFigureRegions(
+      jsonContent: jsonContent,
+      figures: const [
+        FigureManifestEntry(
+          imagePath: r'C:\tmp\fig0.png',
+          captionText: '',
+          pageIndex: 0,
+          blockIds: ['7'],
+          pairMethod: 'ai_fix',
+          captionSource: 'none',
+        ),
+      ],
+      mdDir: r'C:\tmp',
+    );
+
+    final imageLines = result
+        .split('\n')
+        .where((line) => line.startsWith('![fig:'))
+        .toList();
+    expect(imageLines, hasLength(1));
+    expect(imageLines.single, contains('file:///'));
+    expect(imageLines.single, contains('fig0.png'));
+    expect(imageLines.single, isNot(contains('img_in_image_box')));
+    // 原 API 图片行被替换，相邻正文原样保留。
+    expect(result, isNot(contains('img_in_image_box')));
+    expect(result, contains('Adjacent body text before the anonymous visual.'));
+    expect(result, contains('Another body paragraph that must remain.'));
+  });
 }
 
 LayoutBlock _layoutBlock(

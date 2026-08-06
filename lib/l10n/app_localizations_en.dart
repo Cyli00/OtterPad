@@ -1706,6 +1706,50 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get aiFixFigures => 'AI repair figures';
+
+  @override
+  String get aiFixFiguresAnalyzing => 'Analyzing layout...';
+
+  @override
+  String get aiFixFiguresCalling => 'Calling AI model...';
+
+  @override
+  String get aiFixFiguresApplying => 'Applying repairs...';
+
+  @override
+  String aiFixFiguresCropping(int done, int total) {
+    return 'Cropping figures ($done/$total)';
+  }
+
+  @override
+  String get aiFixFiguresDone =>
+      'Figures repaired. To revert, use \"Reformat\"';
+
+  @override
+  String aiFixFiguresFailed(String error) {
+    return 'AI repair failed: $error';
+  }
+
+  @override
+  String get aiFixFiguresCancelled => 'AI repair cancelled';
+
+  @override
+  String get aiFixFiguresMissingExtract =>
+      'Please extract the document first, then repair figures.';
+
+  @override
+  String get aiFixFiguresModelNotSet =>
+      'Please set an expert or fast model first.';
+
+  @override
+  String get aiFixFiguresInvalidLlmOutput =>
+      'AI output could not be parsed. Please try again.';
+
+  @override
+  String get aiFixFiguresFailedGeneric => 'AI repair failed. Please try again.';
+
+  @override
   String addedToFavorite(String name) {
     return 'Added to \"$name\"';
   }
