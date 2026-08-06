@@ -32,9 +32,12 @@ import '../../../services/translation_service.dart';
 ///
 /// 打开前自动截取当前屏幕的超低分辨率缩略图作为模糊背景。
 ///
-/// [figures] 由调用方决定范围：Outline 画廊应传
-/// [FigureManifestEntry.forDisplay] 过滤后的列表；正文内点图可传全量
-/// manifest，以便 visualOnly 仍可单张查看。
+/// [figures] 由调用方决定范围：
+///  - Outline 画廊与有 caption 的正文图：传 [FigureManifestEntry.forDisplay]
+///    过滤后的列表，画廊只含可展示条目；
+///  - 匿名正文 visual（visualOnly / 无 caption）：以 singleton 列表打开，
+///    单图查看，不混入有标题画廊。
+/// Viewer 组件本身不区分匿名与否，仅消费传入的列表范围。
 Future<void> showFigureViewer(
   BuildContext context,
   List<FigureManifestEntry> figures, {
@@ -136,8 +139,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   // ── 翻译状态（per-figure）──
   /// figureIndex → 翻译结果
   final Map<int, String> _translations = {};
+
   /// figureIndex → 是否正在请求
   final Map<int, bool> _translating = {};
+
   /// figureIndex → 当前是否显示译文（false = 原文）
   final Map<int, bool> _showTranslation = {};
 
@@ -146,10 +151,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = ExtendedPageController(initialPage: _currentIndex);
-    _doubleTapController = AnimationController(
-      vsync: this,
-      duration: kAnim,
-    );
+    _doubleTapController = AnimationController(vsync: this, duration: kAnim);
   }
 
   @override
@@ -174,11 +176,15 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       ..reset();
 
     _doubleTapCb = () => state.handleDoubleTap(
-        scale: _doubleTapAnim!.value, doubleTapPosition: pos);
+      scale: _doubleTapAnim!.value,
+      doubleTapPosition: pos,
+    );
 
     _doubleTapAnim = _doubleTapController.drive(
-      Tween(begin: cur, end: target)
-          .chain(CurveTween(curve: Curves.easeOutCubic)),
+      Tween(
+        begin: cur,
+        end: target,
+      ).chain(CurveTween(curve: Curves.easeOutCubic)),
     )..addListener(_doubleTapCb!);
 
     _doubleTapController.forward();
@@ -216,23 +222,32 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                             _currentIndex = i;
                             _isZoomed = false;
                           }),
-                          itemBuilder: (_, i) =>
-                              _buildImage(widget.figures[i]),
+                          itemBuilder: (_, i) => _buildImage(widget.figures[i]),
                         ),
                         if (_isGallery && _currentIndex > 0)
-                          _buildArrow(true, () => _pageController.previousPage(
+                          _buildArrow(
+                            true,
+                            () => _pageController.previousPage(
                               duration: kAnimSlow,
-                              curve: Curves.easeInOut)),
+                              curve: Curves.easeInOut,
+                            ),
+                          ),
                         if (_isGallery &&
                             _currentIndex < widget.figures.length - 1)
-                          _buildArrow(false, () => _pageController.nextPage(
+                          _buildArrow(
+                            false,
+                            () => _pageController.nextPage(
                               duration: kAnimSlow,
-                              curve: Curves.easeInOut)),
+                              curve: Curves.easeInOut,
+                            ),
+                          ),
                       ],
                     ),
                   ),
                   // 无 caption 时不占底部栏（匿名 visualOnly / 空标题）
-                  if (widget.figures[_currentIndex].captionText.trim().isNotEmpty) ...[
+                  if (widget.figures[_currentIndex].captionText
+                      .trim()
+                      .isNotEmpty) ...[
                     const SizedBox(height: 8),
                     _buildCaptionPanel(bottomPadding),
                   ] else
@@ -344,9 +359,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   }
 
   Future<void> _showSaveMenu(
-      FigureManifestEntry fig, Offset globalPosition) async {
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
+    FigureManifestEntry fig,
+    Offset globalPosition,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final selected = await showMenu<String>(
       context: context,
       color: const Color(0xFF2C2C2E),
@@ -365,11 +381,16 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
             height: 40,
             child: Row(
               children: [
-                const Icon(Symbols.content_copy_rounded,
-                    size: 18, color: Colors.white70),
+                const Icon(
+                  Symbols.content_copy_rounded,
+                  size: 18,
+                  color: Colors.white70,
+                ),
                 const SizedBox(width: 12),
-                Text(context.l10n.copyImage,
-                    style: const TextStyle(color: Colors.white, fontSize: 14)),
+                Text(
+                  context.l10n.copyImage,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
               ],
             ),
           )
@@ -379,11 +400,16 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
             height: 40,
             child: Row(
               children: [
-                const Icon(Symbols.share_rounded,
-                    size: 18, color: Colors.white70),
+                const Icon(
+                  Symbols.share_rounded,
+                  size: 18,
+                  color: Colors.white70,
+                ),
                 const SizedBox(width: 12),
-                Text(context.l10n.shareImage,
-                    style: const TextStyle(color: Colors.white, fontSize: 14)),
+                Text(
+                  context.l10n.shareImage,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
               ],
             ),
           ),
@@ -392,11 +418,16 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           height: 40,
           child: Row(
             children: [
-              const Icon(Symbols.download_rounded,
-                  size: 18, color: Colors.white70),
+              const Icon(
+                Symbols.download_rounded,
+                size: 18,
+                color: Colors.white70,
+              ),
               const SizedBox(width: 12),
-              Text(context.l10n.saveImage,
-                  style: const TextStyle(color: Colors.white, fontSize: 14)),
+              Text(
+                context.l10n.saveImage,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
             ],
           ),
         ),
@@ -436,10 +467,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     }
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
     try {
-      await Share.shareXFiles(
-        [XFile(fig.imagePath)],
-        subject: fileName,
-      );
+      await Share.shareXFiles([XFile(fig.imagePath)], subject: fileName);
     } catch (e) {
       if (!mounted) return;
       snackBar.showResult(message: context.l10n.shareFailed('$e'));
@@ -516,7 +544,9 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isLeft ? Symbols.chevron_left_rounded : Symbols.chevron_right_rounded,
+              isLeft
+                  ? Symbols.chevron_left_rounded
+                  : Symbols.chevron_right_rounded,
               color: Colors.white70,
               size: 28,
             ),
@@ -529,10 +559,9 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   Widget _buildCaptionPanel(double bottomPadding) {
     final idx = _currentIndex;
     final fig = widget.figures[idx];
-    final isTranslated = _showTranslation[idx] == true &&
-        _translations.containsKey(idx);
-    final displayText =
-        isTranslated ? _translations[idx]! : fig.captionText;
+    final isTranslated =
+        _showTranslation[idx] == true && _translations.containsKey(idx);
+    final displayText = isTranslated ? _translations[idx]! : fig.captionText;
     final maxH = MediaQuery.sizeOf(context).height / 4;
 
     return Container(
@@ -547,8 +576,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           GestureDetector(
             onVerticalDragUpdate: (d) {
               setState(() {
-                _captionHeight =
-                    (_captionHeight - d.delta.dy).clamp(_kMinCaptionH, maxH);
+                _captionHeight = (_captionHeight - d.delta.dy).clamp(
+                  _kMinCaptionH,
+                  maxH,
+                );
               });
             },
             behavior: HitTestBehavior.opaque,
@@ -583,8 +614,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                   const SizedBox(width: 12),
                   Column(
                     children: [
-                      if (widget.document != null)
-                        _buildAskAiButton(fig),
+                      if (widget.document != null) _buildAskAiButton(fig),
                       if (widget.document != null) const SizedBox(height: 8),
                       _buildTranslateButton(idx, fig, isTranslated),
                     ],
@@ -638,7 +668,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   }
 
   Widget _buildTranslateButton(
-      int idx, FigureManifestEntry fig, bool isTranslated) {
+    int idx,
+    FigureManifestEntry fig,
+    bool isTranslated,
+  ) {
     final isLoading = _translating[idx] == true;
     return Padding(
       padding: const EdgeInsets.only(top: 2),
@@ -666,11 +699,14 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                       : const Color(0x1AFFFFFF),
                   foregroundColor: Colors.white60,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   padding: EdgeInsets.zero,
                 ),
                 tooltip: _translations.containsKey(idx)
-                    ? (isTranslated ? context.l10n.showOriginal : context.l10n.showTranslation)
+                    ? (isTranslated
+                          ? context.l10n.showOriginal
+                          : context.l10n.showTranslation)
                     : context.l10n.translateText,
                 onPressed: () {
                   Haptics.soft();
@@ -751,9 +787,9 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       )) {
         return;
       }
-      ref.read(snackBarServiceProvider).showResult(
-            message: '$e'.replaceFirst('Exception: ', ''),
-          );
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: '$e'.replaceFirst('Exception: ', ''));
     }
   }
 }
