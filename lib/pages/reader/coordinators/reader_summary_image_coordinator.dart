@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:extended_image/extended_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -51,8 +52,7 @@ class ReaderSummaryImageCoordinator {
 
   Future<void> generate({bool openOutline = true}) async {
     final imageRole = AgentApiNotifier.globalImageRole;
-    final hasImageRole =
-        imageRole.id != null && imageRole.modelId != null;
+    final hasImageRole = imageRole.id != null && imageRole.modelId != null;
 
     final choice = await _showCostDialog(hasImageRole: hasImageRole);
     if (!context.mounted ||
@@ -94,28 +94,38 @@ class ReaderSummaryImageCoordinator {
       generating: true,
     );
 
+    // 成功路径收敛：onSuccess 只记录生成的路径，统一在 generate 完成后驱逐
+    // Thumbnail + Viewer 三类缓存，再递增 revision 更新状态——避免 unawaited
+    // FileImage evict 的竞态导致 Viewer 仍显示旧图。
+    String? generatedPath;
     await ref
         .read(documentTaskProvider.notifier)
         .generateSummaryImage(
           document: document,
           onSuccess: (imagePath) {
-            unawaited(FileImage(File(imagePath)).evict());
-            if (!context.mounted) return;
-            final revision = summaryImageState.value.revision + 1;
-            sessionNotifier.setSummaryImagePath(imagePath);
-            summaryImageState.value = SummaryImageState(
-              imagePath: imagePath,
-              revision: revision,
-            );
+            generatedPath = imagePath;
           },
         );
 
     if (!context.mounted || !summaryImageState.value.generating) return;
     final latest = summaryImageState.value;
-    summaryImageState.value = SummaryImageState(
-      imagePath: latest.imagePath,
-      revision: latest.revision,
-    );
+    final newPath = generatedPath;
+    if (newPath != null) {
+      // 在 revision/state 更新前清缓存，确保新缩略图可点击前 extended_image 键已失效。
+      await evictSummaryImageCaches(newPath);
+      final revision = latest.revision + 1;
+      sessionNotifier.setSummaryImagePath(newPath);
+      summaryImageState.value = SummaryImageState(
+        imagePath: newPath,
+        revision: revision,
+      );
+    } else {
+      // 未生成图片：沿用现有 generating 收尾逻辑。
+      summaryImageState.value = SummaryImageState(
+        imagePath: latest.imagePath,
+        revision: latest.revision,
+      );
+    }
   }
 
   Future<void> openSummaryImage([String? imagePath]) async {
@@ -123,7 +133,9 @@ class ReaderSummaryImageCoordinator {
         imagePath ?? DocumentSummaryImageService.imagePathFor(document.id);
     if (!await File(path).exists()) {
       if (!context.mounted) return;
-      ref.read(snackBarServiceProvider).showResult(message: context.l10n.summaryNotFound);
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: context.l10n.summaryNotFound);
       return;
     }
     if (!context.mounted) return;
@@ -164,7 +176,7 @@ class ReaderSummaryImageCoordinator {
 
       // 先驱逐缓存，再删旧文件，避免解码器锁住 summary.png 导致覆盖失败
       // 或 UI 仍显示旧图 A。
-      await _evictSummaryImageCaches(destPath);
+      await evictSummaryImageCaches(destPath);
       if (await destFile.exists()) {
         await destFile.delete();
       }
@@ -175,7 +187,8 @@ class ReaderSummaryImageCoordinator {
       // 读字节再写入固定路径，语义是「替换」而非「另存一份」
       final bytes = await File(sourcePath).readAsBytes();
       await destFile.writeAsBytes(bytes, flush: true);
-      await _evictSummaryImageCaches(destPath);
+      // 写入后再清一次（含 extended_image 键），且必须在 revision/state 更新前完成。
+      await evictSummaryImageCaches(destPath);
 
       final current = summaryImageState.value;
       final revision = current.revision + 1;
@@ -194,14 +207,23 @@ class ReaderSummaryImageCoordinator {
     }
   }
 
-  /// 驱逐 summary 图相关的 ImageCache 条目。
+  /// 驱逐 summary 图相关的三类 ImageCache 条目。
   ///
-  /// [Image.file] 在 outline 中带 `cacheWidth: 600`，实际缓存键是
-  /// [ResizeImage]，只 evict [FileImage] 不够，旧图 A 仍会残留。
-  Future<void> _evictSummaryImageCaches(String path) async {
+  /// 与真实渲染路径保持一致：
+  ///  - [FileImage]：无 resize 的普通加载；
+  ///  - [ResizeImage]（width: 600）：Outline 缩略图 `Image.file(cacheWidth: 600)`
+  ///    的实际缓存键，只 evict [FileImage] 不够，旧图 A 仍会残留；
+  ///  - [ExtendedFileImageProvider]：FigureViewer 的 `ExtendedImage.file()`
+  ///    走 extended_image 独立缓存键，缩略图刷新后 Viewer 仍可能显示旧图。
+  /// 不调用 [ImageCache.clear]，避免清空全局无关图片缓存。
+  ///
+  /// @visibleForTesting 静态方法：测试直接调用验证三类键都被清理。
+  @visibleForTesting
+  static Future<void> evictSummaryImageCaches(String path) async {
     final provider = FileImage(File(path));
     await provider.evict();
     await ResizeImage(provider, width: 600).evict();
+    await ExtendedFileImageProvider(File(path)).evict();
   }
 
   Future<_SummaryImageChoice?> _showCostDialog({
@@ -341,10 +363,7 @@ class _CostDialog extends ConsumerStatefulWidget {
   final bool hasImageRole;
   final VoidCallback onGoToSettings;
 
-  const _CostDialog({
-    required this.hasImageRole,
-    required this.onGoToSettings,
-  });
+  const _CostDialog({required this.hasImageRole, required this.onGoToSettings});
 
   @override
   ConsumerState<_CostDialog> createState() => _CostDialogState();
@@ -376,9 +395,7 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
 
     return AlertDialog(
       backgroundColor: cs.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       title: Text(
@@ -428,9 +445,7 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
                     selectedBackgroundColor: cs.primaryContainer,
                     foregroundColor: cs.onSurfaceVariant,
                     selectedForegroundColor: cs.onPrimaryContainer,
-                    side: BorderSide(
-                      color: cs.outlineVariant.withAlpha(100),
-                    ),
+                    side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -441,15 +456,12 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
                       .map(
                         (v) => ButtonSegment<String>(
                           value: v,
-                          label: Text(
-                            switch (v) {
-                              'auto' => l10n.fidelityAuto,
-                              'standard' => l10n.fidelityStandard,
-                              'high' => l10n.fidelityHigh,
-                              _ => v,
-                            },
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          label: Text(switch (v) {
+                            'auto' => l10n.fidelityAuto,
+                            'standard' => l10n.fidelityStandard,
+                            'high' => l10n.fidelityHigh,
+                            _ => v,
+                          }, overflow: TextOverflow.ellipsis),
                         ),
                       )
                       .toList(),
@@ -547,8 +559,7 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
         ),
         TextButton(
           onPressed: widget.hasImageRole
-              ? () =>
-                  Navigator.of(context).pop(_SummaryImageChoice.confirm)
+              ? () => Navigator.of(context).pop(_SummaryImageChoice.confirm)
               : null,
           child: Text(l10n.confirm),
         ),
