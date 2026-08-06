@@ -33,8 +33,12 @@ class DocumentTranslationState {
     this.error,
   });
 
-  /// 当前是否已有完整翻译结果（决定按钮形态：文本循环 vs 图标）
-  bool get hasResult => status == DocTranslationStatus.done;
+  /// 当前是否已有完整翻译结果（决定按钮形态：文本循环 vs 图标）。
+  /// 必须同时要求 `translations` 非空——`translate()` 在全段失败时也会走到
+  /// done 分支的历史已堵（见 translate 末尾的空 translations 判定），但这里
+  /// 仍作防御：done + 空 translations 时不应让底栏露出失灵的模式按钮。
+  bool get hasResult =>
+    status == DocTranslationStatus.done && translations.isNotEmpty;
 
   DocumentTranslationState copyWith({
     DocTranslationStatus? status,
@@ -190,6 +194,23 @@ class DocumentTranslationNotifier
         state = state.copyWith(
           status: DocTranslationStatus.idle,
           translations: translations,
+        );
+        return false;
+      }
+
+      // 全段失败兜底：没有任何「markdown 段」翻出来时（零缓存命中 + 所有段重试
+      // 后仍失败；figure title 即便侥幸成功也不参与 weave），weaver 会对每段
+      // continue 返回原文 → effectiveMd 不变 → 一直原文、模式按钮失灵。若仍走
+      // done，hasResult=true 会让底栏显示模式按钮、_handleTranslate 弹「翻译完成」，
+      // 用户感受到「翻译完成却看不到译文」。改走 failed 把真实失败暴露：
+      // _reportTranslationFailure 弹错误文案，底栏回到「翻译」入口。
+      final anyMarkdownTranslated = paragraphs.any(
+        (p) => translations[p.hash]?.isNotEmpty == true,
+      );
+      if (!anyMarkdownTranslated) {
+        state = state.copyWith(
+          status: DocTranslationStatus.failed,
+          error: Exception('所有段落翻译均失败，请检查 AI 设置与网络（可能为接口限流）'),
         );
         return false;
       }

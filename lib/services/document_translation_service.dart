@@ -282,7 +282,8 @@ class DocumentTranslationService {
   }
 
   /// 接缝 2：单段翻译 + 指数退避重试。注入 [translator] 以便无 LLM 单测；
-  /// [backoff] 默认 200ms × 2^attempt，测试可注入 no-op 跳过等待。空译文按失败重试。
+  /// [backoff] 默认 1s × 2^attempt（attempt 0/1 = 1s/2s），给短时接口限流窗恢复
+  /// 时间；测试可注入 no-op 跳过等待。空译文按失败重试。
   /// 全部尝试失败返回 null（保留原文，不抛，避免连累并发池里的其他 worker）。
   @visibleForTesting
   static Future<String?> translateWithRetry({
@@ -303,7 +304,7 @@ class DocumentTranslationService {
       }
       if (attempt < maxRetries) {
         await (backoff?.call(attempt) ??
-            Future<void>.delayed(Duration(milliseconds: 200 * (1 << attempt))));
+            Future<void>.delayed(Duration(milliseconds: 1000 * (1 << attempt))));
       }
     }
     log.d(
