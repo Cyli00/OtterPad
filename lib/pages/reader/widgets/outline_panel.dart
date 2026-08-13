@@ -197,10 +197,8 @@ class _OutlinePanelState extends State<OutlinePanel>
       return;
     }
     final all = await FigureExtractService.loadManifest(widget.documentId!);
-    // Outline 只展示有 caption 身份的 figure；visualOnly 匿名图留在 manifest
-    // 供 AI 补检，但不进列表（避免空白标题刷屏）。
-    final figures =
-        all == null ? null : FigureManifestEntry.forDisplay(all);
+    // Outline 只展示有 caption 身份的 figure；匿名图留在 manifest 供 AI 补检。
+    final figures = all == null ? null : FigureManifestEntry.forDisplay(all);
     // 重新提取会原地覆盖 figures/*.png,但 Flutter 全局 ImageCache 以
     // FileImage(path) 为 key,不感知 mtime,导致 Image.file 还显示旧字节.
     // 显式 evict 这批 path,下次构建时 Image.file 重读磁盘.
@@ -381,87 +379,87 @@ class _FiguresTab extends StatelessWidget {
 
         return RepaintBoundary(
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              fig.captionText,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: cs.onSurface,
-                height: 1.4,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                fig.captionText,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                  height: 1.4,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 10),
-            if (imageExists)
-              GestureDetector(
-                onTap: () {
-                  Haptics.soft();
-                  showFigureViewer(
-                    context,
-                    figures!,
-                    initialIndex: figIndex,
-                    documentId: documentId,
-                    document: document,
-                    onLocateQuote: onLocateQuote,
-                  );
-                },
-                child: Hero(
-                  tag: 'figure_${fig.imagePath}',
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      File(fig.imagePath),
-                      fit: BoxFit.contain,
-                      width: double.infinity,
-                      cacheWidth: 600,
-                      gaplessPlayback: true,
-                    ),
-                  ),
-                ),
-              )
-            else
-              Container(
-                height: 100,
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Icon(
-                    Symbols.broken_image_rounded,
-                    color: cs.onSurfaceVariant.withAlpha(120),
-                    size: 32,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _ActionLink(
-                  icon: Symbols.article_rounded,
-                  label: context.l10n.viewInDocument,
-                  onTap: () => _navigateToFigure(fig),
-                ),
-                const SizedBox(width: 16),
-                if (imageExists)
-                  _ActionLink(
-                    icon: Symbols.open_in_full_rounded,
-                    label: context.l10n.viewOriginalImage,
-                    onTap: () => showFigureViewer(
+              const SizedBox(height: 10),
+              if (imageExists)
+                GestureDetector(
+                  onTap: () {
+                    Haptics.soft();
+                    showFigureViewer(
                       context,
                       figures!,
                       initialIndex: figIndex,
                       documentId: documentId,
                       document: document,
                       onLocateQuote: onLocateQuote,
+                    );
+                  },
+                  child: Hero(
+                    tag: 'figure_${fig.imagePath}',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        File(fig.imagePath),
+                        fit: BoxFit.contain,
+                        width: double.infinity,
+                        cacheWidth: 600,
+                        gaplessPlayback: true,
+                      ),
                     ),
                   ),
-              ],
-            ),
-          ],
-        ),
+                )
+              else
+                Container(
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Symbols.broken_image_rounded,
+                      color: cs.onSurfaceVariant.withAlpha(120),
+                      size: 32,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _ActionLink(
+                    icon: Symbols.article_rounded,
+                    label: context.l10n.viewInDocument,
+                    onTap: () => _navigateToFigure(fig),
+                  ),
+                  const SizedBox(width: 16),
+                  if (imageExists)
+                    _ActionLink(
+                      icon: Symbols.open_in_full_rounded,
+                      label: context.l10n.viewOriginalImage,
+                      onTap: () => showFigureViewer(
+                        context,
+                        figures!,
+                        initialIndex: figIndex,
+                        documentId: documentId,
+                        document: document,
+                        onLocateQuote: onLocateQuote,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );
@@ -504,9 +502,11 @@ class _FiguresTab extends StatelessWidget {
             ],
             if (onUploadSummaryImage != null)
               TactilePress(
-                onTap: summaryState.generating ? null : () {
-                  onUploadSummaryImage!();
-                },
+                onTap: summaryState.generating
+                    ? null
+                    : () {
+                        onUploadSummaryImage!();
+                      },
                 baseColor: Colors.transparent,
                 padding: const EdgeInsets.all(4),
                 child: Icon(
@@ -605,8 +605,7 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
   }
 
   Future<void> _copy(int index, _ReferenceItem item) async {
-    final text =
-        item.isNumbered ? '[${item.number}] ${item.text}' : item.text;
+    final text = item.isNumbered ? '[${item.number}] ${item.text}' : item.text;
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     setState(() => _copiedIndex = index);
@@ -618,7 +617,9 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
     final snippet = item.text.length > 30
         ? '${item.text.substring(0, 30)}…'
         : item.text;
-    ref.read(snackBarServiceProvider).showResult(
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(
           message: context.l10n.copiedReference(item.number, snippet),
           duration: const Duration(seconds: 2),
         );
@@ -648,14 +649,14 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
 
         return RepaintBoundary(
           child: TactilePress(
-          // 复制后的 2 秒高亮复用 TactilePress 内部的 AnimatedContainer
-          baseColor: copied
-              ? cs.primaryContainer.withAlpha(110)
-              : Colors.transparent,
-          onTap: () => _copy(index, item),
-          borderRadius: BorderRadius.circular(8),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
+            // 复制后的 2 秒高亮复用 TactilePress 内部的 AnimatedContainer
+            baseColor: copied
+                ? cs.primaryContainer.withAlpha(110)
+                : Colors.transparent,
+            onTap: () => _copy(index, item),
+            borderRadius: BorderRadius.circular(8),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
@@ -694,7 +695,7 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
                 ),
               ],
             ),
-        ),
+          ),
         );
       },
     );
@@ -756,13 +757,12 @@ class _ActionLink extends StatelessWidget {
             label,
             style: TextStyle(
               color: cs.primary,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 }
-

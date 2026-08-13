@@ -61,15 +61,55 @@ Figure 1. Example caption.
       html,
       contains('<link rel="stylesheet" href="/_assets/reader/reader.css">'),
     );
-    expect(
-      html,
-      contains('<script src="/_assets/reader/reader.js"></script>'),
-    );
+    expect(html, contains('<script src="/_assets/reader/reader.js"></script>'));
     // 动态 CSS 变量块仍按文档内联（palette/字体）
     expect(html, contains(':root {'));
     expect(html, contains('--font-size'));
     // JS 与静态 CSS 规则不再内联在 HTML 中
     expect(html, isNot(contains('addHighlightsBatch')));
     expect(html, isNot(contains('-webkit-scrollbar')));
+  });
+
+  test('空 caption 的 fig 图不进入正文 HTML', () {
+    final html = buildReaderHtml(
+      markdownContent:
+          'Before\n\n![fig:](https://example.com/cover.png)\n\nAfter',
+      palette: palette,
+      settings: const ReaderSettingsState(),
+      baseHref: '/library/doc/',
+      serverRoot: '/',
+    );
+
+    expect(html, isNot(contains('cover.png')));
+    expect(html, isNot(contains('<figure>')));
+    expect(html, contains('Before'));
+    expect(html, contains('After'));
+  });
+
+  test('空白 caption 的 fig 图同样不进入正文 HTML', () {
+    final html = buildReaderHtml(
+      markdownContent: '![fig:   ](https://example.com/deco.png)\n\nKeep',
+      palette: palette,
+      settings: const ReaderSettingsState(),
+      baseHref: '/library/doc/',
+      serverRoot: '/',
+    );
+
+    expect(html, isNot(contains('deco.png')));
+    expect(html, contains('Keep'));
+  });
+
+  test('有 caption 的 fig 图转为 figure + figcaption', () {
+    final html = buildReaderHtml(
+      markdownContent: '![fig:Figure 1. Result.](https://example.com/fig.png)',
+      palette: palette,
+      settings: const ReaderSettingsState(),
+      baseHref: '/library/doc/',
+      serverRoot: '/',
+    );
+
+    expect(html, contains('<figure>'));
+    expect(html, contains('fig.png'));
+    expect(html, contains('<figcaption>Figure 1. Result.</figcaption>'));
   });
 }

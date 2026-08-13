@@ -263,7 +263,10 @@ class DocExtractService {
 
     final rawMdFile = File(rawMdPath);
     if (!rawMdFile.existsSync()) {
-      throw FileSystemException('raw.md not found; run extraction first', rawMdPath);
+      throw FileSystemException(
+        'raw.md not found; run extraction first',
+        rawMdPath,
+      );
     }
 
     var processedMarkdown = await rawMdFile.readAsString();
@@ -321,7 +324,10 @@ class DocExtractService {
 
     final rawMdFile = File(rawMdPath);
     if (!rawMdFile.existsSync()) {
-      throw FileSystemException('raw.md not found; run extraction first', rawMdPath);
+      throw FileSystemException(
+        'raw.md not found; run extraction first',
+        rawMdPath,
+      );
     }
 
     var processedMarkdown = await rawMdFile.readAsString();
@@ -405,7 +411,9 @@ class DocExtractService {
   /// 用本地 figure 图片替换原始 Markdown 中的 figure 区域。
   ///
   /// 按页遍历 API JSON，通过 block_ids 在每页的 raw markdown.text 中
-  /// 精确定位 figure 行范围，替换为 `![caption](file:///path/to/figure.png)`。
+  /// 精确定位 figure 行范围：可展示条目替换为
+  /// `![fig:caption](file:///path/to/figure.png)`；匿名 / 空 caption 只删
+  /// 原图行、不插入标签（与 [FigureManifestEntry.isDisplayFigure] 一致）。
   static String replaceFigureRegions({
     required String jsonContent,
     required List<FigureManifestEntry> figures,
@@ -436,8 +444,8 @@ class DocExtractService {
   ///
   /// 用**行集合**（而非连续 (start, end) 区间）精确表达每个 figure 占用的行——
   /// 天生支持"双栏排版两个 figure 行段交错"的场景（见 `_planFigureLines` 注释）。
-  /// 替换时：figure 的 anchor 行（figure_title 所在行）插入 `![fig:...](path)`，
-  /// 其余 owned 行从输出里抹掉。锚点在原始行号位置，不同 figure 的图片自然保持阅读顺序。
+  /// 替换时：可展示 figure 的 anchor 行插入 `![fig:...](path)`；匿名 figure
+  /// 只抹掉 owned 行。锚点在原始行号位置，不同 figure 的图片自然保持阅读顺序。
   static String _replaceInPageMd(
     String mdText,
     List<FigureManifestEntry> pageFigures,
@@ -478,16 +486,17 @@ class DocExtractService {
       ownedByAny.addAll(p.ownedLines);
     }
 
-    // Phase 3：扫 lines——锚点行输出 img_tag，其它 owned 行跳过，其余原样保留
+    // Phase 3：扫 lines——锚点行输出 img_tag（可展示）或删除（匿名），
+    // 其它 owned 行跳过，其余原样保留。
     final out = <String>[];
     for (var i = 0; i < lines.length; i++) {
       final tag = anchorTag[i];
       if (tag != null) {
-        out.add(tag);
+        if (tag.isNotEmpty) out.add(tag);
       } else if (!ownedByAny.contains(i)) {
         out.add(lines[i]);
       }
-      // owned but not anchor：deliberately skip (delete)
+      // owned but not anchor / 空 imgTag：deliberately skip (delete)
     }
     return out.join('\n');
   }
@@ -587,13 +596,12 @@ class DocExtractService {
     // blockedByOthers=claimed，不越过其他 figure 的行；不触碰自身 owned 行。
     _absorbBlankNeighbors(lines, owned, claimed);
 
-    final uri = Uri.file(fig.imagePath);
-    final caption = _normalizeInlineText(fig.captionText);
-    return _FigurePlan(
-      ownedLines: owned,
-      anchorLine: anchor,
-      imgTag: '\n![fig:$caption]($uri)\n',
-    );
+    // 匿名 / 空 caption 仍吃掉 raw 图行（避免封面留在正文），但不插入图片标签。
+    // 与 Outline / 查看器共用 [FigureManifestEntry.isDisplayFigure]。
+    final imgTag = fig.isDisplayFigure
+        ? '\n![fig:${_normalizeInlineText(fig.captionText)}](${Uri.file(fig.imagePath)})\n'
+        : '';
+    return _FigurePlan(ownedLines: owned, anchorLine: anchor, imgTag: imgTag);
   }
 
   /// 在行列表中找到包含 [text] 的第一行（跳过已使用的行）
@@ -904,6 +912,7 @@ class _FigurePlan {
   final int anchorLine;
 
   /// 生成的 markdown 图片标记，形如 `\n![fig:CAPTION](file:///.../FIGURE_N_.png)\n`。
+  /// 空字符串 = 匿名 figure：删除 owned 行、不插入图片。
   final String imgTag;
 
   const _FigurePlan({

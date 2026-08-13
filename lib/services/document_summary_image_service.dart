@@ -181,6 +181,7 @@ class DocumentSummaryImageService {
       await FigureExtractService.instance.init();
       final extractor = FigureExtractService.instance;
       for (final entry in manifest) {
+        if (!entry.isDisplayFigure) continue;
         if (!await File(entry.imagePath).exists()) continue;
         if (extractor.isSupplementaryCaption(entry.captionText)) {
           supplementary.add(entry.imagePath);
@@ -193,7 +194,8 @@ class DocumentSummaryImageService {
         if (primary.length < maxCount)
           ...supplementary.take(maxCount - primary.length),
       ];
-      if (selected.isNotEmpty) return selected;
+      // manifest 在就不扫目录：匿名封面图仍躺在 figures/ 里，回退会把它们捡回来。
+      return selected;
     }
 
     final figuresDir = Directory(DocPaths.figuresDir(pdfPath));

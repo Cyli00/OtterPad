@@ -121,7 +121,10 @@ String _markdownToHtml(
   return html;
 }
 
-/// `<img alt="fig:Caption text" src="...">` → `<figure><img><figcaption>`
+/// `<img alt="fig:Caption text" src="...">` → `<figure><img><figcaption>`。
+///
+/// 空 / 空白 caption（`alt="fig:"`）视为匿名 visual：整段丢掉，不进正文。
+/// 覆盖已落盘的旧 extract.md（当时仍会把封面写成 `![fig:](...)`）。
 String _convertFigCaptions(String html) {
   return html.replaceAllMapped(
     RegExp(
@@ -129,8 +132,9 @@ String _convertFigCaptions(String html) {
       caseSensitive: false,
     ),
     (m) {
-      final before = m[1]!;
       final caption = m[2]!;
+      if (caption.trim().isEmpty) return '';
+      final before = m[1]!;
       final after = m[3]!;
       return '<figure><img ${before}alt="$caption"$after />'
           '<figcaption>$caption</figcaption></figure>';

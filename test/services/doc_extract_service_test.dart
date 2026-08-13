@@ -160,7 +160,7 @@ void main() {
     expect(result, contains('GRIN lenses suffer primarily'));
   });
 
-  test('replaceFigureRegions 匿名 entry 独立还原到 Markdown', () {
+  test('replaceFigureRegions 匿名 entry 删除原图且不插入正文图片', () {
     final jsonContent = jsonEncode([
       {
         'markdown': {
@@ -180,7 +180,7 @@ void main() {
       },
     ]);
 
-    // 匿名 visual（无 caption）以独立图片写回 Markdown，不吞掉相邻正文。
+    // 匿名 visual（无 caption）从正文移除，不吞掉相邻正文。
     final result = DocExtractService.replaceFigureRegions(
       jsonContent: jsonContent,
       figures: const [
@@ -196,18 +196,76 @@ void main() {
       mdDir: r'C:\tmp',
     );
 
+    expect(result, isNot(contains('![fig:')));
+    expect(result, isNot(contains('fig0.png')));
+    expect(result, isNot(contains('img_in_image_box')));
+    expect(result, contains('Adjacent body text before the anonymous visual.'));
+    expect(result, contains('Another body paragraph that must remain.'));
+  });
+
+  test('replaceFigureRegions 同页：展示 figure 插入、匿名 figure 删除', () {
+    final jsonContent = jsonEncode([
+      {
+        'markdown': {
+          'text': [
+            '<div style="text-align: center;"><img src="imgs/img_in_image_box_10_20_30_40.jpg" alt="Image" width="20%" /></div>',
+            '',
+            '<div style="text-align: center;"><img src="imgs/img_in_image_box_100_200_400_500.jpg" alt="Image" width="37%" /></div>',
+            '',
+            '<div style="text-align: center;">Figure 1. Result.</div>',
+            '',
+            'Body after figures.',
+          ].join('\n'),
+        },
+        'prunedResult': {
+          'parsing_res_list': [
+            _block(1, 'image', [10, 20, 30, 40], ''),
+            _block(2, 'image', [100, 200, 400, 500], ''),
+            _block(3, 'figure_title', [
+              100,
+              520,
+              400,
+              540,
+            ], 'Figure 1. Result.'),
+          ],
+        },
+      },
+    ]);
+
+    final result = DocExtractService.replaceFigureRegions(
+      jsonContent: jsonContent,
+      figures: const [
+        FigureManifestEntry(
+          imagePath: r'C:\tmp\cover.png',
+          captionText: '',
+          pageIndex: 0,
+          blockIds: ['1'],
+          pairMethod: 'visualOnly',
+          captionSource: 'none',
+        ),
+        FigureManifestEntry(
+          imagePath: r'C:\tmp\Figure_1.png',
+          captionText: 'Figure 1. Result.',
+          pageIndex: 0,
+          blockIds: ['2', '3'],
+          pairMethod: 'samePage',
+          captionSource: 'blockMatch',
+        ),
+      ],
+      mdDir: r'C:\tmp',
+    );
+
     final imageLines = result
         .split('\n')
         .where((line) => line.startsWith('![fig:'))
         .toList();
     expect(imageLines, hasLength(1));
-    expect(imageLines.single, contains('file:///'));
-    expect(imageLines.single, contains('fig0.png'));
-    expect(imageLines.single, isNot(contains('img_in_image_box')));
-    // 原 API 图片行被替换，相邻正文原样保留。
-    expect(result, isNot(contains('img_in_image_box')));
-    expect(result, contains('Adjacent body text before the anonymous visual.'));
-    expect(result, contains('Another body paragraph that must remain.'));
+    expect(imageLines.single, contains('Figure_1.png'));
+    expect(imageLines.single, contains('Figure 1. Result.'));
+    expect(result, isNot(contains('cover.png')));
+    expect(result, isNot(contains('img_in_image_box_10_20_30_40')));
+    expect(result, isNot(contains('img_in_image_box_100_200_400_500')));
+    expect(result, contains('Body after figures.'));
   });
 }
 

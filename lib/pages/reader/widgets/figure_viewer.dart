@@ -33,10 +33,8 @@ import '../../../services/translation_service.dart';
 /// 打开前自动截取当前屏幕的超低分辨率缩略图作为模糊背景。
 ///
 /// [figures] 由调用方决定范围：
-///  - Outline 画廊与有 caption 的正文图：传 [FigureManifestEntry.forDisplay]
-///    过滤后的列表，画廊只含可展示条目；
-///  - 匿名正文 visual（visualOnly / 无 caption）：以 singleton 列表打开，
-///    单图查看，不混入有标题画廊。
+///  - Outline / 正文可展示图：传 [FigureManifestEntry.forDisplay] 过滤后的列表；
+///  - 旧稿残留的匿名 visual：以 singleton 打开，不混入有标题画廊。
 /// Viewer 组件本身不区分匿名与否，仅消费传入的列表范围。
 Future<void> showFigureViewer(
   BuildContext context,

@@ -1682,11 +1682,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 匹配策略：从 url 提取 basename（`Figure_N.png`）与 manifest entry
   /// 的 `imagePath` basename 比对，和 outline_panel 保持一致。
   ///
-  /// 范围分流：先在**全量 manifest** 按 basename 定位正文实际点击的条目
-  /// （匿名 visual 也能被找到）；若命中匿名条目（visual-only / 空 caption
-  /// legacy）则以 singleton 列表打开，避免混入有标题画廊；若是可展示条目则对
-  /// 全量 manifest 调 [FigureManifestEntry.forDisplay]，在过滤后的列表里
-  /// 重新按 basename 定位 index，保证画廊只含可展示条目。
+  /// 范围分流：先在**全量 manifest** 按 basename 定位正文实际点击的条目。
+  /// 匿名图默认不进正文；旧稿若仍残留，命中后以 singleton 打开，不混入
+  /// 有标题画廊。可展示条目对全量 manifest 调
+  /// [FigureManifestEntry.forDisplay]，在过滤后的列表里重定位 index。
   Future<void> _handleMarkdownImageTap(String url) async {
     final documentId = widget.document.id;
 

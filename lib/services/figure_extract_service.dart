@@ -130,17 +130,20 @@ class FigureManifestEntry {
     this.kind,
   });
 
-  /// 无编号 caption 的匿名 visual（General profile 产出）。
+  /// 无编号 caption 的匿名 visual（General profile / AI 修缮产出）。
   ///
-  /// 仍写入 manifest 供 AI 补检 / 重处理，但默认不进阅读器 Figures 列表。
+  /// 仍写入 manifest 供 AI 补检 / 重处理，但不进任何用户可见的 figure 面。
   bool get isAnonymous =>
       pairMethod == PairMethod.visualOnly.name || captionSource == 'none';
 
-  /// 是否适合出现在 Outline Figures tab / viewer 画廊。
-  /// 要求有可读 caption；匿名 visualOnly 默认隐藏，避免空白标题污染列表。
+  /// 是否适合出现在用户可见的 figure 面。
+  ///
+  /// 要求有可读 caption；匿名 visualOnly / `captionSource=none` 默认隐藏，
+  /// 避免封面、装饰图、空白标题污染正文和 Outline。
   bool get isDisplayFigure => !isAnonymous && captionText.trim().isNotEmpty;
 
-  /// 展示用子集：过滤掉匿名 figure。正文内点图等路径仍应用全量 manifest。
+  /// 用户可见子集：Outline 列表、正文替换、查看器画廊、摘要配图共用此过滤。
+  /// manifest 全量仍留给 AI 补检 / 点图定位。
   static List<FigureManifestEntry> forDisplay(
     Iterable<FigureManifestEntry> all,
   ) => [
