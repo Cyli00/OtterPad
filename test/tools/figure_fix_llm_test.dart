@@ -1,4 +1,9 @@
+@Tags(['tools'])
+library;
+
 // 一次性工具：用真实 LLM（auth.json 里的 key/model）跑 figure-fix 全管线。
+// CI 通过 `--exclude-tags tools` 跳过；本地手动跑：
+//   flutter test test/tools/figure_fix_llm_test.dart --plain-name demoLlmFix
 //
 // 用法：
 //   flutter test test/tools/figure_fix_llm_test.dart --plain-name demoLlmFix
@@ -25,13 +30,15 @@ import 'package:otter_pad/services/figure_extract_service.dart';
 import 'package:otter_pad/services/figure_fix_service.dart';
 import 'package:otter_pad/services/prompts.dart';
 
-const _dir =
-    r'C:\Users\leahd\AppData\Roaming\io.github.cyli00\OtterPad\OtterPad\library\c2763bc1-5aad-d64c-3ab7-a5d418c1a817';
-const _pdfPath =
-    r'C:\Users\leahd\AppData\Roaming\io.github.cyli00\OtterPad\OtterPad\library\c2763bc1-5aad-d64c-3ab7-a5d418c1a817\source.pdf';
+import '../support/local_library.dart';
+
+const _docId = 'c2763bc1-5aad-d64c-3ab7-a5d418c1a817';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  final dir = localLibraryDoc(_docId);
+  final pdfPath = dir == null ? null : p.join(dir, 'source.pdf');
 
   setUpAll(() async {
     await GStorage.initForTest(AppDatabase(NativeDatabase.memory()));
@@ -41,14 +48,13 @@ void main() {
   test(
     'demoLlmFix: 真实 LLM 全管线 → figure_llm/',
     () async {
-    final pdf = File(_pdfPath);
-    if (!pdf.existsSync()) {
-      print('SKIP: source.pdf 不存在 @ $_pdfPath');
+    if (dir == null || pdfPath == null || !File(pdfPath).existsSync()) {
+      print('SKIP: source.pdf 不存在');
       return;
     }
-    final authFile = File(p.join(_dir, 'auth.json'));
+    final authFile = File(p.join(dir, 'auth.json'));
     if (!authFile.existsSync()) {
-      print('SKIP: auth.json 不存在 @ ${authFile.path}');
+      print('SKIP: auth.json 不存在');
       return;
     }
     final auth = jsonDecode(await authFile.readAsString()) as Map<String, dynamic>;
@@ -61,7 +67,7 @@ void main() {
     }
 
     // ── analyze ──
-    final analysis = await FigureFixService.instance.analyze(pdfPath: _pdfPath);
+    final analysis = await FigureFixService.instance.analyze(pdfPath: pdfPath);
     print('analyze: pages=${analysis.pages.length}, '
         'captions=${analysis.captionRegistry.length}, '
         'visuals=${analysis.visualRegistry.length}, '
@@ -90,8 +96,8 @@ void main() {
       schemaName: 'figure_fix',
       anthropicMaxTokens: 16384,
     );
-    await File(p.join(_dir, 'figure_llm.json')).writeAsString(llmText);
-    print('LLM 原始输出 → ${p.join(_dir, 'figure_llm.json')}');
+    await File(p.join(dir, 'figure_llm.json')).writeAsString(llmText);
+    print('LLM 原始输出 → figure_llm.json');
 
     // ── parse + merge ──
     final result = FigureFixService.parseAndValidate(
@@ -113,10 +119,10 @@ void main() {
         'keptHeuristic=${plan.keptHeuristic.length}');
 
     // ── 裁图到 figure_llm/ ──
-    final outDir = p.join(_dir, 'figure_llm');
+    final outDir = p.join(dir, 'figure_llm');
     final pageBlocks = [for (final pg in analysis.pages) pg.blocks];
     final manifest = await FigureExtractService.instance.cropFiguresFromSegments(
-      pdfPath: _pdfPath,
+      pdfPath: pdfPath,
       segments: plan.cropRequests,
       pageBlocks: pageBlocks,
       outputDir: outDir,

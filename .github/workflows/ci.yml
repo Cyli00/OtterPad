@@ -23,7 +23,8 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
-      - run: flutter test
+      # test/tools 是本机 PDF + 真实 LLM 的手工 demo，标了 tools tag，CI 不跑。
+      - run: flutter test --exclude-tags tools
 
   # ── Android APK ──
   build-android:

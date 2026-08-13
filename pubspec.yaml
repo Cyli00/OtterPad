@@ -25,7 +25,7 @@ dependencies:
   # 网络
   dio: ^5.9.0
   dio_http2_adapter: ^2.7.1
-  pdfrx: ^2.2.24
+  pdfrx: ^2.4.7
 
 
   # 关系数据库（Drift + sqlite3 v3 Dart Hooks + 中文/拼音 FTS5）

@@ -61,6 +61,10 @@ app.*.map.json
 /android/app/release.jks
 .ace-tool/
 
+# Local machine / credentials — never commit
+.claude/settings.local.json
+**/auth.json
+
 # PDB debug files
 *.pdb
 

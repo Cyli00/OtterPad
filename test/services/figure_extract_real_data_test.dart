@@ -3,21 +3,24 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otter_pad/services/document_structure.dart';
 import 'package:otter_pad/services/figure_extract_service.dart';
+import 'package:path/path.dart' as p;
+
+import '../support/local_library.dart';
 
 /// 真实 extract.json 集成测试——验证 groupId/blockOrder 解析正确、
 /// figure 提取回归不破坏。
 ///
-/// 依赖本机数据文件，CI 上自动 skip。
+/// 依赖本机数据文件（APPDATA / OTTERPAD_TEST_LIBRARY），CI 上自动 skip。
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const libraryRoot =
-      r'C:\Users\leahd\AppData\Roaming\io.github.cyli00\OtterPad\OtterPad\library';
-  const doc1 = '$libraryRoot\\c2763bc1-5aad-d64c-3ab7-a5d418c1a817';
-  const doc2 = '$libraryRoot\\19071c61-e86e-ec56-6337-46df5e6a84a3';
+  final doc1 = localLibraryDoc('c2763bc1-5aad-d64c-3ab7-a5d418c1a817');
+  final doc2 = localLibraryDoc('19071c61-e86e-ec56-6337-46df5e6a84a3');
 
-  final doc1Exists = File('$doc1\\extract.json').existsSync();
-  final doc2Exists = File('$doc2\\extract.json').existsSync();
+  final doc1Exists =
+      doc1 != null && File(p.join(doc1, 'extract.json')).existsSync();
+  final doc2Exists =
+      doc2 != null && File(p.join(doc2, 'extract.json')).existsSync();
 
   setUpAll(() async {
     await FigureExtractService.instance.init();
@@ -29,7 +32,7 @@ void main() {
     'DocumentStructure.parse 正确读取 groupId/blockOrder',
     skip: doc1Exists ? null : '需要本机数据文件',
     () async {
-      final json = await File('$doc1\\extract.json').readAsString();
+      final json = await File(p.join(doc1!, 'extract.json')).readAsString();
       final structure = DocumentStructure.parse(json);
 
       expect(structure.pages.length, 32);
@@ -56,7 +59,7 @@ void main() {
     '中文光学教材: findFigures 产出 43 个 figure (回归)',
     skip: doc1Exists ? null : '需要本机数据文件',
     () async {
-      final json = await File('$doc1\\extract.json').readAsString();
+      final json = await File(p.join(doc1!, 'extract.json')).readAsString();
       final structure = DocumentStructure.parse(json);
 
       final pages = structure.pages.map((p) => p.blocks).toList();
@@ -83,7 +86,7 @@ void main() {
     '英文神经科学论文: findFigures 产出 6 个 figure (回归)',
     skip: doc2Exists ? null : '需要本机数据文件',
     () async {
-      final json = await File('$doc2\\extract.json').readAsString();
+      final json = await File(p.join(doc2!, 'extract.json')).readAsString();
       final structure = DocumentStructure.parse(json);
 
       final pages = structure.pages.map((p) => p.blocks).toList();
