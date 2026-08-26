@@ -40,6 +40,8 @@
   "copiedToClipboard": "已复制到剪贴板",
 
   "settings": "设置",
+  "navShowLabels": "显示标签",
+  "navHideLabels": "隐藏标签",
   "networkSettings": "网络设置",
   "networkSettingsSubtitle": "代理 · 连通性测试",
   "aiSettings": "AI 设置",
@@ -614,7 +616,7 @@
   "favoriteDocumentCount": "{count} 篇文献",
   "clearReadingHistoryConfirm": "将清除所有阅读记录，文献本身不会被删除。此操作不可撤销",
   "noReadingHistoryHint": "打开任意文献后，这里会按日期显示浏览顺序",
-  "identifierInputHint": "输入 ISBN、DOI、PMID、arXiv ID 或 ADS 条码来添加条目到您的文库：",
+  "identifierInputHint": "输入 ISBN、DOI、PMID 或 arXiv ID 来添加条目到您的文库：",
   "identifierExample": "例如: 10.1038/s41586-021-03811-w",
   "addFilesSubtitle": "导入本地 PDF，并提取标题、作者、期刊、年份与 DOI",
   "addByIdentifierSubtitle": "输入 DOI、PMID、arXiv ID 或 ISBN 直接创建条目",

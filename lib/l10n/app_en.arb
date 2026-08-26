@@ -40,6 +40,8 @@
   "copiedToClipboard": "Copied to clipboard",
 
   "settings": "Settings",
+  "navShowLabels": "Show labels",
+  "navHideLabels": "Hide labels",
   "networkSettings": "Network",
   "networkSettingsSubtitle": "Proxy · Connectivity Test",
   "aiSettings": "AI Settings",
@@ -673,7 +675,7 @@
   "@favoriteDocumentCount": { "placeholders": { "count": { "type": "int" } } },
   "clearReadingHistoryConfirm": "This will clear all reading history. Documents will not be deleted. This cannot be undone",
   "noReadingHistoryHint": "Open any document and it will appear here by date",
-  "identifierInputHint": "Enter ISBN, DOI, PMID, arXiv ID or ADS bibcode to add entries:",
+  "identifierInputHint": "Enter ISBN, DOI, PMID or arXiv ID to add entries:",
   "identifierExample": "e.g.: 10.1038/s41586-021-03811-w",
   "addFilesSubtitle": "Import local PDFs, extract title, author, journal, year and DOI",
   "addByIdentifierSubtitle": "Enter DOI, PMID, arXiv ID or ISBN to create entries directly",

@@ -309,6 +309,18 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settings;
 
+  /// No description provided for @navShowLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Show labels'**
+  String get navShowLabels;
+
+  /// No description provided for @navHideLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide labels'**
+  String get navHideLabels;
+
   /// No description provided for @networkSettings.
   ///
   /// In en, this message translates to:
@@ -3408,7 +3420,7 @@ abstract class AppLocalizations {
   /// No description provided for @identifierInputHint.
   ///
   /// In en, this message translates to:
-  /// **'Enter ISBN, DOI, PMID, arXiv ID or ADS bibcode to add entries:'**
+  /// **'Enter ISBN, DOI, PMID or arXiv ID to add entries:'**
   String get identifierInputHint;
 
   /// No description provided for @identifierExample.

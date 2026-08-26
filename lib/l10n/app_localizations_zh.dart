@@ -114,6 +114,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settings => '设置';
 
   @override
+  String get navShowLabels => '显示标签';
+
+  @override
+  String get navHideLabels => '隐藏标签';
+
+  @override
   String get networkSettings => '网络设置';
 
   @override
@@ -1797,8 +1803,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noReadingHistoryHint => '打开任意文献后，这里会按日期显示浏览顺序';
 
   @override
-  String get identifierInputHint =>
-      '输入 ISBN、DOI、PMID、arXiv ID 或 ADS 条码来添加条目到您的文库：';
+  String get identifierInputHint => '输入 ISBN、DOI、PMID 或 arXiv ID 来添加条目到您的文库：';
 
   @override
   String get identifierExample => '例如: 10.1038/s41586-021-03811-w';
@@ -4356,8 +4361,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get noReadingHistoryHint => '開啟任意文獻後，這裡會按日期顯示瀏覽順序';
 
   @override
-  String get identifierInputHint =>
-      '輸入 ISBN、DOI、PMID、arXiv ID 或 ADS 條碼來新增條目到您的文庫：';
+  String get identifierInputHint => '輸入 ISBN、DOI、PMID 或 arXiv ID 來新增條目到您的文庫：';
 
   @override
   String get identifierExample => '例如: 10.1038/s41586-021-03811-w';

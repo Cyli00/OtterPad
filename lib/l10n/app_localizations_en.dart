@@ -114,6 +114,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
+  String get navShowLabels => 'Show labels';
+
+  @override
+  String get navHideLabels => 'Hide labels';
+
+  @override
   String get networkSettings => 'Network';
 
   @override
@@ -1843,7 +1849,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get identifierInputHint =>
-      'Enter ISBN, DOI, PMID, arXiv ID or ADS bibcode to add entries:';
+      'Enter ISBN, DOI, PMID or arXiv ID to add entries:';
 
   @override
   String get identifierExample => 'e.g.: 10.1038/s41586-021-03811-w';

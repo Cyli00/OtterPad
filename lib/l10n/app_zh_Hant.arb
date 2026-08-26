@@ -669,7 +669,7 @@
   "@favoriteDocumentCount": { "placeholders": { "count": { "type": "int" } } },
   "clearReadingHistoryConfirm": "將清除所有閱讀記錄，文獻本身不會被刪除。此操作不可復原",
   "noReadingHistoryHint": "開啟任意文獻後，這裡會按日期顯示瀏覽順序",
-  "identifierInputHint": "輸入 ISBN、DOI、PMID、arXiv ID 或 ADS 條碼來新增條目到您的文庫：",
+  "identifierInputHint": "輸入 ISBN、DOI、PMID 或 arXiv ID 來新增條目到您的文庫：",
   "identifierExample": "例如: 10.1038/s41586-021-03811-w",
   "addFilesSubtitle": "匯入本地 PDF，並擷取標題、作者、期刊、年份與 DOI",
   "addByIdentifierSubtitle": "輸入 DOI、PMID、arXiv ID 或 ISBN 直接建立條目",
