@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:motor/motor.dart';
 
 import '../core/animation_constants.dart';
 import '../services/haptics.dart';
@@ -14,6 +15,8 @@ class TactilePress extends StatefulWidget {
   final double? pressedScale;
   final EdgeInsetsGeometry? padding;
   final bool haptics;
+
+  /// 按压回弹（kSpringPress）欠阻尼可中断；默认值见 build 中的 0.96。
 
   const TactilePress({
     super.key,
@@ -36,8 +39,7 @@ class _TactilePressState extends State<TactilePress> {
   bool _pressed = false;
   bool _hovered = false;
 
-  bool get _interactive =>
-      widget.onTap != null || widget.onLongPress != null;
+  bool get _interactive => widget.onTap != null || widget.onLongPress != null;
 
   @override
   Widget build(BuildContext context) {
@@ -51,12 +53,11 @@ class _TactilePressState extends State<TactilePress> {
     final Color pressTarget =
         Color.lerp(base, isDark ? Colors.white : Colors.black, k) ?? base;
     final Color hoverTarget =
-        Color.lerp(base, isDark ? Colors.white : Colors.black, k * 0.6) ??
-            base;
-    final Color target =
-        _pressed ? pressTarget : (_hovered ? hoverTarget : base);
-    final double scale =
-        _pressed ? (widget.pressedScale ?? 0.97) : 1.0;
+        Color.lerp(base, isDark ? Colors.white : Colors.black, k * 0.6) ?? base;
+    final Color target = _pressed
+        ? pressTarget
+        : (_hovered ? hoverTarget : base);
+    final double scale = _pressed ? (widget.pressedScale ?? 0.96) : 1.0;
     final radius = widget.borderRadius ?? BorderRadius.circular(12);
 
     final content = widget.padding == null
@@ -72,53 +73,53 @@ class _TactilePressState extends State<TactilePress> {
         gestures: {
           TapGestureRecognizer:
               GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
-            TapGestureRecognizer.new,
-            (r) {
-              r
-                ..onTapDown = _interactive
-                    ? (_) => setState(() => _pressed = true)
-                    : null
-                ..onTapUp = _interactive
-                    ? (_) => setState(() => _pressed = false)
-                    : null
-                ..onTapCancel = _interactive
-                    ? () => setState(() => _pressed = false)
-                    : null
-                ..onTap = widget.onTap == null
-                    ? null
-                    : () {
-                        if (widget.haptics) Haptics.soft();
-                        widget.onTap!();
-                      };
-            },
-          ),
+                TapGestureRecognizer.new,
+                (r) {
+                  r
+                    ..onTapDown = _interactive
+                        ? (_) => setState(() => _pressed = true)
+                        : null
+                    ..onTapUp = _interactive
+                        ? (_) => setState(() => _pressed = false)
+                        : null
+                    ..onTapCancel = _interactive
+                        ? () => setState(() => _pressed = false)
+                        : null
+                    ..onTap = widget.onTap == null
+                        ? null
+                        : () {
+                            if (widget.haptics) Haptics.soft();
+                            widget.onTap!();
+                          };
+                },
+              ),
           // 仅在确有 onLongPress 时注册——回调全空的 LongPressGestureRecognizer
           // 是"僵尸竞争者"：500ms deadline 一到它无条件赢得竞技场，Tap 被判负，
           // onTap 静默丢失（用户按住稍久抬手 = 点击无效），且 _pressed 的清除
           // 走不到 onLongPressEnd（也是 null），按压灰永久卡在条目上。
           if (widget.onLongPress != null)
             LongPressGestureRecognizer:
-                GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-              LongPressGestureRecognizer.new,
-              (r) {
-                r
-                  ..onLongPress = () {
-                    if (widget.haptics) Haptics.medium();
-                    widget.onLongPress!();
-                  }
-                  ..onLongPressEnd = (_) {
-                    setState(() => _pressed = false);
-                  }
-                  ..onLongPressCancel = () {
-                    setState(() => _pressed = false);
-                  };
-              },
-            ),
+                GestureRecognizerFactoryWithHandlers<
+                  LongPressGestureRecognizer
+                >(LongPressGestureRecognizer.new, (r) {
+                  r
+                    ..onLongPress = () {
+                      if (widget.haptics) Haptics.medium();
+                      widget.onLongPress!();
+                    }
+                    ..onLongPressEnd = (_) {
+                      setState(() => _pressed = false);
+                    }
+                    ..onLongPressCancel = () {
+                      setState(() => _pressed = false);
+                    };
+                }),
         },
-        child: AnimatedScale(
-          scale: scale,
-          duration: kAnimFast,
-          curve: kAnimCurve,
+        child: SingleMotionBuilder(
+          motion: const SpringMotion(kSpringPress),
+          value: scale,
+          builder: (context, v, child) =>
+              Transform.scale(scale: v, child: child),
           child: AnimatedContainer(
             duration: kAnimFast,
             curve: kAnimCurve,

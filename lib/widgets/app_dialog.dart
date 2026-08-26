@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../core/animation_constants.dart';
+import '../core/elevation.dart';
 
 Future<T?> showAppDialog<T>({
   required BuildContext context,
@@ -13,32 +14,44 @@ Future<T?> showAppDialog<T>({
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: barrierDismissible,
-    barrierLabel: barrierLabel ??
+    barrierLabel:
+        barrierLabel ??
         MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black54,
     transitionDuration: kAnimSlow,
     transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
+      // scale 用 easeOutBack 轻回弹，fade 保持标准缓出
+      final scaleCurved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutBack,
+        reverseCurve: kAnimCurveReverse,
+      );
+      final fadeCurved = CurvedAnimation(
         parent: animation,
         curve: kAnimCurve,
         reverseCurve: kAnimCurveReverse,
       );
       return BackdropFilter(
         filter: ImageFilter.blur(
-          sigmaX: 8.0 * curved.value,
-          sigmaY: 8.0 * curved.value,
+          sigmaX: 4.0 * fadeCurved.value,
+          sigmaY: 4.0 * fadeCurved.value,
         ),
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
-          child: FadeTransition(
-            opacity: curved,
-            child: child,
-          ),
+          scale: Tween<double>(begin: 0.92, end: 1.0).animate(scaleCurved),
+          child: FadeTransition(opacity: fadeCurved, child: child),
         ),
       );
     },
     pageBuilder: (context, animation, secondaryAnimation) {
-      return Center(child: builder(context));
+      return Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: AppShadows.dialog,
+          ),
+          child: builder(context),
+        ),
+      );
     },
   );
 }

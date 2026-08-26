@@ -84,10 +84,8 @@ class _SpotlightOverlayState extends State<_SpotlightOverlay>
   @override
   void initState() {
     super.initState();
-    _pulseCtrl = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    )..repeat(reverse: true);
+    _pulseCtrl = AnimationController(duration: kAnimPulse, vsync: this)
+      ..repeat(reverse: true);
   }
 
   @override
@@ -251,10 +249,8 @@ class _OnboardingPulseState extends State<OnboardingPulse>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    )..repeat(reverse: true);
+    _ctrl = AnimationController(duration: kAnimPulse, vsync: this)
+      ..repeat(reverse: true);
   }
 
   @override
