@@ -959,5 +959,8 @@
 
   "emptyLibraryTitle": "Your library is empty",
   "emptyLibraryBody": "Set up OCR and AI models, then add your first PDF to start reading",
-  "emptyLibraryAction": "Initial Setup"
+  "emptyLibraryAction": "Initial Setup",
+
+  "dropPdfToImport": "Drop PDF files to import",
+  "dropPdfOnly": "Only PDF files can be imported"
 }

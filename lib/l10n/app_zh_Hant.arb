@@ -919,5 +919,8 @@
 
   "emptyLibraryTitle": "文獻庫還是空的",
   "emptyLibraryBody": "設定 OCR 和 AI 模型，然後新增你的第一篇 PDF 開始閱讀",
-  "emptyLibraryAction": "初始設定"
+  "emptyLibraryAction": "初始設定",
+
+  "dropPdfToImport": "拖入 PDF 以匯入",
+  "dropPdfOnly": "僅支援匯入 PDF 檔案"
 }

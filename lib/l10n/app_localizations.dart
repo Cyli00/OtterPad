@@ -4670,6 +4670,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Initial Setup'**
   String get emptyLibraryAction;
+
+  /// No description provided for @dropPdfToImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop PDF files to import'**
+  String get dropPdfToImport;
+
+  /// No description provided for @dropPdfOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only PDF files can be imported'**
+  String get dropPdfOnly;
 }
 
 class _AppLocalizationsDelegate

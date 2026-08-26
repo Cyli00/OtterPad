@@ -2546,6 +2546,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get emptyLibraryAction => '初始设置';
+
+  @override
+  String get dropPdfToImport => '拖入 PDF 以导入';
+
+  @override
+  String get dropPdfOnly => '仅支持导入 PDF 文件';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -5090,4 +5096,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get emptyLibraryAction => '初始設定';
+
+  @override
+  String get dropPdfToImport => '拖入 PDF 以匯入';
+
+  @override
+  String get dropPdfOnly => '僅支援匯入 PDF 檔案';
 }

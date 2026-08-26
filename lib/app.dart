@@ -11,6 +11,8 @@ import 'providers/task_activity_provider.dart';
 import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
 import 'services/snackbar_service.dart';
+import 'utils/desktop.dart';
+import 'widgets/desktop_drop_host.dart';
 import 'widgets/window_chrome.dart';
 
 /// 各平台系统默认字体族
@@ -90,11 +92,11 @@ class OtterPadApp extends ConsumerWidget {
 
             // 桌面端：在路由内容上方注入自定义 chrome（替换原生标题栏）
             Widget wrapped = child!;
-            if (isDesktopChromeTarget) {
+            if (isDesktopOs) {
               wrapped = Column(
                 children: [
                   const WindowChrome(),
-                  Expanded(child: child),
+                  Expanded(child: DesktopDropHost(child: child)),
                 ],
               );
             }

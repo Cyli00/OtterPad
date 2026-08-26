@@ -107,6 +107,9 @@ dependencies:
   window_manager: ^0.5.1
   gal: ^2.3.2
 
+  # 桌面拖入 PDF。^0.7.1 = ≥0.7.1 <0.8.0，不会漂到 0.8.0（后者要求 AGP 9；本仓 AGP 8.11.1 且禁止改 android/）
+  desktop_drop: ^0.7.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -36,4 +36,20 @@ class Responsive {
   static bool showNavigationRail(BuildContext context) {
     return !isMobile(context);
   }
+
+  /// 阅读器正文最小逻辑宽。
+  static const double kReaderBodyMin = 360;
+
+  /// 停靠栏最小 / 最大宽。
+  static const double kReaderSidebarMin = 280;
+  static const double kReaderSidebarMax = 360;
+
+  /// 阅读器停靠栏启用门槛（逻辑宽）。
+  static const double kReaderDockMinWidth = kReaderBodyMin + kReaderSidebarMin;
+
+  static bool showExtendedRail(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= Breakpoints.tablet;
+
+  static bool useReaderDock(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= kReaderDockMinWidth;
 }

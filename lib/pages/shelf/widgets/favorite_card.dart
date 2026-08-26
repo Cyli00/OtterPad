@@ -3,6 +3,8 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../utils/desktop.dart';
+import '../../../widgets/app_context_menu.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../library/widgets/pdf_cover.dart';
 
@@ -40,8 +42,11 @@ class FavoriteCard extends StatelessWidget {
         onLongPressStart: hasMenu
             ? (d) {
                 Haptics.medium();
-                _showCardMenu(context, d.globalPosition, cs);
+                _showCardMenu(context, d.globalPosition);
               }
+            : null,
+        onSecondaryTapDown: hasMenu && isDesktopOs
+            ? (d) => _showCardMenu(context, d.globalPosition)
             : null,
         child: Container(
           width: _getDynamicWidth(),
@@ -122,53 +127,23 @@ class FavoriteCard extends StatelessWidget {
     );
   }
 
-  void _showCardMenu(
-      BuildContext context, Offset position, ColorScheme cs) async {
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
-    final result = await showMenu<String>(
+  Future<void> _showCardMenu(BuildContext context, Offset position) async {
+    final result = await showAppContextMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        overlay.size.width - position.dx,
-        overlay.size.height - position.dy,
-      ),
-      color: cs.surfaceContainerHigh,
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      globalPosition: position,
       items: [
         if (onEdit != null)
-          PopupMenuItem<String>(
+          AppContextMenuItem(
             value: 'edit',
-            height: 44,
-            child: Row(
-              children: [
-                Icon(Symbols.edit_rounded, size: 20, color: cs.onSurfaceVariant),
-                const SizedBox(width: 14),
-                Text(context.l10n.edit,
-                    style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500)),
-              ],
-            ),
+            label: context.l10n.edit,
+            icon: Symbols.edit_rounded,
           ),
         if (onDelete != null)
-          PopupMenuItem<String>(
+          AppContextMenuItem(
             value: 'delete',
-            height: 44,
-            child: Row(
-              children: [
-                Icon(Symbols.delete_rounded, size: 20, color: cs.error),
-                const SizedBox(width: 14),
-                Text(context.l10n.delete,
-                    style: TextStyle(
-                        color: cs.error,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500)),
-              ],
-            ),
+            label: context.l10n.delete,
+            icon: Symbols.delete_rounded,
+            destructive: true,
           ),
       ],
     );

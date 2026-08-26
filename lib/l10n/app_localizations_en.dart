@@ -2623,4 +2623,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyLibraryAction => 'Initial Setup';
+
+  @override
+  String get dropPdfToImport => 'Drop PDF files to import';
+
+  @override
+  String get dropPdfOnly => 'Only PDF files can be imported';
 }

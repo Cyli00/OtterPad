@@ -850,5 +850,8 @@
 
   "emptyLibraryTitle": "文献库还是空的",
   "emptyLibraryBody": "设置 OCR 和 AI 模型，然后添加你的第一篇 PDF 开始阅读",
-  "emptyLibraryAction": "初始设置"
+  "emptyLibraryAction": "初始设置",
+
+  "dropPdfToImport": "拖入 PDF 以导入",
+  "dropPdfOnly": "仅支持导入 PDF 文件"
 }
