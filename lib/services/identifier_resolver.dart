@@ -86,6 +86,23 @@ class IdentifierResolver {
 
     switch (parsed.type) {
       case IdentifierType.doi:
+        // arXiv 规范 DataCite DOI（10.48550/arxiv.*）CrossRef/Unpaywall 均未
+        // 收录，路由到 arXiv API；旧式 ID 的规范 DOI 不含子类别，须经 doi.org
+        // 重定向拿回完整 ID。
+        if (_isArxivCanonicalDoi(parsed.value)) {
+          final arxivId = await _arxivIdFromDoiRedirect(
+            parsed.value,
+            cancelToken: cancelToken,
+          );
+          if (arxivId == null) {
+            throw const IdentifierResolveException('未找到该标识符对应的文献');
+          }
+          return _resolveArxiv(
+            arxivId,
+            metadataOnly: metadataOnly,
+            cancelToken: cancelToken,
+          );
+        }
         return _resolveDoi(
           parsed.value,
           metadataOnly: metadataOnly,
@@ -426,8 +443,7 @@ class IdentifierResolver {
         if (filePath.isEmpty && pmcid != null && pmcid.isNotEmpty) {
           try {
             filePath = await _downloadPdf(
-              url:
-                  'https://europepmc.org/backend/ptpmcrender.fcgi?accid=$pmcid&blobtype=pdf',
+              url: _pmcPdfUrl(pmcid),
               year: year,
               authors: authors,
               title: title,
@@ -537,12 +553,16 @@ class IdentifierResolver {
       final year = published != null && published.length >= 4
           ? published.substring(0, 4)
           : null;
-      final doi = entry
-          .findAllElements('doi')
-          .firstOrNull
-          ?.innerText
-          .trim()
-          .toLowerCase();
+      // arXiv API 仅在论文已有正式 DOI 时返回 <arxiv:doi>；缺失时用 arXiv
+      // 规范 DataCite DOI 兜底，保证 PDF 拉取统一走 DOI 下载管道。
+      final doi =
+          entry
+              .findAllElements('doi')
+              .firstOrNull
+              ?.innerText
+              .trim()
+              .toLowerCase() ??
+          arxivCanonicalDoi(arxivId);
 
       if (!metadataOnly) {
         try {
@@ -727,6 +747,59 @@ class IdentifierResolver {
     return filePath;
   }
 
+  // ─── 根据 PMID 下载 PDF（PMC 开放获取兜底） ───────────────────────────────
+
+  /// Europe PMC PDF 直出端点。旧端点 backend/ptpmcrender.fcgi 已失效（520）。
+  static String _pmcPdfUrl(String pmcid) =>
+      'https://europepmc.org/articles/$pmcid?pdf=render';
+
+  /// PMID 输入的 PDF 兑底：esummary 取 PMCID → Europe PMC 直出；任一步失败返回空。
+  Future<String> downloadPdfByPmid({
+    required String pmid,
+    String? year,
+    List<String> authors = const [],
+    required String title,
+    required String fallbackId,
+    String? targetPath,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final resp = await _dio.get(
+        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi',
+        queryParameters: {'db': 'pubmed', 'id': pmid, 'retmode': 'json'},
+        cancelToken: cancelToken,
+      );
+      final result = (resp.data as Map<String, dynamic>)['result'];
+      final article = (result as Map<String, dynamic>?)?[pmid];
+      final ids = (article as Map<String, dynamic>?)?['articleids'];
+      String? pmcid;
+      if (ids is List) {
+        for (final id in ids) {
+          final map = id as Map<String, dynamic>;
+          if (map['idtype'] == 'pmc') {
+            final value = map['value'] as String?;
+            if (value != null && value.isNotEmpty) {
+              pmcid = value;
+              break;
+            }
+          }
+        }
+      }
+      if (pmcid == null) return '';
+      return await _downloadPdf(
+        url: _pmcPdfUrl(pmcid),
+        year: year,
+        authors: authors,
+        title: title,
+        fallbackId: fallbackId,
+        targetPath: targetPath,
+        cancelToken: cancelToken,
+      );
+    } catch (e) {
+      log.d('PMC PDF 下载失败: $e');
+      return '';
+    }
+  }
   // ─── 出版商直接获取 PDF ───────────────────────────────────────────────────
 
   /// 优先通过 HEAD doi.org 重定向判断出版商，再构造 PDF 直链 / 出版商 URL 模式下载。
@@ -772,7 +845,7 @@ class IdentifierResolver {
 
     // 根据出版商域名构造 PDF 直链
     if (publisherUri != null) {
-      final pdfUrl = _buildPublisherPdfUrl(publisherUri, doi);
+      final pdfUrl = buildPublisherPdfUrl(publisherUri, doi);
       if (pdfUrl != null) {
         try {
           final path = await _downloadPdf(
@@ -795,8 +868,28 @@ class IdentifierResolver {
   }
 
   /// 根据出版商域名构造 PDF 直链，不支持则返回 null。
-  String? _buildPublisherPdfUrl(Uri publisherUri, String doi) {
+  @visibleForTesting
+  static String? buildPublisherPdfUrl(Uri publisherUri, String doi) {
     final host = publisherUri.host.toLowerCase();
+
+    // arXiv：/abs/{id} → /pdf/{id}。Unpaywall 未索引规范 DOI（10.48550/arxiv.*），
+    // 必须出版商直达。
+    if (host.contains('arxiv.org')) {
+      final match = RegExp(r'^/abs/(.+)$').firstMatch(publisherUri.path);
+      if (match != null) return 'https://arxiv.org/pdf/${match.group(1)}';
+      return null;
+    }
+
+    // bioRxiv / medRxiv：realUri 为 /content/{doi}vN 页面，附 .full.pdf 后缀
+    // 即为 PDF。直连可减少对 Unpaywall 的依赖，并降低触发 Cloudflare 限流的
+    // 请求次数。
+    if (host.contains('biorxiv.org') || host.contains('medrxiv.org')) {
+      final path = publisherUri.path.replaceFirst(RegExp(r'/$'), '');
+      if (path.startsWith('/content/10.1101/')) {
+        return 'https://$host$path.full.pdf';
+      }
+      return null;
+    }
 
     // Springer
     if (host.contains('link.springer.com')) {
@@ -849,6 +942,57 @@ class IdentifierResolver {
     }
 
     return null;
+  }
+
+  // ─── arXiv 规范 DOI ─────────────────────────────────────────────────────
+
+  /// 判断是否为 arXiv 规范 DataCite DOI（10.48550/arxiv.*）。
+  static bool _isArxivCanonicalDoi(String doi) {
+    return RegExp(
+      r'^10\.48550/arxiv\..+$',
+      caseSensitive: false,
+    ).hasMatch(doi.trim());
+  }
+
+  /// arXiv 规范 DataCite DOI（无版本号），如 10.48550/arxiv.2412.14135。
+  /// 旧式 ID 的规范 DOI 不含子类别：math.GT/0309136 → 10.48550/arxiv.math/0309136。
+  @visibleForTesting
+  static String? arxivCanonicalDoi(String arxivId) {
+    var clean = arxivId.trim().replaceFirst(
+      RegExp(r'v\d+$', caseSensitive: false),
+      '',
+    );
+    if (clean.isEmpty) return null;
+    // 旧式 ID（archive[/subcategory]/number）丢弃子类别段
+    final slashIdx = clean.indexOf('/');
+    if (slashIdx > 0) {
+      final archive = clean.substring(0, slashIdx).split('.').first;
+      clean = '$archive${clean.substring(slashIdx)}';
+    }
+    return '10.48550/arxiv.${clean.toLowerCase()}';
+  }
+
+  /// 经 doi.org 重定向把 arXiv 规范 DOI 解析为完整 arXiv ID，失败返回 null。
+  Future<String?> _arxivIdFromDoiRedirect(
+    String doi, {
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final resp = await _dio.head(
+        _doiUrl(doi),
+        options: Options(
+          followRedirects: true,
+          maxRedirects: 10,
+          validateStatus: (s) => s != null && s >= 200 && s < 400,
+        ),
+        cancelToken: cancelToken,
+      );
+      final match = RegExp(r'^/abs/(.+)$').firstMatch(resp.realUri.path);
+      return match?.group(1);
+    } catch (e) {
+      log.d('arXiv 规范 DOI 重定向解析失败: $e');
+      return null;
+    }
   }
 
   bool _isPdfContentType(Headers headers) {

@@ -16,6 +16,7 @@ import '../services/chinese_text_detector.dart';
 import '../services/document_metadata_checks.dart';
 import '../services/document_metadata_parser.dart';
 import '../services/document_structure.dart';
+import '../services/identifier_parser.dart';
 import '../services/identifier_resolver.dart';
 import '../services/layout_metadata_extractor.dart';
 import '../services/metadata_search_service.dart';
@@ -282,12 +283,34 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
 
     var doc = resolved.copyWith(id: _newDocumentId(), contentHash: null);
 
+    // PDF 下载：DOI 管道优先；PMID 输入且 DOI 无果时走 PMC 开放获取兜底。
+    final parsed = IdentifierParser.parse(identifier);
+    final pdfPath = DocPaths.pdf(doc.id);
+    String downloadedPath = '';
     if (!DocumentMetadataChecks.isBlank(doc.doi)) {
-      final downloaded = await _downloadPdfIntoDocument(
-        doc,
+      downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
+        doi: doc.doi!,
+        year: doc.year,
+        authors: doc.authors,
+        title: doc.title,
+        fallbackId: doc.id,
+        targetPath: pdfPath,
         cancelToken: cancelToken,
       );
-      if (downloaded != null) doc = downloaded;
+    }
+    if (downloadedPath.isEmpty && parsed.type == IdentifierType.pmid) {
+      downloadedPath = await IdentifierResolver.instance.downloadPdfByPmid(
+        pmid: parsed.value,
+        year: doc.year,
+        authors: doc.authors,
+        title: doc.title,
+        fallbackId: doc.id,
+        targetPath: pdfPath,
+        cancelToken: cancelToken,
+      );
+    }
+    if (downloadedPath.isNotEmpty) {
+      doc = doc.copyWith(contentHash: await DocPaths.computeHash(File(pdfPath)));
     }
 
     await _upsertDoc(doc);
@@ -584,26 +607,6 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     // DELETE FROM documents → FK CASCADE 清 4 子表 + FTS 触发器清 documents_fts；
     // watch() 流自动刷新 state（ADR-0001 / ADR-0003）。
     await _deleteDoc(id);
-  }
-
-  Future<Document?> _downloadPdfIntoDocument(
-    Document doc, {
-    CancelToken? cancelToken,
-  }) async {
-    if (DocumentMetadataChecks.isBlank(doc.doi)) return null;
-    final pdfPath = DocPaths.pdf(doc.id);
-    final downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
-      doi: doc.doi!,
-      year: doc.year,
-      authors: doc.authors,
-      title: doc.title,
-      fallbackId: doc.id,
-      targetPath: pdfPath,
-      cancelToken: cancelToken,
-    );
-    if (downloadedPath.isEmpty) return null;
-    final contentHash = await DocPaths.computeHash(File(downloadedPath));
-    return doc.copyWith(contentHash: contentHash);
   }
 
   Future<void> _writePdfForDocument(
