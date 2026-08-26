@@ -69,6 +69,8 @@ Future<bool> showOnboardingOcrDialog(BuildContext context) async {
             fontWeight: FontWeight.bold,
           ),
         ),
+        // 矮窗口兜底可滚动，不允许假设窗口高度足够
+        scrollable: true,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,7 +90,13 @@ Future<bool> showOnboardingOcrDialog(BuildContext context) async {
                 final asset = lang == 'zh'
                     ? 'assets/icons/ocr_token_setting.png'
                     : 'assets/icons/ocr_token_setting_en.png';
-                return Image.asset(asset, fit: BoxFit.contain);
+                // 图片原生高度大，压到半屏内，否则矮窗口 BOTTOM OVERFLOWED
+                return ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+                  ),
+                  child: Image.asset(asset, fit: BoxFit.contain),
+                );
               }),
             ),
           ],

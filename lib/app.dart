@@ -1,27 +1,18 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'l10n/app_localizations.dart';
-import 'pages/library/widgets/identifier_dialog.dart';
 import 'providers/locale_provider.dart';
 import 'providers/task_activity_provider.dart';
-import 'providers/task_provider.dart';
 import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
-import 'router/app_routes.dart';
 import 'services/snackbar_service.dart';
-import 'shortcuts/app_intents.dart';
 import 'utils/desktop.dart';
-import 'utils/responsive.dart';
 import 'widgets/desktop_drop_host.dart';
-import 'widgets/desktop_shortcut_map.dart';
 import 'widgets/window_chrome.dart';
 
 /// 各平台系统默认字体族
@@ -102,52 +93,11 @@ class OtterPadApp extends ConsumerWidget {
             // 桌面端：在路由内容上方注入自定义 chrome（替换原生标题栏）
             Widget wrapped = child!;
             if (isDesktopOs) {
-              wrapped = Shortcuts(
-                shortcuts: kDesktopShortcutMap,
-                child: Actions(
-                  actions: {
-                    ImportPdfIntent: EnabledCallbackAction<ImportPdfIntent>(
-                      onInvoke: (_) {
-                        unawaited(_importPdfs(ref));
-                        return null;
-                      },
-                    ),
-                    ImportByIdentifierIntent:
-                        EnabledCallbackAction<ImportByIdentifierIntent>(
-                          onInvoke: (_) {
-                            final ctx =
-                                rootNavigatorKey.currentContext ?? context;
-                            unawaited(_importByIdentifier(ctx, ref));
-                            return null;
-                          },
-                        ),
-                    OpenLibrarySearchIntent:
-                        EnabledCallbackAction<OpenLibrarySearchIntent>(
-                          onInvoke: (_) {
-                            final ctx =
-                                FocusManager.instance.primaryFocus?.context ??
-                                rootNavigatorKey.currentContext ??
-                                context;
-                            ctx.push(AppRoutes.librarySearch);
-                            return null;
-                          },
-                        ),
-                    OpenSettingsIntent:
-                        EnabledCallbackAction<OpenSettingsIntent>(
-                          enabled: () => _settingsShortcutEnabled(router),
-                          onInvoke: (_) {
-                            _openSettings(context);
-                            return null;
-                          },
-                        ),
-                  },
-                  child: Column(
-                    children: [
-                      const WindowChrome(),
-                      Expanded(child: DesktopDropHost(child: child)),
-                    ],
-                  ),
-                ),
+              wrapped = Column(
+                children: [
+                  const WindowChrome(),
+                  Expanded(child: DesktopDropHost(child: child)),
+                ],
               );
             }
 
@@ -174,48 +124,4 @@ class OtterPadApp extends ConsumerWidget {
       },
     );
   }
-}
-
-bool _settingsShortcutEnabled(GoRouter router) {
-  final path = router.state.uri.path;
-  if (path == AppRoutes.settings) return false;
-  if (path.startsWith(AppRoutes.settingsOverlay)) return false;
-  return true;
-}
-
-void _openSettings(BuildContext context) {
-  final ctx =
-      FocusManager.instance.primaryFocus?.context ??
-      rootNavigatorKey.currentContext ??
-      context;
-  if (!ctx.mounted) return;
-  final showRail = Responsive.showNavigationRail(ctx);
-  final shell = StatefulNavigationShell.maybeOf(ctx);
-  if (showRail && shell != null) {
-    shell.goBranch(2);
-    return;
-  }
-  ctx.push(AppRoutes.settingsOverlay);
-}
-
-Future<void> _importPdfs(WidgetRef ref) async {
-  final result = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: ['pdf'],
-    allowMultiple: true,
-  );
-  if (result == null) return;
-  final paths = result.files
-      .where((f) => f.path != null)
-      .map((f) => f.path!)
-      .toList();
-  if (paths.isEmpty) return;
-  await ref.read(taskProvider.notifier).addFiles(paths);
-}
-
-Future<void> _importByIdentifier(BuildContext context, WidgetRef ref) async {
-  if (!context.mounted) return;
-  final identifier = await showIdentifierDialog(context);
-  if (identifier == null) return;
-  ref.read(taskProvider.notifier).addByIdentifier(identifier);
 }

@@ -12,14 +12,6 @@ import '../pages/library/view.dart';
 import '../pages/main/view.dart';
 import '../pages/reader/chat/document_chat_page.dart';
 import '../pages/reader/view.dart';
-import '../pages/setting/api_settings_page.dart';
-import '../pages/setting/ocr_settings_page.dart';
-import '../pages/setting/appearance_settings_page.dart';
-import '../pages/setting/backup_settings_page.dart';
-import '../pages/setting/network_settings_page.dart';
-import '../pages/setting/about_page.dart';
-import '../pages/setting/general_settings_page.dart';
-import '../pages/setting/storage_space_page.dart';
 import '../pages/setting/view.dart';
 import '../pages/shelf/add_documents_to_favorite_page.dart';
 import '../pages/shelf/favorite_detail_page.dart';
@@ -263,53 +255,95 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: const SettingPage(mode: SettingNavMode.overlay),
         ),
       ),
+      // 分组 overlay：统一走 SettingPage(initialSection:)，宽屏左右分栏、
+      // 窄屏整页，一次 pop 回到调用页（禁止 overlay 嵌套 routes）
       GoRoute(
         path: AppRoutes.settingsOverlayExtract,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) =>
-            _lateral(state: state, child: const OcrSettingsPage()),
+        pageBuilder: (context, state) => _lateral(
+          state: state,
+          child: const SettingPage(
+            mode: SettingNavMode.overlay,
+            initialSection: SettingsSection.extract,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settingsOverlayApi,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) =>
-            _lateral(state: state, child: const ApiSettingsPage()),
+        pageBuilder: (context, state) => _lateral(
+          state: state,
+          child: const SettingPage(
+            mode: SettingNavMode.overlay,
+            initialSection: SettingsSection.api,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settingsOverlayGeneral,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) =>
-            _lateral(state: state, child: const GeneralSettingsPage()),
+        pageBuilder: (context, state) => _lateral(
+          state: state,
+          child: const SettingPage(
+            mode: SettingNavMode.overlay,
+            initialSection: SettingsSection.general,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settingsOverlayNetwork,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) =>
-            _lateral(state: state, child: const NetworkSettingsPage()),
+        pageBuilder: (context, state) => _lateral(
+          state: state,
+          child: const SettingPage(
+            mode: SettingNavMode.overlay,
+            initialSection: SettingsSection.network,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settingsOverlayAppearance,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) =>
-            _lateral(state: state, child: const AppearanceSettingsPage()),
+        pageBuilder: (context, state) => _lateral(
+          state: state,
+          child: const SettingPage(
+            mode: SettingNavMode.overlay,
+            initialSection: SettingsSection.appearance,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settingsOverlayBackup,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) =>
-            _lateral(state: state, child: const BackupSettingsPage()),
+        pageBuilder: (context, state) => _lateral(
+          state: state,
+          child: const SettingPage(
+            mode: SettingNavMode.overlay,
+            initialSection: SettingsSection.backup,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settingsOverlayStorage,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) =>
-            _forward(state: state, child: const StorageSpacePage()),
+        pageBuilder: (context, state) => _forward(
+          state: state,
+          child: const SettingPage(
+            mode: SettingNavMode.overlay,
+            initialSection: SettingsSection.storage,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutes.settingsOverlayAbout,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) =>
-            _lateral(state: state, child: const AboutPage()),
+        pageBuilder: (context, state) => _lateral(
+          state: state,
+          child: const SettingPage(
+            mode: SettingNavMode.overlay,
+            initialSection: SettingsSection.about,
+          ),
+        ),
       ),
     ],
   );

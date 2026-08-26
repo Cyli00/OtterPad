@@ -20,7 +20,7 @@ import 'storage_space_page.dart';
 
 enum SettingNavMode { shell, overlay }
 
-enum _SettingsSection {
+enum SettingsSection {
   general,
   network,
   api,
@@ -32,70 +32,86 @@ enum _SettingsSection {
 }
 
 class SettingPage extends StatefulWidget {
-  const SettingPage({super.key, this.mode = SettingNavMode.overlay});
+  const SettingPage({
+    super.key,
+    this.mode = SettingNavMode.overlay,
+    this.initialSection,
+  });
 
   final SettingNavMode mode;
+
+  /// 进入时预选的设置分组（overlay 深链：宽屏直接定位到右侧详情）
+  final SettingsSection? initialSection;
 
   @override
   State<SettingPage> createState() => _SettingPageState();
 }
 
 class _SettingPageState extends State<SettingPage> {
-  _SettingsSection? _selectedSection;
+  SettingsSection? _selectedSection;
 
   bool get _isShell => widget.mode == SettingNavMode.shell;
 
-  void _openSection(_SettingsSection section) {
-    if (_isShell) {
+  bool get _isWide => MediaQuery.sizeOf(context).width >= 600;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedSection = widget.initialSection;
+  }
+
+  void _openSection(SettingsSection section) {
+    // shell 或宽屏 overlay 都走原地切换（宽屏左右分栏，禁止整窗 push 子页）
+    if (_isShell || _isWide) {
       setState(() => _selectedSection = section);
       return;
     }
     context.push(_overlayPath(section));
   }
 
-  String _overlayPath(_SettingsSection section) {
+  String _overlayPath(SettingsSection section) {
     return switch (section) {
-      _SettingsSection.general => AppRoutes.settingsOverlayGeneral,
-      _SettingsSection.network => AppRoutes.settingsOverlayNetwork,
-      _SettingsSection.api => AppRoutes.settingsOverlayApi,
-      _SettingsSection.extract => AppRoutes.settingsOverlayExtract,
-      _SettingsSection.appearance => AppRoutes.settingsOverlayAppearance,
-      _SettingsSection.backup => AppRoutes.settingsOverlayBackup,
-      _SettingsSection.storage => AppRoutes.settingsOverlayStorage,
-      _SettingsSection.about => AppRoutes.settingsOverlayAbout,
+      SettingsSection.general => AppRoutes.settingsOverlayGeneral,
+      SettingsSection.network => AppRoutes.settingsOverlayNetwork,
+      SettingsSection.api => AppRoutes.settingsOverlayApi,
+      SettingsSection.extract => AppRoutes.settingsOverlayExtract,
+      SettingsSection.appearance => AppRoutes.settingsOverlayAppearance,
+      SettingsSection.backup => AppRoutes.settingsOverlayBackup,
+      SettingsSection.storage => AppRoutes.settingsOverlayStorage,
+      SettingsSection.about => AppRoutes.settingsOverlayAbout,
     };
   }
 
-  String _sectionTitle(_SettingsSection section) {
+  String _sectionTitle(SettingsSection section) {
     final l10n = context.l10n;
     return switch (section) {
-      _SettingsSection.general => l10n.generalSettings,
-      _SettingsSection.network => l10n.networkSettings,
-      _SettingsSection.api => l10n.aiSettings,
-      _SettingsSection.extract => l10n.ocrSettings,
-      _SettingsSection.appearance => l10n.appearanceSettings,
-      _SettingsSection.backup => l10n.dataManagement,
-      _SettingsSection.storage => l10n.storageSpace,
-      _SettingsSection.about => l10n.about,
+      SettingsSection.general => l10n.generalSettings,
+      SettingsSection.network => l10n.networkSettings,
+      SettingsSection.api => l10n.aiSettings,
+      SettingsSection.extract => l10n.ocrSettings,
+      SettingsSection.appearance => l10n.appearanceSettings,
+      SettingsSection.backup => l10n.dataManagement,
+      SettingsSection.storage => l10n.storageSpace,
+      SettingsSection.about => l10n.about,
     };
   }
 
-  Widget _sectionPage(_SettingsSection section) {
+  Widget _sectionPage(SettingsSection section) {
     return switch (section) {
-      _SettingsSection.general => const GeneralSettingsPage(embedded: true),
-      _SettingsSection.network => const NetworkSettingsPage(embedded: true),
-      _SettingsSection.api => const ApiSettingsPage(embedded: true),
-      _SettingsSection.extract => const OcrSettingsPage(embedded: true),
-      _SettingsSection.appearance => const AppearanceSettingsPage(
+      SettingsSection.general => const GeneralSettingsPage(embedded: true),
+      SettingsSection.network => const NetworkSettingsPage(embedded: true),
+      SettingsSection.api => const ApiSettingsPage(embedded: true),
+      SettingsSection.extract => const OcrSettingsPage(embedded: true),
+      SettingsSection.appearance => const AppearanceSettingsPage(
         embedded: true,
       ),
-      _SettingsSection.backup => BackupSettingsPage(
+      SettingsSection.backup => BackupSettingsPage(
         embedded: true,
         onOpenStorage: () =>
-            setState(() => _selectedSection = _SettingsSection.storage),
+            setState(() => _selectedSection = SettingsSection.storage),
       ),
-      _SettingsSection.storage => const StorageSpacePage(embedded: true),
-      _SettingsSection.about => const AboutPage(embedded: true),
+      SettingsSection.storage => const StorageSpacePage(embedded: true),
+      SettingsSection.about => const AboutPage(embedded: true),
     };
   }
 
@@ -109,12 +125,12 @@ class _SettingPageState extends State<SettingPage> {
     }
   }
 
-  _SettingsSection? _listHighlight(_SettingsSection? section) {
-    if (section == _SettingsSection.storage) return _SettingsSection.backup;
+  SettingsSection? _listHighlight(SettingsSection? section) {
+    if (section == SettingsSection.storage) return SettingsSection.backup;
     return section;
   }
 
-  Widget _buildList({_SettingsSection? selected, required bool showChevron}) {
+  Widget _buildList({SettingsSection? selected, required bool showChevron}) {
     final l10n = context.l10n;
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -125,50 +141,50 @@ class _SettingPageState extends State<SettingPage> {
               icon: Symbols.tune_rounded,
               title: l10n.generalSettings,
               subtitle: l10n.generalSettingsSubtitle,
-              selected: selected == _SettingsSection.general,
+              selected: selected == SettingsSection.general,
               showChevron: showChevron,
-              onTap: () => _openSection(_SettingsSection.general),
+              onTap: () => _openSection(SettingsSection.general),
             ),
             if (isDesktopOs)
               _SettingsTile(
                 icon: Symbols.dns_rounded,
                 title: l10n.networkSettings,
                 subtitle: l10n.networkSettingsSubtitle,
-                selected: selected == _SettingsSection.network,
+                selected: selected == SettingsSection.network,
                 showChevron: showChevron,
-                onTap: () => _openSection(_SettingsSection.network),
+                onTap: () => _openSection(SettingsSection.network),
               ),
             _SettingsTile(
               icon: Symbols.memory_rounded,
               title: l10n.aiSettings,
               subtitle: l10n.aiSettingsSubtitle,
-              selected: selected == _SettingsSection.api,
+              selected: selected == SettingsSection.api,
               showChevron: showChevron,
-              onTap: () => _openSection(_SettingsSection.api),
+              onTap: () => _openSection(SettingsSection.api),
             ),
             _SettingsTile(
               icon: Symbols.document_scanner_rounded,
               title: l10n.ocrSettings,
               subtitle: l10n.ocrSettingsSubtitle,
-              selected: selected == _SettingsSection.extract,
+              selected: selected == SettingsSection.extract,
               showChevron: showChevron,
-              onTap: () => _openSection(_SettingsSection.extract),
+              onTap: () => _openSection(SettingsSection.extract),
             ),
             _SettingsTile(
               icon: Symbols.palette_rounded,
               title: l10n.appearanceSettings,
               subtitle: l10n.appearanceSettingsSubtitle,
-              selected: selected == _SettingsSection.appearance,
+              selected: selected == SettingsSection.appearance,
               showChevron: showChevron,
-              onTap: () => _openSection(_SettingsSection.appearance),
+              onTap: () => _openSection(SettingsSection.appearance),
             ),
             _SettingsTile(
               icon: Symbols.backup_table_rounded,
               title: l10n.dataManagement,
               subtitle: l10n.dataManagementSubtitle,
-              selected: selected == _SettingsSection.backup,
+              selected: selected == SettingsSection.backup,
               showChevron: showChevron,
-              onTap: () => _openSection(_SettingsSection.backup),
+              onTap: () => _openSection(SettingsSection.backup),
             ),
           ],
         ),
@@ -179,9 +195,9 @@ class _SettingPageState extends State<SettingPage> {
               icon: Symbols.info_rounded,
               title: l10n.about,
               subtitle: l10n.aboutSubtitle,
-              selected: selected == _SettingsSection.about,
+              selected: selected == SettingsSection.about,
               showChevron: showChevron,
-              onTap: () => _openSection(_SettingsSection.about),
+              onTap: () => _openSection(SettingsSection.about),
             ),
           ],
         ),
@@ -197,10 +213,11 @@ class _SettingPageState extends State<SettingPage> {
         final colorScheme = theme.colorScheme;
         final l10n = context.l10n;
         final showRail = Responsive.showNavigationRail(context);
-        final showMasterDetail = _isShell && constraints.maxWidth >= 600;
-        final inSection =
-            _isShell && !showMasterDetail && _selectedSection != null;
-        final detailSection = _selectedSection ?? _SettingsSection.general;
+        // shell 与 overlay 在宽屏都走左右分栏；overlay 深链（initialSection）
+        // 在窄屏直接呈现目标分组，一次 pop 回到调用页
+        final showMasterDetail = constraints.maxWidth >= 600;
+        final inSection = !showMasterDetail && _selectedSection != null;
+        final detailSection = _selectedSection ?? SettingsSection.general;
 
         Widget body;
         if (showMasterDetail) {
@@ -238,7 +255,9 @@ class _SettingPageState extends State<SettingPage> {
                 ? IconButton(
                     icon: const Icon(Symbols.arrow_back_rounded),
                     tooltip: l10n.back,
-                    onPressed: () => setState(() => _selectedSection = null),
+                    onPressed: () => _isShell
+                        ? setState(() => _selectedSection = null)
+                        : context.pop(),
                   )
                 : (_isShell && !showRail
                       ? IconButton(

@@ -36,7 +36,6 @@ import '../../data/models/book/highlight.dart';
 import '../../providers/highlight_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
-import '../../shortcuts/app_intents.dart' show ReaderTranslateIntent;
 import '../../utils/desktop.dart';
 import '../../utils/doc_paths.dart';
 import '../../utils/markdown_translation_weaver.dart';
@@ -51,7 +50,6 @@ import 'widgets/reader_chat_return_prompt.dart';
 import 'widgets/reader_background.dart';
 import 'widgets/reader_docked_pane.dart';
 import 'widgets/reader_document_info_sheet.dart';
-import 'widgets/reader_intents.dart';
 import 'widgets/reader_notes_sheet.dart';
 import 'widgets/reader_outline_sheet.dart';
 import 'widgets/reader_favorite_sheet.dart';
@@ -1207,272 +1205,214 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     return Theme(
       data: theme,
-      child: Shortcuts(
-        shortcuts: {
-          const SingleActivator(
-            LogicalKeyboardKey.escape,
-            includeRepeats: false,
-          ): const DismissOverlayIntent(),
-          desktopActivator(LogicalKeyboardKey.digit1, includeRepeats: false):
-              const ToggleReaderOutlineIntent(),
-          desktopActivator(LogicalKeyboardKey.digit2, includeRepeats: false):
-              const ToggleReaderNotesIntent(),
-          desktopActivator(LogicalKeyboardKey.digit3, includeRepeats: false):
-              const ToggleReaderAskAiIntent(),
-          desktopActivator(LogicalKeyboardKey.keyT, includeRepeats: false):
-              const ReaderTranslateIntent(),
-          desktopActivator(LogicalKeyboardKey.keyF): const ReaderFindIntent(),
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) unawaited(_dismissReaderOverlay());
         },
-        child: Actions(
-          actions: {
-            DismissOverlayIntent: CallbackAction<DismissOverlayIntent>(
-              onInvoke: (_) {
-                unawaited(_dismissReaderOverlay());
-                return null;
-              },
-            ),
-            ToggleReaderOutlineIntent:
-                CallbackAction<ToggleReaderOutlineIntent>(
-                  onInvoke: (_) {
-                    _toggleOutline();
-                    return null;
-                  },
-                ),
-            ToggleReaderNotesIntent: CallbackAction<ToggleReaderNotesIntent>(
-              onInvoke: (_) {
-                _toggleNotes();
-                return null;
-              },
-            ),
-            ToggleReaderAskAiIntent: CallbackAction<ToggleReaderAskAiIntent>(
-              onInvoke: (_) {
-                _toggleAskAi();
-                return null;
-              },
-            ),
-            ReaderTranslateIntent: CallbackAction<ReaderTranslateIntent>(
-              onInvoke: (_) {
-                _onTranslateShortcut();
-                return null;
-              },
-            ),
-            ReaderFindIntent: _ReaderFindAction(this),
-          },
-          child: PopScope(
-            canPop: false,
-            onPopInvokedWithResult: (didPop, _) {
-              if (!didPop) unawaited(_dismissReaderOverlay());
-            },
-            child: Scaffold(
-              backgroundColor: cs.surface,
-              // 键盘弹出时不缩放 body：阅读器搜索框锚在顶部工具栏，笔记/编辑走独立
-              // sheet/dialog，正文从不需要为底部键盘让位。设 false 切断 WebView 平台
-              // 视图随 viewInsets 每帧 resize（MIUI 的 adjustResize 会逐帧推 inset）。
-              resizeToAvoidBottomInset: false,
-              body: SafeArea(
-                top: false,
-                bottom: false,
-                child: Listener(
-                  onPointerHover: isDesktopOs ? _onDesktopPointerHover : null,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
-                            Positioned.fill(
-                              child: AnimatedContainer(
-                                duration: kAnim,
-                                curve: Curves.easeInOut,
-                                color: contentBg,
-                                child: fileExists
-                                    ? _buildBody(
-                                        theme,
-                                        cs,
-                                        readerSettings,
-                                        session,
-                                      )
-                                    : _buildFileNotFound(theme, cs),
-                              ),
-                            ),
-                            // ── 顶部工具栏（沉浸式时向上滑出） ──
-                            // ClipRect 必须包在 AnimatedSlide 外：AnimatedSlide 内部 transform
-                            // 只动 paint 位移不动 layout box，Stack 的 clipBehavior 按 layout
-                            // 边界剪不到。少了 ClipRect 时工具栏向上滑出的部分会透过透明状态栏显示。
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child: ClipRect(
-                                child: AnimatedSlide(
-                                  duration: kAnim,
-                                  curve: kAnimCurve,
-                                  offset: session.toolbarsVisible
-                                      ? Offset.zero
-                                      : const Offset(0, -1),
-                                  child: Container(
-                                    color: cs.surface,
-                                    padding: EdgeInsets.only(
-                                      top: MediaQuery.of(context).padding.top,
-                                    ),
-                                    child: isMarkdownHighlightMode
-                                        ? _buildHighlightSearchBar(session)
-                                        : (session.searchActive &&
-                                                  !session.showPreview
-                                              ? _buildPdfSearchBar()
-                                              : _buildToolbar(
-                                                  cs,
-                                                  session,
-                                                  extracting: extracting,
-                                                )),
-                                  ),
+        child: Scaffold(
+          backgroundColor: cs.surface,
+          // 键盘弹出时不缩放 body：阅读器搜索框锚在顶部工具栏，笔记/编辑走独立
+          // sheet/dialog，正文从不需要为底部键盘让位。设 false 切断 WebView 平台
+          // 视图随 viewInsets 每帧 resize（MIUI 的 adjustResize 会逐帧推 inset）。
+          resizeToAvoidBottomInset: false,
+          body: SafeArea(
+            top: false,
+            bottom: false,
+            child: Listener(
+              onPointerHover: isDesktopOs ? _onDesktopPointerHover : null,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
+                        Positioned.fill(
+                          child: AnimatedContainer(
+                            duration: kAnim,
+                            curve: Curves.easeInOut,
+                            color: contentBg,
+                            child: fileExists
+                                ? _buildBody(theme, cs, readerSettings, session)
+                                : _buildFileNotFound(theme, cs),
+                          ),
+                        ),
+                        // ── 顶部工具栏（沉浸式时向上滑出） ──
+                        // ClipRect 必须包在 AnimatedSlide 外：AnimatedSlide 内部 transform
+                        // 只动 paint 位移不动 layout box，Stack 的 clipBehavior 按 layout
+                        // 边界剪不到。少了 ClipRect 时工具栏向上滑出的部分会透过透明状态栏显示。
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: ClipRect(
+                            child: AnimatedSlide(
+                              duration: kAnim,
+                              curve: kAnimCurve,
+                              offset: session.toolbarsVisible
+                                  ? Offset.zero
+                                  : const Offset(0, -1),
+                              child: Container(
+                                color: cs.surface,
+                                padding: EdgeInsets.only(
+                                  top: MediaQuery.of(context).padding.top,
                                 ),
+                                child: isMarkdownHighlightMode
+                                    ? _buildHighlightSearchBar(session)
+                                    : (session.searchActive &&
+                                              !session.showPreview
+                                          ? _buildPdfSearchBar()
+                                          : _buildToolbar(
+                                              cs,
+                                              session,
+                                              extracting: extracting,
+                                            )),
                               ),
                             ),
-                            // ── 内嵌 sheet 宿主（z-order 低于底栏 → 底栏始终可见） ──
-                            Positioned.fill(
-                              child: ReaderSheetHost(
-                                key: _sheetHostKey,
-                                onSheetOpen: () =>
-                                    _sessionNotifier.setSheetOpen(true),
-                                onSheetClose: () {
-                                  _sessionNotifier.setSheetOpen(false);
-                                  setState(() => _activeSheet = null);
-                                },
-                              ),
-                            ),
-                            // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
-                            // 同样的 ClipRect 防御：避免向下滑出后透过透明导航栏区域显示。
-                            if (session.showPreview &&
-                                session.hasResult &&
-                                session.markdownContent != null)
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                child: ClipRect(
-                                  child: AnimatedSlide(
-                                    duration: kAnim,
-                                    curve: kAnimCurve,
-                                    offset: session.toolbarsVisible
-                                        ? Offset.zero
-                                        : const Offset(0, 1),
-                                    child: _buildBottomBar(readerSettings),
-                                  ),
-                                ),
-                              ),
-                            // ── 定位原文后返回问 AI 引导条 ──
-                            if (_chatReturnArgs != null)
-                              AnimatedPositioned(
+                          ),
+                        ),
+                        // ── 内嵌 sheet 宿主（z-order 低于底栏 → 底栏始终可见） ──
+                        Positioned.fill(
+                          child: ReaderSheetHost(
+                            key: _sheetHostKey,
+                            onSheetOpen: () =>
+                                _sessionNotifier.setSheetOpen(true),
+                            onSheetClose: () {
+                              _sessionNotifier.setSheetOpen(false);
+                              setState(() => _activeSheet = null);
+                            },
+                          ),
+                        ),
+                        // ── 底部工具栏（仅 Markdown 模式；沉浸式时向下滑出） ──
+                        // 同样的 ClipRect 防御：避免向下滑出后透过透明导航栏区域显示。
+                        if (session.showPreview &&
+                            session.hasResult &&
+                            session.markdownContent != null)
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: ClipRect(
+                              child: AnimatedSlide(
                                 duration: kAnim,
                                 curve: kAnimCurve,
-                                right: 16,
-                                bottom: _chatReturnPromptBottom(session),
-                                child: ReaderChatReturnPrompt(
-                                  onCancel: () {
-                                    Haptics.soft();
-                                    setState(() => _chatReturnArgs = null);
-                                  },
-                                  onReturn: _returnToChat,
-                                ),
+                                offset: session.toolbarsVisible
+                                    ? Offset.zero
+                                    : const Offset(0, 1),
+                                child: _buildBottomBar(readerSettings),
                               ),
-                            // ── 浮动搜索结果导航器 ──
-                            if (isMarkdownHighlightMode &&
-                                session.searchResultCount > 0)
-                              Positioned(
-                                right: 16,
-                                bottom: 32,
-                                child: _ResultNavigator(
-                                  sessionArgs: _sessionArgs,
-                                  onPrevious: _goToPrevResult,
-                                  onNext: _goToNextResult,
-                                ),
-                              ),
-                            if (showPdfNavigator)
-                              Positioned(
-                                right: 16,
-                                bottom: 32,
-                                child: _buildPdfResultNavigator(pdfMatchCount),
-                              ),
-                            // ── 搜索遮罩层 ──
-                            if (session.searchActive && session.showPreview)
-                              Positioned.fill(
-                                child: SearchOverlay(
-                                  readerSettings: readerSettings,
-                                  onSearch:
-                                      (
-                                        String query, {
-                                        bool caseSensitive = false,
-                                        bool wholeWord = false,
-                                      }) async {
-                                        final results =
-                                            await _webViewReaderKey.currentState
-                                                ?.searchContent(
-                                                  query,
-                                                  caseSensitive: caseSensitive,
-                                                  wholeWord: wholeWord,
-                                                ) ??
-                                            const [];
-                                        if (mounted) {
-                                          _sessionNotifier.updateSearchResults(
-                                            results.length,
-                                          );
-                                        }
-                                        return results;
-                                      },
-                                  onResultTap: _onSearchResultTap,
-                                  onDismiss: _closeSearch,
-                                  initialQuery: session.highlightQuery,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (useDock && _dockHostMounted)
-                        ReaderDockedPane(
-                          sidebarWidth: sidebarW,
-                          open: _dockOpen,
-                          pane: _dockPane,
-                          outline: OutlinePanel(
-                            key: ValueKey(markdown.hashCode),
-                            markdownContent: markdown ?? '',
-                            documentId: widget.document.id,
-                            document: widget.document,
-                            onLocateQuote: _locateQuoteInReader,
-                            onOpenChat: _openChatFromFigure,
-                            summaryImageState: _summaryImageState,
-                            figuresEpoch: _figuresEpoch,
-                            onNavigate: (offset) {
-                              _scrollToCharOffset(offset);
-                              _tryFlashImageAtOffset(offset);
-                            },
-                            onUploadSummaryImage: () {
-                              _summaryCoordinator.uploadFromGallery();
-                            },
-                          ),
-                          notes: ReaderNotesPanel(
-                            documentId: widget.document.id,
-                            showGrabber: false,
-                            onEditStart: _onNotesEditStart,
-                            onEditEnd: _onNotesEditEnd,
-                          ),
-                          chat: DocumentChatPage(
-                            embedded: true,
-                            paneWidth: sidebarW,
-                            onClose: _closeDock,
-                            onQuoteConsumed: _onDockChatQuoteConsumed,
-                            args: DocumentChatPageArgs(
-                              document: widget.document,
-                              initialQuote: _dockChatQuote,
-                              figureImagePath: _dockChatFigurePath,
-                              onLocateQuote: _locateQuoteInReader,
-                              quoteEpoch: _dockChatQuoteEpoch,
                             ),
                           ),
-                        ),
-                    ],
+                        // ── 定位原文后返回问 AI 引导条 ──
+                        if (_chatReturnArgs != null)
+                          AnimatedPositioned(
+                            duration: kAnim,
+                            curve: kAnimCurve,
+                            right: 16,
+                            bottom: _chatReturnPromptBottom(session),
+                            child: ReaderChatReturnPrompt(
+                              onCancel: () {
+                                Haptics.soft();
+                                setState(() => _chatReturnArgs = null);
+                              },
+                              onReturn: _returnToChat,
+                            ),
+                          ),
+                        // ── 浮动搜索结果导航器 ──
+                        if (isMarkdownHighlightMode &&
+                            session.searchResultCount > 0)
+                          Positioned(
+                            right: 16,
+                            bottom: 32,
+                            child: _ResultNavigator(
+                              sessionArgs: _sessionArgs,
+                              onPrevious: _goToPrevResult,
+                              onNext: _goToNextResult,
+                            ),
+                          ),
+                        if (showPdfNavigator)
+                          Positioned(
+                            right: 16,
+                            bottom: 32,
+                            child: _buildPdfResultNavigator(pdfMatchCount),
+                          ),
+                        // ── 搜索遮罩层 ──
+                        if (session.searchActive && session.showPreview)
+                          Positioned.fill(
+                            child: SearchOverlay(
+                              readerSettings: readerSettings,
+                              onSearch:
+                                  (
+                                    String query, {
+                                    bool caseSensitive = false,
+                                    bool wholeWord = false,
+                                  }) async {
+                                    final results =
+                                        await _webViewReaderKey.currentState
+                                            ?.searchContent(
+                                              query,
+                                              caseSensitive: caseSensitive,
+                                              wholeWord: wholeWord,
+                                            ) ??
+                                        const [];
+                                    if (mounted) {
+                                      _sessionNotifier.updateSearchResults(
+                                        results.length,
+                                      );
+                                    }
+                                    return results;
+                                  },
+                              onResultTap: _onSearchResultTap,
+                              onDismiss: _closeSearch,
+                              initialQuery: session.highlightQuery,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
+                  if (useDock && _dockHostMounted)
+                    ReaderDockedPane(
+                      sidebarWidth: sidebarW,
+                      open: _dockOpen,
+                      pane: _dockPane,
+                      outline: OutlinePanel(
+                        key: ValueKey(markdown.hashCode),
+                        markdownContent: markdown ?? '',
+                        documentId: widget.document.id,
+                        document: widget.document,
+                        onLocateQuote: _locateQuoteInReader,
+                        onOpenChat: _openChatFromFigure,
+                        summaryImageState: _summaryImageState,
+                        figuresEpoch: _figuresEpoch,
+                        onNavigate: (offset) {
+                          _scrollToCharOffset(offset);
+                          _tryFlashImageAtOffset(offset);
+                        },
+                        onUploadSummaryImage: () {
+                          _summaryCoordinator.uploadFromGallery();
+                        },
+                      ),
+                      notes: ReaderNotesPanel(
+                        documentId: widget.document.id,
+                        showGrabber: false,
+                        onEditStart: _onNotesEditStart,
+                        onEditEnd: _onNotesEditEnd,
+                      ),
+                      chat: DocumentChatPage(
+                        embedded: true,
+                        paneWidth: sidebarW,
+                        onClose: _closeDock,
+                        onQuoteConsumed: _onDockChatQuoteConsumed,
+                        args: DocumentChatPageArgs(
+                          document: widget.document,
+                          initialQuote: _dockChatQuote,
+                          figureImagePath: _dockChatFigurePath,
+                          onLocateQuote: _locateQuoteInReader,
+                          quoteEpoch: _dockChatQuoteEpoch,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -1586,21 +1526,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onOpenNotes: _toggleNotes,
       onOpenTheme: _openThemeSheet,
     );
-  }
-
-  /// Ctrl/Cmd+T：与底栏翻译钮同一语义（无译文则启动，有译文则循环模式）。
-  /// PDF / 无 markdown 时 no-op。
-  void _onTranslateShortcut() {
-    if (_session.markdownContent == null || !_session.showPreview) return;
-    final translation = ref.read(
-      documentTranslationProvider(widget.document.id),
-    );
-    if (translation.status == DocTranslationStatus.loading) return;
-    if (translation.hasResult) {
-      _handleCycleTranslationMode();
-    } else {
-      unawaited(_handleTranslate());
-    }
   }
 
   /// 启动全文翻译：show 一个长驻 SnackBar 订阅 provider 的进度 ValueListenable，
@@ -2114,25 +2039,5 @@ class _ResultNavigator extends ConsumerWidget {
       onPrevious: onPrevious,
       onNext: onNext,
     );
-  }
-}
-
-class _ReaderFindAction extends Action<ReaderFindIntent> {
-  _ReaderFindAction(this._state);
-
-  final _ReaderPageState _state;
-
-  @override
-  bool isEnabled(ReaderFindIntent intent) {
-    if (_state._pdfSearch.focusNode.hasFocus) return false;
-    final session = _state._session;
-    if (session.searchActive && session.showPreview) return false;
-    return true;
-  }
-
-  @override
-  Object? invoke(ReaderFindIntent intent) {
-    unawaited(_state._openSearch());
-    return null;
   }
 }

@@ -163,7 +163,9 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
             borderRadius: BorderRadius.circular(24),
           ),
           clipBehavior: Clip.antiAlias,
-          child: child,
+          // 为内部 ListTile/RadioListTile 提供最近的 Material 祖先，
+          // 否则选中色与 ink 会被 DecoratedBox 背景盖住（框架断言报错）
+          child: Material(type: MaterialType.transparency, child: child),
         ),
       ],
     );

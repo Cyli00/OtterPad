@@ -1,12 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
-import '../../../utils/desktop.dart';
 import '../../../utils/responsive.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../../providers/documents_provider.dart';
@@ -190,17 +188,11 @@ class _ToolsMenuButton extends StatelessWidget {
         MenuItemButton(
           onPressed: () => onAction(ToolbarAction.addFile),
           leadingIcon: const Icon(Symbols.note_add_rounded, size: 20),
-          shortcut: isDesktopOs
-              ? desktopActivator(LogicalKeyboardKey.keyO)
-              : null,
           child: Text(l10n.addFiles),
         ),
         MenuItemButton(
           onPressed: () => onAction(ToolbarAction.addByIdentifier),
           leadingIcon: const Icon(Symbols.travel_explore_rounded, size: 20),
-          shortcut: isDesktopOs
-              ? desktopActivator(LogicalKeyboardKey.keyO, shift: true)
-              : null,
           child: Text(l10n.addByIdentifier),
         ),
         MenuItemButton(

@@ -209,12 +209,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
     return SelectionPopScope(
       sourceContext: 'library',
-      onSelectAll: () {
-        if (!allSelected) {
-          ref.read(selectionProvider.notifier).toggleAll(allIds);
-        }
-      },
-      onDeleteSelected: _deleteSelected,
       child: Scaffold(
         backgroundColor: cs.surface,
         body: SafeArea(

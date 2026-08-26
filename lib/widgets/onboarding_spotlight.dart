@@ -13,17 +13,9 @@ Future<void> showOnboardingSpotlight({
   EdgeInsets targetPadding = const EdgeInsets.all(8),
   double borderRadius = 16,
 }) async {
-  final renderBox =
-      targetKey.currentContext?.findRenderObject() as RenderBox?;
-  if (renderBox == null || !context.mounted) return;
-
-  final offset = renderBox.localToGlobal(Offset.zero);
-  final targetRect = Rect.fromLTRB(
-    offset.dx - targetPadding.left,
-    offset.dy - targetPadding.top,
-    offset.dx + renderBox.size.width + targetPadding.right,
-    offset.dy + renderBox.size.height + targetPadding.bottom,
-  );
+  if (_measureRect(targetKey, targetPadding) == null || !context.mounted) {
+    return;
+  }
 
   await showGeneralDialog<void>(
     context: context,
@@ -36,7 +28,8 @@ Future<void> showOnboardingSpotlight({
     },
     pageBuilder: (context, animation, secondaryAnimation) {
       return _SpotlightOverlay(
-        targetRect: targetRect,
+        targetKey: targetKey,
+        targetPadding: targetPadding,
         borderRadius: borderRadius,
         message: message,
         actionLabel: actionLabel,
@@ -46,17 +39,34 @@ Future<void> showOnboardingSpotlight({
   );
 }
 
+/// 从 [targetKey] 实时量取目标区域（全局坐标）。
+/// 禁止在 dialog 弹出前快照一次就定死——弹出转场 / 布局调整期间目标会动，
+/// 快照会导致镂空与卡片脱开。
+Rect? _measureRect(GlobalKey targetKey, EdgeInsets padding) {
+  final renderBox = targetKey.currentContext?.findRenderObject();
+  if (renderBox is! RenderBox || !renderBox.hasSize) return null;
+  final offset = renderBox.localToGlobal(Offset.zero);
+  return Rect.fromLTRB(
+    offset.dx - padding.left,
+    offset.dy - padding.top,
+    offset.dx + renderBox.size.width + padding.right,
+    offset.dy + renderBox.size.height + padding.bottom,
+  );
+}
+
 // ─── Spotlight Overlay ──────────────────────────────────────────────────────
 
 class _SpotlightOverlay extends StatefulWidget {
-  final Rect targetRect;
+  final GlobalKey targetKey;
+  final EdgeInsets targetPadding;
   final double borderRadius;
   final String message;
   final String actionLabel;
   final VoidCallback onDismiss;
 
   const _SpotlightOverlay({
-    required this.targetRect,
+    required this.targetKey,
+    required this.targetPadding,
     required this.borderRadius,
     required this.message,
     required this.actionLabel,
@@ -86,77 +96,87 @@ class _SpotlightOverlayState extends State<_SpotlightOverlay>
     super.dispose();
   }
 
+  /// 上一帧的目标区域——目标已 unmount 的极端时刻兜底，避免闪烁。
+  Rect? _lastRect;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final screenSize = MediaQuery.sizeOf(context);
-    final showBelow = widget.targetRect.center.dy < screenSize.height * 0.5;
 
     return Material(
       type: MaterialType.transparency,
-      child: Stack(
-        children: [
-          // 遮罩 + 镂空
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _pulseCtrl,
-              builder: (context, _) => CustomPaint(
-                painter: _SpotlightPainter(
-                  targetRect: widget.targetRect,
-                  borderRadius: widget.borderRadius,
-                  primaryColor: cs.primary,
-                  pulseValue: _pulseCtrl.value,
+      // 随脉搏动画逐帧重建，镂空/浮卡跟随目标卡片实时位置
+      child: AnimatedBuilder(
+        animation: _pulseCtrl,
+        builder: (context, _) {
+          final rect =
+              _measureRect(widget.targetKey, widget.targetPadding) ?? _lastRect;
+          if (rect == null) return const SizedBox.shrink();
+          _lastRect = rect;
+
+          final screenSize = MediaQuery.sizeOf(context);
+          final showBelow = rect.center.dy < screenSize.height * 0.5;
+
+          return Stack(
+            children: [
+              // 遮罩 + 镂空
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _SpotlightPainter(
+                    targetRect: rect,
+                    borderRadius: widget.borderRadius,
+                    primaryColor: cs.primary,
+                    pulseValue: _pulseCtrl.value,
+                  ),
                 ),
               ),
-            ),
-          ),
-          // Tooltip 卡片
-          Positioned(
-            left: 24,
-            right: 24,
-            top: showBelow ? widget.targetRect.bottom + 20 : null,
-            bottom: showBelow
-                ? null
-                : screenSize.height - widget.targetRect.top + 20,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Card(
-                  elevation: 8,
-                  color: cs.surfaceContainerHigh,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.message,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurface,
-                            height: 1.5,
-                          ),
+              // Tooltip 卡片
+              Positioned(
+                left: 24,
+                right: 24,
+                top: showBelow ? rect.bottom + 20 : null,
+                bottom: showBelow ? null : screenSize.height - rect.top + 20,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: Card(
+                      elevation: 8,
+                      color: cs.surfaceContainerHigh,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.message,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: cs.onSurface,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: FilledButton(
+                                onPressed: widget.onDismiss,
+                                child: Text(widget.actionLabel),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton(
-                            onPressed: widget.onDismiss,
-                            child: Text(widget.actionLabel),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

@@ -43,12 +43,6 @@ class NoFileEntriesPage extends ConsumerWidget {
 
     return SelectionPopScope(
       sourceContext: _sourceContext,
-      onSelectAll: () {
-        if (!allSelected) {
-          ref.read(selectionProvider.notifier).toggleAll(allIds);
-        }
-      },
-      onDeleteSelected: () => _deleteSelected(context, ref, selection),
       child: Scaffold(
         backgroundColor: colorScheme.surface,
         appBar: isSelectionMode
