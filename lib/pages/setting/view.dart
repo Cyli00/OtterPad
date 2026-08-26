@@ -1,12 +1,14 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/l10n.dart';
 import '../../router/app_routes.dart';
 import '../../utils/desktop.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/tactile_press.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'about_page.dart';
 import 'api_settings_page.dart';
 import 'appearance_settings_page.dart';
@@ -97,8 +99,8 @@ class _SettingPageState extends State<SettingPage> {
     };
   }
 
-  void _onShellPop() {
-    if (_selectedSection != null) {
+  void _onShellPop({required bool showMasterDetail}) {
+    if (!showMasterDetail && _selectedSection != null) {
       setState(() => _selectedSection = null);
       return;
     }
@@ -107,114 +109,179 @@ class _SettingPageState extends State<SettingPage> {
     }
   }
 
+  _SettingsSection? _listHighlight(_SettingsSection? section) {
+    if (section == _SettingsSection.storage) return _SettingsSection.backup;
+    return section;
+  }
+
+  Widget _buildList({_SettingsSection? selected, required bool showChevron}) {
+    final l10n = context.l10n;
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      children: [
+        _SettingsCard(
+          children: [
+            _SettingsTile(
+              icon: Symbols.tune_rounded,
+              title: l10n.generalSettings,
+              subtitle: l10n.generalSettingsSubtitle,
+              selected: selected == _SettingsSection.general,
+              showChevron: showChevron,
+              onTap: () => _openSection(_SettingsSection.general),
+            ),
+            if (isDesktopOs)
+              _SettingsTile(
+                icon: Symbols.dns_rounded,
+                title: l10n.networkSettings,
+                subtitle: l10n.networkSettingsSubtitle,
+                selected: selected == _SettingsSection.network,
+                showChevron: showChevron,
+                onTap: () => _openSection(_SettingsSection.network),
+              ),
+            _SettingsTile(
+              icon: Symbols.memory_rounded,
+              title: l10n.aiSettings,
+              subtitle: l10n.aiSettingsSubtitle,
+              selected: selected == _SettingsSection.api,
+              showChevron: showChevron,
+              onTap: () => _openSection(_SettingsSection.api),
+            ),
+            _SettingsTile(
+              icon: Symbols.document_scanner_rounded,
+              title: l10n.ocrSettings,
+              subtitle: l10n.ocrSettingsSubtitle,
+              selected: selected == _SettingsSection.extract,
+              showChevron: showChevron,
+              onTap: () => _openSection(_SettingsSection.extract),
+            ),
+            _SettingsTile(
+              icon: Symbols.palette_rounded,
+              title: l10n.appearanceSettings,
+              subtitle: l10n.appearanceSettingsSubtitle,
+              selected: selected == _SettingsSection.appearance,
+              showChevron: showChevron,
+              onTap: () => _openSection(_SettingsSection.appearance),
+            ),
+            _SettingsTile(
+              icon: Symbols.backup_table_rounded,
+              title: l10n.dataManagement,
+              subtitle: l10n.dataManagementSubtitle,
+              selected: selected == _SettingsSection.backup,
+              showChevron: showChevron,
+              onTap: () => _openSection(_SettingsSection.backup),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SettingsCard(
+          children: [
+            _SettingsTile(
+              icon: Symbols.info_rounded,
+              title: l10n.about,
+              subtitle: l10n.aboutSubtitle,
+              selected: selected == _SettingsSection.about,
+              showChevron: showChevron,
+              onTap: () => _openSection(_SettingsSection.about),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final l10n = context.l10n;
-    final showRail = Responsive.showNavigationRail(context);
-    final inSection = _isShell && _selectedSection != null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        final l10n = context.l10n;
+        final showRail = Responsive.showNavigationRail(context);
+        final showMasterDetail = _isShell && constraints.maxWidth >= 600;
+        final inSection =
+            _isShell && !showMasterDetail && _selectedSection != null;
+        final detailSection = _selectedSection ?? _SettingsSection.general;
 
-    Widget page = Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        leading: inSection
-            ? IconButton(
-                icon: const Icon(Symbols.arrow_back_rounded),
-                tooltip: l10n.back,
-                onPressed: () => setState(() => _selectedSection = null),
-              )
-            : (_isShell && !showRail
-                  ? IconButton(
-                      icon: const Icon(Symbols.arrow_back_rounded),
-                      tooltip: l10n.back,
-                      onPressed: () =>
-                          StatefulNavigationShell.maybeOf(context)?.goBranch(0),
-                    )
-                  : null),
-        automaticallyImplyLeading: !_isShell,
-        title: Text(
-          inSection ? _sectionTitle(_selectedSection!) : l10n.settings,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: colorScheme.surface,
-        scrolledUnderElevation: 0,
-      ),
-      body: inSection
-          ? _sectionPage(_selectedSection!)
-          : ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              children: [
-                _SettingsCard(
-                  children: [
-                    _SettingsTile(
-                      icon: Symbols.tune_rounded,
-                      title: l10n.generalSettings,
-                      subtitle: l10n.generalSettingsSubtitle,
-                      onTap: () => _openSection(_SettingsSection.general),
-                    ),
-                    if (isDesktopOs)
-                      _SettingsTile(
-                        icon: Symbols.dns_rounded,
-                        title: l10n.networkSettings,
-                        subtitle: l10n.networkSettingsSubtitle,
-                        onTap: () => _openSection(_SettingsSection.network),
-                      ),
-                    _SettingsTile(
-                      icon: Symbols.memory_rounded,
-                      title: l10n.aiSettings,
-                      subtitle: l10n.aiSettingsSubtitle,
-                      onTap: () => _openSection(_SettingsSection.api),
-                    ),
-                    _SettingsTile(
-                      icon: Symbols.document_scanner_rounded,
-                      title: l10n.ocrSettings,
-                      subtitle: l10n.ocrSettingsSubtitle,
-                      onTap: () => _openSection(_SettingsSection.extract),
-                    ),
-                    _SettingsTile(
-                      icon: Symbols.palette_rounded,
-                      title: l10n.appearanceSettings,
-                      subtitle: l10n.appearanceSettingsSubtitle,
-                      onTap: () => _openSection(_SettingsSection.appearance),
-                    ),
-                    _SettingsTile(
-                      icon: Symbols.backup_table_rounded,
-                      title: l10n.dataManagement,
-                      subtitle: l10n.dataManagementSubtitle,
-                      onTap: () => _openSection(_SettingsSection.backup),
-                    ),
-                  ],
+        Widget body;
+        if (showMasterDetail) {
+          final lo = 200.0;
+          final computed = math.min(280.0, constraints.maxWidth * 0.35);
+          final hi = math.max(lo, computed);
+          final leftW = computed.clamp(lo, hi);
+          body = Row(
+            children: [
+              SizedBox(
+                width: leftW,
+                child: _buildList(
+                  selected: _listHighlight(detailSection),
+                  showChevron: false,
                 ),
-                const SizedBox(height: 16),
-                _SettingsCard(
-                  children: [
-                    _SettingsTile(
-                      icon: Symbols.info_rounded,
-                      title: l10n.about,
-                      subtitle: l10n.aboutSubtitle,
-                      onTap: () => _openSection(_SettingsSection.about),
-                    ),
-                  ],
-                ),
-              ],
+              ),
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: colorScheme.outlineVariant.withAlpha(80),
+              ),
+              Expanded(child: _sectionPage(detailSection)),
+            ],
+          );
+        } else if (inSection) {
+          body = _sectionPage(_selectedSection!);
+        } else {
+          body = _buildList(showChevron: true);
+        }
+
+        Widget page = Scaffold(
+          backgroundColor: colorScheme.surface,
+          appBar: AppBar(
+            leading: inSection
+                ? IconButton(
+                    icon: const Icon(Symbols.arrow_back_rounded),
+                    tooltip: l10n.back,
+                    onPressed: () => setState(() => _selectedSection = null),
+                  )
+                : (_isShell && !showRail
+                      ? IconButton(
+                          icon: const Icon(Symbols.arrow_back_rounded),
+                          tooltip: l10n.back,
+                          onPressed: () => StatefulNavigationShell.maybeOf(
+                            context,
+                          )?.goBranch(0),
+                        )
+                      : null),
+            automaticallyImplyLeading: !_isShell,
+            title: Text(
+              showMasterDetail
+                  ? _sectionTitle(detailSection)
+                  : (inSection
+                        ? _sectionTitle(_selectedSection!)
+                        : l10n.settings),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
+            centerTitle: false,
+            backgroundColor: colorScheme.surface,
+            scrolledUnderElevation: 0,
+          ),
+          body: body,
+        );
+
+        if (_isShell) {
+          page = PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) {
+                _onShellPop(showMasterDetail: showMasterDetail);
+              }
+            },
+            child: page,
+          );
+        }
+
+        return page;
+      },
     );
-
-    if (_isShell) {
-      page = PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _onShellPop();
-        },
-        child: page,
-      );
-    }
-
-    return page;
   }
 }
 
@@ -263,12 +330,16 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final VoidCallback? onTap;
+  final bool selected;
+  final bool showChevron;
 
   const _SettingsTile({
     required this.icon,
     required this.title,
     this.subtitle,
     this.onTap,
+    this.selected = false,
+    this.showChevron = true,
   });
 
   @override
@@ -278,7 +349,7 @@ class _SettingsTile extends StatelessWidget {
 
     return TactilePress(
       onTap: onTap,
-      baseColor: Colors.transparent,
+      baseColor: selected ? colorScheme.primaryContainer : Colors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
@@ -286,7 +357,9 @@ class _SettingsTile extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
+              color: selected
+                  ? colorScheme.surface
+                  : colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: colorScheme.primary, size: 22),
@@ -315,10 +388,11 @@ class _SettingsTile extends StatelessWidget {
               ],
             ),
           ),
-          Icon(
-            Symbols.chevron_right_rounded,
-            color: colorScheme.onSurfaceVariant.withAlpha(120),
-          ),
+          if (showChevron)
+            Icon(
+              Symbols.chevron_right_rounded,
+              color: colorScheme.onSurfaceVariant.withAlpha(120),
+            ),
         ],
       ),
     );

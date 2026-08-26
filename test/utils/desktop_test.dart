@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otter_pad/utils/desktop.dart';
 
 void main() {
-  test('desktopActivator 默认允许连发', () {
-    expect(desktopActivator(LogicalKeyboardKey.keyF).includeRepeats, isTrue);
+  test('desktopActivator 默认不允许连发', () {
+    expect(desktopActivator(LogicalKeyboardKey.keyF).includeRepeats, isFalse);
   });
 
   test('desktopActivator 可关闭键盘连发', () {
