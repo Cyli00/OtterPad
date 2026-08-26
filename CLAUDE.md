@@ -19,7 +19,7 @@
 
 ## 动画时序
 
-`AnimationConstants` (`lib/core/animation_constants.dart`)：`kAnimFast`（180ms）微交互 · `kAnim`（240ms）标准过渡 · `kAnimSlow`（320ms）大转场。曲线 `kAnimCurve`（easeOutCubic）/ `kAnimCurveReverse`（easeInCubic）。禁止硬编码 Duration。
+`AnimationConstants` (`lib/core/animation_constants.dart`)：`kAnimFast`（180ms）微交互 · `kAnim`（240ms）标准过渡 · `kAnimSlow`（320ms）大转场 · `kAnimEmphasis`（500ms）大强调 · `kAnimPulse`（1200ms）循环脉冲。曲线 `kAnimCurve`（easeOutCubic）/ `kAnimCurveReverse`（easeInCubic）。弹簧 `kSpringPress`（按压）/ `kSpringSelection`（勾选 SpringPop）/ `kSpringPanel`（dock 宽度）。列表入场统一 `StaggeredEntrance`（首屏 ≤8 项 × 30ms）。阴影走 `AppShadows`（Card/bar/sheet/dialog）。分隔线走 `AppDivider`。禁止硬编码 Duration。
 
 ## 触觉反馈
 
@@ -29,7 +29,10 @@
 
 - 路由：`FadeThroughTransition` + `kAnimSlow`，通过 `_buildAnimatedPage()` 封装
 - 页内切换：`SharedAxisTransition` horizontal + `kAnimSlow`
-- 对话框：`showAppDialog()`
+- 阅读器入场：卡片 rect → 全屏容器变换（`ReaderArgs.sourceRect`，`kAnimEmphasis`），无起点回落 scale+fade 微上移
+- 阅读器 dock：`kSpringPanel` 宽度弹簧
+- Android 预测返回：`PredictiveBackPageTransitionsBuilder`（Manifest 已开 `enableOnBackInvokedCallback`）；非 Android 维持 FadeThrough/SharedAxis
+- 对话框：`showAppDialog()`（scale 0.92→1 easeOutBack 轻回弹 + 模糊 4 + `AppShadows.dialog`）
 - 禁止用 `flutter_animate` 的 `.slideY()` / `.fade()` 做路由级转场
 
 ## UI 组件范式
@@ -119,15 +122,17 @@
 ### 导航 / 设置
 
 - **AppRoutes** (`lib/router/app_routes.dart`) — `settings`（`/settings`）仅 shell branch；overlay 全部 root 平级 `settingsOverlay*`。禁止 overlay 嵌套 `routes:[]`（`push(overlay/extract)` 一次 pop 必须回到调用页）。禁止再挂一棵 `/settings`。
-- **SettingPage** (`lib/pages/setting/view.dart`) — `SettingNavMode.shell` 只 `setState` 切 section，禁止 `context.push` overlay。
+- **SettingPage** (`lib/pages/setting/view.dart`) — `SettingNavMode.shell` 只 `setState` 切 section，禁止 `context.push` overlay。宽屏（≥600）shell / overlay 都走左右分栏；分组 overlay 必须挂 `SettingPage(overlay, initialSection: SettingsSection.xxx)`，禁止直接挂裸分组页（桌面端整屏单页、丢失左侧分级列表）。
 - **AdaptiveScaffold** (`lib/widgets/layout/adaptive_scaffold.dart`) — `railBottomDestinationCount` / `hideBottomNavigation`。禁止把 `selectedIndex: 2` 传给只有 2 项的 NavigationBar。
 
 ## 基础架构
 
-**桌面探测** (lib/utils/desktop.dart) — `isDesktopOs` / `isAppleDesktop` / `desktopActivator`。键鼠交互看 OS；布局看 `Responsive` 宽度。禁止在业务处自写 `Platform.isWindows || …`。
+**桌面探测** (lib/utils/desktop.dart) — `isDesktopOs` / `isAppleDesktop`。键鼠交互看 OS；布局看 `Responsive` 宽度。禁止在业务处自写 `Platform.isWindows || …`。
 **右键菜单** (lib/widgets/app_context_menu.dart) — `showAppContextMenu`，视觉对齐 FavoriteCard 长按菜单（`surfaceContainerHigh`、圆角 16）。桌面 OS 用 `onSecondaryTapDown`；移动端长按路径不变。
 **桌面拖入** (lib/widgets/desktop_drop_host.dart) — `desktop_drop` ^0.7.1 全窗口 DropTarget，合法 PDF 走 `taskProvider.addFiles`。全非法才 SnackBar `dropPdfOnly`；混合拖入只导入合法 PDF，完成摘要走 `addFiles` 既有 SnackBar。禁止升 0.8.0（需 AGP 9，禁止改 android/）；禁止自写导入。
 **设置路由** (lib/router/app_router.dart) — shell `/settings` 内部切 section；onboarding / prompt 走 root 平级 `/settings-overlay*`。禁止 overlay 嵌套 routes、禁止两棵 `/settings` 树。
+**设置分组** (lib/pages/setting/setting_group.dart) — `SettingGroup` 是设置页分组容器唯一来源（标题 + 圆角 24 容器，内置 Material 透明祖先），禁止再复制 `_buildGroup`。
+**桌面差异化** — `WindowChrome` 失焦降饱和；`AdaptiveScaffold` 桌面端侧栏半透明（`surfaceContainer.withAlpha(180)`，Row 分栏避让不叠压，移动端纯色侧栏；禁止改回 Stack 叠层——会遮挡/拦截主内容左侧）；`Responsive.compactDensity`（桌面宽 ≥1200）卡片/列表行距 -4px。导航栏底部槽位为标签显示切换（`navRailExtendedProvider`，null=跟随宽度自动 ≥1200 展开）。
 
 @TODO.md
 

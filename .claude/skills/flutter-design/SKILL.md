@@ -83,8 +83,18 @@ description: 构建符合项目设计规范的 Flutter UI 组件。在创建新�
 | `kAnimFast` | 180ms | 微交互（hover、选择切换、按压态、工具栏） |
 | `kAnim` | 240ms | 标准过渡（状态变化、内容切换、面板收起） |
 | `kAnimSlow` | 320ms | 大转场（路由、弹窗、面板展开） |
+| `kAnimEmphasis` | 500ms | 大强调（卡片→阅读器容器变换） |
+| `kAnimPulse` | 1200ms | 循环脉冲（呼吸 / 发光），配 `repeat(reverse: ...)` |
 | `kAnimCurve` | `Curves.easeOutCubic` | 统一正向缓动 |
 | `kAnimCurveReverse` | `Curves.easeInCubic` | 统一反向缓动 |
+
+**弹簧 Token**（配 `motor` 的 `SpringMotion` 使用）：
+
+| 常量 | stiffness / damping | 用途 |
+|---|---|---|
+| `kSpringPress` | 400 / 22（ζ≈0.49，欠阻尼微回弹） | 按压 scale 1→0.96→1，可中断 |
+| `kSpringSelection` | 500 / 20 | 勾选 / 图标盒 scale 0.8→1 弹出，~200ms 完成 |
+| `kSpringPanel` | 500 / 28（ζ≈0.63） | 面板开合（阅读器 dock 宽度），可中断 |
 
 **场景对照**：
 
@@ -92,11 +102,42 @@ description: 构建符合项目设计规范的 Flutter UI 组件。在创建新�
 |---|---|---|---|
 | 路由转场 | `FadeThroughTransition`（`package:animations`） | `kAnimSlow` | FadeThrough 内置 |
 | 页内视图切换（如 PDF↔Markdown） | `SharedAxisTransition` 水平 | `kAnimSlow` | SharedAxis 内置 |
-| 对话框转场 | `showAppDialog()` Scale+Fade+Blur | `kAnimSlow` | `kAnimCurve` / `kAnimCurveReverse` |
-| 选中态 / 按压态 | `AnimatedContainer` / `AnimatedScale` | `kAnimFast` | `kAnimCurve` |
+| 对话框转场 | `showAppDialog()` Scale(easeOutBack 轻回弹)+Fade+Blur | `kAnimSlow` | `easeOutBack` / `kAnimCurveReverse` |
+| 按压微交互 | `TactilePress` 内 motor 弹簧（`kSpringPress`） | — | spring |
+| 选中态勾选 | `SpringPop`（`kSpringSelection`，0.8→1 + 渐显） | ~200ms | spring |
+| 列表入场 | `StaggeredEntrance`（首屏 ≤8 项 × 30ms 延迟，fade + slideY 12px→0，之后分页不动） | `kAnimFast` | `kAnimCurve` |
+| 阅读器入场 | 卡片 rect → 全屏容器变换（手写双边界裁切+缩放+渐显），无起点回落 scale+fade 微上移 | `kAnimEmphasis` / `kAnimSlow` | `kAnimCurve` |
 | 工具栏 / 面板滑出 | `AnimatedSlide` | `kAnim` | `kAnimCurve` |
+| 阅读器 dock 开合 | `SingleMotionBuilder` + `kSpringPanel` | — | spring |
+| Android 预测返回 | `PredictiveBackPageTransitionsBuilder`（手势中）；非手势回落 FadeThrough / SharedAxis | 框架 | 框架 |
 
 禁止路由级使用 `flutter_animate` 的 `slideY()` / `fade()`。
+
+### 1.6 阴影分层
+
+> 参考：`AppShadows`（lib/core/elevation.dart）
+
+禁止组件自写 `BoxShadow` blur / offset。桌面 Card hover 走 `HoverLift`。
+
+| 层级 | blur | y | Token |
+|---|---|---|---|
+| Card | 10 | 4 | `AppShadows.card` |
+| 浮层工具条 | 16 | 8 | `AppShadows.bar` |
+| BottomSheet | 20 | 10 | `AppShadows.sheet` |
+| Dialog | 24 | 12 | `AppShadows.dialog` |
+| Card hover 抬升 | 16 | 4 | `AppShadows.cardHover` |
+
+### 1.7 分隔线
+
+> 参考：`AppDivider`（lib/widgets/app_divider.dart）
+
+颜色统一 `outlineVariant.withAlpha(80)`。禁止再写 40 / 60 / 70 / 128。
+
+| 档 | indent / endIndent | 用途 |
+|---|---|---|
+| `AppDivider()` | 20 / 20 | 无前置图标的行间 |
+| `AppDivider.tile()` | 80 / 20 | 设置项（padding 20 + 图标 44 + 间距 16） |
+| `AppDivider.full()` | 0 / 0 | 分段全宽 |
 
 ---
 
@@ -120,7 +161,7 @@ TactilePress(
 )
 ```
 
-**反馈层次**：ColorTween 按压态（即时色变） + 可选 micro-scale（`kAnimFast` `kAnimCurve`） + 触觉反馈（`Haptics`）。
+**反馈层次**：ColorTween 按压态（即时色变） + 可选 micro-scale（motor 弹簧 `kSpringPress`） + 触觉反馈（`Haptics`）。
 
 **baseColor 规则**：TactilePress 始终渲染带色圆角背景，必须根据上下文显式指定。
 
@@ -164,6 +205,19 @@ TactilePress(
 
 预览卡展示「选中后的效果」而非「当前运行时色」。跟随型选项（如 `ReaderTheme.themed`）锁定语义对应的固定色调（白天锁浅色），避免 dark 模式下被染黑失去选项语义。
 
+### 2.4 桌面端差异化
+
+仅 `isDesktopOs` 生效，移动端保持原有纯色 / 常规间距：
+
+| 项 | 参数 |
+|---|---|
+| 窗口 Chrome 失焦 | 标题栏标题与按钮整体 `AnimatedOpacity 1→0.55`（`kAnimFast`），跟随系统窗焦点 |
+| 侧栏半透明 | `AdaptiveScaffold` 桌面端侧栏 `surfaceContainer.withAlpha(180)`；与主内容 Row 分栏避让，禁止改回叠层压内容 |
+| 紧凑密度 | `Responsive.compactDensity(context)`（桌面且宽 ≥1200）：卡片/列表**行距** -4px（12→8、16→12），列距与字号不动 |
+
+- 半透明侧栏仅桌面端；非桌面端 `AdaptiveScaffold` 纯色侧栏
+- macOS 红绿灯避让：未实测，暂缓（确认重叠后再加 ~70px 左内边距）
+
 ---
 
 ## 3. 组件规范
@@ -179,10 +233,10 @@ TactilePress(
 | 属性 | 值 |
 |---|---|
 | 时长 | `kAnimSlow`（320ms） |
-| 缩放 | 0.92 → 1.0 |
-| 透明度 | 0 → 1 |
-| 背景模糊 | sigma 0 → 8 |
-| 曲线 | `kAnimCurve` / `kAnimCurveReverse` |
+| 缩放 | 0.92 → 1.0（`easeOutBack` 轻回弹） |
+| 透明度 | 0 → 1（`kAnimCurve`） |
+| 背景模糊 | sigma 0 → 4 |
+| 退出曲线 | `kAnimCurveReverse` |
 | 遮罩色 | `Colors.black54` |
 
 **Dialog 视觉**：
@@ -234,10 +288,10 @@ TactilePress(
 | 圆角 | 16 |
 | 背景 | `surfaceContainerLow` |
 | 标题 | `titleMedium` bold |
-| 阴影 | `BoxShadow(black.withAlpha(13), blur: 10, offset: (0, 4))` |
+| 阴影 | `AppShadows.card`；桌面 hover `HoverLift`（blur 10→16） |
 | 选中边框 | `primary.withAlpha(160)` width 2 |
 | 点击反馈 | `TactilePress`（pressedScale: 0.98） |
-| 选中动画 | `AnimatedContainer` `kAnimFast` `kAnimCurve` + 勾选缩放 `easeOutBack` |
+| 选中动画 | 边框 `AnimatedContainer` `kAnimFast` + 勾选 `SpringPop`（弹簧 scale 0.8→1 + 渐显） |
 
 ### 3.4 TextField
 
@@ -371,3 +425,15 @@ SegmentedButton.styleFrom(
 - 桌面端 sheet 走 `constraints: maxWidth: 480` 居中
 - 点选立即触发 `onChanged` 并自动关闭 sheet（无显式确认按钮）
 - 仅用于「单选 from 固定列表」场景；多选见 §3.7 FilterChip
+
+### 3.9 设置分组（SettingGroup）
+
+> 参考：`SettingGroup`（lib/pages/setting/setting_group.dart）· 各 `*_settings_page`
+
+所有设置页分组统一使用 `SettingGroup`，禁止再复制 `_buildGroup` 容器。
+
+| 属性 | 值 |
+|---|---|
+| 标题 | `titleMedium` bold · `primary` · padding left:16 bottom:12 top:24 |
+| 容器 | `surfaceContainerHigh` · 圆角 24 · `clipBehavior: antiAlias` · 宽度撑满 |
+| 内部祖先 | 内置 `Material(transparency)`（为 ListTile/RadioListTile 提供最近 Material 祖先） |
