@@ -26,7 +26,14 @@ import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
-  const BackupSettingsPage({super.key});
+  const BackupSettingsPage({
+    super.key,
+    this.embedded = false,
+    this.onOpenStorage,
+  });
+
+  final bool embedded;
+  final VoidCallback? onOpenStorage;
 
   @override
   ConsumerState<BackupSettingsPage> createState() => _BackupSettingsPageState();
@@ -84,17 +91,19 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
-        title: Text(
-          context.l10n.dataManagement,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        scrolledUnderElevation: 0,
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: Text(
+                context.l10n.dataManagement,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              centerTitle: false,
+              backgroundColor: cs.surface,
+              scrolledUnderElevation: 0,
+            ),
       body: Listener(
         onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
         child: Stack(
@@ -233,10 +242,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       _ActionTile(
                         icon: Symbols.folder_managed_rounded,
                         title: context.l10n.storageSpace,
-                        subtitle: _totalSizeText ??
-                            context.l10n.thumbnailsAndTemp,
+                        subtitle:
+                            _totalSizeText ?? context.l10n.thumbnailsAndTemp,
                         enabled: !_busy,
-                        onTap: () => context.push(AppRoutes.settingsStorage),
+                        onTap:
+                            widget.onOpenStorage ??
+                            () =>
+                                context.push(AppRoutes.settingsOverlayStorage),
                       ),
                     ],
                   ),

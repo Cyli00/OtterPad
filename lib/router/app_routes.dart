@@ -17,14 +17,14 @@ abstract class AppRoutes {
   static const shelfNoFileEntries = '/shelf/no-file-entries';
   static const shelfCloudSync = '/shelf/cloud-sync';
 
-  // 设置子页面
-  static const settingsNetwork = '/settings/network';
-  static const settingsApi = '/settings/api';
-  static const settingsExtract = '/settings/extract';
-  static const settingsAppearance = '/settings/appearance';
-  static const settingsBackup = '/settings/backup';
-  static const settingsBackupHome = '/settings/backupHome';
-  static const settingsStorage = '/settings/storage';
-  static const settingsGeneral = '/settings/general';
-  static const settingsAbout = '/settings/about';
+  // overlay 设置（root 平级 GoRoute）
+  static const settingsOverlay = '/settings-overlay';
+  static const settingsOverlayGeneral = '/settings-overlay/general';
+  static const settingsOverlayNetwork = '/settings-overlay/network';
+  static const settingsOverlayApi = '/settings-overlay/api';
+  static const settingsOverlayExtract = '/settings-overlay/extract';
+  static const settingsOverlayAppearance = '/settings-overlay/appearance';
+  static const settingsOverlayBackup = '/settings-overlay/backup';
+  static const settingsOverlayStorage = '/settings-overlay/storage';
+  static const settingsOverlayAbout = '/settings-overlay/about';
 }

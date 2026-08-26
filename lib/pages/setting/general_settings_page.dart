@@ -28,7 +28,9 @@ const _kAutoCheckUpdate = SettingsKeys.autoCheckUpdate;
 const _kHttp2Enabled = SettingsKeys.http2Enabled;
 
 class GeneralSettingsPage extends ConsumerStatefulWidget {
-  const GeneralSettingsPage({super.key});
+  const GeneralSettingsPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<GeneralSettingsPage> createState() =>
@@ -60,7 +62,7 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: widget.embedded ? null : AppBar(
         title: Text(
           l10n.generalSettings,
           style: theme.textTheme.titleLarge?.copyWith(

@@ -240,71 +240,76 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+
+          // ── Tab 2: 设置 ──
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.settings,
+                builder: (context, state) =>
+                    const SettingPage(mode: SettingNavMode.shell),
+              ),
+            ],
+          ),
         ],
       ),
 
-      // 设置：从首页头部按钮推入的全屏页（不再是导航 Tab）
+      // overlay 设置（root 平级）
       GoRoute(
-        path: AppRoutes.settings,
+        path: AppRoutes.settingsOverlay,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) => _forward(
+          state: state,
+          child: const SettingPage(mode: SettingNavMode.overlay),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOverlayExtract,
         parentNavigatorKey: rootNavigatorKey,
         pageBuilder: (context, state) =>
-            _forward(state: state, child: const SettingPage()),
-        routes: [
-          GoRoute(
-            path: 'network',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _lateral(state: state, child: const NetworkSettingsPage()),
-          ),
-          GoRoute(
-            path: 'api',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _lateral(state: state, child: const ApiSettingsPage()),
-          ),
-          GoRoute(
-            path: 'extract',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _lateral(state: state, child: const OcrSettingsPage()),
-          ),
-          GoRoute(
-            path: 'appearance',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _lateral(state: state, child: const AppearanceSettingsPage()),
-          ),
-          GoRoute(
-            path: 'backup',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _lateral(state: state, child: const BackupSettingsPage()),
-          ),
-          GoRoute(
-            path: 'backupHome',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _lateral(state: state, child: const BackupSettingsPage()),
-          ),
-          GoRoute(
-            path: 'storage',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _forward(state: state, child: const StorageSpacePage()),
-          ),
-          GoRoute(
-            path: 'general',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _lateral(state: state, child: const GeneralSettingsPage()),
-          ),
-          GoRoute(
-            path: 'about',
-            parentNavigatorKey: rootNavigatorKey,
-            pageBuilder: (context, state) =>
-                _lateral(state: state, child: const AboutPage()),
-          ),
-        ],
+            _lateral(state: state, child: const OcrSettingsPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOverlayApi,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            _lateral(state: state, child: const ApiSettingsPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOverlayGeneral,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            _lateral(state: state, child: const GeneralSettingsPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOverlayNetwork,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            _lateral(state: state, child: const NetworkSettingsPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOverlayAppearance,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            _lateral(state: state, child: const AppearanceSettingsPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOverlayBackup,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            _lateral(state: state, child: const BackupSettingsPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOverlayStorage,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            _forward(state: state, child: const StorageSpacePage()),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOverlayAbout,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            _lateral(state: state, child: const AboutPage()),
       ),
     ],
   );

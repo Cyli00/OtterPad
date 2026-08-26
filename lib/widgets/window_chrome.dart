@@ -22,7 +22,12 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
     windowManager.addListener(this);
     windowManager.isAlwaysOnTop().then((v) {
       windowManager.isMaximized().then((m) {
-        if (mounted) setState(() { _pinned = v; _maximized = m; });
+        if (mounted) {
+          setState(() {
+            _pinned = v;
+            _maximized = m;
+          });
+        }
       });
     });
   }
@@ -43,46 +48,71 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: WindowChrome.height,
-      child: DragToMoveArea(
-        child: Container(
-          color: cs.surfaceContainerHighest,
-          child: Row(
-            children: [
-              const Spacer(),
-              _Btn(
-                icon: _pinned ? Symbols.keep_rounded : Symbols.keep_off_rounded,
-                fill: _pinned ? 1.0 : 0.0,
-                highlight: _pinned,
-                onTap: () async {
-                  final next = !_pinned;
-                  await windowManager.setAlwaysOnTop(next);
-                  if (mounted) setState(() => _pinned = next);
-                },
+      child: Stack(
+        children: [
+          DragToMoveArea(
+            child: ColoredBox(
+              color: cs.surfaceContainerHighest,
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Text(
+                      'OtterPad',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  _Btn(
+                    icon: _pinned
+                        ? Symbols.keep_rounded
+                        : Symbols.keep_off_rounded,
+                    fill: _pinned ? 1.0 : 0.0,
+                    highlight: _pinned,
+                    onTap: () async {
+                      final next = !_pinned;
+                      await windowManager.setAlwaysOnTop(next);
+                      if (mounted) setState(() => _pinned = next);
+                    },
+                  ),
+                  _Btn(
+                    icon: Symbols.remove_rounded,
+                    onTap: windowManager.minimize,
+                  ),
+                  _Btn(
+                    icon: _maximized
+                        ? Symbols.fullscreen_exit_rounded
+                        : Symbols.crop_square_rounded,
+                    onTap: () async {
+                      if (await windowManager.isMaximized()) {
+                        await windowManager.unmaximize();
+                      } else {
+                        await windowManager.maximize();
+                      }
+                    },
+                  ),
+                  _Btn(
+                    icon: Symbols.close_rounded,
+                    onTap: windowManager.close,
+                    isClose: true,
+                  ),
+                ],
               ),
-              _Btn(
-                icon: Symbols.remove_rounded,
-                onTap: windowManager.minimize,
-              ),
-              _Btn(
-                icon: _maximized
-                    ? Symbols.fullscreen_exit_rounded
-                    : Symbols.crop_square_rounded,
-                onTap: () async {
-                  if (await windowManager.isMaximized()) {
-                    await windowManager.unmaximize();
-                  } else {
-                    await windowManager.maximize();
-                  }
-                },
-              ),
-              _Btn(
-                icon: Symbols.close_rounded,
-                onTap: windowManager.close,
-                isClose: true,
-              ),
-            ],
+            ),
           ),
-        ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: cs.outlineVariant.withAlpha(80),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -114,7 +144,9 @@ class _BtnState extends State<_Btn> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bg = _hovered
-        ? (widget.isClose ? const Color(0xFFE81123) : cs.onSurface.withAlpha(24))
+        ? (widget.isClose
+              ? const Color(0xFFE81123)
+              : cs.onSurface.withAlpha(24))
         : Colors.transparent;
     final fg = _hovered && widget.isClose
         ? Colors.white
@@ -133,7 +165,13 @@ class _BtnState extends State<_Btn> {
           height: WindowChrome.height,
           color: bg,
           alignment: Alignment.center,
-          child: Icon(widget.icon, size: 20, weight: 800, fill: widget.fill, color: fg),
+          child: Icon(
+            widget.icon,
+            size: 20,
+            weight: 800,
+            fill: widget.fill,
+            color: fg,
+          ),
         ),
       ),
     );

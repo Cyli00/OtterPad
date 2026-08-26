@@ -7,7 +7,9 @@ import 'translation_settings_section.dart';
 
 /// 模型服务设置页
 class ApiSettingsPage extends StatelessWidget {
-  const ApiSettingsPage({super.key});
+  const ApiSettingsPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +18,7 @@ class ApiSettingsPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: embedded ? null : AppBar(
         title: Text(
           context.l10n.aiSettings,
           style: theme.textTheme.titleLarge?.copyWith(

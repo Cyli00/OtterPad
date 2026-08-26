@@ -187,7 +187,7 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
               child: TextButton(
                 onPressed: () {
                   Haptics.soft();
-                  context.push(AppRoutes.settingsBackup);
+                  context.push(AppRoutes.settingsOverlayBackup);
                 },
                 child: Text(l10n.goToSettings),
               ),

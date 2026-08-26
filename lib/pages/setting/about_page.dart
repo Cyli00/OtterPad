@@ -15,7 +15,9 @@ import '../../widgets/app_dialog.dart';
 import '../../widgets/tactile_press.dart';
 
 class AboutPage extends ConsumerStatefulWidget {
-  const AboutPage({super.key});
+  const AboutPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<AboutPage> createState() => _AboutPageState();
@@ -45,7 +47,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: widget.embedded ? null : AppBar(
         title: Text(
           l10n.about,
           style: theme.textTheme.titleLarge?.copyWith(

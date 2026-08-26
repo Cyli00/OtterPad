@@ -225,7 +225,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             duration: const Duration(seconds: 7),
             action: SnackBarAction(
               label: l10n.goToSettings,
-              onPressed: () => context.push('${AppRoutes.settings}/api'),
+              onPressed: () => context.push(AppRoutes.settingsOverlayApi),
             ),
           );
     }

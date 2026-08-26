@@ -235,7 +235,7 @@ class ReaderSummaryImageCoordinator {
         hasImageRole: hasImageRole,
         onGoToSettings: () {
           Navigator.of(ctx).pop();
-          context.push(AppRoutes.settingsApi);
+          context.push(AppRoutes.settingsOverlayApi);
         },
       ),
     );

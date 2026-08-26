@@ -23,7 +23,7 @@ class AiSettingsPrompt {
       await _showDialog(
         context: ctx,
         message: ctx.l10n.aiSettingsSelectTextModel,
-        route: AppRoutes.settingsApi,
+        route: AppRoutes.settingsOverlayApi,
       );
       return false;
     }
@@ -33,7 +33,7 @@ class AiSettingsPrompt {
       await _showDialog(
         context: ctx,
         message: ctx.l10n.aiSettingsFillApiKey,
-        route: AppRoutes.settingsApi,
+        route: AppRoutes.settingsOverlayApi,
       );
       return false;
     }
@@ -50,7 +50,7 @@ class AiSettingsPrompt {
     await _showDialog(
       context: ctx,
       message: ctx.l10n.selectImageModelFirst,
-      route: AppRoutes.settingsApi,
+      route: AppRoutes.settingsOverlayApi,
     );
     return false;
   }
@@ -66,7 +66,7 @@ class AiSettingsPrompt {
       await _showDialog(
         context: ctx,
         message: ctx.l10n.selectImageModelFirst,
-        route: AppRoutes.settingsApi,
+        route: AppRoutes.settingsOverlayApi,
       );
       return false;
     }
@@ -76,7 +76,7 @@ class AiSettingsPrompt {
       await _showDialog(
         context: ctx,
         message: ctx.l10n.aiSettingsFillImageApiKey,
-        route: AppRoutes.settingsApi,
+        route: AppRoutes.settingsOverlayApi,
       );
       return false;
     }
@@ -93,7 +93,7 @@ class AiSettingsPrompt {
     await _showDialog(
       context: ctx,
       message: ctx.l10n.configureExtractToken,
-      route: AppRoutes.settingsExtract,
+      route: AppRoutes.settingsOverlayExtract,
     );
     return false;
   }
@@ -108,7 +108,7 @@ class AiSettingsPrompt {
     await _showDialog(
       context: context,
       message: message,
-      route: AppRoutes.settingsApi,
+      route: AppRoutes.settingsOverlayApi,
     );
     return true;
   }

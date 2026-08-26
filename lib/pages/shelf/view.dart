@@ -121,7 +121,7 @@ class ShelfPage extends ConsumerWidget {
                       tooltip: context.l10n.settings,
                       onPressed: () {
                         Haptics.soft();
-                        context.push(AppRoutes.settings);
+                        context.push(AppRoutes.settingsOverlay);
                       },
                     ),
                   ],

@@ -17,6 +17,8 @@ class AdaptiveScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.railLeading,
     this.extendedRail = false,
+    this.railBottomDestinationCount = 1,
+    this.hideBottomNavigation = false,
   });
 
   final int selectedIndex;
@@ -26,6 +28,8 @@ class AdaptiveScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final Widget? railLeading;
   final bool extendedRail;
+  final int railBottomDestinationCount;
+  final bool hideBottomNavigation;
 
   @override
   Widget build(BuildContext context) {
@@ -41,17 +45,15 @@ class AdaptiveScaffold extends StatelessWidget {
               destinations: destinations,
               extended: extendedRail,
               leading: railLeading,
+              bottomDestinationCount: railBottomDestinationCount,
             ),
             const VerticalDivider(thickness: 1, width: 1),
           ],
-          Expanded(
-            key: const ValueKey('adaptive-body'),
-            child: body,
-          ),
+          Expanded(key: const ValueKey('adaptive-body'), child: body),
         ],
       ),
       floatingActionButton: floatingActionButton,
-      bottomNavigationBar: showRail
+      bottomNavigationBar: (showRail || hideBottomNavigation)
           ? null
           : AdaptiveBottomNavigation(
               selectedIndex: selectedIndex,

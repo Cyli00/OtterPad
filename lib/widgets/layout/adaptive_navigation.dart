@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/animation_constants.dart';
 import '../../services/haptics.dart';
 import '../tactile_press.dart';
 
@@ -49,52 +50,58 @@ class AdaptiveNavigationRail extends StatelessWidget {
     return ColoredBox(
       color: colorScheme.surfaceContainer,
       child: SafeArea(
-        child: SizedBox(
+        child: AnimatedContainer(
+          duration: kAnim,
+          curve: kAnimCurve,
           width: extended ? 180 : 72,
-          child: Column(
-            children: [
-              if (leading != null) ...[
-                leading!,
-                const SizedBox(height: 8),
-              ],
-              const SizedBox(height: 16),
-              ...topDestinations.asMap().entries.map((entry) {
-                final index = entry.key;
-                final dest = entry.value;
-                final selected = index == selectedIndex;
+          child: ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.centerLeft,
+              minWidth: extended ? 180 : null,
+              maxWidth: extended ? 180 : null,
+              child: Column(
+                children: [
+                  if (leading != null) ...[leading!, const SizedBox(height: 8)],
+                  const SizedBox(height: 16),
+                  ...topDestinations.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final dest = entry.value;
+                    final selected = index == selectedIndex;
 
-                return _NavigationRailItem(
-                  icon: selected ? dest.selectedIcon : dest.icon,
-                  label: dest.label,
-                  selected: selected,
-                  extended: extended,
-                  colorScheme: colorScheme,
-                  onTap: () {
-                    Haptics.soft();
-                    onDestinationSelected(index);
-                  },
-                );
-              }),
-              const Spacer(),
-              ...bottomDestinations.asMap().entries.map((entry) {
-                final index = entry.key + splitIndex;
-                final dest = entry.value;
-                final selected = index == selectedIndex;
+                    return _NavigationRailItem(
+                      icon: selected ? dest.selectedIcon : dest.icon,
+                      label: dest.label,
+                      selected: selected,
+                      extended: extended,
+                      colorScheme: colorScheme,
+                      onTap: () {
+                        Haptics.soft();
+                        onDestinationSelected(index);
+                      },
+                    );
+                  }),
+                  const Spacer(),
+                  ...bottomDestinations.asMap().entries.map((entry) {
+                    final index = entry.key + splitIndex;
+                    final dest = entry.value;
+                    final selected = index == selectedIndex;
 
-                return _NavigationRailItem(
-                  icon: selected ? dest.selectedIcon : dest.icon,
-                  label: dest.label,
-                  selected: selected,
-                  extended: extended,
-                  colorScheme: colorScheme,
-                  onTap: () {
-                    Haptics.soft();
-                    onDestinationSelected(index);
-                  },
-                );
-              }),
-              const SizedBox(height: 16),
-            ],
+                    return _NavigationRailItem(
+                      icon: selected ? dest.selectedIcon : dest.icon,
+                      label: dest.label,
+                      selected: selected,
+                      extended: extended,
+                      colorScheme: colorScheme,
+                      onTap: () {
+                        Haptics.soft();
+                        onDestinationSelected(index);
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -121,50 +128,57 @@ class _NavigationRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor =
-        selected ? colorScheme.secondaryContainer : Colors.transparent;
+    final backgroundColor = selected
+        ? colorScheme.secondaryContainer
+        : Colors.transparent;
     final iconColor = selected
         ? colorScheme.onSecondaryContainer
         : colorScheme.onSurfaceVariant;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: TactilePress(
-        baseColor: backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        haptics: false,
-        child: SizedBox(
-            height: 56,
-            child: extended
-                ? Row(
-                    children: [
-                      const SizedBox(width: 16),
-                      IconTheme(
-                        data: IconThemeData(color: iconColor, size: 24),
-                        child: icon,
+    Widget item = TactilePress(
+      baseColor: backgroundColor,
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      haptics: false,
+      child: SizedBox(
+        height: 56,
+        child: extended
+            ? Row(
+                children: [
+                  const SizedBox(width: 16),
+                  IconTheme(
+                    data: IconThemeData(color: iconColor, size: 24),
+                    child: icon,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: iconColor,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            color: iconColor,
-                            fontWeight:
-                                selected ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : Center(
-                    child: IconTheme(
-                      data: IconThemeData(color: iconColor, size: 24),
-                      child: icon,
                     ),
                   ),
-        ),
+                ],
+              )
+            : Center(
+                child: IconTheme(
+                  data: IconThemeData(color: iconColor, size: 24),
+                  child: icon,
+                ),
+              ),
       ),
+    );
+    if (!extended) {
+      item = Tooltip(message: label, child: item);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: item,
     );
   }
 }

@@ -14,7 +14,9 @@ import '../../widgets/tactile_press.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
-  const AppearanceSettingsPage({super.key});
+  const AppearanceSettingsPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -26,7 +28,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: embedded ? null : AppBar(
         title: Text(
           l10n.appearanceSettings,
           style: theme.textTheme.titleLarge?.copyWith(

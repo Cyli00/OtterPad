@@ -83,7 +83,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
     notifier.advance(); // → ocrGetToken
     if (goToOcr) {
-      await context.push(AppRoutes.settingsExtract);
+      await context.push(AppRoutes.settingsOverlayExtract);
       if (!mounted) return;
     }
 
@@ -112,7 +112,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
     // ⑤ 前往 AI 设置（AgentApiSection 负责后续 spotlight 引导）
     notifier.advance(); // → aiExpert
-    await context.push(AppRoutes.settingsApi);
+    await context.push(AppRoutes.settingsOverlayApi);
     if (!mounted) return;
 
     // 从 AI 设置返回时，如果引导未完成则标记完成

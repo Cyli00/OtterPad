@@ -11,7 +11,9 @@ import '../../widgets/app_dialog.dart';
 import '../../widgets/tactile_press.dart';
 
 class StorageSpacePage extends ConsumerStatefulWidget {
-  const StorageSpacePage({super.key});
+  const StorageSpacePage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<StorageSpacePage> createState() => _StorageSpacePageState();
@@ -236,7 +238,7 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: widget.embedded ? null : AppBar(
         title: Text(
           l10n.storageSpace,
           style: theme.textTheme.titleLarge?.copyWith(

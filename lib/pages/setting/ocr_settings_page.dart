@@ -16,7 +16,9 @@ import 'setting_picker.dart';
 
 /// OCR 设置页 — 独立顶级设置入口
 class OcrSettingsPage extends ConsumerStatefulWidget {
-  const OcrSettingsPage({super.key});
+  const OcrSettingsPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<OcrSettingsPage> createState() => _OcrSettingsPageState();
@@ -378,7 +380,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: widget.embedded ? null : AppBar(
         leading: _buildBackButton(onboardingStep),
         title: Text(
           context.l10n.ocrSettings,

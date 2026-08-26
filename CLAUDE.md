@@ -115,11 +115,18 @@
 - **OnboardingNotifier** (`lib/providers/onboarding_provider.dart`) — 首启引导状态机，`hasSeenOnboarding` 存 `GStorage.setting`。禁止自行判断/持久化首启标志。
 - **SystemSpecs** (`lib/services/system_specs.dart`) — About 系统标签 / issue 系统信息。Android 版本走 `device_info_plus` 的 `version.release`。禁止用 `Platform.operatingSystemVersion` 取首段数字推断 Android 版本（Build.DISPLAY 会误判成 3 等）。
 
+### 导航 / 设置
+
+- **AppRoutes** (`lib/router/app_routes.dart`) — `settings`（`/settings`）仅 shell branch；overlay 全部 root 平级 `settingsOverlay*`。禁止 overlay 嵌套 `routes:[]`（`push(overlay/extract)` 一次 pop 必须回到调用页）。禁止再挂一棵 `/settings`。
+- **SettingPage** (`lib/pages/setting/view.dart`) — `SettingNavMode.shell` 只 `setState` 切 section，禁止 `context.push` overlay。
+- **AdaptiveScaffold** (`lib/widgets/layout/adaptive_scaffold.dart`) — `railBottomDestinationCount` / `hideBottomNavigation`。禁止把 `selectedIndex: 2` 传给只有 2 项的 NavigationBar。
+
 ## 基础架构
 
 **桌面探测** (lib/utils/desktop.dart) — `isDesktopOs` / `isAppleDesktop` / `desktopActivator`。键鼠交互看 OS；布局看 `Responsive` 宽度。禁止在业务处自写 `Platform.isWindows || …`。
 **右键菜单** (lib/widgets/app_context_menu.dart) — `showAppContextMenu`，视觉对齐 FavoriteCard 长按菜单（`surfaceContainerHigh`、圆角 16）。桌面 OS 用 `onSecondaryTapDown`；移动端长按路径不变。
 **桌面拖入** (lib/widgets/desktop_drop_host.dart) — `desktop_drop` ^0.7.1 全窗口 DropTarget，合法 PDF 走 `taskProvider.addFiles`。全非法才 SnackBar `dropPdfOnly`；混合拖入只导入合法 PDF，完成摘要走 `addFiles` 既有 SnackBar。禁止升 0.8.0（需 AGP 9，禁止改 android/）；禁止自写导入。
+**设置路由** (lib/router/app_router.dart) — shell `/settings` 内部切 section；onboarding / prompt 走 root 平级 `/settings-overlay*`。禁止 overlay 嵌套 routes、禁止两棵 `/settings` 树。
 
 @TODO.md
 

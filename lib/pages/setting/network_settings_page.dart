@@ -14,7 +14,9 @@ import '../../services/identifier_resolver.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class NetworkSettingsPage extends StatelessWidget {
-  const NetworkSettingsPage({super.key});
+  const NetworkSettingsPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +25,7 @@ class NetworkSettingsPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
+      appBar: embedded ? null : AppBar(
         title: Text(
           context.l10n.networkSettings,
           style: theme.textTheme.titleLarge?.copyWith(
