@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
+import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../services/haptics.dart';
@@ -264,65 +265,71 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
   }
 
   Widget _buildActionBar(String? activeColor, double maxWidth) {
-    return Material(
-      elevation: 6,
-      color: const Color(0xF0282828),
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      // 约束到屏宽内：内容放得下时按内容自适应（窄于 maxWidth），放不下时
-      // SingleChildScrollView 横向滚动，绝不溢出屏幕被裁。
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ActionIcon(
-                  icon: Symbols.content_copy_rounded,
-                  tooltip: context.l10n.copy,
-                  onTap: widget.onCopy,
-                ),
-                const _Divider(),
-                for (final color in kHighlightColors)
-                  _ColorDot(
-                    hexColor: color,
-                    isActive: activeColor == color,
-                    onTap: () => widget.onHighlight(color),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: AppShadows.bar,
+      ),
+      child: Material(
+        elevation: 0,
+        color: const Color(0xF0282828),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        // 约束到屏宽内：内容放得下时按内容自适应（窄于 maxWidth），放不下时
+        // SingleChildScrollView 横向滚动，绝不溢出屏幕被裁。
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ActionIcon(
+                    icon: Symbols.content_copy_rounded,
+                    tooltip: context.l10n.copy,
+                    onTap: widget.onCopy,
                   ),
-                const _Divider(),
-                _ActionIcon(
-                  icon: _showNotePanel
-                      ? Symbols.edit_note_rounded
-                      : Symbols.edit_note_rounded,
-                  tooltip: context.l10n.notes,
-                  onTap: _handleNoteTap,
-                  color: _showNotePanel
-                      ? const Color(0xFF4FC3F7)
-                      : Colors.white,
-                ),
-                _ActionIcon(
-                  icon: Symbols.auto_awesome_rounded,
-                  tooltip: context.l10n.askAi,
-                  onTap: widget.onAskAi,
-                ),
-                _ActionIcon(
-                  icon: Symbols.translate_rounded,
-                  tooltip: context.l10n.translateText,
-                  onTap: widget.onTranslate,
-                ),
-                if (widget.onDelete != null) ...[
+                  const _Divider(),
+                  for (final color in kHighlightColors)
+                    _ColorDot(
+                      hexColor: color,
+                      isActive: activeColor == color,
+                      onTap: () => widget.onHighlight(color),
+                    ),
                   const _Divider(),
                   _ActionIcon(
-                    icon: Symbols.delete_rounded,
-                    tooltip: context.l10n.deleteHighlight,
-                    onTap: widget.onDelete!,
-                    color: const Color(0xFFEF5350),
+                    icon: _showNotePanel
+                        ? Symbols.edit_note_rounded
+                        : Symbols.edit_note_rounded,
+                    tooltip: context.l10n.notes,
+                    onTap: _handleNoteTap,
+                    color: _showNotePanel
+                        ? const Color(0xFF4FC3F7)
+                        : Colors.white,
                   ),
+                  _ActionIcon(
+                    icon: Symbols.auto_awesome_rounded,
+                    tooltip: context.l10n.askAi,
+                    onTap: widget.onAskAi,
+                  ),
+                  _ActionIcon(
+                    icon: Symbols.translate_rounded,
+                    tooltip: context.l10n.translateText,
+                    onTap: widget.onTranslate,
+                  ),
+                  if (widget.onDelete != null) ...[
+                    const _Divider(),
+                    _ActionIcon(
+                      icon: Symbols.delete_rounded,
+                      tooltip: context.l10n.deleteHighlight,
+                      onTap: widget.onDelete!,
+                      color: const Color(0xFFEF5350),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -331,63 +338,69 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
   }
 
   Widget _buildNotePanel(double maxWidth) {
-    return Material(
-      elevation: 6,
-      color: const Color(0xF0282828),
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        // 默认 320，窄屏收窄到屏宽内，避免笔记面板溢出被裁。
-        constraints: BoxConstraints(
-          maxWidth: math.min(320, maxWidth),
-          maxHeight: 160,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _noteController,
-                  autofocus: true,
-                  maxLines: 4,
-                  minLines: 1,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: context.l10n.writeYourThoughts,
-                    hintStyle: const TextStyle(
-                      color: Colors.white38,
-                      fontSize: 13,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: AppShadows.bar,
+      ),
+      child: Material(
+        elevation: 0,
+        color: const Color(0xF0282828),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          // 默认 320，窄屏收窄到屏宽内，避免笔记面板溢出被裁。
+          constraints: BoxConstraints(
+            maxWidth: math.min(320, maxWidth),
+            maxHeight: 160,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _noteController,
+                    autofocus: true,
+                    maxLines: 4,
+                    minLines: 1,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: context.l10n.writeYourThoughts,
+                      hintStyle: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 13,
+                      ),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     ),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  onChanged: (_) {
-                    if (!_noteDirty) setState(() => _noteDirty = true);
-                  },
-                  onSubmitted: (_) => _handleNoteSave(),
-                ),
-              ),
-              if (_noteDirty)
-                IconButton(
-                  icon: const Icon(
-                    Symbols.check_circle_rounded,
-                    color: Color(0xFF4FC3F7),
-                    size: 22,
-                  ),
-                  onPressed: () {
-                    Haptics.soft();
-                    _handleNoteSave();
-                  },
-                  tooltip: context.l10n.save,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
+                    onChanged: (_) {
+                      if (!_noteDirty) setState(() => _noteDirty = true);
+                    },
+                    onSubmitted: (_) => _handleNoteSave(),
                   ),
                 ),
-            ],
+                if (_noteDirty)
+                  IconButton(
+                    icon: const Icon(
+                      Symbols.check_circle_rounded,
+                      color: Color(0xFF4FC3F7),
+                      size: 22,
+                    ),
+                    onPressed: () {
+                      Haptics.soft();
+                      _handleNoteSave();
+                    },
+                    tooltip: context.l10n.save,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

@@ -354,7 +354,7 @@ class _FiguresTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       itemCount: totalCount,
       separatorBuilder: (_, _) =>
-          Divider(color: cs.outlineVariant.withAlpha(60), height: 32),
+          Divider(color: cs.outlineVariant.withAlpha(80), height: 32),
       itemBuilder: (context, index) {
         if (index == 0 && summaryOffset == 1) {
           return _buildSummaryBlock(context, theme, cs, hasSummary: hasSummary);
@@ -631,7 +631,7 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       itemCount: references.length,
       separatorBuilder: (_, _) =>
-          Divider(color: cs.outlineVariant.withAlpha(40), height: 1),
+          Divider(color: cs.outlineVariant.withAlpha(80), height: 1),
       itemBuilder: (context, index) {
         final item = references[index];
         final copied = index == _copiedIndex;

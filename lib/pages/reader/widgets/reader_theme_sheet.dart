@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
+import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
@@ -54,6 +55,7 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
       ),
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
       // 六个 section 高度必然超出 9/16 屏幕上限——包一层 ScrollView，

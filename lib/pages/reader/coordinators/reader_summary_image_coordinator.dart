@@ -479,7 +479,7 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
                 onChanged: notifier.setMaxReferenceImages,
               ),
               const SizedBox(height: 16),
-              Divider(color: cs.outlineVariant.withAlpha(60), height: 1),
+              Divider(color: cs.outlineVariant.withAlpha(80), height: 1),
               const SizedBox(height: 12),
               // ── 预估费用（随设置实时变化） ──
               if (costLine.isNotEmpty) ...[

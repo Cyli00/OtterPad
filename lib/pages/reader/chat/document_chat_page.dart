@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/animation_constants.dart';
+import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../core/storage/settings_keys.dart';
 import '../../../core/storage/storage.dart';
@@ -1237,6 +1238,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
           ),
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(sheetContext).padding.bottom + 16,

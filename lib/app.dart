@@ -76,11 +76,23 @@ class OtterPadApp extends ConsumerWidget {
             colorScheme: lightScheme,
             useMaterial3: true,
             fontFamily: _systemFontFamily,
+            dialogTheme: const DialogThemeData(elevation: 0),
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+              },
+            ),
           ),
           darkTheme: ThemeData(
             colorScheme: darkScheme,
             useMaterial3: true,
             fontFamily: _systemFontFamily,
+            dialogTheme: const DialogThemeData(elevation: 0),
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+              },
+            ),
           ),
           routerConfig: router,
           builder: (context, child) {

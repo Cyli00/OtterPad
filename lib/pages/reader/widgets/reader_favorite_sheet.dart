@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/collection/favorite.dart';
 import '../../../services/haptics.dart';
@@ -106,6 +107,7 @@ class _ReaderFavoritePickerContentState
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

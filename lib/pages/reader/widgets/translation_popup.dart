@@ -98,7 +98,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
           Scrollable.ensureVisible(
             ctx,
             alignment: 0.3,
-            duration: const Duration(milliseconds: 300),
+            duration: kAnimSlow,
             curve: kAnimCurve,
           );
         }
@@ -172,7 +172,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
               Scrollable.ensureVisible(
                 ctx,
                 alignment: 0.3,
-                duration: const Duration(milliseconds: 300),
+                duration: kAnimSlow,
                 curve: kAnimCurve,
               );
             }
@@ -502,8 +502,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 3),
                           child: TactilePress(
-                            onTap: () =>
-                                Navigator.pop(menuContext, color),
+                            onTap: () => Navigator.pop(menuContext, color),
                             baseColor: Colors.transparent,
                             borderRadius: BorderRadius.circular(11),
                             child: Container(
@@ -511,8 +510,9 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
                               height: 22,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Color(int.parse('0xFF$color'))
-                                    .withAlpha(200),
+                                color: Color(
+                                  int.parse('0xFF$color'),
+                                ).withAlpha(200),
                               ),
                             ),
                           ),
@@ -551,15 +551,24 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
             itemBuilder: (_) => [
               PopupMenuItem(
                 value: 'translation',
-                child: Text(context.l10n.copyTranslation, style: theme.textTheme.bodyMedium),
+                child: Text(
+                  context.l10n.copyTranslation,
+                  style: theme.textTheme.bodyMedium,
+                ),
               ),
               PopupMenuItem(
                 value: 'source',
-                child: Text(context.l10n.copyOriginal, style: theme.textTheme.bodyMedium),
+                child: Text(
+                  context.l10n.copyOriginal,
+                  style: theme.textTheme.bodyMedium,
+                ),
               ),
               PopupMenuItem(
                 value: 'all',
-                child: Text(context.l10n.copyAll, style: theme.textTheme.bodyMedium),
+                child: Text(
+                  context.l10n.copyAll,
+                  style: theme.textTheme.bodyMedium,
+                ),
               ),
             ],
           ),
@@ -582,7 +591,7 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: kAnimPulse,
   )..repeat();
 
   @override

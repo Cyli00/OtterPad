@@ -13,6 +13,8 @@ import 'package:dio/dio.dart' show CancelToken;
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
+import '../../core/storage/settings_keys.dart';
+import '../../core/storage/storage.dart';
 import '../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/api_provider.dart';
@@ -105,6 +107,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _dockOpen = false;
   ReaderDockPane _dockPane = ReaderDockPane.outline;
 
+  /// 用户拖拽得到的停靠栏宽度覆写；null = 跟随窗口自适应（GStorage.setting 持久化）。
+  double? _sidebarWidthOverride;
+
   /// 定位原文后暂存的问 AI 返回参数；非空时展示返回引导条。
   DocumentChatPageArgs? _chatReturnArgs;
 
@@ -184,6 +189,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       title: widget.document.title,
       defaultReadingMode: ref.read(readerSettingsProvider).defaultReadingMode,
     );
+    _sidebarWidthOverride =
+        GStorage.setting.get(SettingsKeys.readerSidebarWidth) as double?;
     // 在 initState 中 cache notifier 引用——Riverpod 3.x 禁止在 dispose()
     // 中通过 ref.read 取 provider（widget 已 unmount-pending）。Notifier 实
     // 例的生命周期由 provider 管理、独立于 widget，cache 安全。
@@ -547,6 +554,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     if (_activeSheet == ReaderSheetType.outline) return;
     unawaited(_showOutlineBottomSheet());
+  }
+
+  /// 停靠栏分隔线拖拽：向左拖（dx<0）变宽。宽度持久化到 drag end，避免每帧写库。
+  void _onSidebarDragUpdate(DragUpdateDetails d) {
+    final windowW = MediaQuery.sizeOf(context).width;
+    final base = _sidebarWidthOverride ?? Responsive.readerSidebarWidth(windowW);
+    final next = Responsive.clampReaderSidebarWidth(base - d.delta.dx, windowW);
+    if (next == base) return;
+    setState(() => _sidebarWidthOverride = next);
+  }
+
+  void _onSidebarDragEnd() {
+    final w = _sidebarWidthOverride;
+    if (w != null) {
+      unawaited(GStorage.setting.put(SettingsKeys.readerSidebarWidth, w));
+    }
   }
 
   void _openDock(ReaderDockPane pane) {
@@ -1199,9 +1222,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final useDock = Responsive.useReaderDock(context);
     final markdown = session.markdownContent;
-    final sidebarW = Responsive.readerSidebarWidth(
-      MediaQuery.sizeOf(context).width,
-    );
+    final windowW = MediaQuery.sizeOf(context).width;
+    final sidebarW = _sidebarWidthOverride == null
+        ? Responsive.readerSidebarWidth(windowW)
+        : Responsive.clampReaderSidebarWidth(_sidebarWidthOverride!, windowW);
 
     return Theme(
       data: theme,
@@ -1375,6 +1399,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       sidebarWidth: sidebarW,
                       open: _dockOpen,
                       pane: _dockPane,
+                      onSidebarDragUpdate: _onSidebarDragUpdate,
+                      onSidebarDragEnd: _onSidebarDragEnd,
                       outline: OutlinePanel(
                         key: ValueKey(markdown.hashCode),
                         markdownContent: markdown ?? '',

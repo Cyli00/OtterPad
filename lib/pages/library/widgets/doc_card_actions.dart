@@ -29,10 +29,36 @@ import 'batch_progress_sheet.dart';
 /// 所有使用 [DocListCard] / [DocumentCard] 的页面（文献库、收藏夹、无文件条目等）
 /// 都应通过此类获取回调，避免交互逻辑分散在各页面中导致不同步。
 class DocCardActions {
-  /// 点击卡片 → 记录阅读历史并打开 PDF 阅读器
+  /// 点击卡片 → 记录阅读历史并打开 PDF 阅读器。
+  ///
+  /// [context] 为卡片自身（而非页面容器）时，会量取卡片在 root Navigator
+  /// 坐标系中的矩形作为「卡片→阅读器」容器变换的起点矩形。
   static void openReader(BuildContext context, WidgetRef ref, Document doc) {
     ref.read(documentLifecycleProvider).recordOpen(doc.id);
-    context.push(AppRoutes.reader, extra: doc);
+    context.push(
+      AppRoutes.reader,
+      extra: (doc: doc, sourceRect: _sourceRectOf(context)),
+    );
+  }
+
+  /// 量取 [context] 对应 RenderBox 在 root Navigator 中的矩形。
+  /// context 是整页容器（与 Navigator 几乎同尺寸）或不可测时返回 null——
+  /// 那种起点做容器变换没有意义。
+  static Rect? _sourceRectOf(BuildContext context) {
+    final box = context.findRenderObject();
+    final nav = Navigator.maybeOf(context, rootNavigator: true);
+    final navBox = nav?.context.findRenderObject();
+    if (box is! RenderBox ||
+        !box.hasSize ||
+        navBox is! RenderBox ||
+        !navBox.hasSize) {
+      return null;
+    }
+    if (box.size.width >= navBox.size.width * 0.95 &&
+        box.size.height >= navBox.size.height * 0.95) {
+      return null;
+    }
+    return box.localToGlobal(Offset.zero, ancestor: navBox) & box.size;
   }
 
   /// 删除文献（级联：文库条目 + 磁盘文件 + 提取产物 + 缩略图 + 收藏夹 + 高亮 + 历史）

@@ -1,4 +1,5 @@
 import 'package:animations/animations.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/animation_constants.dart';
@@ -23,6 +24,32 @@ import 'app_routes.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// 阅读器路由参数：文档 + 可选的卡片源矩形（容器变换起点，root Navigator 坐标系）
+typedef ReaderArgs = ({Document doc, Rect? sourceRect});
+
+/// Android 预测返回：手势进行中走框架 PredictiveBack，否则回落 [fallback]。
+Widget _maybePredictiveBack<T>({
+  required BuildContext context,
+  required Animation<double> animation,
+  required Animation<double> secondaryAnimation,
+  required Widget child,
+  required Widget Function() fallback,
+}) {
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<T>) {
+      return const PredictiveBackPageTransitionsBuilder().buildTransitions(
+        route,
+        context,
+        animation,
+        secondaryAnimation,
+        child,
+      );
+    }
+  }
+  return fallback();
+}
+
 /// 平级切换：FadeThroughTransition（旧页淡出 → 新页淡入）
 CustomTransitionPage<T> _lateral<T>({
   required Widget child,
@@ -34,10 +61,16 @@ CustomTransitionPage<T> _lateral<T>({
     transitionDuration: kAnimSlow,
     reverseTransitionDuration: kAnimSlow,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return FadeThroughTransition(
+      return _maybePredictiveBack<T>(
+        context: context,
         animation: animation,
         secondaryAnimation: secondaryAnimation,
         child: child,
+        fallback: () => FadeThroughTransition(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          child: child,
+        ),
       );
     },
   );
@@ -54,47 +87,106 @@ CustomTransitionPage<T> _drillIn<T>({
     transitionDuration: kAnimSlow,
     reverseTransitionDuration: kAnimSlow,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return SharedAxisTransition(
+      return _maybePredictiveBack<T>(
+        context: context,
         animation: animation,
         secondaryAnimation: secondaryAnimation,
-        transitionType: SharedAxisTransitionType.vertical,
         child: child,
+        fallback: () => SharedAxisTransition(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          transitionType: SharedAxisTransitionType.vertical,
+          child: child,
+        ),
       );
     },
   );
 }
 
-/// 阅读器入场：Scale + Fade + 微上移，模拟 Container Transform 的「展开」感
+/// 阅读器入场：有卡片起点时做「卡片→全屏」容器变换（双边界裁切+缩放+渐显），
+/// 否则回落 Scale + Fade + 微上移。
 CustomTransitionPage<T> _readerEntry<T>({
   required Widget child,
   required GoRouterState state,
+  required Rect? sourceRect,
 }) {
   return CustomTransitionPage<T>(
     key: state.pageKey,
     child: child,
-    transitionDuration: kAnimSlow,
-    reverseTransitionDuration: kAnimSlow,
+    transitionDuration: sourceRect != null ? kAnimEmphasis : kAnimSlow,
+    reverseTransitionDuration: sourceRect != null ? kAnimEmphasis : kAnimSlow,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
         parent: animation,
         curve: kAnimCurve,
         reverseCurve: kAnimCurveReverse,
       );
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.04),
-            end: Offset.zero,
-          ).animate(curved),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
-            child: child,
+      final fullRect = Offset.zero & MediaQuery.sizeOf(context);
+      final from = sourceRect;
+      // 无起点，或起点卡片已滚出屏幕 → 回落通用开场
+      if (from == null || !from.overlaps(fullRect)) {
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.04),
+              end: Offset.zero,
+            ).animate(curved),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+              child: child,
+            ),
           ),
-        ),
+        );
+      }
+      // 页面全程按全屏布局（避免 WebView 重排），只对最终呈现做
+      // 裁切 + 到卡片矩形的缩放平移——手写双边界容器变换。
+      return AnimatedBuilder(
+        animation: curved,
+        child: child,
+        builder: (context, page) {
+          if (page == null) return const SizedBox.shrink();
+          final t = curved.value;
+          final rect = Rect.lerp(from, fullRect, t)!;
+          final sx = rect.width / fullRect.width;
+          final sy = rect.height / fullRect.height;
+          final center = fullRect.center;
+          final d = rect.center - center;
+          // 前段快速淡入，避免与旧页重叠过久
+          final opacity = Curves.easeIn.transform(
+            const Interval(0, 0.5).transform(t),
+          );
+          return ClipRRect(
+            clipper: _RectMorphClipper(
+              RRect.fromRectAndRadius(rect, Radius.circular(16 * (1 - t))),
+            ),
+            child: Opacity(
+              opacity: opacity,
+              child: Transform(
+                origin: center,
+                transform: Matrix4.translationValues(d.dx, d.dy, 0)
+                  ..scaleByDouble(sx, sy, 1.0, 1.0),
+                child: page,
+              ),
+            ),
+          );
+        },
       );
     },
   );
+}
+
+/// 固定 RRect 裁切（圆角随容器变换从 16 收拢为 0）
+class _RectMorphClipper extends CustomClipper<RRect> {
+  const _RectMorphClipper(this.rrect);
+
+  final RRect rrect;
+
+  @override
+  RRect getClip(Size size) => rrect;
+
+  @override
+  bool shouldReclip(_RectMorphClipper old) => old.rrect != rrect;
 }
 
 /// 横向前进：SharedAxisTransition horizontal（前进→ / 返回←）
@@ -108,11 +200,17 @@ CustomTransitionPage<T> _forward<T>({
     transitionDuration: kAnimSlow,
     reverseTransitionDuration: kAnimSlow,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return SharedAxisTransition(
+      return _maybePredictiveBack<T>(
+        context: context,
         animation: animation,
         secondaryAnimation: secondaryAnimation,
-        transitionType: SharedAxisTransitionType.horizontal,
         child: child,
+        fallback: () => SharedAxisTransition(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          transitionType: SharedAxisTransitionType.horizontal,
+          child: child,
+        ),
       );
     },
   );
@@ -136,10 +234,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.reader,
         parentNavigatorKey: rootNavigatorKey,
-        pageBuilder: (context, state) => _readerEntry(
-          state: state,
-          child: ReaderPage(document: state.extra! as Document),
-        ),
+        pageBuilder: (context, state) {
+          final args = state.extra! as ReaderArgs;
+          return _readerEntry(
+            state: state,
+            sourceRect: args.sourceRect,
+            child: ReaderPage(document: args.doc),
+          );
+        },
         routes: [
           GoRoute(
             path: 'chat',
