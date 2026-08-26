@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import '../../core/elevation.dart';
 import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
@@ -269,6 +270,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
         ),
         child: column,
       ),

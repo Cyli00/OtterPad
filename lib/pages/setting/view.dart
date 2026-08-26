@@ -8,6 +8,7 @@ import '../../core/l10n.dart';
 import '../../router/app_routes.dart';
 import '../../utils/desktop.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 import 'about_page.dart';
 import 'api_settings_page.dart';
@@ -327,14 +328,7 @@ class _SettingsCard extends StatelessWidget {
         children: [
           for (int i = 0; i < children.length; i++) ...[
             children[i],
-            if (i < children.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                indent: 80,
-                endIndent: 20,
-                color: cs.outlineVariant.withAlpha(80),
-              ),
+            if (i < children.length - 1) const AppDivider.tile(),
           ],
         ],
       ),

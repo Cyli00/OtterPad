@@ -8,6 +8,7 @@ import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/storage_usage_service.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 
 class StorageSpacePage extends ConsumerStatefulWidget {
@@ -405,13 +406,7 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
   }
 
   Widget _divider(ColorScheme cs) {
-    return Divider(
-      height: 1,
-      thickness: 1,
-      indent: 80,
-      endIndent: 20,
-      color: cs.outlineVariant.withAlpha(70),
-    );
+    return const AppDivider.tile();
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/elevation.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../widgets/tactile_press.dart';
@@ -79,6 +80,7 @@ class SettingPicker<T> extends StatelessWidget {
             color: cs.surfaceContainerHigh,
             borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

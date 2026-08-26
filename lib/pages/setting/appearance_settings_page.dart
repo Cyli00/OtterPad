@@ -5,6 +5,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/elevation.dart';
 import '../../core/l10n.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/reader_settings_provider.dart';
@@ -12,6 +13,7 @@ import '../../providers/theme_provider.dart';
 import '../../services/haptics.dart';
 import '../../widgets/tactile_press.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'setting_group.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
   const AppearanceSettingsPage({super.key, this.embedded = false});
@@ -28,17 +30,19 @@ class AppearanceSettingsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: embedded ? null : AppBar(
-        title: Text(
-          l10n.appearanceSettings,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        scrolledUnderElevation: 0,
-      ),
+      appBar: embedded
+          ? null
+          : AppBar(
+              title: Text(
+                l10n.appearanceSettings,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              centerTitle: false,
+              backgroundColor: cs.surface,
+              scrolledUnderElevation: 0,
+            ),
       body: ListView(
         padding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -97,8 +101,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
           ),
 
           // ── 主题色彩 ──
-          _buildGroup(
-            context,
+          SettingGroup(
             title: l10n.themeColor,
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -107,8 +110,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
           ),
 
           // ── 阅读设置 ──
-          _buildGroup(
-            context,
+          SettingGroup(
             title: l10n.readingSettings,
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -315,39 +317,6 @@ class AppearanceSettingsPage extends ConsumerWidget {
       },
     );
   }
-
-  Widget _buildGroup(
-    BuildContext context, {
-    required String title,
-    required Widget child,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        ),
-      ],
-    );
-  }
 }
 
 // ── 色彩选择圆形按钮 ──
@@ -477,13 +446,17 @@ class _AppLanguagePicker extends ConsumerWidget {
   static final _options = <(Locale?, String Function(AppLocalizations))>[
     (null, _systemLabel),
     (const Locale('zh'), _zhLabel),
-    (const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'), _zhHantLabel),
+    (
+      const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
+      _zhHantLabel,
+    ),
     (const Locale('en'), _enLabel),
   ];
 
   static String _systemLabel(AppLocalizations l10n) => l10n.languageSystem;
   static String _zhLabel(AppLocalizations l10n) => l10n.languageChinese;
-  static String _zhHantLabel(AppLocalizations l10n) => l10n.languageTraditionalChinese;
+  static String _zhHantLabel(AppLocalizations l10n) =>
+      l10n.languageTraditionalChinese;
   static String _enLabel(AppLocalizations l10n) => l10n.languageEnglish;
 
   @override
@@ -523,8 +496,11 @@ class _AppLanguagePicker extends ConsumerWidget {
               margin: const EdgeInsets.symmetric(horizontal: 20),
               child: Padding(
                 padding: const EdgeInsets.all(4),
-                child: Icon(Symbols.help_rounded,
-                    size: 16, color: cs.onSurfaceVariant),
+                child: Icon(
+                  Symbols.help_rounded,
+                  size: 16,
+                  color: cs.onSurfaceVariant,
+                ),
               ),
             ),
           ],
@@ -551,8 +527,11 @@ class _AppLanguagePicker extends ConsumerWidget {
                     ),
                   ),
                 ),
-                Icon(Symbols.expand_more_rounded,
-                    size: 20, color: cs.onSurfaceVariant),
+                Icon(
+                  Symbols.expand_more_rounded,
+                  size: 20,
+                  color: cs.onSurfaceVariant,
+                ),
               ],
             ),
           ),
@@ -589,8 +568,10 @@ class _AppLanguagePicker extends ConsumerWidget {
             constraints: BoxConstraints(maxHeight: maxH),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            boxShadow: AppShadows.sheet,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -606,14 +587,17 @@ class _AppLanguagePicker extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 8,
+                  ),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       l10n.appLanguage,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -628,7 +612,9 @@ class _AppLanguagePicker extends ConsumerWidget {
                       Navigator.pop(ctx);
                     },
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         Expanded(
@@ -638,14 +624,16 @@ class _AppLanguagePicker extends ConsumerWidget {
                               fontWeight: isSelected
                                   ? FontWeight.w700
                                   : FontWeight.w500,
-                              color:
-                                  isSelected ? cs.primary : cs.onSurface,
+                              color: isSelected ? cs.primary : cs.onSurface,
                             ),
                           ),
                         ),
                         if (isSelected)
-                          Icon(Symbols.check_rounded,
-                              color: cs.primary, size: 22),
+                          Icon(
+                            Symbols.check_rounded,
+                            color: cs.primary,
+                            size: 22,
+                          ),
                       ],
                     ),
                   );

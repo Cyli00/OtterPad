@@ -12,6 +12,7 @@ import '../../services/system_specs.dart';
 import '../../services/update_flow.dart';
 import '../../services/update_service.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 
 class AboutPage extends ConsumerStatefulWidget {
@@ -155,15 +156,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     );
   }
 
-  Widget _divider(ColorScheme cs) {
-    return Divider(
-      height: 1,
-      thickness: 1,
-      indent: 80,
-      endIndent: 20,
-      color: cs.outlineVariant.withAlpha(80),
-    );
-  }
+  Widget _divider(ColorScheme cs) => const AppDivider.tile();
 
   Future<void> _copySpecs() async {
     final l10n = context.l10n;

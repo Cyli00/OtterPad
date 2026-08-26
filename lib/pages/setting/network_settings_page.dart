@@ -12,6 +12,7 @@ import '../../providers/proxy_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/identifier_resolver.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'setting_group.dart';
 
 class NetworkSettingsPage extends StatelessWidget {
   const NetworkSettingsPage({super.key, this.embedded = false});
@@ -25,26 +26,28 @@ class NetworkSettingsPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: embedded ? null : AppBar(
-        title: Text(
-          context.l10n.networkSettings,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        scrolledUnderElevation: 0,
-      ),
+      appBar: embedded
+          ? null
+          : AppBar(
+              title: Text(
+                context.l10n.networkSettings,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              centerTitle: false,
+              backgroundColor: cs.surface,
+              scrolledUnderElevation: 0,
+            ),
       body: Listener(
         onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
         child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-            .copyWith(bottom: 40),
-        children: const [
-          _ProxySettingsSection(),
-        ],
-      ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 8,
+          ).copyWith(bottom: 40),
+          children: const [_ProxySettingsSection()],
+        ),
       ),
     );
   }
@@ -136,41 +139,6 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
     }
   }
 
-  Widget _buildGroup(
-    BuildContext context, {
-    required String title,
-    required Widget child,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          // 为内部 ListTile/RadioListTile 提供最近的 Material 祖先，
-          // 否则选中色与 ink 会被 DecoratedBox 背景盖住（框架断言报错）
-          child: Material(type: MaterialType.transparency, child: child),
-        ),
-      ],
-    );
-  }
-
   InputDecoration _fieldDeco(
     BuildContext context, {
     required String hint,
@@ -202,10 +170,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: cs.primary, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 14,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       suffixIcon: suffix,
     );
   }
@@ -219,8 +184,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
     return Column(
       children: [
         // ── 代理设置 ──
-        _buildGroup(
-          context,
+        SettingGroup(
           title: context.l10n.proxy,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -233,12 +197,18 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
               child: Column(
                 children: [
                   RadioListTile<ProxyMode>(
-                    title: Text(context.l10n.customProxy,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    subtitle: Text(context.l10n.customProxySubtitle,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant)),
+                    title: Text(
+                      context.l10n.customProxy,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      context.l10n.customProxySubtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                     value: ProxyMode.custom,
                   ),
                   Animate(
@@ -299,21 +269,33 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     ),
                   ),
                   RadioListTile<ProxyMode>(
-                    title: Text(context.l10n.systemProxy,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    subtitle: Text(context.l10n.systemProxySubtitle,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant)),
+                    title: Text(
+                      context.l10n.systemProxy,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      context.l10n.systemProxySubtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                     value: ProxyMode.system,
                   ),
                   RadioListTile<ProxyMode>(
-                    title: Text(context.l10n.noProxy,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    subtitle: Text(context.l10n.noProxySubtitle,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant)),
+                    title: Text(
+                      context.l10n.noProxy,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      context.l10n.noProxySubtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                     value: ProxyMode.none,
                   ),
                 ],
@@ -323,8 +305,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
         ),
 
         // ── 连通性测试 ──
-        _buildGroup(
-          context,
+        SettingGroup(
           title: context.l10n.connectivityTest,
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -352,11 +333,12 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     ),
                     const SizedBox(width: 12),
                     FilledButton.tonalIcon(
-                      onPressed:
-                          _testStatus == _TestStatus.testing ? null : () {
-                            Haptics.soft();
-                            _runTest();
-                          },
+                      onPressed: _testStatus == _TestStatus.testing
+                          ? null
+                          : () {
+                              Haptics.soft();
+                              _runTest();
+                            },
                       icon: _testStatus == _TestStatus.testing
                           ? SizedBox(
                               width: 18,

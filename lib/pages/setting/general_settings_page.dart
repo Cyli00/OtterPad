@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'setting_group.dart';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
@@ -16,6 +17,7 @@ import '../../services/agent_http.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/system_specs.dart';
+import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 
 // ── GStorage keys ──
@@ -38,8 +40,7 @@ class GeneralSettingsPage extends ConsumerStatefulWidget {
 }
 
 class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
-  late bool _logEnabled =
-      GStorage.setting.get(_kLogEnabled) as bool? ?? true;
+  late bool _logEnabled = GStorage.setting.get(_kLogEnabled) as bool? ?? true;
   late String _logLevel =
       GStorage.setting.get(_kLogLevel) as String? ?? 'error';
   late bool _hapticsEnabled =
@@ -62,17 +63,19 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: widget.embedded ? null : AppBar(
-        title: Text(
-          l10n.generalSettings,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        scrolledUnderElevation: 0,
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: Text(
+                l10n.generalSettings,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              centerTitle: false,
+              backgroundColor: cs.surface,
+              scrolledUnderElevation: 0,
+            ),
       body: ListView(
         padding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -80,8 +83,7 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
         ).copyWith(bottom: 40),
         children: [
           // ── 日志记录 ──
-          _buildGroup(
-            context,
+          SettingGroup(
             title: l10n.generalLogRecording,
             child: Column(
               children: [
@@ -138,7 +140,8 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
                                   },
                                   style: SegmentedButton.styleFrom(
                                     backgroundColor: cs.surface,
-                                    selectedBackgroundColor: cs.primaryContainer,
+                                    selectedBackgroundColor:
+                                        cs.primaryContainer,
                                     side: BorderSide(
                                       color: cs.outlineVariant.withAlpha(100),
                                     ),
@@ -172,8 +175,7 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
           ),
 
           // ── 系统 ──
-          _buildGroup(
-            context,
+          SettingGroup(
             title: l10n.generalSystem,
             child: Column(
               children: [
@@ -255,14 +257,11 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
         if (await target.exists()) await target.delete();
         await file.copy(target.path);
         if (!mounted) return;
-        snackBar.showResult(
-          message: l10n.generalExportLogSaved(target.path),
-        );
+        snackBar.showResult(message: l10n.generalExportLogSaved(target.path));
       } else {
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          subject: p.basename(file.path),
-        );
+        await Share.shareXFiles([
+          XFile(file.path),
+        ], subject: p.basename(file.path));
       }
     } catch (_) {
       if (!mounted) return;
@@ -279,47 +278,10 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
     );
   }
 
-  Widget _buildGroup(
-    BuildContext context, {
-    required String title,
-    required Widget child,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        ),
-      ],
-    );
-  }
-
-  Widget _divider(ColorScheme cs, {double indent = 20}) {
-    return Divider(
-      height: 1,
-      thickness: 1,
-      indent: indent,
-      endIndent: 20,
-      color: cs.outlineVariant.withAlpha(70),
-    );
+  Widget _divider(ColorScheme cs, {double indent = AppDivider.kContent}) {
+    return indent == AppDivider.kTile
+        ? const AppDivider.tile()
+        : AppDivider(indent: indent);
   }
 }
 

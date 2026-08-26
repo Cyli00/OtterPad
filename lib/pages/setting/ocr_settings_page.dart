@@ -12,6 +12,7 @@ import '../../services/snackbar_service.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/onboarding_spotlight.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'setting_group.dart';
 import 'setting_picker.dart';
 
 /// OCR 设置页 — 独立顶级设置入口
@@ -33,13 +34,21 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
   ];
 
   List<(String, String, String)> _recognitionDefs(AppLocalizations l10n) => [
-    ('useChartRecognition', l10n.chartRecognition, l10n.ocrChartRecognitionDesc),
+    (
+      'useChartRecognition',
+      l10n.chartRecognition,
+      l10n.ocrChartRecognitionDesc,
+    ),
     ('useSealRecognition', l10n.stampRecognition, l10n.ocrStampRecognitionDesc),
     ('useOcrForImageBlock', l10n.imageAreaOcr, l10n.ocrImageAreaDesc),
   ];
 
   List<(String, String, String)> _correctionDefs(AppLocalizations l10n) => [
-    ('useDocOrientationClassify', l10n.orientationCorrection, l10n.ocrOrientationDesc),
+    (
+      'useDocOrientationClassify',
+      l10n.orientationCorrection,
+      l10n.ocrOrientationDesc,
+    ),
     ('useDocUnwarping', l10n.curvatureCorrection, l10n.ocrCurvatureDesc),
   ];
 
@@ -62,26 +71,24 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     'aside_text': l10n.ocrSideNote,
   };
 
-
   late final TextEditingController _keyCtrl;
 
-    bool _keyObscured = true;
-    Timer? _keyTimer;
+  bool _keyObscured = true;
+  Timer? _keyTimer;
 
-    @override
-    void initState() {
-      super.initState();
-      final s = ref.read(docExtractApiProvider);
-      _keyCtrl = TextEditingController(text: s.apiKey);
-    }
+  @override
+  void initState() {
+    super.initState();
+    final s = ref.read(docExtractApiProvider);
+    _keyCtrl = TextEditingController(text: s.apiKey);
+  }
 
-    @override
-    void dispose() {
-      _keyCtrl.dispose();
-      _keyTimer?.cancel();
-      super.dispose();
-    }
-
+  @override
+  void dispose() {
+    _keyCtrl.dispose();
+    _keyTimer?.cancel();
+    super.dispose();
+  }
 
   bool _getOptionValue(DocExtractApiState s, String field) => switch (field) {
     'useChartRecognition' => s.useChartRecognition,
@@ -114,46 +121,15 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
       margin: const EdgeInsets.symmetric(horizontal: 20),
       child: Padding(
         padding: const EdgeInsets.all(4),
-        child: Icon(
-          Symbols.help_rounded,
-          size: 16,
-          color: cs.onSurfaceVariant,
-        ),
+        child: Icon(Symbols.help_rounded, size: 16, color: cs.onSurfaceVariant),
       ),
     );
   }
 
-  Widget _buildGroup({required String title, required Widget child}) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        ),
-      ],
-    );
-  }
-
-  List<Widget> _switchGroup(DocExtractApiState docState,
-      List<(String, String, String)> defs) {
+  List<Widget> _switchGroup(
+    DocExtractApiState docState,
+    List<(String, String, String)> defs,
+  ) {
     final theme = Theme.of(context);
     final tiles = <Widget>[];
     for (final def in defs) {
@@ -169,9 +145,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Flexible(
-                      child: Text(title,
-                          style: theme.textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600)),
+                      child: Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 4),
                     _helpIcon(subtitle),
@@ -228,9 +207,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Flexible(
-                      child: Text(title,
-                          style: theme.textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600)),
+                      child: Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 4),
                     _helpIcon(subtitle),
@@ -240,7 +222,9 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
               const SizedBox(width: 12),
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: isSet
                       ? cs.primaryContainer
@@ -266,14 +250,18 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
               Expanded(
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 8),
-                    overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 16),
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 8,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 16,
+                    ),
                     trackHeight: 3,
                   ),
                   child: Slider(
-                    value: value, min: min, max: max,
+                    value: value,
+                    min: min,
+                    max: max,
                     divisions: divisions,
                     onChanged: (v) {
                       Haptics.soft();
@@ -284,10 +272,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 ),
               ),
               IconButton(
-                onPressed: isSet ? () {
-                  Haptics.soft();
-                  onReset();
-                } : null,
+                onPressed: isSet
+                    ? () {
+                        Haptics.soft();
+                        onReset();
+                      }
+                    : null,
                 icon: const Icon(Symbols.refresh_rounded, size: 20),
                 tooltip: context.l10n.restoreDefaults,
                 color: cs.onSurfaceVariant,
@@ -323,7 +313,8 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 : cs.outlineVariant.withAlpha(100),
           ),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+            borderRadius: BorderRadius.circular(12),
+          ),
           onSelected: (v) {
             Haptics.soft();
             final updated = List<String>.from(selected);
@@ -347,64 +338,75 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     final cs = theme.colorScheme;
     final docState = ref.watch(docExtractApiProvider);
 
-    InputDecoration fieldDeco({required String hint, String? label, Widget? suffix}) =>
-        InputDecoration(
-          labelText: label,
-          hintText: hint,
-          hintStyle: theme.textTheme.bodyMedium?.copyWith(
-            color: cs.onSurfaceVariant.withAlpha(120),
-          ),
-          filled: true,
-          fillColor: cs.surfaceContainerLow,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-              color: cs.outlineVariant.withAlpha(100),
-              width: 1,
-            ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: cs.primary, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 14),
-          suffixIcon: suffix,
-        );
+    InputDecoration fieldDeco({
+      required String hint,
+      String? label,
+      Widget? suffix,
+    }) => InputDecoration(
+      labelText: label,
+      hintText: hint,
+      hintStyle: theme.textTheme.bodyMedium?.copyWith(
+        color: cs.onSurfaceVariant.withAlpha(120),
+      ),
+      filled: true,
+      fillColor: cs.surfaceContainerLow,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: cs.outlineVariant.withAlpha(100),
+          width: 1,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: cs.primary, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      suffixIcon: suffix,
+    );
 
     final onboardingStep = ref.watch(onboardingProvider);
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: widget.embedded ? null : AppBar(
-        leading: _buildBackButton(onboardingStep),
-        title: Text(
-          context.l10n.ocrSettings,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        scrolledUnderElevation: 0,
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              leading: _buildBackButton(onboardingStep),
+              title: Text(
+                context.l10n.ocrSettings,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              centerTitle: false,
+              backgroundColor: cs.surface,
+              scrolledUnderElevation: 0,
+            ),
       body: Listener(
         onPointerDown: (_) {
           FocusManager.instance.primaryFocus?.unfocus();
           ScaffoldMessenger.of(context).clearSnackBars();
         },
         child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-              .copyWith(bottom: 40),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 8,
+          ).copyWith(bottom: 40),
           children: [
             // ── OCR 接口设置 ──
             // ── OCR 接口 ──
             Padding(
-              padding: const EdgeInsets.only(left: 16, right: 4, top: 24, bottom: 12),
+              padding: const EdgeInsets.only(
+                left: 16,
+                right: 4,
+                top: 24,
+                bottom: 12,
+              ),
               child: Row(
                 children: [
                   Text(
@@ -422,7 +424,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             _buildApiKeyField(theme, cs, fieldDeco),
 
             // ── 输出控制 ──
-            _buildGroup(
+            SettingGroup(
               title: context.l10n.outputControl,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,16 +433,21 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                   ..._switchGroup(docState, _layoutDefs(context.l10n)),
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(context.l10n.layoutGeometry,
-                                style: theme.textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w600)),
+                            Text(
+                              context.l10n.layoutGeometry,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             const SizedBox(width: 4),
                             _helpIcon(context.l10n.layoutGeometryHelp),
                           ],
@@ -448,9 +455,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                         const SizedBox(height: 12),
                         SettingPicker<String>(
                           current: docState.layoutShapeMode,
-                          options: _layoutShapeModes(context.l10n).map((m) => m.$1).toList(),
-                          labelFor: (id) =>
-                              _layoutShapeModes(context.l10n).firstWhere((m) => m.$1 == id).$2,
+                          options: _layoutShapeModes(
+                            context.l10n,
+                          ).map((m) => m.$1).toList(),
+                          labelFor: (id) => _layoutShapeModes(
+                            context.l10n,
+                          ).firstWhere((m) => m.$1 == id).$2,
                           sheetTitle: context.l10n.layoutGeometry,
                           onChanged: (v) {
                             Haptics.soft();
@@ -469,7 +479,10 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     title: context.l10n.repetitionPenalty,
                     subtitle: context.l10n.repetitionPenaltyHint,
                     value: docState.repetitionPenalty,
-                    min: 1.0, max: 1.2, divisions: 20, defaultValue: 1.0,
+                    min: 1.0,
+                    max: 1.2,
+                    divisions: 20,
+                    defaultValue: 1.0,
                     formatter: (v) => v.toStringAsFixed(2),
                     onChanged: (v) => ref
                         .read(docExtractApiProvider.notifier)
@@ -482,7 +495,10 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                     title: context.l10n.recognitionStability,
                     subtitle: context.l10n.recognitionStabilityHint,
                     value: docState.temperature,
-                    min: 0.0, max: 1.0, divisions: 20, defaultValue: 0.0,
+                    min: 0.0,
+                    max: 1.0,
+                    divisions: 20,
+                    defaultValue: 0.0,
                     formatter: (v) => v.toStringAsFixed(2),
                     onChanged: (v) => ref
                         .read(docExtractApiProvider.notifier)
@@ -497,7 +513,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             ),
 
             // ── 识别增强 ──
-            _buildGroup(
+            SettingGroup(
               title: context.l10n.recognitionEnhancement,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,14 +528,15 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(context.l10n.markdownIgnoreLabels,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: cs.onSurface,
-                                )),
+                            Text(
+                              context.l10n.markdownIgnoreLabels,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: cs.onSurface,
+                              ),
+                            ),
                             const SizedBox(width: 4),
-                            _helpIcon(
-                                context.l10n.ocrFilterHelp),
+                            _helpIcon(context.l10n.ocrFilterHelp),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -533,7 +550,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             ),
 
             // ── 文档校正 ──
-            _buildGroup(
+            SettingGroup(
               title: context.l10n.documentCorrection,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -611,8 +628,11 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           ref.read(onboardingProvider.notifier).advance();
         }
       },
-      icon: Icon(Symbols.arrow_outward_rounded,
-          size: 16, color: cs.onSurfaceVariant),
+      icon: Icon(
+        Symbols.arrow_outward_rounded,
+        size: 16,
+        color: cs.onSurfaceVariant,
+      ),
       tooltip: context.l10n.getToken,
       visualDensity: VisualDensity.compact,
     );
@@ -623,7 +643,12 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
   Widget _buildApiKeyField(
     ThemeData theme,
     ColorScheme cs,
-    InputDecoration Function({required String hint, String? label, Widget? suffix}) fieldDeco,
+    InputDecoration Function({
+      required String hint,
+      String? label,
+      Widget? suffix,
+    })
+    fieldDeco,
   ) {
     final step = ref.watch(onboardingProvider);
 

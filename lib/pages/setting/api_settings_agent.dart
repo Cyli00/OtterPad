@@ -6,6 +6,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/animation_constants.dart';
+import '../../core/elevation.dart';
+import '../../widgets/app_divider.dart';
 import '../../core/l10n.dart';
 import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
@@ -87,8 +89,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _apiNotifier = ref.read(agentApiProvider.notifier);
     final instances = ref.read(agentApiProvider).instances;
     final lastId = GStorage.setting.get(_lastInstanceKey) as String?;
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _maybeStartOnboardingGuide());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _maybeStartOnboardingGuide(),
+    );
     final inst =
         instances.where((i) => i.id == lastId).firstOrNull ??
         (instances.isNotEmpty ? instances.first : null);
@@ -362,6 +365,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -518,6 +522,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -641,17 +646,17 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       providerLabel: inst.name,
       addedModels: inst.models,
       currentDefaultModel: () {
-            final r = ref.read(agentApiProvider).defaultRole;
-            return r.id == id ? r.modelId : null;
-          }(),
+        final r = ref.read(agentApiProvider).defaultRole;
+        return r.id == id ? r.modelId : null;
+      }(),
       currentFastModel: () {
-            final r = ref.read(agentApiProvider).fastRole;
-            return r.id == id ? r.modelId : null;
-          }(),
+        final r = ref.read(agentApiProvider).fastRole;
+        return r.id == id ? r.modelId : null;
+      }(),
       currentImageModel: () {
-            final r = ref.read(agentApiProvider).imageRole;
-            return r.id == id ? r.modelId : null;
-          }(),
+        final r = ref.read(agentApiProvider).imageRole;
+        return r.id == id ? r.modelId : null;
+      }(),
       onAdd:
           (
             modelId, {
@@ -681,11 +686,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       modelId: modelId,
       protocol: inst.protocol,
       initial: inst.capabilityFor(modelId),
-      inferred: ModelCapabilityStore.instance.lookup(modelId) ??
-          AgentModelCapability.infer(
-            provider: inst.protocol,
-            modelId: modelId,
-          ),
+      inferred:
+          ModelCapabilityStore.instance.lookup(modelId) ??
+          AgentModelCapability.infer(provider: inst.protocol, modelId: modelId),
       onSave: (cap) => ref
           .read(agentApiProvider.notifier)
           .setModelCapability(inst.id, modelId, cap),
@@ -737,8 +740,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             children: [
               _sectionLabel(theme, cs, context.l10n.apiKey),
               const Spacer(),
-              if (AgentApiNotifier.presetApiKeyUrl(current.id)
-                  case final url?)
+              if (AgentApiNotifier.presetApiKeyUrl(current.id) case final url?)
                 IconButton(
                   onPressed: () {
                     Haptics.soft();
@@ -871,8 +873,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 final testState = ref.watch(modelTestProvider);
                 return Column(
                   children: current.models.map((modelId) {
-                    final hasTested =
-                        testState.results.containsKey(modelId);
+                    final hasTested = testState.results.containsKey(modelId);
                     final errorMsg = testState.results[modelId];
                     return AgentModelListTile(
                       key: ValueKey('${current.id}/$modelId'),
@@ -890,10 +891,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                             .clearResult(modelId);
                       },
                       onTest: () => _testModel(current, modelId),
-                      onShowError: () =>
-                          _showTestError(modelId, errorMsg!),
-                      onEdit: () =>
-                          _openCapabilitySheet(current, modelId),
+                      onShowError: () => _showTestError(modelId, errorMsg!),
+                      onEdit: () => _openCapabilitySheet(current, modelId),
                     );
                   }).toList(),
                 );
@@ -974,13 +973,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     final fastRole = apiState.fastRole;
     final imageRole = apiState.imageRole;
 
-    final divider = Divider(
-      height: 1,
-      thickness: 1,
-      indent: 14,
-      endIndent: 14,
-      color: cs.outlineVariant.withAlpha(40),
-    );
+    const divider = AppDivider();
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -1155,7 +1148,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       final models = inst.models.where((modelId) {
         final cap = inst.capabilityFor(modelId);
         if (imageOnly) return cap.canGenerateImage;
-        if (multimodalOnly) return cap.imageInput && !cap.embedding && !cap.imageOutput;
+        if (multimodalOnly)
+          return cap.imageInput && !cap.embedding && !cap.imageOutput;
         return !cap.embedding && !cap.imageOutput;
       }).toList();
       if (models.isNotEmpty) {
@@ -1199,8 +1193,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                           imageOnly
                               ? ctx.l10n.pleaseAddImageModel
                               : multimodalOnly
-                                  ? ctx.l10n.pleaseAddMultimodalModel
-                                  : ctx.l10n.pleaseAddModels,
+                              ? ctx.l10n.pleaseAddMultimodalModel
+                              : ctx.l10n.pleaseAddModels,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: cs.onSurfaceVariant.withAlpha(160),
                           ),

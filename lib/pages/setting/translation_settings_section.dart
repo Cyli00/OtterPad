@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/elevation.dart';
 import '../../core/l10n.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../services/haptics.dart';
@@ -13,7 +14,7 @@ import '../../services/translation_skip_sections.dart';
 import '../../services/translation_style.dart';
 import '../../widgets/tactile_press.dart';
 
-/// 翻译设置区块——嵌入 api_settings_page 的 _buildGroup 内。
+/// 翻译设置区块——嵌入 api_settings_page 的 SettingGroup 内。
 class TranslationSettingsSection extends ConsumerStatefulWidget {
   const TranslationSettingsSection({super.key});
 
@@ -99,8 +100,11 @@ class _TranslationSettingsSectionState
     );
   }
 
-  InputDecoration _fieldDeco(ThemeData theme, ColorScheme cs,
-      {required String hint}) {
+  InputDecoration _fieldDeco(
+    ThemeData theme,
+    ColorScheme cs, {
+    required String hint,
+  }) {
     return InputDecoration(
       hintText: hint,
       hintStyle: theme.textTheme.bodyMedium?.copyWith(
@@ -166,8 +170,7 @@ class _TranslationSettingsSectionState
             ),
             const SizedBox(width: 12),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: isSet
                     ? cs.primaryContainer
@@ -193,10 +196,12 @@ class _TranslationSettingsSectionState
             Expanded(
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
-                  thumbShape:
-                      const RoundSliderThumbShape(enabledThumbRadius: 8),
-                  overlayShape:
-                      const RoundSliderOverlayShape(overlayRadius: 16),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 8,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 16,
+                  ),
                   trackHeight: 3,
                 ),
                 child: Slider(
@@ -238,21 +243,30 @@ class _TranslationSettingsSectionState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── 目标语言 ──
-          _buildTitleRow(context.l10n.targetLanguage, context.l10n.translationTargetLangDesc),
+          _buildTitleRow(
+            context.l10n.targetLanguage,
+            context.l10n.translationTargetLangDesc,
+          ),
           const SizedBox(height: 12),
           _buildLanguagePicker(theme, cs, cfg.targetLanguage),
 
           const SizedBox(height: 24),
 
           // ── 译文样式 ──
-          _buildTitleRow(context.l10n.translationStyleSetting, context.l10n.translationStyleDesc),
+          _buildTitleRow(
+            context.l10n.translationStyleSetting,
+            context.l10n.translationStyleDesc,
+          ),
           const SizedBox(height: 12),
           _buildStylePicker(theme, cs, cfg.displayStyleId),
 
           const SizedBox(height: 24),
 
           // ── 翻译忽略内容 ──
-          _buildTitleRow(context.l10n.translationIgnore, context.l10n.translationIgnoreDesc),
+          _buildTitleRow(
+            context.l10n.translationIgnore,
+            context.l10n.translationIgnoreDesc,
+          ),
           const SizedBox(height: 12),
           _buildIgnoreSectionChips(cs, cfg.ignoreSections),
 
@@ -285,18 +299,22 @@ class _TranslationSettingsSectionState
           // ── 系统提示词 ──
           Row(
             children: [
-              Expanded(child: _buildTitleRow(
-                context.l10n.systemPrompt,
-                context.l10n.systemPromptDesc,
-              )),
+              Expanded(
+                child: _buildTitleRow(
+                  context.l10n.systemPrompt,
+                  context.l10n.systemPromptDesc,
+                ),
+              ),
               if (!cfg.isSystemPromptDefault)
-                _resetButton(onPressed: () {
-                  Haptics.soft();
-                  ref
-                      .read(translationConfigProvider.notifier)
-                      .resetSystemPrompt();
-                  _systemPromptCtrl.text = kDefaultTranslationSystemPrompt;
-                }),
+                _resetButton(
+                  onPressed: () {
+                    Haptics.soft();
+                    ref
+                        .read(translationConfigProvider.notifier)
+                        .resetSystemPrompt();
+                    _systemPromptCtrl.text = kDefaultTranslationSystemPrompt;
+                  },
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -305,8 +323,11 @@ class _TranslationSettingsSectionState
             minLines: 3,
             maxLines: 8,
             style: theme.textTheme.bodyMedium,
-            decoration: _fieldDeco(theme, cs,
-                hint: context.l10n.systemPromptHint),
+            decoration: _fieldDeco(
+              theme,
+              cs,
+              hint: context.l10n.systemPromptHint,
+            ),
             onChanged: (v) => _debounceSaveSystem(v.trim()),
           ),
 
@@ -315,19 +336,23 @@ class _TranslationSettingsSectionState
           // ── 用户提示词 ──
           Row(
             children: [
-              Expanded(child: _buildTitleRow(
-                context.l10n.userPrompt,
-                context.l10n.userPromptDesc,
-              )),
+              Expanded(
+                child: _buildTitleRow(
+                  context.l10n.userPrompt,
+                  context.l10n.userPromptDesc,
+                ),
+              ),
               if (!cfg.isUserPromptDefault)
-                _resetButton(onPressed: () {
-                  Haptics.soft();
-                  ref
-                      .read(translationConfigProvider.notifier)
-                      .resetUserPrompt();
-                  _userPromptCtrl.text = kDefaultTranslationUserPrompt;
-                  setState(() => _userPromptError = null);
-                }),
+                _resetButton(
+                  onPressed: () {
+                    Haptics.soft();
+                    ref
+                        .read(translationConfigProvider.notifier)
+                        .resetUserPrompt();
+                    _userPromptCtrl.text = kDefaultTranslationUserPrompt;
+                    setState(() => _userPromptError = null);
+                  },
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -336,9 +361,11 @@ class _TranslationSettingsSectionState
             minLines: 2,
             maxLines: 6,
             style: theme.textTheme.bodyMedium,
-            decoration: _fieldDeco(theme, cs,
-                    hint: 'Translate to {{targetLanguage}}:\n\n{{input}}')
-                .copyWith(errorText: _userPromptError),
+            decoration: _fieldDeco(
+              theme,
+              cs,
+              hint: 'Translate to {{targetLanguage}}:\n\n{{input}}',
+            ).copyWith(errorText: _userPromptError),
             onChanged: (v) => _debounceSaveUser(v.trim()),
           ),
         ],
@@ -449,7 +476,12 @@ class _TranslationSettingsSectionState
             .setDisplayStyleId(style.id);
       },
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: _buildStyledLabel(style.id, _translationStyleLabel(context.l10n, style.id), cs, theme),
+      child: _buildStyledLabel(
+        style.id,
+        _translationStyleLabel(context.l10n, style.id),
+        cs,
+        theme,
+      ),
     );
   }
 
@@ -463,49 +495,55 @@ class _TranslationSettingsSectionState
 
     return switch (styleId) {
       'themed' => Text(label, style: base.copyWith(color: cs.primary)),
-      'bold' => Text(label,
-          style: base.copyWith(fontWeight: FontWeight.bold)),
-      'italic' => Text(label,
-          style: base.copyWith(fontStyle: FontStyle.italic)),
-      'weakened' => Text(label,
-          style: base.copyWith(color: cs.onSurface.withAlpha(120))),
-      'dashed' => Text(label,
-          style: base.copyWith(
-            color: cs.primary,
-            decoration: TextDecoration.underline,
-            decorationStyle: TextDecorationStyle.dashed,
-            decorationColor: cs.primary.withAlpha(140),
-          )),
-      'highlight' => Text(label,
-          style: base.copyWith(backgroundColor: cs.primaryContainer)),
+      'bold' => Text(label, style: base.copyWith(fontWeight: FontWeight.bold)),
+      'italic' => Text(
+        label,
+        style: base.copyWith(fontStyle: FontStyle.italic),
+      ),
+      'weakened' => Text(
+        label,
+        style: base.copyWith(color: cs.onSurface.withAlpha(120)),
+      ),
+      'dashed' => Text(
+        label,
+        style: base.copyWith(
+          color: cs.primary,
+          decoration: TextDecoration.underline,
+          decorationStyle: TextDecorationStyle.dashed,
+          decorationColor: cs.primary.withAlpha(140),
+        ),
+      ),
+      'highlight' => Text(
+        label,
+        style: base.copyWith(backgroundColor: cs.primaryContainer),
+      ),
       'blur' => ClipRect(
-          child: ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-            child: Text(label, style: base),
-          ),
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+          child: Text(label, style: base),
         ),
+      ),
       'quote' => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 3,
-              height: 16,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(1.5),
-              ),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 3,
+            height: 16,
+            decoration: BoxDecoration(
+              color: cs.outlineVariant,
+              borderRadius: BorderRadius.circular(1.5),
             ),
-            const SizedBox(width: 6),
-            Text(label, style: base.copyWith(color: cs.onSurfaceVariant)),
-          ],
-        ),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: base.copyWith(color: cs.onSurfaceVariant)),
+        ],
+      ),
       _ => Text(label, style: base),
     };
   }
 
   /// 点击后弹出底部语言选择面板（视觉参照 toolbar_bottom_sheet）
-  Widget _buildLanguagePicker(
-      ThemeData theme, ColorScheme cs, String current) {
+  Widget _buildLanguagePicker(ThemeData theme, ColorScheme cs, String current) {
     return TactilePress(
       borderRadius: BorderRadius.circular(16),
       onTap: () => _showLanguageSheet(current),
@@ -527,8 +565,11 @@ class _TranslationSettingsSectionState
                 ),
               ),
             ),
-            Icon(Symbols.expand_more_rounded,
-                size: 20, color: cs.onSurfaceVariant),
+            Icon(
+              Symbols.expand_more_rounded,
+              size: 20,
+              color: cs.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -550,8 +591,10 @@ class _TranslationSettingsSectionState
             constraints: BoxConstraints(maxHeight: maxH),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            boxShadow: AppShadows.sheet,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -567,8 +610,10 @@ class _TranslationSettingsSectionState
                 ),
                 const SizedBox(height: 8),
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 8,
+                  ),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
@@ -584,14 +629,17 @@ class _TranslationSettingsSectionState
                   child: ListView(
                     shrinkWrap: true,
                     padding: EdgeInsets.only(
-                        bottom: MediaQuery.of(ctx).padding.bottom + 16),
+                      bottom: MediaQuery.of(ctx).padding.bottom + 16,
+                    ),
                     children: kTargetLanguages.map((lang) {
                       final isSelected = lang == current;
                       return TactilePress(
                         baseColor: Colors.transparent,
                         onTap: () => Navigator.pop(ctx, lang),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
@@ -601,15 +649,16 @@ class _TranslationSettingsSectionState
                                   fontWeight: isSelected
                                       ? FontWeight.w700
                                       : FontWeight.w500,
-                                  color: isSelected
-                                      ? cs.primary
-                                      : cs.onSurface,
+                                  color: isSelected ? cs.primary : cs.onSurface,
                                 ),
                               ),
                             ),
                             if (isSelected)
-                              Icon(Symbols.check_rounded,
-                                  color: cs.primary, size: 22),
+                              Icon(
+                                Symbols.check_rounded,
+                                color: cs.primary,
+                                size: 22,
+                              ),
                           ],
                         ),
                       );

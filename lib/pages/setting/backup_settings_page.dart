@@ -16,6 +16,7 @@ import '../../services/backup_merge_service.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/backup_s3_service.dart';
 import '../../services/haptics.dart';
+import '../../widgets/app_divider.dart';
 import '../../widgets/backup_scope_dialog.dart';
 import '../../widgets/tactile_press.dart';
 import '../../services/snackbar_service.dart';
@@ -24,6 +25,7 @@ import '../../utils/debounced_action.dart';
 import '../../core/l10n.dart';
 import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'setting_group.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
   const BackupSettingsPage({
@@ -114,8 +116,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 vertical: 8,
               ).copyWith(bottom: 40),
               children: [
-                _buildGroup(
-                  context,
+                SettingGroup(
                   title: context.l10n.remoteBackup,
                   child: Column(
                     children: [
@@ -211,8 +212,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   ),
                 ),
                 _buildZoteroGroup(context, zotero),
-                _buildGroup(
-                  context,
+                SettingGroup(
                   title: context.l10n.localBackup,
                   child: Column(
                     children: [
@@ -234,8 +234,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     ],
                   ),
                 ),
-                _buildGroup(
-                  context,
+                SettingGroup(
                   title: context.l10n.storage,
                   child: Column(
                     children: [
@@ -303,57 +302,14 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     );
   }
 
-  Widget _buildGroup(
-    BuildContext context, {
-    required String title,
-    required Widget child,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDivider(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Divider(
-      height: 1,
-      thickness: 1,
-      indent: 80,
-      endIndent: 20,
-      color: cs.outlineVariant.withAlpha(70),
-    );
-  }
+  Widget _buildDivider(BuildContext context) => const AppDivider.tile();
 
   Widget _buildZoteroGroup(BuildContext context, ZoteroSyncState zotero) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final importedCount = ZoteroSyncStore.importedCount;
 
-    return _buildGroup(
-      context,
+    return SettingGroup(
       title: context.l10n.zoteroSync,
       child: Column(
         children: [
@@ -1061,7 +1017,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       mode.description,
                       style: ts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
-                    const Divider(height: 24),
+                    const AppDivider.full(height: 24),
                     Text(context.l10n.restoreScope, style: ts.titleSmall),
                     RadioGroup<BackupRestoreScope>(
                       groupValue: scope,
