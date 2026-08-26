@@ -104,6 +104,7 @@
 - **escapeJsLiteral** (`lib/utils/js_string_escape.dart`) — 向 WebView 注入 JS 时字符串转义唯一函数。禁止手拼 JS 字符串字面量。
 - **FigureViewer** (`lib/pages/reader/widgets/figure_viewer.dart`) — 复制图片用 `Pasteboard.writeImage()`，禁止 `Clipboard.setData`。
 - 底部面板禁止直接 `settings.backgroundColor`，用 `resolveReaderPalette()`。
+- **ReaderDockedPane** (`lib/pages/reader/widgets/reader_docked_pane.dart`) — 宽屏（≥640）目录/笔记互斥停靠。宽度走 `Responsive.readerSidebarWidth`（先 `useReaderDock` 再算宽）。关舱 clip + OverflowBox，IndexedStack 按 sidebarW layout。禁止 endDrawer；禁止把 child 压成 0 宽。问 AI 仍 `push(readerChat)`。
 
 ### 国际化
 

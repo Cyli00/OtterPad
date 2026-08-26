@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 
 /// 响应式布局断点
@@ -52,4 +54,13 @@ class Responsive {
 
   static bool useReaderDock(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= kReaderDockMinWidth;
+
+  /// 阅读器停靠栏宽度。调用方须先满足 [kReaderDockMinWidth]（640）。
+  static double readerSidebarWidth(double windowWidth) {
+    const lo = kReaderSidebarMin;
+    const maxW = kReaderSidebarMax;
+    const bodyMin = kReaderBodyMin;
+    final hi = math.max(lo, math.min(maxW, windowWidth - bodyMin));
+    return (windowWidth - bodyMin).clamp(lo, hi).toDouble();
+  }
 }

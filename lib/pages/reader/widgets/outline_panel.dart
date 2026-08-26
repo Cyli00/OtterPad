@@ -152,11 +152,6 @@ class OutlinePanel extends StatefulWidget {
   /// AI 排版修复完成后递增，触发 manifest 重读 + ImageCache evict。
   final ValueListenable<int>? figuresEpoch;
 
-  /// true: 嵌入 bottom sheet（外壳由 caller 提供圆角+drag handle，本组件不再加
-  /// Scaffold/SafeArea-top，避免双层背景盖住 sheet 顶部圆角）。
-  /// false: 作为 Drawer 内容渲染，自带 Scaffold + SafeArea(top: true)。
-  final bool inSheet;
-
   const OutlinePanel({
     super.key,
     required this.markdownContent,
@@ -167,7 +162,6 @@ class OutlinePanel extends StatefulWidget {
     this.figuresEpoch,
     required this.onNavigate,
     this.onUploadSummaryImage,
-    this.inSheet = false,
   });
 
   @override
@@ -297,21 +291,8 @@ class _OutlinePanelState extends State<OutlinePanel>
       ],
     );
 
-    // Sheet 模式：外层由 caller 提供圆角 + drag handle + 背景，本组件只负责内容。
-    // SafeArea(top: false) 因为 sheet 不接触 status bar；bottom: false 留给内层 ListView
-    // 的 viewPadding 处理（_FiguresTab/_ReferencesTab 的 ListView padding 都已含
-    // MediaQuery.padding.bottom）。
-    if (widget.inSheet) {
-      return content;
-    }
-
-    return Scaffold(
-      backgroundColor: cs.surface,
-      // SafeArea 必须显式加：Drawer 内嵌 Scaffold 时 Drawer 自带的 inset 不会
-      // 透传到嵌套 Scaffold 的 body，TabBar 会侵占 Android 透明状态栏。
-      // bottom: false——drawer 自己处理底部 inset + 内层 ListView 自带 viewPadding。
-      body: SafeArea(top: true, bottom: false, child: content),
-    );
+    // sheet / dock 外壳负责圆角与背景；本组件只出内容。
+    return content;
   }
 }
 

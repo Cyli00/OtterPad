@@ -35,7 +35,7 @@ class ReaderSummaryImageCoordinator {
   final BuildContext context;
   final WidgetRef ref;
   final Document document;
-  final GlobalKey<ScaffoldState> scaffoldKey;
+  final GlobalKey<ScaffoldState>? scaffoldKey;
   final ValueNotifier<SummaryImageState> summaryImageState;
   final ReaderSessionNotifier sessionNotifier;
   final VoidCallback openOutlineSheet;
@@ -44,7 +44,7 @@ class ReaderSummaryImageCoordinator {
     required this.context,
     required this.ref,
     required this.document,
-    required this.scaffoldKey,
+    this.scaffoldKey,
     required this.summaryImageState,
     required this.sessionNotifier,
     required this.openOutlineSheet,

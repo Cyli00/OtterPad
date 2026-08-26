@@ -18,5 +18,15 @@ void main() {
       expect(state.expandToParagraphContext('关键发现'), '第一段包含关键发现和更多背景。');
       expect(state.expandToParagraphContext('第二段继续说明机制。'), isNull);
     });
+
+    test('copyWith 保留 dockOpen', () {
+      const state = ReaderSessionState();
+      expect(state.dockOpen, isFalse);
+      expect(state.copyWith(dockOpen: true).dockOpen, isTrue);
+      expect(
+        state.copyWith(dockOpen: true).copyWith(sheetOpen: true).dockOpen,
+        isTrue,
+      );
+    });
   });
 }

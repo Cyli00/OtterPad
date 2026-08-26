@@ -6,6 +6,7 @@ import '../../../services/haptics.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../utils/markdown_translation_weaver.dart';
+import 'reader_docked_pane.dart';
 
 enum ReaderSheetType { outline, notes, theme }
 
@@ -13,6 +14,7 @@ class ReaderBottomBar extends StatelessWidget {
   final ReaderSettingsState readerSettings;
   final DocumentTranslationState translation;
   final ReaderSheetType? activeSheet;
+  final ReaderDockPane? activeDock;
   final VoidCallback onOpenOutline;
   final VoidCallback onTranslate;
   final VoidCallback onCycleTranslationMode;
@@ -25,6 +27,7 @@ class ReaderBottomBar extends StatelessWidget {
     required this.readerSettings,
     required this.translation,
     this.activeSheet,
+    this.activeDock,
     required this.onOpenOutline,
     required this.onTranslate,
     required this.onCycleTranslationMode,
@@ -55,7 +58,9 @@ class ReaderBottomBar extends StatelessWidget {
               cs,
               icon: Symbols.menu_rounded,
               tooltip: l10n.outline,
-              active: activeSheet == ReaderSheetType.outline,
+              active:
+                  activeDock == ReaderDockPane.outline ||
+                  activeSheet == ReaderSheetType.outline,
               onTap: onOpenOutline,
             ),
             _buildTranslationBottomButton(context, cs),
@@ -63,13 +68,16 @@ class ReaderBottomBar extends StatelessWidget {
               cs,
               icon: Symbols.auto_awesome_rounded,
               tooltip: l10n.askAi,
+              active: activeDock == ReaderDockPane.askAi,
               onTap: onAskAi,
             ),
             _bottomButton(
               cs,
               icon: Symbols.stylus_note_rounded,
               tooltip: l10n.notes,
-              active: activeSheet == ReaderSheetType.notes,
+              active:
+                  activeDock == ReaderDockPane.notes ||
+                  activeSheet == ReaderSheetType.notes,
               onTap: onOpenNotes,
             ),
             _bottomButton(

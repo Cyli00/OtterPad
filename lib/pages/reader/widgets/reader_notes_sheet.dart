@@ -35,8 +35,9 @@ class ReaderNotesSheetBody extends StatelessWidget {
       expand: false,
       builder: (context, scrollController) => ColoredBox(
         color: Theme.of(context).colorScheme.surface,
-        child: _NotesSheetBody(
+        child: ReaderNotesPanel(
           documentId: documentId,
+          showGrabber: true,
           scrollController: scrollController,
           onEditStart: onEditStart,
           onEditEnd: onEditEnd,
@@ -46,31 +47,34 @@ class ReaderNotesSheetBody extends StatelessWidget {
   }
 }
 
-/// 笔记 sheet 内容容器。
+/// 笔记面板内容。sheet 传 [showGrabber] true；停靠栏传 false。
 ///
 /// 改造为 StatefulWidget 是为**键盘弹出期间的性能**：原 ConsumerWidget 在
 /// viewInsets 每帧变化时整树 build，ListView 和所有 _HighlightTile 全部重建。
 /// 现在把 list 子树构造一次缓存为字段，build 方法复用同一个 widget reference
 /// → Flutter 比较时跳过 child.build，list 在 IME 动画期间不再级联重建。
 /// header（标题计数）仍随 sheet rebuild 而更新——计数变化时父级 watch 触发。
-class _NotesSheetBody extends StatefulWidget {
+class ReaderNotesPanel extends StatefulWidget {
   final String documentId;
-  final ScrollController scrollController;
+  final bool showGrabber;
+  final ScrollController? scrollController;
   final Future<void> Function()? onEditStart;
   final VoidCallback? onEditEnd;
 
-  const _NotesSheetBody({
+  const ReaderNotesPanel({
+    super.key,
     required this.documentId,
-    required this.scrollController,
+    required this.showGrabber,
+    this.scrollController,
     this.onEditStart,
     this.onEditEnd,
   });
 
   @override
-  State<_NotesSheetBody> createState() => _NotesSheetBodyState();
+  State<ReaderNotesPanel> createState() => _ReaderNotesPanelState();
 }
 
-class _NotesSheetBodyState extends State<_NotesSheetBody> {
+class _ReaderNotesPanelState extends State<ReaderNotesPanel> {
   late final Widget _listSubtree;
 
   @override
@@ -90,7 +94,10 @@ class _NotesSheetBodyState extends State<_NotesSheetBody> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const _Grabber(),
+        if (widget.showGrabber)
+          const _Grabber()
+        else
+          const SizedBox(height: 16),
         _Header(documentId: widget.documentId),
         const SizedBox(height: 12),
         Expanded(child: _listSubtree),
@@ -162,18 +169,18 @@ class _Header extends ConsumerWidget {
 
 /// 笔记列表本身——自治 Consumer，只在 highlights 变化时重建。
 ///
-/// 由 [_NotesSheetBodyState] 在 initState 一次性构造，引用稳定。
+/// 由 [_ReaderNotesPanelState] 在 initState 一次性构造，引用稳定。
 /// 父级 sheet 在 IME viewport 变化时 build，Flutter 比较 widget 引用相同
 /// → 跳过此处 build → list 不被键盘动画拖累。
 class _NotesList extends ConsumerStatefulWidget {
   final String documentId;
-  final ScrollController scrollController;
+  final ScrollController? scrollController;
   final Future<void> Function()? onEditStart;
   final VoidCallback? onEditEnd;
 
   const _NotesList({
     required this.documentId,
-    required this.scrollController,
+    this.scrollController,
     this.onEditStart,
     this.onEditEnd,
   });
@@ -213,8 +220,7 @@ class _NotesListState extends ConsumerState<_NotesList> {
   @override
   Widget build(BuildContext context) {
     final highlights =
-        ref.watch(highlightProvider(widget.documentId)).value ??
-        const [];
+        ref.watch(highlightProvider(widget.documentId)).value ?? const [];
     if (highlights.isEmpty) {
       final theme = Theme.of(context);
       final cs = theme.colorScheme;

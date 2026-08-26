@@ -52,6 +52,7 @@ class ReaderSessionState {
   final int currentResultIndex;
   final bool toolbarsVisible;
   final bool sheetOpen;
+  final bool dockOpen;
   final String? summaryImagePath;
 
   const ReaderSessionState({
@@ -69,6 +70,7 @@ class ReaderSessionState {
     this.currentResultIndex = 0,
     this.toolbarsVisible = true,
     this.sheetOpen = false,
+    this.dockOpen = false,
     this.summaryImagePath,
   });
 
@@ -92,6 +94,7 @@ class ReaderSessionState {
     int? currentResultIndex,
     bool? toolbarsVisible,
     bool? sheetOpen,
+    bool? dockOpen,
     Object? summaryImagePath = _sentinel,
   }) {
     return ReaderSessionState(
@@ -119,6 +122,7 @@ class ReaderSessionState {
       currentResultIndex: currentResultIndex ?? this.currentResultIndex,
       toolbarsVisible: toolbarsVisible ?? this.toolbarsVisible,
       sheetOpen: sheetOpen ?? this.sheetOpen,
+      dockOpen: dockOpen ?? this.dockOpen,
       summaryImagePath: identical(summaryImagePath, _sentinel)
           ? this.summaryImagePath
           : summaryImagePath as String?,
@@ -297,9 +301,7 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
       title: args.title,
     );
     if (mounted && state.markdownPath == mdPath) {
-      state = state.copyWith(
-        markdownCacheKey: resolved.cacheKey,
-      );
+      state = state.copyWith(markdownCacheKey: resolved.cacheKey);
     }
     return resolved.content;
   }
@@ -406,8 +408,16 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     state = state.copyWith(sheetOpen: value);
   }
 
+  void setDockOpen(bool value) {
+    if (state.dockOpen == value) return;
+    state = state.copyWith(dockOpen: value);
+  }
+
   bool get canReactToReaderScroll =>
-      !state.sheetOpen && !state.searchActive && state.highlightQuery == null;
+      !state.sheetOpen &&
+      !state.dockOpen &&
+      !state.searchActive &&
+      state.highlightQuery == null;
 
   void handleReaderScrollDirection(ScrollDirection direction) {
     switch (direction) {

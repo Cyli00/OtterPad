@@ -6,9 +6,9 @@ import '../chat/document_chat_page.dart';
 import '../../../providers/summary_image_provider.dart';
 import 'outline_panel.dart';
 
-/// 大纲面板 body，由 [ReaderSheetHost] 弹出（移动端）。
+/// 大纲面板 body，由 [ReaderSheetHost] 弹出（窄屏 / 无 dock）。
 ///
-/// 桌面端走 Scaffold endDrawer，不经过此 widget。
+/// 宽屏走停靠栏内的 [OutlinePanel]，不经过此 widget。
 class ReaderOutlineSheetBody extends StatelessWidget {
   final String markdownContent;
   final String documentId;
@@ -58,7 +58,6 @@ class ReaderOutlineSheetBody extends StatelessWidget {
               onLocateQuote: onLocateQuote,
               summaryImageState: summaryImageState,
               figuresEpoch: figuresEpoch,
-              inSheet: true,
               onNavigate: onNavigate,
               onUploadSummaryImage: onUploadSummaryImage,
             ),
