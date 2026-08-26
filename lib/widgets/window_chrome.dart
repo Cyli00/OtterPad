@@ -15,6 +15,8 @@ class WindowChrome extends StatefulWidget {
 class _WindowChromeState extends State<WindowChrome> with WindowListener {
   bool _pinned = false;
   bool _maximized = false;
+  // 跟随系统窗焦点：失焦时标题栏降饱和（macOS/Windows 原生窗行为）
+  bool _focused = true;
 
   @override
   void initState() {
@@ -30,6 +32,9 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
         }
       });
     });
+    windowManager.isFocused().then((f) {
+      if (mounted) setState(() => _focused = f);
+    });
   }
 
   @override
@@ -42,6 +47,10 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
   void onWindowMaximize() => setState(() => _maximized = true);
   @override
   void onWindowUnmaximize() => setState(() => _maximized = false);
+  @override
+  void onWindowFocus() => setState(() => _focused = true);
+  @override
+  void onWindowBlur() => setState(() => _focused = false);
 
   @override
   Widget build(BuildContext context) {
@@ -53,52 +62,57 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
           DragToMoveArea(
             child: ColoredBox(
               color: cs.surfaceContainerHighest,
-              child: Row(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Text(
-                      'OtterPad',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
+              child: AnimatedOpacity(
+                opacity: _focused ? 1.0 : 0.55,
+                duration: kAnimFast,
+                curve: kAnimCurve,
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: Text(
+                        'OtterPad',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  _Btn(
-                    icon: _pinned
-                        ? Symbols.keep_rounded
-                        : Symbols.keep_off_rounded,
-                    fill: _pinned ? 1.0 : 0.0,
-                    highlight: _pinned,
-                    onTap: () async {
-                      final next = !_pinned;
-                      await windowManager.setAlwaysOnTop(next);
-                      if (mounted) setState(() => _pinned = next);
-                    },
-                  ),
-                  _Btn(
-                    icon: Symbols.remove_rounded,
-                    onTap: windowManager.minimize,
-                  ),
-                  _Btn(
-                    icon: _maximized
-                        ? Symbols.fullscreen_exit_rounded
-                        : Symbols.crop_square_rounded,
-                    onTap: () async {
-                      if (await windowManager.isMaximized()) {
-                        await windowManager.unmaximize();
-                      } else {
-                        await windowManager.maximize();
-                      }
-                    },
-                  ),
-                  _Btn(
-                    icon: Symbols.close_rounded,
-                    onTap: windowManager.close,
-                    isClose: true,
-                  ),
-                ],
+                    const Spacer(),
+                    _Btn(
+                      icon: _pinned
+                          ? Symbols.keep_rounded
+                          : Symbols.keep_off_rounded,
+                      fill: _pinned ? 1.0 : 0.0,
+                      highlight: _pinned,
+                      onTap: () async {
+                        final next = !_pinned;
+                        await windowManager.setAlwaysOnTop(next);
+                        if (mounted) setState(() => _pinned = next);
+                      },
+                    ),
+                    _Btn(
+                      icon: Symbols.remove_rounded,
+                      onTap: windowManager.minimize,
+                    ),
+                    _Btn(
+                      icon: _maximized
+                          ? Symbols.fullscreen_exit_rounded
+                          : Symbols.crop_square_rounded,
+                      onTap: () async {
+                        if (await windowManager.isMaximized()) {
+                          await windowManager.unmaximize();
+                        } else {
+                          await windowManager.maximize();
+                        }
+                      },
+                    ),
+                    _Btn(
+                      icon: Symbols.close_rounded,
+                      onTap: windowManager.close,
+                      isClose: true,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

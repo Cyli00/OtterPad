@@ -20,6 +20,9 @@ class SettingsKeys {
   static const locale = 'app_locale';
   static const hasSeenOnboarding = 'hasSeenOnboarding';
 
+  /// 导航栏是否展开文字标签；缺省 null = 跟随宽度自动（≥1200 展开）
+  static const navRailExtended = 'nav_rail_extended';
+
   // ── 主题 ──
   static const themeMode = 'theme_mode';
   static const seedColor = 'seed_color';
@@ -38,10 +41,14 @@ class SettingsKeys {
   static const readerDefaultMode = 'reader_default_mode';
   static const readerPaginationMode = 'reader_pagination_mode';
 
+  /// 停靠栏（目录/笔记/问 AI）用户拖拽调宽后的宽度；缺省 null = 跟随窗口自适应
+  static const readerSidebarWidth = 'reader_sidebar_width';
+
   // ── chat ──
   static const chatStreamEnabled = 'chat_stream_enabled';
   static const chatNewSessionHintDismissed = 'chat_new_session_hint_dismissed';
-  static const mimoSearchPluginHintDismissed = 'mimo_search_plugin_hint_dismissed';
+  static const mimoSearchPluginHintDismissed =
+      'mimo_search_plugin_hint_dismissed';
 
   // ── 翻译 ──
   static const translationTargetLang = 'translation_config_target_language';
@@ -52,7 +59,8 @@ class SettingsKeys {
   // ── 图片生成 ──
   static const imageAspectRatio = 'image_generation_aspect_ratio';
   static const imageFidelity = 'image_generation_fidelity';
-  static const imageMaxReferenceImages = 'image_generation_max_reference_images';
+  static const imageMaxReferenceImages =
+      'image_generation_max_reference_images';
 
   // ── 自动备份 ──
   static const autoBackupInterval = 'auto_backup_interval';

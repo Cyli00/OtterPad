@@ -19,16 +19,6 @@ class AdaptiveDestination {
 
 /// 侧边导航栏组件 (平板/桌面)
 class AdaptiveNavigationRail extends StatelessWidget {
-  const AdaptiveNavigationRail({
-    super.key,
-    required this.selectedIndex,
-    required this.onDestinationSelected,
-    required this.destinations,
-    this.extended = false,
-    this.leading,
-    this.bottomDestinationCount = 1,
-  });
-
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final List<AdaptiveDestination> destinations;
@@ -37,6 +27,26 @@ class AdaptiveNavigationRail extends StatelessWidget {
 
   /// 固定在底部的导航项数量（从末尾算起）
   final int bottomDestinationCount;
+
+  /// 覆盖默认背景色（桌面端半透明侧栏时传半透明色）
+  final Color? backgroundColor;
+
+  /// 底部操作项（非导航目的地，无选中态，如标签显示模式切换）
+  final AdaptiveDestination? bottomAction;
+  final VoidCallback? onBottomAction;
+
+  const AdaptiveNavigationRail({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.destinations,
+    this.extended = false,
+    this.leading,
+    this.bottomDestinationCount = 1,
+    this.backgroundColor,
+    this.bottomAction,
+    this.onBottomAction,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +58,7 @@ class AdaptiveNavigationRail extends StatelessWidget {
     final bottomDestinations = destinations.sublist(splitIndex);
 
     return ColoredBox(
-      color: colorScheme.surfaceContainer,
+      color: backgroundColor ?? colorScheme.surfaceContainer,
       child: SafeArea(
         child: AnimatedContainer(
           duration: kAnim,
@@ -98,6 +108,18 @@ class AdaptiveNavigationRail extends StatelessWidget {
                       },
                     );
                   }),
+                  if (bottomAction != null)
+                    _NavigationRailItem(
+                      icon: bottomAction!.icon,
+                      label: bottomAction!.label,
+                      selected: false,
+                      extended: extended,
+                      colorScheme: colorScheme,
+                      onTap: () {
+                        Haptics.soft();
+                        onBottomAction?.call();
+                      },
+                    ),
                   const SizedBox(height: 16),
                 ],
               ),

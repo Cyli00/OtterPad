@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import 'desktop.dart';
+
 /// 响应式布局断点
 class Breakpoints {
   Breakpoints._();
@@ -52,6 +54,13 @@ class Responsive {
   static bool showExtendedRail(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= Breakpoints.tablet;
 
+  /// 桌面宽屏（≥1200）紧凑密度：卡片/列表行距 -4px，字号不动。
+  static const double kCompactDensityMinWidth = 1200;
+
+  static bool compactDensity(BuildContext context) =>
+      isDesktopOs &&
+      MediaQuery.sizeOf(context).width >= kCompactDensityMinWidth;
+
   static bool useReaderDock(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= kReaderDockMinWidth;
 
@@ -62,5 +71,12 @@ class Responsive {
     const bodyMin = kReaderBodyMin;
     final hi = math.max(lo, math.min(maxW, windowWidth - bodyMin));
     return (windowWidth - bodyMin).clamp(lo, hi).toDouble();
+  }
+
+  /// 停靠栏拖拽调宽的可选范围：下限 [kReaderSidebarMin]，上限保证正文
+  /// ≥ [kReaderBodyMin]（hi 用 math.max 兜底窄窗 clamp 的 lo>hi 异常）。
+  static double clampReaderSidebarWidth(double width, double windowWidth) {
+    final hi = math.max(kReaderSidebarMin, windowWidth - kReaderBodyMin);
+    return width.clamp(kReaderSidebarMin, hi);
   }
 }
