@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../services/haptics.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/app_divider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
@@ -11,6 +12,7 @@ import '../../providers/sync_status_provider.dart';
 import '../../router/app_routes.dart';
 import '../../utils/doc_paths.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/staggered_entrance.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
@@ -181,11 +183,7 @@ class ShelfPage extends ConsumerWidget {
                 ),
 
                 // 分割线
-                Divider(
-                  height: 32,
-                  thickness: 1,
-                  color: theme.colorScheme.outlineVariant.withAlpha(128),
-                ),
+                const AppDivider.full(height: 32),
                 const SizedBox(height: 8),
 
                 // 收藏夹标题与操作栏
@@ -264,8 +262,16 @@ class ShelfPage extends ConsumerWidget {
                     if (maxW >= 900) {
                       return Wrap(
                         spacing: 16,
-                        runSpacing: 16,
-                        children: [for (final fav in favorites) cardFor(fav)],
+                        runSpacing: Responsive.compactDensity(context)
+                            ? 12
+                            : 16,
+                        children: [
+                          for (var i = 0; i < favorites.length; i++)
+                            StaggeredEntrance(
+                              index: i,
+                              child: cardFor(favorites[i]),
+                            ),
+                        ],
                       );
                     }
                     return SizedBox(
@@ -274,8 +280,10 @@ class ShelfPage extends ConsumerWidget {
                         scrollDirection: Axis.horizontal,
                         clipBehavior: Clip.none,
                         itemCount: favorites.length,
-                        itemBuilder: (context, index) =>
-                            cardFor(favorites[index]),
+                        itemBuilder: (context, index) => StaggeredEntrance(
+                          index: index,
+                          child: cardFor(favorites[index]),
+                        ),
                       ),
                     );
                   },

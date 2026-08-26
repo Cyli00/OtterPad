@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/l10n.dart';
+import '../../widgets/app_divider.dart';
 import '../../data/models/book/document.dart';
 import '../../providers/auto_backup_provider.dart';
 import '../../providers/backup_orchestrator.dart';
@@ -352,13 +353,7 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
               children: [
                 for (var i = 0; i < docs.length; i++) ...[
                   if (i > 0)
-                    Divider(
-                      height: 1,
-                      thickness: 1,
-                      indent: 16,
-                      endIndent: 16,
-                      color: cs.outlineVariant.withAlpha(40),
-                    ),
+                    const AppDivider(),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,

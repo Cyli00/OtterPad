@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../utils/desktop.dart';
@@ -185,6 +186,7 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
         ),
         child: column,
       ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -7,6 +6,8 @@ import '../../../core/animation_constants.dart';
 import '../../../data/models/book/document.dart';
 import '../../../providers/history_provider.dart';
 import '../../../utils/desktop.dart';
+import '../../../widgets/hover_lift.dart';
+import '../../../widgets/spring_pop.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../../utils/doc_paths.dart';
 import 'doc_card_actions.dart';
@@ -79,13 +80,6 @@ class DocListCard extends ConsumerWidget {
               : Colors.transparent,
           width: isSelected ? 2 : 0,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(13),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: TactilePress(
@@ -138,25 +132,21 @@ class DocListCard extends ConsumerWidget {
                                 Container(
                                   color: colorScheme.primary.withAlpha(80),
                                   child: Center(
-                                    child:
-                                        Container(
-                                          width: 36,
-                                          height: 36,
-                                          decoration: BoxDecoration(
-                                            color: colorScheme.primary,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Icon(
-                                            Symbols.check_rounded,
-                                            color: colorScheme.onPrimary,
-                                            size: 22,
-                                          ),
-                                        ).animate().scaleXY(
-                                          begin: 0.6,
-                                          end: 1,
-                                          duration: kAnim,
-                                          curve: Curves.easeOutBack,
+                                    child: SpringPop(
+                                      child: Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          color: colorScheme.primary,
+                                          shape: BoxShape.circle,
                                         ),
+                                        child: Icon(
+                                          Symbols.check_rounded,
+                                          color: colorScheme.onPrimary,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                             ],
@@ -282,7 +272,7 @@ class DocListCard extends ConsumerWidget {
         child: card,
       );
     }
-    return card;
+    return HoverLift(enabled: isDesktopOs && !isSelectionMode, child: card);
   }
 
   Widget _wrapHover({

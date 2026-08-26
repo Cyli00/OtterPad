@@ -7,6 +7,7 @@ import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../utils/desktop.dart';
 import '../../../widgets/app_context_menu.dart';
+import '../../../widgets/hover_lift.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../library/widgets/pdf_cover.dart';
 
@@ -54,78 +55,74 @@ class FavoriteCard extends StatelessWidget {
         onSecondaryTapDown: hasMenu && isDesktopOs
             ? (d) => _showCardMenu(context, d.globalPosition)
             : null,
-        child: Container(
-          width: _cardWidth(),
-          height: 380,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(13),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: TactilePress(
-            baseColor: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            pressedScale: 0.98,
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: cs.onSurface,
+        child: HoverLift(
+          enabled: isDesktopOs,
+          child: Container(
+            width: _cardWidth(),
+            height: 380,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: TactilePress(
+              baseColor: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+              pressedScale: 0.98,
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (subtitleIcon != null) ...[
-                        subtitleIcon!,
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          subtitle,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurfaceVariant,
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (subtitleIcon != null) ...[
+                          subtitleIcon!,
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Text(
+                            subtitle,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(child: _buildCoverArea(context)),
-                  const SizedBox(height: 16),
-                  TactilePress(
-                    onTap: onTap,
-                    borderRadius: BorderRadius.circular(12),
-                    baseColor: cs.surfaceContainerHighest.withAlpha(128),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Center(
-                      child: Text(
-                        context.l10n.viewLibraryTotal(totalCount),
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: cs.primary,
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(child: _buildCoverArea(context)),
+                    const SizedBox(height: 16),
+                    TactilePress(
+                      onTap: onTap,
+                      borderRadius: BorderRadius.circular(12),
+                      baseColor: cs.surfaceContainerHighest.withAlpha(128),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: Text(
+                          context.l10n.viewLibraryTotal(totalCount),
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: cs.primary,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

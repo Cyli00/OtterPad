@@ -62,13 +62,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(40),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
+
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

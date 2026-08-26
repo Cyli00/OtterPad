@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../utils/desktop.dart';
+import '../../../widgets/hover_lift.dart';
+import '../../../widgets/spring_pop.dart';
 import '../../../widgets/tactile_press.dart';
 import 'doc_card_actions.dart';
 import 'hover_actions.dart';
@@ -87,13 +88,6 @@ class DocumentCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(13),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: TactilePress(
           baseColor: colorScheme.surfaceContainerLow,
@@ -151,25 +145,21 @@ class DocumentCard extends StatelessWidget {
                         Container(
                           color: colorScheme.primary.withAlpha(80),
                           child: Center(
-                            child:
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Symbols.check_rounded,
-                                    color: colorScheme.onPrimary,
-                                    size: 28,
-                                  ),
-                                ).animate().scaleXY(
-                                  begin: 0.6,
-                                  end: 1,
-                                  duration: kAnim,
-                                  curve: Curves.easeOutBack,
+                            child: SpringPop(
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary,
+                                  shape: BoxShape.circle,
                                 ),
+                                child: Icon(
+                                  Symbols.check_rounded,
+                                  color: colorScheme.onPrimary,
+                                  size: 28,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -239,7 +229,7 @@ class DocumentCard extends StatelessWidget {
         child: card,
       );
     }
-    return card;
+    return HoverLift(enabled: isDesktopOs && !isSelectionMode, child: card);
   }
 
   Widget _wrapCoverHover({

@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/document_task_provider.dart';
@@ -381,6 +382,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
         ),
         child: column,
       ),

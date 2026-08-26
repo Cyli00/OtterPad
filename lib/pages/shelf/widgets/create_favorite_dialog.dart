@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:motor/motor.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
@@ -15,11 +15,21 @@ const List<String> _emojis = [
   '\u{1F4D3}', '\u{1F4DD}', '\u{270F}\u{FE0F}', '\u{1F58A}\u{FE0F}',
   '\u{1F393}', '\u{1F3EB}',
   // 科学与工具
-  '\u{1F52C}', '\u{1F52D}', '\u{1F9EA}', '\u{1F4BB}', '\u{2699}\u{FE0F}', '\u{1F4CE}',
+  '\u{1F52C}',
+  '\u{1F52D}',
+  '\u{1F9EA}',
+  '\u{1F4BB}',
+  '\u{2699}\u{FE0F}',
+  '\u{1F4CE}',
   '\u{1F4C1}', '\u{1F4C2}', '\u{1F5C2}\u{FE0F}', '\u{1F4CB}',
   '\u{1F4CA}', '\u{1F4C8}',
   // 自然与灵感
-  '\u{2B50}', '\u{1F31F}', '\u{1F525}', '\u{1F4A1}', '\u{2764}\u{FE0F}', '\u{1F308}',
+  '\u{2B50}',
+  '\u{1F31F}',
+  '\u{1F525}',
+  '\u{1F4A1}',
+  '\u{2764}\u{FE0F}',
+  '\u{1F308}',
   '\u{1F33F}', '\u{1F33B}', '\u{1F340}', '\u{1F30D}',
   '\u{2600}\u{FE0F}', '\u{1F319}',
   // 标记与符号
@@ -85,10 +95,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
   void _onConfirm() {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
-    Navigator.of(context).pop({
-      'emoji': _selectedEmoji,
-      'name': name,
-    });
+    Navigator.of(context).pop({'emoji': _selectedEmoji, 'name': name});
   }
 
   @override
@@ -106,13 +113,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(40),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
+
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -123,7 +124,9 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
               child: Row(
                 children: [
                   Text(
-                    _isEditing ? context.l10n.editFavorite : context.l10n.createFavorite,
+                    _isEditing
+                        ? context.l10n.editFavorite
+                        : context.l10n.createFavorite,
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
@@ -140,8 +143,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                       color: colorScheme.onSurfaceVariant,
                     ),
                     style: IconButton.styleFrom(
-                      backgroundColor:
-                          colorScheme.surfaceContainerHighest,
+                      backgroundColor: colorScheme.surfaceContainerHighest,
                       shape: const CircleBorder(),
                     ),
                   ),
@@ -185,15 +187,14 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                   shrinkWrap: true,
                                   gridDelegate:
                                       const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 4,
-                                    mainAxisSpacing: 4,
-                                    crossAxisSpacing: 4,
-                                  ),
+                                        crossAxisCount: 4,
+                                        mainAxisSpacing: 4,
+                                        crossAxisSpacing: 4,
+                                      ),
                                   itemCount: _emojis.length,
                                   itemBuilder: (context, index) {
                                     final emoji = _emojis[index];
-                                    final isSelected =
-                                        emoji == _selectedEmoji;
+                                    final isSelected = emoji == _selectedEmoji;
                                     return AnimatedContainer(
                                       duration: kAnim,
                                       curve: kAnimCurve,
@@ -201,8 +202,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                         color: isSelected
                                             ? colorScheme.primaryContainer
                                             : Colors.transparent,
-                                        borderRadius:
-                                            BorderRadius.circular(10),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
                                       clipBehavior: Clip.antiAlias,
                                       child: TactilePress(
@@ -213,26 +213,28 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                           });
                                         },
                                         child: Center(
-                                          child: Text(
-                                            emoji,
-                                            style: const TextStyle(
-                                              fontSize: 20,
-                                              height: 1.0,
+                                          child: SingleMotionBuilder(
+                                            motion: const SpringMotion(
+                                              kSpringSelection,
                                             ),
-                                            strutStyle: const StrutStyle(
-                                              forceStrutHeight: true,
-                                              height: 1.0,
-                                            ),
-                                          )
-                                              .animate(
-                                                  target:
-                                                      isSelected ? 1 : 0)
-                                              .scaleXY(
-                                                begin: 1,
-                                                end: 1.15,
-                                                duration: kAnimFast,
-                                                curve: Curves.easeOutBack,
+                                            value: isSelected ? 1.0 : 0.0,
+                                            builder: (context, t, child) =>
+                                                Transform.scale(
+                                                  scale: 1 + 0.15 * t,
+                                                  child: child,
+                                                ),
+                                            child: Text(
+                                              emoji,
+                                              style: const TextStyle(
+                                                fontSize: 20,
+                                                height: 1.0,
                                               ),
+                                              strutStyle: const StrutStyle(
+                                                forceStrutHeight: true,
+                                                height: 1.0,
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     );
@@ -276,8 +278,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                   height: 56,
                                   decoration: BoxDecoration(
                                     color: colorScheme.primaryContainer,
-                                    borderRadius:
-                                        BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
@@ -294,12 +295,11 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                   _nameController.text.isEmpty
                                       ? context.l10n.unnamed
                                       : _nameController.text,
-                                  style: theme.textTheme.titleMedium
-                                      ?.copyWith(
+                                  style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
                                     color: _nameController.text.isEmpty
                                         ? colorScheme.onSurfaceVariant
-                                            .withAlpha(128)
+                                              .withAlpha(128)
                                         : colorScheme.onSurface,
                                   ),
                                   maxLines: 1,
@@ -320,23 +320,19 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                               hintText: context.l10n.enterFavoriteName,
                               counterText: '',
                               filled: true,
-                              fillColor:
-                                  colorScheme.surfaceContainerLow,
+                              fillColor: colorScheme.surfaceContainerLow,
                               border: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
                                   color: colorScheme.primary,
                                   width: 2,
                                 ),
                               ),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 12,
                               ),
@@ -365,14 +361,15 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                   ),
                   const SizedBox(width: 8),
                   TextButton(
-                    onPressed:
-                        _nameController.text.trim().isEmpty
-                            ? null
-                            : () {
-                                Haptics.soft();
-                                _onConfirm();
-                              },
-                    child: Text(_isEditing ? context.l10n.save : context.l10n.create),
+                    onPressed: _nameController.text.trim().isEmpty
+                        ? null
+                        : () {
+                            Haptics.soft();
+                            _onConfirm();
+                          },
+                    child: Text(
+                      _isEditing ? context.l10n.save : context.l10n.create,
+                    ),
                   ),
                 ],
               ),

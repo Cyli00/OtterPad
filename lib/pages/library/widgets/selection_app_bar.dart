@@ -46,11 +46,6 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
     final sz = wide ? 40.0 : 36.0;
     final iconSz = sz * 0.5;
     final enabled = selectedCount > 0;
-    final overflow =
-        onExtract != null ||
-        onDownload != null ||
-        onAddToFavorite != null ||
-        onRemoveFromFavorite != null;
 
     final row = SizedBox(
       height: kToolbarHeight,
@@ -95,123 +90,53 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
               bg: cs.primaryContainer,
               fg: cs.primary,
             ),
-            if (wide && overflow) ...[
+            if (onExtract != null) ...[
               const SizedBox(width: 8),
-              MenuAnchor(
-                style: MenuStyle(
-                  backgroundColor: WidgetStatePropertyAll(
-                    cs.surfaceContainerHigh,
-                  ),
-                  elevation: const WidgetStatePropertyAll(3),
-                  shape: WidgetStatePropertyAll(
-                    RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-                builder: (context, controller, _) => _button(
-                  icon: Symbols.more_vert_rounded,
-                  sz: sz,
-                  iconSz: iconSz,
-                  onPressed: () {
-                    if (controller.isOpen) {
-                      controller.close();
-                    } else {
-                      controller.open();
-                    }
-                  },
-                  tooltip: context.l10n.more,
-                  bg: cs.primaryContainer,
-                  fg: cs.primary,
-                ),
-                menuChildren: [
-                  if (onExtract != null)
-                    MenuItemButton(
-                      onPressed: enabled ? onExtract : null,
-                      leadingIcon: const Icon(
-                        Symbols.auto_awesome_rounded,
-                        size: 20,
-                      ),
-                      child: Text(context.l10n.textExtraction),
-                    ),
-                  if (onDownload != null)
-                    MenuItemButton(
-                      onPressed: enabled ? onDownload : null,
-                      leadingIcon: const Icon(
-                        Symbols.download_rounded,
-                        size: 20,
-                      ),
-                      child: Text(context.l10n.downloadPdf),
-                    ),
-                  if (onAddToFavorite != null)
-                    MenuItemButton(
-                      onPressed: enabled ? onAddToFavorite : null,
-                      leadingIcon: const Icon(
-                        Symbols.bookmark_add_rounded,
-                        size: 20,
-                      ),
-                      child: Text(context.l10n.addToFavorite),
-                    ),
-                  if (onRemoveFromFavorite != null)
-                    MenuItemButton(
-                      onPressed: enabled ? onRemoveFromFavorite : null,
-                      leadingIcon: const Icon(
-                        Symbols.bookmark_remove_rounded,
-                        size: 20,
-                      ),
-                      child: Text(context.l10n.removeFromFavorite),
-                    ),
-                ],
+              _button(
+                icon: Symbols.auto_awesome_rounded,
+                sz: sz,
+                iconSz: iconSz,
+                onPressed: enabled ? onExtract : null,
+                tooltip: context.l10n.textExtraction,
+                bg: cs.primaryContainer,
+                fg: cs.primary,
               ),
-            ] else ...[
-              if (onExtract != null) ...[
-                const SizedBox(width: 8),
-                _button(
-                  icon: Symbols.auto_awesome_rounded,
-                  sz: sz,
-                  iconSz: iconSz,
-                  onPressed: enabled ? onExtract : null,
-                  tooltip: context.l10n.textExtraction,
-                  bg: cs.primaryContainer,
-                  fg: cs.primary,
-                ),
-              ],
-              if (onDownload != null) ...[
-                const SizedBox(width: 8),
-                _button(
-                  icon: Symbols.download_rounded,
-                  sz: sz,
-                  iconSz: iconSz,
-                  onPressed: enabled ? onDownload : null,
-                  tooltip: context.l10n.downloadPdf,
-                  bg: cs.primaryContainer,
-                  fg: cs.primary,
-                ),
-              ],
-              if (onAddToFavorite != null) ...[
-                const SizedBox(width: 8),
-                _button(
-                  icon: Symbols.bookmark_add_rounded,
-                  sz: sz,
-                  iconSz: iconSz,
-                  onPressed: enabled ? onAddToFavorite : null,
-                  tooltip: context.l10n.addToFavorite,
-                  bg: cs.tertiaryContainer,
-                  fg: cs.tertiary,
-                ),
-              ],
-              if (onRemoveFromFavorite != null) ...[
-                const SizedBox(width: 8),
-                _button(
-                  icon: Symbols.bookmark_remove_rounded,
-                  sz: sz,
-                  iconSz: iconSz,
-                  onPressed: enabled ? onRemoveFromFavorite : null,
-                  tooltip: context.l10n.removeFromFavorite,
-                  bg: cs.tertiaryContainer,
-                  fg: cs.tertiary,
-                ),
-              ],
+            ],
+            if (onDownload != null) ...[
+              const SizedBox(width: 8),
+              _button(
+                icon: Symbols.download_rounded,
+                sz: sz,
+                iconSz: iconSz,
+                onPressed: enabled ? onDownload : null,
+                tooltip: context.l10n.downloadPdf,
+                bg: cs.primaryContainer,
+                fg: cs.primary,
+              ),
+            ],
+            if (onAddToFavorite != null) ...[
+              const SizedBox(width: 8),
+              _button(
+                icon: Symbols.bookmark_add_rounded,
+                sz: sz,
+                iconSz: iconSz,
+                onPressed: enabled ? onAddToFavorite : null,
+                tooltip: context.l10n.addToFavorite,
+                bg: cs.tertiaryContainer,
+                fg: cs.tertiary,
+              ),
+            ],
+            if (onRemoveFromFavorite != null) ...[
+              const SizedBox(width: 8),
+              _button(
+                icon: Symbols.bookmark_remove_rounded,
+                sz: sz,
+                iconSz: iconSz,
+                onPressed: enabled ? onRemoveFromFavorite : null,
+                tooltip: context.l10n.removeFromFavorite,
+                bg: cs.tertiaryContainer,
+                fg: cs.tertiary,
+              ),
             ],
             const SizedBox(width: 8),
             _button(

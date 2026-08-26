@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../widgets/tactile_press.dart';
 
@@ -23,6 +24,7 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: AppShadows.sheet,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

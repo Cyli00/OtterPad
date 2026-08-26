@@ -5,6 +5,7 @@ import '../../../providers/history_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../utils/doc_paths.dart';
 import '../../../utils/responsive.dart';
+import '../../../widgets/staggered_entrance.dart';
 import 'doc_card_actions.dart';
 import 'document_card.dart';
 import 'library_empty_state.dart';
@@ -50,6 +51,10 @@ class BookshelfGrid extends ConsumerWidget {
         // + 期刊 + 年份行 + 上下 8px padding）是固定像素，所以用 mainAxisExtent
         // 而非 childAspectRatio——后者会让宽列产生越来越大的底部空隙。
         final spacing = Responsive.showNavigationRail(context) ? 12.0 : 16.0;
+        // 桌面宽屏紧凑密度：行距 -4px（token 见 Responsive.compactDensity）
+        final rowSpacing = Responsive.compactDensity(context)
+            ? spacing - 4
+            : spacing;
         final cardWidth =
             (constraints.crossAxisExtent -
                 32.0 -
@@ -62,7 +67,7 @@ class BookshelfGrid extends ConsumerWidget {
           sliver: SliverGrid(
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
-              mainAxisSpacing: spacing,
+              mainAxisSpacing: rowSpacing,
               crossAxisSpacing: spacing,
               mainAxisExtent: coverHeight + _kTextBlockHeight,
             ),
@@ -70,42 +75,45 @@ class BookshelfGrid extends ConsumerWidget {
               final doc = docs[index];
               // 进度走单卡片粒度订阅（docProgressProvider）——阅读器每
               // 500ms 的 setProgress 只重建对应卡片，不再整 grid rebuild。
-              return Consumer(
-                builder: (context, ref, _) => DocumentCard(
-                  docId: doc.id,
-                  coverAsset: doc.contentHash == null
-                      ? ''
-                      : DocPaths.pdf(doc.id),
-                  name: doc.title,
-                  authors: doc.authors.join(', '),
-                  journalName: doc.journal ?? '',
-                  year: doc.year ?? '',
-                  progress: ref.watch(docProgressProvider(doc.id)),
-                  isSelectionMode: isSelectionMode,
-                  isSelected: selection.selectedIds.contains(doc.id),
-                  onTap: () => DocCardActions.openReader(context, ref, doc),
-                  onLongPress: () => ref
-                      .read(selectionProvider.notifier)
-                      .enter(doc.id, 'library'),
-                  onSelectionTap: () =>
-                      ref.read(selectionProvider.notifier).toggle(doc.id),
-                  onModifierToggle: () =>
-                      DocCardActions.modifierToggle(ref, doc.id, 'library'),
-                  onSelectRange: () => DocCardActions.selectRange(
-                    ref,
+              return StaggeredEntrance(
+                index: index,
+                child: Consumer(
+                  builder: (context, ref, _) => DocumentCard(
                     docId: doc.id,
-                    sourceContext: 'library',
-                    orderedIds: orderedIds,
-                  ),
-                  onFavorite: () =>
-                      DocCardActions.addToFavorite(context, ref, {doc.id}),
-                  onContextMenu: (pos) => DocCardActions.showMenu(
-                    context: context,
-                    ref: ref,
-                    globalPosition: pos,
-                    doc: doc,
-                    sourceContext: 'library',
-                    orderedIds: orderedIds,
+                    coverAsset: doc.contentHash == null
+                        ? ''
+                        : DocPaths.pdf(doc.id),
+                    name: doc.title,
+                    authors: doc.authors.join(', '),
+                    journalName: doc.journal ?? '',
+                    year: doc.year ?? '',
+                    progress: ref.watch(docProgressProvider(doc.id)),
+                    isSelectionMode: isSelectionMode,
+                    isSelected: selection.selectedIds.contains(doc.id),
+                    onTap: () => DocCardActions.openReader(context, ref, doc),
+                    onLongPress: () => ref
+                        .read(selectionProvider.notifier)
+                        .enter(doc.id, 'library'),
+                    onSelectionTap: () =>
+                        ref.read(selectionProvider.notifier).toggle(doc.id),
+                    onModifierToggle: () =>
+                        DocCardActions.modifierToggle(ref, doc.id, 'library'),
+                    onSelectRange: () => DocCardActions.selectRange(
+                      ref,
+                      docId: doc.id,
+                      sourceContext: 'library',
+                      orderedIds: orderedIds,
+                    ),
+                    onFavorite: () =>
+                        DocCardActions.addToFavorite(context, ref, {doc.id}),
+                    onContextMenu: (pos) => DocCardActions.showMenu(
+                      context: context,
+                      ref: ref,
+                      globalPosition: pos,
+                      doc: doc,
+                      sourceContext: 'library',
+                      orderedIds: orderedIds,
+                    ),
                   ),
                 ),
               );
