@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:dio/dio.dart';
@@ -9,13 +10,20 @@ import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/model_capability_store.dart';
 import '../../services/haptics.dart';
+import '../../utils/desktop.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/tactile_press.dart';
 import 'agent_add_model_dialog.dart';
 import 'agent_model_tester.dart';
 import 'agent_role_widgets.dart';
 
 typedef AgentAddModelCallback =
-    void Function(String id, {bool setAsDefault, bool setAsFast, bool setAsImage});
+    void Function(
+      String id, {
+      bool setAsDefault,
+      bool setAsFast,
+      bool setAsImage,
+    });
 
 /// 打开"管理模型"底部弹窗。
 ///
@@ -33,22 +41,27 @@ Future<void> showAgentModelManageSheet({
   required AgentAddModelCallback onAdd,
   required ValueChanged<String> onRemove,
 }) {
+  final content = _ModelManageSheet(
+    baseUrl: baseUrl,
+    apiKey: apiKey,
+    providerType: providerType,
+    providerLabel: providerLabel,
+    addedModels: addedModels,
+    currentDefaultModel: currentDefaultModel,
+    currentFastModel: currentFastModel,
+    currentImageModel: currentImageModel,
+    onAdd: onAdd,
+    onRemove: onRemove,
+    asDialog: isDesktopOs,
+  );
+  if (isDesktopOs) {
+    return showAppDialog<void>(context: context, builder: (_) => content);
+  }
   return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (_) => _ModelManageSheet(
-      baseUrl: baseUrl,
-      apiKey: apiKey,
-      providerType: providerType,
-      providerLabel: providerLabel,
-      addedModels: addedModels,
-      currentDefaultModel: currentDefaultModel,
-      currentFastModel: currentFastModel,
-      currentImageModel: currentImageModel,
-      onAdd: onAdd,
-      onRemove: onRemove,
-    ),
+    builder: (_) => content,
   );
 }
 
@@ -63,6 +76,7 @@ class _ModelManageSheet extends StatefulWidget {
   final String? currentImageModel;
   final AgentAddModelCallback onAdd;
   final ValueChanged<String> onRemove;
+  final bool asDialog;
 
   const _ModelManageSheet({
     required this.baseUrl,
@@ -75,6 +89,7 @@ class _ModelManageSheet extends StatefulWidget {
     required this.currentImageModel,
     required this.onAdd,
     required this.onRemove,
+    this.asDialog = false,
   });
 
   @override
@@ -119,8 +134,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     } on DioException catch (e) {
       // 透出真实失败原因（401 / 404 无该端点 / 网络错误），便于区分排查
       if (mounted) {
-        setState(() => _error =
-            '${context.l10n.fetchModelsFailed}\n${describeDioError(e)}');
+        setState(
+          () => _error =
+              '${context.l10n.fetchModelsFailed}\n${describeDioError(e)}',
+        );
       }
     } catch (_) {
       if (mounted) setState(() => _error = context.l10n.fetchModelsFailed);
@@ -139,17 +156,11 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     var result = _models!;
     if (_imageGenOnly) {
       result = result
-          .where(
-            (m) => ModelCapabilityStore.instance.isImageGenerationModel(m),
-          )
+          .where((m) => ModelCapabilityStore.instance.isImageGenerationModel(m))
           .toList();
     }
     if (_multimodalOnly) {
-      result = result
-          .where(
-            (m) => _capOf(m).imageInput,
-          )
-          .toList();
+      result = result.where((m) => _capOf(m).imageInput).toList();
     }
     if (_query.isEmpty) return result;
     final q = _query.toLowerCase();
@@ -159,7 +170,9 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
   bool _isAdded(String id) => _localAdded.contains(id);
 
   Future<void> _showAddConfirm(String id) async {
-    final isImageModel = ModelCapabilityStore.instance.isImageGenerationModel(id);
+    final isImageModel = ModelCapabilityStore.instance.isImageGenerationModel(
+      id,
+    );
 
     if (isImageModel) {
       widget.onAdd(id, setAsImage: true);
@@ -219,6 +232,44 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         .withHue((onContainerHsl.hue + 180) % 360)
         .toColor();
 
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!widget.asDialog)
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withAlpha(80),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          )
+        else
+          const SizedBox(height: 8),
+        _buildHeader(theme, cs, addedCount, compContainer, onCompContainer),
+        const SizedBox(height: 12),
+        _buildSearchField(theme, cs),
+        const SizedBox(height: 8),
+        Flexible(child: _buildListArea(theme, cs, filtered)),
+      ],
+    );
+
+    if (widget.asDialog) {
+      final lo = 320.0;
+      final computed = MediaQuery.sizeOf(context).width * 0.85;
+      final hi = math.max(lo, math.min(540.0, computed));
+      final width = computed.clamp(lo, hi);
+      return Material(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(28),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(width: width, height: maxH, child: column),
+      );
+    }
+
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
       child: Container(
@@ -227,27 +278,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
           color: cs.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 32,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withAlpha(80),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            _buildHeader(theme, cs, addedCount, compContainer, onCompContainer),
-            const SizedBox(height: 12),
-            _buildSearchField(theme, cs),
-            const SizedBox(height: 8),
-            Flexible(child: _buildListArea(theme, cs, filtered)),
-          ],
-        ),
+        child: column,
       ),
     );
   }
@@ -386,6 +417,9 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     );
   }
 
+  double get _listBottomPad =>
+      (widget.asDialog ? 16.0 : MediaQuery.of(context).padding.bottom) + 16;
+
   Widget _buildListArea(
     ThemeData theme,
     ColorScheme cs,
@@ -401,7 +435,8 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     // 手动添加行：搜索框输入的 id 不在拉取列表中且未添加时出现。
     // 兜底 Zhipu / Doubao 等无 /models 列表端点的服务商，以及自建反代。
     final manualId = _query.trim();
-    final showManual = manualId.isNotEmpty &&
+    final showManual =
+        manualId.isNotEmpty &&
         !_isAdded(manualId) &&
         !(_models?.contains(manualId) ?? false);
 
@@ -411,7 +446,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
           left: 12,
           right: 12,
           top: 4,
-          bottom: MediaQuery.of(context).padding.bottom + 16,
+          bottom: _listBottomPad,
         ),
         children: [
           if (showManual) _buildManualAddRow(theme, cs, manualId),
@@ -451,8 +486,8 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
           _imageGenOnly
               ? context.l10n.noImageGenModels
               : _multimodalOnly
-                  ? context.l10n.noMultimodalModels
-                  : context.l10n.noResults,
+              ? context.l10n.noMultimodalModels
+              : context.l10n.noResults,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant,
           ),
@@ -465,7 +500,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         left: 12,
         right: 12,
         top: 4,
-        bottom: MediaQuery.of(context).padding.bottom + 16,
+        bottom: _listBottomPad,
       ),
       itemCount: filtered.length + manualOffset,
       separatorBuilder: (_, _) => const SizedBox(height: 4),
@@ -586,7 +621,9 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                   color: added ? cs.primary : cs.onSurfaceVariant,
                 ),
                 padding: EdgeInsets.zero,
-                tooltip: added ? context.l10n.removeModel : context.l10n.addModel,
+                tooltip: added
+                    ? context.l10n.removeModel
+                    : context.l10n.addModel,
                 onPressed: () {
                   Haptics.soft();
                   if (added) {
@@ -630,7 +667,12 @@ class _CapDot extends StatelessWidget {
           color: color ?? cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 14, fill: 1, color: iconColor ?? cs.onSurfaceVariant),
+        child: Icon(
+          icon,
+          size: 14,
+          fill: 1,
+          color: iconColor ?? cs.onSurfaceVariant,
+        ),
       ),
     );
   }

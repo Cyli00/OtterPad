@@ -26,6 +26,7 @@ import '../../../services/document_chat_service.dart';
 import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../services/tavily_search_service.dart';
+import '../../../utils/desktop.dart';
 import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
 import '../widgets/md_widget/nr_markdown_config.dart';
@@ -987,15 +988,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           });
         },
       ),
-      _composerToolButton(
-        icon: Symbols.neurology_rounded,
-        color: _thinking != null ? cs.primary : cs.onSurfaceVariant,
-        tooltip: l10n.thinkingIntensity,
-        onPressed: () {
-          Haptics.soft();
-          _showThinkingSheet();
-        },
-      ),
+      _buildThinkingToolButton(cs),
       _composerToolButton(
         icon: Symbols.travel_explore_rounded,
         color: _webSearch ? cs.primary : cs.onSurfaceVariant,
@@ -1165,6 +1158,15 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
 
   // ─── 思考强度 ───
 
+  static const _thinkingOptions = <ThinkingLevel?>[
+    null,
+    ThinkingLevel.off,
+    ThinkingLevel.low,
+    ThinkingLevel.medium,
+    ThinkingLevel.high,
+    ThinkingLevel.xhigh,
+  ];
+
   /// 档位显示名——复用设置页同一组 l10n key。
   String _thinkingLabel(ThinkingLevel? level) {
     final l10n = context.l10n;
@@ -1178,17 +1180,55 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     };
   }
 
+  Widget _buildThinkingToolButton(ColorScheme cs) {
+    final l10n = context.l10n;
+    Widget button(VoidCallback onPressed) => _composerToolButton(
+      icon: Symbols.neurology_rounded,
+      color: _thinking != null ? cs.primary : cs.onSurfaceVariant,
+      tooltip: l10n.thinkingIntensity,
+      onPressed: onPressed,
+    );
+    if (!isDesktopOs) {
+      return button(() {
+        Haptics.soft();
+        _showThinkingSheet();
+      });
+    }
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerHigh),
+        elevation: const WidgetStatePropertyAll(3),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      ),
+      builder: (context, controller, _) => button(() {
+        Haptics.soft();
+        if (controller.isOpen) {
+          controller.close();
+        } else {
+          controller.open();
+        }
+      }),
+      menuChildren: [
+        for (final level in _thinkingOptions)
+          MenuItemButton(
+            onPressed: () {
+              Haptics.soft();
+              setState(() => _thinking = level);
+            },
+            trailingIcon: _thinking == level
+                ? Icon(Symbols.check_rounded, size: 20, color: cs.primary)
+                : null,
+            child: Text(_thinkingLabel(level)),
+          ),
+      ],
+    );
+  }
+
   void _showThinkingSheet() {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    const options = [
-      null,
-      ThinkingLevel.off,
-      ThinkingLevel.low,
-      ThinkingLevel.medium,
-      ThinkingLevel.high,
-      ThinkingLevel.xhigh,
-    ];
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1225,7 +1265,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                   ),
                 ),
               ),
-              for (final level in options)
+              for (final level in _thinkingOptions)
                 InkWell(
                   onTap: () {
                     Haptics.soft();

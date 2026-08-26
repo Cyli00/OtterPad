@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import '../../core/l10n.dart';
 import '../../providers/api_provider.dart';
 import '../../services/agent_model_capability.dart';
 import '../../services/haptics.dart';
+import '../../utils/desktop.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/tactile_press.dart';
 
 /// 打开「模型能力」编辑 sheet（照搬 kelivo 基础页：类型 + 模态 + 能力）。
@@ -22,21 +25,26 @@ Future<void> showAgentModelCapabilitySheet({
   ThinkingLevel? initialThinkingLevel,
   ValueChanged<ThinkingLevel?>? onThinkingLevelChanged,
 }) {
+  final content = _ModelCapabilitySheet(
+    modelId: modelId,
+    protocol: protocol,
+    initial: initial,
+    inferred: inferred,
+    onSave: onSave,
+    onReset: onReset,
+    initialThinkingLevel: initialThinkingLevel,
+    onThinkingLevelChanged: onThinkingLevelChanged,
+    asDialog: isDesktopOs,
+  );
+  if (isDesktopOs) {
+    return showAppDialog<void>(context: context, builder: (_) => content);
+  }
   return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     constraints: const BoxConstraints(maxWidth: 480),
-    builder: (_) => _ModelCapabilitySheet(
-      modelId: modelId,
-      protocol: protocol,
-      initial: initial,
-      inferred: inferred,
-      onSave: onSave,
-      onReset: onReset,
-      initialThinkingLevel: initialThinkingLevel,
-      onThinkingLevelChanged: onThinkingLevelChanged,
-    ),
+    builder: (_) => content,
   );
 }
 
@@ -49,6 +57,7 @@ class _ModelCapabilitySheet extends StatefulWidget {
   final VoidCallback onReset;
   final ThinkingLevel? initialThinkingLevel;
   final ValueChanged<ThinkingLevel?>? onThinkingLevelChanged;
+  final bool asDialog;
 
   const _ModelCapabilitySheet({
     required this.modelId,
@@ -59,6 +68,7 @@ class _ModelCapabilitySheet extends StatefulWidget {
     required this.onReset,
     this.initialThinkingLevel,
     this.onThinkingLevelChanged,
+    this.asDialog = false,
   });
 
   @override
@@ -114,6 +124,145 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
+    final bottomPad =
+        (widget.asDialog ? 16.0 : MediaQuery.of(context).padding.bottom) + 12;
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!widget.asDialog)
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withAlpha(80),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          )
+        else
+          const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+          child: Text(
+            widget.modelId,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _segRow(theme, cs, context.l10n.modelType, [
+                  _Seg(context.l10n.chat, !_embedding, () {
+                    if (_embedding) _set(() => _embedding = false);
+                  }),
+                  _Seg(context.l10n.embedding, _embedding, () {
+                    if (!_embedding) _set(() => _embedding = true);
+                  }),
+                ]),
+                const SizedBox(height: 18),
+                _segRow(theme, cs, context.l10n.inputMode, [
+                  _Seg(context.l10n.text, _textInput, () {
+                    _set(() => _textInput = !_textInput);
+                  }),
+                  _Seg(context.l10n.image, _imageInput, () {
+                    _set(() => _imageInput = !_imageInput);
+                  }),
+                ]),
+                if (!_embedding) ...[
+                  const SizedBox(height: 18),
+                  _segRow(theme, cs, context.l10n.outputMode, [
+                    _Seg(context.l10n.text, _textOutput, () {
+                      _set(() => _textOutput = !_textOutput);
+                    }),
+                    _Seg(context.l10n.image, _imageOutput, () {
+                      _set(() => _imageOutput = !_imageOutput);
+                    }),
+                  ]),
+                  const SizedBox(height: 18),
+                  _segRow(theme, cs, context.l10n.capabilities, [
+                    _Seg(context.l10n.roleBadgeTools, _tool, () {
+                      _set(() => _tool = !_tool);
+                    }),
+                    _Seg(context.l10n.reasoning, _reasoning, () {
+                      _set(() => _reasoning = !_reasoning);
+                    }),
+                  ]),
+                  if (_reasoning) ...[
+                    const SizedBox(height: 18),
+                    _thinkingSection(theme, cs),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPad),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  Haptics.soft();
+                  final c = widget.inferred;
+                  setState(() {
+                    _embedding = c.embedding;
+                    _textInput = c.textInput;
+                    _imageInput = c.imageInput;
+                    _textOutput = c.textOutput;
+                    _imageOutput = c.imageOutput;
+                    _tool = c.tool;
+                    _reasoning = c.reasoning;
+                    _thinkingLevel = null;
+                  });
+                  widget.onReset();
+                },
+                child: Text(context.l10n.resetToAuto),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () {
+                  Haptics.soft();
+                  Navigator.pop(context);
+                },
+                child: Text(context.l10n.done),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (widget.asDialog) {
+      final lo = 320.0;
+      final computed = MediaQuery.sizeOf(context).width * 0.85;
+      final hi = math.max(lo, math.min(540.0, computed));
+      final width = computed.clamp(lo, hi);
+      final maxH = MediaQuery.sizeOf(context).height * 0.75;
+      return Material(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(28),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: width,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH),
+            child: column,
+          ),
+        ),
+      );
+    }
+
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
       child: Container(
@@ -121,124 +270,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
           color: cs.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 32,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withAlpha(80),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-              child: Text(
-                widget.modelId,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _segRow(theme, cs, context.l10n.modelType, [
-                      _Seg(context.l10n.chat, !_embedding, () {
-                        if (_embedding) _set(() => _embedding = false);
-                      }),
-                      _Seg(context.l10n.embedding, _embedding, () {
-                        if (!_embedding) _set(() => _embedding = true);
-                      }),
-                    ]),
-                    const SizedBox(height: 18),
-                    _segRow(theme, cs, context.l10n.inputMode, [
-                      _Seg(context.l10n.text, _textInput, () {
-                        _set(() => _textInput = !_textInput);
-                      }),
-                      _Seg(context.l10n.image, _imageInput, () {
-                        _set(() => _imageInput = !_imageInput);
-                      }),
-                    ]),
-                    if (!_embedding) ...[
-                      const SizedBox(height: 18),
-                      _segRow(theme, cs, context.l10n.outputMode, [
-                        _Seg(context.l10n.text, _textOutput, () {
-                          _set(() => _textOutput = !_textOutput);
-                        }),
-                        _Seg(context.l10n.image, _imageOutput, () {
-                          _set(() => _imageOutput = !_imageOutput);
-                        }),
-                      ]),
-                      const SizedBox(height: 18),
-                      _segRow(theme, cs, context.l10n.capabilities, [
-                        _Seg(context.l10n.roleBadgeTools, _tool, () {
-                          _set(() => _tool = !_tool);
-                        }),
-                        _Seg(context.l10n.reasoning, _reasoning, () {
-                          _set(() => _reasoning = !_reasoning);
-                        }),
-                      ]),
-                      if (_reasoning) ...[
-                        const SizedBox(height: 18),
-                        _thinkingSection(theme, cs),
-                      ],
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                4,
-                16,
-                MediaQuery.of(context).padding.bottom + 12,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () {
-                      Haptics.soft();
-                      final c = widget.inferred;
-                      setState(() {
-                        _embedding = c.embedding;
-                        _textInput = c.textInput;
-                        _imageInput = c.imageInput;
-                        _textOutput = c.textOutput;
-                        _imageOutput = c.imageOutput;
-                        _tool = c.tool;
-                        _reasoning = c.reasoning;
-                        _thinkingLevel = null;
-                      });
-                      widget.onReset();
-                    },
-                    child: Text(context.l10n.resetToAuto),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () {
-                      Haptics.soft();
-                      Navigator.pop(context);
-                    },
-                    child: Text(context.l10n.done),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: column,
       ),
     );
   }

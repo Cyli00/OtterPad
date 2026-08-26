@@ -36,6 +36,7 @@ import '../../data/models/book/highlight.dart';
 import '../../providers/highlight_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
+import '../../shortcuts/app_intents.dart' show ReaderTranslateIntent;
 import '../../utils/desktop.dart';
 import '../../utils/doc_paths.dart';
 import '../../utils/markdown_translation_weaver.dart';
@@ -1218,6 +1219,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               const ToggleReaderNotesIntent(),
           desktopActivator(LogicalKeyboardKey.digit3, includeRepeats: false):
               const ToggleReaderAskAiIntent(),
+          desktopActivator(LogicalKeyboardKey.keyT, includeRepeats: false):
+              const ReaderTranslateIntent(),
           desktopActivator(LogicalKeyboardKey.keyF): const ReaderFindIntent(),
         },
         child: Actions(
@@ -1244,6 +1247,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ToggleReaderAskAiIntent: CallbackAction<ToggleReaderAskAiIntent>(
               onInvoke: (_) {
                 _toggleAskAi();
+                return null;
+              },
+            ),
+            ReaderTranslateIntent: CallbackAction<ReaderTranslateIntent>(
+              onInvoke: (_) {
+                _onTranslateShortcut();
                 return null;
               },
             ),
@@ -1577,6 +1586,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onOpenNotes: _toggleNotes,
       onOpenTheme: _openThemeSheet,
     );
+  }
+
+  /// Ctrl/Cmd+T：与底栏翻译钮同一语义（无译文则启动，有译文则循环模式）。
+  /// PDF / 无 markdown 时 no-op。
+  void _onTranslateShortcut() {
+    if (_session.markdownContent == null || !_session.showPreview) return;
+    final translation = ref.read(
+      documentTranslationProvider(widget.document.id),
+    );
+    if (translation.status == DocTranslationStatus.loading) return;
+    if (translation.hasResult) {
+      _handleCycleTranslationMode();
+    } else {
+      unawaited(_handleTranslate());
+    }
   }
 
   /// 启动全文翻译：show 一个长驻 SnackBar 订阅 provider 的进度 ValueListenable，
