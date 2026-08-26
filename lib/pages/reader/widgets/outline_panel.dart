@@ -145,6 +145,7 @@ class OutlinePanel extends StatefulWidget {
   final String? documentId;
   final Document? document;
   final LocateQuoteInReader? onLocateQuote;
+  final void Function(DocumentChatPageArgs args)? onOpenChat;
   final ValueListenable<SummaryImageState> summaryImageState;
   final void Function(int charOffset) onNavigate;
   final VoidCallback? onUploadSummaryImage;
@@ -158,6 +159,7 @@ class OutlinePanel extends StatefulWidget {
     this.documentId,
     this.document,
     this.onLocateQuote,
+    this.onOpenChat,
     required this.summaryImageState,
     this.figuresEpoch,
     required this.onNavigate,
@@ -278,6 +280,7 @@ class _OutlinePanelState extends State<OutlinePanel>
                     documentId: widget.documentId,
                     document: widget.document,
                     onLocateQuote: widget.onLocateQuote,
+                    onOpenChat: widget.onOpenChat,
                     onNavigate: widget.onNavigate,
                     summaryState: summaryState,
                     onUploadSummaryImage: widget.onUploadSummaryImage,
@@ -306,6 +309,7 @@ class _FiguresTab extends StatelessWidget {
   final String? documentId;
   final Document? document;
   final LocateQuoteInReader? onLocateQuote;
+  final void Function(DocumentChatPageArgs args)? onOpenChat;
   final void Function(int charOffset) onNavigate;
   final SummaryImageState summaryState;
   final VoidCallback? onUploadSummaryImage;
@@ -318,6 +322,7 @@ class _FiguresTab extends StatelessWidget {
     this.documentId,
     this.document,
     this.onLocateQuote,
+    this.onOpenChat,
     required this.onNavigate,
     required this.summaryState,
     this.onUploadSummaryImage,
@@ -384,6 +389,7 @@ class _FiguresTab extends StatelessWidget {
                       documentId: documentId,
                       document: document,
                       onLocateQuote: onLocateQuote,
+                      onOpenChat: onOpenChat,
                     );
                   },
                   child: Hero(
@@ -435,6 +441,7 @@ class _FiguresTab extends StatelessWidget {
                         documentId: documentId,
                         document: document,
                         onLocateQuote: onLocateQuote,
+                        onOpenChat: onOpenChat,
                       ),
                     ),
                 ],
@@ -518,6 +525,7 @@ class _FiguresTab extends StatelessWidget {
                 documentId: documentId,
                 document: document,
                 onLocateQuote: onLocateQuote,
+                onOpenChat: onOpenChat,
               );
             },
             child: Hero(

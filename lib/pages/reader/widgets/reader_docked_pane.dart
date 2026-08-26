@@ -12,6 +12,7 @@ class ReaderDockedPane extends StatefulWidget {
   final ReaderDockPane pane;
   final Widget outline;
   final Widget notes;
+  final Widget chat;
 
   const ReaderDockedPane({
     super.key,
@@ -20,6 +21,7 @@ class ReaderDockedPane extends StatefulWidget {
     required this.pane,
     required this.outline,
     required this.notes,
+    required this.chat,
   });
 
   @override
@@ -56,7 +58,11 @@ class _ReaderDockedPaneState extends State<ReaderDockedPane>
     super.dispose();
   }
 
-  int get _paneIndex => widget.pane == ReaderDockPane.notes ? 1 : 0;
+  int get _paneIndex => switch (widget.pane) {
+    ReaderDockPane.outline => 0,
+    ReaderDockPane.notes => 1,
+    ReaderDockPane.askAi => 2,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +96,11 @@ class _ReaderDockedPaneState extends State<ReaderDockedPane>
                               right: false,
                               child: IndexedStack(
                                 index: _paneIndex,
-                                children: [widget.outline, widget.notes],
+                                children: [
+                                  widget.outline,
+                                  widget.notes,
+                                  widget.chat,
+                                ],
                               ),
                             ),
                           ),

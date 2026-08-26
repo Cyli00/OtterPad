@@ -109,6 +109,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 定位原文后暂存的问 AI 返回参数；非空时展示返回引导条。
   DocumentChatPageArgs? _chatReturnArgs;
 
+  String? _dockChatQuote;
+  String? _dockChatFigurePath;
+  int _dockChatQuoteEpoch = 0;
+  DocumentChatPageArgs? _pendingChatReturnArgs;
+
   static _MainBuildKey _mainBuildSelector(ReaderSessionState s) => (
     s.initialized,
     s.fileExists,
@@ -226,6 +231,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         summaryImageState: _summaryImageState,
         sessionNotifier: _sessionNotifier,
         openOutlineSheet: _openOutlineSheet,
+        onOpenChat: Responsive.useReaderDock(context)
+            ? _openChatFromFigure
+            : null,
       );
 
   // ─── 提取逻辑 ───
@@ -400,11 +408,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _togglePreview() {
+    if (_session.showPreview) {
+      _closeDock();
+    }
     final enteringMarkdown = _sessionNotifier.togglePreview();
     if (enteringMarkdown) {
       _pdfSearch.clear();
-    } else {
-      _closeDock();
     }
   }
 
@@ -546,6 +555,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _dockHostMounted = true;
     _dockPane = pane;
     _dockOpen = true;
+    if (pane == ReaderDockPane.askAi) {
+      _pendingChatReturnArgs = null;
+      _chatReturnArgs = null;
+    }
     _sessionNotifier.setDockOpen(true);
     _sessionNotifier.revealToolbars();
     if (mounted) setState(() {});
@@ -555,6 +568,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!_dockOpen) return;
     _dockOpen = false;
     _sessionNotifier.setDockOpen(false);
+    if (_pendingChatReturnArgs != null) {
+      _chatReturnArgs = _pendingChatReturnArgs;
+      _pendingChatReturnArgs = null;
+    }
     if (mounted) setState(() {});
   }
 
@@ -565,7 +582,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     if (_dockOpen) {
-      setState(() => _dockPane = pane);
+      setState(() {
+        _dockPane = pane;
+        if (pane == ReaderDockPane.askAi) {
+          _pendingChatReturnArgs = null;
+          _chatReturnArgs = null;
+        }
+      });
       return;
     }
     _openDock(pane);
@@ -936,19 +959,58 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _sessionNotifier.toggleToolbars();
   }
 
-  /// 打开问 AI 对话页。[quote] 是划词引用；底栏入口不带引用。
-  void _openAiChat({String? quote}) {
-    setState(() => _chatReturnArgs = null);
+  /// 打开问 AI。[quote] 是划词引用；底栏入口不带引用。
+  void _openAiChat({String? quote, String? figureImagePath}) {
     // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"新路由显示
     _webViewReaderKey.currentState?.clearSelection();
+    _chatReturnArgs = null;
+    _pendingChatReturnArgs = null;
+    _dockChatQuote = quote?.trim();
+    if (_dockChatQuote?.isEmpty ?? false) _dockChatQuote = null;
+    _dockChatFigurePath = figureImagePath;
+    _dockChatQuoteEpoch++;
+    if (Responsive.useReaderDock(context) &&
+        _session.markdownContent != null &&
+        _session.showPreview) {
+      _openDock(ReaderDockPane.askAi);
+      return;
+    }
+    if (mounted) setState(() {});
     context.push(
       AppRoutes.readerChat,
       extra: DocumentChatPageArgs(
         document: widget.document,
         initialQuote: quote,
+        figureImagePath: figureImagePath,
         onLocateQuote: _locateQuoteInReader,
+        quoteEpoch: _dockChatQuoteEpoch,
       ),
     );
+  }
+
+  void _onDockChatQuoteConsumed() {
+    _dockChatQuote = null;
+    _dockChatFigurePath = null;
+  }
+
+  void _openChatFromFigure(DocumentChatPageArgs args) {
+    _openAiChat(
+      quote: args.initialQuote,
+      figureImagePath: args.figureImagePath,
+    );
+  }
+
+  void _toggleAskAi() {
+    if (_session.markdownContent == null) return;
+    if (Responsive.useReaderDock(context) && _session.showPreview) {
+      if (!(_dockOpen && _dockPane == ReaderDockPane.askAi)) {
+        _chatReturnArgs = null;
+        _webViewReaderKey.currentState?.clearSelection();
+      }
+      _toggleDock(ReaderDockPane.askAi);
+      return;
+    }
+    _openAiChat();
   }
 
   /// 会话历史「定位原文」——按引用文本在 markdown 源里找偏移，复用大纲
@@ -963,6 +1025,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       idx = md.indexOf(trimmed.substring(0, 30));
     }
     if (idx >= 0) _scrollToCharOffset(idx);
+    if (_dockOpen && _dockPane == ReaderDockPane.askAi) {
+      _pendingChatReturnArgs = returnArgs;
+      if (_chatReturnArgs != null) {
+        setState(() => _chatReturnArgs = null);
+      }
+      return;
+    }
     setState(() => _chatReturnArgs = returnArgs);
   }
 
@@ -970,8 +1039,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final args = _chatReturnArgs;
     if (args == null) return;
     Haptics.soft();
-    setState(() => _chatReturnArgs = null);
+    setState(() {
+      _chatReturnArgs = null;
+      _pendingChatReturnArgs = null;
+    });
     _webViewReaderKey.currentState?.clearSelection();
+    if (Responsive.useReaderDock(context) &&
+        _session.markdownContent != null &&
+        _session.showPreview) {
+      _openDock(ReaderDockPane.askAi);
+      return;
+    }
     context.push(AppRoutes.readerChat, extra: args);
   }
 
@@ -1122,6 +1200,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     final useDock = Responsive.useReaderDock(context);
     final markdown = session.markdownContent;
+    final sidebarW = Responsive.readerSidebarWidth(
+      MediaQuery.sizeOf(context).width,
+    );
 
     return Theme(
       data: theme,
@@ -1135,6 +1216,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               const ToggleReaderOutlineIntent(),
           desktopActivator(LogicalKeyboardKey.digit2, includeRepeats: false):
               const ToggleReaderNotesIntent(),
+          desktopActivator(LogicalKeyboardKey.digit3, includeRepeats: false):
+              const ToggleReaderAskAiIntent(),
           desktopActivator(LogicalKeyboardKey.keyF): const ReaderFindIntent(),
         },
         child: Actions(
@@ -1155,6 +1238,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ToggleReaderNotesIntent: CallbackAction<ToggleReaderNotesIntent>(
               onInvoke: (_) {
                 _toggleNotes();
+                return null;
+              },
+            ),
+            ToggleReaderAskAiIntent: CallbackAction<ToggleReaderAskAiIntent>(
+              onInvoke: (_) {
+                _toggleAskAi();
                 return null;
               },
             ),
@@ -1330,22 +1419,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                           ],
                         ),
                       ),
-                      if (useDock &&
-                          _dockHostMounted &&
-                          session.showPreview &&
-                          markdown != null)
+                      if (useDock && _dockHostMounted)
                         ReaderDockedPane(
-                          sidebarWidth: Responsive.readerSidebarWidth(
-                            MediaQuery.sizeOf(context).width,
-                          ),
+                          sidebarWidth: sidebarW,
                           open: _dockOpen,
                           pane: _dockPane,
                           outline: OutlinePanel(
                             key: ValueKey(markdown.hashCode),
-                            markdownContent: markdown,
+                            markdownContent: markdown ?? '',
                             documentId: widget.document.id,
                             document: widget.document,
                             onLocateQuote: _locateQuoteInReader,
+                            onOpenChat: _openChatFromFigure,
                             summaryImageState: _summaryImageState,
                             figuresEpoch: _figuresEpoch,
                             onNavigate: (offset) {
@@ -1361,6 +1446,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             showGrabber: false,
                             onEditStart: _onNotesEditStart,
                             onEditEnd: _onNotesEditEnd,
+                          ),
+                          chat: DocumentChatPage(
+                            embedded: true,
+                            paneWidth: sidebarW,
+                            onClose: _closeDock,
+                            onQuoteConsumed: _onDockChatQuoteConsumed,
+                            args: DocumentChatPageArgs(
+                              document: widget.document,
+                              initialQuote: _dockChatQuote,
+                              figureImagePath: _dockChatFigurePath,
+                              onLocateQuote: _locateQuoteInReader,
+                              quoteEpoch: _dockChatQuoteEpoch,
+                            ),
                           ),
                         ),
                     ],
@@ -1475,7 +1573,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onOpenOutline: _toggleOutline,
       onTranslate: _handleTranslate,
       onCycleTranslationMode: _handleCycleTranslationMode,
-      onAskAi: _openAiChat,
+      onAskAi: _toggleAskAi,
       onOpenNotes: _toggleNotes,
       onOpenTheme: _openThemeSheet,
     );
@@ -1892,6 +1990,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       documentId: documentId,
       document: widget.document,
       onLocateQuote: _locateQuoteInReader,
+      onOpenChat: Responsive.useReaderDock(context)
+          ? _openChatFromFigure
+          : null,
     );
   }
 

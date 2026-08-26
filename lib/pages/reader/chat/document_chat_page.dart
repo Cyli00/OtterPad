@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,10 +31,8 @@ import '../../../widgets/tactile_press.dart';
 import '../widgets/md_widget/nr_markdown_config.dart';
 
 /// 定位原文：阅读器滚动后展示「返回问 AI」引导。
-typedef LocateQuoteInReader = void Function(
-  String quote,
-  DocumentChatPageArgs returnArgs,
-);
+typedef LocateQuoteInReader =
+    void Function(String quote, DocumentChatPageArgs returnArgs);
 
 class DocumentChatPageArgs {
   final Document document;
@@ -51,21 +50,44 @@ class DocumentChatPageArgs {
   /// 定位原文返回后重新打开时保留当前会话，不重置为草稿。
   final bool preserveSession;
 
+  /// 每次划词/Figure 问 AI 递增；同值引用再入也要刷新 composer。
+  final int quoteEpoch;
+
   const DocumentChatPageArgs({
     required this.document,
     this.initialQuote,
     this.figureImagePath,
     this.onLocateQuote,
     this.preserveSession = false,
+    this.quoteEpoch = 0,
   });
 }
 
-/// 问 AI 全屏对话页。状态在 [documentChatProvider]（family by documentId），
+/// 问 AI 对话页。状态在 [documentChatProvider]（family by documentId），
 /// 页面自己只持「待发送引用」「回答角色」两个输入态。
 class DocumentChatPage extends ConsumerStatefulWidget {
   final DocumentChatPageArgs args;
 
-  const DocumentChatPage({super.key, required this.args});
+  /// 阅读器停靠栏内嵌：会话跟随 provider 保活，不在 [initState] 重置。
+  final bool embedded;
+
+  /// 嵌入态关闭停靠栏；全屏态不使用。
+  final VoidCallback? onClose;
+
+  /// 嵌入态抽屉宽度；必须等于停靠栏宽，禁止读窗口 [MediaQuery]。
+  final double? paneWidth;
+
+  /// 嵌入态发送后清掉父级暂存的 quote/图，避免 remount 灌回旧引用。
+  final VoidCallback? onQuoteConsumed;
+
+  const DocumentChatPage({
+    super.key,
+    required this.args,
+    this.embedded = false,
+    this.onClose,
+    this.paneWidth,
+    this.onQuoteConsumed,
+  }) : assert(!embedded || paneWidth != null);
 
   @override
   ConsumerState<DocumentChatPage> createState() => _DocumentChatPageState();
@@ -99,14 +121,28 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     _quote = widget.args.initialQuote?.trim();
     if (_quote?.isEmpty ?? false) _quote = null;
     _figureImagePath = widget.args.figureImagePath;
-    // 每次进入都从新会话草稿开始；定位原文返回时保留会话。
-    if (!widget.args.preserveSession) {
+    // 全屏且非 preserveSession：进入即新会话草稿。嵌入停靠栏跟随 provider 保活。
+    if (!widget.embedded && !widget.args.preserveSession) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          ref.read(documentChatProvider(_documentId).notifier).startNewSession();
+          ref
+              .read(documentChatProvider(_documentId).notifier)
+              .startNewSession();
         }
       });
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant DocumentChatPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.args.quoteEpoch == oldWidget.args.quoteEpoch) return;
+    setState(() {
+      var q = widget.args.initialQuote?.trim();
+      if (q?.isEmpty ?? false) q = null;
+      _quote = q;
+      _figureImagePath = widget.args.figureImagePath;
+    });
   }
 
   @override
@@ -124,15 +160,15 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     final notifier = ref.read(documentChatProvider(_documentId).notifier);
     if (notifier.supportsImages(_role)) return _role;
     if (!notifier.supportsImages(ChatModelRole.expert)) {
-      ref.read(snackBarServiceProvider).showResult(
-        message: context.l10n.expertRequiresVision,
-      );
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: context.l10n.expertRequiresVision);
       return null;
     }
     setState(() => _role = ChatModelRole.expert);
-    ref.read(snackBarServiceProvider).showResult(
-      message: context.l10n.switchedToExpertForImage,
-    );
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.switchedToExpertForImage);
     return ChatModelRole.expert;
   }
 
@@ -177,6 +213,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       _quote = null;
       _editingIndex = null;
     });
+    widget.onQuoteConsumed?.call();
   }
 
   void _cancelEditing() {
@@ -322,7 +359,8 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   }
 
   /// 「不再提醒」的持久化 key——全局一次性偏好，不分文献。
-  static const _kNewChatHintDismissedKey = SettingsKeys.chatNewSessionHintDismissed;
+  static const _kNewChatHintDismissedKey =
+      SettingsKeys.chatNewSessionHintDismissed;
 
   /// 新建会话：首次（未勾选不再提醒）先确认「新会话仍基于当前文献」，
   /// 避免用户误以为开新会话 = 脱离文献的自由聊天。
@@ -444,7 +482,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         onLocateQuote: widget.args.onLocateQuote,
       ),
     );
-    context.pop();
+    if (!widget.embedded) context.pop();
   }
 
   Future<void> _showError(String message) async {
@@ -474,58 +512,76 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     final session = chat.activeSession;
     final messages = session?.messages ?? const <ChatMessage>[];
 
-    return Scaffold(
-      key: _scaffoldKey,
-      // 全覆盖抽屉与系统返回/横滑手势冲突，只走按钮开启。
-      drawerEnableOpenDragGesture: false,
-      drawer: _buildSessionsDrawer(theme, cs),
-      appBar: AppBar(
-        leading: const BackButton(),
-        title: Text(
-          session?.title ?? l10n.askAi,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final drawerWidth = widget.embedded
+            ? (constraints.maxWidth.isFinite
+                  ? constraints.maxWidth
+                  : widget.paneWidth!)
+            : math.min(360.0, MediaQuery.sizeOf(context).width);
+        return Scaffold(
+          key: _scaffoldKey,
+          // 全覆盖抽屉与系统返回/横滑手势冲突，只走按钮开启。
+          drawerEnableOpenDragGesture: false,
+          drawer: _buildSessionsDrawer(theme, cs, drawerWidth),
+          appBar: AppBar(
+            leading: widget.embedded
+                ? IconButton(
+                    icon: const Icon(Symbols.close_rounded),
+                    tooltip: l10n.close,
+                    onPressed: () {
+                      Haptics.soft();
+                      widget.onClose?.call();
+                    },
+                  )
+                : const BackButton(),
+            title: Text(
+              session?.title ?? l10n.askAi,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Symbols.history_rounded, size: 22),
+                tooltip: l10n.chatHistory,
+                onPressed: () {
+                  Haptics.soft();
+                  _scaffoldKey.currentState?.openDrawer();
+                },
+              ),
+              IconButton(
+                icon: const Icon(Symbols.add_comment_rounded, size: 22),
+                tooltip: l10n.newChat,
+                onPressed: () {
+                  Haptics.soft();
+                  _handleNewChat();
+                },
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Symbols.history_rounded, size: 22),
-            tooltip: l10n.chatHistory,
-            onPressed: () {
-              Haptics.soft();
-              _scaffoldKey.currentState?.openDrawer();
-            },
+          body: Column(
+            children: [
+              Expanded(
+                child: messages.isEmpty && !chat.sending
+                    ? _buildEmptyState(theme, cs)
+                    : _buildMessageList(
+                        theme,
+                        cs,
+                        messages,
+                        chat.sending,
+                        chat.streamingText,
+                      ),
+              ),
+              _buildComposer(theme, cs, chat.sending),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Symbols.add_comment_rounded, size: 22),
-            tooltip: l10n.newChat,
-            onPressed: () {
-              Haptics.soft();
-              _handleNewChat();
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: messages.isEmpty && !chat.sending
-                ? _buildEmptyState(theme, cs)
-                : _buildMessageList(
-                    theme,
-                    cs,
-                    messages,
-                    chat.sending,
-                    chat.streamingText,
-                  ),
-          ),
-          _buildComposer(theme, cs, chat.sending),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -893,9 +949,202 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         );
   }
 
+  Widget _composerToolButton({
+    required IconData icon,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    final embedded = widget.embedded;
+    return IconButton(
+      icon: Icon(icon, size: embedded ? 20 : 22, color: color),
+      iconSize: embedded ? 20 : 24,
+      tooltip: tooltip,
+      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(8),
+      constraints: embedded
+          ? BoxConstraints.tight(const Size(36, 36))
+          : const BoxConstraints(minWidth: 48, minHeight: 48),
+      onPressed: onPressed,
+    );
+  }
+
   Widget _buildComposer(ThemeData theme, ColorScheme cs, bool sending) {
     final l10n = context.l10n;
+    final embedded = widget.embedded;
+    final toolButtons = [
+      _composerToolButton(
+        icon: _role == ChatModelRole.expert
+            ? Symbols.psychology_rounded
+            : Symbols.bolt_rounded,
+        color: cs.onSurfaceVariant,
+        tooltip: _role == ChatModelRole.expert ? l10n.expert : l10n.fast,
+        onPressed: () {
+          Haptics.soft();
+          setState(() {
+            _role = _role == ChatModelRole.expert
+                ? ChatModelRole.fast
+                : ChatModelRole.expert;
+          });
+        },
+      ),
+      _composerToolButton(
+        icon: Symbols.neurology_rounded,
+        color: _thinking != null ? cs.primary : cs.onSurfaceVariant,
+        tooltip: l10n.thinkingIntensity,
+        onPressed: () {
+          Haptics.soft();
+          _showThinkingSheet();
+        },
+      ),
+      _composerToolButton(
+        icon: Symbols.travel_explore_rounded,
+        color: _webSearch ? cs.primary : cs.onSurfaceVariant,
+        tooltip: l10n.searchToolLabel,
+        onPressed: () {
+          Haptics.soft();
+          final enabled = !_webSearch;
+          setState(() => _webSearch = enabled);
+          if (enabled) _maybeShowSearchHint();
+        },
+      ),
+      _composerToolButton(
+        icon: Symbols.flowsheet,
+        color: _stream ? cs.primary : cs.onSurfaceVariant,
+        tooltip: l10n.streamOutput,
+        onPressed: () {
+          Haptics.soft();
+          setState(() => _stream = !_stream);
+          GStorage.setting.put(_kChatStreamKey, _stream);
+        },
+      ),
+    ];
+    final sendButton = sending
+        ? IconButton.filled(
+            icon: const Icon(Symbols.stop_rounded, size: 22),
+            tooltip: l10n.cancel,
+            style: IconButton.styleFrom(
+              backgroundColor: cs.errorContainer,
+              foregroundColor: cs.onErrorContainer,
+            ),
+            onPressed: () {
+              Haptics.soft();
+              ref.read(documentChatProvider(_documentId).notifier).cancel();
+            },
+          )
+        : IconButton.filled(
+            icon: const Icon(Symbols.arrow_upward_rounded, size: 22),
+            tooltip: l10n.chatSend,
+            onPressed: _send,
+          );
+
+    Widget inner = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_editingIndex != null) ...[
+          Text(
+            l10n.chatEditHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (_quote != null || _figureImagePath != null) ...[
+          _QuoteCard(
+            text: _quote ?? '',
+            imagePath: _figureImagePath,
+            onRemove: () {
+              Haptics.soft();
+              setState(() {
+                _quote = null;
+                _figureImagePath = null;
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+        Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+          ),
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_editingIndex != null)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(8, 4, 4, 0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Symbols.edit_rounded,
+                        size: 16,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.chatEditingMessage,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _cancelEditing,
+                        child: Icon(
+                          Symbols.close_rounded,
+                          size: 18,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              TextField(
+                controller: _inputController,
+                minLines: 2,
+                maxLines: 6,
+                textInputAction: TextInputAction.newline,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  hintText: l10n.chatInputHint,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                ),
+              ),
+              if (embedded) ...[
+                Wrap(spacing: 0, runSpacing: 0, children: toolButtons),
+                Align(alignment: Alignment.centerRight, child: sendButton),
+              ] else
+                Row(children: [...toolButtons, const Spacer(), sendButton]),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (embedded) {
+      inner = ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: inner,
+      );
+    }
+
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: cs.surface,
         border: Border(
@@ -905,198 +1154,10 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_editingIndex != null) ...[
-                Text(
-                  l10n.chatEditHint,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              if (_quote != null || _figureImagePath != null) ...[
-                _QuoteCard(
-                  text: _quote ?? '',
-                  imagePath: _figureImagePath,
-                  onRemove: () {
-                    Haptics.soft();
-                    setState(() {
-                      _quote = null;
-                      _figureImagePath = null;
-                    });
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
-              Container(
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: cs.outlineVariant.withAlpha(100)),
-                ),
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_editingIndex != null)
-                      Container(
-                        margin: const EdgeInsets.fromLTRB(8, 4, 4, 0),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Symbols.edit_rounded,
-                              size: 16,
-                              color: cs.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                l10n.chatEditingMessage,
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: _cancelEditing,
-                              child: Icon(
-                                Symbols.close_rounded,
-                                size: 18,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    TextField(
-                      controller: _inputController,
-                      minLines: 2,
-                      maxLines: 6,
-                      textInputAction: TextInputAction.newline,
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        hintText: l10n.chatInputHint,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
-                        ),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            _role == ChatModelRole.expert
-                                ? Symbols.psychology_rounded
-                                : Symbols.bolt_rounded,
-                            size: 22,
-                            color: cs.onSurfaceVariant,
-                          ),
-                          tooltip: _role == ChatModelRole.expert
-                              ? l10n.expert
-                              : l10n.fast,
-                          onPressed: () {
-                            Haptics.soft();
-                            setState(() {
-                              _role = _role == ChatModelRole.expert
-                                  ? ChatModelRole.fast
-                                  : ChatModelRole.expert;
-                            });
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Symbols.neurology_rounded,
-                            size: 22,
-                            color: _thinking != null
-                                ? cs.primary
-                                : cs.onSurfaceVariant,
-                          ),
-                          tooltip: l10n.thinkingIntensity,
-                          onPressed: () {
-                            Haptics.soft();
-                            _showThinkingSheet();
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Symbols.travel_explore_rounded,
-                            size: 22,
-                            color: _webSearch
-                                ? cs.primary
-                                : cs.onSurfaceVariant,
-                          ),
-                          tooltip: l10n.searchToolLabel,
-                          onPressed: () {
-                            Haptics.soft();
-                            final enabled = !_webSearch;
-                            setState(() => _webSearch = enabled);
-                            if (enabled) _maybeShowSearchHint();
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Symbols.flowsheet,
-                            size: 22,
-                            color: _stream ? cs.primary : cs.onSurfaceVariant,
-                          ),
-                          tooltip: l10n.streamOutput,
-                          onPressed: () {
-                            Haptics.soft();
-                            setState(() => _stream = !_stream);
-                            GStorage.setting.put(_kChatStreamKey, _stream);
-                          },
-                        ),
-                        const Spacer(),
-                        sending
-                            ? IconButton.filled(
-                                icon: const Icon(
-                                  Symbols.stop_rounded,
-                                  size: 22,
-                                ),
-                                tooltip: l10n.cancel,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: cs.errorContainer,
-                                  foregroundColor: cs.onErrorContainer,
-                                ),
-                                onPressed: () {
-                                  Haptics.soft();
-                                  ref
-                                      .read(
-                                        documentChatProvider(
-                                          _documentId,
-                                        ).notifier,
-                                      )
-                                      .cancel();
-                                },
-                              )
-                            : IconButton.filled(
-                                icon: const Icon(
-                                  Symbols.arrow_upward_rounded,
-                                  size: 22,
-                                ),
-                                tooltip: l10n.chatSend,
-                                onPressed: _send,
-                              ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          padding: embedded
+              ? const EdgeInsets.fromLTRB(8, 8, 8, 8)
+              : const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: inner,
         ),
       ),
     );
@@ -1210,13 +1271,13 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
 
   // ─── 会话历史抽屉（左侧全覆盖）───
 
-  Widget _buildSessionsDrawer(ThemeData theme, ColorScheme cs) {
+  Widget _buildSessionsDrawer(ThemeData theme, ColorScheme cs, double width) {
     final l10n = context.l10n;
     final chat = ref.watch(documentChatProvider(_documentId));
     final notifier = ref.read(documentChatProvider(_documentId).notifier);
 
     return Drawer(
-      width: MediaQuery.of(context).size.width,
+      width: width,
       backgroundColor: cs.surface,
       child: SafeArea(
         child: Column(
@@ -1250,7 +1311,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             GestureDetector(
               onTap: () {
                 Haptics.soft();
-                context.pop();
+                if (widget.embedded) {
+                  _scaffoldKey.currentState?.closeDrawer();
+                } else {
+                  context.pop();
+                }
               },
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
@@ -1507,8 +1572,7 @@ class _QuoteCardState extends State<_QuoteCard> {
                               color: cs.onSurfaceVariant,
                             ),
                             maxLines: _expanded ? null : 2,
-                            overflow:
-                                _expanded ? null : TextOverflow.ellipsis,
+                            overflow: _expanded ? null : TextOverflow.ellipsis,
                           ),
                       ],
                     ),

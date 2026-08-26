@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:extended_image/extended_image.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +27,7 @@ import '../../../services/markdown_paragraph_extractor.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
 import '../../../services/translation_service.dart';
+import '../../../utils/desktop.dart';
 
 /// 以 fade 转场打开 [FigureViewer]。
 ///
@@ -43,8 +44,9 @@ Future<void> showFigureViewer(
   String? documentId,
   Document? document,
   LocateQuoteInReader? onLocateQuote,
+  void Function(DocumentChatPageArgs args)? onOpenChat,
 }) async {
-  // 截取背景：找到最外层 RepaintBoundary（包含阅读器 + Drawer 全屏画面）
+  // 截取背景：找到最外层 RepaintBoundary（阅读器全屏画面）
   Uint8List? bgSnapshot;
   RenderRepaintBoundary? boundary;
   RenderObject? ro = context.findRenderObject();
@@ -77,6 +79,7 @@ Future<void> showFigureViewer(
         documentId: documentId,
         document: document,
         onLocateQuote: onLocateQuote,
+        onOpenChat: onOpenChat,
       ),
       transitionsBuilder: (_, animation, _, child) =>
           FadeTransition(opacity: animation, child: child),
@@ -92,6 +95,7 @@ class FigureViewer extends ConsumerStatefulWidget {
   final String? documentId;
   final Document? document;
   final LocateQuoteInReader? onLocateQuote;
+  final void Function(DocumentChatPageArgs args)? onOpenChat;
 
   const FigureViewer({
     super.key,
@@ -101,6 +105,7 @@ class FigureViewer extends ConsumerStatefulWidget {
     this.documentId,
     this.document,
     this.onLocateQuote,
+    this.onOpenChat,
   });
 
   @override
@@ -116,9 +121,6 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   VoidCallback? _doubleTapCb;
 
   bool get _isGallery => widget.figures.length > 1;
-
-  bool get _isDesktop =>
-      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
   static const _kCaptionStyle = TextStyle(
     color: Colors.white,
@@ -373,7 +375,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         overlay.size.height - globalPosition.dy,
       ),
       items: [
-        if (_isDesktop)
+        if (isDesktopOs)
           PopupMenuItem<String>(
             value: 'copy',
             height: 40,
@@ -483,7 +485,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
 
     try {
-      if (_isDesktop) {
+      if (isDesktopOs) {
         if (!mounted) return;
         final targetPath = await FilePicker.platform.saveFile(
           dialogTitle: context.l10n.saveImageTitle,
@@ -660,9 +662,14 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       onLocateQuote: widget.onLocateQuote,
     );
 
+    final onOpenChat = widget.onOpenChat;
     final router = GoRouter.of(context);
     Navigator.of(context, rootNavigator: true).pop();
-    router.push(AppRoutes.readerChat, extra: args);
+    if (onOpenChat != null) {
+      onOpenChat(args);
+    } else {
+      router.push(AppRoutes.readerChat, extra: args);
+    }
   }
 
   Widget _buildTranslateButton(

@@ -15,3 +15,7 @@ class ToggleReaderOutlineIntent extends Intent {
 class ToggleReaderNotesIntent extends Intent {
   const ToggleReaderNotesIntent();
 }
+
+class ToggleReaderAskAiIntent extends Intent {
+  const ToggleReaderAskAiIntent();
+}

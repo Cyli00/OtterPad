@@ -26,28 +26,30 @@ import '../../../services/figure_extract_service.dart';
 import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
+import '../../../utils/desktop.dart';
 import '../../../utils/doc_paths.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../setting/setting_picker.dart';
+import '../chat/document_chat_page.dart';
 import '../widgets/figure_viewer.dart';
 
 class ReaderSummaryImageCoordinator {
   final BuildContext context;
   final WidgetRef ref;
   final Document document;
-  final GlobalKey<ScaffoldState>? scaffoldKey;
   final ValueNotifier<SummaryImageState> summaryImageState;
   final ReaderSessionNotifier sessionNotifier;
   final VoidCallback openOutlineSheet;
+  final void Function(DocumentChatPageArgs args)? onOpenChat;
 
   const ReaderSummaryImageCoordinator({
     required this.context,
     required this.ref,
     required this.document,
-    this.scaffoldKey,
     required this.summaryImageState,
     required this.sessionNotifier,
     required this.openOutlineSheet,
+    this.onOpenChat,
   });
 
   Future<void> generate({bool openOutline = true}) async {
@@ -150,6 +152,7 @@ class ReaderSummaryImageCoordinator {
       [entry],
       documentId: document.id,
       document: document,
+      onOpenChat: onOpenChat,
     );
   }
 
@@ -299,7 +302,7 @@ class ReaderSummaryImageCoordinator {
 
     // 4. 平台分流
     try {
-      if (_isDesktop) {
+      if (isDesktopOs) {
         // 桌面：打包 ZIP（全平铺：根目录直接放 figure / article.md / prompt.md，
         // 用户解压后一次框选拖到 ChatGPT 网页版即可）
         if (!context.mounted) return null;
@@ -341,9 +344,6 @@ class ReaderSummaryImageCoordinator {
       return context.l10n.exportFailed('$e');
     }
   }
-
-  bool get _isDesktop =>
-      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
   String _safeFileStem(String raw) {
     final trimmed = raw.trim();
