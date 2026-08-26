@@ -13,22 +13,30 @@ class SelectionState {
   final bool isActive;
   final Set<String> selectedIds;
   final String? sourceContext;
+  final String? anchorId;
 
   const SelectionState({
     this.isActive = false,
     this.selectedIds = const {},
     this.sourceContext,
+    this.anchorId,
   });
+
+  static const _unset = Object();
 
   SelectionState copyWith({
     bool? isActive,
     Set<String>? selectedIds,
     String? sourceContext,
+    Object? anchorId = _unset,
   }) {
     return SelectionState(
       isActive: isActive ?? this.isActive,
       selectedIds: selectedIds ?? this.selectedIds,
       sourceContext: sourceContext ?? this.sourceContext,
+      anchorId: identical(anchorId, _unset)
+          ? this.anchorId
+          : anchorId as String?,
     );
   }
 }
@@ -42,6 +50,7 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
       isActive: true,
       selectedIds: {docId},
       sourceContext: sourceContext,
+      anchorId: docId,
     );
   }
 
@@ -67,6 +76,24 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
     }
   }
 
+  /// 从 [anchorId] 到 [toId] 含端点，并入当前选中集合。
+  void selectRange({required List<String> orderedIds, required String toId}) {
+    if (!state.isActive) return;
+    final fromId = state.anchorId ?? toId;
+    var from = orderedIds.indexOf(fromId);
+    final to = orderedIds.indexOf(toId);
+    if (to < 0) return;
+    if (from < 0) from = to;
+    final start = from < to ? from : to;
+    final end = from < to ? to : from;
+    state = state.copyWith(
+      selectedIds: {
+        ...state.selectedIds,
+        ...orderedIds.sublist(start, end + 1),
+      },
+    );
+  }
+
   /// 退出多选模式，清空所有状态
   void exit() {
     state = const SelectionState();
@@ -75,5 +102,5 @@ class SelectionNotifier extends StateNotifier<SelectionState> {
 
 final selectionProvider =
     StateNotifierProvider<SelectionNotifier, SelectionState>(
-  (ref) => SelectionNotifier(),
-);
+      (ref) => SelectionNotifier(),
+    );

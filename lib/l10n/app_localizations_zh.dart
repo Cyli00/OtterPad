@@ -414,6 +414,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get removeFromFavorite => '移出收藏夹';
 
   @override
+  String get openInReader => '打开';
+
+  @override
+  String get enterSelection => '进入多选';
+
+  @override
   String get deleteFavorite => '删除收藏夹';
 
   @override
@@ -2548,6 +2554,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get emptyLibraryAction => '初始设置';
 
   @override
+  String get emptyLibraryDropHint => '也可以将 PDF 拖到此处导入';
+
+  @override
   String get dropPdfToImport => '拖入 PDF 以导入';
 
   @override
@@ -2962,6 +2971,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get removeFromFavorite => '移出收藏夾';
+
+  @override
+  String get openInReader => '開啟';
+
+  @override
+  String get enterSelection => '進入多選';
 
   @override
   String get deleteFavorite => '刪除收藏夾';
@@ -5096,6 +5111,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get emptyLibraryAction => '初始設定';
+
+  @override
+  String get emptyLibraryDropHint => '也可以將 PDF 拖到此處匯入';
 
   @override
   String get dropPdfToImport => '拖入 PDF 以匯入';

@@ -10,6 +10,7 @@ import '../../providers/history_provider.dart';
 import '../../providers/sync_status_provider.dart';
 import '../../router/app_routes.dart';
 import '../../utils/doc_paths.dart';
+import '../../utils/responsive.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
@@ -115,15 +116,16 @@ class ShelfPage extends ConsumerWidget {
                     ),
                     const Spacer(),
                     const _CloudSyncButton(),
-                    IconButton(
-                      icon: const Icon(Symbols.settings_rounded),
-                      color: theme.colorScheme.onSurfaceVariant,
-                      tooltip: context.l10n.settings,
-                      onPressed: () {
-                        Haptics.soft();
-                        context.push(AppRoutes.settingsOverlay);
-                      },
-                    ),
+                    if (!Responsive.showNavigationRail(context))
+                      IconButton(
+                        icon: const Icon(Symbols.settings_rounded),
+                        color: theme.colorScheme.onSurfaceVariant,
+                        tooltip: context.l10n.settings,
+                        onPressed: () {
+                          Haptics.soft();
+                          context.push(AppRoutes.settingsOverlay);
+                        },
+                      ),
                   ],
                 ),
                 const SizedBox(height: 32),
@@ -218,15 +220,10 @@ class ShelfPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // 水平滚动的卡片列表
-                SizedBox(
-                  height: 380,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    itemCount: favorites.length,
-                    itemBuilder: (context, index) {
-                      final fav = favorites[index];
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxW = constraints.maxWidth;
+                    FavoriteCard cardFor(Favorite fav) {
                       final pdfAssets = [
                         for (final documentId in fav.documentIds)
                           if (byId[documentId]?.contentHash != null)
@@ -252,14 +249,36 @@ class ShelfPage extends ConsumerWidget {
                         ),
                         pdfAssets: pdfAssets,
                         totalCount: fav.documentIds.length,
+                        maxWidth: maxW,
+                        margin: maxW >= 900
+                            ? EdgeInsets.zero
+                            : const EdgeInsets.only(right: 16),
                         onTap: () => _openDetail(context, fav),
                         onEdit: () => _editFavorite(context, ref, fav),
                         onDelete: fav.isDefault
                             ? null
                             : () => _confirmDelete(context, ref, fav),
                       );
-                    },
-                  ),
+                    }
+
+                    if (maxW >= 900) {
+                      return Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: [for (final fav in favorites) cardFor(fav)],
+                      );
+                    }
+                    return SizedBox(
+                      height: 380,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none,
+                        itemCount: favorites.length,
+                        itemBuilder: (context, index) =>
+                            cardFor(favorites[index]),
+                      ),
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 32), // 底部留白

@@ -8,22 +8,12 @@ import '../../services/haptics.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/onboarding_dialogs.dart';
 import '../../widgets/onboarding_spotlight.dart';
-import '../../providers/api_provider.dart';
-import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
-import '../../providers/favorites_provider.dart';
 import '../../providers/onboarding_provider.dart';
-import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../widgets/selection_pop_scope.dart';
-import '../../services/batch_extract_service.dart';
-import '../../services/ai_settings_prompt.dart';
 import '../../services/snackbar_service.dart';
 import '../../router/app_routes.dart';
-import '../../utils/doc_paths.dart';
-import '../shelf/widgets/create_favorite_dialog.dart';
-import '../shelf/widgets/pick_favorite_sheet.dart';
-import 'widgets/batch_progress_sheet.dart';
 import 'widgets/bookshelf_grid.dart';
 import 'widgets/bookshelf_list.dart';
 import 'widgets/doc_card_actions.dart';
@@ -51,7 +41,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     super.initState();
     // length 2：推荐（左）/ 文献库（右）；initialIndex 1 → 默认打开文献库
     _tabController = TabController(length: 2, initialIndex: 1, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStartOnboarding());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _maybeStartOnboarding(),
+    );
   }
 
   Future<void> _maybeStartOnboarding() async {
@@ -128,41 +120,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
   }
 
   /// 把选中文献移入某个收藏夹——先选目标收藏夹（含新建入口），再批量加入。
-  ///
-  /// Provider 层 `addDocuments` 自带去重；pick sheet 还会显示与每个收藏夹
-  /// 的重叠度提示，让用户清楚有多少篇会被跳过。
   Future<void> _addSelectedToFavorite() async {
     final selection = ref.read(selectionProvider);
-    if (selection.selectedIds.isEmpty) return;
-
-    final favorites = ref.read(favoritesProvider).value ?? const [];
-    final selectedIds = selection.selectedIds.toSet();
-
-    final result = await showPickFavoriteSheet(
-      context: context,
-      favorites: favorites,
-      selectedDocumentIds: selectedIds,
-      onCreateFavorite: () async {
-        final res = await showCreateFavoriteDialog(context);
-        if (res == null) return null;
-        return ref
-            .read(favoritesProvider.notifier)
-            .create(emoji: res['emoji']!, name: res['name']!);
-      },
+    await DocCardActions.addToFavorite(
+      context,
+      ref,
+      selection.selectedIds.toSet(),
+      exitSelection: true,
     );
-    if (result == null) return;
-
-    final added = await ref
-        .read(documentLifecycleProvider)
-        .addToFavoriteBatch(result.favoriteId, selectedIds);
-    if (!mounted) return;
-    final skipped = selectedIds.length - added;
-    final l10n = context.l10n;
-    final msg = skipped == 0
-        ? l10n.documentsAddedCount(added)
-        : l10n.documentsAddedSkipped(added, skipped);
-    ref.read(snackBarServiceProvider).showResult(message: msg);
-    ref.read(selectionProvider.notifier).exit();
   }
 
   /// 批量删除选中文献
@@ -206,7 +171,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
       await DocCardActions.delete(ref, id);
     }
 
-    ref.read(snackBarServiceProvider).showResult(message: l10n.deletedDocuments(count));
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: l10n.deletedDocuments(count));
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -214,58 +181,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
   Future<void> _extractSelected() async {
     final selection = ref.read(selectionProvider);
     if (selection.selectedIds.isEmpty) return;
-
-    final apiState = ref.read(docExtractApiProvider);
-    if (!await AiSettingsPrompt.ensureExtractConfigured(
-      context: context,
-      apiState: apiState,
-    )) {
-      return;
-    }
-    if (!mounted) return;
-
     final docs = ref.read(validDocsProvider);
     final selectedDocs = docs
-        .where(
-          (d) => selection.selectedIds.contains(d.id) && d.contentHash != null,
-        )
+        .where((d) => selection.selectedIds.contains(d.id))
         .toList();
-
-    if (selectedDocs.isEmpty) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.noPdfFilesSelected);
-      return;
-    }
-
-    final items = selectedDocs
-        .map(
-          (d) => BatchExtractItem(
-            documentId: d.id,
-            filePath: DocPaths.pdf(d.id),
-            title: d.title,
-          ),
-        )
-        .toList();
-
-    // 提取前应用当前代理配置
-    final proxyState = ref.read(proxyProvider);
-    BatchExtractService.instance.applyProxy(
-      proxyState.mode,
-      proxyState.host,
-      proxyState.port,
-    );
-
-    ref.read(selectionProvider.notifier).exit();
-
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => BatchProgressSheet(items: items, apiState: apiState),
+    await DocCardActions.extract(
+      context,
+      ref,
+      selectedDocs,
+      exitSelection: true,
     );
   }
 
@@ -285,6 +209,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
     return SelectionPopScope(
       sourceContext: 'library',
+      onSelectAll: () {
+        if (!allSelected) {
+          ref.read(selectionProvider.notifier).toggleAll(allIds);
+        }
+      },
+      onDeleteSelected: _deleteSelected,
       child: Scaffold(
         backgroundColor: cs.surface,
         body: SafeArea(
@@ -300,6 +230,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                 child: isSelectionMode
                     ? SelectionAppBar(
                         key: const ValueKey('selection'),
+                        useSafeArea: false,
                         onClose: () =>
                             ref.read(selectionProvider.notifier).exit(),
                         selectedCount: selection.selectedIds.length,
@@ -324,9 +255,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                 ),
               ),
               // ── 内容区 ──
-              Expanded(
-                child: _buildTabContent(isGrid),
-              ),
+              Expanded(child: _buildTabContent(isGrid)),
             ],
           ),
         ),
@@ -375,5 +304,4 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
       ],
     );
   }
-
 }

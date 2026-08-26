@@ -7,6 +7,7 @@ import '../../providers/history_provider.dart';
 import '../../services/haptics.dart';
 import '../../widgets/app_dialog.dart';
 import '../../services/snackbar_service.dart';
+import '../../utils/desktop.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../../core/l10n.dart';
@@ -132,6 +133,7 @@ class ReadingHistoryPage extends ConsumerWidget {
             final doc = section.docs[index];
             return SpringDismissible(
               key: ValueKey(doc.id),
+              enableSwipe: !isDesktopOs,
               onDismissed: () async {
                 await ref.read(historyProvider.notifier).removeDoc(doc.id);
                 if (!context.mounted) return;
@@ -139,11 +141,31 @@ class ReadingHistoryPage extends ConsumerWidget {
                     .read(snackBarServiceProvider)
                     .showResult(message: context.l10n.removedFromHistory);
               },
-              background:
-                  SpringDismissDeleteBackground(label: context.l10n.remove),
+              background: SpringDismissDeleteBackground(
+                label: context.l10n.remove,
+              ),
               child: DocListCard(
                 doc: doc,
                 onTap: () => DocCardActions.openReader(context, ref, doc),
+                onFavorite: () =>
+                    DocCardActions.addToFavorite(context, ref, {doc.id}),
+                onContextMenu: (pos) => DocCardActions.showMenu(
+                  context: context,
+                  ref: ref,
+                  globalPosition: pos,
+                  doc: doc,
+                  sourceContext: 'history',
+                  orderedIds: const [],
+                  canEnterSelection: false,
+                  confirmOverrideDelete: false,
+                  onDeleteOverride: () async {
+                    await ref.read(historyProvider.notifier).removeDoc(doc.id);
+                    if (!context.mounted) return;
+                    ref
+                        .read(snackBarServiceProvider)
+                        .showResult(message: context.l10n.removedFromHistory);
+                  },
+                ),
               ),
             );
           },
@@ -177,9 +199,7 @@ class ReadingHistoryPage extends ConsumerWidget {
               Haptics.soft();
               Navigator.pop(context, true);
             },
-            style: TextButton.styleFrom(
-              foregroundColor: cs.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: Text(context.l10n.clearHistory),
           ),
         ],
@@ -188,7 +208,9 @@ class ReadingHistoryPage extends ConsumerWidget {
     if (confirmed != true) return;
     await ref.read(historyProvider.notifier).clear();
     if (!context.mounted) return;
-    ref.read(snackBarServiceProvider).showResult(message: context.l10n.readingHistoryCleared);
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.readingHistoryCleared);
   }
 }
 

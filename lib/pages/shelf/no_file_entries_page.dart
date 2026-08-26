@@ -12,6 +12,7 @@ import '../../providers/documents_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../widgets/selection_pop_scope.dart';
 import '../../services/snackbar_service.dart';
+import '../../utils/desktop.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
@@ -38,8 +39,16 @@ class NoFileEntriesPage extends ConsumerWidget {
     final allSelected =
         allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
+    final orderedIds = [for (final d in noFileDocs) d.id];
+
     return SelectionPopScope(
       sourceContext: _sourceContext,
+      onSelectAll: () {
+        if (!allSelected) {
+          ref.read(selectionProvider.notifier).toggleAll(allIds);
+        }
+      },
+      onDeleteSelected: () => _deleteSelected(context, ref, selection),
       child: Scaffold(
         backgroundColor: colorScheme.surface,
         appBar: isSelectionMode
@@ -115,6 +124,32 @@ class NoFileEntriesPage extends ConsumerWidget {
                           onSelectionTap: () => ref
                               .read(selectionProvider.notifier)
                               .toggle(doc.id),
+                          onModifierToggle: () => DocCardActions.modifierToggle(
+                            ref,
+                            doc.id,
+                            _sourceContext,
+                          ),
+                          onSelectRange: () => DocCardActions.selectRange(
+                            ref,
+                            docId: doc.id,
+                            sourceContext: _sourceContext,
+                            orderedIds: orderedIds,
+                          ),
+                          onFavorite: () => DocCardActions.addToFavorite(
+                            context,
+                            ref,
+                            {doc.id},
+                          ),
+                          onContextMenu: (pos) => DocCardActions.showMenu(
+                            context: context,
+                            ref: ref,
+                            globalPosition: pos,
+                            doc: doc,
+                            sourceContext: _sourceContext,
+                            orderedIds: orderedIds,
+                            canOpen: false,
+                            canExtract: false,
+                          ),
                         ),
                         if (!isSelectionMode)
                           Positioned(
@@ -155,11 +190,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                                   IconButton.filledTonal(
                                     onPressed: () {
                                       Haptics.soft();
-                                      _handleRedownload(
-                                        ref,
-                                        doc.id,
-                                        doc.title,
-                                      );
+                                      _handleRedownload(ref, doc.id, doc.title);
                                     },
                                     icon: const Icon(Symbols.download_rounded),
                                     iconSize: 18,
@@ -181,6 +212,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                     final entryDeletedMsg = context.l10n.entryDeleted;
                     return SpringDismissible(
                       key: ValueKey(doc.id),
+                      enableSwipe: !isDesktopOs,
                       onDismissed: () async {
                         await DocCardActions.delete(ref, doc.id);
                         ref
@@ -208,6 +240,7 @@ class NoFileEntriesPage extends ConsumerWidget {
     WidgetRef ref,
     SelectionState selection,
   ) async {
+    if (selection.selectedIds.isEmpty) return;
     final count = selection.selectedIds.length;
     final cs = Theme.of(context).colorScheme;
     final confirmed = await showAppDialog<bool>(
@@ -243,13 +276,18 @@ class NoFileEntriesPage extends ConsumerWidget {
       await DocCardActions.delete(ref, id);
     }
     if (!context.mounted) return;
-    ref.read(snackBarServiceProvider).showResult(message: context.l10n.deletedEntries(count));
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.deletedEntries(count));
     ref.read(selectionProvider.notifier).exit();
   }
 
   /// 批量从公网拉取 PDF：对所有选中项发起下载（无 DOI 的条目会先尝试标题搜索补全）。
   /// 进度与汇总由 [DocumentTaskNotifier.redownloadBatch] 的聚合 snackbar 负责。
-  Future<void> _downloadSelected(WidgetRef ref, SelectionState selection) async {
+  Future<void> _downloadSelected(
+    WidgetRef ref,
+    SelectionState selection,
+  ) async {
     final selectedIds = selection.selectedIds;
     final selected = ref
         .read(noFileDocsProvider)
@@ -259,9 +297,9 @@ class NoFileEntriesPage extends ConsumerWidget {
     if (selected.isEmpty) return;
 
     ref.read(selectionProvider.notifier).exit();
-    await ref.read(documentTaskProvider.notifier).redownloadBatch(
-      [for (final d in selected) (documentId: d.id, title: d.title)],
-    );
+    await ref.read(documentTaskProvider.notifier).redownloadBatch([
+      for (final d in selected) (documentId: d.id, title: d.title),
+    ]);
   }
 
   Future<void> _handleAttachFile(

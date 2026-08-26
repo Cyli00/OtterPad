@@ -20,6 +20,9 @@ class SpringDismissible extends StatefulWidget {
   /// 快速划动速度阈值（px/s），超过则无视位置直接删除。
   final double dismissVelocity;
 
+  /// 桌面端关闭滑动删除，改走右键。
+  final bool enableSwipe;
+
   const SpringDismissible({
     super.key,
     required this.child,
@@ -27,6 +30,7 @@ class SpringDismissible extends StatefulWidget {
     required this.onDismissed,
     this.threshold = 0.55,
     this.dismissVelocity = 1200,
+    this.enableSwipe = true,
   });
 
   @override
@@ -81,43 +85,42 @@ class _SpringDismissibleState extends State<SpringDismissible>
       Haptics.medium();
       _controller.value = _offset;
       _controller
-          .animateTo(
-            -_width * 1.5,
-            duration: kAnim,
-            curve: Curves.easeIn,
-          )
+          .animateTo(-_width * 1.5, duration: kAnim, curve: Curves.easeIn)
           .then((_) {
-        if (mounted) widget.onDismissed();
-      });
+            if (mounted) widget.onDismissed();
+          });
     } else {
       _controller.value = _offset;
-      _controller.animateWith(
-        SpringSimulation(_spring, _offset, 0, velocity),
-      );
+      _controller.animateWith(SpringSimulation(_spring, _offset, 0, velocity));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (ctx, box) {
-      _width = box.maxWidth;
-      final reveal = Curves.easeIn.transform(
-        (-_offset / _width).clamp(0.0, 1.0),
-      );
-      return GestureDetector(
-        onHorizontalDragUpdate: _onDragUpdate,
-        onHorizontalDragEnd: _onDragEnd,
-        child: Stack(children: [
-          Positioned.fill(
-            child: Opacity(opacity: reveal, child: widget.background),
+    if (!widget.enableSwipe) return widget.child;
+    return LayoutBuilder(
+      builder: (ctx, box) {
+        _width = box.maxWidth;
+        final reveal = Curves.easeIn.transform(
+          (-_offset / _width).clamp(0.0, 1.0),
+        );
+        return GestureDetector(
+          onHorizontalDragUpdate: _onDragUpdate,
+          onHorizontalDragEnd: _onDragEnd,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Opacity(opacity: reveal, child: widget.background),
+              ),
+              Transform.translate(
+                offset: Offset(_offset, 0),
+                child: widget.child,
+              ),
+            ],
           ),
-          Transform.translate(
-            offset: Offset(_offset, 0),
-            child: widget.child,
-          ),
-        ]),
-      );
-    });
+        );
+      },
+    );
   }
 }
 

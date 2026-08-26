@@ -3,7 +3,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
+import '../../../utils/desktop.dart';
 import '../../../widgets/tactile_press.dart';
+import 'doc_card_actions.dart';
+import 'hover_actions.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
 
@@ -33,6 +36,10 @@ class DocumentCard extends StatelessWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback? onSelectionTap;
+  final VoidCallback? onModifierToggle;
+  final VoidCallback? onSelectRange;
+  final void Function(Offset globalPosition)? onContextMenu;
+  final VoidCallback? onFavorite;
 
   const DocumentCard({
     super.key,
@@ -48,6 +55,10 @@ class DocumentCard extends StatelessWidget {
     this.isSelectionMode = false,
     this.isSelected = false,
     this.onSelectionTap,
+    this.onModifierToggle,
+    this.onSelectRange,
+    this.onContextMenu,
+    this.onFavorite,
   });
 
   @override
@@ -55,7 +66,12 @@ class DocumentCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return AnimatedContainer(
+    final showHover =
+        isDesktopOs &&
+        !isSelectionMode &&
+        (onFavorite != null || onContextMenu != null);
+
+    Widget card = AnimatedContainer(
       duration: kAnimFast,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -83,21 +99,33 @@ class DocumentCard extends StatelessWidget {
           baseColor: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(15),
           pressedScale: 0.98,
-          onTap: isSelectionMode ? onSelectionTap : onTap,
+          onTap: () => DocCardActions.handleTap(
+            isSelectionMode: isSelectionMode,
+            onOpen: onTap,
+            onToggle: onSelectionTap,
+            onModifierToggle: onModifierToggle,
+            onSelectRange: onSelectRange,
+          ),
           onLongPress: isSelectionMode ? null : onLongPress,
           child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 封面缩略图：A4 槽位 + BoxFit.cover + 顶部对齐。
-                //
-                // 设计取舍：
-                // - 槽位锁 0.707（A4 W/H）保证网格视觉对齐
-                // - 非 A4 PDF（PPT 导出、海报等）会被裁，但**从顶部裁**——
-                //   PDF 首页顶部一般是标题/作者，最有识别价值的信息留下
-                // - 之前 BoxFit.contain 在非 A4 PDF 上下产生 letterbox，
-                //   配卡片圆角难看；cover + topCenter 彻底消除 letterbox
-                AspectRatio(
-                  aspectRatio: 0.707,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 封面缩略图：A4 槽位 + BoxFit.cover + 顶部对齐。
+              //
+              // 设计取舍：
+              // - 槽位锁 0.707（A4 W/H）保证网格视觉对齐
+              // - 非 A4 PDF（PPT 导出、海报等）会被裁，但**从顶部裁**——
+              //   PDF 首页顶部一般是标题/作者，最有识别价值的信息留下
+              // - 之前 BoxFit.contain 在非 A4 PDF 上下产生 letterbox，
+              //   配卡片圆角难看；cover + topCenter 彻底消除 letterbox
+              AspectRatio(
+                aspectRatio: 0.707,
+                child: _wrapCoverHover(
+                  showHover: showHover,
+                  bar: DocHoverButtons(
+                    onFavorite: onFavorite,
+                    onMore: onContextMenu,
+                  ),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -112,8 +140,9 @@ class DocumentCard extends StatelessWidget {
                             : Center(
                                 child: Icon(
                                   Symbols.article_rounded,
-                                  color: colorScheme.onSurfaceVariant
-                                      .withAlpha(80),
+                                  color: colorScheme.onSurfaceVariant.withAlpha(
+                                    80,
+                                  ),
                                   size: 48,
                                 ),
                               ),
@@ -122,19 +151,20 @@ class DocumentCard extends StatelessWidget {
                         Container(
                           color: colorScheme.primary.withAlpha(80),
                           child: Center(
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: colorScheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Symbols.check_rounded,
-                                color: colorScheme.onPrimary,
-                                size: 28,
-                              ),
-                            ).animate().scaleXY(
+                            child:
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Symbols.check_rounded,
+                                    color: colorScheme.onPrimary,
+                                    size: 28,
+                                  ),
+                                ).animate().scaleXY(
                                   begin: 0.6,
                                   end: 1,
                                   duration: kAnim,
@@ -145,62 +175,79 @@ class DocumentCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                // 文字层
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+              ),
+              // 文字层
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          height: 1.25,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (journalName.isNotEmpty) ...[
+                        const SizedBox(height: 4),
                         Text(
-                          name,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            height: 1.25,
+                          journalName,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                           ),
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (journalName.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            journalName,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                year,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant
-                                      .withAlpha(180),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (progress > 0)
-                              ProgressChip(progress: progress),
-                          ],
-                        ),
                       ],
-                    ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              year,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant.withAlpha(
+                                  180,
+                                ),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (progress > 0) ProgressChip(progress: progress),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
       ),
     );
+
+    if (isDesktopOs && onContextMenu != null) {
+      card = GestureDetector(
+        onSecondaryTapDown: (d) => onContextMenu!(d.globalPosition),
+        child: card,
+      );
+    }
+    return card;
+  }
+
+  Widget _wrapCoverHover({
+    required bool showHover,
+    required Widget bar,
+    required Widget child,
+  }) {
+    if (!showHover) return child;
+    return HoverActions(bar: bar, child: child);
   }
 }
-

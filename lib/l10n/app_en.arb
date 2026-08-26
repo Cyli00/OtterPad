@@ -154,6 +154,8 @@
   "textExtraction": "Text Extraction",
   "addToFavorite": "Add to Favorite",
   "removeFromFavorite": "Remove from Favorite",
+  "openInReader": "Open",
+  "enterSelection": "Enter selection",
 
   "deleteFavorite": "Delete Favorite",
   "myLibrary": "My Library",
@@ -960,6 +962,7 @@
   "emptyLibraryTitle": "Your library is empty",
   "emptyLibraryBody": "Set up OCR and AI models, then add your first PDF to start reading",
   "emptyLibraryAction": "Initial Setup",
+  "emptyLibraryDropHint": "You can also drop PDF files here to import",
 
   "dropPdfToImport": "Drop PDF files to import",
   "dropPdfOnly": "Only PDF files can be imported"

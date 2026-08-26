@@ -885,6 +885,18 @@ abstract class AppLocalizations {
   /// **'Remove from Favorite'**
   String get removeFromFavorite;
 
+  /// No description provided for @openInReader.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get openInReader;
+
+  /// No description provided for @enterSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter selection'**
+  String get enterSelection;
+
   /// No description provided for @deleteFavorite.
   ///
   /// In en, this message translates to:
@@ -4670,6 +4682,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Initial Setup'**
   String get emptyLibraryAction;
+
+  /// No description provided for @emptyLibraryDropHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can also drop PDF files here to import'**
+  String get emptyLibraryDropHint;
 
   /// No description provided for @dropPdfToImport.
   ///

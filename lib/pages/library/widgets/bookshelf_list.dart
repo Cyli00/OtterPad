@@ -37,6 +37,8 @@ class BookshelfList extends ConsumerWidget {
       );
     }
 
+    final orderedIds = [for (final d in docs) d.id];
+
     Widget buildCard(int index) {
       final doc = docs[index];
       // 进度由 DocListCard 内部按 docId 细粒度订阅，无需在此下发
@@ -49,6 +51,23 @@ class BookshelfList extends ConsumerWidget {
             ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
         onSelectionTap: () =>
             ref.read(selectionProvider.notifier).toggle(doc.id),
+        onModifierToggle: () =>
+            DocCardActions.modifierToggle(ref, doc.id, 'library'),
+        onSelectRange: () => DocCardActions.selectRange(
+          ref,
+          docId: doc.id,
+          sourceContext: 'library',
+          orderedIds: orderedIds,
+        ),
+        onFavorite: () => DocCardActions.addToFavorite(context, ref, {doc.id}),
+        onContextMenu: (pos) => DocCardActions.showMenu(
+          context: context,
+          ref: ref,
+          globalPosition: pos,
+          doc: doc,
+          sourceContext: 'library',
+          orderedIds: orderedIds,
+        ),
       );
     }
 

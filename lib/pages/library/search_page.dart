@@ -48,127 +48,138 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: SafeArea(
-        child: Column(
-          children: [
-            // 搜索栏
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      Haptics.soft();
-                      context.pop();
-                    },
-                    icon: const Icon(Symbols.arrow_back_rounded),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      onChanged: (v) => setState(() => _query = v.trim()),
-                      decoration: InputDecoration(
-                        hintText: l10n.searchDocumentsHintDesktop,
-                        filled: true,
-                        fillColor: colorScheme.surfaceContainerHighest
-                            .withAlpha(150),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
-                        ),
-                        prefixIcon: Icon(
-                          Symbols.search_rounded,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        suffixIcon: _query.isNotEmpty
-                            ? IconButton(
-                                onPressed: () {
-                                  Haptics.soft();
-                                  _controller.clear();
-                                  setState(() => _query = '');
-                                },
-                                icon: Icon(
-                                  Symbols.clear_rounded,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              )
-                            : null,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              children: [
+                // 搜索栏
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          Haptics.soft();
+                          context.pop();
+                        },
+                        icon: const Icon(Symbols.arrow_back_rounded),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // 搜索结果
-            Expanded(
-              child: _query.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Symbols.search_rounded,
-                            size: 64,
-                            color: colorScheme.onSurfaceVariant.withAlpha(80),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            l10n.enterKeywordToSearch,
-                            style: theme.textTheme.bodyLarge?.copyWith(
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: TextField(
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          onChanged: (v) => setState(() => _query = v.trim()),
+                          decoration: InputDecoration(
+                            hintText: l10n.searchDocumentsHintDesktop,
+                            filled: true,
+                            fillColor: colorScheme.surfaceContainerHighest
+                                .withAlpha(150),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            prefixIcon: Icon(
+                              Symbols.search_rounded,
                               color: colorScheme.onSurfaceVariant,
                             ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : asyncDocs.when(
-                      loading: () => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                      error: (error, _) => Center(
-                        child: Text(
-                          '$error',
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: colorScheme.error,
+                            suffixIcon: _query.isNotEmpty
+                                ? IconButton(
+                                    onPressed: () {
+                                      Haptics.soft();
+                                      _controller.clear();
+                                      setState(() => _query = '');
+                                    },
+                                    icon: Icon(
+                                      Symbols.clear_rounded,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  )
+                                : null,
                           ),
                         ),
                       ),
-                      data: (docs) => docs.isEmpty
-                          ? Center(
-                              child: Text(
-                                l10n.noDocumentsFound,
+                    ],
+                  ),
+                ),
+                // 搜索结果
+                Expanded(
+                  child: _query.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Symbols.search_rounded,
+                                size: 64,
+                                color: colorScheme.onSurfaceVariant.withAlpha(
+                                  80,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                l10n.enterKeywordToSearch,
                                 style: theme.textTheme.bodyLarge?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                            )
-                          : ListView.builder(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                              itemCount: docs.length,
-                              itemBuilder: (context, index) {
-                                final doc = docs[index];
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: DocListCard(
-                                    doc: doc,
-                                    onTap: () => DocCardActions.openReader(
-                                      context,
-                                      ref,
-                                      doc,
+                            ],
+                          ),
+                        )
+                      : asyncDocs.when(
+                          loading: () =>
+                              const Center(child: CircularProgressIndicator()),
+                          error: (error, _) => Center(
+                            child: Text(
+                              '$error',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: colorScheme.error,
+                              ),
+                            ),
+                          ),
+                          data: (docs) => docs.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    l10n.noDocumentsFound,
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
                                     ),
                                   ),
-                                );
-                              },
-                            ),
-                    ),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    8,
+                                    16,
+                                    24,
+                                  ),
+                                  itemCount: docs.length,
+                                  itemBuilder: (context, index) {
+                                    final doc = docs[index];
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: DocListCard(
+                                        doc: doc,
+                                        onTap: () => DocCardActions.openReader(
+                                          context,
+                                          ref,
+                                          doc,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

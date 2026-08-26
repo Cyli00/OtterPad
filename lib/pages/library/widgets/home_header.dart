@@ -1,10 +1,13 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../utils/desktop.dart';
+import '../../../utils/responsive.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/task_provider.dart';
@@ -124,21 +127,88 @@ class HomeHeader extends ConsumerWidget {
             },
           ),
           const SizedBox(width: 8.0),
-          _HeaderButton(
-            key: toolsButtonKey,
-            icon: Symbols.note_add_rounded,
-            tooltip: context.l10n.tools,
-            size: isMobile ? 36 : 40,
-            onPressed: () async {
-              Haptics.soft();
-              final action = await showToolbarSheet(context);
-              if (action != null && context.mounted) {
-                _handleToolbarAction(context, ref, action);
-              }
-            },
-          ),
+          if (Responsive.showNavigationRail(context))
+            _ToolsMenuButton(
+              size: isMobile ? 36 : 40,
+              onAction: (action) => _handleToolbarAction(context, ref, action),
+            )
+          else
+            _HeaderButton(
+              key: toolsButtonKey,
+              icon: Symbols.note_add_rounded,
+              tooltip: context.l10n.tools,
+              size: isMobile ? 36 : 40,
+              onPressed: () async {
+                Haptics.soft();
+                final action = await showToolbarSheet(context);
+                if (action != null && context.mounted) {
+                  _handleToolbarAction(context, ref, action);
+                }
+              },
+            ),
         ],
       ),
+    );
+  }
+}
+
+class _ToolsMenuButton extends StatelessWidget {
+  const _ToolsMenuButton({required this.size, required this.onAction});
+
+  final double size;
+  final ValueChanged<ToolbarAction> onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerHigh),
+        elevation: const WidgetStatePropertyAll(3),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      ),
+      builder: (context, controller, _) {
+        return _HeaderButton(
+          key: HomeHeader.toolsButtonKey,
+          icon: Symbols.note_add_rounded,
+          tooltip: l10n.tools,
+          size: size,
+          onPressed: () {
+            Haptics.soft();
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+        );
+      },
+      menuChildren: [
+        MenuItemButton(
+          onPressed: () => onAction(ToolbarAction.addFile),
+          leadingIcon: const Icon(Symbols.note_add_rounded, size: 20),
+          shortcut: isDesktopOs
+              ? desktopActivator(LogicalKeyboardKey.keyO)
+              : null,
+          child: Text(l10n.addFiles),
+        ),
+        MenuItemButton(
+          onPressed: () => onAction(ToolbarAction.addByIdentifier),
+          leadingIcon: const Icon(Symbols.travel_explore_rounded, size: 20),
+          shortcut: isDesktopOs
+              ? desktopActivator(LogicalKeyboardKey.keyO, shift: true)
+              : null,
+          child: Text(l10n.addByIdentifier),
+        ),
+        MenuItemButton(
+          onPressed: () => onAction(ToolbarAction.rebuildLibrary),
+          leadingIcon: const Icon(Symbols.refresh_rounded, size: 20),
+          child: Text(l10n.rebuildLibrary),
+        ),
+      ],
     );
   }
 }

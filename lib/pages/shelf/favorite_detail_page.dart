@@ -5,19 +5,13 @@ import '../../data/models/book/document.dart';
 import '../../services/haptics.dart';
 import '../../widgets/app_dialog.dart';
 import '../../data/models/collection/favorite.dart';
-import '../../providers/api_provider.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
-import '../../providers/proxy_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../widgets/selection_pop_scope.dart';
-import '../../services/ai_settings_prompt.dart';
-import '../../services/batch_extract_service.dart';
 import '../../services/snackbar_service.dart';
-import '../../utils/doc_paths.dart';
 import '../../router/app_routes.dart';
-import '../library/widgets/batch_progress_sheet.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
@@ -56,11 +50,18 @@ class FavoriteDetailPage extends ConsumerWidget {
         .where((d) => d.id.isNotEmpty)
         .map((d) => d.id)
         .toSet();
+    final orderedIds = [for (final d in favDocs) d.id];
     final allSelected =
         allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
     return SelectionPopScope(
       sourceContext: _sourceContext,
+      onSelectAll: () {
+        if (!allSelected) {
+          ref.read(selectionProvider.notifier).toggleAll(allIds);
+        }
+      },
+      onDeleteSelected: () => _deleteSelected(context, ref, selection),
       child: Scaffold(
         backgroundColor: colorScheme.surface,
         appBar: isSelectionMode
@@ -95,10 +96,7 @@ class FavoriteDetailPage extends ConsumerWidget {
                   IconButton(
                     onPressed: () {
                       Haptics.soft();
-                      _openAddDocumentsPage(
-                        context,
-                        currentFavorite,
-                      );
+                      _openAddDocumentsPage(context, currentFavorite);
                     },
                     icon: const Icon(Symbols.bookmark_add_rounded),
                     tooltip: context.l10n.addDocument,
@@ -132,7 +130,10 @@ class FavoriteDetailPage extends ConsumerWidget {
                           Haptics.soft();
                           _openAddDocumentsPage(context, currentFavorite);
                         },
-                        icon: const Icon(Symbols.bookmark_add_rounded, size: 20),
+                        icon: const Icon(
+                          Symbols.bookmark_add_rounded,
+                          size: 20,
+                        ),
                         label: Text(context.l10n.addDocument),
                       ),
                     ],
@@ -163,6 +164,31 @@ class FavoriteDetailPage extends ConsumerWidget {
                                 .read(selectionProvider.notifier)
                                 .toggle(doc.id)
                           : null,
+                      onModifierToggle: doc.id.isNotEmpty
+                          ? () => DocCardActions.modifierToggle(
+                              ref,
+                              doc.id,
+                              _sourceContext,
+                            )
+                          : null,
+                      onSelectRange: doc.id.isNotEmpty
+                          ? () => DocCardActions.selectRange(
+                              ref,
+                              docId: doc.id,
+                              sourceContext: _sourceContext,
+                              orderedIds: orderedIds,
+                            )
+                          : null,
+                      onFavorite: () =>
+                          DocCardActions.addToFavorite(context, ref, {doc.id}),
+                      onContextMenu: (pos) => DocCardActions.showMenu(
+                        context: context,
+                        ref: ref,
+                        globalPosition: pos,
+                        doc: doc,
+                        sourceContext: _sourceContext,
+                        orderedIds: orderedIds,
+                      ),
                     );
                   },
                 ),
@@ -198,7 +224,9 @@ class FavoriteDetailPage extends ConsumerWidget {
       }
     }
     if (!context.mounted) return;
-    ref.read(snackBarServiceProvider).showResult(message: context.l10n.removedFromFavoriteCount(count));
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.removedFromFavoriteCount(count));
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -208,6 +236,7 @@ class FavoriteDetailPage extends ConsumerWidget {
     WidgetRef ref,
     SelectionState selection,
   ) async {
+    if (selection.selectedIds.isEmpty) return;
     final count = selection.selectedIds.length;
     final cs = Theme.of(context).colorScheme;
     final confirmed = await showAppDialog<bool>(
@@ -243,7 +272,9 @@ class FavoriteDetailPage extends ConsumerWidget {
       await DocCardActions.delete(ref, id);
     }
     if (!context.mounted) return;
-    ref.read(snackBarServiceProvider).showResult(message: context.l10n.deletedDocuments(count));
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.deletedDocuments(count));
     ref.read(selectionProvider.notifier).exit();
   }
 
@@ -254,55 +285,14 @@ class FavoriteDetailPage extends ConsumerWidget {
     SelectionState selection,
     List<Document> favDocs,
   ) async {
-    final apiState = ref.read(docExtractApiProvider);
-    if (!await AiSettingsPrompt.ensureExtractConfigured(
-      context: context,
-      apiState: apiState,
-    )) {
-      return;
-    }
-    if (!context.mounted) return;
-
     final selectedDocs = favDocs
-        .where(
-          (d) => selection.selectedIds.contains(d.id) && d.contentHash != null,
-        )
+        .where((d) => selection.selectedIds.contains(d.id))
         .toList();
-
-    if (selectedDocs.isEmpty) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.noPdfFilesSelected);
-      return;
-    }
-
-    final items = selectedDocs
-        .map(
-          (d) => BatchExtractItem(
-            documentId: d.id,
-            filePath: DocPaths.pdf(d.id),
-            title: d.title,
-          ),
-        )
-        .toList();
-
-    final proxyState = ref.read(proxyProvider);
-    BatchExtractService.instance.applyProxy(
-      proxyState.mode,
-      proxyState.host,
-      proxyState.port,
-    );
-
-    ref.read(selectionProvider.notifier).exit();
-
-    if (!context.mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => BatchProgressSheet(items: items, apiState: apiState),
+    await DocCardActions.extract(
+      context,
+      ref,
+      selectedDocs,
+      exitSelection: true,
     );
   }
 }

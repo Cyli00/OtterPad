@@ -13,7 +13,7 @@ SingleActivator desktopActivator(
   LogicalKeyboardKey key, {
   bool shift = false,
   bool alt = false,
-  bool includeRepeats = true,
+  bool includeRepeats = false,
 }) => SingleActivator(
   key,
   control: !isAppleDesktop,

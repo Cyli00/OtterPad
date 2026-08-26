@@ -421,6 +421,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get removeFromFavorite => 'Remove from Favorite';
 
   @override
+  String get openInReader => 'Open';
+
+  @override
+  String get enterSelection => 'Enter selection';
+
+  @override
   String get deleteFavorite => 'Delete Favorite';
 
   @override
@@ -2623,6 +2629,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyLibraryAction => 'Initial Setup';
+
+  @override
+  String get emptyLibraryDropHint =>
+      'You can also drop PDF files here to import';
 
   @override
   String get dropPdfToImport => 'Drop PDF files to import';

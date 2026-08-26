@@ -1,9 +1,12 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../utils/desktop.dart';
+import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
 
 import '../../../data/models/collection/favorite.dart';
@@ -25,15 +28,23 @@ Future<PickFavoriteResult?> showPickFavoriteSheet({
   required Set<String> selectedDocumentIds,
   Future<Favorite?> Function()? onCreateFavorite,
 }) {
+  final content = _PickFavoriteContent(
+    favorites: favorites,
+    selectedDocumentIds: selectedDocumentIds,
+    onCreateFavorite: onCreateFavorite,
+    asDialog: isDesktopOs,
+  );
+  if (isDesktopOs) {
+    return showAppDialog<PickFavoriteResult>(
+      context: context,
+      builder: (_) => content,
+    );
+  }
   return showModalBottomSheet<PickFavoriteResult>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (_) => _PickFavoriteContent(
-      favorites: favorites,
-      selectedDocumentIds: selectedDocumentIds,
-      onCreateFavorite: onCreateFavorite,
-    ),
+    builder: (_) => content,
   );
 }
 
@@ -41,11 +52,13 @@ class _PickFavoriteContent extends StatefulWidget {
   final List<Favorite> favorites;
   final Set<String> selectedDocumentIds;
   final Future<Favorite?> Function()? onCreateFavorite;
+  final bool asDialog;
 
   const _PickFavoriteContent({
     required this.favorites,
     required this.selectedDocumentIds,
     this.onCreateFavorite,
+    this.asDialog = false,
   });
 
   @override
@@ -83,8 +96,87 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final maxH = MediaQuery.sizeOf(context).height * 0.7;
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final bottomPadding = widget.asDialog
+        ? 16.0
+        : MediaQuery.of(context).padding.bottom;
     final total = widget.selectedDocumentIds.length;
+
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!widget.asDialog)
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 32,
+            height: 4,
+            decoration: BoxDecoration(
+              color: cs.onSurfaceVariant.withAlpha(80),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          )
+        else
+          const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              context.l10n.addingDocumentsTo(total),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+        ),
+        Flexible(
+          child: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            children: [
+              if (widget.onCreateFavorite != null)
+                _CreateFavoriteItem(
+                  creating: _creating,
+                  onTap: _createFavorite,
+                ),
+              for (final fav in _favorites) _buildFavoriteItem(theme, fav),
+            ],
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(24, 8, 24, bottomPadding + 16),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                Haptics.soft();
+                Navigator.pop(context);
+              },
+              child: Text(context.l10n.cancel),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (widget.asDialog) {
+      final lo = 320.0;
+      final computed = MediaQuery.sizeOf(context).width * 0.85;
+      final hi = math.max(lo, math.min(540.0, computed));
+      final width = computed.clamp(lo, hi);
+      return Material(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(28),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: width,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH),
+            child: column,
+          ),
+        ),
+      );
+    }
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
@@ -94,70 +186,14 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
           color: cs.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 32,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.onSurfaceVariant.withAlpha(80),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  context.l10n.addingDocumentsTo(total),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-            ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
-                children: [
-                  if (widget.onCreateFavorite != null)
-                    _CreateFavoriteItem(
-                      creating: _creating,
-                      onTap: _createFavorite,
-                    ),
-                  for (final fav in _favorites)
-                    _buildFavoriteItem(theme, fav),
-                ],
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(24, 8, 24, bottomPadding + 16),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    Haptics.soft();
-                    Navigator.pop(context);
-                  },
-                  child: Text(context.l10n.cancel),
-                ),
-              ),
-            ),
-          ],
-        ),
+        child: column,
       ),
     );
   }
 
   Widget _buildFavoriteItem(ThemeData theme, Favorite fav) {
     final existing = fav.documentIds.toSet();
-    final overlap = widget.selectedDocumentIds
-        .where(existing.contains)
-        .length;
+    final overlap = widget.selectedDocumentIds.where(existing.contains).length;
     final newCount = widget.selectedDocumentIds.length - overlap;
     final allIncluded = newCount == 0;
     final l10n = context.l10n;

@@ -6,8 +6,11 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/animation_constants.dart';
 import '../../../data/models/book/document.dart';
 import '../../../providers/history_provider.dart';
+import '../../../utils/desktop.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../../utils/doc_paths.dart';
+import 'doc_card_actions.dart';
+import 'hover_actions.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
 
@@ -28,6 +31,10 @@ class DocListCard extends ConsumerWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback? onSelectionTap;
+  final VoidCallback? onModifierToggle;
+  final VoidCallback? onSelectRange;
+  final void Function(Offset globalPosition)? onContextMenu;
+  final VoidCallback? onFavorite;
 
   const DocListCard({
     super.key,
@@ -38,6 +45,10 @@ class DocListCard extends ConsumerWidget {
     this.isSelectionMode = false,
     this.isSelected = false,
     this.onSelectionTap,
+    this.onModifierToggle,
+    this.onSelectRange,
+    this.onContextMenu,
+    this.onFavorite,
   });
 
   // 缩略图尺寸——锁 A4 比例（W/H 0.707），cover + topCenter 不裁切页面。
@@ -50,8 +61,12 @@ class DocListCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final progress = ref.watch(docProgressProvider(doc.id));
+    final showHover =
+        isDesktopOs &&
+        !isSelectionMode &&
+        (onFavorite != null || onContextMenu != null);
 
-    return AnimatedContainer(
+    Widget card = AnimatedContainer(
       duration: kAnimFast,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -79,9 +94,24 @@ class DocListCard extends ConsumerWidget {
             : colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
         pressedScale: 0.98,
-        onTap: isSelectionMode ? onSelectionTap : onTap,
+        onTap:
+            (onTap == null &&
+                !isSelectionMode &&
+                onModifierToggle == null &&
+                onSelectRange == null)
+            ? null
+            : () => DocCardActions.handleTap(
+                isSelectionMode: isSelectionMode,
+                onOpen: onTap ?? () {},
+                onToggle: onSelectionTap,
+                onModifierToggle: onModifierToggle,
+                onSelectRange: onSelectRange,
+              ),
         onLongPress: isSelectionMode ? null : onLongPress,
-        child: Padding(
+        child: _wrapHover(
+          showHover: showHover,
+          bar: DocHoverButtons(onFavorite: onFavorite, onMore: onContextMenu),
+          child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,8 +200,9 @@ class DocListCard extends ConsumerWidget {
                               Text(
                                 doc.journal!,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant
-                                      .withAlpha(180),
+                                  color: colorScheme.onSurfaceVariant.withAlpha(
+                                    180,
+                                  ),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -242,6 +273,28 @@ class DocListCard extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+
+    if (isDesktopOs && onContextMenu != null) {
+      card = GestureDetector(
+        onSecondaryTapDown: (d) => onContextMenu!(d.globalPosition),
+        child: card,
+      );
+    }
+    return card;
+  }
+
+  Widget _wrapHover({
+    required bool showHover,
+    required Widget bar,
+    required Widget child,
+  }) {
+    if (!showHover) return child;
+    return HoverActions(
+      padding: const EdgeInsets.all(8),
+      bar: bar,
+      child: child,
     );
   }
 }

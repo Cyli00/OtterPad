@@ -148,6 +148,8 @@
   "textExtraction": "文本提取",
   "addToFavorite": "加入收藏夹",
   "removeFromFavorite": "移出收藏夹",
+  "openInReader": "打开",
+  "enterSelection": "进入多选",
 
   "deleteFavorite": "删除收藏夹",
   "myLibrary": "我的库",
@@ -851,6 +853,7 @@
   "emptyLibraryTitle": "文献库还是空的",
   "emptyLibraryBody": "设置 OCR 和 AI 模型，然后添加你的第一篇 PDF 开始阅读",
   "emptyLibraryAction": "初始设置",
+  "emptyLibraryDropHint": "也可以将 PDF 拖到此处导入",
 
   "dropPdfToImport": "拖入 PDF 以导入",
   "dropPdfOnly": "仅支持导入 PDF 文件"

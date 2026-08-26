@@ -4,6 +4,7 @@ import '../../../providers/documents_provider.dart';
 import '../../../providers/history_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../utils/doc_paths.dart';
+import '../../../utils/responsive.dart';
 import 'doc_card_actions.dart';
 import 'document_card.dart';
 import 'library_empty_state.dart';
@@ -48,17 +49,21 @@ class BookshelfGrid extends ConsumerWidget {
         // 封面锁 A4 比例 (W/H 0.707)，高度随列宽成比例放大；文字块（标题 2 行
         // + 期刊 + 年份行 + 上下 8px padding）是固定像素，所以用 mainAxisExtent
         // 而非 childAspectRatio——后者会让宽列产生越来越大的底部空隙。
+        final spacing = Responsive.showNavigationRail(context) ? 12.0 : 16.0;
         final cardWidth =
-            (constraints.crossAxisExtent - 32.0 - 16.0 * (crossAxisCount - 1)) /
-                crossAxisCount;
+            (constraints.crossAxisExtent -
+                32.0 -
+                spacing * (crossAxisCount - 1)) /
+            crossAxisCount;
         final coverHeight = cardWidth / 0.707;
+        final orderedIds = [for (final d in docs) d.id];
         return SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           sliver: SliverGrid(
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
-              mainAxisSpacing: 16.0,
-              crossAxisSpacing: 16.0,
+              mainAxisSpacing: spacing,
+              crossAxisSpacing: spacing,
               mainAxisExtent: coverHeight + _kTextBlockHeight,
             ),
             delegate: SliverChildBuilderDelegate((context, index) {
@@ -68,8 +73,9 @@ class BookshelfGrid extends ConsumerWidget {
               return Consumer(
                 builder: (context, ref, _) => DocumentCard(
                   docId: doc.id,
-                  coverAsset:
-                      doc.contentHash == null ? '' : DocPaths.pdf(doc.id),
+                  coverAsset: doc.contentHash == null
+                      ? ''
+                      : DocPaths.pdf(doc.id),
                   name: doc.title,
                   authors: doc.authors.join(', '),
                   journalName: doc.journal ?? '',
@@ -83,6 +89,24 @@ class BookshelfGrid extends ConsumerWidget {
                       .enter(doc.id, 'library'),
                   onSelectionTap: () =>
                       ref.read(selectionProvider.notifier).toggle(doc.id),
+                  onModifierToggle: () =>
+                      DocCardActions.modifierToggle(ref, doc.id, 'library'),
+                  onSelectRange: () => DocCardActions.selectRange(
+                    ref,
+                    docId: doc.id,
+                    sourceContext: 'library',
+                    orderedIds: orderedIds,
+                  ),
+                  onFavorite: () =>
+                      DocCardActions.addToFavorite(context, ref, {doc.id}),
+                  onContextMenu: (pos) => DocCardActions.showMenu(
+                    context: context,
+                    ref: ref,
+                    globalPosition: pos,
+                    doc: doc,
+                    sourceContext: 'library',
+                    orderedIds: orderedIds,
+                  ),
                 ),
               );
             }, childCount: docs.length),

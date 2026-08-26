@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -17,6 +19,8 @@ class FavoriteCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final double? maxWidth;
+  final EdgeInsetsGeometry margin;
 
   const FavoriteCard({
     super.key,
@@ -28,6 +32,8 @@ class FavoriteCard extends StatelessWidget {
     required this.onTap,
     this.onEdit,
     this.onDelete,
+    this.maxWidth,
+    this.margin = const EdgeInsets.only(right: 16),
   });
 
   @override
@@ -37,7 +43,7 @@ class FavoriteCard extends StatelessWidget {
     final hasMenu = onEdit != null || onDelete != null;
 
     return Padding(
-      padding: const EdgeInsets.only(right: 16),
+      padding: margin,
       child: GestureDetector(
         onLongPressStart: hasMenu
             ? (d) {
@@ -49,7 +55,8 @@ class FavoriteCard extends StatelessWidget {
             ? (d) => _showCardMenu(context, d.globalPosition)
             : null,
         child: Container(
-          width: _getDynamicWidth(),
+          width: _cardWidth(),
+          height: 380,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
@@ -68,62 +75,62 @@ class FavoriteCard extends StatelessWidget {
             pressedScale: 0.98,
             onTap: onTap,
             child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Row(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (subtitleIcon != null) ...[
-                    subtitleIcon!,
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
-                    child: Text(
-                      subtitle,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Expanded(child: _buildCoverArea(context)),
-              const SizedBox(height: 16),
-              TactilePress(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(12),
-                baseColor: cs.surfaceContainerHighest.withAlpha(128),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Center(
-                  child: Text(
-                    context.l10n.viewLibraryTotal(totalCount),
-                    style: theme.textTheme.labelLarge?.copyWith(
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: cs.primary,
+                      color: cs.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (subtitleIcon != null) ...[
+                        subtitleIcon!,
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(child: _buildCoverArea(context)),
+                  const SizedBox(height: 16),
+                  TactilePress(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(12),
+                    baseColor: cs.surfaceContainerHighest.withAlpha(128),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Text(
+                        context.l10n.viewLibraryTotal(totalCount),
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: cs.primary,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
                 ],
-                ),
               ),
             ),
           ),
         ),
+      ),
     );
   }
 
@@ -162,13 +169,25 @@ class FavoriteCard extends StatelessWidget {
     return 330.0;
   }
 
+  double _cardWidth() {
+    final desired = _getDynamicWidth();
+    final maxW = maxWidth;
+    if (maxW == null) return desired;
+    const lo = 200.0;
+    final hi = math.max(lo, maxW);
+    return desired.clamp(lo, hi);
+  }
+
   Widget _emptyCover(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       color: cs.surfaceContainerHighest,
       child: Center(
-        child: Icon(Symbols.picture_as_pdf_rounded,
-            color: cs.onSurfaceVariant.withAlpha(100), size: 24),
+        child: Icon(
+          Symbols.picture_as_pdf_rounded,
+          color: cs.onSurfaceVariant.withAlpha(100),
+          size: 24,
+        ),
       ),
     );
   }
@@ -195,90 +214,129 @@ class FavoriteCard extends StatelessWidget {
     final count = pdfAssets.length;
     if (count == 0) {
       return Center(
-          child: AspectRatio(
-              aspectRatio: 0.72, child: _emptyCover(context)));
+        child: AspectRatio(aspectRatio: 0.72, child: _emptyCover(context)),
+      );
     }
     if (count == 1) {
       return Center(
-          child: AspectRatio(
-              aspectRatio: 0.72, child: _cover(context, pdfAssets[0])));
+        child: AspectRatio(
+          aspectRatio: 0.72,
+          child: _cover(context, pdfAssets[0]),
+        ),
+      );
     }
     if (count == 2) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Expanded(
-              child: AspectRatio(
-                  aspectRatio: 0.72, child: _cover(context, pdfAssets[0]))),
+            child: AspectRatio(
+              aspectRatio: 0.72,
+              child: _cover(context, pdfAssets[0]),
+            ),
+          ),
           const SizedBox(width: 8),
           Expanded(
-              child: AspectRatio(
-                  aspectRatio: 0.72, child: _cover(context, pdfAssets[1]))),
+            child: AspectRatio(
+              aspectRatio: 0.72,
+              child: _cover(context, pdfAssets[1]),
+            ),
+          ),
         ],
       );
     }
     if (count == 3) {
-      return Row(children: [
-        Expanded(
+      return Row(
+        children: [
+          Expanded(
             flex: 2,
             child: AspectRatio(
-                aspectRatio: 0.72, child: _cover(context, pdfAssets[0]))),
-        const SizedBox(width: 6),
-        Expanded(
+              aspectRatio: 0.72,
+              child: _cover(context, pdfAssets[0]),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
             flex: 1,
-            child: Column(children: [
-              Expanded(child: _cover(context, pdfAssets[1])),
-              const SizedBox(height: 4),
-              Expanded(child: _cover(context, pdfAssets[2])),
-            ])),
-      ]);
+            child: Column(
+              children: [
+                Expanded(child: _cover(context, pdfAssets[1])),
+                const SizedBox(height: 4),
+                Expanded(child: _cover(context, pdfAssets[2])),
+              ],
+            ),
+          ),
+        ],
+      );
     }
     if (count == 4) {
       return Center(
         child: AspectRatio(
           aspectRatio: 0.72,
-          child: Column(children: [
-            Expanded(
-                child: Row(children: [
-              Expanded(child: _cover(context, pdfAssets[0])),
-              const SizedBox(width: 4),
-              Expanded(child: _cover(context, pdfAssets[1])),
-            ])),
-            const SizedBox(height: 4),
-            Expanded(
-                child: Row(children: [
-              Expanded(child: _cover(context, pdfAssets[2])),
-              const SizedBox(width: 4),
-              Expanded(child: _cover(context, pdfAssets[3])),
-            ])),
-          ]),
+          child: Column(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(child: _cover(context, pdfAssets[0])),
+                    const SizedBox(width: 4),
+                    Expanded(child: _cover(context, pdfAssets[1])),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(child: _cover(context, pdfAssets[2])),
+                    const SizedBox(width: 4),
+                    Expanded(child: _cover(context, pdfAssets[3])),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
     // count >= 5
-    return Row(children: [
-      Expanded(
+    return Row(
+      children: [
+        Expanded(
           flex: 12,
           child: AspectRatio(
-              aspectRatio: 0.72, child: _cover(context, pdfAssets[0]))),
-      const SizedBox(width: 6),
-      Expanded(
+            aspectRatio: 0.72,
+            child: _cover(context, pdfAssets[0]),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
           flex: 11,
-          child: Column(children: [
-            Expanded(
-                child: Row(children: [
-              Expanded(child: _cover(context, pdfAssets[1])),
-              const SizedBox(width: 3),
-              Expanded(child: _cover(context, pdfAssets[2])),
-            ])),
-            const SizedBox(height: 3),
-            Expanded(
-                child: Row(children: [
-              Expanded(child: _cover(context, pdfAssets[3])),
-              const SizedBox(width: 3),
-              Expanded(child: _cover(context, pdfAssets[4])),
-            ])),
-          ])),
-    ]);
+          child: Column(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(child: _cover(context, pdfAssets[1])),
+                    const SizedBox(width: 3),
+                    Expanded(child: _cover(context, pdfAssets[2])),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 3),
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(child: _cover(context, pdfAssets[3])),
+                    const SizedBox(width: 3),
+                    Expanded(child: _cover(context, pdfAssets[4])),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

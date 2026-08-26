@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../utils/desktop.dart';
 
 class LibraryEmptyState extends StatelessWidget {
   final VoidCallback? onStartSetup;
@@ -51,6 +52,17 @@ class LibraryEmptyState extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
+            if (isDesktopOs) ...[
+              const SizedBox(height: 8),
+              Text(
+                context.l10n.emptyLibraryDropHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant.withAlpha(180),
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
             if (onStartSetup != null) ...[
               const SizedBox(height: 24),
               FilledButton.tonal(
@@ -59,13 +71,19 @@ class LibraryEmptyState extends StatelessWidget {
                   onStartSetup!();
                 },
                 style: FilledButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Symbols.tune_rounded, size: 18, color: cs.onSecondaryContainer),
+                    Icon(
+                      Symbols.tune_rounded,
+                      size: 18,
+                      color: cs.onSecondaryContainer,
+                    ),
                     const SizedBox(width: 8),
                     Text(context.l10n.emptyLibraryAction),
                   ],

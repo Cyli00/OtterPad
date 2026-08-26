@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -8,31 +9,45 @@ import '../../../core/l10n.dart';
 import '../../../providers/api_provider.dart';
 import '../../../providers/document_task_provider.dart';
 import '../../../services/batch_extract_service.dart';
+import '../../../utils/desktop.dart';
+import '../../../widgets/app_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+Future<void> showBatchProgress({
+  required BuildContext context,
+  required List<BatchExtractItem> items,
+  required DocExtractApiState apiState,
+}) {
+  if (isDesktopOs) {
+    return showAppDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          BatchProgressSheet(items: items, apiState: apiState, asDialog: true),
+    );
+  }
+  return showModalBottomSheet<void>(
+    context: context,
+    isDismissible: false,
+    enableDrag: false,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => BatchProgressSheet(items: items, apiState: apiState),
+  );
+}
 
 // ─── 批量提取进度 Sheet ────────────────────────────────────────────────────────
 
-/// 以 ModalBottomSheet 展示批量提取进度，可从多选模式或其他入口触发。
-///
-/// 用法：
-/// ```dart
-/// showModalBottomSheet(
-///   context: context,
-///   isDismissible: false,
-///   enableDrag: false,
-///   isScrollControlled: true,
-///   backgroundColor: Colors.transparent,
-///   builder: (_) => BatchProgressSheet(items: items, apiState: apiState),
-/// );
-/// ```
 class BatchProgressSheet extends ConsumerStatefulWidget {
   final List<BatchExtractItem> items;
   final DocExtractApiState apiState;
+  final bool asDialog;
 
   const BatchProgressSheet({
     super.key,
     required this.items,
     required this.apiState,
+    this.asDialog = false,
   });
 
   @override
@@ -168,187 +183,206 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
               ? l10n.extractionComplete
               : '${l10n.extractionDone}: $succeeded, ${l10n.failedCount(failed)}');
 
+    final screenH = MediaQuery.sizeOf(context).height;
+    final lo = 280.0;
+    final computed = screenH * 0.72;
+    final hi = math.max(lo, math.min(screenH * 0.9, computed));
+    final height = computed.clamp(lo, hi);
+
+    final column = Column(
+      children: [
+        if (!widget.asDialog)
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 32,
+            height: 4,
+            decoration: BoxDecoration(
+              color: colorScheme.onSurfaceVariant.withAlpha(80),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          )
+        else
+          const SizedBox(height: 16),
+        if (!widget.asDialog) const SizedBox(height: 16),
+
+        // 标题区域
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isRunning ? l10n.batchExtracting : l10n.extractionDone,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      statusText,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              if (isRunning)
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              else
+                Icon(
+                  failed == 0
+                      ? Symbols.check_circle_rounded
+                      : Symbols.warning_amber_rounded,
+                  color: failed == 0 ? colorScheme.primary : colorScheme.error,
+                  size: 28,
+                ),
+            ],
+          ),
+        ),
+
+        // 总进度条
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: isRunning
+                        ? (total > 0 ? completed / total : null)
+                        : 1.0,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      failed > 0 && !isRunning
+                          ? colorScheme.error
+                          : colorScheme.primary,
+                    ),
+                    minHeight: 6,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '$completed / $total',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+        Divider(height: 1, color: colorScheme.outlineVariant.withAlpha(80)),
+
+        // Job 状态列表
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: progress.statuses.length,
+            itemBuilder: (context, index) {
+              final s = progress.statuses[index];
+              final key = DocumentTaskKey(
+                type: DocumentTaskType.extractDocument,
+                documentId: s.documentId,
+              );
+              final task = ref.read(documentTaskProvider)[key];
+              return _JobStatusTile(
+                title: s.title,
+                state: s.state,
+                extractedPages: s.extractedPages,
+                totalPages: s.totalPages,
+                error: s.error,
+                statusText: task?.progress.status,
+              );
+            },
+          ),
+        ),
+
+        // 操作按钮
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+            child: isRunning
+                ? OutlinedButton.icon(
+                    onPressed: () {
+                      final notifier = ref.read(documentTaskProvider.notifier);
+                      for (final item in widget.items) {
+                        notifier.cancelTask(
+                          DocumentTaskKey(
+                            type: DocumentTaskType.extractDocument,
+                            documentId: item.documentId,
+                          ),
+                        );
+                      }
+                      Navigator.pop(context);
+                    },
+                    icon: const Icon(Symbols.cancel_rounded),
+                    label: Text(l10n.cancelExtraction),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  )
+                : FilledButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Symbols.check_rounded),
+                    label: Text(
+                      failed == 0
+                          ? l10n.done
+                          : '${l10n.close}（${l10n.failedCount(failed)}）',
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      backgroundColor: failed == 0
+                          ? colorScheme.primary
+                          : colorScheme.error,
+                      foregroundColor: failed == 0
+                          ? colorScheme.onPrimary
+                          : colorScheme.onError,
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+
+    if (widget.asDialog) {
+      return Material(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(28),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(width: 540, height: height, child: column),
+      );
+    }
+
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
       child: Container(
-        height: MediaQuery.sizeOf(context).height * 0.72,
+        height: height,
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          children: [
-            // 拖拽条
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 32,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colorScheme.onSurfaceVariant.withAlpha(80),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 标题区域
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isRunning ? l10n.batchExtracting : l10n.extractionDone,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          statusText,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isRunning)
-                    const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    )
-                  else
-                    Icon(
-                      failed == 0
-                          ? Symbols.check_circle_rounded
-                          : Symbols.warning_amber_rounded,
-                      color: failed == 0
-                          ? colorScheme.primary
-                          : colorScheme.error,
-                      size: 28,
-                    ),
-                ],
-              ),
-            ),
-
-            // 总进度条
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: isRunning
-                            ? (total > 0 ? completed / total : null)
-                            : 1.0,
-                        backgroundColor: colorScheme.surfaceContainerHighest,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          failed > 0 && !isRunning
-                              ? colorScheme.error
-                              : colorScheme.primary,
-                        ),
-                        minHeight: 6,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    '$completed / $total',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-            Divider(height: 1, color: colorScheme.outlineVariant.withAlpha(80)),
-
-            // Job 状态列表
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: progress.statuses.length,
-                itemBuilder: (context, index) {
-                  final s = progress.statuses[index];
-                  final key = DocumentTaskKey(
-                    type: DocumentTaskType.extractDocument,
-                    documentId: s.documentId,
-                  );
-                  final task = ref.read(documentTaskProvider)[key];
-                  return _JobStatusTile(
-                    title: s.title,
-                    state: s.state,
-                    extractedPages: s.extractedPages,
-                    totalPages: s.totalPages,
-                    error: s.error,
-                    statusText: task?.progress.status,
-                  );
-                },
-              ),
-            ),
-
-            // 操作按钮
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                child: isRunning
-                    ? OutlinedButton.icon(
-                        onPressed: () {
-                          final notifier = ref.read(
-                            documentTaskProvider.notifier,
-                          );
-                          for (final item in widget.items) {
-                            notifier.cancelTask(
-                              DocumentTaskKey(
-                                type: DocumentTaskType.extractDocument,
-                                documentId: item.documentId,
-                              ),
-                            );
-                          }
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(Symbols.cancel_rounded),
-                        label: Text(l10n.cancelExtraction),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      )
-                    : FilledButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Symbols.check_rounded),
-                        label: Text(failed == 0 ? l10n.done : '${l10n.close}（${l10n.failedCount(failed)}）'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          backgroundColor: failed == 0
-                              ? colorScheme.primary
-                              : colorScheme.error,
-                          foregroundColor: failed == 0
-                              ? colorScheme.onPrimary
-                              : colorScheme.onError,
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
+        child: column,
       ),
     );
   }
@@ -394,7 +428,11 @@ class _JobStatusTile extends StatelessWidget {
         colorScheme.onSurfaceVariant,
       ),
       BatchJobState.submitted => (
-        Icon(Symbols.cloud_upload_rounded, color: colorScheme.primary, size: 20),
+        Icon(
+          Symbols.cloud_upload_rounded,
+          color: colorScheme.primary,
+          size: 20,
+        ),
         l10n.waitingSubmit,
         colorScheme.onSurfaceVariant,
       ),
@@ -409,7 +447,9 @@ class _JobStatusTile extends StatelessWidget {
           ),
         ),
         statusText ??
-            (totalPages > 0 ? l10n.extractionCompletePages(totalPages) : l10n.processing),
+            (totalPages > 0
+                ? l10n.extractionCompletePages(totalPages)
+                : l10n.processing),
         colorScheme.onSurfaceVariant,
       ),
       BatchJobState.done => (
@@ -418,7 +458,9 @@ class _JobStatusTile extends StatelessWidget {
           color: colorScheme.primary,
           size: 20,
         ),
-        totalPages > 0 ? l10n.extractionCompletePages(totalPages) : l10n.extractionComplete,
+        totalPages > 0
+            ? l10n.extractionCompletePages(totalPages)
+            : l10n.extractionComplete,
         colorScheme.onSurfaceVariant,
       ),
       BatchJobState.failed => (
