@@ -120,6 +120,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navHideLabels => 'Hide labels';
 
   @override
+  String get readerShowNavigation => 'Show navigation';
+
+  @override
+  String get readerHideNavigation => 'Hide navigation';
+
+  @override
   String get networkSettings => 'Network';
 
   @override
@@ -1356,6 +1362,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get restoringBackup => 'Restoring backup...';
 
   @override
+  String get backupInvalidData =>
+      'The backup is incomplete or damaged. Your current data has not been replaced.';
+
+  @override
+  String get backupUnsupportedVersion =>
+      'This backup uses an unsupported version. Please update OtterPad before restoring it.';
+
+  @override
+  String get backupPendingRestore =>
+      'Files from an earlier recovery are still present. They have been kept; resolve the earlier recovery before trying again.';
+
+  @override
+  String get backupActiveTasks =>
+      'Background tasks have not finished. Please wait before restoring.';
+
+  @override
+  String get backupChangedDuringCreation =>
+      'Data changed while the backup was being created. Please try again after editing and background tasks have finished.';
+
+  @override
+  String get backupOperationInProgress =>
+      'A backup or restore is already in progress. Please wait for it to finish.';
+
+  @override
   String restoreFailed(String error) {
     return 'Restore failed: $error';
   }
@@ -1611,6 +1641,93 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ocrInterface => 'OCR Interface';
+
+  @override
+  String get ocrProvider => 'Provider';
+
+  @override
+  String get ocrProviderHelp =>
+      'PaddleOCR and MinerU each store their own token; switching providers does not affect configured extraction options';
+
+  @override
+  String get mineruOptions => 'MinerU Parsing Options';
+
+  @override
+  String get mineruScannedOcr => 'Scanned Document OCR';
+
+  @override
+  String get mineruScannedOcrDesc => 'Enable for scanned / image-only PDFs';
+
+  @override
+  String get mineruFormulaRecognition => 'Formula Recognition';
+
+  @override
+  String get mineruFormulaRecognitionDesc =>
+      'Enabled by default. Controls inline formulas only with VLM, and formula recognition with Pipeline.';
+
+  @override
+  String get mineruTableRecognition => 'Table Recognition';
+
+  @override
+  String get mineruTableRecognitionDesc => 'Parse tables into HTML';
+
+  @override
+  String get ocrLanguage => 'Document Language';
+
+  @override
+  String get ocrLanguageHelp =>
+      'Choose the main document language or language family. Defaults to Chinese and English.';
+
+  @override
+  String get ocrLangChinese => 'Chinese and English';
+
+  @override
+  String get ocrLangEnglish => 'English';
+
+  @override
+  String get ocrUsageTitle => 'Daily Quota';
+
+  @override
+  String ocrUsagePages(int used, int limit) {
+    return '$used / $limit pages parsed today';
+  }
+
+  @override
+  String get ocrUsageHardLimitNote =>
+      'Hard daily cap; overage is rejected. Local estimate only — the provider\'s actual accounting prevails';
+
+  @override
+  String get ocrUsagePriorityNote =>
+      'Priority quota; overage continues at lower priority. Local estimate only — the provider\'s actual accounting prevails';
+
+  @override
+  String ocrUsageLimitsLine(int sizeMB, int pages, int batch) {
+    return 'Per file ≤ ${sizeMB}MB / $pages pages · Batch ≤ $batch files';
+  }
+
+  @override
+  String extractFileTooLarge(int maxMB, int count) {
+    return '$count file(s) exceed the ${maxMB}MB limit and were skipped';
+  }
+
+  @override
+  String extractFileTooLargeSingle(int maxMB) {
+    return 'File exceeds the ${maxMB}MB size limit';
+  }
+
+  @override
+  String extractTooManyPages(int maxPages) {
+    return 'File exceeds the $maxPages-page limit';
+  }
+
+  @override
+  String batchExtractTooManyFiles(int max) {
+    return 'Batch extraction accepts at most $max files at a time';
+  }
+
+  @override
+  String get aiFixNotForMinerU =>
+      'Documents extracted by MinerU already include figure captions; AI figure repair is not needed';
 
   @override
   String get aspectSquare => 'Square · Social media';
@@ -2645,4 +2762,213 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dropPdfOnly => 'Only PDF files can be imported';
+
+  @override
+  String get mineruModel => 'Parsing model';
+
+  @override
+  String get mineruModelHelp =>
+      'VLM is recommended; Pipeline uses the traditional parsing pipeline. VLM remains the app default.';
+
+  @override
+  String get mineruModelVlm => 'VLM (recommended)';
+
+  @override
+  String get mineruModelPipeline => 'Pipeline';
+
+  @override
+  String get mineruPageRanges => 'Page range';
+
+  @override
+  String get mineruPageRangesHelp =>
+      'Leave empty for all pages. Use 2,4-6 or 2--2 (page 2 through the second-to-last page). Applies to each file in a batch.';
+
+  @override
+  String get mineruPageRangesHint => 'All pages, e.g. 2,4-6';
+
+  @override
+  String get mineruPageRangesInvalid =>
+      'Enter a valid range, e.g. 2,4-6 or 2--2';
+
+  @override
+  String get mineruExtraFormats => 'Additional export formats';
+
+  @override
+  String get mineruExtraFormatsHelp =>
+      'Markdown and JSON are always generated. Additional formats are retained in mineru.exports.zip in the document folder.';
+
+  @override
+  String get mineruLangChServer => 'Traditional and handwritten';
+
+  @override
+  String get mineruLangJapan => 'Japanese';
+
+  @override
+  String get mineruLangKorean => 'Korean';
+
+  @override
+  String get mineruLangChineseCht => 'Traditional Chinese';
+
+  @override
+  String get mineruLangTa => 'Tamil';
+
+  @override
+  String get mineruLangTe => 'Telugu';
+
+  @override
+  String get mineruLangKa => 'Kannada';
+
+  @override
+  String get mineruLangEl => 'Greek';
+
+  @override
+  String get mineruLangTh => 'Thai';
+
+  @override
+  String get mineruLangLatin => 'Latin scripts';
+
+  @override
+  String get mineruLangArabic => 'Arabic scripts';
+
+  @override
+  String get mineruLangCyrillic => 'Cyrillic scripts';
+
+  @override
+  String get mineruLangEastSlavic => 'East Slavic';
+
+  @override
+  String get mineruLangDevanagari => 'Devanagari scripts';
+
+  @override
+  String get reformatSourceChoice => 'Choose reformatting source';
+
+  @override
+  String get reformatSourceChoiceHelp =>
+      'Choose the OCR result to use for text and figures.';
+
+  @override
+  String get extractProviderChoiceHelp =>
+      'Choose the OCR provider for this extraction. Its parsing settings apply; your default provider stays unchanged.';
+
+  @override
+  String get mineruProgressRequestingUpload => 'Requesting upload URL...';
+
+  @override
+  String get mineruProgressUploading => 'Uploading file...';
+
+  @override
+  String get mineruProgressQueued => 'Queued...';
+
+  @override
+  String get mineruProgressParsing => 'Parsing...';
+
+  @override
+  String get mineruProgressConverting => 'Converting format...';
+
+  @override
+  String get mineruProgressDownloading => 'Downloading result...';
+
+  @override
+  String mineruErrInvalidParams(String msg) {
+    return 'Invalid parameter: $msg';
+  }
+
+  @override
+  String get mineruErrUnsupportedFormat => 'Unsupported file format';
+
+  @override
+  String get mineruErrFileUnreadable => 'File is unreadable or empty';
+
+  @override
+  String get mineruErrFileTooLarge => 'File exceeds the 200MB size limit';
+
+  @override
+  String get mineruErrTooManyPages => 'File exceeds the 200-page limit';
+
+  @override
+  String get mineruErrFileTimeout => 'Timed out reading the file';
+
+  @override
+  String get mineruErrParseFailed => 'Failed to parse the document';
+
+  @override
+  String get mineruErrConvertFailed => 'File / format conversion failed';
+
+  @override
+  String get mineruErrQuotaExhausted =>
+      'Daily parsing quota is used up. Try again tomorrow.';
+
+  @override
+  String mineruErrUnknown(String code) {
+    return 'Unknown error ($code)';
+  }
+
+  @override
+  String get mineruErrTokenInvalid => 'Invalid API token (A0202)';
+
+  @override
+  String get mineruErrTokenExpired => 'API token expired (A0211)';
+
+  @override
+  String mineruErrRequestRejected(String code, String msg) {
+    return 'Request rejected ($code): $msg';
+  }
+
+  @override
+  String mineruErrRequestUploadFailed(String detail) {
+    return 'Failed to request the upload URL: $detail';
+  }
+
+  @override
+  String get mineruErrMissingFileUrls =>
+      'Upload response is missing batch_id / file_urls';
+
+  @override
+  String mineruErrUploadFailed(String file, String detail) {
+    return 'Failed to upload $file: $detail';
+  }
+
+  @override
+  String mineruErrPollFailed(String detail) {
+    return 'Failed to query the result: $detail';
+  }
+
+  @override
+  String mineruErrDownloadFailed(String detail) {
+    return 'Failed to download the result: $detail';
+  }
+
+  @override
+  String get mineruErrMissingResultUrl =>
+      'The task finished but returned no result URL';
+
+  @override
+  String get mineruErrTaskFailed => 'Parsing failed';
+
+  @override
+  String mineruErrSaveResultFailed(String detail) {
+    return 'Failed to save the result: $detail';
+  }
+
+  @override
+  String get mineruErrResultPackageIncomplete =>
+      'The MinerU result package is missing full.md or structured results';
+
+  @override
+  String get exportDocuments => 'Export documents';
+
+  @override
+  String get exportNotesMarkdown => 'Notes as Markdown';
+
+  @override
+  String get exportCitationsBibtex => 'Citations as BibTeX';
+
+  @override
+  String get exportNoNotes => 'No highlights or notes yet.';
+
+  @override
+  String get exportNoDocuments => 'The selected documents no longer exist.';
+
+  @override
+  String get documentExportSaved => 'Export saved';
 }

@@ -120,6 +120,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get navHideLabels => '隐藏标签';
 
   @override
+  String get readerShowNavigation => '显示导航栏';
+
+  @override
+  String get readerHideNavigation => '隐藏导航栏';
+
+  @override
   String get networkSettings => '网络设置';
 
   @override
@@ -1340,6 +1346,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get restoringBackup => '正在恢复备份...';
 
   @override
+  String get backupInvalidData => '备份不完整或已损坏，尚未替换当前资料。';
+
+  @override
+  String get backupUnsupportedVersion => '暂不支持此备份的版本，请更新 OtterPad 后再恢复。';
+
+  @override
+  String get backupPendingRestore => '检测到上次恢复留下的副本，已保留这些资料。请先处理上次恢复，再重试。';
+
+  @override
+  String get backupActiveTasks => '后台任务尚未结束，请等待任务结束后再恢复。';
+
+  @override
+  String get backupChangedDuringCreation => '备份期间资料发生了变化，请等待编辑和后台任务结束后重试。';
+
+  @override
+  String get backupOperationInProgress => '备份或恢复正在进行，请等待完成后再试。';
+
+  @override
   String restoreFailed(String error) {
     return '恢复失败：$error';
   }
@@ -1582,6 +1606,89 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get ocrInterface => 'OCR 接口';
+
+  @override
+  String get ocrProvider => '提供商';
+
+  @override
+  String get ocrProviderHelp =>
+      'PaddleOCR 与 MinerU 的 Token 各自独立保存，切换提供商不影响已配置的提取选项';
+
+  @override
+  String get mineruOptions => 'MinerU 解析选项';
+
+  @override
+  String get mineruScannedOcr => '扫描件 OCR';
+
+  @override
+  String get mineruScannedOcrDesc => '扫描版 / 纯图片 PDF 开启';
+
+  @override
+  String get mineruFormulaRecognition => '公式识别';
+
+  @override
+  String get mineruFormulaRecognitionDesc =>
+      '默认开启。VLM 模型下仅影响行内公式；Pipeline 模型下控制公式识别。';
+
+  @override
+  String get mineruTableRecognition => '表格识别';
+
+  @override
+  String get mineruTableRecognitionDesc => '将表格解析为 HTML';
+
+  @override
+  String get ocrLanguage => '文档语言';
+
+  @override
+  String get ocrLanguageHelp => '选择文档的主要语言或语言组，默认为中英文。';
+
+  @override
+  String get ocrLangChinese => '中英文';
+
+  @override
+  String get ocrLangEnglish => '英文';
+
+  @override
+  String get ocrUsageTitle => '今日额度';
+
+  @override
+  String ocrUsagePages(int used, int limit) {
+    return '今日已解析 $used / $limit 页';
+  }
+
+  @override
+  String get ocrUsageHardLimitNote => '每日硬上限，超出即被拒绝。本地估算，以服务商实际记账为准';
+
+  @override
+  String get ocrUsagePriorityNote => '优先解析额度，超出后排队降速继续。本地估算，以服务商实际记账为准';
+
+  @override
+  String ocrUsageLimitsLine(int sizeMB, int pages, int batch) {
+    return '单文件 ≤ ${sizeMB}MB / $pages 页 · 批量 ≤ $batch 个文件';
+  }
+
+  @override
+  String extractFileTooLarge(int maxMB, int count) {
+    return '$count 个文件超过 ${maxMB}MB 大小限制，已跳过';
+  }
+
+  @override
+  String extractFileTooLargeSingle(int maxMB) {
+    return '文件超过 ${maxMB}MB 大小限制';
+  }
+
+  @override
+  String extractTooManyPages(int maxPages) {
+    return '页数超过单文件 $maxPages 页限制';
+  }
+
+  @override
+  String batchExtractTooManyFiles(int max) {
+    return '一次最多批量提取 $max 个文件';
+  }
+
+  @override
+  String get aiFixNotForMinerU => 'MinerU 提取的文档已自带图表说明，无需 AI 修缮';
 
   @override
   String get aspectSquare => '方形 · 社交配图';
@@ -2566,6 +2673,208 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get dropPdfOnly => '仅支持导入 PDF 文件';
+
+  @override
+  String get mineruModel => '解析模型';
+
+  @override
+  String get mineruModelHelp => 'VLM 为推荐模型；Pipeline 使用传统流水线解析。默认沿用 VLM。';
+
+  @override
+  String get mineruModelVlm => 'VLM（推荐）';
+
+  @override
+  String get mineruModelPipeline => 'Pipeline';
+
+  @override
+  String get mineruPageRanges => '解析页码范围';
+
+  @override
+  String get mineruPageRangesHelp =>
+      '留空解析全部页。支持 2,4-6 或 2--2（第 2 页至倒数第 2 页）。批量解析时应用于每个文件。';
+
+  @override
+  String get mineruPageRangesHint => '全部页，例如 2,4-6';
+
+  @override
+  String get mineruPageRangesInvalid => '请输入有效页码，如 2,4-6 或 2--2';
+
+  @override
+  String get mineruExtraFormats => '额外导出格式';
+
+  @override
+  String get mineruExtraFormatsHelp =>
+      'Markdown 和 JSON 默认生成。勾选的额外格式随结果包保存在文献目录中的 mineru.exports.zip。';
+
+  @override
+  String get mineruLangChServer => '繁体与手写体';
+
+  @override
+  String get mineruLangJapan => '日文';
+
+  @override
+  String get mineruLangKorean => '韩文';
+
+  @override
+  String get mineruLangChineseCht => '繁体中文';
+
+  @override
+  String get mineruLangTa => '泰米尔文';
+
+  @override
+  String get mineruLangTe => '泰卢固文';
+
+  @override
+  String get mineruLangKa => '卡纳达文';
+
+  @override
+  String get mineruLangEl => '希腊文';
+
+  @override
+  String get mineruLangTh => '泰文';
+
+  @override
+  String get mineruLangLatin => '拉丁语系';
+
+  @override
+  String get mineruLangArabic => '阿拉伯语系';
+
+  @override
+  String get mineruLangCyrillic => '西里尔语系';
+
+  @override
+  String get mineruLangEastSlavic => '东斯拉夫语系';
+
+  @override
+  String get mineruLangDevanagari => '天城文语系';
+
+  @override
+  String get reformatSourceChoice => '选择排版来源';
+
+  @override
+  String get reformatSourceChoiceHelp => '选择用于正文和图表的 OCR 提取结果。';
+
+  @override
+  String get extractProviderChoiceHelp =>
+      '选择本次提取使用的 OCR 接口，沿用该接口的解析设置，不改变默认接口。';
+
+  @override
+  String get mineruProgressRequestingUpload => '正在申请上传...';
+
+  @override
+  String get mineruProgressUploading => '正在上传...';
+
+  @override
+  String get mineruProgressQueued => '排队中...';
+
+  @override
+  String get mineruProgressParsing => '正在解析...';
+
+  @override
+  String get mineruProgressConverting => '正在转换格式...';
+
+  @override
+  String get mineruProgressDownloading => '正在下载结果...';
+
+  @override
+  String mineruErrInvalidParams(String msg) {
+    return '参数错误: $msg';
+  }
+
+  @override
+  String get mineruErrUnsupportedFormat => '不支持的文件格式';
+
+  @override
+  String get mineruErrFileUnreadable => '文件读取失败或为空';
+
+  @override
+  String get mineruErrFileTooLarge => '文件超过 200MB 大小限制';
+
+  @override
+  String get mineruErrTooManyPages => '页数超过单文件 200 页限制';
+
+  @override
+  String get mineruErrFileTimeout => '文件读取超时';
+
+  @override
+  String get mineruErrParseFailed => '文档解析失败';
+
+  @override
+  String get mineruErrConvertFailed => '文件 / 格式转换失败';
+
+  @override
+  String get mineruErrQuotaExhausted => '今日解析额度已用尽，请明日再试';
+
+  @override
+  String mineruErrUnknown(String code) {
+    return '未知错误 ($code)';
+  }
+
+  @override
+  String get mineruErrTokenInvalid => 'API Token 无效（A0202）';
+
+  @override
+  String get mineruErrTokenExpired => 'API Token 已过期（A0211）';
+
+  @override
+  String mineruErrRequestRejected(String code, String msg) {
+    return '请求被拒绝 ($code): $msg';
+  }
+
+  @override
+  String mineruErrRequestUploadFailed(String detail) {
+    return '申请上传失败: $detail';
+  }
+
+  @override
+  String get mineruErrMissingFileUrls => '申请上传响应缺少 batch_id / file_urls';
+
+  @override
+  String mineruErrUploadFailed(String file, String detail) {
+    return '上传文件失败 ($file): $detail';
+  }
+
+  @override
+  String mineruErrPollFailed(String detail) {
+    return '查询结果失败: $detail';
+  }
+
+  @override
+  String mineruErrDownloadFailed(String detail) {
+    return '下载结果失败: $detail';
+  }
+
+  @override
+  String get mineruErrMissingResultUrl => '任务完成但无结果链接';
+
+  @override
+  String get mineruErrTaskFailed => '解析失败';
+
+  @override
+  String mineruErrSaveResultFailed(String detail) {
+    return '保存结果失败: $detail';
+  }
+
+  @override
+  String get mineruErrResultPackageIncomplete => 'MinerU 结果包缺少 full.md 或结构化结果';
+
+  @override
+  String get exportDocuments => '导出文献';
+
+  @override
+  String get exportNotesMarkdown => '笔记和标注（Markdown）';
+
+  @override
+  String get exportCitationsBibtex => '参考文献（BibTeX）';
+
+  @override
+  String get exportNoNotes => '这篇文献还没有标注或笔记。';
+
+  @override
+  String get exportNoDocuments => '所选文献已不存在。';
+
+  @override
+  String get documentExportSaved => '导出文件已保存';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -2676,6 +2985,18 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get settings => '設定';
+
+  @override
+  String get navShowLabels => '顯示標籤';
+
+  @override
+  String get navHideLabels => '隱藏標籤';
+
+  @override
+  String get readerShowNavigation => '顯示導覽列';
+
+  @override
+  String get readerHideNavigation => '隱藏導覽列';
 
   @override
   String get networkSettings => '網路設定';
@@ -3898,6 +4219,24 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get restoringBackup => '正在還原備份...';
 
   @override
+  String get backupInvalidData => '備份不完整或已損毀，尚未取代目前資料。';
+
+  @override
+  String get backupUnsupportedVersion => '不支援此備份的版本，請先更新 OtterPad 再還原。';
+
+  @override
+  String get backupPendingRestore => '偵測到上次還原留下的檔案，已保留這些資料；請先處理上次還原再重試。';
+
+  @override
+  String get backupActiveTasks => '背景任務尚未結束，請等待任務結束後再還原。';
+
+  @override
+  String get backupChangedDuringCreation => '備份期間資料發生變化，請等待編輯與背景任務結束後重試。';
+
+  @override
+  String get backupOperationInProgress => '備份或還原正在進行中，請等待完成後再試。';
+
+  @override
   String restoreFailed(String error) {
     return '還原失敗：$error';
   }
@@ -4140,6 +4479,89 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get ocrInterface => 'OCR 介面';
+
+  @override
+  String get ocrProvider => '服務商';
+
+  @override
+  String get ocrProviderHelp =>
+      'PaddleOCR 與 MinerU 的 Token 各自獨立儲存，切換服務商不影響已設定的擷取選項';
+
+  @override
+  String get mineruOptions => 'MinerU 解析選項';
+
+  @override
+  String get mineruScannedOcr => '掃描件 OCR';
+
+  @override
+  String get mineruScannedOcrDesc => '掃描版 / 純圖片 PDF 開啟';
+
+  @override
+  String get mineruFormulaRecognition => '公式辨識';
+
+  @override
+  String get mineruFormulaRecognitionDesc =>
+      '預設開啟。VLM 模型下僅影響行內公式；Pipeline 模型下控制公式辨識。';
+
+  @override
+  String get mineruTableRecognition => '表格辨識';
+
+  @override
+  String get mineruTableRecognitionDesc => '將表格解析為 HTML';
+
+  @override
+  String get ocrLanguage => '文件語言';
+
+  @override
+  String get ocrLanguageHelp => '選擇文件的主要語言或語系，預設為中英文。';
+
+  @override
+  String get ocrLangChinese => '中英文';
+
+  @override
+  String get ocrLangEnglish => '英文';
+
+  @override
+  String get ocrUsageTitle => '每日配額';
+
+  @override
+  String ocrUsagePages(int used, int limit) {
+    return '今日已解析 $used / $limit 頁';
+  }
+
+  @override
+  String get ocrUsageHardLimitNote => '每日硬性上限，超出即遭拒絕。僅為本地估算，以服務商實際計算為準';
+
+  @override
+  String get ocrUsagePriorityNote => '優先配額，超出後以較低優先權繼續。僅為本地估算，以服務商實際計算為準';
+
+  @override
+  String ocrUsageLimitsLine(int sizeMB, int pages, int batch) {
+    return '單檔 ≤ ${sizeMB}MB / $pages 頁 · 批次 ≤ $batch 個檔案';
+  }
+
+  @override
+  String extractFileTooLarge(int maxMB, int count) {
+    return '$count 個檔案超過 ${maxMB}MB 大小限制，已跳過';
+  }
+
+  @override
+  String extractFileTooLargeSingle(int maxMB) {
+    return '檔案超過 ${maxMB}MB 大小限制';
+  }
+
+  @override
+  String extractTooManyPages(int maxPages) {
+    return '頁數超過單一檔案 $maxPages 頁限制';
+  }
+
+  @override
+  String batchExtractTooManyFiles(int max) {
+    return '一次最多批次擷取 $max 個檔案';
+  }
+
+  @override
+  String get aiFixNotForMinerU => 'MinerU 擷取的文件已自帶圖表說明，無須 AI 修繕';
 
   @override
   String get aspectSquare => '方形 · 社群配圖';
@@ -5124,4 +5546,206 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get dropPdfOnly => '僅支援匯入 PDF 檔案';
+
+  @override
+  String get mineruModel => '解析模型';
+
+  @override
+  String get mineruModelHelp => '建議使用 VLM；Pipeline 採用傳統解析流程。預設仍為 VLM。';
+
+  @override
+  String get mineruModelVlm => 'VLM（建議）';
+
+  @override
+  String get mineruModelPipeline => 'Pipeline';
+
+  @override
+  String get mineruPageRanges => '解析頁面範圍';
+
+  @override
+  String get mineruPageRangesHelp =>
+      '留空解析全部頁面。支援 2,4-6 或 2--2（第 2 頁至倒數第 2 頁）。批次解析時套用於每個檔案。';
+
+  @override
+  String get mineruPageRangesHint => '全部頁面，例如 2,4-6';
+
+  @override
+  String get mineruPageRangesInvalid => '請輸入有效頁碼，如 2,4-6 或 2--2';
+
+  @override
+  String get mineruExtraFormats => '額外匯出格式';
+
+  @override
+  String get mineruExtraFormatsHelp =>
+      'Markdown 與 JSON 一律產生。勾選的額外格式隨結果保存在文件目錄的 mineru.exports.zip。';
+
+  @override
+  String get mineruLangChServer => '繁體與手寫體';
+
+  @override
+  String get mineruLangJapan => '日文';
+
+  @override
+  String get mineruLangKorean => '韓文';
+
+  @override
+  String get mineruLangChineseCht => '繁體中文';
+
+  @override
+  String get mineruLangTa => '泰米爾文';
+
+  @override
+  String get mineruLangTe => '泰盧固文';
+
+  @override
+  String get mineruLangKa => '卡納達文';
+
+  @override
+  String get mineruLangEl => '希臘文';
+
+  @override
+  String get mineruLangTh => '泰文';
+
+  @override
+  String get mineruLangLatin => '拉丁語系';
+
+  @override
+  String get mineruLangArabic => '阿拉伯語系';
+
+  @override
+  String get mineruLangCyrillic => '西里爾語系';
+
+  @override
+  String get mineruLangEastSlavic => '東斯拉夫語系';
+
+  @override
+  String get mineruLangDevanagari => '天城文語系';
+
+  @override
+  String get reformatSourceChoice => '選擇重新排版來源';
+
+  @override
+  String get reformatSourceChoiceHelp => '選擇用於正文與圖表的 OCR 擷取結果。';
+
+  @override
+  String get extractProviderChoiceHelp =>
+      '選擇本次擷取使用的 OCR 服務商，將沿用該服務商的解析設定，不會變更預設服務商。';
+
+  @override
+  String get mineruProgressRequestingUpload => '正在申請上傳...';
+
+  @override
+  String get mineruProgressUploading => '正在上傳...';
+
+  @override
+  String get mineruProgressQueued => '排隊中...';
+
+  @override
+  String get mineruProgressParsing => '正在解析...';
+
+  @override
+  String get mineruProgressConverting => '正在轉換格式...';
+
+  @override
+  String get mineruProgressDownloading => '正在下載結果...';
+
+  @override
+  String mineruErrInvalidParams(String msg) {
+    return '參數錯誤: $msg';
+  }
+
+  @override
+  String get mineruErrUnsupportedFormat => '不支援的檔案格式';
+
+  @override
+  String get mineruErrFileUnreadable => '檔案讀取失敗或為空';
+
+  @override
+  String get mineruErrFileTooLarge => '檔案超過 200MB 大小限制';
+
+  @override
+  String get mineruErrTooManyPages => '頁數超過單一檔案 200 頁限制';
+
+  @override
+  String get mineruErrFileTimeout => '檔案讀取逾時';
+
+  @override
+  String get mineruErrParseFailed => '文件解析失敗';
+
+  @override
+  String get mineruErrConvertFailed => '檔案 / 格式轉換失敗';
+
+  @override
+  String get mineruErrQuotaExhausted => '今日解析配額已用盡，請明日再試';
+
+  @override
+  String mineruErrUnknown(String code) {
+    return '未知錯誤 ($code)';
+  }
+
+  @override
+  String get mineruErrTokenInvalid => 'API Token 無效（A0202）';
+
+  @override
+  String get mineruErrTokenExpired => 'API Token 已過期（A0211）';
+
+  @override
+  String mineruErrRequestRejected(String code, String msg) {
+    return '請求遭拒絕 ($code): $msg';
+  }
+
+  @override
+  String mineruErrRequestUploadFailed(String detail) {
+    return '申請上傳失敗: $detail';
+  }
+
+  @override
+  String get mineruErrMissingFileUrls => '申請上傳回應缺少 batch_id / file_urls';
+
+  @override
+  String mineruErrUploadFailed(String file, String detail) {
+    return '上傳檔案失敗 ($file): $detail';
+  }
+
+  @override
+  String mineruErrPollFailed(String detail) {
+    return '查詢結果失敗: $detail';
+  }
+
+  @override
+  String mineruErrDownloadFailed(String detail) {
+    return '下載結果失敗: $detail';
+  }
+
+  @override
+  String get mineruErrMissingResultUrl => '任務完成但無結果連結';
+
+  @override
+  String get mineruErrTaskFailed => '解析失敗';
+
+  @override
+  String mineruErrSaveResultFailed(String detail) {
+    return '儲存結果失敗: $detail';
+  }
+
+  @override
+  String get mineruErrResultPackageIncomplete => 'MinerU 結果包缺少 full.md 或結構化結果';
+
+  @override
+  String get exportDocuments => '匯出文獻';
+
+  @override
+  String get exportNotesMarkdown => '筆記與標註（Markdown）';
+
+  @override
+  String get exportCitationsBibtex => '參考文獻（BibTeX）';
+
+  @override
+  String get exportNoNotes => '這篇文獻還沒有標註或筆記。';
+
+  @override
+  String get exportNoDocuments => '所選文獻已不存在。';
+
+  @override
+  String get documentExportSaved => '匯出檔案已儲存';
 }

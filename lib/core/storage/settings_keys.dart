@@ -109,6 +109,12 @@ class SettingsKeys {
   // ── 文档抽取配置（键 = [docExtractPrefix] + 字段名）──
   static const docExtractPrefix = 'doc_extract_';
 
+  /// OCR 提供商选择（'paddle' | 'mineru'），键 = docExtractPrefix + 'provider'
+  static const docExtractProviderField = 'provider';
+
+  /// 提取用量本地记账（{date, paddle, mineru} Map）
+  static const docExtractUsage = 'doc_extract_usage';
+
   /// doc_extract 配置字段名集合；与 [docExtractPrefix] 拼成完整键。
   /// （注：DocExtractApiNotifier 的 setBool/setDouble/setString 仍按字段名
   /// 入参，调用点传字段名字面量——那是字段标识符模式，非本表管辖范围。）
@@ -125,5 +131,16 @@ class SettingsKeys {
     'repetitionPenalty',
     'temperature',
     'markdownIgnoreLabels',
+  ];
+
+  /// MinerU 提供商的参数字段名集合；与 [docExtractPrefix] 拼成完整键。
+  static const docExtractMineruFields = <String>[
+    'mineruIsOcr',
+    'mineruEnableFormula',
+    'mineruEnableTable',
+    'mineruLanguage',
+    'mineruModelVersion',
+    'mineruPageRanges',
+    'mineruExtraFormats',
   ];
 }

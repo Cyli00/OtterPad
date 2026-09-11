@@ -464,9 +464,11 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   static String _baseUrlKey(String id) => SettingsKeys.agentApiBaseUrl(id);
   static String _apiKeyKey(String id) => 'agent_api_key_$id';
   static String _modelsKey(String id) => SettingsKeys.agentApiModels(id);
-  static String _modelParamsKey(String id) => SettingsKeys.agentApiModelParams(id);
+  static String _modelParamsKey(String id) =>
+      SettingsKeys.agentApiModelParams(id);
   static String _modelCapsKey(String id) => SettingsKeys.agentApiModelCaps(id);
-  static String _modelToolsKey(String id) => SettingsKeys.agentApiModelTools(id);
+  static String _modelToolsKey(String id) =>
+      SettingsKeys.agentApiModelTools(id);
 
   /// 有序实例 id 列表——定义「有哪些实例、什么顺序」。
   static const _idsKey = SettingsKeys.agentApiProviderIds;
@@ -483,12 +485,30 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   /// 各家 base URL 与 key 格式均按官方文档核实；Zhipu / Doubao 无 OpenAI
   /// 兼容的 GET /models 列表端点，模型靠管理弹窗的手动添加行录入。
   static const _builtinPresets = [
-    AgentVendorPreset('openai', 'OpenAI', AgentApiProvider.openai,
-        '', '', 'https://platform.openai.com/api-keys'),
-    AgentVendorPreset('anthropic', 'Anthropic', AgentApiProvider.anthropic,
-        '', '', 'https://console.anthropic.com/settings/keys'),
-    AgentVendorPreset('gemini', 'Gemini', AgentApiProvider.gemini,
-        '', '', 'https://aistudio.google.com/app/api-keys'),
+    AgentVendorPreset(
+      'openai',
+      'OpenAI',
+      AgentApiProvider.openai,
+      '',
+      '',
+      'https://platform.openai.com/api-keys',
+    ),
+    AgentVendorPreset(
+      'anthropic',
+      'Anthropic',
+      AgentApiProvider.anthropic,
+      '',
+      '',
+      'https://console.anthropic.com/settings/keys',
+    ),
+    AgentVendorPreset(
+      'gemini',
+      'Gemini',
+      AgentApiProvider.gemini,
+      '',
+      '',
+      'https://aistudio.google.com/app/api-keys',
+    ),
     AgentVendorPreset(
       'deepseek',
       'DeepSeek',
@@ -587,10 +607,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   static void _migrateCapsV1() {
     final box = GStorage.setting;
     if (box.get(_kCapsMigrationV1) == true) return;
-    final ids = <String>[
-      for (final p in _builtinPresets) p.id,
-      ..._loadIds(),
-    ];
+    final ids = <String>[for (final p in _builtinPresets) p.id, ..._loadIds()];
     for (final id in ids) {
       final key = _modelCapsKey(id);
       final raw = box.get(key);
@@ -1033,7 +1050,58 @@ final effectiveAgentApiProvider = Provider<AgentApiState>((ref) {
   return AgentApiNotifier.loadInstance(targetId) ?? const AgentApiState();
 });
 
-// ─── 文档提取 API（百度 AI Studio Layout Parsing）─────────────────────────────
+// ─── 文档提取 API ─────────────────────────────────────────────────────────────
+
+/// OCR / 文档提取提供商。
+///
+/// 线格式差异大（Paddle 同步/异步 Job vs MinerU 批量上传轮询），由各自服务类
+/// 消费；本枚举只负责 UI 选择、凭据分槽与限额常量。
+enum DocExtractProvider { paddle, mineru }
+
+extension DocExtractProviderExt on DocExtractProvider {
+  String get artifactKey =>
+      this == DocExtractProvider.paddle ? 'paddleocr' : 'mineru';
+
+  String get label => switch (this) {
+    DocExtractProvider.paddle => 'PaddleOCR',
+    DocExtractProvider.mineru => 'MinerU',
+  };
+
+  /// 获取 API Token 的引导页
+  String get tokenPageUrl => switch (this) {
+    DocExtractProvider.paddle => 'https://aistudio.baidu.com/paddleocr',
+    DocExtractProvider.mineru => 'https://mineru.net/apiManage/token',
+  };
+
+  /// 每日额度（页）。MinerU 为「优先解析」额度——超出后降优先级而非硬拒绝。
+  int get dailyPages => switch (this) {
+    DocExtractProvider.paddle => 20000,
+    DocExtractProvider.mineru => 1000,
+  };
+
+  /// 是否每日硬上限（超限即拒绝）。MinerU 超限仅降级，非硬上限。
+  bool get dailyPagesIsHardLimit => switch (this) {
+    DocExtractProvider.paddle => true,
+    DocExtractProvider.mineru => false,
+  };
+
+  /// 单文件大小上限（MB）
+  int get maxFileSizeMB => 200;
+
+  /// 单文件页数上限
+  int get maxPagesPerFile => switch (this) {
+    DocExtractProvider.paddle => 1000,
+    DocExtractProvider.mineru => 200,
+  };
+
+  /// 单次批量上传文件数上限（统一按 20 控制）
+  int get maxBatchFiles => 20;
+
+  static DocExtractProvider fromName(String? name) =>
+      name == DocExtractProvider.mineru.name
+      ? DocExtractProvider.mineru
+      : DocExtractProvider.paddle;
+}
 
 /// 所有可选的 Markdown 忽略标签
 const kAllIgnoreLabels = [
@@ -1058,9 +1126,16 @@ const kDefaultIgnoreLabels = [
 ];
 
 class DocExtractApiState {
-  final String apiKey; // Access Token（异步 Job API 必填）
+  /// 当前选择的提供商
+  final DocExtractProvider provider;
 
-  // ── 提取选项 ──
+  /// PaddleOCR Access Token
+  final String paddleApiKey;
+
+  /// MinerU API Token
+  final String mineruApiKey;
+
+  // ── PaddleOCR 提取选项 ──
   final bool useChartRecognition;
   final bool useDocOrientationClassify;
   final bool useDocUnwarping;
@@ -1073,15 +1148,31 @@ class DocExtractApiState {
   final double repetitionPenalty;
   final double temperature;
 
-  // ── Markdown 忽略标签 ──
+  // ── Markdown 忽略标签（PaddleOCR 专属参数）──
   final List<String> markdownIgnoreLabels;
 
-  /// 异步 API 只需 token，是否已配置
+  // ── MinerU 提取选项 ──
+  final bool mineruIsOcr;
+  final bool mineruEnableFormula;
+  final bool mineruEnableTable;
+  final String mineruLanguage;
+  final String mineruModelVersion;
+  final String mineruPageRanges;
+  final List<String> mineruExtraFormats;
 
+  /// 当前提供商的 API Key/token
+  String get apiKey => switch (provider) {
+    DocExtractProvider.paddle => paddleApiKey,
+    DocExtractProvider.mineru => mineruApiKey,
+  };
+
+  /// 当前提供商是否已配置 token
   bool get isConfigured => apiKey.isNotEmpty;
 
   const DocExtractApiState({
-    this.apiKey = '',
+    this.provider = DocExtractProvider.paddle,
+    this.paddleApiKey = '',
+    this.mineruApiKey = '',
     this.useChartRecognition = false,
     this.useDocOrientationClassify = false,
     this.useDocUnwarping = false,
@@ -1094,10 +1185,19 @@ class DocExtractApiState {
     this.repetitionPenalty = 1.0,
     this.temperature = 0.0,
     this.markdownIgnoreLabels = kDefaultIgnoreLabels,
+    this.mineruIsOcr = false,
+    this.mineruEnableFormula = true,
+    this.mineruEnableTable = true,
+    this.mineruLanguage = 'ch',
+    this.mineruModelVersion = 'vlm',
+    this.mineruPageRanges = '',
+    this.mineruExtraFormats = const [],
   });
 
   DocExtractApiState copyWith({
-    String? apiKey,
+    DocExtractProvider? provider,
+    String? paddleApiKey,
+    String? mineruApiKey,
     bool? useChartRecognition,
     bool? useDocOrientationClassify,
     bool? useDocUnwarping,
@@ -1110,8 +1210,17 @@ class DocExtractApiState {
     double? repetitionPenalty,
     double? temperature,
     List<String>? markdownIgnoreLabels,
+    bool? mineruIsOcr,
+    bool? mineruEnableFormula,
+    bool? mineruEnableTable,
+    String? mineruLanguage,
+    String? mineruModelVersion,
+    String? mineruPageRanges,
+    List<String>? mineruExtraFormats,
   }) => DocExtractApiState(
-    apiKey: apiKey ?? this.apiKey,
+    provider: provider ?? this.provider,
+    paddleApiKey: paddleApiKey ?? this.paddleApiKey,
+    mineruApiKey: mineruApiKey ?? this.mineruApiKey,
     useChartRecognition: useChartRecognition ?? this.useChartRecognition,
     useDocOrientationClassify:
         useDocOrientationClassify ?? this.useDocOrientationClassify,
@@ -1125,11 +1234,20 @@ class DocExtractApiState {
     repetitionPenalty: repetitionPenalty ?? this.repetitionPenalty,
     temperature: temperature ?? this.temperature,
     markdownIgnoreLabels: markdownIgnoreLabels ?? this.markdownIgnoreLabels,
+    mineruIsOcr: mineruIsOcr ?? this.mineruIsOcr,
+    mineruEnableFormula: mineruEnableFormula ?? this.mineruEnableFormula,
+    mineruEnableTable: mineruEnableTable ?? this.mineruEnableTable,
+    mineruLanguage: mineruLanguage ?? this.mineruLanguage,
+    mineruModelVersion: mineruModelVersion ?? this.mineruModelVersion,
+    mineruPageRanges: mineruPageRanges ?? this.mineruPageRanges,
+    mineruExtraFormats: mineruExtraFormats ?? this.mineruExtraFormats,
   );
 }
 
 class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
-  static const _apiKeyKey = 'doc_extract_api_key';
+  /// PaddleOCR key 槽（历史键名，勿改——旧用户数据在此）
+  static const _paddleApiKeyKey = 'doc_extract_api_key';
+  static const _mineruApiKeyKey = 'doc_extract_api_key_mineru';
   static const _prefix = SettingsKeys.docExtractPrefix;
 
   DocExtractApiNotifier() : super(_load());
@@ -1137,7 +1255,11 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
   static DocExtractApiState _load() {
     final box = GStorage.setting;
 
-    final apiKey = SecureCredentialVault.read(_apiKeyKey);
+    final provider = DocExtractProviderExt.fromName(
+      box.get('$_prefix${SettingsKeys.docExtractProviderField}') as String?,
+    );
+    final paddleApiKey = SecureCredentialVault.read(_paddleApiKeyKey);
+    final mineruApiKey = SecureCredentialVault.read(_mineruApiKeyKey);
     final useChartRecognition =
         box.get('${_prefix}useChartRecognition', defaultValue: false) as bool;
     final useDocOrientationClassify =
@@ -1167,8 +1289,19 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         ? rawLabels.cast<String>().toList()
         : List<String>.from(kDefaultIgnoreLabels);
 
+    final mineruIsOcr =
+        box.get('${_prefix}mineruIsOcr', defaultValue: false) as bool;
+    final mineruEnableFormula =
+        box.get('${_prefix}mineruEnableFormula', defaultValue: true) as bool;
+    final mineruEnableTable =
+        box.get('${_prefix}mineruEnableTable', defaultValue: true) as bool;
+    final mineruLanguage =
+        box.get('${_prefix}mineruLanguage', defaultValue: 'ch') as String;
+
     return DocExtractApiState(
-      apiKey: apiKey,
+      provider: provider,
+      paddleApiKey: paddleApiKey,
+      mineruApiKey: mineruApiKey,
       useChartRecognition: useChartRecognition,
       useDocOrientationClassify: useDocOrientationClassify,
       useDocUnwarping: useDocUnwarping,
@@ -1181,12 +1314,39 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
       repetitionPenalty: repetitionPenalty,
       temperature: temperature,
       markdownIgnoreLabels: markdownIgnoreLabels,
+      mineruIsOcr: mineruIsOcr,
+      mineruEnableFormula: mineruEnableFormula,
+      mineruEnableTable: mineruEnableTable,
+      mineruLanguage: mineruLanguage,
+      mineruModelVersion:
+          box.get('${_prefix}mineruModelVersion', defaultValue: 'vlm')
+              as String,
+      mineruPageRanges:
+          box.get('${_prefix}mineruPageRanges', defaultValue: '') as String,
+      mineruExtraFormats:
+          (box.get('${_prefix}mineruExtraFormats') as List?)?.cast<String>() ??
+          const [],
     );
   }
 
-  Future<void> setApiKey(String key) async {
-    state = state.copyWith(apiKey: key);
-    await SecureCredentialVault.write(_apiKeyKey, key);
+  Future<void> setProvider(DocExtractProvider provider) async {
+    state = state.copyWith(provider: provider);
+    await GStorage.setting.put(
+      '$_prefix${SettingsKeys.docExtractProviderField}',
+      provider.name,
+    );
+  }
+
+  /// 写指定提供商的 token；槽位隔离，切换提供商互不影响。
+  Future<void> setApiKey(DocExtractProvider provider, String key) async {
+    switch (provider) {
+      case DocExtractProvider.paddle:
+        state = state.copyWith(paddleApiKey: key);
+        await SecureCredentialVault.write(_paddleApiKeyKey, key);
+      case DocExtractProvider.mineru:
+        state = state.copyWith(mineruApiKey: key);
+        await SecureCredentialVault.write(_mineruApiKeyKey, key);
+    }
   }
 
   Future<void> setBool(String field, bool value) async {
@@ -1207,6 +1367,12 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         state = state.copyWith(layoutNms: value);
       case 'mergeTables':
         state = state.copyWith(mergeTables: value);
+      case 'mineruIsOcr':
+        state = state.copyWith(mineruIsOcr: value);
+      case 'mineruEnableFormula':
+        state = state.copyWith(mineruEnableFormula: value);
+      case 'mineruEnableTable':
+        state = state.copyWith(mineruEnableTable: value);
     }
     await GStorage.setting.put('$_prefix$field', value);
   }
@@ -1225,8 +1391,19 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     switch (field) {
       case 'layoutShapeMode':
         state = state.copyWith(layoutShapeMode: value);
+      case 'mineruLanguage':
+        state = state.copyWith(mineruLanguage: value);
+      case 'mineruModelVersion':
+        state = state.copyWith(mineruModelVersion: value);
+      case 'mineruPageRanges':
+        state = state.copyWith(mineruPageRanges: value);
     }
     await GStorage.setting.put('$_prefix$field', value);
+  }
+
+  Future<void> setMineruExtraFormats(List<String> formats) async {
+    state = state.copyWith(mineruExtraFormats: List.unmodifiable(formats));
+    await GStorage.setting.put('${_prefix}mineruExtraFormats', formats);
   }
 
   Future<void> setIgnoreLabels(List<String> labels) async {
@@ -1234,14 +1411,21 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     await GStorage.setting.put('${_prefix}markdownIgnoreLabels', labels);
   }
 
-  /// 重置除 API Key 外的所有提取配置为默认值（清除持久化键，state 回落到默认构造）。
+  /// 重置除 API Key 与提供商选择外的所有提取配置为默认值。
   Future<void> resetExceptApiKey() async {
     final box = GStorage.setting;
     const fields = SettingsKeys.docExtractFields;
     for (final f in fields) {
       await box.delete('$_prefix$f');
     }
-    state = DocExtractApiState(apiKey: state.apiKey);
+    for (final f in SettingsKeys.docExtractMineruFields) {
+      await box.delete('$_prefix$f');
+    }
+    state = DocExtractApiState(
+      provider: state.provider,
+      paddleApiKey: state.paddleApiKey,
+      mineruApiKey: state.mineruApiKey,
+    );
   }
 
   void reload() {

@@ -321,6 +321,18 @@ abstract class AppLocalizations {
   /// **'Hide labels'**
   String get navHideLabels;
 
+  /// No description provided for @readerShowNavigation.
+  ///
+  /// In en, this message translates to:
+  /// **'Show navigation'**
+  String get readerShowNavigation;
+
+  /// No description provided for @readerHideNavigation.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide navigation'**
+  String get readerHideNavigation;
+
   /// No description provided for @networkSettings.
   ///
   /// In en, this message translates to:
@@ -2655,6 +2667,42 @@ abstract class AppLocalizations {
   /// **'Restoring backup...'**
   String get restoringBackup;
 
+  /// No description provided for @backupInvalidData.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup is incomplete or damaged. Your current data has not been replaced.'**
+  String get backupInvalidData;
+
+  /// No description provided for @backupUnsupportedVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup uses an unsupported version. Please update OtterPad before restoring it.'**
+  String get backupUnsupportedVersion;
+
+  /// No description provided for @backupPendingRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Files from an earlier recovery are still present. They have been kept; resolve the earlier recovery before trying again.'**
+  String get backupPendingRestore;
+
+  /// No description provided for @backupActiveTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Background tasks have not finished. Please wait before restoring.'**
+  String get backupActiveTasks;
+
+  /// No description provided for @backupChangedDuringCreation.
+  ///
+  /// In en, this message translates to:
+  /// **'Data changed while the backup was being created. Please try again after editing and background tasks have finished.'**
+  String get backupChangedDuringCreation;
+
+  /// No description provided for @backupOperationInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'A backup or restore is already in progress. Please wait for it to finish.'**
+  String get backupOperationInProgress;
+
   /// No description provided for @restoreFailed.
   ///
   /// In en, this message translates to:
@@ -3074,6 +3122,144 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'OCR Interface'**
   String get ocrInterface;
+
+  /// No description provided for @ocrProvider.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider'**
+  String get ocrProvider;
+
+  /// No description provided for @ocrProviderHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'PaddleOCR and MinerU each store their own token; switching providers does not affect configured extraction options'**
+  String get ocrProviderHelp;
+
+  /// No description provided for @mineruOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'MinerU Parsing Options'**
+  String get mineruOptions;
+
+  /// No description provided for @mineruScannedOcr.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanned Document OCR'**
+  String get mineruScannedOcr;
+
+  /// No description provided for @mineruScannedOcrDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable for scanned / image-only PDFs'**
+  String get mineruScannedOcrDesc;
+
+  /// No description provided for @mineruFormulaRecognition.
+  ///
+  /// In en, this message translates to:
+  /// **'Formula Recognition'**
+  String get mineruFormulaRecognition;
+
+  /// No description provided for @mineruFormulaRecognitionDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled by default. Controls inline formulas only with VLM, and formula recognition with Pipeline.'**
+  String get mineruFormulaRecognitionDesc;
+
+  /// No description provided for @mineruTableRecognition.
+  ///
+  /// In en, this message translates to:
+  /// **'Table Recognition'**
+  String get mineruTableRecognition;
+
+  /// No description provided for @mineruTableRecognitionDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Parse tables into HTML'**
+  String get mineruTableRecognitionDesc;
+
+  /// No description provided for @ocrLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Document Language'**
+  String get ocrLanguage;
+
+  /// No description provided for @ocrLanguageHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the main document language or language family. Defaults to Chinese and English.'**
+  String get ocrLanguageHelp;
+
+  /// No description provided for @ocrLangChinese.
+  ///
+  /// In en, this message translates to:
+  /// **'Chinese and English'**
+  String get ocrLangChinese;
+
+  /// No description provided for @ocrLangEnglish.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get ocrLangEnglish;
+
+  /// No description provided for @ocrUsageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily Quota'**
+  String get ocrUsageTitle;
+
+  /// No description provided for @ocrUsagePages.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} / {limit} pages parsed today'**
+  String ocrUsagePages(int used, int limit);
+
+  /// No description provided for @ocrUsageHardLimitNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Hard daily cap; overage is rejected. Local estimate only — the provider\'s actual accounting prevails'**
+  String get ocrUsageHardLimitNote;
+
+  /// No description provided for @ocrUsagePriorityNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority quota; overage continues at lower priority. Local estimate only — the provider\'s actual accounting prevails'**
+  String get ocrUsagePriorityNote;
+
+  /// No description provided for @ocrUsageLimitsLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Per file ≤ {sizeMB}MB / {pages} pages · Batch ≤ {batch} files'**
+  String ocrUsageLimitsLine(int sizeMB, int pages, int batch);
+
+  /// No description provided for @extractFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} file(s) exceed the {maxMB}MB limit and were skipped'**
+  String extractFileTooLarge(int maxMB, int count);
+
+  /// No description provided for @extractFileTooLargeSingle.
+  ///
+  /// In en, this message translates to:
+  /// **'File exceeds the {maxMB}MB size limit'**
+  String extractFileTooLargeSingle(int maxMB);
+
+  /// No description provided for @extractTooManyPages.
+  ///
+  /// In en, this message translates to:
+  /// **'File exceeds the {maxPages}-page limit'**
+  String extractTooManyPages(int maxPages);
+
+  /// No description provided for @batchExtractTooManyFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Batch extraction accepts at most {max} files at a time'**
+  String batchExtractTooManyFiles(int max);
+
+  /// No description provided for @aiFixNotForMinerU.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents extracted by MinerU already include figure captions; AI figure repair is not needed'**
+  String get aiFixNotForMinerU;
 
   /// No description provided for @aspectSquare.
   ///
@@ -4712,6 +4898,372 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only PDF files can be imported'**
   String get dropPdfOnly;
+
+  /// No description provided for @mineruModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Parsing model'**
+  String get mineruModel;
+
+  /// No description provided for @mineruModelHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'VLM is recommended; Pipeline uses the traditional parsing pipeline. VLM remains the app default.'**
+  String get mineruModelHelp;
+
+  /// No description provided for @mineruModelVlm.
+  ///
+  /// In en, this message translates to:
+  /// **'VLM (recommended)'**
+  String get mineruModelVlm;
+
+  /// No description provided for @mineruModelPipeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Pipeline'**
+  String get mineruModelPipeline;
+
+  /// No description provided for @mineruPageRanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Page range'**
+  String get mineruPageRanges;
+
+  /// No description provided for @mineruPageRangesHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty for all pages. Use 2,4-6 or 2--2 (page 2 through the second-to-last page). Applies to each file in a batch.'**
+  String get mineruPageRangesHelp;
+
+  /// No description provided for @mineruPageRangesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'All pages, e.g. 2,4-6'**
+  String get mineruPageRangesHint;
+
+  /// No description provided for @mineruPageRangesInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid range, e.g. 2,4-6 or 2--2'**
+  String get mineruPageRangesInvalid;
+
+  /// No description provided for @mineruExtraFormats.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional export formats'**
+  String get mineruExtraFormats;
+
+  /// No description provided for @mineruExtraFormatsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Markdown and JSON are always generated. Additional formats are retained in mineru.exports.zip in the document folder.'**
+  String get mineruExtraFormatsHelp;
+
+  /// No description provided for @mineruLangChServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Traditional and handwritten'**
+  String get mineruLangChServer;
+
+  /// No description provided for @mineruLangJapan.
+  ///
+  /// In en, this message translates to:
+  /// **'Japanese'**
+  String get mineruLangJapan;
+
+  /// No description provided for @mineruLangKorean.
+  ///
+  /// In en, this message translates to:
+  /// **'Korean'**
+  String get mineruLangKorean;
+
+  /// No description provided for @mineruLangChineseCht.
+  ///
+  /// In en, this message translates to:
+  /// **'Traditional Chinese'**
+  String get mineruLangChineseCht;
+
+  /// No description provided for @mineruLangTa.
+  ///
+  /// In en, this message translates to:
+  /// **'Tamil'**
+  String get mineruLangTa;
+
+  /// No description provided for @mineruLangTe.
+  ///
+  /// In en, this message translates to:
+  /// **'Telugu'**
+  String get mineruLangTe;
+
+  /// No description provided for @mineruLangKa.
+  ///
+  /// In en, this message translates to:
+  /// **'Kannada'**
+  String get mineruLangKa;
+
+  /// No description provided for @mineruLangEl.
+  ///
+  /// In en, this message translates to:
+  /// **'Greek'**
+  String get mineruLangEl;
+
+  /// No description provided for @mineruLangTh.
+  ///
+  /// In en, this message translates to:
+  /// **'Thai'**
+  String get mineruLangTh;
+
+  /// No description provided for @mineruLangLatin.
+  ///
+  /// In en, this message translates to:
+  /// **'Latin scripts'**
+  String get mineruLangLatin;
+
+  /// No description provided for @mineruLangArabic.
+  ///
+  /// In en, this message translates to:
+  /// **'Arabic scripts'**
+  String get mineruLangArabic;
+
+  /// No description provided for @mineruLangCyrillic.
+  ///
+  /// In en, this message translates to:
+  /// **'Cyrillic scripts'**
+  String get mineruLangCyrillic;
+
+  /// No description provided for @mineruLangEastSlavic.
+  ///
+  /// In en, this message translates to:
+  /// **'East Slavic'**
+  String get mineruLangEastSlavic;
+
+  /// No description provided for @mineruLangDevanagari.
+  ///
+  /// In en, this message translates to:
+  /// **'Devanagari scripts'**
+  String get mineruLangDevanagari;
+
+  /// No description provided for @reformatSourceChoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose reformatting source'**
+  String get reformatSourceChoice;
+
+  /// No description provided for @reformatSourceChoiceHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the OCR result to use for text and figures.'**
+  String get reformatSourceChoiceHelp;
+
+  /// No description provided for @extractProviderChoiceHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the OCR provider for this extraction. Its parsing settings apply; your default provider stays unchanged.'**
+  String get extractProviderChoiceHelp;
+
+  /// No description provided for @mineruProgressRequestingUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Requesting upload URL...'**
+  String get mineruProgressRequestingUpload;
+
+  /// No description provided for @mineruProgressUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading file...'**
+  String get mineruProgressUploading;
+
+  /// No description provided for @mineruProgressQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued...'**
+  String get mineruProgressQueued;
+
+  /// No description provided for @mineruProgressParsing.
+  ///
+  /// In en, this message translates to:
+  /// **'Parsing...'**
+  String get mineruProgressParsing;
+
+  /// No description provided for @mineruProgressConverting.
+  ///
+  /// In en, this message translates to:
+  /// **'Converting format...'**
+  String get mineruProgressConverting;
+
+  /// No description provided for @mineruProgressDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading result...'**
+  String get mineruProgressDownloading;
+
+  /// No description provided for @mineruErrInvalidParams.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid parameter: {msg}'**
+  String mineruErrInvalidParams(String msg);
+
+  /// No description provided for @mineruErrUnsupportedFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsupported file format'**
+  String get mineruErrUnsupportedFormat;
+
+  /// No description provided for @mineruErrFileUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'File is unreadable or empty'**
+  String get mineruErrFileUnreadable;
+
+  /// No description provided for @mineruErrFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'File exceeds the 200MB size limit'**
+  String get mineruErrFileTooLarge;
+
+  /// No description provided for @mineruErrTooManyPages.
+  ///
+  /// In en, this message translates to:
+  /// **'File exceeds the 200-page limit'**
+  String get mineruErrTooManyPages;
+
+  /// No description provided for @mineruErrFileTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Timed out reading the file'**
+  String get mineruErrFileTimeout;
+
+  /// No description provided for @mineruErrParseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to parse the document'**
+  String get mineruErrParseFailed;
+
+  /// No description provided for @mineruErrConvertFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'File / format conversion failed'**
+  String get mineruErrConvertFailed;
+
+  /// No description provided for @mineruErrQuotaExhausted.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily parsing quota is used up. Try again tomorrow.'**
+  String get mineruErrQuotaExhausted;
+
+  /// No description provided for @mineruErrUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown error ({code})'**
+  String mineruErrUnknown(String code);
+
+  /// No description provided for @mineruErrTokenInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid API token (A0202)'**
+  String get mineruErrTokenInvalid;
+
+  /// No description provided for @mineruErrTokenExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'API token expired (A0211)'**
+  String get mineruErrTokenExpired;
+
+  /// No description provided for @mineruErrRequestRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Request rejected ({code}): {msg}'**
+  String mineruErrRequestRejected(String code, String msg);
+
+  /// No description provided for @mineruErrRequestUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to request the upload URL: {detail}'**
+  String mineruErrRequestUploadFailed(String detail);
+
+  /// No description provided for @mineruErrMissingFileUrls.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload response is missing batch_id / file_urls'**
+  String get mineruErrMissingFileUrls;
+
+  /// No description provided for @mineruErrUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to upload {file}: {detail}'**
+  String mineruErrUploadFailed(String file, String detail);
+
+  /// No description provided for @mineruErrPollFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to query the result: {detail}'**
+  String mineruErrPollFailed(String detail);
+
+  /// No description provided for @mineruErrDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to download the result: {detail}'**
+  String mineruErrDownloadFailed(String detail);
+
+  /// No description provided for @mineruErrMissingResultUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'The task finished but returned no result URL'**
+  String get mineruErrMissingResultUrl;
+
+  /// No description provided for @mineruErrTaskFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Parsing failed'**
+  String get mineruErrTaskFailed;
+
+  /// No description provided for @mineruErrSaveResultFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save the result: {detail}'**
+  String mineruErrSaveResultFailed(String detail);
+
+  /// No description provided for @mineruErrResultPackageIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'The MinerU result package is missing full.md or structured results'**
+  String get mineruErrResultPackageIncomplete;
+
+  /// No description provided for @exportDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Export documents'**
+  String get exportDocuments;
+
+  /// No description provided for @exportNotesMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes as Markdown'**
+  String get exportNotesMarkdown;
+
+  /// No description provided for @exportCitationsBibtex.
+  ///
+  /// In en, this message translates to:
+  /// **'Citations as BibTeX'**
+  String get exportCitationsBibtex;
+
+  /// No description provided for @exportNoNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'No highlights or notes yet.'**
+  String get exportNoNotes;
+
+  /// No description provided for @exportNoDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected documents no longer exist.'**
+  String get exportNoDocuments;
+
+  /// No description provided for @documentExportSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Export saved'**
+  String get documentExportSaved;
 }
 
 class _AppLocalizationsDelegate
