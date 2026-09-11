@@ -10,6 +10,8 @@ import '../../data/models/collection/favorite.dart' as fav;
 import 'app_database.dart';
 import 'db_convert.dart' show favoriteCompanion;
 import 'settings_store.dart';
+import 'restore_checkpoint.dart';
+import 'document_file_operations.dart';
 import 'zotero_snapshot.dart';
 
 /// 全局存储单例：Drift（关系化 + FTS5）主存储 + 文件系统根目录管理。
@@ -72,6 +74,11 @@ class GStorage {
     _libraryDirPath = libraryDir.path;
     _logsDirPath = logsDir.path;
 
+    await RestoreCheckpoint(
+      p.join(dbDir.path, _dbFileName),
+      libraryDir.path,
+    ).recover();
+
     // ADR-0005：全局 Simple 扩展必须在开 Drift 连接前注册（auto-extension
     // 对之后打开的连接生效）。加载失败（目标平台缺预编译 simple 库）不致开库
     // 崩溃，搜索降级为 LIKE（见 searchDocuments）。
@@ -110,6 +117,7 @@ class GStorage {
     // ADR-0002：ZoteroSyncStore 同步快照订阅 zotero_items + meta 流。
     await ZoteroSnapshot.attach(_db);
     await _ensureDefaultFavorite();
+    await DocumentFileOperations(_db, _libraryDirPath).recover();
 
     if (kDebugMode) await _debugFtsSelfCheck();
 
@@ -130,28 +138,9 @@ class GStorage {
   /// 匹配行报 SQL logic error。启动/重开时若 documents 行数 ≠ documents_fts
   /// 行数，清空并从 documents 全量重建 FTS 索引（一次性，之后触发器保持一致）。
   static Future<void> _syncFtsIfStale() async {
-    final docCount = (await _db.select(_db.documents).get()).length;
-    if (docCount == 0) return;
-    final ftsCount =
-        (await _db.customSelect('SELECT count(*) AS c FROM documents_fts')
-                .getSingle())
-            .read<int>('c');
-    // 旧触发器用 id 自动分配 FTS rowid（≠ documents rowid），导致 'delete' 命令
-    // 找不到行。行数不等或 rowid 关联不一致时重建。
-    final rowidMismatch = ftsCount == docCount
-        ? (await _db.customSelect(
-                "SELECT count(*) AS c FROM documents_fts f "
-                "JOIN documents d ON d.id = f.id WHERE f.rowid != d.rowid")
-              .getSingle())
-            .read<int>('c')
-        : 1;
-    if (ftsCount == docCount && rowidMismatch == 0) return;
-    debugPrint('OtterPad: FTS 索引不一致（$ftsCount/$docCount，rowid 偏差 $rowidMismatch），重建 documents_fts');
-    await _db.customStatement('DELETE FROM documents_fts');
-    await _db.customStatement(
-      'INSERT INTO documents_fts(rowid, id, title, authors, journal, keywords) '
-      'SELECT rowid, id, title, authors, journal, keywords FROM documents',
-    );
+    if (await _db.synchronizeFts()) {
+      debugPrint('OtterPad: 已重建不一致的 FTS 索引');
+    }
   }
 
   /// FTS 不可用时的降级兜底：摘除 documents 上的三个 FTS 同步触发器。
@@ -186,7 +175,9 @@ class GStorage {
         return;
       }
       await _db.customStatement("SELECT jieba_query('文献测试')");
-      debugPrint('OtterPad FTS 自检：documents_fts 存在 + jieba_query 可调，FTS5 主路径可用');
+      debugPrint(
+        'OtterPad FTS 自检：documents_fts 存在 + jieba_query 可调，FTS5 主路径可用',
+      );
     } catch (e) {
       debugPrint('OtterPad FTS 自检异常: $e');
     }
@@ -195,11 +186,13 @@ class GStorage {
   /// 启动/恢复后幂等补建默认「我的收藏」收藏夹（首次启动或恢复的备份缺默认夹时）。
   /// 从 FavoritesNotifier.build() 移入——build() 应纯读，副作用归 init 钩子。
   static Future<void> _ensureDefaultFavorite() async {
-    final exists = await (_db.select(_db.favorites)
-          ..where((t) => t.id.equals(fav.Favorite.defaultId)))
-        .getSingleOrNull();
+    final exists = await (_db.select(
+      _db.favorites,
+    )..where((t) => t.id.equals(fav.Favorite.defaultId))).getSingleOrNull();
     if (exists == null) {
-      await _db.into(_db.favorites).insertOnConflictUpdate(
+      await _db
+          .into(_db.favorites)
+          .insertOnConflictUpdate(
             favoriteCompanion(
               fav.Favorite.defaultFor(
                 PlatformDispatcher.instance.locale.languageCode,
@@ -242,6 +235,7 @@ class GStorage {
     await _settings.preload();
     await ZoteroSnapshot.attach(_db);
     await _ensureDefaultFavorite();
+    await DocumentFileOperations(_db, _libraryDirPath).recover();
   }
 
   /// 重新加载 settings 缓存（不重开库）。settingsOnly 覆盖恢复直接写 settings

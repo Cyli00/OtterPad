@@ -12,7 +12,10 @@ import 'api_provider.dart';
 import 'auto_backup_provider.dart';
 import 'backup_provider.dart';
 import '../core/storage/app_database_provider.dart';
+import '../core/storage/storage_exception.dart';
 import 'documents_provider.dart';
+import 'document_task_provider.dart';
+import '../services/doc_extract_usage_service.dart';
 import 'proxy_provider.dart';
 import 'reader_settings_provider.dart';
 import 'sync_status_provider.dart';
@@ -135,26 +138,38 @@ class BackupOrchestrator {
     required RestoreMode mode,
   }) async {
     await _drainActiveTasks();
-    final result = await BackupRestoreService.restoreBackupArchive(
-      archivePath: archivePath,
-      scope: scope,
-      mode: mode,
-    );
-    _refreshAfterRestore(scope);
-    return result;
+    try {
+      return await BackupRestoreService.restoreBackupArchive(
+        archivePath: archivePath,
+        scope: scope,
+        mode: mode,
+      );
+    } finally {
+      // 失败回滚也会换连接，旧订阅必须一起重建。
+      _refreshAfterRestore(scope);
+    }
   }
 
   /// 恢复会 close Drift 连接（overwrite）或整批读写 DB（merge）——
   /// 先取消所有 Active Task 并等活集合清空，避免在飞任务（翻译写盘、
   /// 提取 saveResult 等）撞上 close 窗口炸出 "database has been closed"。
-  /// 取消是协作式的，已在飞的网络请求要跑完才退出，超时后尽力而为继续。
+  /// 取消是协作式的，已在飞的网络请求要跑完才退出，超时则停止恢复。
   Future<void> _drainActiveTasks() async {
     final notifier = _ref.read(taskActivityProvider.notifier);
     notifier.cancelAll();
+    final documentTasks = _ref.read(documentTaskProvider.notifier);
+    for (final task in _ref.read(documentTaskProvider).values.toList()) {
+      if (task.isActive) documentTasks.cancelTask(task.key);
+    }
+    bool hasActiveTasks() =>
+        _ref.read(taskActivityProvider).isNotEmpty ||
+        _ref.read(documentTaskProvider).values.any((task) => task.isActive);
     final deadline = DateTime.now().add(const Duration(seconds: 15));
-    while (_ref.read(taskActivityProvider).isNotEmpty &&
-        DateTime.now().isBefore(deadline)) {
+    while (hasActiveTasks() && DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    if (hasActiveTasks()) {
+      throw const StorageException(StorageFailure.activeTasks);
     }
   }
 
@@ -167,6 +182,7 @@ class BackupOrchestrator {
       _ref.read(proxyProvider.notifier).reload();
       _ref.read(agentApiProvider.notifier).reload();
       _ref.read(docExtractApiProvider.notifier).reload();
+      _ref.read(docExtractUsageProvider.notifier).reload();
       _ref.read(readerSettingsProvider.notifier).reload();
       _ref.read(backupRemoteTypeProvider.notifier).reload();
       _ref.read(backupS3Provider.notifier).reload();

@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import '../core/storage/app_database.dart' show AppDatabase;
 import '../core/storage/app_database_provider.dart';
 import '../core/storage/storage.dart';
+import '../core/storage/document_file_operations.dart';
 import '../data/models/book/document.dart';
 import '../services/chinese_metadata_extractor.dart';
 import '../services/chinese_text_detector.dart';
@@ -118,10 +119,9 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   /// 收藏关联/Zotero 映射整批级联清空。
   Future<void> _upsertDocs(Iterable<Document> docs) async {
     await _db.batch((b) {
-      b.insertAllOnConflictUpdate(
-        _db.documents,
-        [for (final d in docs) documentCompanion(d)],
-      );
+      b.insertAllOnConflictUpdate(_db.documents, [
+        for (final d in docs) documentCompanion(d),
+      ]);
     });
   }
 
@@ -132,9 +132,9 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   /// 按 id 从 DB 查单篇（唯一真值源）——不读 watch() 流 state，
   /// 避免 StreamNotifier 流未 emit 时漏判。
   Future<Document?> _findById(String id) async {
-    final row = await (_db.select(_db.documents)
-          ..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.documents,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     return row == null ? null : documentFromRow(row);
   }
 
@@ -166,9 +166,9 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     // 判重走 DB 查询（唯一真值源）——不依赖 watch() 流 state：StreamNotifier
     // 异步，流未 emit 时列表为空会漏判，导致 _upsertDoc 触发 contentHash
     // UNIQUE 约束冲突，addFile 抛异常、文件成孤儿。
-    final existingRow = await (_db.select(_db.documents)
-          ..where((t) => t.contentHash.equals(contentHash)))
-        .getSingleOrNull();
+    final existingRow = await (_db.select(
+      _db.documents,
+    )..where((t) => t.contentHash.equals(contentHash))).getSingleOrNull();
     if (existingRow != null) {
       return AddFileResult(
         type: AddFileResultType.duplicate,
@@ -177,7 +177,6 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     }
 
     final documentId = _newDocumentId();
-    await _writePdfForDocument(documentId, sourceFile);
 
     final initialMetadata = DocumentMetadataParser.parseFilePath(sourcePath);
     final doc = Document(
@@ -192,7 +191,14 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     );
 
     // 立即入库：卡片先出现（文件名级初始元数据），元数据后台提取更新。
-    await _upsertDoc(doc);
+    await DocumentFileOperations(_db, GStorage.libraryDirPath).run(
+      documentId,
+      deleting: false,
+      action: () async {
+        await _writePdfForDocument(documentId, sourceFile);
+        await _upsertDoc(doc);
+      },
+    );
 
     unawaited(
       PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(doc.id)),
@@ -212,18 +218,21 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   /// 后台提取元数据并更新（异步，不阻塞 addFile）。提取耗时数秒（联网），
   /// 期间文献可能被删除或被用户编辑：回写做字段级合并（用户改过的字段不
   /// 覆盖），并用带 where 的 UPDATE 落库——行已删时更新 0 行，不复活已删文献。
-  Future<void> _repairAndUpdate(Document doc, {CancelToken? cancelToken}) async {
+  Future<void> _repairAndUpdate(
+    Document doc, {
+    CancelToken? cancelToken,
+  }) async {
     // 提前取库实例：本方法 fire-and-forget，避免 await 之后 ref 已被释放。
     final database = _db;
     final repaired = await _repairDocument(doc, cancelToken: cancelToken);
-    final row = await (database.select(database.documents)
-          ..where((t) => t.id.equals(doc.id)))
-        .getSingleOrNull();
+    final row = await (database.select(
+      database.documents,
+    )..where((t) => t.id.equals(doc.id))).getSingleOrNull();
     if (row == null) return;
     final merged = _mergeRepaired(doc, documentFromRow(row), repaired.document);
-    await (database.update(database.documents)
-          ..where((t) => t.id.equals(doc.id)))
-        .write(documentCompanion(merged));
+    await (database.update(
+      database.documents,
+    )..where((t) => t.id.equals(doc.id))).write(documentCompanion(merged));
   }
 
   /// 字段级合并提取结果：以 addFile 时的快照为基线，用户在提取窗口内改过的
@@ -247,8 +256,9 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       authors: sameList(current.authors, snapshot.authors)
           ? repaired.authors
           : current.authors,
-      journal:
-          current.journal == snapshot.journal ? repaired.journal : current.journal,
+      journal: current.journal == snapshot.journal
+          ? repaired.journal
+          : current.journal,
       year: current.year == snapshot.year ? repaired.year : current.year,
       doi: current.doi == snapshot.doi ? repaired.doi : current.doi,
       keywords: sameList(current.keywords, snapshot.keywords)
@@ -310,7 +320,9 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       );
     }
     if (downloadedPath.isNotEmpty) {
-      doc = doc.copyWith(contentHash: await DocPaths.computeHash(File(pdfPath)));
+      doc = doc.copyWith(
+        contentHash: await DocPaths.computeHash(File(pdfPath)),
+      );
     }
 
     await _upsertDoc(doc);
@@ -593,20 +605,15 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }
 
   Future<void> delete(String id) async {
-    // 删文件只需 id，不依赖流 state（流未 emit 时为空会漏删文件，留孤儿）。
+    await DocumentFileOperations(
+      _db,
+      GStorage.libraryDirPath,
+    ).run(id, deleting: true, action: () => _deleteDoc(id));
     try {
-      final docDir = Directory(DocPaths.docDir(id));
-      if (await docDir.exists()) {
-        await docDir.delete(recursive: true);
-      }
       await PdfThumbnailService.instance.deleteCacheEntry(DocPaths.pdf(id));
     } catch (error) {
-      log.d('删除文件失败: $error');
+      log.d('删除缩略图失败: $error');
     }
-
-    // DELETE FROM documents → FK CASCADE 清 4 子表 + FTS 触发器清 documents_fts；
-    // watch() 流自动刷新 state（ADR-0001 / ADR-0003）。
-    await _deleteDoc(id);
   }
 
   Future<void> _writePdfForDocument(
@@ -808,8 +815,9 @@ class ViewModeNotifier extends Notifier<bool> {
   void toggle() => state = !state;
 }
 
-final viewModeProvider =
-    NotifierProvider<ViewModeNotifier, bool>(ViewModeNotifier.new);
+final viewModeProvider = NotifierProvider<ViewModeNotifier, bool>(
+  ViewModeNotifier.new,
+);
 
 /// 派生 provider 保持同步：内部解包 [documentsProvider] 的 AsyncValue，
 /// 让 bookshelf / no_file 等消费点零改动（ADR-0001）。

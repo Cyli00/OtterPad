@@ -22,27 +22,29 @@ class SettingsStore {
 
   Iterable<String> get keys => _cache.keys;
 
-  /// 写穿透：先更新内存缓存，再 upsert 到 settings 表。
+  /// 数据库写成功后更新缓存，避免写入失败却显示新值。
   Future<void> put(String key, Object? value) async {
-    _cache[key] = value;
-    await _db.into(_db.settings).insertOnConflictUpdate(
+    await _db
+        .into(_db.settings)
+        .insertOnConflictUpdate(
           db.SettingsCompanion.insert(
             settingKey: key,
             value: jsonEncode(value),
           ),
         );
+    _cache[key] = value;
   }
 
   Future<void> delete(String key) async {
+    await (_db.delete(
+      _db.settings,
+    )..where((t) => t.settingKey.equals(key))).go();
     _cache.remove(key);
-    await (_db.delete(_db.settings)
-          ..where((t) => t.settingKey.equals(key)))
-        .go();
   }
 
   Future<void> clear() async {
-    _cache.clear();
     await _db.delete(_db.settings).go();
+    _cache.clear();
   }
 
   /// 启动时一次性加载全部 settings 到缓存。

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import '../core/storage/app_database.dart' show AppDatabase;
 import '../core/storage/app_database_provider.dart';
 import '../core/storage/db_convert.dart';
 import '../data/models/book/document.dart';
+import '../utils/debounced_action.dart';
 
 /// 全文检索（FTS5 jieba 分词 + 拼音）+ 全字段 LIKE 兜底。
 ///
@@ -26,43 +28,48 @@ Future<List<Document>> searchDocuments(AppDatabase db, String query) async {
   // FTS5 命中（jieba 分词 + 拼音）。扩展/表缺失时降级。
   final ftsDocs = <Document>[];
   try {
-    final ftsRows = await db.customSelect(
-      'SELECT d.id, d.title, d.authors, d.journal, d.year, d.doi, d.keywords, '
-      'd.contentHash, d.addedAt '
-      'FROM documents_fts f JOIN documents d ON d.id = f.id '
-      'WHERE documents_fts MATCH jieba_query(?)',
-      variables: [Variable.withString(q)],
-    ).get();
+    final ftsRows = await db
+        .customSelect(
+          'SELECT d.id, d.title, d.authors, d.journal, d.year, d.doi, d.keywords, '
+          'd.contentHash, d.addedAt '
+          'FROM documents_fts f JOIN documents d ON d.id = f.id '
+          'WHERE documents_fts MATCH jieba_query(?)',
+          variables: [Variable.withString(q)],
+        )
+        .get();
     for (final r in ftsRows) {
-      ftsDocs.add(Document(
-        id: r.read<String>('id'),
-        title: r.read<String>('title'),
-        authors: (jsonDecode(r.read<String>('authors')) as List).cast<String>(),
-        journal: r.read<String?>('journal'),
-        year: r.read<String?>('year'),
-        doi: r.read<String?>('doi'),
-        keywords:
-            (jsonDecode(r.read<String>('keywords')) as List).cast<String>(),
-        contentHash: r.read<String?>('contentHash'),
-        addedAt: DateTime.fromMillisecondsSinceEpoch(r.read<int>('addedAt')),
-      ));
+      ftsDocs.add(
+        Document(
+          id: r.read<String>('id'),
+          title: r.read<String>('title'),
+          authors: (jsonDecode(r.read<String>('authors')) as List)
+              .cast<String>(),
+          journal: r.read<String?>('journal'),
+          year: r.read<String?>('year'),
+          doi: r.read<String?>('doi'),
+          keywords: (jsonDecode(r.read<String>('keywords')) as List)
+              .cast<String>(),
+          contentHash: r.read<String?>('contentHash'),
+          addedAt: DateTime.fromMillisecondsSinceEpoch(r.read<int>('addedAt')),
+        ),
+      );
     }
   } catch (_) {
     // FTS5 不可用：ftsDocs 留空，纯靠下方全字段 LIKE。
   }
 
   // 全字段 LIKE（见文档注释），与 FTS 命中合并。
-  final likeRows = await (db.select(db.documents)
-        ..where(
-          (t) =>
-              t.title.like('%$q%') |
-              t.authors.like('%$q%') |
-              t.journal.like('%$q%') |
-              t.keywords.like('%$q%') |
-              t.doi.like('%$q%') |
-              t.year.like('%$q%'),
-        ))
-      .get();
+  final likeRows =
+      await (db.select(db.documents)..where(
+            (t) =>
+                t.title.like('%$q%') |
+                t.authors.like('%$q%') |
+                t.journal.like('%$q%') |
+                t.keywords.like('%$q%') |
+                t.doi.like('%$q%') |
+                t.year.like('%$q%'),
+          ))
+          .get();
   final likeDocs = likeRows.map(documentFromRow).toList();
 
   // 合并去重（FTS 命中优先）
@@ -77,7 +84,17 @@ Future<List<Document>> searchDocuments(AppDatabase db, String query) async {
 /// 搜索结果（异步）。autoDispose：查询串变更后旧 family 项自动释放。
 /// 库实例经 [appDatabaseProvider]（唯一来源）：备份恢复 reopen 后
 /// invalidate 连带失效缓存的搜索结果，重查新库。
-final documentSearchProvider =
-    FutureProvider.autoDispose.family<List<Document>, String>(
-  (ref, query) => searchDocuments(ref.watch(appDatabaseProvider), query),
-);
+final documentSearchProvider = FutureProvider.autoDispose
+    .family<List<Document>, String>((ref, query) async {
+      final db = ref.watch(appDatabaseProvider);
+      if (query.trim().isEmpty) return const [];
+      final debounce = DebouncedAction();
+      final ready = Completer<bool>();
+      debounce.run(() => ready.complete(true));
+      ref.onDispose(() {
+        debounce.cancel();
+        if (!ready.isCompleted) ready.complete(false);
+      });
+      if (!await ready.future) return const [];
+      return searchDocuments(db, query);
+    });

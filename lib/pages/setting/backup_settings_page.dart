@@ -23,6 +23,7 @@ import '../../services/snackbar_service.dart';
 import '../../services/storage_usage_service.dart';
 import '../../utils/debounced_action.dart';
 import '../../core/l10n.dart';
+import '../../core/storage/storage_exception.dart';
 import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
@@ -1086,6 +1087,16 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   }
 
   String _formatError(Object error) {
+    if (error is StorageException) {
+      return switch (error.reason) {
+        StorageFailure.invalidBackup => context.l10n.backupInvalidData,
+        StorageFailure.unsupportedBackup => context.l10n.backupUnsupportedVersion,
+        StorageFailure.pendingRestore => context.l10n.backupPendingRestore,
+        StorageFailure.activeTasks => context.l10n.backupActiveTasks,
+        StorageFailure.changedDuringBackup => context.l10n.backupChangedDuringCreation,
+        StorageFailure.operationInProgress => context.l10n.backupOperationInProgress,
+      };
+    }
     return error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
   }
 
