@@ -107,7 +107,8 @@ description: 构建符合项目设计规范的 Flutter UI 组件。在创建新�
 | 选中态勾选 | `SpringPop`（`kSpringSelection`，0.8→1 + 渐显） | ~200ms | spring |
 | 列表入场 | `StaggeredEntrance`（首屏 ≤8 项 × 30ms 延迟，fade + slideY 12px→0，之后分页不动） | `kAnimFast` | `kAnimCurve` |
 | 阅读器入场 | 卡片 rect → 全屏容器变换（手写双边界裁切+缩放+渐显），无起点回落 scale+fade 微上移 | `kAnimEmphasis` / `kAnimSlow` | `kAnimCurve` |
-| 工具栏 / 面板滑出 | `AnimatedSlide` | `kAnim` | `kAnimCurve` |
+| 工具栏 / 面板滑出 | `ClipRect > AnimatedSlide`（外层必须包 `ClipRect` 防位移透出透明状态栏） | `kAnim` | `kAnimCurve` |
+| 原文定位返回引导条 | `AnimatedPositioned` | `kAnim` | `kAnimCurve` |
 | 阅读器 dock 开合 | `SingleMotionBuilder` + `kSpringPanel` | — | spring |
 | Android 预测返回 | `PredictiveBackPageTransitionsBuilder`（手势中）；非手势回落 FadeThrough / SharedAxis | 框架 | 框架 |
 
@@ -182,6 +183,13 @@ TactilePress(
 | 底部面板内工具按钮 | `TactilePress`（baseColor: transparent） |
 | 纯图标按钮 | `IconButton`（保留 Material 默认） |
 
+**触觉反馈档位**（`Haptics`，`lib/services/haptics.dart`）：
+
+- `soft()`：日常轻量点击（工具栏图标、TabBar、普通按钮）
+- `light()`：轻量确认（选项敲定、Picker 点选、Switch 开关）
+- `medium()`：破坏性操作（删除、清空、滑动删除完成）或长按呼出菜单
+- 约束：禁止直接调用 `HapticFeedback.*`，统一经 `Haptics` 封装。
+
 需要 `onLongPressStart(details)` 位置信息时：外层 `GestureDetector` 只注册 longPress，内层 `TactilePress` 管 tap（手势类型不同，不抢 gesture arena）。
 
 ### 2.2 滑动删除（Swipe to Dismiss）
@@ -214,6 +222,9 @@ TactilePress(
 | 窗口 Chrome 失焦 | 标题栏标题与按钮整体 `AnimatedOpacity 1→0.55`（`kAnimFast`），跟随系统窗焦点 |
 | 侧栏半透明 | `AdaptiveScaffold` 桌面端侧栏 `surfaceContainer.withAlpha(180)`；与主内容 Row 分栏避让，禁止改回叠层压内容 |
 | 紧凑密度 | `Responsive.compactDensity(context)`（桌面且宽 ≥1200）：卡片/列表**行距** -4px（12→8、16→12），列距与字号不动 |
+| 右键菜单 | `showAppContextMenu`（`surfaceContainerHigh` · 圆角 16 · elevation 3）。桌面 OS 用 `onSecondaryTapDown`，移动端长按 |
+| 窗口与浮层基准 | 桌面窗口最小/初始尺寸由 `DisplayMetrics` 推导；浮层/下拉菜单高度以**当前窗口**为基准（`windowH * 0.6`），禁止按物理屏幕分辨率计算 |
+| 修饰键容错 | Windows/Linux 单击禁止将 Win/Super 或未进多选时的 Shift 视为多选键（防 IME 丢 key-up 导致 stuck）；Ctrl 点选，Shift 仅已多选时划选 |
 
 - 半透明侧栏仅桌面端；非桌面端 `AdaptiveScaffold` 纯色侧栏
 - macOS 红绿灯避让：未实测，暂缓（确认重叠后再加 ~70px 左内边距）
@@ -395,7 +406,7 @@ SegmentedButton.styleFrom(
 
 > 参考：`SettingPicker<T>`（setting_picker.dart）
 
-单选 picker：折叠态显示当前值 + ▼，点击弹 bottom sheet 列出全部选项。SegmentedButton 在长标签 / 多选项时的替代品（决策表见 §3.6）。
+单选 picker：折叠态显示当前值 + ▼，展开态按终端分型——移动端 bottom sheet，桌面端锚定下拉菜单（`isDesktopOs`）。SegmentedButton 在长标签 / 多选项时的替代品（决策表见 §3.6）。
 
 **折叠态**：
 
@@ -422,9 +433,27 @@ SegmentedButton.styleFrom(
 | 选中态 trailing | `Symbols.check_rounded` 20px `cs.primary` |
 
 - API 签名：`current` · `options` · `labelFor` · `subtitleFor?` · `sheetTitle` · `onChanged`
-- 桌面端 sheet 走 `constraints: maxWidth: 480` 居中
+- sheet 走 `constraints: maxWidth: 480` 居中
 - 点选立即触发 `onChanged` 并自动关闭 sheet（无显式确认按钮）
 - 仅用于「单选 from 固定列表」场景；多选见 §3.7 FilterChip
+
+**桌面端下拉菜单**（`isDesktopOs` 分支，替代 bottom sheet）：
+
+| 属性 | 值 |
+|---|---|
+| 容器 | `MenuAnchor` + `MenuItemButton` |
+| 面板 | `surfaceContainerHigh` · 圆角 16 · elevation 3（同 `app_context_menu`） |
+| 定位 | 贴触发框下沿左缘 · `alignmentOffset: Offset(0, 4)` · 空间不足自动翻折 |
+| 宽度 | 内容自适应 · 下限 240 / 上限 480 |
+| 高度 | 窗口高 × 0.6，clamp `[240, 400]`，超出滚动 |
+| 触发态 | chevron `AnimatedRotation` 0→0.5 · `kAnimFast` / `kAnimCurve` |
+| 选项行 | 主标题 `bodyMedium` w500（选中 w700 + `cs.primary`）· 副标题 `bodySmall` `cs.onSurfaceVariant` |
+| 选中态 trailing | `Symbols.check_rounded` 20px `cs.primary` |
+
+- 宽度下限必须写在每个 `MenuItemButton.minimumSize`：`MenuStyle.minimumSize` 被面板 `IntrinsicWidth` 静默忽略（下限失效且不报错）
+- 高度上限以**窗口**为基准（弹出层受窗口约束），`MenuAnchor` 会再按可用空间收窄
+- 键盘 ↑↓ / Enter / Esc 由 `MenuAnchor` 提供，禁止自实现
+- 禁止按选项数量分型（菜单溢出即滚动，会让同一控件出现两种模态）；禁止在桌面端用 bottom sheet 承载枚举选择
 
 ### 3.9 设置分组（SettingGroup）
 
@@ -437,3 +466,51 @@ SegmentedButton.styleFrom(
 | 标题 | `titleMedium` bold · `primary` · padding left:16 bottom:12 top:24 |
 | 容器 | `surfaceContainerHigh` · 圆角 24 · `clipBehavior: antiAlias` · 宽度撑满 |
 | 内部祖先 | 内置 `Material(transparency)`（为 ListTile/RadioListTile 提供最近 Material 祖先） |
+
+### 3.10 阅读器底栏与工具栏
+
+> 参考：`ReaderBottomBar`（lib/pages/reader/widgets/reader_bottom_bar.dart）· `ReaderTopToolbar`（lib/pages/reader/widgets/reader_top_toolbar.dart）
+
+底栏按 `desktop` 分型，顶部工具栏与底栏均需适配窄屏与侧栏占用。
+
+**底栏分型**：
+
+| 属性 | 移动端 | 桌面端 |
+|---|---|---|
+| 容器 | 通栏吸底 · 高度 56 + safe area | 居中浮动药丸 · `Align(bottomCenter)` |
+| 背景 | `surfaceContainer` · 顶边 `outlineVariant.withAlpha(80)` | `surfaceContainerHigh` · 圆角 16 |
+| 边框 / 阴影 | — | 描边 `outlineVariant.withAlpha(80)` · `AppShadows.bar` |
+| 外边距 | 仅 safe area 底部留白 | 左右 16 · 下方 `padding.bottom + 16` |
+| 内边距 | — | 水平 8 · 垂直 4 |
+| 按钮尺寸 | 等分拉伸（`spaceEvenly`） | 48×48 正方形按钮 · 紧凑排布 |
+
+**工具栏自适应横滚**：
+- 顶部工具栏右侧操作区与桌面浮动底栏在小屏或侧栏展开时，外层必须包裹 `SingleChildScrollView(scrollDirection: Axis.horizontal)`
+- 右侧操作区靠右对齐（`Expanded > Align(centerRight)`），禁止硬编码固定宽度或在小屏下允许 RenderFlex overflow 溢出
+- 工具栏滑出入场必须外层包裹 `ClipRect`：`AnimatedSlide` 内部 transform 仅做 paint 位移，缺少 `ClipRect` 会透过透明系统状态栏透出
+
+### 3.11 接口配置与用量卡片
+
+> 参考：`OcrSettingsPage`（lib/pages/setting/ocr_settings_page.dart）· `_buildUsageCard`
+
+用于展示外部 API 提供商切换、凭据录入及本地记账估算的配额/用量。
+
+**提供商分段**：
+- 选项数 ≤ 3 且标签短（如 PaddleOCR / MinerU）时统一使用 `SegmentedButton`（§3.6），长标签或多选项切 `SettingPicker`（§3.8）
+- API Key / Token 凭据按提供商分槽独立持久化，切换提供商时控制器互不清空
+
+**用量卡片视觉**：
+
+| 属性 | 值 |
+|---|---|
+| 容器 | `surfaceContainerHigh` · 圆角 24 · padding 16 · 宽度撑满 |
+| 标题行 | 标题 `titleSmall` w600 + `_helpIcon`，紧凑 Wrap 排布 |
+| 数值胶囊 | `padding(h:10, v:4)` · 圆角 12 · `labelMedium` w700 |
+| 胶囊颜色（正常） | `primaryContainer` 背景 · `onPrimaryContainer` 文本 |
+| 胶囊颜色（超额/耗尽） | `errorContainer` 背景 · `onErrorContainer` 文本 |
+| 进度条 | `ClipRRect(borderRadius: BorderRadius.circular(4))` · `LinearProgressIndicator` |
+| 进度条高度 | `minHeight: 4` |
+| 进度条背景色 | `outlineVariant.withAlpha(80)` |
+
+- 仅在无远程配额查询接口时使用本地记账估算；并在标题旁提供 Tooltip 说明配额性质（硬上限 vs 降优先级）
+- 进度百分比必须 `ratio.clamp(0.0, 1.0)` 兜底，防止超额时进度条渲染异常
