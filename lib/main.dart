@@ -17,6 +17,7 @@ import 'providers/proxy_provider.dart';
 import 'providers/update_check_scheduler.dart';
 import 'services/model_capability_store.dart';
 import 'services/back_matter_detector.dart';
+import 'services/display_metrics.dart';
 import 'services/figure_extract_service.dart';
 import 'services/haptics.dart';
 import 'services/reader_localhost_server.dart';
@@ -35,9 +36,14 @@ Future<void> main() async {
   // 桌面：隐藏原生标题栏，改由 WindowChrome 提供自定义 chrome
   if (_isDesktop) {
     await windowManager.ensureInitialized();
-    const windowOptions = WindowOptions(
-      size: Size(1280, 800),
-      minimumSize: Size(720, 480),
+    // 窗口尺寸由主显示器分辨率推导：逻辑分辨率（系统缩放后的分辨率）决定
+    // 布局可用宽度，可用工作区（扣任务栏 / Dock）决定上限——避免小屏上初始
+    // 窗口超出屏幕、大屏上最小尺寸过小失去约束意义
+    final display = await queryPrimaryDisplay();
+    final minimumSize = resolveWindowMinimumSize(display);
+    final windowOptions = WindowOptions(
+      size: resolveInitialWindowSize(display, minimumSize),
+      minimumSize: minimumSize,
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
