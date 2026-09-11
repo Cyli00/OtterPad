@@ -107,6 +107,10 @@ dependencies:
 
   # 桌面端自定义标题栏（隐藏原生 title bar + 窗口控制）
   window_manager: ^0.5.1
+
+  # 桌面端主显示器分辨率查询（窗口最小尺寸推导）。window_manager 的传递依赖，
+  # 但代码直接 import，故显式声明
+  screen_retriever: ^0.2.2
   gal: ^2.3.2
 
   # 桌面拖入 PDF。^0.7.1 = ≥0.7.1 <0.8.0，不会漂到 0.8.0（后者要求 AGP 9；本仓 AGP 8.11.1 且禁止改 android/）
