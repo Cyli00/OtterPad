@@ -18,6 +18,7 @@ import '../../../data/models/book/highlight.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/haptics.dart';
 import '../../../services/reader_localhost_server.dart';
+import '../../../services/reader/reader_html_cache.dart';
 import 'reader_background.dart';
 import 'reader_js_bridge.dart';
 import 'reader_update_plan.dart';
@@ -26,6 +27,7 @@ import '../../../core/app_logger.dart';
 
 class WebViewMarkdownReader extends StatefulWidget {
   final String markdownData;
+  final int contentRevision;
   final ReaderSettingsState settings;
   final ReaderPalette palette;
   final List<Highlight> highlights;
@@ -61,6 +63,7 @@ class WebViewMarkdownReader extends StatefulWidget {
   const WebViewMarkdownReader({
     super.key,
     required this.markdownData,
+    this.contentRevision = 0,
     required this.settings,
     required this.palette,
     this.highlights = const [],
@@ -139,6 +142,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   /// 首次 HTML 是否已写好——写好前 WebView 不挂载（initialUrlRequest 会
   /// 立即加载，HTML 必须先落盘），build 用纸张底色占位。
   bool _htmlReady = false;
+  Future<void>? _htmlWriteFuture;
+  int _reloadEpoch = 0;
 
   /// 揭幕控制：纸色幕布盖在 WebView 上方，遮住原生实例创建 → HTML 首帧
   /// paint → 进度恢复的全过程（原生 WebView 在首帧 paint 前刷系统白底，
@@ -157,7 +162,13 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   Future<void> _prepareInitialHtml() async {
     await _writeHtmlFile();
-    if (mounted) setState(() => _htmlReady = true);
+    Future<void>? pending;
+    do {
+      pending = _htmlWriteFuture;
+      await pending;
+    } while (pending != _htmlWriteFuture);
+    if (!mounted) return;
+    setState(() => _htmlReady = true);
     // 兜底：onContentReady 依赖 window.onload，首屏图片异常时可能迟迟不来。
     // 超时强制揭幕——transparentBackground 下未 paint 区域透出底层纸色，
     // 提前揭幕也不会闪白。
@@ -211,12 +222,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     return _appVersionCache = '${info.version}+${info.buildNumber}';
   }
 
-  /// HTML 生成（整篇 markdown 解析 + 全文正则后处理）与写盘都在后台
-  /// isolate 执行——大文献的同步转换此前直接跑在 initState 里，卡住打开
+  /// HTML 生成（整篇 markdown 解析 + 全文正则后处理）在后台
+  /// isolate 执行，缓存按文献串行写盘——大文献的同步转换此前直接跑在 initState 里，卡住打开
   /// 阅读器的首帧与路由转场（「打开就卡一下」的来源）。
   ///
   /// `.reader.html` 当缓存用：sidecar 指纹文件 `.reader.html.fp` 记录
-  /// 内容 hash | 图片 cacheBuster | app 版本，三者都没变就跳过整篇
+  /// 内容 hash | 图片 cacheBuster | app 版本 | 排版版本都没变才跳过整篇
   /// parse + 写盘（大文献数百 ms~秒级），isolate 只做一次 hash（几十 ms）。
   /// 主题/字号/翻译样式/翻页/top-inset **不进指纹**——[onContentReady]
   /// 会用 widget 当前值无条件重放，缓存 HTML 里烤的旧值被覆写。
@@ -224,7 +235,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   ///
   /// Isolate 闭包不能捕获 `this`（State 持有 controller 等不可发送对象），
   /// 全部输入先提为局部变量。
-  Future<void> _writeHtmlFile() async {
+  Future<void> _writeHtmlFile() {
     final markdown = widget.markdownData;
     final palette = widget.palette;
     final settings = widget.settings;
@@ -237,43 +248,26 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     // server root 在主 isolate 取出传入——isolate 内单例未初始化，
     // 否则 file:// 重写失效、图片裂成 alt 文本（见 _rootRelativeUrlForPath）。
     final serverRoot = ReaderLocalhostServer.instance.root;
-    final appVersion = await _appVersion();
-    final reused = await Isolate.run(() {
-      final fingerprint =
-          '${md5.convert(utf8.encode(markdown))}|$buster|$appVersion';
-      final htmlFile = File(path);
-      final fpFile = File('$path.fp');
-      String? stored;
-      try {
-        if (fpFile.existsSync()) stored = fpFile.readAsStringSync();
-      } catch (_) {
-        // 指纹读不出来按不匹配处理，走重新生成
-      }
-      if (!kDebugMode && stored == fingerprint && htmlFile.existsSync()) {
-        return true;
-      }
-      // 写入顺序「删 fp → 写 HTML → 写 fp」：中途被杀只会留下无指纹的
-      // 半截 HTML，下次必然重新生成，不会把坏文件当缓存加载。
-      if (fpFile.existsSync()) fpFile.deleteSync();
-      final html = buildReaderHtml(
+    final revision = widget.contentRevision;
+    return _htmlWriteFuture = ReaderHtmlCache.write(
+      path: path,
+      fingerprint: _appVersion().then((version) =>
+          '${md5.convert(utf8.encode(markdown))}|$buster|$version|$revision'),
+      allowReuse: !kDebugMode,
+      buildHtml: () => Isolate.run(() => buildReaderHtml(
         markdownContent: markdown,
         palette: palette,
         settings: settings,
         baseHref: baseHref,
         serverRoot: serverRoot,
         translationStyleId: styleId,
-        imageCacheBuster: buster,
+        imageCacheBuster: '$buster-$revision',
         topInset: inset,
         bottomInset: bottomInset,
-      );
-      htmlFile.parent.createSync(recursive: true);
-      htmlFile.writeAsStringSync(html);
-      fpFile.writeAsStringSync(fingerprint);
-      return false;
+      )),
+    ).then((reused) {
+      if (reused) log.d('[WebViewMarkdownReader] HTML 指纹命中');
     });
-    if (reused) {
-      log.d('[WebViewMarkdownReader] .reader.html 指纹命中，跳过重新生成');
-    }
   }
 
   @override
@@ -288,6 +282,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   ReaderProps _propsOf(WebViewMarkdownReader w) => ReaderProps(
     markdownData: w.markdownData,
+    contentRevision: w.contentRevision,
     palette: w.palette,
     settings: w.settings,
     translationStyleId: w.translationStyleId,
@@ -321,8 +316,9 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   }
 
   void _reloadContent() {
+    final epoch = ++_reloadEpoch;
     _writeHtmlFile().then((_) {
-      if (!mounted) return;
+      if (!mounted || epoch != _reloadEpoch) return;
       final url = _readerUrl(cacheBust: true);
       if (url == null) {
         log.d(
@@ -351,6 +347,8 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   // 都是单行转发到 bridge——bridge 字段未初始化时（WebView 未 ready）静默跳过。
 
   void scrollToBlockIndex(int index) => _bridge?.scrollToBlock(index);
+
+  void scrollToFigure(String id) => _bridge?.scrollToFigure(id);
 
   void scrollToSearchResult(int index) => _bridge?.scrollToSearchResult(index);
 

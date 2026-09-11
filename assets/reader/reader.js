@@ -780,6 +780,12 @@ window.scrollToBlock = function(index) {
   }
 };
 
+window.scrollToFigure = function(id) {
+  const figure = document.getElementById('otter-figure-' + id);
+  if (!figure) return;
+  figure.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+};
+
 // ─── 搜索高亮 ───
 
 function _getBlockParent(el) {

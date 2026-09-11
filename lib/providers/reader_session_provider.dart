@@ -11,6 +11,7 @@ import '../services/document_summary_image_service.dart';
 import '../services/reader/markdown_document_cache_service.dart';
 import '../utils/doc_paths.dart';
 import 'highlight_provider.dart';
+import 'document_task_provider.dart';
 import 'history_provider.dart';
 import 'reader_settings_provider.dart';
 
@@ -44,6 +45,7 @@ class ReaderSessionState {
   final String? markdownPath;
   final String? markdownContent;
   final String? markdownCacheKey;
+  final int contentRevision;
   final bool markdownLoading;
   final Object? markdownLoadError;
   final bool searchActive;
@@ -62,6 +64,7 @@ class ReaderSessionState {
     this.markdownPath,
     this.markdownContent,
     this.markdownCacheKey,
+    this.contentRevision = 0,
     this.markdownLoading = false,
     this.markdownLoadError,
     this.searchActive = false,
@@ -86,6 +89,7 @@ class ReaderSessionState {
     Object? markdownPath = _sentinel,
     Object? markdownContent = _sentinel,
     Object? markdownCacheKey = _sentinel,
+    int? contentRevision,
     bool? markdownLoading,
     Object? markdownLoadError = _sentinel,
     bool? searchActive,
@@ -110,6 +114,7 @@ class ReaderSessionState {
       markdownCacheKey: identical(markdownCacheKey, _sentinel)
           ? this.markdownCacheKey
           : markdownCacheKey as String?,
+      contentRevision: contentRevision ?? this.contentRevision,
       markdownLoading: markdownLoading ?? this.markdownLoading,
       markdownLoadError: identical(markdownLoadError, _sentinel)
           ? this.markdownLoadError
@@ -220,14 +225,32 @@ const _sentinel = Object();
 class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
   ReaderSessionNotifier(this._ref, this.args)
     : super(const ReaderSessionState()) {
+    _ref.listen(
+      documentTaskProvider.select(
+        (tasks) =>
+            tasks[DocumentTaskKey(
+              type: DocumentTaskType.extractDocument,
+              documentId: args.documentId,
+            )],
+      ),
+      (previous, next) {
+        if (next?.status == DocumentTaskStatus.completed &&
+            !identical(previous, next) &&
+            next?.result is String) {
+          unawaited(_reloadExtraction(next!.result as String));
+        }
+      },
+    );
     unawaited(_init());
   }
 
   final Ref _ref;
   final ReaderSessionArgs args;
   Future<String>? _loadFuture;
+  int _loadEpoch = 0;
 
   Future<void> _init() async {
+    final epoch = _loadEpoch;
     final pdfPath = DocPaths.pdf(args.documentId);
     final fileExistsFuture = args.documentId.isNotEmpty
         ? File(pdfPath).exists()
@@ -242,6 +265,14 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     final summaryImagePath = await summaryPathFuture;
     if (!mounted) return;
 
+    if (epoch != _loadEpoch) {
+      state = state.copyWith(
+        initialized: true,
+        fileExists: fileExists,
+        summaryImagePath: summaryImagePath,
+      );
+      return;
+    }
     final wantMarkdown =
         args.defaultReadingMode == DefaultReadingMode.markdown &&
         markdownPath != null;
@@ -276,46 +307,70 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     final mdPath = state.markdownPath;
     if (mdPath == null) return;
 
-    _loadFuture ??= _loadAndResolveMarkdown(mdPath);
+    final epoch = _loadEpoch;
+    _loadFuture ??= _loadAndResolveMarkdown(mdPath, epoch);
     if (!state.markdownLoading) {
       state = state.copyWith(markdownLoading: true, markdownLoadError: null);
     }
 
     try {
       final content = await _loadFuture!;
-      if (!mounted || state.markdownPath != mdPath) return;
+      if (!mounted || epoch != _loadEpoch || state.markdownPath != mdPath) {
+        return;
+      }
       state = state.copyWith(
         markdownContent: content,
         markdownLoading: false,
         markdownLoadError: null,
       );
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || epoch != _loadEpoch) return;
       state = state.copyWith(markdownLoading: false, markdownLoadError: error);
     }
   }
 
-  Future<String> _loadAndResolveMarkdown(String mdPath) async {
+  Future<String> _loadAndResolveMarkdown(String mdPath, int epoch) async {
     final resolved = await MarkdownDocumentCacheService.instance.loadDocument(
       mdPath: mdPath,
       title: args.title,
     );
-    if (mounted && state.markdownPath == mdPath) {
+    if (mounted && epoch == _loadEpoch && state.markdownPath == mdPath) {
       state = state.copyWith(markdownCacheKey: resolved.cacheKey);
     }
     return resolved.content;
+  }
+
+  Future<void> _reloadExtraction(String mdPath) async {
+    final epoch = ++_loadEpoch;
+    try {
+      final content = await File(mdPath).readAsString();
+      if (!mounted || epoch != _loadEpoch) return;
+      useExtractedMarkdown(markdownPath: mdPath, markdownContent: content);
+    } catch (error) {
+      if (!mounted || epoch != _loadEpoch) return;
+      if (state.markdownContent == null) {
+        state = state.copyWith(
+          markdownLoading: false,
+          markdownLoadError: error,
+        );
+      }
+    }
   }
 
   void useExtractedMarkdown({
     required String markdownPath,
     required String markdownContent,
   }) {
+    if (!mounted) return;
+    ++_loadEpoch;
+    final revision = state.contentRevision + 1;
     final cacheService = MarkdownDocumentCacheService.instance;
-    final cacheKey = cacheService.buildMemoryCacheKey(
+    final contentKey = cacheService.buildMemoryCacheKey(
       mdPath: markdownPath,
       title: args.title,
       markdownContent: markdownContent,
     );
+    final cacheKey = '$contentKey|revision=$revision';
     cacheService.primeResolvedContent(
       cacheKey: cacheKey,
       content: markdownContent,
@@ -325,6 +380,7 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
       markdownPath: markdownPath,
       markdownContent: markdownContent,
       markdownCacheKey: cacheKey,
+      contentRevision: revision,
       markdownLoading: false,
       markdownLoadError: null,
       showPreview: true,

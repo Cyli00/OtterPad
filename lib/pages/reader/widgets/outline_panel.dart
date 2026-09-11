@@ -422,14 +422,15 @@ class _FiguresTab extends StatelessWidget {
                   ),
                 ),
               const SizedBox(height: 8),
-              Row(
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
                 children: [
                   _ActionLink(
                     icon: Symbols.article_rounded,
                     label: context.l10n.viewInDocument,
                     onTap: () => _navigateToFigure(fig),
                   ),
-                  const SizedBox(width: 16),
                   if (imageExists)
                     _ActionLink(
                       icon: Symbols.open_in_full_rounded,
@@ -564,6 +565,13 @@ class _FiguresTab extends StatelessWidget {
   }
 
   void _navigateToFigure(FigureManifestEntry fig) {
+    if (fig.id != null) {
+      final anchor = markdownContent.indexOf(fig.markdownAnchor);
+      if (anchor >= 0) {
+        onNavigate(anchor);
+        return;
+      }
+    }
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
     final idx = markdownContent.indexOf(fileName);
     if (idx >= 0) onNavigate(idx);

@@ -24,6 +24,9 @@ class ReaderTopToolbar extends StatelessWidget {
   final VoidCallback onRetranslate;
   final VoidCallback onOpenSummaryImage;
   final VoidCallback onAiFixFigures;
+  final bool showNavigationToggle;
+  final bool navigationVisible;
+  final VoidCallback? onToggleNavigation;
 
   const ReaderTopToolbar({
     super.key,
@@ -47,6 +50,9 @@ class ReaderTopToolbar extends StatelessWidget {
     required this.onRetranslate,
     required this.onOpenSummaryImage,
     required this.onAiFixFigures,
+    this.showNavigationToggle = false,
+    this.navigationVisible = true,
+    this.onToggleNavigation,
   });
 
   @override
@@ -73,175 +79,213 @@ class ReaderTopToolbar extends StatelessWidget {
                 onBack();
               },
             ),
-            const Spacer(),
-            if ((showPreview && hasResult) || (!showPreview && fileExists))
+            if (showNavigationToggle && onToggleNavigation != null)
               IconButton(
                 icon: Icon(
-                  Symbols.search_rounded,
+                  navigationVisible
+                      ? Symbols.left_panel_close_rounded
+                      : Symbols.left_panel_open_rounded,
                   size: 22,
                   fill: 1,
                   color: cs.onSurfaceVariant,
                 ),
-                tooltip: l10n.search,
+                tooltip: navigationVisible
+                    ? l10n.readerHideNavigation
+                    : l10n.readerShowNavigation,
                 onPressed: () {
                   Haptics.soft();
-                  onSearch();
+                  onToggleNavigation!();
                 },
               ),
-            extractButton,
-            if (showPreview && hasResult && !extracting)
-              IconButton(
-                icon: Icon(
-                  Symbols.auto_fix_high_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if ((showPreview && hasResult) ||
+                          (!showPreview && fileExists))
+                        IconButton(
+                          icon: Icon(
+                            Symbols.search_rounded,
+                            size: 22,
+                            fill: 1,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          tooltip: l10n.search,
+                          onPressed: () {
+                            Haptics.soft();
+                            onSearch();
+                          },
+                        ),
+                      extractButton,
+                      if (showPreview && hasResult && !extracting)
+                        IconButton(
+                          icon: Icon(
+                            Symbols.auto_fix_high_rounded,
+                            size: 22,
+                            fill: 1,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          tooltip: l10n.aiFixFigures,
+                          onPressed: () {
+                            Haptics.soft();
+                            onAiFixFigures();
+                          },
+                        ),
+                      if (showPreview && hasResult && hasMarkdownContent)
+                        IconButton(
+                          icon: Icon(
+                            Symbols.mindfulness_rounded,
+                            size: 22,
+                            fill: 1,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          tooltip: l10n.generateSummary,
+                          onPressed: () {
+                            Haptics.soft();
+                            onGenerateSummaryImage();
+                          },
+                        ),
+                      if (!showPreview && fileExists)
+                        IconButton(
+                          icon: Icon(
+                            inFavorite
+                                ? Symbols.bookmark_remove_rounded
+                                : Symbols.bookmark_add_rounded,
+                            size: 22,
+                            fill: 1,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          tooltip: inFavorite
+                              ? l10n.removeFromFavorite
+                              : l10n.moveToFavorite,
+                          onPressed: () {
+                            Haptics.soft();
+                            (inFavorite ? onRemoveFavorite : onAddFavorite)();
+                          },
+                        ),
+                      if (!showPreview && hasResult && !extracting)
+                        IconButton(
+                          icon: Icon(
+                            Symbols.sync_rounded,
+                            size: 22,
+                            fill: 1,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          tooltip: l10n.reExtract,
+                          onPressed: () {
+                            Haptics.soft();
+                            onExtract();
+                          },
+                        ),
+                      if (!showPreview)
+                        IconButton(
+                          icon: Icon(
+                            Symbols.info_rounded,
+                            size: 22,
+                            fill: 1,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          tooltip: l10n.documentInfo,
+                          onPressed: () {
+                            Haptics.soft();
+                            onShowInfo();
+                          },
+                        )
+                      else
+                        PopupMenuButton<String>(
+                          icon: Icon(
+                            Symbols.more_vert_rounded,
+                            size: 22,
+                            fill: 1,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          tooltip: l10n.more,
+                          color: cs.surfaceContainerHigh,
+                          elevation: 3,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          position: PopupMenuPosition.under,
+                          onSelected: (value) {
+                            Haptics.soft();
+                            switch (value) {
+                              case 'info':
+                                onShowInfo();
+                              case 'favorite_add':
+                                onAddFavorite();
+                              case 'favorite_remove':
+                                onRemoveFavorite();
+                              case 're_extract':
+                                onExtract();
+                              case 'reprocess':
+                                onReprocess();
+                              case 'retranslate':
+                                onRetranslate();
+                              case 'view_summary_image':
+                                onOpenSummaryImage();
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            if (hasSummaryImage)
+                              _popupItem(
+                                'view_summary_image',
+                                Symbols.image_rounded,
+                                l10n.viewSummary,
+                                cs,
+                              ),
+                            _popupItem(
+                              'info',
+                              Symbols.info_rounded,
+                              l10n.documentInfo,
+                              cs,
+                            ),
+                            if (inFavorite)
+                              _popupItem(
+                                'favorite_remove',
+                                Symbols.bookmark_remove_rounded,
+                                l10n.removeFromFavorite,
+                                cs,
+                              )
+                            else
+                              _popupItem(
+                                'favorite_add',
+                                Symbols.bookmark_add_rounded,
+                                l10n.moveToFavorite,
+                                cs,
+                              ),
+                            if (hasResult && !extracting)
+                              _popupItem(
+                                're_extract',
+                                Symbols.sync_rounded,
+                                l10n.reExtract,
+                                cs,
+                              ),
+                            if (hasResult && !extracting)
+                              _popupItem(
+                                'reprocess',
+                                Symbols.refresh_rounded,
+                                l10n.reformat,
+                                cs,
+                              ),
+                            if (canRetranslate)
+                              _popupItem(
+                                'retranslate',
+                                Symbols.translate_rounded,
+                                l10n.reTranslate,
+                                cs,
+                              ),
+                          ],
+                        ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
                 ),
-                tooltip: l10n.aiFixFigures,
-                onPressed: () {
-                  Haptics.soft();
-                  onAiFixFigures();
-                },
               ),
-            if (showPreview && hasResult && hasMarkdownContent)
-              IconButton(
-                icon: Icon(
-                  Symbols.mindfulness_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: l10n.generateSummary,
-                onPressed: () {
-                  Haptics.soft();
-                  onGenerateSummaryImage();
-                },
-              ),
-            if (!showPreview && fileExists)
-              IconButton(
-                icon: Icon(
-                  inFavorite
-                      ? Symbols.bookmark_remove_rounded
-                      : Symbols.bookmark_add_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: inFavorite ? l10n.removeFromFavorite : l10n.moveToFavorite,
-                onPressed: () {
-                  Haptics.soft();
-                  (inFavorite ? onRemoveFavorite : onAddFavorite)();
-                },
-              ),
-            if (!showPreview && hasResult && !extracting)
-              IconButton(
-                icon: Icon(
-                  Symbols.sync_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: l10n.reExtract,
-                onPressed: () {
-                  Haptics.soft();
-                  onExtract();
-                },
-              ),
-            if (!showPreview)
-              IconButton(
-                icon: Icon(
-                  Symbols.info_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: l10n.documentInfo,
-                onPressed: () {
-                  Haptics.soft();
-                  onShowInfo();
-                },
-              )
-            else
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Symbols.more_vert_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
-                tooltip: l10n.more,
-                color: cs.surfaceContainerHigh,
-                elevation: 3,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                position: PopupMenuPosition.under,
-                onSelected: (value) {
-                  Haptics.soft();
-                  switch (value) {
-                    case 'info':
-                      onShowInfo();
-                    case 'favorite_add':
-                      onAddFavorite();
-                    case 'favorite_remove':
-                      onRemoveFavorite();
-                    case 're_extract':
-                      onExtract();
-                    case 'reprocess':
-                      onReprocess();
-                    case 'retranslate':
-                      onRetranslate();
-                    case 'view_summary_image':
-                      onOpenSummaryImage();
-                  }
-                },
-                itemBuilder: (_) => [
-                  if (hasSummaryImage)
-                    _popupItem(
-                      'view_summary_image',
-                      Symbols.image_rounded,
-                      l10n.viewSummary,
-                      cs,
-                    ),
-                  _popupItem('info', Symbols.info_rounded, l10n.documentInfo, cs),
-                  if (inFavorite)
-                    _popupItem(
-                      'favorite_remove',
-                      Symbols.bookmark_remove_rounded,
-                      l10n.removeFromFavorite,
-                      cs,
-                    )
-                  else
-                    _popupItem(
-                      'favorite_add',
-                      Symbols.bookmark_add_rounded,
-                      l10n.moveToFavorite,
-                      cs,
-                    ),
-                  if (hasResult && !extracting)
-                    _popupItem(
-                      're_extract',
-                      Symbols.sync_rounded,
-                      l10n.reExtract,
-                      cs,
-                    ),
-                  if (hasResult)
-                    _popupItem(
-                      'reprocess',
-                      Symbols.refresh_rounded,
-                      l10n.reformat,
-                      cs,
-                    ),
-                  if (canRetranslate)
-                    _popupItem(
-                      'retranslate',
-                      Symbols.translate_rounded,
-                      l10n.reTranslate,
-                      cs,
-                    ),
-                ],
-              ),
-            const SizedBox(width: 4),
+            ),
           ],
         ),
       ),

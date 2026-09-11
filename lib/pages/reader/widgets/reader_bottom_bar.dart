@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-
 import '../../../core/l10n.dart';
+import '../../../core/elevation.dart';
 import '../../../services/haptics.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
@@ -21,6 +21,7 @@ class ReaderBottomBar extends StatelessWidget {
   final VoidCallback onAskAi;
   final VoidCallback onOpenNotes;
   final VoidCallback onOpenTheme;
+  final bool desktop;
 
   const ReaderBottomBar({
     super.key,
@@ -34,12 +35,41 @@ class ReaderBottomBar extends StatelessWidget {
     required this.onAskAi,
     required this.onOpenNotes,
     required this.onOpenTheme,
+    this.desktop = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final l10n = context.l10n;
+
+    if (desktop) {
+      return Align(
+        alignment: Alignment.bottomCenter,
+        heightFactor: 1,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: AppShadows.bar,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: _buildActionRow(context, cs, compact: true),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -49,47 +79,56 @@ class ReaderBottomBar extends StatelessWidget {
         ),
       ),
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      child: SizedBox(
-        height: 56,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _bottomButton(
-              cs,
-              icon: Symbols.menu_rounded,
-              tooltip: l10n.outline,
-              active:
-                  activeDock == ReaderDockPane.outline ||
-                  activeSheet == ReaderSheetType.outline,
-              onTap: onOpenOutline,
-            ),
-            _buildTranslationBottomButton(context, cs),
-            _bottomButton(
-              cs,
-              icon: Symbols.auto_awesome_rounded,
-              tooltip: l10n.askAi,
-              active: activeDock == ReaderDockPane.askAi,
-              onTap: onAskAi,
-            ),
-            _bottomButton(
-              cs,
-              icon: Symbols.stylus_note_rounded,
-              tooltip: l10n.notes,
-              active:
-                  activeDock == ReaderDockPane.notes ||
-                  activeSheet == ReaderSheetType.notes,
-              onTap: onOpenNotes,
-            ),
-            _bottomButton(
-              cs,
-              icon: Symbols.palette_rounded,
-              tooltip: l10n.appearance,
-              active: activeSheet == ReaderSheetType.theme,
-              onTap: onOpenTheme,
-            ),
-          ],
+      child: SizedBox(height: 56, child: _buildActionRow(context, cs)),
+    );
+  }
+
+  Widget _buildActionRow(
+    BuildContext context,
+    ColorScheme cs, {
+    bool compact = false,
+  }) {
+    final l10n = context.l10n;
+    return Row(
+      mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+      mainAxisAlignment: compact
+          ? MainAxisAlignment.start
+          : MainAxisAlignment.spaceEvenly,
+      children: [
+        _bottomButton(
+          cs,
+          icon: Symbols.menu_rounded,
+          tooltip: l10n.outline,
+          active:
+              activeDock == ReaderDockPane.outline ||
+              activeSheet == ReaderSheetType.outline,
+          onTap: onOpenOutline,
         ),
-      ),
+        _buildTranslationBottomButton(context, cs),
+        _bottomButton(
+          cs,
+          icon: Symbols.auto_awesome_rounded,
+          tooltip: l10n.askAi,
+          active: activeDock == ReaderDockPane.askAi,
+          onTap: onAskAi,
+        ),
+        _bottomButton(
+          cs,
+          icon: Symbols.stylus_note_rounded,
+          tooltip: l10n.notes,
+          active:
+              activeDock == ReaderDockPane.notes ||
+              activeSheet == ReaderSheetType.notes,
+          onTap: onOpenNotes,
+        ),
+        _bottomButton(
+          cs,
+          icon: Symbols.palette_rounded,
+          tooltip: l10n.appearance,
+          active: activeSheet == ReaderSheetType.theme,
+          onTap: onOpenTheme,
+        ),
+      ],
     );
   }
 
@@ -133,18 +172,21 @@ class ReaderBottomBar extends StatelessWidget {
     required VoidCallback onTap,
     bool active = false,
   }) {
-    return IconButton(
-      icon: Icon(
-        icon,
-        size: 24,
-        fill: 1,
-        color: active ? cs.primary : cs.onSurfaceVariant,
+    return SizedBox.square(
+      dimension: 48,
+      child: IconButton(
+        icon: Icon(
+          icon,
+          size: 24,
+          fill: 1,
+          color: active ? cs.primary : cs.onSurfaceVariant,
+        ),
+        tooltip: tooltip,
+        onPressed: () {
+          Haptics.soft();
+          onTap();
+        },
       ),
-      tooltip: tooltip,
-      onPressed: () {
-        Haptics.soft();
-        onTap();
-      },
     );
   }
 

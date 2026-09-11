@@ -48,6 +48,7 @@ class ApplySearchQuery extends ReaderUpdate {
 /// [planUpdates] 的纯输入快照——从 widget 抽出参与"该做什么"判断的字段。
 class ReaderProps {
   final String markdownData;
+  final int contentRevision;
   final ReaderPalette palette;
   final ReaderSettingsState settings;
   final String translationStyleId;
@@ -56,6 +57,7 @@ class ReaderProps {
 
   const ReaderProps({
     required this.markdownData,
+    this.contentRevision = 0,
     required this.palette,
     required this.settings,
     required this.translationStyleId,
@@ -74,7 +76,9 @@ class ReaderProps {
 List<ReaderUpdate> planUpdates(ReaderProps oldProps, ReaderProps newProps) {
   final updates = <ReaderUpdate>[];
 
-  final dataChanged = newProps.markdownData != oldProps.markdownData;
+  final dataChanged =
+      newProps.markdownData != oldProps.markdownData ||
+      newProps.contentRevision != oldProps.contentRevision;
 
   if (dataChanged) {
     updates.add(const ReloadContent());

@@ -69,59 +69,73 @@ class AdaptiveNavigationRail extends StatelessWidget {
               alignment: Alignment.centerLeft,
               minWidth: extended ? 180 : null,
               maxWidth: extended ? 180 : null,
-              child: Column(
-                children: [
-                  if (leading != null) ...[leading!, const SizedBox(height: 8)],
-                  const SizedBox(height: 16),
-                  ...topDestinations.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final dest = entry.value;
-                    final selected = index == selectedIndex;
-
-                    return _NavigationRailItem(
-                      icon: selected ? dest.selectedIcon : dest.icon,
-                      label: dest.label,
-                      selected: selected,
-                      extended: extended,
-                      colorScheme: colorScheme,
-                      onTap: () {
-                        Haptics.soft();
-                        onDestinationSelected(index);
-                      },
-                    );
-                  }),
-                  const Spacer(),
-                  ...bottomDestinations.asMap().entries.map((entry) {
-                    final index = entry.key + splitIndex;
-                    final dest = entry.value;
-                    final selected = index == selectedIndex;
-
-                    return _NavigationRailItem(
-                      icon: selected ? dest.selectedIcon : dest.icon,
-                      label: dest.label,
-                      selected: selected,
-                      extended: extended,
-                      colorScheme: colorScheme,
-                      onTap: () {
-                        Haptics.soft();
-                        onDestinationSelected(index);
-                      },
-                    );
-                  }),
-                  if (bottomAction != null)
-                    _NavigationRailItem(
-                      icon: bottomAction!.icon,
-                      label: bottomAction!.label,
-                      selected: false,
-                      extended: extended,
-                      colorScheme: colorScheme,
-                      onTap: () {
-                        Haptics.soft();
-                        onBottomAction?.call();
-                      },
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
                     ),
-                  const SizedBox(height: 16),
-                ],
+                    child: IntrinsicHeight(
+                      child: Column(
+                        children: [
+                          if (leading != null) ...[
+                            leading!,
+                            const SizedBox(height: 8),
+                          ],
+                          const SizedBox(height: 16),
+                          ...topDestinations.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final dest = entry.value;
+                            final selected = index == selectedIndex;
+
+                            return _NavigationRailItem(
+                              icon: selected ? dest.selectedIcon : dest.icon,
+                              label: dest.label,
+                              selected: selected,
+                              extended: extended,
+                              colorScheme: colorScheme,
+                              onTap: () {
+                                Haptics.soft();
+                                onDestinationSelected(index);
+                              },
+                            );
+                          }),
+                          const Spacer(),
+                          ...bottomDestinations.asMap().entries.map((entry) {
+                            final index = entry.key + splitIndex;
+                            final dest = entry.value;
+                            final selected = index == selectedIndex;
+
+                            return _NavigationRailItem(
+                              icon: selected ? dest.selectedIcon : dest.icon,
+                              label: dest.label,
+                              selected: selected,
+                              extended: extended,
+                              colorScheme: colorScheme,
+                              onTap: () {
+                                Haptics.soft();
+                                onDestinationSelected(index);
+                              },
+                            );
+                          }),
+                          if (bottomAction != null)
+                            _NavigationRailItem(
+                              icon: bottomAction!.icon,
+                              label: bottomAction!.label,
+                              selected: false,
+                              extended: extended,
+                              colorScheme: colorScheme,
+                              onTap: () {
+                                Haptics.soft();
+                                onBottomAction?.call();
+                              },
+                            ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

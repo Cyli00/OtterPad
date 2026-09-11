@@ -20,9 +20,13 @@ import '../../../utils/desktop.dart';
 import '../../../utils/doc_paths.dart';
 import '../../../widgets/app_context_menu.dart';
 import '../../../widgets/app_dialog.dart';
+import '../../../widgets/extract_provider_dialog.dart';
 import '../../shelf/widgets/create_favorite_dialog.dart';
 import '../../shelf/widgets/pick_favorite_sheet.dart';
 import 'batch_progress_sheet.dart';
+
+/// 文献卡片单击要走的动作。
+enum DocTapIntent { open, toggle, range, modifierToggle }
 
 /// 文献卡片统一交互入口
 ///
@@ -73,23 +77,52 @@ class DocCardActions {
     VoidCallback? onModifierToggle,
     VoidCallback? onSelectRange,
   }) {
-    if (isDesktopOs) {
-      final keyboard = HardwareKeyboard.instance;
-      if (keyboard.isShiftPressed && onSelectRange != null) {
-        onSelectRange();
-        return;
+    final keyboard = HardwareKeyboard.instance;
+    switch (resolveTap(
+      isSelectionMode: isSelectionMode,
+      isDesktop: isDesktopOs,
+      isApple: isAppleDesktop,
+      shiftPressed: keyboard.isShiftPressed,
+      controlPressed: keyboard.isControlPressed,
+      metaPressed: keyboard.isMetaPressed,
+      canRange: onSelectRange != null,
+      canModifierToggle: onModifierToggle != null,
+    )) {
+      case DocTapIntent.range:
+        onSelectRange!();
+      case DocTapIntent.modifierToggle:
+        onModifierToggle!();
+      case DocTapIntent.toggle:
+        onToggle?.call();
+      case DocTapIntent.open:
+        onOpen();
+    }
+  }
+
+  /// 单击意图。Win/Linux 的 Meta（Win/Super）和未进多选时的 Shift
+  /// 都不能当多选修饰键：系统/IME 常吃掉 key up，HardwareKeyboard 会一直
+  /// stuck，轻点卡片就会被当成进入多选。
+  @visibleForTesting
+  static DocTapIntent resolveTap({
+    required bool isSelectionMode,
+    required bool isDesktop,
+    required bool isApple,
+    required bool shiftPressed,
+    required bool controlPressed,
+    required bool metaPressed,
+    required bool canRange,
+    required bool canModifierToggle,
+  }) {
+    if (isDesktop) {
+      if (shiftPressed && isSelectionMode && canRange) {
+        return DocTapIntent.range;
       }
-      if ((keyboard.isControlPressed || keyboard.isMetaPressed) &&
-          onModifierToggle != null) {
-        onModifierToggle();
-        return;
+      final toggleMod = controlPressed || (isApple && metaPressed);
+      if (toggleMod && canModifierToggle) {
+        return DocTapIntent.modifierToggle;
       }
     }
-    if (isSelectionMode) {
-      onToggle?.call();
-    } else {
-      onOpen();
-    }
+    return isSelectionMode ? DocTapIntent.toggle : DocTapIntent.open;
   }
 
   static void modifierToggle(
@@ -115,7 +148,7 @@ class DocCardActions {
     final sel = ref.read(selectionProvider);
     final notifier = ref.read(selectionProvider.notifier);
     if (!sel.isActive || sel.sourceContext != sourceContext) {
-      notifier.enter(docId, sourceContext);
+      return;
     }
     notifier.selectRange(orderedIds: orderedIds, toId: docId);
   }
@@ -294,7 +327,11 @@ class DocCardActions {
       return;
     }
 
-    final apiState = ref.read(docExtractApiProvider);
+    final apiState = await showExtractProviderDialog(
+      context: context,
+      apiState: ref.read(docExtractApiProvider),
+    );
+    if (apiState == null || !context.mounted) return;
     if (!await AiSettingsPrompt.ensureExtractConfigured(
       context: context,
       apiState: apiState,

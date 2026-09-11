@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -562,7 +563,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final isTranslated =
         _showTranslation[idx] == true && _translations.containsKey(idx);
     final displayText = isTranslated ? _translations[idx]! : fig.captionText;
-    final maxH = MediaQuery.sizeOf(context).height / 4;
+    final maxH = math.max(_kMinCaptionH, MediaQuery.sizeOf(context).height / 4);
 
     return Container(
       decoration: const BoxDecoration(

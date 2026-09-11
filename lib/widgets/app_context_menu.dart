@@ -49,11 +49,13 @@ Future<T?> showAppContextMenu<T>({
                 color: item.destructive ? cs.error : cs.onSurfaceVariant,
               ),
               const SizedBox(width: 14),
-              Text(
-                item.label,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: item.destructive ? cs.error : cs.onSurface,
-                  fontWeight: FontWeight.w500,
+              Flexible(
+                child: Text(
+                  item.label,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: item.destructive ? cs.error : cs.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],

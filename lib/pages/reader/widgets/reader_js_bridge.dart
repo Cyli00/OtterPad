@@ -312,6 +312,10 @@ class ReaderJsBridge {
     _controller.evaluateJavascript(source: 'window.scrollToBlock($index)');
   }
 
+  void scrollToFigure(String id) {
+    _controller.evaluateJavascript(source: "window.scrollToFigure('${_jsLiteral(id)}')");
+  }
+
   void scrollToSearchResult(int index) {
     _controller.evaluateJavascript(
       source: 'window.scrollToSearchResult($index)',

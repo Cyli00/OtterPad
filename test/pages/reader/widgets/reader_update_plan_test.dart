@@ -17,6 +17,7 @@ void main() {
 
   ReaderProps props({
     String markdownData = 'md',
+    int contentRevision = 0,
     ReaderPalette palette = basePalette,
     ReaderSettingsState settings = const ReaderSettingsState(),
     String translationStyleId = 'themed',
@@ -24,6 +25,7 @@ void main() {
     String? highlightQuery,
   }) => ReaderProps(
     markdownData: markdownData,
+    contentRevision: contentRevision,
     palette: palette,
     settings: settings,
     translationStyleId: translationStyleId,
@@ -40,6 +42,12 @@ void main() {
 
   test('无任何变化 → 空清单', () {
     expect(planUpdates(props(), props()), isEmpty);
+  });
+
+  test('正文相同但排版版本变化时重写 HTML', () {
+    final updates = planUpdates(props(), props(contentRevision: 1));
+    expect(updates, hasLength(1));
+    expect(updates.single, isA<ReloadContent>());
   });
 
   test('字号变化 → ApplyTheme', () {

@@ -14,6 +14,15 @@ void main() {
     codeBlock: Color(0xFFF5F5F5),
   );
 
+  test('stable figure markers become DOM anchors without adding a layout block', () {
+    final html = buildReaderHtml(markdownContent:
+      '<!-- otter-figure:stable-figure -->\n\n![fig:Unnumbered title](file:///tmp/figure.png)',
+      palette: palette, settings: const ReaderSettingsState(), baseHref: '/', serverRoot: '/');
+    expect(html, contains('<figure id="otter-figure-stable-figure">'));
+    expect(html, contains('<figcaption>Unnumbered title</figcaption>'));
+    expect(html, isNot(contains('<!-- otter-figure:')));
+  });
+
   test('显示公式结束符后接正文时继续解析后续 Markdown', () {
     final html = buildReaderHtml(
       markdownContent: r'''

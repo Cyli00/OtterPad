@@ -118,6 +118,10 @@ String _markdownToHtml(
 
   html = _injectImageAttrs(html, serverRoot, imageCacheBuster);
   html = _convertFigCaptions(html);
+  html = html.replaceAllMapped(
+    RegExp(r'<!-- otter-figure:([a-zA-Z0-9_-]+) -->\s*<figure>'),
+    (m) => '<figure id="otter-figure-${m[1]}">',
+  );
   return html;
 }
 
