@@ -143,6 +143,7 @@ class MarkdownPreprocessor {
     if (_listItemRe.hasMatch(trimmed)) return true;
     if (trimmed.startsWith('|')) return true;
     if (_figureLineRe.hasMatch(trimmed)) return true;
+    if (_panelLabelLineRe.hasMatch(trimmed)) return true;
     if (trimmed.startsWith('>')) return true;
     if (trimmed.startsWith('<')) return true;
     if (_horizontalRuleRe.hasMatch(trimmed)) return true;
@@ -425,6 +426,7 @@ final RegExp _listItemRe = RegExp(r'^([-*+]|\d+[.)])\s');
 /// 贪婪 `.*` 让正则引擎从末尾 backtrack 找最后一个 `]\(...\)` 边界,
 /// 平衡 / 不平衡的内嵌方括号都能命中.
 final RegExp _figureLineRe = RegExp(r'^!\[.*\]\(.*\)\s*$');
+final RegExp _panelLabelLineRe = RegExp(r'^\(?[a-zA-Z]\)?[).:]?$');
 final RegExp _horizontalRuleRe = RegExp(r'^[-*_]{3,}\s*$');
 final RegExp _sentenceEndCharRe = RegExp(r'[.!?。！？:;]');
 

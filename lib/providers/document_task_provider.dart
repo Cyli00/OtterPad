@@ -7,16 +7,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:pdfrx/pdfrx.dart';
 import '../core/l10n.dart';
 import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../services/ai_settings_prompt.dart';
 import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
+import '../services/doc_extract_usage_service.dart';
+import '../services/document_structure.dart';
 import '../services/document_summary_image_service.dart';
 import '../services/image_generation_service.dart';
+import '../services/mineru_extract_service.dart';
+import '../services/mineru_result_converter.dart';
+import '../services/pdf_process_lock.dart';
 import '../services/snackbar_service.dart';
+import '../utils/doc_paths.dart';
 import 'api_provider.dart';
+import 'task_activity_provider.dart' show taskActivityProvider;
 import 'document_lifecycle_provider.dart';
 import 'image_generation_config_provider.dart';
 import 'summary_image_provider.dart';
@@ -129,8 +137,11 @@ class DocumentTaskNotifier
       if (queued != null) {
         _queue.remove(queued);
         queued.completeCancelled();
+        _finishTask(key, DocumentTaskStatus.cancelled);
+        return;
       }
-      _finishTask(key, DocumentTaskStatus.cancelled);
+      // 批量上传中的等待项不在单文献队列里，必须取消真实请求后再结束状态。
+      task.cancelToken.cancel();
       return;
     }
 
@@ -149,9 +160,7 @@ class DocumentTaskNotifier
     bool showBusySnackBar = true,
     bool showResultSnackBar = true,
   }) async {
-    if (!await AiSettingsPrompt.ensureExtractConfigured(
-      apiState: apiState,
-    )) {
+    if (!await AiSettingsPrompt.ensureExtractConfigured(apiState: apiState)) {
       return null;
     }
 
@@ -169,6 +178,19 @@ class DocumentTaskNotifier
       showResultSnackBar: showResultSnackBar,
       cancelledMessage: _l10n?.extractionCancelled ?? '已取消提取',
       body: (token, progress) async {
+        await _preflightExtractFile(filePath, apiState.provider);
+        if (apiState.provider == DocExtractProvider.mineru) {
+          final converted = await _extractViaMinerU(
+            filePath: filePath,
+            title: title,
+            apiState: apiState,
+            cancelToken: token,
+            progress: progress,
+          );
+          onSuccess?.call(converted.mdPath, converted.processedMarkdown);
+          return converted.mdPath;
+        }
+
         final extractResult = await _extractAsync(
           filePath: filePath,
           title: title,
@@ -189,14 +211,15 @@ class DocumentTaskNotifier
             status: _l10n?.savingResult ?? '正在保存结果',
           ),
         );
-        final savedMdPath = await DocExtractService.instance
-            .saveResult(
-              filePath,
-              extractResult,
-              token: apiState.apiKey,
-              title: title,
-            )
-            .timeout(const Duration(seconds: 30));
+        final savedMdPath = await DocExtractService.instance.saveResult(
+          filePath,
+          extractResult,
+          token: apiState.apiKey,
+          title: title,
+        );
+        await _ref
+            .read(docExtractUsageProvider.notifier)
+            .record(DocExtractProvider.paddle, _paddlePageCount(extractResult));
         onSuccess?.call(savedMdPath, extractResult.processedMarkdown ?? '');
         return savedMdPath;
       },
@@ -207,10 +230,15 @@ class DocumentTaskNotifier
       onError: (e) {
         if (e is DocExtractException) return TaskFinish.text(e.message);
         if (e is BatchExtractException) return TaskFinish.text(e.message);
+        if (e is MinerUExtractException) return TaskFinish.text(e.message);
         if (e is DioException) {
-          return TaskFinish.text(_l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}');
+          return TaskFinish.text(
+            _l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}',
+          );
         }
-        return TaskFinish.text(_l10n?.extractionFailedDetail('$e') ?? '提取失败: $e');
+        return TaskFinish.text(
+          _l10n?.extractionFailedDetail('$e') ?? '提取失败: $e',
+        );
       },
     );
     return result;
@@ -220,20 +248,86 @@ class DocumentTaskNotifier
     required List<BatchExtractItem> items,
     required DocExtractApiState apiState,
   }) async {
-    if (!await AiSettingsPrompt.ensureExtractConfigured(
-      apiState: apiState,
-    )) {
+    if (!await AiSettingsPrompt.ensureExtractConfigured(apiState: apiState)) {
       return {for (final item in items) item.documentId: null};
     }
 
-    final pendingItems =
-        items.where((item) => !hasActiveDocumentTask(item.documentId)).toList();
+    final pendingItems = items
+        .where((item) => !hasActiveDocumentTask(item.documentId))
+        .toList();
     if (pendingItems.isEmpty) {
       return {for (final item in items) item.documentId: null};
     }
 
-    final cancelToken = CancelToken();
+    final provider = apiState.provider;
+
+    // 批量文件数上限（统一 ≤20），超限快速失败不进队列
+    if (pendingItems.length > provider.maxBatchFiles) {
+      _snackBar.showResult(
+        message:
+            _l10n?.batchExtractTooManyFiles(provider.maxBatchFiles) ??
+            '一次最多批量提取 ${provider.maxBatchFiles} 篇',
+      );
+      return {for (final item in items) item.documentId: null};
+    }
+
+    // 本地大小预检；页数由服务商错误码兜底（避免批量前逐份加载 PDF）
+    final maxBytes = provider.maxFileSizeMB * 1024 * 1024;
+    final runnable = <BatchExtractItem>[];
+    var oversizedCount = 0;
+    final preflightErrors = <String, String>{};
     for (final item in pendingItems) {
+      try {
+        final file = File(item.filePath);
+        if (!file.existsSync()) {
+          preflightErrors[item.documentId] = _l10n?.pdfNotFound ?? 'PDF 文件不存在';
+        } else if (file.lengthSync() > maxBytes) {
+          oversizedCount++;
+          preflightErrors[item.documentId] =
+              _l10n?.extractFileTooLargeSingle(provider.maxFileSizeMB) ??
+              '文件超过 ${provider.maxFileSizeMB}MB 大小限制';
+        } else {
+          runnable.add(item);
+        }
+      } on FileSystemException {
+        preflightErrors[item.documentId] = _l10n?.pdfNotFound ?? 'PDF 文件不存在';
+      }
+    }
+    for (final item in pendingItems.where(
+      (item) => preflightErrors.containsKey(item.documentId),
+    )) {
+      final key = DocumentTaskKey(
+        type: DocumentTaskType.extractDocument,
+        documentId: item.documentId,
+      );
+      state = {
+        ...state,
+        key: DocumentTaskInfo(
+          key: key,
+          title: item.title,
+          status: DocumentTaskStatus.failed,
+          progress: const ListenableProgress(current: 0, total: 0, status: ''),
+          cancelToken: CancelToken(),
+          error: preflightErrors[item.documentId],
+        ),
+      };
+    }
+    if (oversizedCount > 0) {
+      _snackBar.showResult(
+        message:
+            _l10n?.extractFileTooLarge(
+              provider.maxFileSizeMB,
+              oversizedCount,
+            ) ??
+            '$oversizedCount 篇超过 ${provider.maxFileSizeMB}MB 限制，已跳过',
+      );
+    }
+    if (runnable.isEmpty) {
+      return {for (final item in items) item.documentId: null};
+    }
+
+    final cancelToken = CancelToken();
+    for (final item in runnable) {
       final key = DocumentTaskKey(
         type: DocumentTaskType.extractDocument,
         documentId: item.documentId,
@@ -254,15 +348,51 @@ class DocumentTaskNotifier
       };
     }
 
-    try {
-      final results = await BatchExtractService.instance.extractBatch(
-        items: pendingItems,
-        token: apiState.apiKey,
-        state: apiState,
-        cancelToken: cancelToken,
-        onJobUpdate: _onBatchJobUpdate,
+    final activity = _ref.read(taskActivityProvider.notifier);
+    final batchProgress = ValueNotifier<ListenableProgress>(
+      ListenableProgress(
+        current: 0,
+        total: runnable.length,
+        status: runnable.first.title,
+      ),
+    );
+    final activityId = activity.report(
+      progress: batchProgress,
+      title: runnable.first.title,
+      onCancel: () => cancelToken.cancel(),
+    );
+    void updateProgress(BatchExtractProgress progress) {
+      batchProgress.value = ListenableProgress(
+        current: progress.completed,
+        total: progress.total,
+        status: progress.currentTitle,
       );
-      for (final item in pendingItems) {
+    }
+
+    try {
+      final batchResults = provider == DocExtractProvider.mineru
+          ? await MinerUExtractService.instance.extractBatch(
+              items: runnable,
+              apiKey: apiState.apiKey,
+              state: apiState,
+              cancelToken: cancelToken,
+              onJobUpdate: _onBatchJobUpdate,
+              onProgress: updateProgress,
+            )
+          : await BatchExtractService.instance.extractBatch(
+              items: runnable,
+              token: apiState.apiKey,
+              state: apiState,
+              cancelToken: cancelToken,
+              onJobUpdate: _onBatchJobUpdate,
+              onProgress: updateProgress,
+            );
+      final results = <String, String?>{
+        for (final item in items) item.documentId: null,
+        ...batchResults,
+      };
+      await _recordBatchUsage(provider, runnable, batchResults);
+      for (final item in runnable) {
         final key = DocumentTaskKey(
           type: DocumentTaskType.extractDocument,
           documentId: item.documentId,
@@ -273,7 +403,7 @@ class DocumentTaskNotifier
       }
       return results;
     } catch (e) {
-      for (final item in pendingItems) {
+      for (final item in runnable) {
         final key = DocumentTaskKey(
           type: DocumentTaskType.extractDocument,
           documentId: item.documentId,
@@ -282,7 +412,121 @@ class DocumentTaskNotifier
           _finishTask(key, DocumentTaskStatus.failed, error: e);
         }
       }
-      return {for (final item in pendingItems) item.documentId: null};
+      return {for (final item in items) item.documentId: null};
+    } finally {
+      activity.finish(activityId);
+      batchProgress.dispose();
+    }
+  }
+
+  // ─── 提取分派辅助 ──────────────────────────────────────────────────────────
+
+  /// MinerU 单文件提取：申请上传 → 轮询 → 下载 zip → 转化落盘 + 用量记账。
+  Future<MinerUConversionResult> _extractViaMinerU({
+    required String filePath,
+    required String title,
+    required DocExtractApiState apiState,
+    required CancelToken cancelToken,
+    required void Function(ListenableProgress) progress,
+  }) async {
+    final zipFile = await MinerUExtractService.instance.extractSingle(
+      filePath: filePath,
+      apiKey: apiState.apiKey,
+      state: apiState,
+      onProgress: (status) {
+        if (cancelToken.isCancelled) return;
+        progress(
+          ListenableProgress(current: 0, total: 0, status: '$status · $title'),
+        );
+      },
+      cancelToken: cancelToken,
+    );
+    progress(
+      ListenableProgress(
+        current: 0,
+        total: 0,
+        status: _l10n?.savingResult ?? '正在保存结果',
+      ),
+    );
+    final converted = await MinerUResultConverter.instance.convert(
+      pdfPath: filePath,
+      zipFile: zipFile,
+      title: title,
+      cancelToken: cancelToken,
+    );
+    await _ref
+        .read(docExtractUsageProvider.notifier)
+        .record(DocExtractProvider.mineru, converted.pageCount);
+    return converted;
+  }
+
+  /// 单文件提取预检：大小 + 页数（本地硬校验，与服务商限制一致）。
+  Future<void> _preflightExtractFile(
+    String filePath,
+    DocExtractProvider provider,
+  ) async {
+    final file = File(filePath);
+    if (!file.existsSync()) {
+      throw const DocExtractException('PDF 文件不存在');
+    }
+    final maxBytes = provider.maxFileSizeMB * 1024 * 1024;
+    if (file.lengthSync() > maxBytes) {
+      throw DocExtractException(
+        _l10n?.extractFileTooLargeSingle(provider.maxFileSizeMB) ??
+            '文件超过 ${provider.maxFileSizeMB}MB 大小限制',
+      );
+    }
+    final pages = await _pdfPageCount(filePath);
+    if (pages != null && pages > provider.maxPagesPerFile) {
+      throw DocExtractException(
+        _l10n?.extractTooManyPages(provider.maxPagesPerFile) ??
+            '页数超过单文件 ${provider.maxPagesPerFile} 页限制',
+      );
+    }
+  }
+
+  /// 本地读取 PDF 页数；读不出来返回 null（不阻塞，交由服务商兜底）。
+  Future<int?> _pdfPageCount(String filePath) async {
+    try {
+      return await PdfProcessLock.instance.run(() async {
+        final doc = await PdfDocument.openFile(filePath);
+        try {
+          return doc.pages.length;
+        } finally {
+          doc.dispose();
+        }
+      });
+    } catch (e) {
+      log.d('[DocumentTask] 预检页数读取失败: $e');
+      return null;
+    }
+  }
+
+  /// PaddleOCR 提取结果的页数（用量记账）。
+  int _paddlePageCount(DocExtractResult result) {
+    final json = result.jsonContent;
+    if (json == null) return 0;
+    return DocumentStructure.parse(json).pages.length;
+  }
+
+  /// 批量提取成功条目的用量记账；页数从落盘 extract.json 读取（两提供商形状
+  /// 均被 DocumentStructure 消化）。
+  Future<void> _recordBatchUsage(
+    DocExtractProvider provider,
+    List<BatchExtractItem> items,
+    BatchExtractResults results,
+  ) async {
+    var totalPages = 0;
+    for (final item in items) {
+      if (results[item.documentId] == null) continue;
+      totalPages += (await DocumentStructure.load(
+        DocPaths.json(item.filePath),
+      )).pages.length;
+    }
+    if (totalPages > 0) {
+      await _ref
+          .read(docExtractUsageProvider.notifier)
+          .record(provider, totalPages);
     }
   }
 
@@ -301,7 +545,9 @@ class DocumentTaskNotifier
           progress: ListenableProgress(
             current: 0,
             total: 0,
-            status: _l10n?.waitingSubmitTitle(jobStatus.title) ?? '等待提交: ${jobStatus.title}',
+            status:
+                _l10n?.waitingSubmitTitle(jobStatus.title) ??
+                '等待提交: ${jobStatus.title}',
           ),
         );
 
@@ -312,7 +558,9 @@ class DocumentTaskNotifier
           progress: ListenableProgress(
             current: 0,
             total: 0,
-            status: _l10n?.submittedWaitingTitle(jobStatus.title) ?? '已提交，等待处理: ${jobStatus.title}',
+            status:
+                _l10n?.submittedWaitingTitle(jobStatus.title) ??
+                '已提交，等待处理: ${jobStatus.title}',
           ),
         );
 
@@ -323,7 +571,9 @@ class DocumentTaskNotifier
           progress: ListenableProgress(
             current: jobStatus.extractedPages,
             total: jobStatus.totalPages,
-            status: _l10n?.extractingTitle(jobStatus.title) ?? '正在提取… · ${jobStatus.title}',
+            status:
+                _l10n?.extractingTitle(jobStatus.title) ??
+                '正在提取… · ${jobStatus.title}',
           ),
         );
 
@@ -383,8 +633,12 @@ class DocumentTaskNotifier
         documentId: document.id,
       ),
       title: document.title,
-      initialStatus: _l10n?.waitingSummaryTitle(document.title) ?? '等待生成总结图: ${document.title}',
-      runningStatus: _l10n?.generatingSummaryTitle(document.title) ?? '正在生成总结图: ${document.title}',
+      initialStatus:
+          _l10n?.waitingSummaryTitle(document.title) ??
+          '等待生成总结图: ${document.title}',
+      runningStatus:
+          _l10n?.generatingSummaryTitle(document.title) ??
+          '正在生成总结图: ${document.title}',
       busyMessage: _l10n?.taskInProgress ?? '该文献已有任务正在进行中',
       showBusySnackBar: false,
       showProgressSnackBar: false,
@@ -435,9 +689,13 @@ class DocumentTaskNotifier
           return TaskFinish.text(e.message);
         }
         if (e is DioException) {
-          return TaskFinish.text(_l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}');
+          return TaskFinish.text(
+            _l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}',
+          );
         }
-        return TaskFinish.text(_l10n?.summaryGenerationFailed('$e') ?? '总结图生成失败: $e');
+        return TaskFinish.text(
+          _l10n?.summaryGenerationFailed('$e') ?? '总结图生成失败: $e',
+        );
       },
     );
     if (result == null &&
@@ -472,12 +730,17 @@ class DocumentTaskNotifier
       body: (token, _) => _ref
           .read(documentLifecycleProvider)
           .redownloadPdf(documentId, cancelToken: token),
-      onSuccess: (success) =>
-          TaskFinish.text(success
-              ? (_l10n?.downloadSuccessTitle(title) ?? '下载成功：$title')
-              : (_l10n?.downloadFailedNoSource ?? '下载失败，未找到可用的 PDF 源')),
+      onSuccess: (success) => TaskFinish.text(
+        success
+            ? (_l10n?.downloadSuccessTitle(title) ?? '下载成功：$title')
+            : (_l10n?.downloadFailedNoSource ?? '下载失败，未找到可用的 PDF 源'),
+      ),
       onError: (e) {
-        if (e is DioException) return TaskFinish.text(_l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}');
+        if (e is DioException) {
+          return TaskFinish.text(
+            _l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}',
+          );
+        }
         return TaskFinish.text(_l10n?.downloadFailed('$e') ?? '下载失败: $e');
       },
     );
@@ -499,7 +762,11 @@ class DocumentTaskNotifier
     var cancelled = false;
 
     final notifier = ValueNotifier<ListenableProgress>(
-      ListenableProgress(current: 0, total: total, status: _l10n?.downloadingPdf ?? '正在下载 PDF'),
+      ListenableProgress(
+        current: 0,
+        total: total,
+        status: _l10n?.downloadingPdf ?? '正在下载 PDF',
+      ),
     );
     final handle = _snackBar.showListenableProgress(
       listenable: notifier,
@@ -548,7 +815,9 @@ class DocumentTaskNotifier
     } else if (fail == 0) {
       base = _l10n?.downloadCompleteAll(ok) ?? '下载完成，成功 $ok 篇';
     } else {
-      base = _l10n?.downloadCompletePartial(ok, fail) ?? '下载完成：成功 $ok 篇，失败 $fail 篇';
+      base =
+          _l10n?.downloadCompletePartial(ok, fail) ??
+          '下载完成：成功 $ok 篇，失败 $fail 篇';
     }
     handle.finish(message: base);
     notifier.dispose();
@@ -682,7 +951,11 @@ class DocumentTaskNotifier
         );
         request.complete(result);
       } catch (e, st) {
-        log.e('[DocumentTask:${request.key.type}] unexpected', error: e, stackTrace: st);
+        log.e(
+          '[DocumentTask:${request.key.type}] unexpected',
+          error: e,
+          stackTrace: st,
+        );
         request.complete(null);
       } finally {
         _runningCount--;

@@ -8,6 +8,7 @@ import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
 import '../services/identifier_resolver.dart';
 import '../services/metadata_search_service.dart';
+import '../services/mineru_extract_service.dart';
 import '../services/tavily_search_service.dart';
 import '../services/update_download_service.dart';
 import '../services/update_service.dart';
@@ -79,6 +80,7 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
     IdentifierResolver.instance.applyProxy(state.mode, state.host, state.port);
     DocExtractService.instance.applyProxy(state.mode, state.host, state.port);
     BatchExtractService.instance.applyProxy(state.mode, state.host, state.port);
+    MinerUExtractService.instance.applyProxy(state.mode, state.host, state.port);
     ZoteroSyncService.instance.applyProxy(state.mode, state.host, state.port);
     MetadataSearchService.instance.applyProxy(
       state.mode,

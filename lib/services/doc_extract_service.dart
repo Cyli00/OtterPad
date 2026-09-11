@@ -11,6 +11,8 @@ import '../utils/doc_paths.dart';
 import '../utils/markdown_preprocessor.dart';
 import 'document_structure.dart';
 import 'figure_extract_service.dart';
+import 'mineru_result_converter.dart';
+import 'extraction_artifacts.dart';
 import '../core/app_logger.dart';
 
 /// 文档提取异常
@@ -201,20 +203,15 @@ class DocExtractService {
     String? token,
     String? title,
   }) async {
+    final previous =
+        await FigureExtractService.loadManifest(pdfPath) ??
+        const <FigureManifestEntry>[];
     final dir = p.dirname(pdfPath);
     final rawMdPath = DocPaths.rawMd(pdfPath);
     final mdPath = DocPaths.md(pdfPath);
     final jsonPath = DocPaths.json(pdfPath);
 
-    // 1. 保存原始文件
-    await File(rawMdPath).writeAsString(result.rawMarkdown, flush: true);
-    result.rawPath = rawMdPath;
-
-    if (result.jsonContent != null) {
-      await File(jsonPath).writeAsString(result.jsonContent!, flush: true);
-      result.jsonPath = jsonPath;
-    }
-
+    FigureExtractResult? figures;
     // 2. 从 PDF 提取 figure → 替换 Markdown 中的 figure 区域
     var processedMarkdown = result.rawMarkdown;
     if (result.jsonContent != null) {
@@ -223,13 +220,17 @@ class DocExtractService {
         final figResult = await FigureExtractService.instance.extractFigures(
           resultPath: jsonPath,
           pdfPath: pdfPath,
+          jsonContent: result.jsonContent,
+          publishManifest: false,
         );
+        figures = figResult;
         processedMarkdown = replaceFigureRegions(
           jsonContent: result.jsonContent!,
           figures: figResult.entries,
           mdDir: dir,
         );
       } catch (e) {
+        if (await File(mdPath).exists()) rethrow;
         log.d('[DocExtract] Figure 提取/替换失败，回退原始 Markdown: $e');
       }
     }
@@ -241,7 +242,30 @@ class DocExtractService {
       title: title,
     );
 
-    await File(mdPath).writeAsString(processedMarkdown, flush: true);
+    try {
+      await ExtractionArtifacts.publish(pdfPath, DocExtractProvider.paddle, {
+        rawMdPath: result.rawMarkdown,
+        if (result.jsonContent != null) jsonPath: result.jsonContent!,
+        DocPaths.figuresManifest(pdfPath): FigureExtractService.encodeManifest(
+          _visibleInMarkdown(figures?.entries ?? const [], processedMarkdown),
+          pdfPath,
+        ),
+        mdPath: processedMarkdown,
+      });
+    } catch (_) {
+      if (figures != null) {
+        await Directory(figures.outputDir).delete(recursive: true);
+      }
+      rethrow;
+    }
+    result.rawPath = rawMdPath;
+    if (figures != null) {
+      await pruneFigureGenerations(DocPaths.figuresDir(pdfPath), [
+        ...figures.entries.map((e) => e.imagePath),
+        ...previous.map((e) => e.imagePath),
+      ]);
+    }
+    result.jsonPath = result.jsonContent == null ? null : jsonPath;
     result.processedMarkdown = processedMarkdown;
     result.savedPath = mdPath;
     result.imageDir = DocPaths.figuresDir(pdfPath);
@@ -255,10 +279,28 @@ class DocExtractService {
   Future<(String mdPath, String content)> reprocessMarkdown({
     required String pdfPath,
     String? title,
+    DocExtractProvider? source,
   }) async {
+    final previous =
+        await FigureExtractService.loadManifest(pdfPath) ??
+        const <FigureManifestEntry>[];
+    final sources = await ExtractionArtifacts.availableSources(pdfPath);
+    if (source == null && sources.length > 1) {
+      throw StateError('extraction_source_required');
+    }
+    source ??=
+        sources.firstOrNull ?? await ExtractionArtifacts.activeSource(pdfPath);
+    if (source == DocExtractProvider.mineru) {
+      return MinerUResultConverter.instance.reprocess(
+        pdfPath: pdfPath,
+        title: title,
+      );
+    }
     final dir = p.dirname(pdfPath);
-    final rawMdPath = DocPaths.rawMd(pdfPath);
-    final jsonPath = DocPaths.json(pdfPath);
+    final (jsonPath, rawMdPath) = await ExtractionArtifacts.inputs(
+      pdfPath,
+      source,
+    );
     final mdPath = DocPaths.md(pdfPath);
 
     final rawMdFile = File(rawMdPath);
@@ -269,11 +311,13 @@ class DocExtractService {
       );
     }
 
-    var processedMarkdown = await rawMdFile.readAsString();
+    final rawMarkdown = await rawMdFile.readAsString();
+    var processedMarkdown = rawMarkdown;
 
     // figure 提取 + 替换
     final jsonFile = File(jsonPath);
     String? jsonContent;
+    FigureExtractResult? figures;
     if (jsonFile.existsSync()) {
       jsonContent = await jsonFile.readAsString();
       try {
@@ -281,14 +325,17 @@ class DocExtractService {
         final figResult = await FigureExtractService.instance.extractFigures(
           resultPath: jsonPath,
           pdfPath: pdfPath,
+          publishManifest: false,
         );
+        figures = figResult;
         processedMarkdown = replaceFigureRegions(
           jsonContent: jsonContent,
           figures: figResult.entries,
           mdDir: dir,
         );
       } catch (e) {
-        log.d('[DocExtract] 重新排版: Figure 提取失败，回退原始 Markdown: $e');
+        log.d('[DocExtract] 重新排版: 保留已有产物: $e');
+        rethrow;
       }
     }
 
@@ -299,7 +346,28 @@ class DocExtractService {
       title: title,
     );
 
-    await File(mdPath).writeAsString(processedMarkdown, flush: true);
+    try {
+      await ExtractionArtifacts.publish(pdfPath, source, {
+        DocPaths.rawMd(pdfPath): rawMarkdown,
+        DocPaths.json(pdfPath): ?jsonContent,
+        DocPaths.figuresManifest(pdfPath): FigureExtractService.encodeManifest(
+          _visibleInMarkdown(figures?.entries ?? const [], processedMarkdown),
+          pdfPath,
+        ),
+        mdPath: processedMarkdown,
+      });
+    } catch (_) {
+      if (figures != null) {
+        await Directory(figures.outputDir).delete(recursive: true);
+      }
+      rethrow;
+    }
+    if (figures != null) {
+      await pruneFigureGenerations(DocPaths.figuresDir(pdfPath), [
+        ...figures.entries.map((e) => e.imagePath),
+        ...previous.map((e) => e.imagePath),
+      ]);
+    }
     return (mdPath, processedMarkdown);
   }
 
@@ -342,7 +410,16 @@ class DocExtractService {
       title: title,
     );
 
-    await File(mdPath).writeAsString(processedMarkdown, flush: true);
+    final source = await ExtractionArtifacts.activeSource(pdfPath);
+    await ExtractionArtifacts.publish(pdfPath, source, {
+      DocPaths.figuresManifest(pdfPath): FigureExtractService.encodeManifest(
+        _visibleInMarkdown(figures, processedMarkdown),
+        pdfPath,
+        source: source.artifactKey,
+        diagnostics: {'source': 'ai_fix'},
+      ),
+      mdPath: processedMarkdown,
+    });
     return (mdPath, processedMarkdown);
   }
 
@@ -420,24 +497,57 @@ class DocExtractService {
     required String mdDir,
   }) {
     final structure = DocumentStructure.parse(jsonContent);
-
-    final pageFigs = <int, List<FigureManifestEntry>>{};
-    for (final fig in figures) {
-      pageFigs.putIfAbsent(fig.pageIndex, () => []).add(fig);
-    }
-
-    final mdPages = <String>[];
+    final displayed = FigureManifestEntry.forDisplay(figures);
+    final pages = <int, String>{};
+    final emitted = <FigureManifestEntry>[];
     for (final page in structure.pages) {
-      var mdText = page.markdown;
-
-      final figs = pageFigs[page.pageIndex];
-      if (figs != null) {
-        mdText = _replaceInPageMd(mdText, figs, page.blocks, mdDir);
-      }
-      mdPages.add(mdText);
+      final local = displayed
+          .where((f) => f.pageIndex == page.pageIndex)
+          .toList();
+      final md = _replaceInPageMd(page.markdown, local, page.blocks, mdDir);
+      pages[page.pageIndex] = md;
+      emitted.addAll(
+        local.where((f) => md.contains('](${Uri.file(f.imagePath)})')),
+      );
     }
+    for (final page in structure.pages) {
+      var md = pages[page.pageIndex]!;
+      final refs = emitted
+          .where((f) => f.pageIndex != page.pageIndex)
+          .expand((f) => f.captionRefs)
+          .where((r) => r.pageIndex == page.pageIndex);
+      for (final ref in refs) {
+        final block = page.blocks
+            .where((b) => b.blockId == ref.blockId)
+            .firstOrNull;
+        md = removeExactCaption(md, block?.blockContent ?? ref.text);
+      }
+      // 只有已确认图会写入 fig: 标签，原始图片不再作为匿名资源回填。
+      md = md.replaceAll(RegExp(r'!\[(?!fig:)[^\]]*\]\([^)]+\)'), '');
+      md = md.replaceAll(RegExp(r'<img\b[^>]*>', caseSensitive: false), '');
+      pages[page.pageIndex] = md;
+    }
+    return structure.pages.map((p) => pages[p.pageIndex]!).join('\n\n');
+  }
 
-    return mdPages.join('\n\n');
+  static String removeExactCaption(String markdown, String text) {
+    final target = _normalizeInlineText(text);
+    if (target.isEmpty) return markdown;
+    final lines = markdown.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var probe = '';
+      for (var j = i; j < lines.length; j++) {
+        final line = _normalizeInlineText(lines[j]);
+        if (line.startsWith('![') || line.startsWith('<!--')) break;
+        probe = _normalizeInlineText('$probe $line');
+        if (probe == target) {
+          lines.removeRange(i, j + 1);
+          return lines.join('\n');
+        }
+        if (!target.startsWith(probe)) break;
+      }
+    }
+    return markdown;
   }
 
   /// 在单页 raw markdown 中替换 figure 区域为本地图片引用。
@@ -464,6 +574,8 @@ class DocExtractService {
     final claimed = <int>{};
     final plans = <_FigurePlan>[];
     for (final fig in pageFigures) {
+      // Unresolved resources remain in the original Markdown.
+      if (!fig.isDisplayFigure) continue;
       final plan = _planFigureLines(lines, blockMap, fig, claimed);
       if (plan == null) {
         log.d(
@@ -544,7 +656,19 @@ class DocExtractService {
       } else if (label == 'table') {
         // 表格 HTML：block_content 常是 `<table><tr>...` 但 md 里带属性
         // `<table border=1 ...>`，前缀匹配不上。改用通用 `<table` 起始标签定位。
-        idx = _findLine(lines, '<table', skip);
+        final tables = blockMap.values
+            .where((b) => b.blockLabel == 'table')
+            .toList();
+        final starts = <int>[];
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i].contains('<table')) starts.add(i);
+        }
+        final ordinal = tables.indexOf(block);
+        if (starts.length == tables.length &&
+            ordinal >= 0 &&
+            !skip.contains(starts[ordinal])) {
+          idx = starts[ordinal];
+        }
       } else if (content.isNotEmpty) {
         // figure_title / vision_footnote / 内容像 caption 的 text 等,
         // 按内容前缀搜索。
@@ -599,7 +723,7 @@ class DocExtractService {
     // 匿名 / 空 caption 仍吃掉 raw 图行（避免封面留在正文），但不插入图片标签。
     // 与 Outline / 查看器共用 [FigureManifestEntry.isDisplayFigure]。
     final imgTag = fig.isDisplayFigure
-        ? '\n![fig:${_normalizeInlineText(fig.captionText)}](${Uri.file(fig.imagePath)})\n'
+        ? '\n${fig.markdownAnchor}\n\n![fig:${_normalizeInlineText(fig.captionText)}](${Uri.file(fig.imagePath)})\n'
         : '';
     return _FigurePlan(ownedLines: owned, anchorLine: anchor, imgTag: imgTag);
   }
@@ -679,17 +803,35 @@ class DocExtractService {
     if (captionLead == null) return;
 
     final anchors = <int>[];
-    for (var i = 0; i < lines.length; i++) {
+    final neighboring = Set<int>.from(owned);
+    for (final index in owned) {
+      for (final direction in const [-1, 1]) {
+        var i = index + direction;
+        while (i >= 0 && i < lines.length && lines[i].trim().isEmpty) {
+          i += direction;
+        }
+        if (i >= 0 && i < lines.length) neighboring.add(i);
+      }
+    }
+    for (final i in neighboring) {
       if (claimed.contains(i) && !owned.contains(i)) continue;
       final text = _lineSearchText(lines[i]);
       if (!text.toLowerCase().startsWith(captionLead.toLowerCase())) continue;
+      if (!_normalizeInlineText(captionText).contains(text)) continue;
       owned.add(i);
       skip.add(i);
       anchors.add(i);
     }
 
     for (final anchor in anchors) {
-      _claimFollowingCaptionNotes(lines, anchor, owned, skip, claimed);
+      _claimFollowingCaptionNotes(
+        lines,
+        anchor,
+        owned,
+        skip,
+        claimed,
+        captionText,
+      );
     }
   }
 
@@ -705,6 +847,7 @@ class DocExtractService {
     Set<int> owned,
     Set<int> skip,
     Set<int> claimed,
+    String captionText,
   ) {
     for (var i = anchor + 1; i < lines.length; i++) {
       if (claimed.contains(i) && !owned.contains(i)) break;
@@ -715,6 +858,7 @@ class DocExtractService {
         continue;
       }
       if (!_captionNoteLeadRe.hasMatch(text)) break;
+      if (!_normalizeInlineText(captionText).contains(text)) break;
       owned.add(i);
       skip.add(i);
     }
@@ -762,7 +906,7 @@ class DocExtractService {
 
   /// 清理 + 预处理管线（saveResult / reprocessMarkdown / applyFigureManifest 共用）。
   ///
-  /// 顺序固定：[_stripApiImageTags] → [_convertCenteredDivs] →
+  /// 顺序固定：移除未匹配图片 → [_convertCenteredDivs] →
   /// [MarkdownPreprocessor.process] → [MarkdownPreprocessor.filterBeforeTitle] →
   /// [_normalizeSectionHeadingLevels]（仅 [jsonContent] 非空时）。
   /// 改顺序即改三处渲染结果，禁止调整。
@@ -771,8 +915,8 @@ class DocExtractService {
     String? jsonContent,
     String? title,
   }) {
-    var md = markdown;
-    md = _stripApiImageTags(md);
+    var md = markdown.replaceAll(RegExp(r'!\[(?!fig:)[^\]]*\]\([^)]+\)'), '');
+    md = md.replaceAll(RegExp(r'<img\b[^>]*>', caseSensitive: false), '');
     md = _convertCenteredDivs(md);
     md = MarkdownPreprocessor.process(md);
     md = MarkdownPreprocessor.filterBeforeTitle(md, title);
@@ -829,33 +973,15 @@ class DocExtractService {
     return stripped != text && titles.contains(stripped);
   }
 
-  /// 移除 API 生成的 HTML 图片标签（figure 已替换为 `![]()`，其余无本地文件）
-  static String _stripApiImageTags(String markdown) {
-    var result = markdown;
-    // <div><img src="relative_path"></div>
-    result = result.replaceAllMapped(
-      RegExp(r'<div[^>]*>\s*<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>\s*</div>'),
-      (match) {
-        final src = match.group(1)!;
-        if (src.startsWith('http') || src.startsWith('file:///')) {
-          return match.group(0)!;
-        }
-        return '';
-      },
-    );
-    // 独立 <img> 标签
-    result = result.replaceAllMapped(
-      RegExp(r'<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>'),
-      (match) {
-        final src = match.group(1)!;
-        if (src.startsWith('http') || src.startsWith('file:///')) {
-          return match.group(0)!;
-        }
-        return '';
-      },
-    );
-    return result;
-  }
+  static List<FigureManifestEntry> _visibleInMarkdown(
+    List<FigureManifestEntry> entries,
+    String markdown,
+  ) => [
+    for (final entry in entries)
+      if (entry.isDisplayFigure &&
+          (entry.id == null || markdown.contains(entry.markdownAnchor)))
+        entry,
+  ];
 
   static final _figureSubLabelRe = RegExp(
     r'^\(?[a-zA-Z](?:\s*,\s*[a-zA-Z])*\)?$',
@@ -867,8 +993,8 @@ class DocExtractService {
       RegExp(r'<div\s+style="text-align:\s*center;\s*">\s*(.+?)\s*</div>'),
       (match) {
         final content = match.group(1)!;
-        if (content.contains('<img')) return '';
-        if (_figureSubLabelRe.hasMatch(content.trim())) return '';
+        if (content.contains('<img')) return content;
+        if (_figureSubLabelRe.hasMatch(content.trim())) return content;
         return '*$content*';
       },
     );

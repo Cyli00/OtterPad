@@ -143,8 +143,7 @@ void main() {
     expect(segments, isEmpty);
   });
 
-  test('auto/general: 无 caption 的合格 image 保留为 visualOnly', () {
-    // 非论文 Failure surface：手册/无编号插图不能因缺 Figure N 被整页丢弃。
+  test('auto/general: 无 caption 的图片丢弃', () {
     final service = FigureExtractService.instance;
     final pages = [
       [
@@ -159,14 +158,10 @@ void main() {
     ];
 
     final segments = service.findFigures(pages, markdowns: ['']);
-    expect(segments.length, 1);
-    expect(segments.single.pairMethod, PairMethod.visualOnly);
-    expect(segments.single.captionName, isEmpty);
-    expect(segments.single.captionSource, CaptionSource.none);
-    expect(segments.single.blocks.any((b) => b.blockId == '1'), isTrue);
+    expect(segments, isEmpty);
   });
 
-  test('auto: table caption 不计入 figure caption 密度', () {
+  test('有题注表格保留，无题注图片丢弃', () {
     final service = FigureExtractService.instance;
     final pages = [
       [
@@ -204,7 +199,8 @@ void main() {
         .where((segment) => segment.pairMethod == PairMethod.visualOnly)
         .toList();
 
-    expect(anonymous.length, 3);
+    expect(anonymous, isEmpty);
+    expect(segments, hasLength(2));
   });
 
   test('auto: visual 密度按 cluster 而不是原始 block 计数', () {
@@ -1221,7 +1217,7 @@ void main() {
 
   // ─── Pass 4: ordinal matching ──────────────────────────
 
-  group('Pass 4 ordinal matching (预印本 Figure Legends 布局)', () {
+  group('分离图注不再按数量和顺序强配', () {
     test('标准分离布局——3 caption 集中 + 3 image 分散', () {
       final service = FigureExtractService.instance;
       // Page 0: 正文
@@ -1267,19 +1263,13 @@ void main() {
         ],
       ]);
 
-      expect(segments.length, 3);
-      expect(segments[0].captionName, 'Figure_1');
-      expect(segments[0].pairMethod, PairMethod.ordinalMatch);
-      expect(segments[0].blocks.any((b) => b.blockId == 'i1'), isTrue);
-      expect(segments[1].captionName, 'Figure_2');
-      expect(segments[1].pairMethod, PairMethod.ordinalMatch);
-      expect(segments[1].blocks.any((b) => b.blockId == 'i2'), isTrue);
-      expect(segments[2].captionName, 'Figure_3');
-      expect(segments[2].pairMethod, PairMethod.ordinalMatch);
-      expect(segments[2].blocks.any((b) => b.blockId == 'i3'), isTrue);
+      expect(
+        segments.where((s) => s.pairMethod != PairMethod.visualOnly),
+        isEmpty,
+      );
     });
 
-    test('数量差 1 容忍——3 caption + 2 cluster = 配对 2 个', () {
+    test('数量差 1 也保留未决——不按序强配', () {
       final service = FigureExtractService.instance;
       final segments = service.findFigures([
         // page 0: Figure Legends
@@ -1307,11 +1297,10 @@ void main() {
         ],
       ]);
 
-      expect(segments.length, 2);
-      expect(segments[0].captionName, 'Figure_1');
-      expect(segments[0].pairMethod, PairMethod.ordinalMatch);
-      expect(segments[1].captionName, 'Figure_2');
-      expect(segments[1].pairMethod, PairMethod.ordinalMatch);
+      expect(
+        segments.where((s) => s.pairMethod != PairMethod.visualOnly),
+        isEmpty,
+      );
     });
 
     test('数量差 >1 的安全守卫——4 caption + 2 cluster = 不触发', () {
@@ -1369,11 +1358,10 @@ void main() {
         ],
       ]);
 
-      expect(segments.length, 2);
-      expect(segments[0].captionName, 'Figure_1');
-      expect(segments[0].pairMethod, PairMethod.ordinalMatch);
-      expect(segments[1].captionName, 'Figure_2');
-      expect(segments[1].pairMethod, PairMethod.ordinalMatch);
+      expect(
+        segments.where((s) => s.pairMethod != PairMethod.visualOnly),
+        isEmpty,
+      );
     });
 
     test('非分离布局不触发——caption 与 cluster 同页有交集', () {
@@ -1444,14 +1432,9 @@ void main() {
         ],
       ]);
 
-      expect(segments.length, 3);
-      expect(segments[0].captionName, 'Figure_1');
-      expect(segments[1].captionName, 'Figure_2');
-      // Supplementary 排在最后
-      expect(segments[2].captionText, startsWith('Supplementary Figure S1'));
       expect(
-        segments.every((s) => s.pairMethod == PairMethod.ordinalMatch),
-        isTrue,
+        segments.where((s) => s.pairMethod != PairMethod.visualOnly),
+        isEmpty,
       );
     });
   });

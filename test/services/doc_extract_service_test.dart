@@ -160,7 +160,7 @@ void main() {
     expect(result, contains('GRIN lenses suffer primarily'));
   });
 
-  test('replaceFigureRegions 匿名 entry 删除原图且不插入正文图片', () {
+  test('replaceFigureRegions 匿名 entry 丢弃图片并保留相邻正文', () {
     final jsonContent = jsonEncode([
       {
         'markdown': {
@@ -203,7 +203,7 @@ void main() {
     expect(result, contains('Another body paragraph that must remain.'));
   });
 
-  test('replaceFigureRegions 同页：展示 figure 插入、匿名 figure 删除', () {
+  test('replaceFigureRegions 同页：展示 figure 插入、匿名 figure 丢弃', () {
     final jsonContent = jsonEncode([
       {
         'markdown': {

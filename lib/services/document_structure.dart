@@ -33,6 +33,11 @@ class LayoutBlock {
   /// PaddleOCR 推断的阅读顺序（页内），null 表示未提供。
   final int? blockOrder;
 
+  /// Explicit provider hierarchy; unlike groupId, this is a body/caption owner.
+  final String? parentId;
+  final String? sourceImage;
+  final String? captionKind;
+
   LayoutBlock({
     required this.blockId,
     required this.blockLabel,
@@ -42,11 +47,17 @@ class LayoutBlock {
     this.groupId,
     this.globalGroupId,
     this.blockOrder,
+    this.parentId,
+    this.sourceImage,
+    this.captionKind,
   }) : rawBbox = rawBbox ?? blockBbox;
 
   factory LayoutBlock.fromJson(Map<String, dynamic> json) {
-    final rawBbox =
-        (json['block_bbox'] as List<dynamic>? ?? const []).whereType<num>();
+    final box = json['block_bbox'];
+    final rawBbox = box is List && box.length == 4 &&
+        box.every((v) => v is num && v.isFinite) &&
+        (box[2] as num) > (box[0] as num) && (box[3] as num) > (box[1] as num)
+        ? box.cast<num>() : const <num>[];
     return LayoutBlock(
       blockId: json['block_id']?.toString() ?? '',
       blockLabel: json['block_label'] as String? ?? '',
@@ -56,8 +67,24 @@ class LayoutBlock {
       groupId: json['group_id'] as int?,
       globalGroupId: json['global_group_id'] as int?,
       blockOrder: json['block_order'] as int?,
+      parentId: json['parent_id'] as String?,
+      sourceImage: json['source_image'] as String?,
+      captionKind: json['caption_kind'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'block_id': blockId,
+    'block_label': blockLabel,
+    'block_bbox': rawBbox,
+    'block_content': blockContent,
+    if (groupId != null) 'group_id': groupId,
+    if (globalGroupId != null) 'global_group_id': globalGroupId,
+    if (blockOrder != null) 'block_order': blockOrder,
+    if (parentId != null) 'parent_id': parentId,
+    if (sourceImage != null) 'source_image': sourceImage,
+    if (captionKind != null) 'caption_kind': captionKind,
+  };
 }
 
 /// 结构模型中的一页：页号 + 块列表 + 该页的 raw markdown。
@@ -66,10 +93,16 @@ class StructurePage {
   final List<LayoutBlock> blocks;
   final String markdown;
 
+  /// Width and height in the same 144 DPI space as blockBbox.
+  final List<double>? pageSize;
+  final Map<String, String> images;
+
   const StructurePage({
     required this.pageIndex,
     required this.blocks,
     required this.markdown,
+    this.pageSize,
+    this.images = const {},
   });
 }
 
@@ -89,6 +122,9 @@ class DocumentStructure {
       final decoded = jsonDecode(jsonContent);
       final List<dynamic> rawPages;
       if (decoded is Map<String, dynamic>) {
+        if (decoded['pdf_info'] is List) {
+          return fromMinerULayout(decoded);
+        }
         rawPages = decoded['layoutParsingResults'] as List<dynamic>? ?? [];
       } else if (decoded is List<dynamic>) {
         rawPages = decoded;
@@ -102,6 +138,207 @@ class DocumentStructure {
     } catch (_) {
       return empty;
     }
+  }
+
+  /// MinerU layout.json / middle.json: page points and nested body/caption
+  /// blocks. Preserve explicit ownership instead of synthesizing caption boxes.
+  static DocumentStructure fromMinerULayout(Map<String, dynamic> layout) {
+    final pages = <StructurePage>[];
+    for (final raw in (layout['pdf_info'] as List? ?? const [])) {
+      if (raw is! Map<String, dynamic>) continue;
+      final pi = (raw['page_idx'] as num?)?.toInt() ?? pages.length;
+      final size = _bboxValues(raw['page_size'], 2);
+      final blocks = <LayoutBlock>[];
+      var order = 0;
+      void append(Map<String, dynamic> block, String? parent, String? kind) {
+        final type = block['type'] as String? ?? '';
+        final box = _bboxValues(block['bbox'], 4);
+        final text = <String>[];
+        String? source;
+        for (final line in (block['lines'] as List? ?? const [])) {
+          if (line is! Map) continue;
+          final parts = <String>[];
+          for (final span in (line['spans'] as List? ?? const [])) {
+            if (span is! Map) continue;
+            final value = span['content'];
+            if (value is String && value.isNotEmpty) parts.add(value);
+            final html = span['html'];
+            if (html is String && html.isNotEmpty) parts.add(html);
+            source ??= span['image_path'] as String?;
+          }
+          if (parts.isNotEmpty) text.add(parts.join(' '));
+        }
+        final label = switch (type) {
+          'image_body' => 'image',
+          'chart_body' => 'chart',
+          'table_body' => 'table',
+          'image_caption' ||
+          'chart_caption' ||
+          'table_caption' => 'figure_title',
+          'image_footnote' ||
+          'chart_footnote' ||
+          'table_footnote' => 'vision_footnote',
+          'title' =>
+            pi == 0 && blocks.isEmpty ? 'doc_title' : 'paragraph_title',
+          _ => type,
+        };
+        blocks.add(
+          LayoutBlock(
+            blockId: 'mu_p${pi}_b${order++}',
+            blockLabel: label,
+            blockBbox: size == null || box == null
+                ? const []
+                : [for (final v in box) v * 2],
+            blockContent: text.join(' '),
+            parentId: parent,
+            sourceImage: source,
+            captionKind: label == 'figure_title' ? kind : null,
+            blockOrder: order,
+          ),
+        );
+      }
+
+      for (final block in (raw['para_blocks'] as List? ?? const [])) {
+        if (block is! Map<String, dynamic>) continue;
+        final children = block['blocks'];
+        if (children is List && children.isNotEmpty) {
+          final parent = 'mu_p${pi}_owner$order';
+          final kind = block['type'] == 'table'
+              ? 'table'
+              : block['type'] == 'chart'
+              ? 'chart'
+              : 'figure';
+          for (final child in children.whereType<Map<String, dynamic>>()) {
+            append(child, parent, kind);
+          }
+        } else {
+          append(block, null, null);
+        }
+      }
+      pages.add(
+        StructurePage(
+          pageIndex: pi,
+          blocks: blocks,
+          markdown: '',
+          pageSize: size == null ? null : [for (final v in size) v * 2],
+        ),
+      );
+    }
+    return DocumentStructure(pages);
+  }
+
+  Map<String, dynamic> toJson({String? source}) => {
+    '_source': ?source,
+    'structure_version': 2,
+    'layoutParsingResults': [
+      for (final page in pages)
+        {
+          'page_index': page.pageIndex,
+          if (page.pageSize != null) 'page_size': page.pageSize,
+          'prunedResult': {
+            'parsing_res_list': [for (final b in page.blocks) b.toJson()],
+          },
+          'markdown': {'text': page.markdown, 'images': page.images},
+        },
+    ],
+  };
+
+  /// v2 lacks separate caption boxes. Keep ownership but never invent one.
+  /// [pageSizes] are PDF points; absent sizes disable geometric inference.
+  static DocumentStructure fromMinerUV2(
+    List<dynamic> rawPages, {
+    List<List<double>> pageSizes = const [],
+  }) {
+    final pages = <StructurePage>[];
+    String text(Object? items) => items is List
+        ? items
+              .whereType<Map>()
+              .map((v) => v['content'])
+              .whereType<String>()
+              .join(' ')
+        : '';
+    for (var pi = 0; pi < rawPages.length; pi++) {
+      final size = pi < pageSizes.length ? pageSizes[pi] : null;
+      final blocks = <LayoutBlock>[];
+      var order = 0;
+      for (final raw in (rawPages[pi] as List).whereType<Map>()) {
+        final type = raw['type'] as String? ?? '';
+        final content = raw['content'] as Map? ?? const {};
+        final visual = const ['image', 'table', 'chart'].contains(type);
+        final parent = 'mu_p${pi}_v${order++}';
+        final bbox = _bboxValues(raw['bbox'], 4);
+        final converted = size == null || bbox == null
+            ? <double>[]
+            : [
+                bbox[0] * size[0] / 500,
+                bbox[1] * size[1] / 500,
+                bbox[2] * size[0] / 500,
+                bbox[3] * size[1] / 500,
+              ];
+        final kind = type == 'image' ? 'figure' : type;
+        final source = (content['image_source'] as Map?)?['path'] as String?;
+        blocks.add(
+          LayoutBlock(
+            blockId: parent,
+            blockLabel: visual
+                ? type
+                : type == 'title'
+                ? (pi == 0 && content['level'] == 1
+                      ? 'doc_title'
+                      : 'paragraph_title')
+                : type == 'paragraph' || type == 'list'
+                ? 'text'
+                : type,
+            blockBbox: converted,
+            parentId: visual ? parent : null,
+            sourceImage: source,
+            blockOrder: blocks.length,
+            blockContent: type == 'table'
+                ? content['html'] as String? ?? ''
+                : text(content['${type}_content']),
+          ),
+        );
+        if (visual) {
+          final caption = text(content['${type}_caption']);
+          if (caption.trim().isNotEmpty) {
+            blocks.add(
+              LayoutBlock(
+                blockId: '${parent}_cap',
+                blockLabel: 'figure_title',
+                blockBbox: const [],
+                blockContent: caption,
+                parentId: parent,
+                captionKind: kind,
+                blockOrder: blocks.length,
+              ),
+            );
+          }
+        }
+      }
+      pages.add(
+        StructurePage(
+          pageIndex: pi,
+          blocks: blocks,
+          markdown: '',
+          pageSize: size == null ? null : [size[0] * 2, size[1] * 2],
+        ),
+      );
+    }
+    return DocumentStructure(pages);
+  }
+
+  static List<double>? _bboxValues(Object? raw, int length) {
+    if (raw is! List ||
+        raw.length != length ||
+        raw.any((v) => v is! num || !v.isFinite)) {
+      return null;
+    }
+    final values = [for (final v in raw) (v as num).toDouble()];
+    if (length == 2 && values.any((v) => v <= 0)) return null;
+    if (length == 4 && (values[2] <= values[0] || values[3] <= values[1])) {
+      return null;
+    }
+    return values;
   }
 
   /// 从磁盘读取并解析；文件不存在或损坏返回 [empty]。
@@ -118,17 +355,21 @@ class DocumentStructure {
   static StructurePage _parsePage(Map<String, dynamic> page, int index) {
     final blockList =
         ((page['prunedResult'] as Map<String, dynamic>?)?['parsing_res_list']
-                as List<dynamic>?) ??
-            const [];
+            as List<dynamic>?) ??
+        const [];
     return StructurePage(
       pageIndex: (page['page_index'] as int?) ?? index,
+      pageSize: _bboxValues(page['page_size'], 2),
+      images: ((page['markdown'] as Map?)?['images'] as Map? ?? const {}).map(
+        (key, value) => MapEntry(key.toString(), value.toString()),
+      ),
       blocks: [
         for (final b in blockList)
           LayoutBlock.fromJson(b as Map<String, dynamic>),
       ],
       markdown:
           ((page['markdown'] as Map<String, dynamic>?)?['text'] as String?) ??
-              '',
+          '',
     );
   }
 }

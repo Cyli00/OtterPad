@@ -317,15 +317,6 @@ class FigureFixService {
       return c != 0 ? c : 0; // 同页保留插入顺序（Dart sort 不稳定，但此处够用）
     });
 
-    final manifestPath = DocPaths.figuresManifest(analysis.pdfPath);
-    await File(manifestPath).writeAsString(
-      const JsonEncoder.withIndent('  ').convert({
-        'figures': [for (final e in combined) e.toJson()],
-        'diagnostics': {'source': 'ai_fix'},
-      }),
-      flush: true,
-    );
-
     final (mdPath, content) = await DocExtractService.instance
         .applyFigureManifest(
           pdfPath: analysis.pdfPath,

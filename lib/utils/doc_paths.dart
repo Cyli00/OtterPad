@@ -25,14 +25,21 @@ class DocPaths {
 
   static String pdf(String documentId) => p.join(docDir(documentId), pdfName);
 
-  static String rawMd(String documentIdOrPdfPath) =>
-      p.join(docDir(documentIdOrPdfPath), 'extract.raw.md');
+  static String rawMd(String documentIdOrPdfPath, {String? source}) => p.join(
+    docDir(documentIdOrPdfPath),
+    source == null ? 'extract.raw.md' : 'extract.$source.raw.md',
+  );
 
   static String md(String documentIdOrPdfPath) =>
       p.join(docDir(documentIdOrPdfPath), 'extract.md');
 
-  static String json(String documentIdOrPdfPath) =>
-      p.join(docDir(documentIdOrPdfPath), 'extract.json');
+  static String json(String documentIdOrPdfPath, {String? source}) => p.join(
+    docDir(documentIdOrPdfPath),
+    source == null ? 'extract.json' : 'extract.$source.json',
+  );
+
+  static String mineruExports(String documentIdOrPdfPath) =>
+      p.join(docDir(documentIdOrPdfPath), 'mineru.exports.zip');
 
   static String translations(String documentIdOrPdfPath) =>
       p.join(docDir(documentIdOrPdfPath), 'translations.json');
@@ -40,8 +47,11 @@ class DocPaths {
   static String figuresDir(String documentIdOrPdfPath) =>
       p.join(docDir(documentIdOrPdfPath), 'figures');
 
-  static String figuresManifest(String documentIdOrPdfPath) =>
-      p.join(figuresDir(documentIdOrPdfPath), 'figures.json');
+  static String figuresManifest(String documentIdOrPdfPath, {String? source}) =>
+      p.join(
+        figuresDir(documentIdOrPdfPath),
+        source == null ? 'figures.json' : 'figures.$source.json',
+      );
 
   static String chatsDir(String documentIdOrPdfPath) =>
       p.join(docDir(documentIdOrPdfPath), 'chats');
