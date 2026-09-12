@@ -15,7 +15,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get home => '首页';
 
   @override
-  String get library => '文献库';
+  String get library => '库';
 
   @override
   String get outline => '大纲';
@@ -2888,7 +2888,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get home => '首頁';
 
   @override
-  String get library => '文獻庫';
+  String get library => '庫';
 
   @override
   String get outline => '大綱';
