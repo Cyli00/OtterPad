@@ -1,4 +1,8 @@
 {
+  "sharedFilesImportFailed": "Could not import the shared files. Please try again from the library.",
+  "sharedFilesSkipped": "Some shared files were skipped because they are not readable PDF files.",
+  "readerTranslationIncomplete": "{count} paragraphs remain untranslated. Retry to continue.",
+  "@readerTranslationIncomplete": {"placeholders": {"count": {"type": "int"}}},
   "@@locale": "en",
 
   "appTitle": "OtterPad",
@@ -1075,5 +1079,106 @@
   "exportCitationsBibtex": "Citations as BibTeX",
   "exportNoNotes": "No highlights or notes yet.",
   "exportNoDocuments": "The selected documents no longer exist.",
-  "documentExportSaved": "Export saved"
+  "documentExportSaved": "Export saved",
+  "zoteroLocalTitle": "Local Zotero",
+  "zoteroLocalEntryHint": "Import metadata and PDFs from Zotero on this computer",
+  "zoteroLocalHint": "Open Zotero and enable communication with other applications in Advanced settings. Read your personal library, copy missing PDFs, and keep existing PDFs and your edits. For multiple attachments, choose a PDF below.",
+  "zoteroLocalPort": "Connection port",
+  "zoteroLocalConnect": "Read library",
+  "zoteroLocalInvalidPort": "Enter a port between 1 and 65535.",
+  "zoteroLocalDirectory": "Choose Zotero data folder",
+  "zoteroLocalDirectorySelected": "Change Zotero data folder",
+  "zoteroLocalDirectoryHint": "This Zotero version needs a data folder to identify the library. Choose the folder containing zotero.sqlite; choose again if you switch libraries.",
+  "zoteroLocalLoading": "Reading {fetched} / {total} items",
+  "@zoteroLocalLoading": {
+    "placeholders": {
+      "fetched": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "zoteroLocalSelection": "Selected {selected} of {total} documents",
+  "@zoteroLocalSelection": {
+    "placeholders": {
+      "selected": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "zoteroLocalEmpty": "No importable documents in the personal library.",
+  "zoteroLocalMetadataOnly": "Metadata only",
+  "zoteroLocalChoosePdf": "Choose PDF",
+  "zoteroLocalNoPdf": "No PDF attachment; metadata will still be imported.",
+  "zoteroLocalImport": "Import / update selected",
+  "zoteroLocalUnavailable": "Cannot connect to Zotero. Open Zotero and check the port.",
+  "zoteroLocalDisabled": "In Zotero Advanced settings, allow other applications on this computer to communicate with Zotero.",
+  "zoteroLocalIncompatible": "This Zotero client does not support the required local interface. Update Zotero and try again.",
+  "zoteroLocalChanged": "The Zotero library changed while reading. Read the library again before importing.",
+  "zoteroLocalInvalidResponse": "Zotero returned an incomplete or unrecognized response. Read the library again.",
+  "zoteroLocalInvalidFile": "The attachment is not a local PDF file.",
+  "zoteroLocalFailed": "Local Zotero import failed. Check the connection and folder access, then try again.",
+  "zoteroLocalStopped": "Import did not finish. Completed documents are kept; you can retry.",
+  "zoteroLocalResult": "Documents: {added} added, {updated} updated. PDFs: {copied} copied, {missing} unavailable locally, {kept} kept. {failed} documents failed.",
+  "@zoteroLocalResult": {
+    "placeholders": {
+      "added": {
+        "type": "int"
+      },
+      "updated": {
+        "type": "int"
+      },
+      "copied": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      },
+      "kept": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "readerFontSerif": "Serif",
+  "readerFontSans": "Sans serif",
+  "readerWidthFluid": "Fit window",
+  "readerHorizontalMargin": "Horizontal margin",
+  "readerVerticalMargin": "Vertical margin",
+  "readerReadingProgress": "Reading progress",
+  "readerTextAppearance": "Text & background",
+  "readerPageLayout": "Page layout",
+  "readerReadingOptions": "Reading options",
+  "readerFontSizeHint": "Adjust the text size in the flowing reader.",
+  "readerMarginHint": "Adjust the reading area margins. Shared between PDF and flowing views.",
+  "readerAutoLayoutHint": "Read with continuous scrolling. On wide screens, bilingual text pairs paragraphs side by side; bilingual PDFs pair the same page. Layout adapts in narrow windows.",
+  "readerContinuousReading": "Continuous reading",
+  "readerContinuousReadingHint": "Continuous vertical reading. Bilingual paragraphs switch between side-by-side and stacked layouts as the window changes.",
+  "restoreModeOverwrite": "Overwrite",
+  "restoreModeOverwriteDescription": "Replace local data with the backup",
+  "restoreModeMerge": "Merge",
+  "restoreModeMergeDescription": "Keep local data and add missing content from the backup",
+  "restoreScopeFull": "Full restore",
+  "restoreScopeFullDescription": "Restore the library and settings",
+  "restoreScopeLibrary": "Library only",
+  "restoreScopeLibraryDescription": "Restore documents, collections, annotations and document files",
+  "restoreScopeSettings": "Settings only",
+  "restoreScopeSettingsDescription": "Restore application settings",
+  "historyToday": "Today",
+  "historyYesterday": "Yesterday",
+  "historyThisWeek": "This week",
+  "historyThisMonth": "This month",
+  "historyMonth": "{month}",
+  "libraryName": "OtterPad library",
+  "rebuildScanningFiles": "Scanning PDF files…",
+  "rebuildCheckingFiles": "Checking file integrity…",
+  "rebuildExtractingMetadata": "Extracting PDF metadata…",
+  "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } }
 }

@@ -9,6 +9,19 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get sharedFilesImportFailed =>
+      'Could not import the shared files. Please try again from the library.';
+
+  @override
+  String get sharedFilesSkipped =>
+      'Some shared files were skipped because they are not readable PDF files.';
+
+  @override
+  String readerTranslationIncomplete(int count) {
+    return '$count paragraphs remain untranslated. Retry to continue.';
+  }
+
+  @override
   String get appTitle => 'OtterPad';
 
   @override
@@ -2971,4 +2984,216 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get documentExportSaved => 'Export saved';
+
+  @override
+  String get zoteroLocalTitle => 'Local Zotero';
+
+  @override
+  String get zoteroLocalEntryHint =>
+      'Import metadata and PDFs from Zotero on this computer';
+
+  @override
+  String get zoteroLocalHint =>
+      'Open Zotero and enable communication with other applications in Advanced settings. Read your personal library, copy missing PDFs, and keep existing PDFs and your edits. For multiple attachments, choose a PDF below.';
+
+  @override
+  String get zoteroLocalPort => 'Connection port';
+
+  @override
+  String get zoteroLocalConnect => 'Read library';
+
+  @override
+  String get zoteroLocalInvalidPort => 'Enter a port between 1 and 65535.';
+
+  @override
+  String get zoteroLocalDirectory => 'Choose Zotero data folder';
+
+  @override
+  String get zoteroLocalDirectorySelected => 'Change Zotero data folder';
+
+  @override
+  String get zoteroLocalDirectoryHint =>
+      'This Zotero version needs a data folder to identify the library. Choose the folder containing zotero.sqlite; choose again if you switch libraries.';
+
+  @override
+  String zoteroLocalLoading(int fetched, int total) {
+    return 'Reading $fetched / $total items';
+  }
+
+  @override
+  String zoteroLocalSelection(int selected, int total) {
+    return 'Selected $selected of $total documents';
+  }
+
+  @override
+  String get zoteroLocalEmpty =>
+      'No importable documents in the personal library.';
+
+  @override
+  String get zoteroLocalMetadataOnly => 'Metadata only';
+
+  @override
+  String get zoteroLocalChoosePdf => 'Choose PDF';
+
+  @override
+  String get zoteroLocalNoPdf =>
+      'No PDF attachment; metadata will still be imported.';
+
+  @override
+  String get zoteroLocalImport => 'Import / update selected';
+
+  @override
+  String get zoteroLocalUnavailable =>
+      'Cannot connect to Zotero. Open Zotero and check the port.';
+
+  @override
+  String get zoteroLocalDisabled =>
+      'In Zotero Advanced settings, allow other applications on this computer to communicate with Zotero.';
+
+  @override
+  String get zoteroLocalIncompatible =>
+      'This Zotero client does not support the required local interface. Update Zotero and try again.';
+
+  @override
+  String get zoteroLocalChanged =>
+      'The Zotero library changed while reading. Read the library again before importing.';
+
+  @override
+  String get zoteroLocalInvalidResponse =>
+      'Zotero returned an incomplete or unrecognized response. Read the library again.';
+
+  @override
+  String get zoteroLocalInvalidFile =>
+      'The attachment is not a local PDF file.';
+
+  @override
+  String get zoteroLocalFailed =>
+      'Local Zotero import failed. Check the connection and folder access, then try again.';
+
+  @override
+  String get zoteroLocalStopped =>
+      'Import did not finish. Completed documents are kept; you can retry.';
+
+  @override
+  String zoteroLocalResult(
+    int added,
+    int updated,
+    int copied,
+    int missing,
+    int kept,
+    int failed,
+  ) {
+    return 'Documents: $added added, $updated updated. PDFs: $copied copied, $missing unavailable locally, $kept kept. $failed documents failed.';
+  }
+
+  @override
+  String get readerFontSerif => 'Serif';
+
+  @override
+  String get readerFontSans => 'Sans serif';
+
+  @override
+  String get readerWidthFluid => 'Fit window';
+
+  @override
+  String get readerHorizontalMargin => 'Horizontal margin';
+
+  @override
+  String get readerVerticalMargin => 'Vertical margin';
+
+  @override
+  String get readerReadingProgress => 'Reading progress';
+
+  @override
+  String get readerTextAppearance => 'Text & background';
+
+  @override
+  String get readerPageLayout => 'Page layout';
+
+  @override
+  String get readerReadingOptions => 'Reading options';
+
+  @override
+  String get readerFontSizeHint =>
+      'Adjust the text size in the flowing reader.';
+
+  @override
+  String get readerMarginHint =>
+      'Adjust the reading area margins. Shared between PDF and flowing views.';
+
+  @override
+  String get readerAutoLayoutHint =>
+      'Read with continuous scrolling. On wide screens, bilingual text pairs paragraphs side by side; bilingual PDFs pair the same page. Layout adapts in narrow windows.';
+
+  @override
+  String get readerContinuousReading => 'Continuous reading';
+
+  @override
+  String get readerContinuousReadingHint =>
+      'Continuous vertical reading. Bilingual paragraphs switch between side-by-side and stacked layouts as the window changes.';
+
+  @override
+  String get restoreModeOverwrite => 'Overwrite';
+
+  @override
+  String get restoreModeOverwriteDescription =>
+      'Replace local data with the backup';
+
+  @override
+  String get restoreModeMerge => 'Merge';
+
+  @override
+  String get restoreModeMergeDescription =>
+      'Keep local data and add missing content from the backup';
+
+  @override
+  String get restoreScopeFull => 'Full restore';
+
+  @override
+  String get restoreScopeFullDescription => 'Restore the library and settings';
+
+  @override
+  String get restoreScopeLibrary => 'Library only';
+
+  @override
+  String get restoreScopeLibraryDescription =>
+      'Restore documents, collections, annotations and document files';
+
+  @override
+  String get restoreScopeSettings => 'Settings only';
+
+  @override
+  String get restoreScopeSettingsDescription => 'Restore application settings';
+
+  @override
+  String get historyToday => 'Today';
+
+  @override
+  String get historyYesterday => 'Yesterday';
+
+  @override
+  String get historyThisWeek => 'This week';
+
+  @override
+  String get historyThisMonth => 'This month';
+
+  @override
+  String historyMonth(DateTime month) {
+    final intl.DateFormat monthDateFormat = intl.DateFormat.yMMMM(localeName);
+    final String monthString = monthDateFormat.format(month);
+
+    return '$monthString';
+  }
+
+  @override
+  String get libraryName => 'OtterPad library';
+
+  @override
+  String get rebuildScanningFiles => 'Scanning PDF files…';
+
+  @override
+  String get rebuildCheckingFiles => 'Checking file integrity…';
+
+  @override
+  String get rebuildExtractingMetadata => 'Extracting PDF metadata…';
 }

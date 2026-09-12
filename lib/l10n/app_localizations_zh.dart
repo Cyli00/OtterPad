@@ -9,6 +9,17 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get sharedFilesImportFailed => '分享文件导入失败，请从文库重新导入。';
+
+  @override
+  String get sharedFilesSkipped => '部分分享文件不是可读取的 PDF，已跳过。';
+
+  @override
+  String readerTranslationIncomplete(int count) {
+    return '还有 $count 个段落未翻译，重试可继续。';
+  }
+
+  @override
   String get appTitle => 'OtterPad';
 
   @override
@@ -2875,11 +2886,213 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get documentExportSaved => '导出文件已保存';
+
+  @override
+  String get zoteroLocalTitle => '本机 Zotero';
+
+  @override
+  String get zoteroLocalEntryHint => '从这台电脑上的 Zotero 导入题录和 PDF';
+
+  @override
+  String get zoteroLocalHint =>
+      '请打开 Zotero，并在高级设置中允许其他应用与它通信。读取个人文库，补齐缺失的 PDF，保留已有 PDF 和你手动改过的题录。多个附件时请在下方选择 PDF。';
+
+  @override
+  String get zoteroLocalPort => '连接端口';
+
+  @override
+  String get zoteroLocalConnect => '读取文库';
+
+  @override
+  String get zoteroLocalInvalidPort => '请输入 1 到 65535 之间的端口号。';
+
+  @override
+  String get zoteroLocalDirectory => '选择 Zotero 资料库文件夹';
+
+  @override
+  String get zoteroLocalDirectorySelected => '更换 Zotero 资料库文件夹';
+
+  @override
+  String get zoteroLocalDirectoryHint =>
+      '这个版本的 Zotero 需要选择资料库位置。请选择包含 zotero.sqlite 的文件夹；切换资料库后请重新选择。';
+
+  @override
+  String zoteroLocalLoading(int fetched, int total) {
+    return '正在读取 $fetched / $total 条记录';
+  }
+
+  @override
+  String zoteroLocalSelection(int selected, int total) {
+    return '已选 $selected / $total 篇文献';
+  }
+
+  @override
+  String get zoteroLocalEmpty => '个人文库中没有可导入的文献。';
+
+  @override
+  String get zoteroLocalMetadataOnly => '仅导入题录';
+
+  @override
+  String get zoteroLocalChoosePdf => '选择 PDF';
+
+  @override
+  String get zoteroLocalNoPdf => '没有 PDF 附件，仍可导入题录。';
+
+  @override
+  String get zoteroLocalImport => '导入 / 更新所选文献';
+
+  @override
+  String get zoteroLocalUnavailable => '无法连接 Zotero。请打开 Zotero，并检查端口号。';
+
+  @override
+  String get zoteroLocalDisabled =>
+      '请在 Zotero 的高级设置中允许此计算机上的其他应用程序与 Zotero 通信。';
+
+  @override
+  String get zoteroLocalIncompatible =>
+      '这个 Zotero 客户端不支持所需的本地接口。请更新 Zotero 后重试。';
+
+  @override
+  String get zoteroLocalChanged => '读取期间 Zotero 文库发生变化，请重新读取文库后再导入。';
+
+  @override
+  String get zoteroLocalInvalidResponse => 'Zotero 返回的数据不完整或无法识别，请重新读取文库。';
+
+  @override
+  String get zoteroLocalInvalidFile => '这个附件不是本机 PDF 文件。';
+
+  @override
+  String get zoteroLocalFailed => '本机 Zotero 导入失败。请检查连接和文件夹访问权限后重试。';
+
+  @override
+  String get zoteroLocalStopped => '本次导入未完成，已处理的文献会保留，可以重试。';
+
+  @override
+  String zoteroLocalResult(
+    int added,
+    int updated,
+    int copied,
+    int missing,
+    int kept,
+    int failed,
+  ) {
+    return '题录新增 $added 篇、更新 $updated 篇；PDF 补齐 $copied 份、本机未就绪 $missing 份、保留已有 $kept 份。失败 $failed 篇。';
+  }
+
+  @override
+  String get readerFontSerif => '衬线';
+
+  @override
+  String get readerFontSans => '无衬线';
+
+  @override
+  String get readerWidthFluid => '自适应';
+
+  @override
+  String get readerHorizontalMargin => '左右留白';
+
+  @override
+  String get readerVerticalMargin => '上下留白';
+
+  @override
+  String get readerReadingProgress => '阅读进度';
+
+  @override
+  String get readerTextAppearance => '文本与背景';
+
+  @override
+  String get readerPageLayout => '页面布局';
+
+  @override
+  String get readerReadingOptions => '阅读方式';
+
+  @override
+  String get readerFontSizeHint => '调整流式阅读正文的字号。';
+
+  @override
+  String get readerMarginHint => '调整阅读区域的留白，PDF 与流式查看共享此设置。';
+
+  @override
+  String get readerAutoLayoutHint =>
+      '连续上下滚动。宽屏双语按段落左原文、右译文对照，PDF 双语并排显示同一页；窄窗自动调整。';
+
+  @override
+  String get readerContinuousReading => '连续阅读';
+
+  @override
+  String get readerContinuousReadingHint => '正文连续上下滚动，双语对照随窗口宽度自动切换左右或上下布局。';
+
+  @override
+  String get restoreModeOverwrite => '覆盖恢复';
+
+  @override
+  String get restoreModeOverwriteDescription => '清除本地数据后用备份替换';
+
+  @override
+  String get restoreModeMerge => '合并恢复';
+
+  @override
+  String get restoreModeMergeDescription => '保留本地数据，仅添加备份中不存在的内容';
+
+  @override
+  String get restoreScopeFull => '完整恢复';
+
+  @override
+  String get restoreScopeFullDescription => '恢复文库与设置';
+
+  @override
+  String get restoreScopeLibrary => '仅恢复文库数据';
+
+  @override
+  String get restoreScopeLibraryDescription => '恢复文献库、收藏、标注和文档文件';
+
+  @override
+  String get restoreScopeSettings => '仅恢复设置';
+
+  @override
+  String get restoreScopeSettingsDescription => '恢复设置类数据';
+
+  @override
+  String get historyToday => '今天';
+
+  @override
+  String get historyYesterday => '昨天';
+
+  @override
+  String get historyThisWeek => '本周';
+
+  @override
+  String get historyThisMonth => '本月';
+
+  @override
+  String historyMonth(DateTime month) {
+    final intl.DateFormat monthDateFormat = intl.DateFormat.yMMMM(localeName);
+    final String monthString = monthDateFormat.format(month);
+
+    return '$monthString';
+  }
+
+  @override
+  String get libraryName => 'OtterPad 文库';
+
+  @override
+  String get rebuildScanningFiles => '正在扫描 PDF 文件…';
+
+  @override
+  String get rebuildCheckingFiles => '正在检查文件完整性…';
+
+  @override
+  String get rebuildExtractingMetadata => '正在提取 PDF 元数据…';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
 class AppLocalizationsZhHant extends AppLocalizationsZh {
   AppLocalizationsZhHant() : super('zh_Hant');
+
+  @override
+  String readerTranslationIncomplete(int count) {
+    return '還有 $count 個段落未翻譯，重試可繼續。';
+  }
 
   @override
   String get appTitle => 'OtterPad';
@@ -5748,4 +5961,200 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get documentExportSaved => '匯出檔案已儲存';
+
+  @override
+  String get zoteroLocalTitle => '本機 Zotero';
+
+  @override
+  String get zoteroLocalEntryHint => '從這台電腦上的 Zotero 匯入題錄和 PDF';
+
+  @override
+  String get zoteroLocalHint =>
+      '請開啟 Zotero，並在進階設定中允許其他應用程式與它通訊。讀取個人文庫，補齊缺失的 PDF，保留已有 PDF 和你手動改過的題錄。多個附件時請在下方選擇 PDF。';
+
+  @override
+  String get zoteroLocalPort => '連線埠';
+
+  @override
+  String get zoteroLocalConnect => '讀取文庫';
+
+  @override
+  String get zoteroLocalInvalidPort => '請輸入 1 到 65535 之間的連線埠號。';
+
+  @override
+  String get zoteroLocalDirectory => '選擇 Zotero 資料庫資料夾';
+
+  @override
+  String get zoteroLocalDirectorySelected => '更換 Zotero 資料庫資料夾';
+
+  @override
+  String get zoteroLocalDirectoryHint =>
+      '這個版本的 Zotero 需要選擇資料庫位置。請選擇包含 zotero.sqlite 的資料夾；切換資料庫後請重新選擇。';
+
+  @override
+  String zoteroLocalLoading(int fetched, int total) {
+    return '正在讀取 $fetched / $total 筆記錄';
+  }
+
+  @override
+  String zoteroLocalSelection(int selected, int total) {
+    return '已選 $selected / $total 篇文獻';
+  }
+
+  @override
+  String get zoteroLocalEmpty => '個人文庫中沒有可匯入的文獻。';
+
+  @override
+  String get zoteroLocalMetadataOnly => '僅匯入題錄';
+
+  @override
+  String get zoteroLocalChoosePdf => '選擇 PDF';
+
+  @override
+  String get zoteroLocalNoPdf => '沒有 PDF 附件，仍可匯入題錄。';
+
+  @override
+  String get zoteroLocalImport => '匯入 / 更新所選文獻';
+
+  @override
+  String get zoteroLocalUnavailable => '無法連線至 Zotero。請開啟 Zotero，並檢查連線埠號。';
+
+  @override
+  String get zoteroLocalDisabled => '請在 Zotero 的進階設定中允許此電腦上的其他應用程式與 Zotero 通訊。';
+
+  @override
+  String get zoteroLocalIncompatible =>
+      '這個 Zotero 用戶端不支援所需的本機介面。請更新 Zotero 後重試。';
+
+  @override
+  String get zoteroLocalChanged => '讀取期間 Zotero 文庫發生變化，請重新讀取文庫後再匯入。';
+
+  @override
+  String get zoteroLocalInvalidResponse => 'Zotero 傳回的資料不完整或無法辨識，請重新讀取文庫。';
+
+  @override
+  String get zoteroLocalInvalidFile => '這個附件不是本機 PDF 檔案。';
+
+  @override
+  String get zoteroLocalFailed => '本機 Zotero 匯入失敗。請檢查連線和資料夾存取權限後重試。';
+
+  @override
+  String get zoteroLocalStopped => '本次匯入未完成，已處理的文獻會保留，可以重試。';
+
+  @override
+  String zoteroLocalResult(
+    int added,
+    int updated,
+    int copied,
+    int missing,
+    int kept,
+    int failed,
+  ) {
+    return '題錄新增 $added 篇、更新 $updated 篇；PDF 補齊 $copied 份、本機未就緒 $missing 份、保留已有 $kept 份。失敗 $failed 篇。';
+  }
+
+  @override
+  String get readerFontSerif => '襯線';
+
+  @override
+  String get readerFontSans => '無襯線';
+
+  @override
+  String get readerWidthFluid => '自適應';
+
+  @override
+  String get readerHorizontalMargin => '左右留白';
+
+  @override
+  String get readerVerticalMargin => '上下留白';
+
+  @override
+  String get readerReadingProgress => '閱讀進度';
+
+  @override
+  String get readerTextAppearance => '文字與背景';
+
+  @override
+  String get readerPageLayout => '頁面配置';
+
+  @override
+  String get readerReadingOptions => '閱讀方式';
+
+  @override
+  String get readerFontSizeHint => '調整流式閱讀內文的字級。';
+
+  @override
+  String get readerMarginHint => '調整閱讀區域的留白，PDF 與流式檢視共用此設定。';
+
+  @override
+  String get readerAutoLayoutHint =>
+      '連續上下捲動。寬螢幕雙語按段落左原文、右譯文對照，PDF 雙語並排顯示同一頁；窄視窗自動調整。';
+
+  @override
+  String get readerContinuousReading => '連續閱讀';
+
+  @override
+  String get readerContinuousReadingHint => '正文連續上下捲動，雙語對照隨視窗寬度自動切換左右或上下版面。';
+
+  @override
+  String get restoreModeOverwrite => '覆寫還原';
+
+  @override
+  String get restoreModeOverwriteDescription => '清除本機資料後以備份取代';
+
+  @override
+  String get restoreModeMerge => '合併還原';
+
+  @override
+  String get restoreModeMergeDescription => '保留本機資料，僅加入備份中尚未存在的內容';
+
+  @override
+  String get restoreScopeFull => '完整還原';
+
+  @override
+  String get restoreScopeFullDescription => '還原文庫與設定';
+
+  @override
+  String get restoreScopeLibrary => '僅還原文庫資料';
+
+  @override
+  String get restoreScopeLibraryDescription => '還原文獻庫、收藏、標註與文件';
+
+  @override
+  String get restoreScopeSettings => '僅還原設定';
+
+  @override
+  String get restoreScopeSettingsDescription => '還原應用程式設定';
+
+  @override
+  String get historyToday => '今天';
+
+  @override
+  String get historyYesterday => '昨天';
+
+  @override
+  String get historyThisWeek => '本週';
+
+  @override
+  String get historyThisMonth => '本月';
+
+  @override
+  String historyMonth(DateTime month) {
+    final intl.DateFormat monthDateFormat = intl.DateFormat.yMMMM(localeName);
+    final String monthString = monthDateFormat.format(month);
+
+    return '$monthString';
+  }
+
+  @override
+  String get libraryName => 'OtterPad 文庫';
+
+  @override
+  String get rebuildScanningFiles => '正在掃描 PDF 檔案…';
+
+  @override
+  String get rebuildCheckingFiles => '正在檢查檔案完整性…';
+
+  @override
+  String get rebuildExtractingMetadata => '正在擷取 PDF 中繼資料…';
 }

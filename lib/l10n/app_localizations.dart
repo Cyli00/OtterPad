@@ -99,6 +99,24 @@ abstract class AppLocalizations {
     Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
   ];
 
+  /// No description provided for @sharedFilesImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not import the shared files. Please try again from the library.'**
+  String get sharedFilesImportFailed;
+
+  /// No description provided for @sharedFilesSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Some shared files were skipped because they are not readable PDF files.'**
+  String get sharedFilesSkipped;
+
+  /// No description provided for @readerTranslationIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} paragraphs remain untranslated. Retry to continue.'**
+  String readerTranslationIncomplete(int count);
+
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
@@ -5264,6 +5282,361 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Export saved'**
   String get documentExportSaved;
+
+  /// No description provided for @zoteroLocalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Local Zotero'**
+  String get zoteroLocalTitle;
+
+  /// No description provided for @zoteroLocalEntryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Import metadata and PDFs from Zotero on this computer'**
+  String get zoteroLocalEntryHint;
+
+  /// No description provided for @zoteroLocalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Zotero and enable communication with other applications in Advanced settings. Read your personal library, copy missing PDFs, and keep existing PDFs and your edits. For multiple attachments, choose a PDF below.'**
+  String get zoteroLocalHint;
+
+  /// No description provided for @zoteroLocalPort.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection port'**
+  String get zoteroLocalPort;
+
+  /// No description provided for @zoteroLocalConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Read library'**
+  String get zoteroLocalConnect;
+
+  /// No description provided for @zoteroLocalInvalidPort.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a port between 1 and 65535.'**
+  String get zoteroLocalInvalidPort;
+
+  /// No description provided for @zoteroLocalDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Zotero data folder'**
+  String get zoteroLocalDirectory;
+
+  /// No description provided for @zoteroLocalDirectorySelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Zotero data folder'**
+  String get zoteroLocalDirectorySelected;
+
+  /// No description provided for @zoteroLocalDirectoryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This Zotero version needs a data folder to identify the library. Choose the folder containing zotero.sqlite; choose again if you switch libraries.'**
+  String get zoteroLocalDirectoryHint;
+
+  /// No description provided for @zoteroLocalLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading {fetched} / {total} items'**
+  String zoteroLocalLoading(int fetched, int total);
+
+  /// No description provided for @zoteroLocalSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected {selected} of {total} documents'**
+  String zoteroLocalSelection(int selected, int total);
+
+  /// No description provided for @zoteroLocalEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No importable documents in the personal library.'**
+  String get zoteroLocalEmpty;
+
+  /// No description provided for @zoteroLocalMetadataOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata only'**
+  String get zoteroLocalMetadataOnly;
+
+  /// No description provided for @zoteroLocalChoosePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose PDF'**
+  String get zoteroLocalChoosePdf;
+
+  /// No description provided for @zoteroLocalNoPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'No PDF attachment; metadata will still be imported.'**
+  String get zoteroLocalNoPdf;
+
+  /// No description provided for @zoteroLocalImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Import / update selected'**
+  String get zoteroLocalImport;
+
+  /// No description provided for @zoteroLocalUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot connect to Zotero. Open Zotero and check the port.'**
+  String get zoteroLocalUnavailable;
+
+  /// No description provided for @zoteroLocalDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'In Zotero Advanced settings, allow other applications on this computer to communicate with Zotero.'**
+  String get zoteroLocalDisabled;
+
+  /// No description provided for @zoteroLocalIncompatible.
+  ///
+  /// In en, this message translates to:
+  /// **'This Zotero client does not support the required local interface. Update Zotero and try again.'**
+  String get zoteroLocalIncompatible;
+
+  /// No description provided for @zoteroLocalChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The Zotero library changed while reading. Read the library again before importing.'**
+  String get zoteroLocalChanged;
+
+  /// No description provided for @zoteroLocalInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'Zotero returned an incomplete or unrecognized response. Read the library again.'**
+  String get zoteroLocalInvalidResponse;
+
+  /// No description provided for @zoteroLocalInvalidFile.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment is not a local PDF file.'**
+  String get zoteroLocalInvalidFile;
+
+  /// No description provided for @zoteroLocalFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Local Zotero import failed. Check the connection and folder access, then try again.'**
+  String get zoteroLocalFailed;
+
+  /// No description provided for @zoteroLocalStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Import did not finish. Completed documents are kept; you can retry.'**
+  String get zoteroLocalStopped;
+
+  /// No description provided for @zoteroLocalResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents: {added} added, {updated} updated. PDFs: {copied} copied, {missing} unavailable locally, {kept} kept. {failed} documents failed.'**
+  String zoteroLocalResult(
+    int added,
+    int updated,
+    int copied,
+    int missing,
+    int kept,
+    int failed,
+  );
+
+  /// No description provided for @readerFontSerif.
+  ///
+  /// In en, this message translates to:
+  /// **'Serif'**
+  String get readerFontSerif;
+
+  /// No description provided for @readerFontSans.
+  ///
+  /// In en, this message translates to:
+  /// **'Sans serif'**
+  String get readerFontSans;
+
+  /// No description provided for @readerWidthFluid.
+  ///
+  /// In en, this message translates to:
+  /// **'Fit window'**
+  String get readerWidthFluid;
+
+  /// No description provided for @readerHorizontalMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Horizontal margin'**
+  String get readerHorizontalMargin;
+
+  /// No description provided for @readerVerticalMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Vertical margin'**
+  String get readerVerticalMargin;
+
+  /// No description provided for @readerReadingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading progress'**
+  String get readerReadingProgress;
+
+  /// No description provided for @readerTextAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Text & background'**
+  String get readerTextAppearance;
+
+  /// No description provided for @readerPageLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Page layout'**
+  String get readerPageLayout;
+
+  /// No description provided for @readerReadingOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading options'**
+  String get readerReadingOptions;
+
+  /// No description provided for @readerFontSizeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust the text size in the flowing reader.'**
+  String get readerFontSizeHint;
+
+  /// No description provided for @readerMarginHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust the reading area margins. Shared between PDF and flowing views.'**
+  String get readerMarginHint;
+
+  /// No description provided for @readerAutoLayoutHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Read with continuous scrolling. On wide screens, bilingual text pairs paragraphs side by side; bilingual PDFs pair the same page. Layout adapts in narrow windows.'**
+  String get readerAutoLayoutHint;
+
+  /// No description provided for @readerContinuousReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Continuous reading'**
+  String get readerContinuousReading;
+
+  /// No description provided for @readerContinuousReadingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Continuous vertical reading. Bilingual paragraphs switch between side-by-side and stacked layouts as the window changes.'**
+  String get readerContinuousReadingHint;
+
+  /// No description provided for @restoreModeOverwrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Overwrite'**
+  String get restoreModeOverwrite;
+
+  /// No description provided for @restoreModeOverwriteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace local data with the backup'**
+  String get restoreModeOverwriteDescription;
+
+  /// No description provided for @restoreModeMerge.
+  ///
+  /// In en, this message translates to:
+  /// **'Merge'**
+  String get restoreModeMerge;
+
+  /// No description provided for @restoreModeMergeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep local data and add missing content from the backup'**
+  String get restoreModeMergeDescription;
+
+  /// No description provided for @restoreScopeFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full restore'**
+  String get restoreScopeFull;
+
+  /// No description provided for @restoreScopeFullDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore the library and settings'**
+  String get restoreScopeFullDescription;
+
+  /// No description provided for @restoreScopeLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Library only'**
+  String get restoreScopeLibrary;
+
+  /// No description provided for @restoreScopeLibraryDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore documents, collections, annotations and document files'**
+  String get restoreScopeLibraryDescription;
+
+  /// No description provided for @restoreScopeSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings only'**
+  String get restoreScopeSettings;
+
+  /// No description provided for @restoreScopeSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore application settings'**
+  String get restoreScopeSettingsDescription;
+
+  /// No description provided for @historyToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get historyToday;
+
+  /// No description provided for @historyYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get historyYesterday;
+
+  /// No description provided for @historyThisWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get historyThisWeek;
+
+  /// No description provided for @historyThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get historyThisMonth;
+
+  /// No description provided for @historyMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'{month}'**
+  String historyMonth(DateTime month);
+
+  /// No description provided for @libraryName.
+  ///
+  /// In en, this message translates to:
+  /// **'OtterPad library'**
+  String get libraryName;
+
+  /// No description provided for @rebuildScanningFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning PDF files…'**
+  String get rebuildScanningFiles;
+
+  /// No description provided for @rebuildCheckingFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking file integrity…'**
+  String get rebuildCheckingFiles;
+
+  /// No description provided for @rebuildExtractingMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting PDF metadata…'**
+  String get rebuildExtractingMetadata;
 }
 
 class _AppLocalizationsDelegate
