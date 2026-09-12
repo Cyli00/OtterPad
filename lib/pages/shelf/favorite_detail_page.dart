@@ -36,9 +36,11 @@ class FavoriteDetailPage extends ConsumerWidget {
       (f) => f.id == favorite.id,
       orElse: () => favorite,
     );
-    final selection = ref.watch(selectionProvider);
-    final isSelectionMode =
-        selection.isActive && selection.sourceContext == _sourceContext;
+    final isSelectionMode = ref.watch(
+      selectionProvider.select(
+        (s) => s.isActive && s.sourceContext == _sourceContext,
+      ),
+    );
 
     final byId = {for (final doc in docs) doc.id: doc};
     final favDocs = [
@@ -51,8 +53,6 @@ class FavoriteDetailPage extends ConsumerWidget {
         .map((d) => d.id)
         .toSet();
     final orderedIds = [for (final d in favDocs) d.id];
-    final allSelected =
-        allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
     return SelectionPopScope(
       sourceContext: _sourceContext,
@@ -61,15 +61,23 @@ class FavoriteDetailPage extends ConsumerWidget {
         appBar: isSelectionMode
             ? SelectionAppBar(
                 onClose: () => ref.read(selectionProvider.notifier).exit(),
-                selectedCount: selection.selectedIds.length,
-                allSelected: allSelected,
+                allIds: allIds,
                 onSelectAll: () =>
                     ref.read(selectionProvider.notifier).toggleAll(allIds),
-                onRemoveFromFavorite: () =>
-                    _removeFromFavorite(context, ref, selection, favDocs),
-                onExtract: () =>
-                    _extractSelected(context, ref, selection, favDocs),
-                onDelete: () => _deleteSelected(context, ref, selection),
+                onRemoveFromFavorite: () => _removeFromFavorite(
+                  context,
+                  ref,
+                  ref.read(selectionProvider),
+                  favDocs,
+                ),
+                onExtract: () => _extractSelected(
+                  context,
+                  ref,
+                  ref.read(selectionProvider),
+                  favDocs,
+                ),
+                onDelete: () =>
+                    _deleteSelected(context, ref, ref.read(selectionProvider)),
               )
             : AppBar(
                 backgroundColor: colorScheme.surface,
@@ -143,45 +151,55 @@ class FavoriteDetailPage extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     final doc = favDocs[index];
 
-                    return DocListCard(
-                      doc: doc,
-                      isSelectionMode: isSelectionMode,
-                      isSelected: selection.selectedIds.contains(doc.id),
-                      onTap: () => DocCardActions.openReader(context, ref, doc),
-                      onLongPress: doc.id.isNotEmpty
-                          ? () => ref
-                                .read(selectionProvider.notifier)
-                                .enter(doc.id, _sourceContext)
-                          : null,
-                      onSelectionTap: doc.id.isNotEmpty
-                          ? () => ref
-                                .read(selectionProvider.notifier)
-                                .toggle(doc.id)
-                          : null,
-                      onModifierToggle: doc.id.isNotEmpty
-                          ? () => DocCardActions.modifierToggle(
-                              ref,
-                              doc.id,
-                              _sourceContext,
-                            )
-                          : null,
-                      onSelectRange: doc.id.isNotEmpty
-                          ? () => DocCardActions.selectRange(
-                              ref,
-                              docId: doc.id,
-                              sourceContext: _sourceContext,
-                              orderedIds: orderedIds,
-                            )
-                          : null,
-                      onFavorite: () =>
-                          DocCardActions.addToFavorite(context, ref, {doc.id}),
-                      onContextMenu: (pos) => DocCardActions.showMenu(
-                        context: context,
-                        ref: ref,
-                        globalPosition: pos,
+                    return Consumer(
+                      builder: (context, ref, _) => DocListCard(
                         doc: doc,
-                        sourceContext: _sourceContext,
-                        orderedIds: orderedIds,
+                        isSelectionMode: isSelectionMode,
+                        isSelected: ref.watch(
+                          selectionProvider.select(
+                            (s) => s.selectedIds.contains(doc.id),
+                          ),
+                        ),
+                        onTap: () =>
+                            DocCardActions.openReader(context, ref, doc),
+                        onLongPress: doc.id.isNotEmpty
+                            ? () => ref
+                                  .read(selectionProvider.notifier)
+                                  .enter(doc.id, _sourceContext)
+                            : null,
+                        onSelectionTap: doc.id.isNotEmpty
+                            ? () => ref
+                                  .read(selectionProvider.notifier)
+                                  .toggle(doc.id)
+                            : null,
+                        onModifierToggle: doc.id.isNotEmpty
+                            ? () => DocCardActions.modifierToggle(
+                                ref,
+                                doc.id,
+                                _sourceContext,
+                              )
+                            : null,
+                        onSelectRange: doc.id.isNotEmpty
+                            ? () => DocCardActions.selectRange(
+                                ref,
+                                docId: doc.id,
+                                sourceContext: _sourceContext,
+                                orderedIds: orderedIds,
+                              )
+                            : null,
+                        onFavorite: () => DocCardActions.addToFavorite(
+                          context,
+                          ref,
+                          {doc.id},
+                        ),
+                        onContextMenu: (pos) => DocCardActions.showMenu(
+                          context: context,
+                          ref: ref,
+                          globalPosition: pos,
+                          doc: doc,
+                          sourceContext: _sourceContext,
+                          orderedIds: orderedIds,
+                        ),
                       ),
                     );
                   },

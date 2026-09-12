@@ -4,6 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/task_provider.dart';
+import '../core/app_logger.dart';
+import '../core/l10n.dart';
+import '../router/app_router.dart';
+import 'snackbar_service.dart';
 
 /// 接收移动端分享/打开 PDF 文件的 intent。
 ///
@@ -20,22 +24,38 @@ class ShareReceiverService {
 
   Future<dynamic> _handleMethod(MethodCall call) async {
     if (call.method == 'onSharedFiles') {
-      final paths = List<String>.from(call.arguments as List);
-      await _importFiles(paths);
+      try {
+        final paths = List<String>.from(call.arguments as List);
+        await _importFiles(paths);
+      } catch (e, st) {
+        _reportFailure(e, st);
+      }
     }
     return null;
   }
 
   Future<void> checkInitialSharedFiles() async {
     try {
-      final result =
-          await _channel.invokeMethod<List<Object?>>('getInitialSharedFiles');
+      final result = await _channel.invokeMethod<List<Object?>>(
+        'getInitialSharedFiles',
+      );
       if (result != null && result.isNotEmpty) {
         await _importFiles(result.cast<String>());
       }
     } on MissingPluginException {
       // 桌面端无此 channel
+    } catch (e, st) {
+      _reportFailure(e, st);
     }
+  }
+
+  void _reportFailure(Object error, StackTrace stackTrace) {
+    log.w('[ShareReceiver] 导入失败', error: error, stackTrace: stackTrace);
+    final context = rootNavigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    _container
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.sharedFilesImportFailed);
   }
 
   Future<void> _importFiles(List<String> paths) async {
@@ -49,6 +69,14 @@ class ShareReceiverService {
     try {
       if (pdfPaths.isNotEmpty) {
         await _container.read(taskProvider.notifier).addFiles(pdfPaths);
+      }
+      if (pdfPaths.length != paths.length) {
+        final context = rootNavigatorKey.currentContext;
+        if (context != null && context.mounted) {
+          _container
+              .read(snackBarServiceProvider)
+              .showResult(message: context.l10n.sharedFilesSkipped);
+        }
       }
     } finally {
       _cleanupTempFiles(paths);
@@ -80,7 +108,9 @@ class ShareReceiverService {
         if (file.existsSync() && file.path.contains('shared_pdfs')) {
           file.deleteSync();
         }
-      } catch (_) {}
+      } catch (e, st) {
+        log.w('[ShareReceiver] 临时文件清理失败', error: e, stackTrace: st);
+      }
     }
   }
 }

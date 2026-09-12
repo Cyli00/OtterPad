@@ -93,6 +93,7 @@ class HomeHeader extends ConsumerWidget {
                       Symbols.search_rounded,
                       color: colorScheme.onSurfaceVariant,
                       size: isMobile ? 20 : 24,
+                      fill: 1,
                     ),
                     const SizedBox(width: 8.0),
                     Expanded(
@@ -187,17 +188,17 @@ class _ToolsMenuButton extends StatelessWidget {
       menuChildren: [
         MenuItemButton(
           onPressed: () => onAction(ToolbarAction.addFile),
-          leadingIcon: const Icon(Symbols.note_add_rounded, size: 20),
+          leadingIcon: const Icon(Symbols.note_add_rounded, size: 20, fill: 1),
           child: Text(l10n.addFiles),
         ),
         MenuItemButton(
           onPressed: () => onAction(ToolbarAction.addByIdentifier),
-          leadingIcon: const Icon(Symbols.travel_explore_rounded, size: 20),
+          leadingIcon: const Icon(Symbols.travel_explore_rounded, size: 20, fill: 1),
           child: Text(l10n.addByIdentifier),
         ),
         MenuItemButton(
           onPressed: () => onAction(ToolbarAction.rebuildLibrary),
-          leadingIcon: const Icon(Symbols.refresh_rounded, size: 20),
+          leadingIcon: const Icon(Symbols.refresh_rounded, size: 20, fill: 1),
           child: Text(l10n.rebuildLibrary),
         ),
       ],
@@ -229,7 +230,7 @@ class _HeaderButton extends StatelessWidget {
       child: IconButton.filled(
         onPressed: onPressed,
         tooltip: tooltip,
-        icon: Icon(icon, size: size * 0.5),
+        icon: Icon(icon, size: size * 0.5, fill: 1),
         style: IconButton.styleFrom(
           backgroundColor: colorScheme.primaryContainer,
           foregroundColor: colorScheme.primary,

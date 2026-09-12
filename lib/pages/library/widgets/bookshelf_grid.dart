@@ -32,9 +32,11 @@ class BookshelfGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final docs = ref.watch(validDocsProvider);
-    final selection = ref.watch(selectionProvider);
-    final isSelectionMode =
-        selection.isActive && selection.sourceContext == 'library';
+    final isSelectionMode = ref.watch(
+      selectionProvider.select(
+        (s) => s.isActive && s.sourceContext == 'library',
+      ),
+    );
 
     if (docs.isEmpty) {
       return SliverFillRemaining(
@@ -89,7 +91,11 @@ class BookshelfGrid extends ConsumerWidget {
                     year: doc.year ?? '',
                     progress: ref.watch(docProgressProvider(doc.id)),
                     isSelectionMode: isSelectionMode,
-                    isSelected: selection.selectedIds.contains(doc.id),
+                    isSelected: ref.watch(
+                      selectionProvider.select(
+                        (s) => s.selectedIds.contains(doc.id),
+                      ),
+                    ),
                     onTap: () => DocCardActions.openReader(context, ref, doc),
                     onLongPress: () => ref
                         .read(selectionProvider.notifier)

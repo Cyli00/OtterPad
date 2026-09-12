@@ -125,7 +125,7 @@ class _SheetItem extends StatelessWidget {
                 color: colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: colorScheme.primary, size: 22),
+              child: Icon(icon, color: colorScheme.primary, size: 22, fill: 1),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -152,6 +152,7 @@ class _SheetItem extends StatelessWidget {
             Icon(
               Symbols.chevron_right_rounded,
               color: colorScheme.onSurfaceVariant.withAlpha(120),
+              fill: 1,
             ),
           ],
         ),

@@ -119,7 +119,13 @@ class ReadingHistoryPage extends ConsumerWidget {
     return [
       SliverToBoxAdapter(
         child: _SectionHeader(
-          label: section.label,
+          label: switch (section.period) {
+            HistoryPeriod.today => context.l10n.historyToday,
+            HistoryPeriod.yesterday => context.l10n.historyYesterday,
+            HistoryPeriod.thisWeek => context.l10n.historyThisWeek,
+            HistoryPeriod.thisMonth => context.l10n.historyThisMonth,
+            HistoryPeriod.month => context.l10n.historyMonth(section.month!),
+          },
           count: section.docs.length,
           topPadding: isFirst ? 8 : 24,
         ),

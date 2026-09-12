@@ -64,7 +64,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           Haptics.soft();
                           context.pop();
                         },
-                        icon: const Icon(Symbols.arrow_back_rounded),
+                        icon: const Icon(Symbols.arrow_back_rounded, fill: 1),
                       ),
                       const SizedBox(width: 4),
                       Expanded(
@@ -88,6 +88,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             prefixIcon: Icon(
                               Symbols.search_rounded,
                               color: colorScheme.onSurfaceVariant,
+                              fill: 1,
                             ),
                             suffixIcon: _query.isNotEmpty
                                 ? IconButton(
@@ -99,6 +100,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                     icon: Icon(
                                       Symbols.clear_rounded,
                                       color: colorScheme.onSurfaceVariant,
+                                      fill: 1,
                                     ),
                                   )
                                 : null,

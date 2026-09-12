@@ -198,14 +198,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isGrid = ref.watch(viewModeProvider);
-    final selection = ref.watch(selectionProvider);
-    final isSelectionMode =
-        selection.isActive && selection.sourceContext == 'library';
+    final isSelectionMode = ref.watch(
+      selectionProvider.select(
+        (s) => s.isActive && s.sourceContext == 'library',
+      ),
+    );
 
     final docs = ref.watch(validDocsProvider);
     final allIds = docs.map((d) => d.id).toSet();
-    final allSelected =
-        allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
     return SelectionPopScope(
       sourceContext: 'library',
@@ -227,8 +227,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                         useSafeArea: false,
                         onClose: () =>
                             ref.read(selectionProvider.notifier).exit(),
-                        selectedCount: selection.selectedIds.length,
-                        allSelected: allSelected,
+                        allIds: allIds,
                         onSelectAll: () => ref
                             .read(selectionProvider.notifier)
                             .toggleAll(allIds),

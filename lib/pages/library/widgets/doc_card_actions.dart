@@ -6,7 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
 import '../../../data/models/book/document.dart';
-import '../../../providers/api_provider.dart';
+import '../../../providers/doc_extract_api_provider.dart';
 import '../../../providers/document_lifecycle_provider.dart';
 import '../../../providers/favorites_provider.dart';
 import '../../../providers/proxy_provider.dart';
@@ -24,6 +24,7 @@ import '../../../widgets/extract_provider_dialog.dart';
 import '../../shelf/widgets/create_favorite_dialog.dart';
 import '../../shelf/widgets/pick_favorite_sheet.dart';
 import 'batch_progress_sheet.dart';
+import 'document_export_action.dart';
 
 /// 文献卡片单击要走的动作。
 enum DocTapIntent { open, toggle, range, modifierToggle }
@@ -198,6 +199,11 @@ class DocCardActions {
             icon: Symbols.check_box_rounded,
           ),
         AppContextMenuItem(
+          value: 'export',
+          label: l10n.exportDocuments,
+          icon: Symbols.ios_share_rounded,
+        ),
+        AppContextMenuItem(
           value: 'delete',
           label: l10n.delete,
           icon: Symbols.delete_rounded,
@@ -215,6 +221,8 @@ class DocCardActions {
         await extract(context, ref, [doc]);
       case 'select':
         ref.read(selectionProvider.notifier).enter(doc.id, sourceContext);
+      case 'export':
+        await showDocumentExport(context, ref, [doc.id]);
       case 'delete':
         if (onDeleteOverride != null) {
           if (confirmOverrideDelete) {

@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../utils/responsive.dart';
+import '../../../providers/selection_provider.dart';
+import 'document_export_action.dart';
 
 /// 多选模式操作栏
 ///
 /// 兼用于 Scaffold.appBar（shelf 页面）和 Column 内嵌（LibraryPage）。
 /// [useSafeArea] 仅在作为 appBar 时为 true；Library 已包 SafeArea，必须关掉。
-class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
+class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final VoidCallback onClose;
-  final int selectedCount;
+  final Set<String> allIds;
   final VoidCallback onSelectAll;
-  final bool allSelected;
   final VoidCallback? onExtract;
   final VoidCallback? onDownload;
   final VoidCallback? onAddToFavorite;
@@ -24,9 +26,8 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
   const SelectionAppBar({
     super.key,
     required this.onClose,
-    required this.selectedCount,
+    required this.allIds,
     required this.onSelectAll,
-    required this.allSelected,
     this.onExtract,
     this.onDownload,
     this.onAddToFavorite,
@@ -39,7 +40,11 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selection = ref.watch(selectionProvider);
+    final selectedCount = selection.selectedIds.length;
+    final allSelected =
+        allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final wide = Responsive.showNavigationRail(context);
@@ -61,7 +66,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                   Haptics.soft();
                   onClose();
                 },
-                icon: Icon(Symbols.close_rounded, size: iconSz),
+                icon: Icon(Symbols.close_rounded, size: iconSz, fill: 1),
                 padding: EdgeInsets.zero,
                 tooltip: context.l10n.exitMultiSelect,
               ),
@@ -77,76 +82,102 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            _button(
-              icon: allSelected
-                  ? Symbols.deselect_rounded
-                  : Symbols.select_all_rounded,
-              sz: sz,
-              iconSz: iconSz,
-              onPressed: onSelectAll,
-              tooltip: allSelected
-                  ? context.l10n.deselectAll
-                  : context.l10n.selectAll,
-              bg: cs.primaryContainer,
-              fg: cs.primary,
-            ),
-            if (onExtract != null) ...[
-              const SizedBox(width: 8),
-              _button(
-                icon: Symbols.auto_awesome_rounded,
-                sz: sz,
-                iconSz: iconSz,
-                onPressed: enabled ? onExtract : null,
-                tooltip: context.l10n.textExtraction,
-                bg: cs.primaryContainer,
-                fg: cs.primary,
+            Flexible(
+              flex: 3,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _button(
+                      icon: allSelected
+                          ? Symbols.deselect_rounded
+                          : Symbols.select_all_rounded,
+                      sz: sz,
+                      iconSz: iconSz,
+                      onPressed: onSelectAll,
+                      tooltip: allSelected
+                          ? context.l10n.deselectAll
+                          : context.l10n.selectAll,
+                      bg: cs.primaryContainer,
+                      fg: cs.primary,
+                    ),
+                    if (onExtract != null) ...[
+                      const SizedBox(width: 8),
+                      _button(
+                        icon: Symbols.auto_awesome_rounded,
+                        sz: sz,
+                        iconSz: iconSz,
+                        onPressed: enabled ? onExtract : null,
+                        tooltip: context.l10n.textExtraction,
+                        bg: cs.primaryContainer,
+                        fg: cs.primary,
+                      ),
+                    ],
+                    if (onDownload != null) ...[
+                      const SizedBox(width: 8),
+                      _button(
+                        icon: Symbols.download_rounded,
+                        sz: sz,
+                        iconSz: iconSz,
+                        onPressed: enabled ? onDownload : null,
+                        tooltip: context.l10n.downloadPdf,
+                        bg: cs.primaryContainer,
+                        fg: cs.primary,
+                      ),
+                    ],
+                    if (onAddToFavorite != null) ...[
+                      const SizedBox(width: 8),
+                      _button(
+                        icon: Symbols.bookmark_add_rounded,
+                        sz: sz,
+                        iconSz: iconSz,
+                        onPressed: enabled ? onAddToFavorite : null,
+                        tooltip: context.l10n.addToFavorite,
+                        bg: cs.tertiaryContainer,
+                        fg: cs.tertiary,
+                      ),
+                    ],
+                    if (onRemoveFromFavorite != null) ...[
+                      const SizedBox(width: 8),
+                      _button(
+                        icon: Symbols.bookmark_remove_rounded,
+                        sz: sz,
+                        iconSz: iconSz,
+                        onPressed: enabled ? onRemoveFromFavorite : null,
+                        tooltip: context.l10n.removeFromFavorite,
+                        bg: cs.tertiaryContainer,
+                        fg: cs.tertiary,
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                    _button(
+                      icon: Symbols.ios_share_rounded,
+                      sz: sz,
+                      iconSz: iconSz,
+                      onPressed: enabled
+                          ? () => showDocumentExport(
+                              context,
+                              ref,
+                              ref.read(selectionProvider).selectedIds,
+                            )
+                          : null,
+                      tooltip: context.l10n.exportDocuments,
+                      bg: cs.primaryContainer,
+                      fg: cs.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    _button(
+                      icon: Symbols.delete_rounded,
+                      sz: sz,
+                      iconSz: iconSz,
+                      onPressed: enabled ? onDelete : null,
+                      tooltip: context.l10n.delete,
+                      bg: cs.errorContainer,
+                      fg: cs.error,
+                    ),
+                  ],
+                ),
               ),
-            ],
-            if (onDownload != null) ...[
-              const SizedBox(width: 8),
-              _button(
-                icon: Symbols.download_rounded,
-                sz: sz,
-                iconSz: iconSz,
-                onPressed: enabled ? onDownload : null,
-                tooltip: context.l10n.downloadPdf,
-                bg: cs.primaryContainer,
-                fg: cs.primary,
-              ),
-            ],
-            if (onAddToFavorite != null) ...[
-              const SizedBox(width: 8),
-              _button(
-                icon: Symbols.bookmark_add_rounded,
-                sz: sz,
-                iconSz: iconSz,
-                onPressed: enabled ? onAddToFavorite : null,
-                tooltip: context.l10n.addToFavorite,
-                bg: cs.tertiaryContainer,
-                fg: cs.tertiary,
-              ),
-            ],
-            if (onRemoveFromFavorite != null) ...[
-              const SizedBox(width: 8),
-              _button(
-                icon: Symbols.bookmark_remove_rounded,
-                sz: sz,
-                iconSz: iconSz,
-                onPressed: enabled ? onRemoveFromFavorite : null,
-                tooltip: context.l10n.removeFromFavorite,
-                bg: cs.tertiaryContainer,
-                fg: cs.tertiary,
-              ),
-            ],
-            const SizedBox(width: 8),
-            _button(
-              icon: Symbols.delete_rounded,
-              sz: sz,
-              iconSz: iconSz,
-              onPressed: enabled ? onDelete : null,
-              tooltip: context.l10n.delete,
-              bg: cs.errorContainer,
-              fg: cs.error,
             ),
           ],
         ),
@@ -178,7 +209,7 @@ class SelectionAppBar extends StatelessWidget implements PreferredSizeWidget {
                 Haptics.soft();
                 onPressed();
               },
-        icon: Icon(icon, size: iconSz),
+        icon: Icon(icon, size: iconSz, fill: 1),
         tooltip: tooltip,
         style: IconButton.styleFrom(
           backgroundColor: bg,

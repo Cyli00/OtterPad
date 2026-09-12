@@ -28,9 +28,11 @@ class BookshelfList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final docs = ref.watch(validDocsProvider);
-    final selection = ref.watch(selectionProvider);
-    final isSelectionMode =
-        selection.isActive && selection.sourceContext == 'library';
+    final isSelectionMode = ref.watch(
+      selectionProvider.select(
+        (s) => s.isActive && s.sourceContext == 'library',
+      ),
+    );
 
     if (docs.isEmpty) {
       return SliverFillRemaining(
@@ -46,32 +48,36 @@ class BookshelfList extends ConsumerWidget {
       // 进度由 DocListCard 内部按 docId 细粒度订阅，无需在此下发
       return StaggeredEntrance(
         index: index,
-        child: DocListCard(
-          doc: doc,
-          isSelectionMode: isSelectionMode,
-          isSelected: selection.selectedIds.contains(doc.id),
-          onTap: () => DocCardActions.openReader(context, ref, doc),
-          onLongPress: () =>
-              ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
-          onSelectionTap: () =>
-              ref.read(selectionProvider.notifier).toggle(doc.id),
-          onModifierToggle: () =>
-              DocCardActions.modifierToggle(ref, doc.id, 'library'),
-          onSelectRange: () => DocCardActions.selectRange(
-            ref,
-            docId: doc.id,
-            sourceContext: 'library',
-            orderedIds: orderedIds,
-          ),
-          onFavorite: () =>
-              DocCardActions.addToFavorite(context, ref, {doc.id}),
-          onContextMenu: (pos) => DocCardActions.showMenu(
-            context: context,
-            ref: ref,
-            globalPosition: pos,
+        child: Consumer(
+          builder: (context, ref, _) => DocListCard(
             doc: doc,
-            sourceContext: 'library',
-            orderedIds: orderedIds,
+            isSelectionMode: isSelectionMode,
+            isSelected: ref.watch(
+              selectionProvider.select((s) => s.selectedIds.contains(doc.id)),
+            ),
+            onTap: () => DocCardActions.openReader(context, ref, doc),
+            onLongPress: () =>
+                ref.read(selectionProvider.notifier).enter(doc.id, 'library'),
+            onSelectionTap: () =>
+                ref.read(selectionProvider.notifier).toggle(doc.id),
+            onModifierToggle: () =>
+                DocCardActions.modifierToggle(ref, doc.id, 'library'),
+            onSelectRange: () => DocCardActions.selectRange(
+              ref,
+              docId: doc.id,
+              sourceContext: 'library',
+              orderedIds: orderedIds,
+            ),
+            onFavorite: () =>
+                DocCardActions.addToFavorite(context, ref, {doc.id}),
+            onContextMenu: (pos) => DocCardActions.showMenu(
+              context: context,
+              ref: ref,
+              globalPosition: pos,
+              doc: doc,
+              sourceContext: 'library',
+              orderedIds: orderedIds,
+            ),
           ),
         ),
       );

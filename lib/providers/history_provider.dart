@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../core/app_logger.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' show OrderingTerm;
@@ -67,9 +68,9 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
   /// 按 docId 从 DB 查单条（唯一真值源）——不读 watch() 流 state，
   /// 避免冷启动流未 emit 时误判无记录。
   Future<HistoryEntry?> _findByDocId(String docId) async {
-    final row = await (_db.select(_db.history)
-          ..where((t) => t.docId.equals(docId)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.history,
+    )..where((t) => t.docId.equals(docId))).getSingleOrNull();
     return row == null ? null : historyFromRow(row);
   }
 
@@ -128,7 +129,13 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
     _progressDebounce = Timer(_progressDebounceDelay, () {
       final pending = _pendingProgress;
       _pendingProgress = null;
-      if (pending != null) unawaited(_upsert(pending));
+      if (pending != null) {
+        unawaited(
+          _upsert(pending).catchError((Object e, StackTrace st) {
+            log.w('[History] 进度保存失败', error: e, stackTrace: st);
+          }),
+        );
+      }
     });
   }
 
@@ -164,10 +171,13 @@ final docProgressProvider = Provider.family<double, String>((ref, docId) {
 });
 
 /// 历史分组区段：一个日期桶及其下属文档列表。
+enum HistoryPeriod { today, yesterday, thisWeek, thisMonth, month }
+
 class HistorySection {
-  final String label;
+  final HistoryPeriod period;
+  final DateTime? month;
   final List<Document> docs;
-  const HistorySection({required this.label, required this.docs});
+  const HistorySection({required this.period, required this.docs, this.month});
 }
 
 /// 派生：按日期桶分组后的历史视图。
@@ -192,7 +202,7 @@ final historySectionsProvider = Provider<List<HistorySection>>((ref) {
   final yesterdayDocs = <Document>[];
   final thisWeekDocs = <Document>[];
   final thisMonthDocs = <Document>[];
-  final olderBuckets = <String, List<Document>>{};
+  final olderBuckets = <DateTime, List<Document>>{};
 
   for (final entry in history) {
     final doc = byId[entry.docId];
@@ -211,26 +221,34 @@ final historySectionsProvider = Provider<List<HistorySection>>((ref) {
     } else if (!d.isBefore(monthStart)) {
       thisMonthDocs.add(doc);
     } else {
-      final key = '${entry.openedAt.year}年${entry.openedAt.month}月';
+      final key = DateTime(entry.openedAt.year, entry.openedAt.month);
       olderBuckets.putIfAbsent(key, () => <Document>[]).add(doc);
     }
   }
 
   final sections = <HistorySection>[];
   if (todayDocs.isNotEmpty) {
-    sections.add(HistorySection(label: '今天', docs: todayDocs));
+    sections.add(HistorySection(period: HistoryPeriod.today, docs: todayDocs));
   }
   if (yesterdayDocs.isNotEmpty) {
-    sections.add(HistorySection(label: '昨天', docs: yesterdayDocs));
+    sections.add(
+      HistorySection(period: HistoryPeriod.yesterday, docs: yesterdayDocs),
+    );
   }
   if (thisWeekDocs.isNotEmpty) {
-    sections.add(HistorySection(label: '本周', docs: thisWeekDocs));
+    sections.add(
+      HistorySection(period: HistoryPeriod.thisWeek, docs: thisWeekDocs),
+    );
   }
   if (thisMonthDocs.isNotEmpty) {
-    sections.add(HistorySection(label: '本月', docs: thisMonthDocs));
+    sections.add(
+      HistorySection(period: HistoryPeriod.thisMonth, docs: thisMonthDocs),
+    );
   }
-  olderBuckets.forEach((label, docs) {
-    sections.add(HistorySection(label: label, docs: docs));
+  olderBuckets.forEach((month, docs) {
+    sections.add(
+      HistorySection(period: HistoryPeriod.month, month: month, docs: docs),
+    );
   });
 
   return sections;

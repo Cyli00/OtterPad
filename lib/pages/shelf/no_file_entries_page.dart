@@ -31,13 +31,13 @@ class NoFileEntriesPage extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final noFileDocs = ref.watch(noFileDocsProvider);
-    final selection = ref.watch(selectionProvider);
-    final isSelectionMode =
-        selection.isActive && selection.sourceContext == _sourceContext;
+    final isSelectionMode = ref.watch(
+      selectionProvider.select(
+        (s) => s.isActive && s.sourceContext == _sourceContext,
+      ),
+    );
 
     final allIds = noFileDocs.map((d) => d.id).toSet();
-    final allSelected =
-        allIds.isNotEmpty && selection.selectedIds.containsAll(allIds);
 
     final orderedIds = [for (final d in noFileDocs) d.id];
 
@@ -48,13 +48,14 @@ class NoFileEntriesPage extends ConsumerWidget {
         appBar: isSelectionMode
             ? SelectionAppBar(
                 onClose: () => ref.read(selectionProvider.notifier).exit(),
-                selectedCount: selection.selectedIds.length,
-                allSelected: allSelected,
+                allIds: allIds,
                 onSelectAll: () =>
                     ref.read(selectionProvider.notifier).toggleAll(allIds),
                 // 无文件条目没有 PDF，不提供文本提取
-                onDownload: () => _downloadSelected(ref, selection),
-                onDelete: () => _deleteSelected(context, ref, selection),
+                onDownload: () =>
+                    _downloadSelected(ref, ref.read(selectionProvider)),
+                onDelete: () =>
+                    _deleteSelected(context, ref, ref.read(selectionProvider)),
               )
             : AppBar(
                 backgroundColor: colorScheme.surface,
@@ -108,41 +109,48 @@ class NoFileEntriesPage extends ConsumerWidget {
 
                     final card = Stack(
                       children: [
-                        DocListCard(
-                          doc: doc,
-                          isSelectionMode: isSelectionMode,
-                          isSelected: selection.selectedIds.contains(doc.id),
-                          onLongPress: () => ref
-                              .read(selectionProvider.notifier)
-                              .enter(doc.id, _sourceContext),
-                          onSelectionTap: () => ref
-                              .read(selectionProvider.notifier)
-                              .toggle(doc.id),
-                          onModifierToggle: () => DocCardActions.modifierToggle(
-                            ref,
-                            doc.id,
-                            _sourceContext,
-                          ),
-                          onSelectRange: () => DocCardActions.selectRange(
-                            ref,
-                            docId: doc.id,
-                            sourceContext: _sourceContext,
-                            orderedIds: orderedIds,
-                          ),
-                          onFavorite: () => DocCardActions.addToFavorite(
-                            context,
-                            ref,
-                            {doc.id},
-                          ),
-                          onContextMenu: (pos) => DocCardActions.showMenu(
-                            context: context,
-                            ref: ref,
-                            globalPosition: pos,
+                        Consumer(
+                          builder: (context, ref, _) => DocListCard(
                             doc: doc,
-                            sourceContext: _sourceContext,
-                            orderedIds: orderedIds,
-                            canOpen: false,
-                            canExtract: false,
+                            isSelectionMode: isSelectionMode,
+                            isSelected: ref.watch(
+                              selectionProvider.select(
+                                (s) => s.selectedIds.contains(doc.id),
+                              ),
+                            ),
+                            onLongPress: () => ref
+                                .read(selectionProvider.notifier)
+                                .enter(doc.id, _sourceContext),
+                            onSelectionTap: () => ref
+                                .read(selectionProvider.notifier)
+                                .toggle(doc.id),
+                            onModifierToggle: () =>
+                                DocCardActions.modifierToggle(
+                                  ref,
+                                  doc.id,
+                                  _sourceContext,
+                                ),
+                            onSelectRange: () => DocCardActions.selectRange(
+                              ref,
+                              docId: doc.id,
+                              sourceContext: _sourceContext,
+                              orderedIds: orderedIds,
+                            ),
+                            onFavorite: () => DocCardActions.addToFavorite(
+                              context,
+                              ref,
+                              {doc.id},
+                            ),
+                            onContextMenu: (pos) => DocCardActions.showMenu(
+                              context: context,
+                              ref: ref,
+                              globalPosition: pos,
+                              doc: doc,
+                              sourceContext: _sourceContext,
+                              orderedIds: orderedIds,
+                              canOpen: false,
+                              canExtract: false,
+                            ),
                           ),
                         ),
                         if (!isSelectionMode)

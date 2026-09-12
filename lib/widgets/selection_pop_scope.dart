@@ -16,9 +16,11 @@ class SelectionPopScope extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selection = ref.watch(selectionProvider);
-    final isActive =
-        selection.isActive && selection.sourceContext == sourceContext;
+    final isActive = ref.watch(
+      selectionProvider.select(
+        (s) => s.isActive && s.sourceContext == sourceContext,
+      ),
+    );
 
     return PopScope(
       canPop: !isActive,
