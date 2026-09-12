@@ -1,4 +1,4 @@
-import '../providers/api_provider.dart';
+import 'agent_protocol.dart';
 
 enum AgentModelModality { text, image }
 
@@ -156,8 +156,9 @@ class AgentModelCapability {
   /// `null`=非 gpt-5；`0`=初代（gpt-5/-mini/-nano，effort ∈ minimal..high）；
   /// `1`=gpt-5.1（none..high）；`>=2`=gpt-5.2+（none..xhigh）。
   static int? gpt5Minor(String modelId) {
-    final m = RegExp(r'(?:^|[/-])gpt-5(?:\.(\d+))?(?:[.-]|$)')
-        .firstMatch(modelId.toLowerCase());
+    final m = RegExp(
+      r'(?:^|[/-])gpt-5(?:\.(\d+))?(?:[.-]|$)',
+    ).firstMatch(modelId.toLowerCase());
     if (m == null) return null;
     return int.tryParse(m.group(1) ?? '0') ?? 0;
   }

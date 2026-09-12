@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 
-import '../../providers/api_provider.dart';
+import '../../data/models/ai/agent_config.dart';
 import '../../services/agent_http.dart';
 
 /// Agent API 的网络端操作合集——连通性检测 + 候选模型拉取。
@@ -52,7 +52,6 @@ Future<String?> testAgentModel({
       case AgentApiProvider.gemini:
         await dio.post(
           '${provider.chatUrl(baseUrl)}/models/$modelId:generateContent',
-          queryParameters: {'key': apiKey},
           data: {
             'contents': [
               {
@@ -63,6 +62,7 @@ Future<String?> testAgentModel({
             ],
             'generationConfig': {'maxOutputTokens': 1},
           },
+          options: Options(headers: {'x-goog-api-key': apiKey}),
         );
       case AgentApiProvider.openAICompatible:
         await dio.post(
@@ -158,7 +158,7 @@ Future<List<String>> fetchAvailableModels({
     case AgentApiProvider.gemini:
       final response = await dio.get<Map<String, dynamic>>(
         provider.modelsUrl(baseUrl),
-        queryParameters: {'key': apiKey},
+        options: Options(headers: {'x-goog-api-key': apiKey}),
       );
       final list = response.data?['models'] as List<dynamic>? ?? [];
       return list

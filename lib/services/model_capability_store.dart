@@ -8,7 +8,7 @@ import 'package:path/path.dart' as p;
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import 'agent_http.dart';
-import 'agent_model_capability.dart';
+import '../data/models/ai/agent_config.dart';
 
 /// 模型能力规则集订阅（geosite 模式）：远程 jsdelivr CDN 拉取
 /// `Cyli00/modelcaps` 仓库的 `model_capabilities.json`，本地文件缓存 +
@@ -119,7 +119,10 @@ class ModelCapabilityStore {
   /// 仅测试用：注入远程表数据（绕过网络/缓存），验证 lookup 纯 id 提取、生图
   /// 判定、未知模型默认无能力。生产代码不应调用。
   @visibleForTesting
-  void debugInject(Map<String, AgentModelCapability> models, {String? version}) {
+  void debugInject(
+    Map<String, AgentModelCapability> models, {
+    String? version,
+  }) {
     _models
       ..clear()
       ..addEntries([
@@ -134,9 +137,11 @@ class ModelCapabilityStore {
     final fetchedUtc = _fetchedAt!.toUtc();
     // fetchedAt 所在 UTC 日的次日 0 点 = 下次更新时间（与 modelcaps CI
     // 每日 UTC 0 点 build 对齐——过 UTC 0 点即视为新一天，需拉取）。
-    final nextUpdate =
-        DateTime.utc(fetchedUtc.year, fetchedUtc.month, fetchedUtc.day)
-            .add(const Duration(days: 1));
+    final nextUpdate = DateTime.utc(
+      fetchedUtc.year,
+      fetchedUtc.month,
+      fetchedUtc.day,
+    ).add(const Duration(days: 1));
     return !DateTime.now().toUtc().isBefore(nextUpdate);
   }
 
@@ -177,9 +182,10 @@ class ModelCapabilityStore {
       final respHeaders = resp.headers.map;
       final newEtag = respHeaders['etag']?.first ?? etag;
       final newLastMod = respHeaders['last-modified']?.first ?? lastMod;
-    await Future.wait([
+      await Future.wait([
         if (newEtag != null) GStorage.setting.put(_kEtag, newEtag),
-        if (newLastMod != null) GStorage.setting.put(_kLastModified, newLastMod),
+        if (newLastMod != null)
+          GStorage.setting.put(_kLastModified, newLastMod),
         GStorage.setting.put(_kLastFetched, _fetchedAt!.toIso8601String()),
         if (_version != null) GStorage.setting.put(_kVersion, _version!),
       ]);
@@ -187,5 +193,16 @@ class ModelCapabilityStore {
     } catch (_) {
       return false; // 网络失败 → 保留旧缓存
     }
+  }
+}
+
+extension AgentProviderCapabilities on AgentProviderInstance {
+  /// 取模型能力，优先级：用户手动覆写 > 远程能力表(geosite 订阅) > 正则推断。
+  AgentModelCapability capabilityFor(String modelId) {
+    final manual = modelCaps[modelId];
+    if (manual != null) return manual;
+    final remote = ModelCapabilityStore.instance.lookup(modelId);
+    if (remote != null) return remote;
+    return AgentModelCapability.infer(provider: protocol, modelId: modelId);
   }
 }

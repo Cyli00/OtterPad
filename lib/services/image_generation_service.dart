@@ -4,9 +4,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
-import '../providers/api_provider.dart';
+import '../data/models/ai/agent_config.dart';
 import 'agent_http.dart';
-import 'agent_model_capability.dart';
 import 'model_capability_store.dart';
 
 class ImageGenerationRequest {
@@ -70,7 +69,8 @@ class ImageGenerationService {
     // 走完整能力链：调用方传 capabilityFor 结果（手动覆写 > 远程表 > 兜底），
     // 命中即放行；未传时回退远程表判定。避免用户手动设为生图、但远程表未收录
     // 的模型被拒（isImageGenerationModel 只查远程表，绕过手动覆写）。
-    final canGenerate = request.capability?.canGenerateImage ??
+    final canGenerate =
+        request.capability?.canGenerateImage ??
         ModelCapabilityStore.instance.isImageGenerationModel(request.modelId);
     if (!canGenerate) {
       throw ImageGenerationException('当前模型不支持图片生成：${request.modelId}');
@@ -190,9 +190,13 @@ class ImageGenerationService {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         endpoint,
-        queryParameters: {'key': request.apiKey},
         data: body,
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': request.apiKey,
+          },
+        ),
         cancelToken: request.cancelToken,
       );
       return _extractGeminiImage(response.data);

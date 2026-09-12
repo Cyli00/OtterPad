@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart' show CancelToken;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
-import '../providers/api_provider.dart';
+import '../data/models/ai/agent_config.dart';
 import 'agent_chat_service.dart';
 import 'doc_extract_service.dart';
 import 'document_structure.dart';

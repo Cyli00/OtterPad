@@ -1,11 +1,11 @@
+import '../../widgets/setting_controls.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/l10n.dart';
-import '../../providers/api_provider.dart';
+import '../../providers/agent_api_provider.dart';
 import '../../providers/image_generation_config_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/prompts.dart';
@@ -13,13 +13,14 @@ import 'setting_picker.dart';
 
 /// 画幅比例用户场景副标题——帮用户从"数字"映射到"使用场景"。
 /// 含中文的 hint 在 build 内通过 l10n 解析，其余技术描述保持原样。
-Map<String, String> _kAspectRatioHints(AppLocalizations l10n) => <String, String>{
-  '1:1': l10n.aspectSquare,
-  '4:3': l10n.aspectClassic,
-  '16:9': l10n.aspectWide,
-  '21:9': l10n.aspectUltraWide,
-  '9:16': l10n.aspectTall,
-};
+Map<String, String> _kAspectRatioHints(AppLocalizations l10n) =>
+    <String, String>{
+      '1:1': l10n.aspectSquare,
+      '4:3': l10n.aspectClassic,
+      '16:9': l10n.aspectWide,
+      '21:9': l10n.aspectUltraWide,
+      '9:16': l10n.aspectTall,
+    };
 
 class ImageGenerationSettingsSection extends ConsumerStatefulWidget {
   const ImageGenerationSettingsSection({super.key});
@@ -56,28 +57,6 @@ class _ImageGenerationSettingsSectionState
     });
   }
 
-  Widget _helpIcon(String message) {
-    final cs = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: message,
-      triggerMode: TooltipTriggerMode.tap,
-      showDuration: const Duration(seconds: 5),
-      preferBelow: true,
-      verticalOffset: 16,
-      decoration: BoxDecoration(
-        color: cs.inverseSurface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Icon(Symbols.help_rounded, size: 16, color: cs.onSurfaceVariant),
-      ),
-    );
-  }
-
   InputDecoration _fieldDeco(
     ThemeData theme,
     ColorScheme cs, {
@@ -107,92 +86,6 @@ class _ImageGenerationSettingsSectionState
     );
   }
 
-  Widget _titleRow(String title, String tooltip) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        const SizedBox(width: 4),
-        _helpIcon(tooltip),
-      ],
-    );
-  }
-
-  Widget _resetButton({required VoidCallback onPressed}) {
-    final cs = Theme.of(context).colorScheme;
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(Symbols.refresh_rounded, size: 18, color: cs.onSurfaceVariant),
-      tooltip: context.l10n.restoreDefaults,
-      visualDensity: VisualDensity.compact,
-    );
-  }
-
-  Widget _sliderRow({
-    required ThemeData theme,
-    required ColorScheme cs,
-    required int value,
-    required ValueChanged<int> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _titleRow(
-                context.l10n.referenceImageCount,
-                context.l10n.imageRefCountHint,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$value',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: cs.onPrimaryContainer,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-            trackHeight: 3,
-          ),
-          child: Slider(
-            value: value.toDouble(),
-            min: kSummaryReferenceImageMin.toDouble(),
-            max: kSummaryReferenceImageMax.toDouble(),
-            divisions: kSummaryReferenceImageMax - kSummaryReferenceImageMin,
-            onChanged: (v) {
-              Haptics.soft();
-              onChanged(v.round());
-            },
-            padding: EdgeInsets.zero,
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -205,16 +98,15 @@ class _ImageGenerationSettingsSectionState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _titleRow(
-            context.l10n.aspectRatio,
-            context.l10n.aspectRatioHint,
-          ),
+          SettingTitle(context.l10n.aspectRatio, context.l10n.aspectRatioHint),
           const SizedBox(height: 12),
           SettingPicker<String>(
             current: cfg.aspectRatio,
             options: kSummaryAspectRatios,
             labelFor: (v) => v,
-            subtitleFor: (v) => v == '3:2' ? context.l10n.classicPhotography : (_kAspectRatioHints(context.l10n)[v] ?? ''),
+            subtitleFor: (v) => v == '3:2'
+                ? context.l10n.classicPhotography
+                : (_kAspectRatioHints(context.l10n)[v] ?? ''),
             sheetTitle: context.l10n.aspectRatio,
             onChanged: (v) {
               Haptics.soft();
@@ -225,7 +117,7 @@ class _ImageGenerationSettingsSectionState
           Row(
             children: [
               Expanded(
-                child: _titleRow(
+                child: SettingTitle(
                   context.l10n.resolution,
                   context.l10n.resolutionHint,
                 ),
@@ -249,25 +141,30 @@ class _ImageGenerationSettingsSectionState
             onSelected: notifier.setFidelity,
           ),
           const SizedBox(height: 24),
-          _sliderRow(
-            theme: theme,
-            cs: cs,
-            value: cfg.maxReferenceImages,
-            onChanged: notifier.setMaxReferenceImages,
+          SettingSlider(
+            title: context.l10n.referenceImageCount,
+            tooltip: context.l10n.imageRefCountHint,
+            padding: EdgeInsets.zero,
+            value: cfg.maxReferenceImages.toDouble(),
+            fallback: kSummaryReferenceImageMin.toDouble(),
+            min: kSummaryReferenceImageMin.toDouble(),
+            max: kSummaryReferenceImageMax.toDouble(),
+            divisions: kSummaryReferenceImageMax - kSummaryReferenceImageMin,
+            formatter: (v) => v.round().toString(),
+            onChanged: (v) => notifier.setMaxReferenceImages(v.round()),
           ),
           const SizedBox(height: 24),
           Row(
             children: [
               Expanded(
-                child: _titleRow(
+                child: SettingTitle(
                   context.l10n.summaryPromptLabel,
                   context.l10n.summaryPromptHint,
                 ),
               ),
               if (!cfg.isPromptDefault)
-                _resetButton(
+                SettingResetButton(
                   onPressed: () {
-                    Haptics.soft();
                     notifier.resetPrompt();
                     _promptCtrl.text = kDefaultSummaryImagePrompt;
                   },
@@ -280,7 +177,11 @@ class _ImageGenerationSettingsSectionState
             minLines: 5,
             maxLines: 12,
             style: theme.textTheme.bodyMedium,
-            decoration: _fieldDeco(theme, cs, hint: context.l10n.summaryPromptFieldHint),
+            decoration: _fieldDeco(
+              theme,
+              cs,
+              hint: context.l10n.summaryPromptFieldHint,
+            ),
             onChanged: (v) => _debounceSavePrompt(v.trim()),
           ),
         ],

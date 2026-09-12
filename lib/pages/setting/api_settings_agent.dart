@@ -11,10 +11,9 @@ import '../../widgets/app_divider.dart';
 import '../../core/l10n.dart';
 import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
-import '../../providers/api_provider.dart';
+import '../../providers/agent_api_provider.dart';
 import '../../providers/model_test_provider.dart';
 import '../../providers/onboarding_provider.dart';
-import '../../services/agent_model_capability.dart';
 import '../../services/model_capability_store.dart';
 import '../../services/haptics.dart';
 import '../../services/tavily_search_service.dart';
@@ -1148,8 +1147,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       final models = inst.models.where((modelId) {
         final cap = inst.capabilityFor(modelId);
         if (imageOnly) return cap.canGenerateImage;
-        if (multimodalOnly)
+        if (multimodalOnly) {
           return cap.imageInput && !cap.embedding && !cap.imageOutput;
+        }
         return !cap.embedding && !cap.imageOutput;
       }).toList();
       if (models.isNotEmpty) {

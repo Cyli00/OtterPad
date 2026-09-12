@@ -2,9 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
-import '../providers/api_provider.dart';
+import '../data/models/ai/agent_config.dart';
 import 'agent_http.dart';
-import 'agent_model_capability.dart';
 import 'agent_thinking_payload.dart';
 import 'builtin_tools.dart';
 import 'tavily_search_service.dart';
@@ -12,7 +11,8 @@ import 'tavily_search_service.dart';
 /// Agent 对话请求失败（已含服务商可读文案），调用方可按语境加前缀。
 class AgentChatException implements Exception {
   final String message;
-  const AgentChatException(this.message);
+  final bool retryable;
+  const AgentChatException(this.message, {this.retryable = false});
 
   @override
   String toString() => message;
@@ -145,13 +145,30 @@ class AgentChatService {
         final code = e.response?.statusCode;
         final canFallback =
             m < modes.length - 1 && (code == 400 || code == 422);
-        if (!canFallback) throw AgentChatException(readableMessage(e));
+        if (!canFallback) {
+          throw AgentChatException(
+            readableMessage(e),
+            retryable: _isTransientDioException(e),
+          );
+        }
       }
     }
     throw StateError('unreachable');
   }
 
   /// 429/5xx/超时/断连重试一次（移动网络抖动常见），其余错误直接抛出。
+  static bool _isTransientDioException(DioException e) {
+    final code = e.response?.statusCode;
+    return code == null
+        ? const {
+            DioExceptionType.connectionTimeout,
+            DioExceptionType.sendTimeout,
+            DioExceptionType.receiveTimeout,
+            DioExceptionType.connectionError,
+          }.contains(e.type)
+        : const {429, 500, 502, 503, 529}.contains(code);
+  }
+
   static Future<T> _withTransientRetry<T>(
     CancelToken? cancelToken,
     Future<T> Function() run,
@@ -160,18 +177,12 @@ class AgentChatService {
       return await run();
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) rethrow;
-      final code = e.response?.statusCode;
-      final transient = code == null
-          ? const {
-              DioExceptionType.connectionTimeout,
-              DioExceptionType.sendTimeout,
-              DioExceptionType.receiveTimeout,
-              DioExceptionType.connectionError,
-            }.contains(e.type)
-          : const {429, 500, 502, 503, 529}.contains(code);
-      if (!transient) rethrow;
-      await Future.delayed(const Duration(seconds: 2));
-      if (cancelToken?.isCancelled ?? false) rethrow;
+      if (!_isTransientDioException(e)) rethrow;
+      await Future.any<void>([
+        Future<void>.delayed(const Duration(seconds: 2)),
+        if (cancelToken != null) cancelToken.whenCancel.then((_) {}),
+      ]);
+      if (cancelToken?.isCancelled ?? false) throw cancelToken!.cancelError!;
       return run();
     }
   }
@@ -274,7 +285,6 @@ class AgentChatService {
       case AgentApiProvider.gemini:
         resp = await dio.post(
           '$url/models/$modelId:generateContent',
-          queryParameters: {'key': apiKey},
           data: _geminiBody(
             modelId: modelId,
             modelParams: modelParams,
@@ -288,6 +298,7 @@ class AgentChatService {
             mode: mode,
             schema: schema,
           ),
+          options: Options(headers: {'x-goog-api-key': apiKey}),
           cancelToken: cancelToken,
         );
         final geminiData = resp.data;
@@ -1146,7 +1157,7 @@ class AgentChatService {
   ) async* {
     final resp = await dio.post<ResponseBody>(
       '$url/models/$modelId:streamGenerateContent',
-      queryParameters: {'key': apiKey, 'alt': 'sse'},
+      queryParameters: {'alt': 'sse'},
       data: _geminiBody(
         modelId: modelId,
         modelParams: modelParams,
@@ -1162,6 +1173,7 @@ class AgentChatService {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'text/event-stream',
+          'x-goog-api-key': apiKey,
         },
         responseType: ResponseType.stream,
       ),

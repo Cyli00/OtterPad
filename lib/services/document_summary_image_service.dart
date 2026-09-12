@@ -5,10 +5,10 @@ import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
 import '../data/models/book/document.dart';
-import '../providers/api_provider.dart';
+import '../core/app_logger.dart';
+import '../data/models/ai/agent_config.dart';
 import '../providers/image_generation_config_provider.dart';
 import '../utils/doc_paths.dart';
-import 'agent_model_capability.dart';
 import 'back_matter_detector.dart';
 import 'figure_extract_service.dart';
 import 'image_generation_service.dart';
@@ -142,9 +142,13 @@ class DocumentSummaryImageService {
     final imagePath = p.join(outDir.path, 'summary.png');
     final metadataPath = p.join(outDir.path, 'summary.meta.json');
 
-    await Future.wait([
-      File(imagePath).writeAsBytes(result.bytes, flush: true),
-      File(metadataPath).writeAsString(
+    final stagedImage = File(
+      '$imagePath.${DateTime.now().microsecondsSinceEpoch}.tmp',
+    );
+    try {
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+      await stagedImage.writeAsBytes(result.bytes, flush: true);
+      await File(metadataPath).writeAsString(
         const JsonEncoder.withIndent('  ').convert({
           'documentId': document.id,
           'title': document.title,
@@ -160,8 +164,18 @@ class DocumentSummaryImageService {
             'backMatterOffset': compactResult.backMatterOffset,
         }),
         flush: true,
-      ),
-    ]);
+      );
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+      await stagedImage.rename(imagePath);
+    } finally {
+      try {
+        if (await stagedImage.exists()) {
+          await stagedImage.delete();
+        }
+      } catch (e, st) {
+        log.w('[SummaryImage] 临时文件清理失败', error: e, stackTrace: st);
+      }
+    }
 
     return DocumentSummaryImageResult(
       imagePath: imagePath,

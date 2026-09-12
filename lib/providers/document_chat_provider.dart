@@ -1,3 +1,4 @@
+import '../services/model_capability_store.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -5,9 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../data/models/chat/chat_session.dart';
-import '../services/agent_model_capability.dart';
+import '../core/app_logger.dart';
 import '../services/document_chat_service.dart';
-import 'api_provider.dart';
+import 'agent_api_provider.dart';
 
 /// 每文献问 AI 状态。[activeSessionId] 为 null 表示「新会话草稿」——
 /// 首次发送时才落地创建会话文件，避免空会话垃圾。
@@ -78,9 +79,30 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
   }
 
   Future<void> _init() async {
-    final sessions = await DocumentChatService.listSessions(documentId);
+    try {
+      final sessions = await DocumentChatService.listSessions(documentId);
+      if (!mounted) return;
+      state = state.copyWith(loaded: true, sessions: sessions);
+    } catch (e, st) {
+      _reportError(e, st);
+      if (mounted) state = state.copyWith(loaded: true);
+    }
+  }
+
+  void _reportError(Object error, StackTrace stackTrace) {
+    log.w('[DocumentChat] $documentId', error: error, stackTrace: stackTrace);
     if (!mounted) return;
-    state = state.copyWith(loaded: true, sessions: sessions);
+    state = state.copyWith(
+      sending: false,
+      streamingText: null,
+      error: '$error'.replaceFirst('Exception: ', ''),
+    );
+  }
+
+  @override
+  void dispose() {
+    cancel();
+    super.dispose();
   }
 
   /// 切到新会话草稿（不立即建文件）。
@@ -126,13 +148,6 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     var userMsg = ChatMessage.user(content: question, quotedText: quotedText);
     session = session.append(userMsg);
     _upsert(session, sending: true);
-    await DocumentChatService.saveSession(documentId, session);
-
-    // 首轮发出后异步生成 AI 短标题（快速模型、关思考），不阻塞主请求。
-    if (history.isEmpty) {
-      unawaited(_generateTitle(session.id, question, quotedText));
-    }
-
     final cancelToken = _cancelToken = CancelToken();
     // 流式增量 80ms 节流刷入 state——每个 token 都重建 Markdown 会拖垮 UI。
     final streamBuf = StringBuffer();
@@ -151,11 +166,29 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
       session = (_sessionById(session.id) ?? session).append(
         ChatMessage.assistant(content: content, modelId: _modelIdOf(role)),
       );
-      _upsert(session, sending: false);
+      _upsert(session, sending: true);
       await DocumentChatService.saveSession(documentId, session);
+      if (mounted) state = state.copyWith(sending: false);
     }
 
     try {
+      await DocumentChatService.saveSession(documentId, session);
+      if (!mounted) return;
+      if (cancelToken.isCancelled) throw cancelToken.cancelError!;
+      if (history.isEmpty) {
+        unawaited(
+          _generateTitle(session.id, question, quotedText).catchError((
+            Object e,
+            StackTrace st,
+          ) {
+            log.w(
+              '[DocumentChat] 标题生成失败：$documentId',
+              error: e,
+              stackTrace: st,
+            );
+          }),
+        );
+      }
       // 客户端 URL 回退抓取（无链接 / 模型原生支持 URL 工具时为 null）。
       // 完成后挂回已落盘的 user 消息，历史重放据此与当轮保持一致。
       final urlContext = await DocumentChatService.buildUrlContextFallback(
@@ -163,6 +196,8 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
         question: question,
         cancelToken: cancelToken,
       );
+      if (!mounted) return;
+      if (cancelToken.isCancelled) throw cancelToken.cancelError!;
       if (urlContext != null) {
         userMsg = userMsg.withUrlContext(urlContext);
         final latest = _sessionById(session.id) ?? session;
@@ -191,7 +226,7 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
       flushTimer?.cancel();
       if (!mounted) return;
       await persistAnswer(answer);
-    } on Exception catch (e) {
+    } catch (e, st) {
       flushTimer?.cancel();
       if (!mounted) return;
       if (cancelToken.isCancelled) {
@@ -200,15 +235,18 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
         if (partial.isEmpty) {
           state = state.copyWith(sending: false, streamingText: null);
         } else {
-          await persistAnswer(partial);
+          try {
+            await persistAnswer(partial);
+          } catch (saveError, saveStack) {
+            _reportError(saveError, saveStack);
+          }
         }
         return;
       }
-      state = state.copyWith(
-        sending: false,
-        streamingText: null,
-        error: '$e'.replaceFirst('Exception: ', ''),
-      );
+      _reportError(e, st);
+    } finally {
+      flushTimer?.cancel();
+      if (identical(_cancelToken, cancelToken)) _cancelToken = null;
     }
   }
 
@@ -232,8 +270,15 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     final truncated = session.copyWith(
       messages: session.messages.sublist(0, keepCount),
     );
+    state = state.copyWith(sending: true, error: null);
+    try {
+      await DocumentChatService.saveSession(documentId, truncated);
+    } catch (e, st) {
+      _reportError(e, st);
+      return;
+    }
+    if (!mounted) return;
     _upsert(truncated, sending: false);
-    await DocumentChatService.saveSession(documentId, truncated);
     await send(
       text: text,
       role: role,
@@ -256,7 +301,13 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
       updatedAt: DateTime.now(),
       messages: session.messages.sublist(0, upToIndex + 1),
     );
-    await DocumentChatService.saveSession(documentId, forked);
+    try {
+      await DocumentChatService.saveSession(documentId, forked);
+    } catch (e, st) {
+      _reportError(e, st);
+      return;
+    }
+    if (!mounted) return;
     state = state.copyWith(
       sessions: [forked, ...state.sessions],
       activeSessionId: forked.id,
@@ -310,7 +361,7 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
   }
 
   /// 首轮发出后用快速模型异步生成会话标题。与回答的落盘竞写同一文件——
-  /// 双方都先从 state 取最新版本再改各自字段，后写覆盖前写也不丢内容。
+  /// 双方先从 state 取最新版本再改字段，服务层按调用顺序串行写入同一文件。
   Future<void> _generateTitle(
     String sessionId,
     String question,
@@ -325,7 +376,11 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     if (current == null) return; // 会话已被删除
     final updated = current.copyWith(title: title);
     _replaceSession(updated);
-    await DocumentChatService.saveSession(documentId, updated);
+    try {
+      await DocumentChatService.saveSession(documentId, updated);
+    } catch (e, st) {
+      log.w('[DocumentChat] 标题保存失败：$documentId', error: e, stackTrace: st);
+    }
   }
 
   /// 把会话写回列表头部（updatedAt 降序）并设为活动会话。

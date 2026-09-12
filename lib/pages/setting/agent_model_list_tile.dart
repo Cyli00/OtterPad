@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/l10n.dart';
-import '../../services/agent_model_capability.dart';
+import '../../data/models/ai/agent_model_capability.dart';
 import '../../services/haptics.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../../widgets/tactile_press.dart';

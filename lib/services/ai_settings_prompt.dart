@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/l10n.dart';
-import '../providers/api_provider.dart';
+import '../data/models/ai/agent_config.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
 import '../widgets/app_dialog.dart';

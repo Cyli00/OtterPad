@@ -1,3 +1,4 @@
+import '../services/model_capability_store.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
@@ -23,7 +24,8 @@ import '../services/mineru_result_converter.dart';
 import '../services/pdf_process_lock.dart';
 import '../services/snackbar_service.dart';
 import '../utils/doc_paths.dart';
-import 'api_provider.dart';
+import 'agent_api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import 'task_activity_provider.dart' show taskActivityProvider;
 import 'document_lifecycle_provider.dart';
 import 'image_generation_config_provider.dart';
@@ -398,18 +400,32 @@ class DocumentTaskNotifier
           documentId: item.documentId,
         );
         if (state[key]?.isActive == true) {
-          _finishTask(key, DocumentTaskStatus.cancelled);
+          _finishTask(
+            key,
+            cancelToken.isCancelled
+                ? DocumentTaskStatus.cancelled
+                : batchResults[item.documentId] != null
+                ? DocumentTaskStatus.completed
+                : DocumentTaskStatus.failed,
+          );
         }
       }
       return results;
     } catch (e) {
+      log.w('[DocumentTask] 批量提取失败', error: e);
       for (final item in runnable) {
         final key = DocumentTaskKey(
           type: DocumentTaskType.extractDocument,
           documentId: item.documentId,
         );
         if (state[key]?.isActive == true) {
-          _finishTask(key, DocumentTaskStatus.failed, error: e);
+          _finishTask(
+            key,
+            cancelToken.isCancelled
+                ? DocumentTaskStatus.cancelled
+                : DocumentTaskStatus.failed,
+            error: e,
+          );
         }
       }
       return {for (final item in items) item.documentId: null};

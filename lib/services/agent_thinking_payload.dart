@@ -1,5 +1,4 @@
-import '../providers/api_provider.dart';
-import 'agent_model_capability.dart';
+import '../data/models/ai/agent_config.dart';
 
 /// 把跨 provider 统一的 [ThinkingLevel] 翻译成各服务商请求体 fragment。
 ///

@@ -1,5 +1,4 @@
-import '../providers/api_provider.dart';
-import 'agent_model_capability.dart';
+import '../data/models/ai/agent_config.dart';
 
 /// 内置 server-side 工具的内部标识常量。
 ///

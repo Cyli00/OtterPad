@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:dio_http2_adapter/dio_http2_adapter.dart';
 
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
+import 'proxy_adapter.dart';
 
 const _kHttp2Enabled = SettingsKeys.http2Enabled;
 
@@ -64,27 +63,9 @@ class AgentHttp {
   // ── HTTP/1.1 adapter ──
 
   IOHttpClientAdapter _buildH11Adapter() {
-    final adapter = IOHttpClientAdapter();
     final proxy = _proxy;
-    if (proxy == null) return adapter;
-    switch (proxy.$1) {
-      case 'custom':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'PROXY ${proxy.$2}:${proxy.$3}';
-          client.badCertificateCallback = (_, _, _) => true;
-          return client;
-        };
-      case 'system':
-        adapter.createHttpClient = () => HttpClient();
-      case 'none':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'DIRECT';
-          return client;
-        };
-    }
-    return adapter;
+    if (proxy == null) return IOHttpClientAdapter();
+    return buildProxyAdapter(proxy.$1, proxy.$2, proxy.$3);
   }
 
   // ── adapter 注入 ──
@@ -96,9 +77,7 @@ class AgentHttp {
       return;
     }
     dio.httpClientAdapter = Http2Adapter(
-      ConnectionManager(
-        idleTimeout: const Duration(seconds: 15),
-      ),
+      ConnectionManager(idleTimeout: const Duration(seconds: 15)),
       fallbackAdapter: h11,
     );
   }

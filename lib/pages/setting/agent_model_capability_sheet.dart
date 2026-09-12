@@ -5,8 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/elevation.dart';
 import '../../core/l10n.dart';
-import '../../providers/api_provider.dart';
-import '../../services/agent_model_capability.dart';
+import '../../data/models/ai/agent_config.dart';
 import '../../services/haptics.dart';
 import '../../utils/desktop.dart';
 import '../../widgets/app_dialog.dart';

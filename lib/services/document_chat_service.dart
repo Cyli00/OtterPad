@@ -5,7 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
 import '../data/models/chat/chat_session.dart';
-import '../providers/api_provider.dart';
+import '../providers/agent_api_provider.dart';
 import '../utils/doc_paths.dart';
 import 'agent_chat_service.dart';
 import 'builtin_tools.dart';
@@ -27,6 +27,7 @@ enum ChatModelRole { expert, fast }
 ///   实例，禁止用 effectiveAgentApiProvider 的单一文本角色视图代替。
 class DocumentChatService {
   DocumentChatService._();
+  static final _pendingWrites = <String, Future<void>>{};
 
   // ─── 会话存取 ───
 
@@ -54,8 +55,19 @@ class DocumentChatService {
     ChatSession session,
   ) async {
     final file = File(DocPaths.chatSession(documentId, session.id));
-    await file.parent.create(recursive: true);
-    await file.writeAsString(jsonEncode(session.toJson()));
+    final previous = _pendingWrites[file.path] ?? Future<void>.value();
+    final write = previous.catchError((Object _) {}).then((_) async {
+      await file.parent.create(recursive: true);
+      await file.writeAsString(jsonEncode(session.toJson()));
+    });
+    _pendingWrites[file.path] = write;
+    try {
+      await write;
+    } finally {
+      if (identical(_pendingWrites[file.path], write)) {
+        _pendingWrites.remove(file.path);
+      }
+    }
   }
 
   static Future<void> deleteSession(String documentId, String sessionId) async {
@@ -305,10 +317,7 @@ class DocumentChatService {
     if (onlyImagePath != null) {
       final path = p.isAbsolute(onlyImagePath)
           ? onlyImagePath
-          : p.join(
-              DocPaths.figuresDir(documentId),
-              p.basename(onlyImagePath),
-            );
+          : p.join(DocPaths.figuresDir(documentId), p.basename(onlyImagePath));
       final file = File(path);
       if (!await file.exists()) return const [];
       final label = onlyImageLabel?.trim();
