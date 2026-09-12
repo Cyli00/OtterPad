@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
-import '../../../providers/api_provider.dart';
+import '../../../data/models/ocr/doc_extract_config.dart';
 import '../../../providers/document_task_provider.dart';
 import '../../../services/batch_extract_service.dart';
 import '../../../utils/desktop.dart';

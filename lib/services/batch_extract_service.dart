@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
+import 'proxy_adapter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
-import '../providers/api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import 'doc_extract_service.dart';
 import '../core/app_logger.dart';
 
@@ -66,6 +66,43 @@ class BatchExtractProgress {
     required this.currentTitle,
     required this.statuses,
   });
+
+  factory BatchExtractProgress.fromStatuses(
+    List<BatchJobStatus> statuses,
+    String currentTitle,
+  ) {
+    final succeeded = statuses
+        .where((s) => s.state == BatchJobState.done)
+        .length;
+    final failed = statuses
+        .where(
+          (s) =>
+              s.state == BatchJobState.failed ||
+              s.state == BatchJobState.cancelled,
+        )
+        .length;
+    return BatchExtractProgress(
+      total: statuses.length,
+      completed: succeeded + failed,
+      succeeded: succeeded,
+      failed: failed,
+      currentTitle: currentTitle,
+      statuses: statuses
+          .map(
+            (s) => BatchJobStatus(
+              documentId: s.documentId,
+              title: s.title,
+              state: s.state,
+              jobId: s.jobId,
+              error: s.error,
+              extractedPages: s.extractedPages,
+              totalPages: s.totalPages,
+              savedPath: s.savedPath,
+            ),
+          )
+          .toList(),
+    );
+  }
 }
 
 /// documentId → 已保存的阅读版 Markdown 路径（null 表示该文献提取失败）
@@ -89,39 +126,28 @@ class BatchExtractException implements Exception {
 ///
 /// 提取结果通过 [BatchExtractItem.documentId] 与文献条目一一对应。
 class BatchExtractService {
-  BatchExtractService._();
+  BatchExtractService._()
+    : _dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 300),
+          sendTimeout: const Duration(seconds: 120),
+        ),
+      );
+  @visibleForTesting
+  BatchExtractService.forTesting(this._dio);
   static final BatchExtractService instance = BatchExtractService._();
 
-  late final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 300),
-      sendTimeout: const Duration(seconds: 120),
-    ),
-  );
+  final Dio _dio;
 
   // ─── 代理配置 ──────────────────────────────────────────────────────────────
 
   void applyProxy(Enum mode, String host, int port) {
-    final adapter = IOHttpClientAdapter();
-    switch (mode.name) {
-      case 'custom':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'PROXY $host:$port';
-          client.badCertificateCallback = (_, _, _) => true;
-          return client;
-        };
-      case 'system':
-        adapter.createHttpClient = () => HttpClient();
-      default:
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'DIRECT';
-          return client;
-        };
-    }
-    _dio.httpClientAdapter = adapter;
+    _dio.httpClientAdapter = buildProxyAdapter(
+      mode.name,
+      host,
+      port,
+    );
   }
 
   // ─── 内部工具 ──────────────────────────────────────────────────────────────
@@ -163,43 +189,6 @@ class BatchExtractService {
     throw BatchExtractException('[$code] $desc');
   }
 
-  BatchExtractProgress _buildProgress(
-    List<BatchJobStatus> statuses,
-    String currentTitle,
-  ) {
-    final succeeded = statuses
-        .where((s) => s.state == BatchJobState.done)
-        .length;
-    final failed = statuses
-        .where(
-          (s) =>
-              s.state == BatchJobState.failed ||
-              s.state == BatchJobState.cancelled,
-        )
-        .length;
-    return BatchExtractProgress(
-      total: statuses.length,
-      completed: succeeded + failed,
-      succeeded: succeeded,
-      failed: failed,
-      currentTitle: currentTitle,
-      statuses: statuses
-          .map(
-            (s) => BatchJobStatus(
-              documentId: s.documentId,
-              title: s.title,
-              state: s.state,
-              jobId: s.jobId,
-              error: s.error,
-              extractedPages: s.extractedPages,
-              totalPages: s.totalPages,
-              savedPath: s.savedPath,
-            ),
-          )
-          .toList(),
-    );
-  }
-
   // ─── Job 提交与轮询 ────────────────────────────────────────────────────────
 
   /// 以 multipart/form-data 提交提取任务，返回 jobId。
@@ -239,12 +228,16 @@ class BatchExtractService {
       throw BatchExtractException('提交任务失败: ${e.message ?? e.type.name}');
     }
 
-    log.d('[BatchExtract] submit response: code=${response.data?['code']}, msg=${response.data?['msg']}');
+    log.d(
+      '[BatchExtract] submit response: code=${response.data?['code']}, msg=${response.data?['msg']}',
+    );
     _checkApiResponse(response.data);
     final jobId = response.data?['data']?['jobId'] as String?;
     if (jobId == null) {
       final msg = response.data?['msg'] as String? ?? '响应中无 jobId';
-      log.d('[BatchExtract] submit failed: no jobId, full response=${response.data}');
+      log.d(
+        '[BatchExtract] submit failed: no jobId, full response=${response.data}',
+      );
       throw BatchExtractException('提交任务失败: $msg');
     }
     log.d('[BatchExtract] submit ok: jobId=$jobId');
@@ -256,18 +249,13 @@ class BatchExtractService {
     String jobId,
     String jobUrl,
     String token,
+    CancelToken? cancelToken,
   ) async {
-    final Response<Map<String, dynamic>> response;
-    try {
-      response = await _dio.get<Map<String, dynamic>>(
-        '$jobUrl/$jobId',
-        options: Options(headers: {'Authorization': 'bearer $token'}),
-      );
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 429) rethrow;
-      _checkApiResponse(_safeResponseMap(e.response?.data));
-      throw BatchExtractException('查询任务状态失败: ${e.message ?? e.type.name}');
-    }
+    final response = await _dio.get<Map<String, dynamic>>(
+      '$jobUrl/$jobId',
+      options: Options(headers: {'Authorization': 'bearer $token'}),
+      cancelToken: cancelToken,
+    );
 
     _checkApiResponse(response.data);
     final data = response.data?['data'] as Map<String, dynamic>?;
@@ -280,22 +268,19 @@ class BatchExtractService {
     String batchId,
     String jobUrl,
     String token,
+    CancelToken? cancelToken,
   ) async {
-    final Response<Map<String, dynamic>> response;
-    try {
-      response = await _dio.get<Map<String, dynamic>>(
-        '$jobUrl/batch/$batchId',
-        options: Options(headers: {'Authorization': 'bearer $token'}),
-      );
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 429) rethrow;
-      _checkApiResponse(_safeResponseMap(e.response?.data));
-      throw BatchExtractException('批量查询状态失败: ${e.message ?? e.type.name}');
-    }
+    final response = await _dio.get<Map<String, dynamic>>(
+      '$jobUrl/batch/$batchId',
+      options: Options(headers: {'Authorization': 'bearer $token'}),
+      cancelToken: cancelToken,
+    );
 
     _checkApiResponse(response.data);
     final data = response.data?['data'];
-    log.d('[BatchExtract] pollBatch response data type=${data.runtimeType}, keys=${data is Map<String, dynamic> ? data.keys.toList() : 'N/A'}');
+    log.d(
+      '[BatchExtract] pollBatch response data type=${data.runtimeType}, keys=${data is Map<String, dynamic> ? data.keys.toList() : 'N/A'}',
+    );
     if (data is Map<String, dynamic>) {
       final results = data['extractResult'];
       if (results is List) {
@@ -309,14 +294,19 @@ class BatchExtractService {
   }
 
   /// 从 JSONL URL 下载结果，展平为页面数组后返回 [DocExtractResult]。
-  Future<DocExtractResult> _parseJsonlResult(String jsonlUrl) async {
+  Future<DocExtractResult> _parseJsonlResult(
+    String jsonlUrl,
+    CancelToken? cancelToken,
+  ) async {
     final Response<String> response;
     try {
       response = await _dio.get<String>(
         jsonlUrl,
         options: Options(responseType: ResponseType.plain),
+        cancelToken: cancelToken,
       );
     } on DioException catch (e) {
+      if (CancelToken.isCancel(e)) rethrow;
       throw BatchExtractException('下载提取结果失败: ${e.message ?? e.type.name}');
     }
 
@@ -365,6 +355,7 @@ class BatchExtractService {
     Map<String, dynamic> data,
     List<BatchExtractItem> items,
     Map<String, String?> results,
+    CancelToken? cancelToken,
   ) async {
     switch (data['state'] as String? ?? '') {
       case 'pending':
@@ -383,10 +374,16 @@ class BatchExtractService {
 
         if (jsonlUrl != null) {
           try {
-            final extractResult = await _parseJsonlResult(jsonlUrl);
+            final extractResult = await _parseJsonlResult(
+              jsonlUrl,
+              cancelToken,
+            );
             final item = items.firstWhere(
               (i) => i.documentId == status.documentId,
             );
+            if (cancelToken?.isCancelled == true) {
+              throw cancelToken!.cancelError!;
+            }
             final savedPath = await DocExtractService.instance.saveResult(
               item.filePath,
               extractResult,
@@ -396,6 +393,7 @@ class BatchExtractService {
             status.savedPath = savedPath;
             results[status.documentId] = savedPath;
           } catch (e) {
+            if (e is DioException && CancelToken.isCancel(e)) rethrow;
             status.error = '保存结果失败: $e';
             results[status.documentId] = null;
           }
@@ -405,6 +403,7 @@ class BatchExtractService {
             final mdResponse = await _dio.get<String>(
               markdownUrl,
               options: Options(responseType: ResponseType.plain),
+              cancelToken: cancelToken,
             );
             final markdown = mdResponse.data ?? '';
             final item = items.firstWhere(
@@ -414,6 +413,9 @@ class BatchExtractService {
               rawMarkdown: markdown,
               images: {},
             );
+            if (cancelToken?.isCancelled == true) {
+              throw cancelToken!.cancelError!;
+            }
             final savedPath = await DocExtractService.instance.saveResult(
               item.filePath,
               extractResult,
@@ -423,13 +425,16 @@ class BatchExtractService {
             status.savedPath = savedPath;
             results[status.documentId] = savedPath;
           } catch (e) {
+            if (e is DioException && CancelToken.isCancel(e)) rethrow;
             status.error = '保存结果失败: $e';
             results[status.documentId] = null;
           }
         } else {
           results[status.documentId] = null;
         }
-        status.state = BatchJobState.done;
+        status.state = status.savedPath == null
+            ? BatchJobState.failed
+            : BatchJobState.done;
 
       case 'failed':
         status.state = BatchJobState.failed;
@@ -476,9 +481,13 @@ class BatchExtractService {
         );
       }
 
-      await Future.delayed(_pollInterval);
+      await Future.any<void>([
+        Future<void>.delayed(_pollInterval),
+        if (cancelToken != null) cancelToken.whenCancel.then((_) {}),
+      ]);
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
 
-      final data = await _pollOnce(jobId, jobUrl, token);
+      final data = await _pollOnce(jobId, jobUrl, token, cancelToken);
       final jobState = data['state'] as String? ?? '';
 
       switch (jobState) {
@@ -494,7 +503,7 @@ class BatchExtractService {
           final jsonlUrl = resultUrl?['jsonUrl'] as String?;
           if (jsonlUrl != null) {
             onProgress?.call('正在下载结果…', 0, 0);
-            return _parseJsonlResult(jsonlUrl);
+            return _parseJsonlResult(jsonlUrl, cancelToken);
           }
           // 回退：仅有 Markdown URL
           final markdownUrl = resultUrl?['markdownUrl'] as String?;
@@ -502,6 +511,7 @@ class BatchExtractService {
             final mdResponse = await _dio.get<String>(
               markdownUrl,
               options: Options(responseType: ResponseType.plain),
+              cancelToken: cancelToken,
             );
             return DocExtractResult(
               rawMarkdown: mdResponse.data ?? '',
@@ -543,7 +553,9 @@ class BatchExtractService {
     final jobUrl = _jobApiUrl;
     final batchId = 'nr_${DateTime.now().millisecondsSinceEpoch}';
 
-    log.d('[BatchExtract] === extractBatch start: ${items.length} items, batchId=$batchId ===');
+    log.d(
+      '[BatchExtract] === extractBatch start: ${items.length} items, batchId=$batchId ===',
+    );
     // Phase 1：并发提交 Job（每组最多 _maxConcurrent 个）
     for (int i = 0; i < items.length; i += _maxConcurrent) {
       if (cancelToken?.isCancelled == true) break;
@@ -551,7 +563,9 @@ class BatchExtractService {
       final end = (i + _maxConcurrent).clamp(0, items.length);
       final groupIndices = List.generate(end - i, (j) => i + j);
 
-      onProgress?.call(_buildProgress(jobStatuses, items[i].title));
+      onProgress?.call(
+        BatchExtractProgress.fromStatuses(jobStatuses, items[i].title),
+      );
 
       await Future.wait(
         groupIndices.map((idx) async {
@@ -586,7 +600,7 @@ class BatchExtractService {
       );
 
       onProgress?.call(
-        _buildProgress(
+        BatchExtractProgress.fromStatuses(
           jobStatuses,
           items[(end - 1).clamp(0, items.length - 1)].title,
         ),
@@ -601,13 +615,21 @@ class BatchExtractService {
 
     // Phase 2：轮询所有 Job 直到全部结束（优先使用 batchId 批量查询）
     final submitted = jobStatuses.where((s) => s.jobId != null).length;
-    final failedSubmit = jobStatuses.where((s) => s.state == BatchJobState.failed).length;
-    log.d('[BatchExtract] === Phase 1 done: $submitted submitted, $failedSubmit failed ===');
+    final failedSubmit = jobStatuses
+        .where((s) => s.state == BatchJobState.failed)
+        .length;
+    log.d(
+      '[BatchExtract] === Phase 1 done: $submitted submitted, $failedSubmit failed ===',
+    );
     for (final s in jobStatuses) {
-      log.d('[BatchExtract]   ${s.documentId}: state=${s.state.name}, jobId=${s.jobId}, error=${s.error}');
+      log.d(
+        '[BatchExtract]   ${s.documentId}: state=${s.state.name}, jobId=${s.jobId}, error=${s.error}',
+      );
     }
     int pollDelayMs = 5000;
     bool useBatchPoll = true;
+    final pollFailures = <String, int>{};
+    var rateLimitFailures = 0;
 
     while (cancelToken?.isCancelled != true) {
       final activeStatuses = jobStatuses
@@ -618,16 +640,27 @@ class BatchExtractService {
           )
           .toList();
       if (activeStatuses.isEmpty) break;
-      log.d('[BatchExtract] poll tick: ${activeStatuses.length} active, mode=${useBatchPoll ? "batch" : "individual"}');
+      log.d(
+        '[BatchExtract] poll tick: ${activeStatuses.length} active, mode=${useBatchPoll ? "batch" : "individual"}',
+      );
 
       try {
         if (useBatchPoll) {
           // 批量查询：1 次请求获取所有 Job 状态
-          final jobDataList = await _pollBatch(batchId, jobUrl, token);
-          log.d('[BatchExtract] pollBatch returned ${jobDataList.length} items');
+          final jobDataList = await _pollBatch(
+            batchId,
+            jobUrl,
+            token,
+            cancelToken,
+          );
+          log.d(
+            '[BatchExtract] pollBatch returned ${jobDataList.length} items',
+          );
           if (jobDataList.isEmpty && activeStatuses.isNotEmpty) {
             // 端点返回空列表，回退到逐个查询
-            log.d('[BatchExtract] batch returned empty, falling back to individual');
+            log.d(
+              '[BatchExtract] batch returned empty, falling back to individual',
+            );
             useBatchPoll = false;
             continue;
           }
@@ -641,7 +674,13 @@ class BatchExtractService {
                 status.state != BatchJobState.running) {
               continue;
             }
-            await _updateStatusFromData(status, data, items, results);
+            await _updateStatusFromData(
+              status,
+              data,
+              items,
+              results,
+              cancelToken,
+            );
             onJobUpdate?.call(status);
           }
         } else {
@@ -650,20 +689,58 @@ class BatchExtractService {
             if (cancelToken?.isCancelled == true) break;
             if (status.jobId == null) continue;
             try {
-              final data = await _pollOnce(status.jobId!, jobUrl, token);
-              await _updateStatusFromData(status, data, items, results);
+              final data = await _pollOnce(
+                status.jobId!,
+                jobUrl,
+                token,
+                cancelToken,
+              );
+              await _updateStatusFromData(
+                status,
+                data,
+                items,
+                results,
+                cancelToken,
+              );
               onJobUpdate?.call(status);
+              pollFailures.remove(status.documentId);
             } on DioException catch (e) {
+              if (CancelToken.isCancel(e)) rethrow;
               if (e.response?.statusCode == 429) rethrow;
-              log.d('[BatchExtract] 轮询出错 (${status.documentId}): $e');
+              if (e.response?.statusCode == 401 ||
+                  e.response?.statusCode == 403) {
+                rethrow;
+              }
+              final failures = (pollFailures[status.documentId] ?? 0) + 1;
+              pollFailures[status.documentId] = failures;
+              log.w(
+                '[BatchExtract] 轮询失败 $failures/3 (${status.documentId})',
+                error: e,
+              );
+              if (failures >= 3) {
+                status.state = BatchJobState.failed;
+                status.error = e.toString();
+                results[status.documentId] = null;
+                onJobUpdate?.call(status);
+              }
             } catch (e) {
-              log.d('[BatchExtract] 轮询出错 (${status.documentId}): $e');
+              status.state = BatchJobState.failed;
+              status.error = e.toString();
+              results[status.documentId] = null;
+              onJobUpdate?.call(status);
+              log.w('[BatchExtract] 结果处理失败 (${status.documentId})', error: e);
             }
           }
         }
         pollDelayMs = 5000;
+        rateLimitFailures = 0;
       } on DioException catch (e) {
+        if (CancelToken.isCancel(e)) break;
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          rethrow;
+        }
         if (e.response?.statusCode == 429) {
+          if (++rateLimitFailures >= 6) rethrow;
           // 限流 → 指数退避
           pollDelayMs = (pollDelayMs * 1.5).toInt().clamp(5000, 30000);
           log.d('[BatchExtract] 触发限流 (429)，退避 ${pollDelayMs}ms');
@@ -674,10 +751,16 @@ class BatchExtractService {
           continue;
         }
       } catch (e) {
-        log.d('[BatchExtract] 轮询出错: $e');
+        if (useBatchPoll && e is BatchExtractException) {
+          useBatchPoll = false;
+          log.w('[BatchExtract] 批量响应不可用，回退逐个查询', error: e);
+          continue;
+        }
+        log.w('[BatchExtract] 批量结果处理失败', error: e);
+        rethrow;
       }
 
-      onProgress?.call(_buildProgress(jobStatuses, ''));
+      onProgress?.call(BatchExtractProgress.fromStatuses(jobStatuses, ''));
 
       final stillRunning = jobStatuses.any(
         (s) =>
@@ -685,7 +768,10 @@ class BatchExtractService {
             s.state == BatchJobState.running,
       );
       if (stillRunning && cancelToken?.isCancelled != true) {
-        await Future.delayed(Duration(milliseconds: pollDelayMs));
+        await Future.any<void>([
+          Future<void>.delayed(Duration(milliseconds: pollDelayMs)),
+          if (cancelToken != null) cancelToken.whenCancel.then((_) {}),
+        ]);
       }
     }
 

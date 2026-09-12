@@ -11,7 +11,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:crypto/crypto.dart';
 
 import '../utils/doc_paths.dart';
-import '../providers/api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import 'document_structure.dart';
 import 'pdf_process_lock.dart';
 import 'extraction_artifacts.dart';

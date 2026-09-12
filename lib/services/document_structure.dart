@@ -9,6 +9,24 @@ import 'dart:io';
 /// 响应形状）——两种都在此消化，调用方（figure 提取 / markdown 替换 /
 /// AI 排版修复 / 未来的翻译保护 span）不再各自 jsonDecode 直挖。
 
+class LayoutTextRegion {
+  final int pageIndex;
+  final List<double> bbox;
+  final int sourceLength;
+  const LayoutTextRegion(this.pageIndex, this.bbox, this.sourceLength);
+  Map<String, dynamic> toJson() => {
+    'page_index': pageIndex,
+    'bbox': bbox,
+    'source_length': sourceLength,
+  };
+  factory LayoutTextRegion.fromJson(Map<String, dynamic> json) =>
+      LayoutTextRegion(
+        json['page_index'] as int,
+        (json['bbox'] as List).map((v) => (v as num).toDouble()).toList(),
+        json['source_length'] as int,
+      );
+}
+
 /// 版面解析 API 返回的单个 block。
 class LayoutBlock {
   final String blockId;
@@ -37,6 +55,7 @@ class LayoutBlock {
   final String? parentId;
   final String? sourceImage;
   final String? captionKind;
+  final List<LayoutTextRegion> textRegions;
 
   LayoutBlock({
     required this.blockId,
@@ -50,14 +69,19 @@ class LayoutBlock {
     this.parentId,
     this.sourceImage,
     this.captionKind,
+    this.textRegions = const [],
   }) : rawBbox = rawBbox ?? blockBbox;
 
   factory LayoutBlock.fromJson(Map<String, dynamic> json) {
     final box = json['block_bbox'];
-    final rawBbox = box is List && box.length == 4 &&
-        box.every((v) => v is num && v.isFinite) &&
-        (box[2] as num) > (box[0] as num) && (box[3] as num) > (box[1] as num)
-        ? box.cast<num>() : const <num>[];
+    final rawBbox =
+        box is List &&
+            box.length == 4 &&
+            box.every((v) => v is num && v.isFinite) &&
+            (box[2] as num) > (box[0] as num) &&
+            (box[3] as num) > (box[1] as num)
+        ? box.cast<num>()
+        : const <num>[];
     return LayoutBlock(
       blockId: json['block_id']?.toString() ?? '',
       blockLabel: json['block_label'] as String? ?? '',
@@ -70,6 +94,12 @@ class LayoutBlock {
       parentId: json['parent_id'] as String?,
       sourceImage: json['source_image'] as String?,
       captionKind: json['caption_kind'] as String?,
+      textRegions: (json['text_regions'] as List? ?? [])
+          .map(
+            (r) =>
+                LayoutTextRegion.fromJson(Map<String, dynamic>.from(r as Map)),
+          )
+          .toList(),
     );
   }
 
@@ -84,6 +114,8 @@ class LayoutBlock {
     if (parentId != null) 'parent_id': parentId,
     if (sourceImage != null) 'source_image': sourceImage,
     if (captionKind != null) 'caption_kind': captionKind,
+    if (textRegions.isNotEmpty)
+      'text_regions': textRegions.map((r) => r.toJson()).toList(),
   };
 }
 
@@ -154,6 +186,7 @@ class DocumentStructure {
         final type = block['type'] as String? ?? '';
         final box = _bboxValues(block['bbox'], 4);
         final text = <String>[];
+        final regions = <LayoutTextRegion>[];
         String? source;
         for (final line in (block['lines'] as List? ?? const [])) {
           if (line is! Map) continue;
@@ -161,12 +194,46 @@ class DocumentStructure {
           for (final span in (line['spans'] as List? ?? const [])) {
             if (span is! Map) continue;
             final value = span['content'];
-            if (value is String && value.isNotEmpty) parts.add(value);
+            if (value is String && value.isNotEmpty) {
+              parts.add(
+                span['type'] == 'inline_equation' && !value.startsWith(r'$')
+                    ? '\$$value\$'
+                    : value,
+              );
+            }
             final html = span['html'];
             if (html is String && html.isNotEmpty) parts.add(html);
             source ??= span['image_path'] as String?;
           }
-          if (parts.isNotEmpty) text.add(parts.join(' '));
+          if (parts.isNotEmpty) {
+            final lineText = parts.join(' ');
+            text.add(lineText);
+            final lineBox = _bboxValues(line['bbox'], 4);
+            if (size != null && lineBox != null) {
+              final crossPage = (line['spans'] as List? ?? []).any(
+                (s) => s is Map && s['cross_page'] == true,
+              );
+              final regionPage = crossPage ? pi + 1 : pi;
+              final b = [for (final v in lineBox) v * 2];
+              final previous = regions.lastOrNull;
+              if (previous != null &&
+                  previous.pageIndex == regionPage &&
+                  b[1] >= previous.bbox[1] &&
+                  b[0] < previous.bbox[2] &&
+                  b[2] > previous.bbox[0] &&
+                  b[1] - previous.bbox[3] < (b[3] - b[1]) * 3) {
+                final a = previous.bbox;
+                regions[regions.length - 1] = LayoutTextRegion(regionPage, [
+                  a[0] < b[0] ? a[0] : b[0],
+                  a[1],
+                  a[2] > b[2] ? a[2] : b[2],
+                  b[3],
+                ], previous.sourceLength + lineText.length);
+              } else {
+                regions.add(LayoutTextRegion(regionPage, b, lineText.length));
+              }
+            }
+          }
         }
         final label = switch (type) {
           'image_body' => 'image',
@@ -190,6 +257,7 @@ class DocumentStructure {
                 ? const []
                 : [for (final v in box) v * 2],
             blockContent: text.join(' '),
+            textRegions: regions,
             parentId: parent,
             sourceImage: source,
             captionKind: label == 'figure_title' ? kind : null,
@@ -352,6 +420,68 @@ class DocumentStructure {
     }
   }
 
+  static List<LayoutBlock> _paddleTextRegions(
+    List<LayoutBlock> blocks,
+    int pageIndex,
+  ) {
+    return blocks.map((block) {
+      if (block.groupId == null ||
+          block.textRegions.isNotEmpty ||
+          block.blockContent.trim().isEmpty ||
+          !const {
+            'text',
+            'paragraph',
+            'abstract',
+            'list',
+          }.contains(block.blockLabel)) {
+        return block;
+      }
+      final group = blocks
+          .where(
+            (other) =>
+                other.groupId == block.groupId &&
+                other.blockLabel == block.blockLabel &&
+                other.blockBbox.length == 4 &&
+                other.blockBbox[2] > other.blockBbox[0] &&
+                other.blockBbox[3] > other.blockBbox[1],
+          )
+          .toList();
+      if (group.length < 2 ||
+          group.where((b) => b.blockContent.trim().isNotEmpty).length != 1) {
+        return block;
+      }
+      group.sort(
+        (a, b) => (a.blockOrder ?? blocks.indexOf(a)).compareTo(
+          b.blockOrder ?? blocks.indexOf(b),
+        ),
+      );
+      final areas = group
+          .map(
+            (b) =>
+                (b.blockBbox[2] - b.blockBbox[0]) *
+                (b.blockBbox[3] - b.blockBbox[1]),
+          )
+          .toList();
+      final total = areas.fold<double>(0, (sum, area) => sum + area);
+      // Paddle 将合并后的全文放在组首，续栏留下空文本框；保留框的顺序，
+      // 不改变段落内容和哈希，已有译文与标注可直接复用。
+      return LayoutBlock.fromJson({
+        ...block.toJson(),
+        'text_regions': [
+          for (var i = 0; i < group.length; i++)
+            LayoutTextRegion(
+              pageIndex,
+              group[i].blockBbox,
+              (block.blockContent.length * areas[i] / total).round().clamp(
+                1,
+                1 << 30,
+              ),
+            ).toJson(),
+        ],
+      });
+    }).toList();
+  }
+
   static StructurePage _parsePage(Map<String, dynamic> page, int index) {
     final blockList =
         ((page['prunedResult'] as Map<String, dynamic>?)?['parsing_res_list']
@@ -359,14 +489,19 @@ class DocumentStructure {
         const [];
     return StructurePage(
       pageIndex: (page['page_index'] as int?) ?? index,
-      pageSize: _bboxValues(page['page_size'], 2),
+      pageSize:
+          _bboxValues(page['page_size'], 2) ??
+          _bboxValues([
+            (page['prunedResult'] as Map?)?['width'],
+            (page['prunedResult'] as Map?)?['height'],
+          ], 2),
       images: ((page['markdown'] as Map?)?['images'] as Map? ?? const {}).map(
         (key, value) => MapEntry(key.toString(), value.toString()),
       ),
-      blocks: [
+      blocks: _paddleTextRegions([
         for (final b in blockList)
           LayoutBlock.fromJson(b as Map<String, dynamic>),
-      ],
+      ], (page['page_index'] as int?) ?? index),
       markdown:
           ((page['markdown'] as Map<String, dynamic>?)?['text'] as String?) ??
           '',

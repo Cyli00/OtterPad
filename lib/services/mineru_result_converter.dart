@@ -9,7 +9,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../utils/doc_paths.dart';
 import '../core/l10n.dart';
-import '../providers/api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import '../router/app_router.dart';
 import '../utils/markdown_preprocessor.dart';
 import 'document_structure.dart';

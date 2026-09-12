@@ -4,7 +4,7 @@ import '../core/app_logger.dart';
 
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
-import '../providers/api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 
 /// 文档提取用量的本地记账（按服务商各自 API 均无额度查询接口，只能本地估算）。
 ///

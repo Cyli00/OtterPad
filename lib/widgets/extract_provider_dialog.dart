@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/l10n.dart';
-import '../providers/api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import '../services/haptics.dart';
 import 'app_dialog.dart';
 

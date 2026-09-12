@@ -1,3 +1,4 @@
+import '../../widgets/setting_controls.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/l10n.dart';
-import '../../providers/api_provider.dart';
+import '../../providers/doc_extract_api_provider.dart';
 import '../../providers/onboarding_provider.dart';
 import '../../services/doc_extract_usage_service.dart';
 import '../../services/haptics.dart';
@@ -157,28 +158,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
 
   // ── 通用构建器 ──
 
-  Widget _helpIcon(String message) {
-    final cs = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: message,
-      triggerMode: TooltipTriggerMode.tap,
-      showDuration: const Duration(seconds: 4),
-      preferBelow: true,
-      verticalOffset: 16,
-      decoration: BoxDecoration(
-        color: cs.inverseSurface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Icon(Symbols.help_rounded, size: 16, color: cs.onSurfaceVariant),
-      ),
-    );
-  }
-
   List<Widget> _switchGroup(
     DocExtractApiState docState,
     List<(String, String, String)> defs,
@@ -206,7 +185,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    _helpIcon(subtitle),
+                    SettingHelpIcon(subtitle),
                   ],
                 ),
               ),
@@ -231,115 +210,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
       );
     }
     return tiles;
-  }
-
-  Widget _sliderTile({
-    required String title,
-    required String subtitle,
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required double defaultValue,
-    required String Function(double) formatter,
-    required ValueChanged<double> onChanged,
-    required VoidCallback onReset,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final isSet = value != defaultValue;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        title,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    _helpIcon(subtitle),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: isSet
-                      ? cs.primaryContainer
-                      : cs.surfaceContainerHighest.withAlpha(160),
-                  borderRadius: BorderRadius.circular(12),
-                  border: isSet
-                      ? null
-                      : Border.all(color: cs.outlineVariant.withAlpha(80)),
-                ),
-                child: Text(
-                  formatter(value),
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: isSet ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 8,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 16,
-                    ),
-                    trackHeight: 3,
-                  ),
-                  child: Slider(
-                    value: value,
-                    min: min,
-                    max: max,
-                    divisions: divisions,
-                    onChanged: (v) {
-                      Haptics.soft();
-                      onChanged(v);
-                    },
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
-              ),
-              IconButton(
-                onPressed: isSet
-                    ? () {
-                        Haptics.soft();
-                        onReset();
-                      }
-                    : null,
-                icon: const Icon(Symbols.refresh_rounded, size: 20),
-                tooltip: context.l10n.restoreDefaults,
-                color: cs.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _ignoreLabelChips(DocExtractApiState docState) {
@@ -455,7 +325,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 ),
               ),
               const SizedBox(width: 4),
-              _helpIcon(context.l10n.ocrProviderHelp),
+              SettingHelpIcon(context.l10n.ocrProviderHelp),
               const Spacer(),
               _buildGetTokenButton(cs, provider, step),
             ],
@@ -514,7 +384,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    _helpIcon(
+                    SettingHelpIcon(
                       provider.dailyPagesIsHardLimit
                           ? context.l10n.ocrUsageHardLimitNote
                           : context.l10n.ocrUsagePriorityNote,
@@ -670,7 +540,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              _helpIcon(context.l10n.layoutGeometryHelp),
+                              SettingHelpIcon(context.l10n.layoutGeometryHelp),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -696,14 +566,16 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                       ),
                     ),
                     ..._switchGroup(docState, _outputDefs(context.l10n)),
-                    _sliderTile(
+                    SettingSlider(
                       title: context.l10n.repetitionPenalty,
-                      subtitle: context.l10n.repetitionPenaltyHint,
-                      value: docState.repetitionPenalty,
+                      tooltip: context.l10n.repetitionPenaltyHint,
+                      value: docState.repetitionPenalty == 1.0
+                          ? null
+                          : docState.repetitionPenalty,
                       min: 1.0,
                       max: 1.2,
                       divisions: 20,
-                      defaultValue: 1.0,
+                      fallback: 1.0,
                       formatter: (v) => v.toStringAsFixed(2),
                       onChanged: (v) => ref
                           .read(docExtractApiProvider.notifier)
@@ -712,14 +584,16 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                           .read(docExtractApiProvider.notifier)
                           .setDouble('repetitionPenalty', 1.0),
                     ),
-                    _sliderTile(
+                    SettingSlider(
                       title: context.l10n.recognitionStability,
-                      subtitle: context.l10n.recognitionStabilityHint,
-                      value: docState.temperature,
+                      tooltip: context.l10n.recognitionStabilityHint,
+                      value: docState.temperature == 0.0
+                          ? null
+                          : docState.temperature,
                       min: 0.0,
                       max: 1.0,
                       divisions: 20,
-                      defaultValue: 0.0,
+                      fallback: 0.0,
                       formatter: (v) => v.toStringAsFixed(2),
                       onChanged: (v) => ref
                           .read(docExtractApiProvider.notifier)
@@ -757,7 +631,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              _helpIcon(context.l10n.ocrFilterHelp),
+                              SettingHelpIcon(context.l10n.ocrFilterHelp),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -822,7 +696,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 ),
               ),
               const SizedBox(width: 4),
-              _helpIcon(help),
+              SettingHelpIcon(help),
             ],
           ),
           const SizedBox(height: 12),

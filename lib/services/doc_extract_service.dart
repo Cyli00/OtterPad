@@ -3,10 +3,10 @@ import 'dart:io';
 import 'dart:math' show min;
 
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
+import 'proxy_adapter.dart';
 import 'package:path/path.dart' as p;
 
-import '../providers/api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import '../utils/doc_paths.dart';
 import '../utils/markdown_preprocessor.dart';
 import 'document_structure.dart';
@@ -69,25 +69,11 @@ class DocExtractService {
   );
 
   void applyProxy(Enum mode, String host, int port) {
-    final adapter = IOHttpClientAdapter();
-    switch (mode.name) {
-      case 'custom':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'PROXY $host:$port';
-          client.badCertificateCallback = (_, _, _) => true;
-          return client;
-        };
-      case 'system':
-        adapter.createHttpClient = () => HttpClient();
-      default:
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'DIRECT';
-          return client;
-        };
-    }
-    _dio.httpClientAdapter = adapter;
+    _dio.httpClientAdapter = buildProxyAdapter(
+      mode.name,
+      host,
+      port,
+    );
   }
 
   Future<DocExtractResult> extract({

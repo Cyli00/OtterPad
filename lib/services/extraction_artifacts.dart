@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 
-import '../providers/api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import '../utils/doc_paths.dart';
 
 import 'package:path/path.dart' as p;

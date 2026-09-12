@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
+import 'proxy_adapter.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/app_logger.dart';
 import '../core/l10n.dart';
-import '../providers/api_provider.dart';
+import '../data/models/ocr/doc_extract_config.dart';
 import '../router/app_router.dart';
 import 'batch_extract_service.dart';
 import 'mineru_result_converter.dart';
@@ -15,7 +15,8 @@ import 'mineru_parse_options.dart';
 /// MinerU 精准解析 API 异常
 class MinerUExtractException implements Exception {
   final String message;
-  const MinerUExtractException(this.message);
+  final bool retryable;
+  const MinerUExtractException(this.message, {this.retryable = false});
   @override
   String toString() => message;
 }
@@ -61,25 +62,11 @@ class MinerUExtractService {
   // ─── 代理 ──────────────────────────────────────────────────────────────
 
   void applyProxy(Enum mode, String host, int port) {
-    final adapter = IOHttpClientAdapter();
-    switch (mode.name) {
-      case 'custom':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'PROXY $host:$port';
-          client.badCertificateCallback = (_, _, _) => true;
-          return client;
-        };
-      case 'system':
-        adapter.createHttpClient = () => HttpClient();
-      default:
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'DIRECT';
-          return client;
-        };
-    }
-    _dio.httpClientAdapter = adapter;
+    _dio.httpClientAdapter = buildProxyAdapter(
+      mode.name,
+      host,
+      port,
+    );
   }
 
   // ─── 请求体 ────────────────────────────────────────────────────────────
@@ -252,6 +239,8 @@ class MinerUExtractService {
       final detail = e.message ?? e.type.name;
       throw MinerUExtractException(
         _l10n?.mineruErrPollFailed(detail) ?? '查询结果失败: $detail',
+        retryable:
+            e.response?.statusCode != 401 && e.response?.statusCode != 403,
       );
     }
     _checkResponse(response.data);
@@ -408,7 +397,9 @@ class MinerUExtractService {
         results[status.documentId] = null;
       }
       onJobUpdate?.call(status);
-      onProgress?.call(_buildProgress(statuses, items[i].title));
+      onProgress?.call(
+        BatchExtractProgress.fromStatuses(statuses, items[i].title),
+      );
     }
 
     // Phase 3: 批量轮询，完成一个落盘一个
@@ -435,7 +426,8 @@ class MinerUExtractService {
       } catch (e) {
         if (cancelToken?.isCancelled == true) break;
         log.d('[MinerU] poll error: $e');
-        if (++pollFailures < 3) continue;
+        final permanent = e is MinerUExtractException && !e.retryable;
+        if (++pollFailures < 3 && !permanent) continue;
         for (final status in statuses.where(
           (s) =>
               s.state == BatchJobState.submitted ||
@@ -503,7 +495,7 @@ class MinerUExtractService {
         }
         onJobUpdate?.call(status);
       }
-      onProgress?.call(_buildProgress(statuses, ''));
+      onProgress?.call(BatchExtractProgress.fromStatuses(statuses, ''));
     }
 
     if (cancelToken?.isCancelled == true) {
@@ -519,43 +511,6 @@ class MinerUExtractService {
     }
 
     return results;
-  }
-
-  BatchExtractProgress _buildProgress(
-    List<BatchJobStatus> statuses,
-    String currentTitle,
-  ) {
-    final succeeded = statuses
-        .where((s) => s.state == BatchJobState.done)
-        .length;
-    final failed = statuses
-        .where(
-          (s) =>
-              s.state == BatchJobState.failed ||
-              s.state == BatchJobState.cancelled,
-        )
-        .length;
-    return BatchExtractProgress(
-      total: statuses.length,
-      completed: succeeded + failed,
-      succeeded: succeeded,
-      failed: failed,
-      currentTitle: currentTitle,
-      statuses: statuses
-          .map(
-            (s) => BatchJobStatus(
-              documentId: s.documentId,
-              title: s.title,
-              state: s.state,
-              jobId: s.jobId,
-              error: s.error,
-              extractedPages: s.extractedPages,
-              totalPages: s.totalPages,
-              savedPath: s.savedPath,
-            ),
-          )
-          .toList(),
-    );
   }
 
   void _throwIfCancelled(CancelToken? cancelToken) {
