@@ -201,27 +201,16 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 8,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 16,
-                      ),
-                      trackHeight: 3,
-                    ),
-                    child: Slider(
-                      value: _closestPreset(themeState.textScale),
-                      min: 1.0,
-                      max: 1.3,
-                      divisions: 2,
-                      onChanged: (v) {
-                        Haptics.soft();
-                        ref.read(themeProvider.notifier).setTextScale(v);
-                      },
-                      padding: EdgeInsets.zero,
-                    ),
+                  Slider(
+                    value: _closestPreset(themeState.textScale),
+                    min: 1.0,
+                    max: 1.3,
+                    divisions: 2,
+                    onChanged: (v) {
+                      Haptics.soft();
+                      ref.read(themeProvider.notifier).setTextScale(v);
+                    },
+                    padding: EdgeInsets.zero,
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -571,7 +560,7 @@ class _AppLanguagePicker extends ConsumerWidget {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(28),
               ),
-            boxShadow: AppShadows.sheet,
+              boxShadow: AppShadows.sheet,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/animation_constants.dart';
+import '../utils/desktop.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -103,8 +104,7 @@ CustomTransitionPage<T> _drillIn<T>({
   );
 }
 
-/// 阅读器入场：有卡片起点时做「卡片→全屏」容器变换（双边界裁切+缩放+渐显），
-/// 否则回落 Scale + Fade + 微上移。
+/// 桌面阅读器用淡入淡出保持导航栏位置稳定；移动端保留卡片容器变换。
 CustomTransitionPage<T> _readerEntry<T>({
   required Widget child,
   required GoRouterState state,
@@ -113,14 +113,21 @@ CustomTransitionPage<T> _readerEntry<T>({
   return CustomTransitionPage<T>(
     key: state.pageKey,
     child: child,
-    transitionDuration: sourceRect != null ? kAnimEmphasis : kAnimSlow,
-    reverseTransitionDuration: sourceRect != null ? kAnimEmphasis : kAnimSlow,
+    transitionDuration: isDesktopOs
+        ? kAnim
+        : (sourceRect != null ? kAnimEmphasis : kAnimSlow),
+    reverseTransitionDuration: isDesktopOs
+        ? kAnimFast
+        : (sourceRect != null ? kAnimEmphasis : kAnimSlow),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
         parent: animation,
         curve: kAnimCurve,
         reverseCurve: kAnimCurveReverse,
       );
+      if (isDesktopOs) {
+        return FadeTransition(opacity: curved, child: child);
+      }
       final fullRect = Offset.zero & MediaQuery.sizeOf(context);
       final from = sourceRect;
       // 无起点，或起点卡片已滚出屏幕 → 回落通用开场

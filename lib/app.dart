@@ -1,3 +1,4 @@
+import 'core/app_theme.dart';
 import 'dart:io';
 
 import 'package:dynamic_color/dynamic_color.dart';
@@ -72,28 +73,8 @@ class OtterPadApp extends ConsumerWidget {
           supportedLocales: AppLocalizations.supportedLocales,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           themeMode: themeState.mode,
-          theme: ThemeData(
-            colorScheme: lightScheme,
-            useMaterial3: true,
-            fontFamily: _systemFontFamily,
-            dialogTheme: const DialogThemeData(elevation: 0),
-            pageTransitionsTheme: const PageTransitionsTheme(
-              builders: {
-                TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-              },
-            ),
-          ),
-          darkTheme: ThemeData(
-            colorScheme: darkScheme,
-            useMaterial3: true,
-            fontFamily: _systemFontFamily,
-            dialogTheme: const DialogThemeData(elevation: 0),
-            pageTransitionsTheme: const PageTransitionsTheme(
-              builders: {
-                TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-              },
-            ),
-          ),
+          theme: buildAppTheme(lightScheme, fontFamily: _systemFontFamily),
+          darkTheme: buildAppTheme(darkScheme, fontFamily: _systemFontFamily),
           routerConfig: router,
           builder: (context, child) {
             final brightness = Theme.of(context).brightness;

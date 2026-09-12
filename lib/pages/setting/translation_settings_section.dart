@@ -1,3 +1,6 @@
+import '../../widgets/setting_controls.dart';
+import '../../l10n/reader_labels.dart';
+import '../../widgets/translation_style_label.dart';
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
@@ -76,30 +79,6 @@ class _TranslationSettingsSectionState
     });
   }
 
-  // ── 通用 helpers（镜像 ocr_settings_page 风格）─────────────────────────
-
-  Widget _helpIcon(String message) {
-    final cs = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: message,
-      triggerMode: TooltipTriggerMode.tap,
-      showDuration: const Duration(seconds: 5),
-      preferBelow: true,
-      verticalOffset: 16,
-      decoration: BoxDecoration(
-        color: cs.inverseSurface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Icon(Symbols.help_rounded, size: 16, color: cs.onSurfaceVariant),
-      ),
-    );
-  }
-
   InputDecoration _fieldDeco(
     ThemeData theme,
     ColorScheme cs, {
@@ -129,106 +108,6 @@ class _TranslationSettingsSectionState
     );
   }
 
-  /// 镜像 agent_model_params_sheet 的 _sliderRow 视觉
-  Widget _sliderRow({
-    required ThemeData theme,
-    required ColorScheme cs,
-    required String title,
-    required String tooltip,
-    required double? value,
-    required double fallback,
-    required double min,
-    required double max,
-    required int divisions,
-    required String Function(double) formatter,
-    required ValueChanged<double> onChanged,
-    required VoidCallback onReset,
-  }) {
-    final isSet = value != null;
-    final displayValue = value ?? fallback;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  _helpIcon(tooltip),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: isSet
-                    ? cs.primaryContainer
-                    : cs.surfaceContainerHighest.withAlpha(160),
-                borderRadius: BorderRadius.circular(12),
-                border: isSet
-                    ? null
-                    : Border.all(color: cs.outlineVariant.withAlpha(80)),
-              ),
-              child: Text(
-                formatter(displayValue),
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: isSet ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 8,
-                  ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 16,
-                  ),
-                  trackHeight: 3,
-                ),
-                child: Slider(
-                  value: displayValue.clamp(min, max),
-                  min: min,
-                  max: max,
-                  divisions: divisions,
-                  onChanged: (v) {
-                    Haptics.soft();
-                    onChanged(v);
-                  },
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-            IconButton(
-              onPressed: isSet ? onReset : null,
-              icon: const Icon(Symbols.refresh_rounded, size: 20),
-              tooltip: context.l10n.restoreDefaults,
-              color: cs.onSurfaceVariant,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   // ── Build ──────────────────────────────────────────────────────────────
 
   @override
@@ -243,7 +122,7 @@ class _TranslationSettingsSectionState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── 目标语言 ──
-          _buildTitleRow(
+          SettingTitle(
             context.l10n.targetLanguage,
             context.l10n.translationTargetLangDesc,
           ),
@@ -253,7 +132,7 @@ class _TranslationSettingsSectionState
           const SizedBox(height: 24),
 
           // ── 译文样式 ──
-          _buildTitleRow(
+          SettingTitle(
             context.l10n.translationStyleSetting,
             context.l10n.translationStyleDesc,
           ),
@@ -263,7 +142,7 @@ class _TranslationSettingsSectionState
           const SizedBox(height: 24),
 
           // ── 翻译忽略内容 ──
-          _buildTitleRow(
+          SettingTitle(
             context.l10n.translationIgnore,
             context.l10n.translationIgnoreDesc,
           ),
@@ -273,9 +152,8 @@ class _TranslationSettingsSectionState
           const SizedBox(height: 24),
 
           // ── 温度 ──
-          _sliderRow(
-            theme: theme,
-            cs: cs,
+          SettingSlider(
+            padding: EdgeInsets.zero,
             title: context.l10n.temperature,
             tooltip: context.l10n.temperatureDesc,
             value: cfg.temperature,
@@ -285,11 +163,9 @@ class _TranslationSettingsSectionState
             divisions: 40,
             formatter: (v) => v.toStringAsFixed(2),
             onChanged: (v) {
-              Haptics.soft();
               ref.read(translationConfigProvider.notifier).setTemperature(v);
             },
             onReset: () {
-              Haptics.soft();
               ref.read(translationConfigProvider.notifier).setTemperature(null);
             },
           ),
@@ -300,15 +176,14 @@ class _TranslationSettingsSectionState
           Row(
             children: [
               Expanded(
-                child: _buildTitleRow(
+                child: SettingTitle(
                   context.l10n.systemPrompt,
                   context.l10n.systemPromptDesc,
                 ),
               ),
               if (!cfg.isSystemPromptDefault)
-                _resetButton(
+                SettingResetButton(
                   onPressed: () {
-                    Haptics.soft();
                     ref
                         .read(translationConfigProvider.notifier)
                         .resetSystemPrompt();
@@ -337,15 +212,14 @@ class _TranslationSettingsSectionState
           Row(
             children: [
               Expanded(
-                child: _buildTitleRow(
+                child: SettingTitle(
                   context.l10n.userPrompt,
                   context.l10n.userPromptDesc,
                 ),
               ),
               if (!cfg.isUserPromptDefault)
-                _resetButton(
+                SettingResetButton(
                   onPressed: () {
-                    Haptics.soft();
                     ref
                         .read(translationConfigProvider.notifier)
                         .resetUserPrompt();
@@ -370,35 +244,6 @@ class _TranslationSettingsSectionState
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildTitleRow(String title, String tooltip) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        const SizedBox(width: 4),
-        _helpIcon(tooltip),
-      ],
-    );
-  }
-
-  Widget _resetButton({required VoidCallback onPressed}) {
-    final cs = Theme.of(context).colorScheme;
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(Symbols.refresh_rounded, size: 18, color: cs.onSurfaceVariant),
-      tooltip: context.l10n.restoreDefaults,
-      visualDensity: VisualDensity.compact,
     );
   }
 
@@ -456,7 +301,7 @@ class _TranslationSettingsSectionState
   }
 
   Widget _buildStyleChip(
-    TranslationStyleStrategy style,
+    TranslationStyle style,
     ThemeData theme,
     ColorScheme cs,
     String currentId,
@@ -476,70 +321,11 @@ class _TranslationSettingsSectionState
             .setDisplayStyleId(style.id);
       },
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: _buildStyledLabel(
-        style.id,
-        _translationStyleLabel(context.l10n, style.id),
-        cs,
-        theme,
+      child: TranslationStyleLabel(
+        styleId: style.id,
+        label: translationStyleLabel(context.l10n, style.id),
       ),
     );
-  }
-
-  Widget _buildStyledLabel(
-    String styleId,
-    String label,
-    ColorScheme cs,
-    ThemeData theme,
-  ) {
-    final base = theme.textTheme.bodyMedium!;
-
-    return switch (styleId) {
-      'themed' => Text(label, style: base.copyWith(color: cs.primary)),
-      'bold' => Text(label, style: base.copyWith(fontWeight: FontWeight.bold)),
-      'italic' => Text(
-        label,
-        style: base.copyWith(fontStyle: FontStyle.italic),
-      ),
-      'weakened' => Text(
-        label,
-        style: base.copyWith(color: cs.onSurface.withAlpha(120)),
-      ),
-      'dashed' => Text(
-        label,
-        style: base.copyWith(
-          color: cs.primary,
-          decoration: TextDecoration.underline,
-          decorationStyle: TextDecorationStyle.dashed,
-          decorationColor: cs.primary.withAlpha(140),
-        ),
-      ),
-      'highlight' => Text(
-        label,
-        style: base.copyWith(backgroundColor: cs.primaryContainer),
-      ),
-      'blur' => ClipRect(
-        child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-          child: Text(label, style: base),
-        ),
-      ),
-      'quote' => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 3,
-            height: 16,
-            decoration: BoxDecoration(
-              color: cs.outlineVariant,
-              borderRadius: BorderRadius.circular(1.5),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(label, style: base.copyWith(color: cs.onSurfaceVariant)),
-        ],
-      ),
-      _ => Text(label, style: base),
-    };
   }
 
   /// 点击后弹出底部语言选择面板（视觉参照 toolbar_bottom_sheet）
@@ -594,7 +380,7 @@ class _TranslationSettingsSectionState
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(28),
               ),
-            boxShadow: AppShadows.sheet,
+              boxShadow: AppShadows.sheet,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -676,18 +462,6 @@ class _TranslationSettingsSectionState
     }
   }
 }
-
-String _translationStyleLabel(AppLocalizations l10n, String id) => switch (id) {
-  'themed' => l10n.translationStyleThemed,
-  'bold' => l10n.translationStyleBold,
-  'italic' => l10n.translationStyleItalic,
-  'weakened' => l10n.translationStyleWeakened,
-  'dashed' => l10n.translationStyleDashed,
-  'highlight' => l10n.translationStyleHighlight,
-  'blur' => l10n.translationStyleBlur,
-  'quote' => l10n.translationStyleQuote,
-  _ => id,
-};
 
 String _skipSectionLabel(AppLocalizations l10n, String id) => switch (id) {
   'references' => l10n.skipSectionReferences,

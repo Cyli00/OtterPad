@@ -80,17 +80,13 @@ class MainShell extends ConsumerWidget {
       railBottomDestinationCount: 0,
       extendedRail: railExtended,
       railBottomAction: AdaptiveDestination(
-        icon: Icon(
-          railExtended
-              ? Symbols.left_panel_close_rounded
-              : Symbols.left_panel_open_rounded,
+        icon: const Icon(
+          Symbols.menu_rounded,
           weight: 600,
           fill: 1,
         ),
-        selectedIcon: Icon(
-          railExtended
-              ? Symbols.left_panel_close_rounded
-              : Symbols.left_panel_open_rounded,
+        selectedIcon: const Icon(
+          Symbols.menu_rounded,
           weight: 600,
           fill: 1,
         ),

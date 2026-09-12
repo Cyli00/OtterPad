@@ -60,80 +60,71 @@ class AdaptiveNavigationRail extends StatelessWidget {
     return ColoredBox(
       color: backgroundColor ?? colorScheme.surfaceContainer,
       child: SafeArea(
-        child: AnimatedContainer(
-          duration: kAnim,
-          curve: kAnimCurve,
-          width: extended ? 180 : 72,
-          child: ClipRect(
-            child: OverflowBox(
-              alignment: Alignment.centerLeft,
-              minWidth: extended ? 180 : null,
-              maxWidth: extended ? 180 : null,
-              child: LayoutBuilder(
-                builder: (context, constraints) => SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        children: [
-                          if (leading != null) ...[
-                            leading!,
-                            const SizedBox(height: 8),
-                          ],
-                          const SizedBox(height: 16),
-                          ...topDestinations.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final dest = entry.value;
-                            final selected = index == selectedIndex;
+        child: SizedBox(
+          width: 72,
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      if (leading != null) ...[
+                        leading!,
+                        const SizedBox(height: 8),
+                      ],
+                      const SizedBox(height: 16),
+                      ...topDestinations.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final dest = entry.value;
+                        final selected = index == selectedIndex;
 
-                            return _NavigationRailItem(
-                              icon: selected ? dest.selectedIcon : dest.icon,
-                              label: dest.label,
-                              selected: selected,
-                              extended: extended,
-                              colorScheme: colorScheme,
-                              onTap: () {
-                                Haptics.soft();
-                                onDestinationSelected(index);
-                              },
-                            );
-                          }),
-                          const Spacer(),
-                          ...bottomDestinations.asMap().entries.map((entry) {
-                            final index = entry.key + splitIndex;
-                            final dest = entry.value;
-                            final selected = index == selectedIndex;
+                        return _NavigationRailItem(
+                          icon: selected ? dest.selectedIcon : dest.icon,
+                          label: dest.label,
+                          selected: selected,
+                          extended: extended,
+                          colorScheme: colorScheme,
+                          onTap: () {
+                            Haptics.soft();
+                            onDestinationSelected(index);
+                          },
+                        );
+                      }),
+                      const Spacer(),
+                      ...bottomDestinations.asMap().entries.map((entry) {
+                        final index = entry.key + splitIndex;
+                        final dest = entry.value;
+                        final selected = index == selectedIndex;
 
-                            return _NavigationRailItem(
-                              icon: selected ? dest.selectedIcon : dest.icon,
-                              label: dest.label,
-                              selected: selected,
-                              extended: extended,
-                              colorScheme: colorScheme,
-                              onTap: () {
-                                Haptics.soft();
-                                onDestinationSelected(index);
-                              },
-                            );
-                          }),
-                          if (bottomAction != null)
-                            _NavigationRailItem(
-                              icon: bottomAction!.icon,
-                              label: bottomAction!.label,
-                              selected: false,
-                              extended: extended,
-                              colorScheme: colorScheme,
-                              onTap: () {
-                                Haptics.soft();
-                                onBottomAction?.call();
-                              },
-                            ),
-                          const SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
+                        return _NavigationRailItem(
+                          icon: selected ? dest.selectedIcon : dest.icon,
+                          label: dest.label,
+                          selected: selected,
+                          extended: extended,
+                          colorScheme: colorScheme,
+                          onTap: () {
+                            Haptics.soft();
+                            onDestinationSelected(index);
+                          },
+                        );
+                      }),
+                      if (bottomAction != null)
+                        _NavigationRailItem(
+                          icon: bottomAction!.icon,
+                          label: bottomAction!.label,
+                          selected: false,
+                          extended: false,
+                          colorScheme: colorScheme,
+                          onTap: () {
+                            Haptics.soft();
+                            onBottomAction?.call();
+                          },
+                        ),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
               ),
@@ -164,48 +155,83 @@ class _NavigationRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = selected
+    final indicatorColor = selected
         ? colorScheme.secondaryContainer
         : Colors.transparent;
     final iconColor = selected
         ? colorScheme.onSecondaryContainer
         : colorScheme.onSurfaceVariant;
 
+    Widget buildIconOnly() {
+      return Container(
+        width: 48,
+        height: 56,
+        decoration: BoxDecoration(
+          color: indicatorColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.center,
+        child: IconTheme(
+          data: IconThemeData(color: iconColor, size: 24, fill: 1),
+          child: icon,
+        ),
+      );
+    }
+
+    Widget buildWithLabel() {
+      return SizedBox(
+        width: 48,
+        height: 56,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48,
+              height: 36,
+              decoration: BoxDecoration(
+                color: indicatorColor,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              alignment: Alignment.center,
+              child: IconTheme(
+                data: IconThemeData(color: iconColor, size: 24, fill: 1),
+                child: icon,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: selected
+                      ? colorScheme.onSurface
+                      : colorScheme.onSurfaceVariant,
+                  fontSize: 11,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     Widget item = TactilePress(
-      baseColor: backgroundColor,
+      baseColor: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       haptics: false,
-      child: SizedBox(
-        height: 56,
+      child: AnimatedSwitcher(
+        duration: kAnimFast,
         child: extended
-            ? Row(
-                children: [
-                  const SizedBox(width: 16),
-                  IconTheme(
-                    data: IconThemeData(color: iconColor, size: 24),
-                    child: icon,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: iconColor,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : Center(
-                child: IconTheme(
-                  data: IconThemeData(color: iconColor, size: 24),
-                  child: icon,
-                ),
-              ),
+            ? KeyedSubtree(key: const ValueKey(true), child: buildWithLabel())
+            : KeyedSubtree(key: const ValueKey(false), child: buildIconOnly()),
       ),
     );
     if (!extended) {
@@ -234,19 +260,26 @@ class AdaptiveBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: selectedIndex,
-      onDestinationSelected: (index) {
-        Haptics.soft();
-        onDestinationSelected(index);
-      },
-      destinations: destinations.map((d) {
-        return NavigationDestination(
-          icon: d.icon,
-          selectedIcon: d.selectedIcon,
-          label: d.label,
-        );
-      }).toList(),
+    return NavigationBarTheme(
+      data: NavigationBarTheme.of(context).copyWith(
+        iconTheme: const WidgetStatePropertyAll(
+          IconThemeData(fill: 1.0),
+        ),
+      ),
+      child: NavigationBar(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) {
+          Haptics.soft();
+          onDestinationSelected(index);
+        },
+        destinations: destinations.map((d) {
+          return NavigationDestination(
+            icon: d.icon,
+            selectedIcon: d.selectedIcon,
+            label: d.label,
+          );
+        }).toList(),
+      ),
     );
   }
 }
