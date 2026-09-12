@@ -5,28 +5,7 @@ patch.txt
 .gitconfig-codex
 .codex_tmp*
 /.agents/
-# 仅纳入本次阅读器回归测试，其余本地测试保持忽略。
-/test/*
-!/test/reader_anchor_dom_test.cjs
-!/test/reader_translation_dom_test.cjs
-!/test/services/
-/test/services/*
-!/test/services/reader_document_index_test.dart
-!/test/services/desktop_window_service_test.dart
-!/test/providers/
-/test/providers/*
-!/test/providers/reader_shared_data_test.dart
-!/test/pages/
-/test/pages/*
-!/test/pages/reader/
-/test/pages/reader/*
-!/test/pages/reader/reader_layout_test.dart
-!/test/pages/reader/widgets/
-/test/pages/reader/widgets/*
-!/test/pages/reader/widgets/reader_incremental_translation_test.dart
-!/test/widgets/
-/test/widgets/*
-!/test/widgets/adaptive_navigation_test.dart
+/test/
 
 # mcp
 /mcps/
