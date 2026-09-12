@@ -12,6 +12,7 @@ import '../core/storage/storage.dart';
 import '../router/app_router.dart';
 import '../services/backup_fingerprint.dart';
 import '../services/backup_restore_service.dart';
+import '../services/snackbar_service.dart';
 import 'backup_orchestrator.dart';
 import 'documents_provider.dart';
 import 'task_activity_provider.dart';
@@ -92,7 +93,7 @@ final autoBackupProvider =
 ///
 /// 每次 tick 的闸门：开启了自动备份 → 远端已配置 → 距上次备份超过周期
 /// → 文献指纹相对快照有变化。零变化不上传（不浪费流量也不刷新快照，
-/// 比对本身是毫秒级纯本地计算）。失败只记日志，下一个 tick 自然重试。
+/// 比对本身是本地计算）。失败记录日志并提示，下一个 tick 自然重试。
 class AutoBackupScheduler {
   AutoBackupScheduler(this._ref);
 
@@ -100,6 +101,7 @@ class AutoBackupScheduler {
   Timer? _initial;
   Timer? _periodic;
   bool _running = false;
+  bool _disposed = false;
 
   void start() {
     _initial ??= Timer(const Duration(minutes: 2), _tick);
@@ -107,12 +109,33 @@ class AutoBackupScheduler {
   }
 
   void dispose() {
+    _disposed = true;
     _initial?.cancel();
     _periodic?.cancel();
   }
 
   Future<void> _tick() async {
-    if (_running) return;
+    if (_running || _disposed) return;
+    _running = true;
+    try {
+      await _runBackup();
+    } catch (e, st) {
+      log.w('[AutoBackup] 失败，下次调度重试', error: e, stackTrace: st);
+      final context = rootNavigatorKey.currentContext;
+      if (!_disposed && context != null && context.mounted) {
+        _ref
+            .read(snackBarServiceProvider)
+            .showResult(
+              message:
+                  '${context.l10n.autoBackup}: ${context.l10n.uploadRemoteFailed('$e')}',
+            );
+      }
+    } finally {
+      _running = false;
+    }
+  }
+
+  Future<void> _runBackup() async {
     final config = _ref.read(autoBackupProvider);
     final period = config.interval.period;
     if (period == null) return;
@@ -129,8 +152,7 @@ class AutoBackupScheduler {
         ? (AppLocalizations.of(ctx)?.autoBackup ?? '自动备份')
         : '自动备份';
     if (snapshot != null && !await _hasChanges(snapshot)) return;
-
-    _running = true;
+    if (_disposed) return;
     final activity = _ref.read(taskActivityProvider.notifier);
     final progress = ValueNotifier(
       const ListenableProgress(current: 0, total: 0, status: ''),
@@ -139,12 +161,9 @@ class AutoBackupScheduler {
     try {
       await orchestrator.backupToRemote(scope: config.scope);
       log.d('[AutoBackup] 完成（${config.scope.name}）');
-    } catch (e) {
-      log.w('[AutoBackup] 失败：$e');
     } finally {
       activity.finish(taskId);
       progress.dispose();
-      _running = false;
     }
   }
 

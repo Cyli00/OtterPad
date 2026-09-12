@@ -62,6 +62,7 @@ class TaskActivityNotifier extends StateNotifier<List<ActiveTask>> {
 
   /// 注销一个 Active Task（完成 / 取消 / 失败统一走这里）。
   void finish(int id) {
+    if (!mounted) return;
     final next = [
       for (final task in state)
         if (task.id != id) task,

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -7,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../core/storage/app_database.dart' as db;
 import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
+import '../core/storage/settings_store.dart';
 import '../core/storage/zotero_snapshot.dart';
 import '../data/models/book/document.dart';
 import '../data/models/book/highlight.dart';
@@ -86,9 +86,7 @@ class BackupMergeService {
       }
       if (scope.restoreSettings) {
         onProgress?.call('正在合并设置...');
-        stats = stats.copyWith(
-          settingsAdded: await _mergeSettings(backupDb),
-        );
+        stats = stats.copyWith(settingsAdded: await _mergeSettings(backupDb));
       }
       if (scope == BackupRestoreScope.full) {
         onProgress?.call('正在合并 Zotero 同步数据...');
@@ -121,10 +119,9 @@ class BackupMergeService {
       if (doi != null && doi.isNotEmpty) liveByDoi[doi] = d;
     }
 
-    final backupDocs =
-        (await backupDb.select(backupDb.documents).get())
-            .map(documentFromRow)
-            .toList();
+    final backupDocs = (await backupDb.select(backupDb.documents).get())
+        .map(documentFromRow)
+        .toList();
 
     final toUpsert = <Document>[];
     final additions = <Document>[];
@@ -167,10 +164,9 @@ class BackupMergeService {
       // foreign_keys=ON 时对同 id 已存在文档（_enrichDocument 命中）REPLACE
       // 会 CASCADE 清空它本地独有的高亮/历史/收藏关联/Zotero 映射。
       await GStorage.db.batch((b) {
-        b.insertAllOnConflictUpdate(
-          GStorage.db.documents,
-          [for (final d in toUpsert) documentCompanion(d)],
-        );
+        b.insertAllOnConflictUpdate(GStorage.db.documents, [
+          for (final d in toUpsert) documentCompanion(d),
+        ]);
       });
     }
     return (additions.length, idMap);
@@ -300,8 +296,9 @@ class BackupMergeService {
         .map((r) => r.id)
         .toSet();
     final backupFavRows = await backupDb.select(backupDb.favorites).get();
-    final backupFdRows =
-        await backupDb.select(backupDb.favoriteDocuments).get();
+    final backupFdRows = await backupDb
+        .select(backupDb.favoriteDocuments)
+        .get();
     final backupDocsByFav = <String, List<String>>{};
     for (final r in backupFdRows) {
       backupDocsByFav.putIfAbsent(r.favoriteId, () => []).add(r.docId);
@@ -322,15 +319,15 @@ class BackupMergeService {
 
       if (liveFavIds.contains(bf.id)) {
         // 已存在：documentIds 取并集（新关联 insert-or-ignore）
-        final liveDocIds = (await (GStorage.db.select(
+        final liveDocIds =
+            (await (GStorage.db.select(
                   GStorage.db.favoriteDocuments,
-                )
-                      ..where((t) => t.favoriteId.equals(bf.id)))
-                .get())
-            .map((r) => r.docId)
-            .toSet();
-        final newDocIds =
-            remappedDocIds.where((id) => !liveDocIds.contains(id)).toList();
+                )..where((t) => t.favoriteId.equals(bf.id))).get())
+                .map((r) => r.docId)
+                .toSet();
+        final newDocIds = remappedDocIds
+            .where((id) => !liveDocIds.contains(id))
+            .toList();
         if (newDocIds.isEmpty) continue;
         await GStorage.db.batch((b) {
           for (final id in newDocIds) {
@@ -343,16 +340,16 @@ class BackupMergeService {
         });
       } else {
         // 新增收藏夹 + 其关联
-        await GStorage.db.into(GStorage.db.favorites).insertOnConflictUpdate(
+        await GStorage.db
+            .into(GStorage.db.favorites)
+            .insertOnConflictUpdate(
               favoriteCompanion(
                 Favorite(
                   id: bf.id,
                   emoji: bf.emoji,
                   name: bf.name,
                   documentIds: const [],
-                  createdAt: DateTime.fromMillisecondsSinceEpoch(
-                    bf.createdAt,
-                  ),
+                  createdAt: DateTime.fromMillisecondsSinceEpoch(bf.createdAt),
                 ),
               ),
             );
@@ -427,9 +424,9 @@ class BackupMergeService {
       if (cappedDocIds.isEmpty) {
         await GStorage.db.delete(GStorage.db.history).go();
       } else {
-        await (GStorage.db.delete(GStorage.db.history)
-              ..where((t) => t.docId.isNotIn(cappedDocIds)))
-            .go();
+        await (GStorage.db.delete(
+          GStorage.db.history,
+        )..where((t) => t.docId.isNotIn(cappedDocIds))).go();
       }
     });
     return skipped;
@@ -444,19 +441,13 @@ class BackupMergeService {
     for (final r in backupRows) {
       if (_localOnlySettingsKeys.contains(r.settingKey)) continue;
       if (liveKeys.contains(r.settingKey)) continue;
-      await GStorage.setting.put(r.settingKey, _decode(r.value));
+      await GStorage.setting.put(
+        r.settingKey,
+        SettingsStore.decodeRaw(r.value),
+      );
       added++;
     }
     return added;
-  }
-
-  static Object? _decode(String raw) {
-    if (raw.isEmpty) return null;
-    try {
-      return jsonDecode(raw);
-    } catch (_) {
-      return raw;
-    }
   }
 
   // ─── Zotero Sync ───────────────────────────────────────────────────────────
@@ -468,11 +459,13 @@ class BackupMergeService {
   ) async {
     var skipped = 0;
     // 库版本取 max
-    final backupVerRow = await (backupDb.select(backupDb.meta)
-          ..where((t) => t.metaKey.equals('zotero_library_version')))
-        .getSingleOrNull();
-    final backupVer =
-        backupVerRow == null ? 0 : (int.tryParse(backupVerRow.value) ?? 0);
+    final backupVerRow =
+        await (backupDb.select(backupDb.meta)
+              ..where((t) => t.metaKey.equals('zotero_library_version')))
+            .getSingleOrNull();
+    final backupVer = backupVerRow == null
+        ? 0
+        : (int.tryParse(backupVerRow.value) ?? 0);
     if (backupVer > ZoteroSnapshot.libraryVersion) {
       await ZoteroSyncStore.setLibraryVersion(backupVer);
     }

@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import '../core/storage/app_database.dart' as db;
 import '../core/storage/db_convert.dart';
 import '../core/storage/storage.dart';
+import '../core/storage/settings_store.dart';
 import '../core/storage/restore_checkpoint.dart';
 import '../core/storage/storage_exception.dart';
 import '../core/storage/document_file_operations.dart';
@@ -32,28 +33,15 @@ enum BackupScope {
 }
 
 enum BackupRestoreScope {
-  full('完整恢复', '恢复 data 与 docs 目录'),
-  libraryOnly('仅恢复文库数据', '恢复文献库、收藏、标注和文档文件'),
-  settingsOnly('仅恢复设置', '恢复设置类数据');
-
-  const BackupRestoreScope(this.label, this.description);
-
-  final String label;
-  final String description;
+  full,
+  libraryOnly,
+  settingsOnly;
 
   bool get restoreLibrary => this != BackupRestoreScope.settingsOnly;
   bool get restoreSettings => this != BackupRestoreScope.libraryOnly;
 }
 
-enum RestoreMode {
-  overwrite('覆盖恢复', '清除本地数据后用备份替换'),
-  merge('合并恢复', '保留本地数据，仅添加备份中不存在的内容');
-
-  const RestoreMode(this.label, this.description);
-
-  final String label;
-  final String description;
-}
+enum RestoreMode { overwrite, merge }
 
 /// 备份/恢复服务。备份形态：单个 SQLite 文件（otter.db，经 VACUUM INTO
 /// 一致快照）+ library/ 目录 + manifest，打包成 ZIP。
@@ -522,7 +510,7 @@ class BackupRestoreService {
           for (final r in backupRows) {
             b.insert(
               GStorage.db.settings,
-              settingCompanion(r.settingKey, _decode(r.value)),
+              settingCompanion(r.settingKey, SettingsStore.decodeRaw(r.value)),
               mode: InsertMode.insertOrReplace,
             );
           }
@@ -552,15 +540,6 @@ class BackupRestoreService {
         b.insert(liveTable, toCompanion(r), mode: InsertMode.insertOrReplace);
       }
     });
-  }
-
-  static Object? _decode(String raw) {
-    if (raw.isEmpty) return null;
-    try {
-      return jsonDecode(raw);
-    } catch (_) {
-      return raw;
-    }
   }
 
   /// 在 Isolate 中解压 ZIP 到磁盘，避免主线程 OOM。

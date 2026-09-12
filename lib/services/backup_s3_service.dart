@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
 import '../providers/backup_provider.dart';
+import 'proxy_adapter.dart';
 
 /// ListObjectsV2 返回的单个对象信息。
 class S3ObjectInfo {
@@ -34,6 +35,10 @@ class BackupS3Service {
       validateStatus: (status) => status != null && status < 500,
     ),
   );
+
+  void applyProxy(Enum mode, String host, int port) {
+    _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
+  }
 
   Future<void> ping(BackupS3State config) async {
     final response = await _signedRequest(

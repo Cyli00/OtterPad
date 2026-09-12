@@ -27,6 +27,8 @@ import '../../core/storage/storage_exception.dart';
 import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
+import 'zotero_local_import_dialog.dart';
+import '../../utils/desktop.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
   const BackupSettingsPage({
@@ -314,6 +316,16 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       title: context.l10n.zoteroSync,
       child: Column(
         children: [
+          if (isDesktopOs) ...[
+            _ActionTile(
+              icon: Symbols.computer_rounded,
+              title: context.l10n.zoteroLocalTitle,
+              subtitle: context.l10n.zoteroLocalEntryHint,
+              enabled: !_busy,
+              onTap: () => showZoteroLocalImport(context),
+            ),
+            _buildDivider(context),
+          ],
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -1004,7 +1016,15 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       child: SegmentedButton<RestoreMode>(
                         segments: [
                           for (final m in RestoreMode.values)
-                            ButtonSegment(value: m, label: Text(m.label)),
+                            ButtonSegment(
+                              value: m,
+                              label: Text(switch (m) {
+                                RestoreMode.overwrite =>
+                                  context.l10n.restoreModeOverwrite,
+                                RestoreMode.merge =>
+                                  context.l10n.restoreModeMerge,
+                              }),
+                            ),
                         ],
                         selected: {mode},
                         onSelectionChanged: (set) {
@@ -1015,7 +1035,12 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      mode.description,
+                      switch (mode) {
+                        RestoreMode.overwrite =>
+                          context.l10n.restoreModeOverwriteDescription,
+                        RestoreMode.merge =>
+                          context.l10n.restoreModeMergeDescription,
+                      },
                       style: ts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                     const AppDivider.full(height: 24),
@@ -1034,8 +1059,22 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                               value: s,
                               activeColor: cs.primary,
                               contentPadding: EdgeInsets.zero,
-                              title: Text(s.label),
-                              subtitle: Text(s.description),
+                              title: Text(switch (s) {
+                                BackupRestoreScope.full =>
+                                  context.l10n.restoreScopeFull,
+                                BackupRestoreScope.libraryOnly =>
+                                  context.l10n.restoreScopeLibrary,
+                                BackupRestoreScope.settingsOnly =>
+                                  context.l10n.restoreScopeSettings,
+                              }),
+                              subtitle: Text(switch (s) {
+                                BackupRestoreScope.full =>
+                                  context.l10n.restoreScopeFullDescription,
+                                BackupRestoreScope.libraryOnly =>
+                                  context.l10n.restoreScopeLibraryDescription,
+                                BackupRestoreScope.settingsOnly =>
+                                  context.l10n.restoreScopeSettingsDescription,
+                              }),
                             ),
                         ],
                       ),
@@ -1090,11 +1129,14 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     if (error is StorageException) {
       return switch (error.reason) {
         StorageFailure.invalidBackup => context.l10n.backupInvalidData,
-        StorageFailure.unsupportedBackup => context.l10n.backupUnsupportedVersion,
+        StorageFailure.unsupportedBackup =>
+          context.l10n.backupUnsupportedVersion,
         StorageFailure.pendingRestore => context.l10n.backupPendingRestore,
         StorageFailure.activeTasks => context.l10n.backupActiveTasks,
-        StorageFailure.changedDuringBackup => context.l10n.backupChangedDuringCreation,
-        StorageFailure.operationInProgress => context.l10n.backupOperationInProgress,
+        StorageFailure.changedDuringBackup =>
+          context.l10n.backupChangedDuringCreation,
+        StorageFailure.operationInProgress =>
+          context.l10n.backupOperationInProgress,
       };
     }
     return error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');

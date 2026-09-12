@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../core/app_logger.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -8,7 +9,8 @@ import '../services/backup_fingerprint.dart';
 import '../services/backup_merge_service.dart';
 import '../services/backup_remote.dart';
 import '../services/backup_restore_service.dart';
-import 'api_provider.dart';
+import 'agent_api_provider.dart';
+import 'doc_extract_api_provider.dart';
 import 'auto_backup_provider.dart';
 import 'backup_provider.dart';
 import '../core/storage/app_database_provider.dart';
@@ -97,7 +99,9 @@ class BackupOrchestrator {
       for (final entry in versioned.skip(kKeepRemoteBackups)) {
         await target.delete(entry.name);
       }
-    } catch (_) {}
+    } catch (e, st) {
+      log.w('[Backup] 旧备份清理失败', error: e, stackTrace: st);
+    }
   }
 
   /// 从远端下载备份到临时文件，返回 zip 路径。优先取最新的时间戳版本，
