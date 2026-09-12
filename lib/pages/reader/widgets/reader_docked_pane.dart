@@ -21,6 +21,8 @@ class ReaderDockedPane extends StatelessWidget {
   final Widget chat;
   final ValueChanged<DragUpdateDetails>? onSidebarDragUpdate;
   final VoidCallback? onSidebarDragEnd;
+  final bool animateWidth;
+  final double? visibleWidth;
 
   const ReaderDockedPane({
     super.key,
@@ -32,6 +34,8 @@ class ReaderDockedPane extends StatelessWidget {
     required this.chat,
     this.onSidebarDragUpdate,
     this.onSidebarDragEnd,
+    this.animateWidth = true,
+    this.visibleWidth,
   });
 
   int get _paneIndex => switch (pane) {
@@ -44,6 +48,66 @@ class ReaderDockedPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final sidebarW = sidebarWidth;
     final cs = Theme.of(context).colorScheme;
+
+    Widget buildPaneContent() {
+      return SizedBox(
+        width: sidebarW,
+        child: ColoredBox(
+          color: cs.surfaceContainer,
+          child: Row(
+            children: [
+              _DockResizeDivider(
+                onDragUpdate: onSidebarDragUpdate,
+                onDragEnd: onSidebarDragEnd,
+              ),
+              Expanded(
+                child: ReaderLocalTheme(
+                  child: SafeArea(
+                    left: false,
+                    right: false,
+                    child: IndexedStack(
+                      index: _paneIndex,
+                      children: [outline, notes, chat],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!animateWidth) {
+      return IgnorePointer(
+        ignoring: !open,
+        child: SizedBox(
+          width: visibleWidth ?? (open ? sidebarW : 0.0),
+          child: ClipRect(
+            child: OverflowBox(
+              minWidth: sidebarW,
+              maxWidth: sidebarW,
+              alignment: Alignment.centerLeft,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: open ? 1 : 0),
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : kAnimFast,
+                curve: kAnimCurve,
+                builder: (context, value, child) => Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(12 * (1 - value), 0),
+                    child: child,
+                  ),
+                ),
+                child: buildPaneContent(),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return SingleMotionBuilder(
       motion: const SpringMotion(kSpringPanel),
@@ -60,32 +124,7 @@ class ReaderDockedPane extends StatelessWidget {
           minWidth: sidebarW,
           maxWidth: sidebarW,
           alignment: Alignment.centerLeft,
-          child: SizedBox(
-            width: sidebarW,
-            child: ColoredBox(
-              color: cs.surfaceContainer,
-              child: Row(
-                children: [
-                  _DockResizeDivider(
-                    onDragUpdate: onSidebarDragUpdate,
-                    onDragEnd: onSidebarDragEnd,
-                  ),
-                  Expanded(
-                    child: ReaderLocalTheme(
-                      child: SafeArea(
-                        left: false,
-                        right: false,
-                        child: IndexedStack(
-                          index: _paneIndex,
-                          children: [outline, notes, chat],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          child: buildPaneContent(),
         ),
       ),
     );

@@ -31,6 +31,8 @@ class ReaderPdfSearchController extends ChangeNotifier {
     _disposeListener = searcher.addListener(notifyListeners);
     _searcher = searcher;
     if (_query.isNotEmpty) {
+      // 重新绑定发生在展示层/页序切换后：只重跑查询、跳到首个命中会把刚恢复的
+      // 源页位置拉走，命中定位留给用户的上/下一处或重新输入。
       searcher.startTextSearch(_query, searchImmediately: true);
     }
   }

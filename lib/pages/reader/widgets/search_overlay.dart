@@ -160,6 +160,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
               icon: Icon(
                 Symbols.chevron_left_rounded,
                 size: 28,
+                fill: 1,
                 color: cs.onSurface,
               ),
               tooltip: context.l10n.back,
@@ -186,6 +187,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                     prefixIcon: Icon(
                       Symbols.search_rounded,
                       size: 20,
+                      fill: 1,
                       color: cs.onSurfaceVariant,
                     ),
                     suffixIcon: _controller.text.isNotEmpty
@@ -193,6 +195,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                             icon: Icon(
                               Symbols.cancel_rounded,
                               size: 18,
+                              fill: 1,
                               color: cs.onSurfaceVariant,
                             ),
                             onPressed: () {
@@ -342,6 +345,7 @@ class _OptionToggle extends StatelessWidget {
       icon: Icon(
         icon,
         size: 22,
+        fill: 1,
         color: active ? cs.primary : cs.onSurfaceVariant,
       ),
       tooltip: tooltip,

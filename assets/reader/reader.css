@@ -201,7 +201,7 @@ html, body {
 }
 
 /* ─── 左右翻页（CSS Multi-column）────────────────────────────
- * 用浏览器原生分栏：column-width=100vw 让每一"列"= 一整个视口宽度，
+ * 用浏览器原生分栏：窄窗每屏一栏，桌面宽屏每屏两栏，
  * #content 横向溢出后通过水平滚动翻页。模式切换由 JS 改 body 的
  * `data-pagination` 属性触发，不重排 DOM 也不销毁 KaTeX/高亮缓存。
  *
@@ -226,12 +226,14 @@ body[data-pagination="horizontal"] {
 }
 body[data-pagination="horizontal"] #content {
   padding: var(--h-pad-top) 32px var(--h-pad-bottom);
-  /* column-width 必须用 JS 喂入的 px 值（--page-width）而非 100vw：
+  /* column-width 必须用 JS 喂入的 px 值而非 vw：
      在 InAppWebView 底层 (WebView2 / Chromium) 上 vw 单位不会触发
      multi-column 的 reflow——窗口变大后会出现"一屏看到下一页"。
-     JS 在 load + resize 时主动 setProperty('--page-width', innerWidth+'px')，
+     JS 在 load + resize 时按视口宽度和栏数同步 CSS 变量，
      CSS var 变化会触发 column layout invalidation，浏览器才重排。 */
-  column-width: var(--page-width, 100vw);
+  column-width: var(--reader-column-width, 100vw);
+  column-count: var(--reader-columns, 1);
+  column-fill: auto;
   column-gap: 64px;
   height: calc(100vh - var(--h-pad-top) - var(--h-pad-bottom));
   overflow-x: auto;
@@ -283,4 +285,39 @@ body[data-pagination="horizontal"] img {
 }
 body[data-pagination="horizontal"] #page-footer {
   bottom: calc(var(--h-pad-bottom, 16px) + 4px);
+}
+
+body[data-desktop="true"] #page-footer { display: none; }
+
+/* 桌面双语以段落为行，共用一个滚动容器；内容长的一侧撑开整行。 */
+body[data-desktop="true"] #content {
+  max-width: calc(var(--font-size) * 44);
+  margin-inline: auto;
+}
+.reader-pair { margin-block: calc(var(--font-size) * var(--block-margin)); }
+.reader-language { min-width: 0; }
+.reader-language > :first-child { margin-top: 0; }
+.reader-language > :last-child { margin-bottom: 0; }
+.reader-language:not([hidden]) + .reader-language { margin-top: calc(var(--font-size) * var(--block-margin)); }
+body[data-desktop="true"][data-bilingual-columns="true"] #content:has(.reader-pair[data-bilingual="true"]) { max-width: 100%; }
+body[data-desktop="true"][data-bilingual-columns="true"] .reader-pair[data-bilingual="true"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: calc(var(--font-size) * 3);
+  align-items: start;
+}
+body[data-desktop="true"][data-bilingual-columns="true"] .reader-language:not([hidden]) + .reader-language {
+  margin-top: 0;
+}
+body.reader-select-source .reader-language:not([data-language="source"]),
+body.reader-select-target .reader-language[data-language="source"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.reader-language[hidden] { display: none !important; }
+body[data-translation-style="bold"] .reader-target.translated { color: var(--text); font-weight: bold; }
+body[data-translation-style="italic"] .reader-target.translated { color: var(--text); font-style: italic; }
+body[data-translation-style="quote"] .reader-target.translated {
+  color: var(--secondary); border-inline-start: 3px solid var(--secondary); padding-inline-start: 0.8em;
 }

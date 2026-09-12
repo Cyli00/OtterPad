@@ -78,8 +78,7 @@ class TranslationConfig {
       userPrompt.trim() == kDefaultTranslationUserPrompt.trim();
 
   /// 解析后的样式策略对象（便于 UI / weaver 直接用）。
-  TranslationStyleStrategy get displayStyle =>
-      resolveTranslationStyle(displayStyleId);
+  TranslationStyle get displayStyle => resolveTranslationStyle(displayStyleId);
 
   TranslationConfig copyWith({
     String? systemPrompt,
@@ -87,15 +86,14 @@ class TranslationConfig {
     String? targetLanguage,
     String? displayStyleId,
     List<String>? ignoreSections,
-  }) =>
-      TranslationConfig(
-        systemPrompt: systemPrompt ?? this.systemPrompt,
-        userPrompt: userPrompt ?? this.userPrompt,
-        targetLanguage: targetLanguage ?? this.targetLanguage,
-        temperature: temperature,
-        displayStyleId: displayStyleId ?? this.displayStyleId,
-        ignoreSections: ignoreSections ?? this.ignoreSections,
-      );
+  }) => TranslationConfig(
+    systemPrompt: systemPrompt ?? this.systemPrompt,
+    userPrompt: userPrompt ?? this.userPrompt,
+    targetLanguage: targetLanguage ?? this.targetLanguage,
+    temperature: temperature,
+    displayStyleId: displayStyleId ?? this.displayStyleId,
+    ignoreSections: ignoreSections ?? this.ignoreSections,
+  );
 }
 
 // ── StateNotifier ──────────────────────────────────────────────────────
@@ -112,8 +110,9 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
       targetLanguage:
           box.get(_kTargetLang, defaultValue: kDefaultTargetLanguage) as String,
       temperature: box.get(_kTemperature) as double?,
-      displayStyleId: box.get(_kDisplayStyle,
-          defaultValue: kDefaultTranslationStyleId) as String,
+      displayStyleId:
+          box.get(_kDisplayStyle, defaultValue: kDefaultTranslationStyleId)
+              as String,
       ignoreSections: rawSections != null
           ? rawSections.cast<String>().toList()
           : List<String>.from(kDefaultTranslationIgnoreSections),
@@ -199,5 +198,5 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
 
 final translationConfigProvider =
     StateNotifierProvider<TranslationConfigNotifier, TranslationConfig>(
-  (ref) => TranslationConfigNotifier(),
-);
+      (ref) => TranslationConfigNotifier(),
+    );

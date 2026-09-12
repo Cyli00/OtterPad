@@ -42,26 +42,29 @@ class PdfThumbnailService {
     final cachePath = p.join(await _cacheDir, _cacheKey(filePath));
     if (await File(cachePath).exists()) return cachePath;
 
-    // 如果任务已经发起，直接复用其对应的 Future 等待结果
-    if (_cachingTasks.containsKey(filePath)) {
-      return _cachingTasks[filePath];
-    }
-
-    // 开启渲染提取任务
-    final task = _renderAndSave(filePath, cachePath);
-    _cachingTasks[filePath] = task;
-
-    try {
-      return await task;
-    } finally {
-      _cachingTasks.remove(filePath);
-    }
+    // 调用方等待超时不代表原生渲染已结束，必须等真实任务结束后才能移除去重记录。
+    final task = _cachingTasks.putIfAbsent(
+      filePath,
+      () => _renderAndSave(
+        filePath,
+        cachePath,
+      ).whenComplete(() => _cachingTasks.remove(filePath)),
+    );
+    return task.timeout(
+      _renderTimeout,
+      onTimeout: () {
+        log.d('渲染 PDF 首页超时 ($filePath)');
+        return null;
+      },
+    );
   }
 
   /// 通过全局锁串行渲染 PDF 首页（带超时保护）
   Future<String?> _renderAndSave(String filePath, String cachePath) async {
     return PdfProcessLock.instance.run(() async {
       PdfDocument? document;
+      PdfImage? rendered;
+      ui.Image? image;
       try {
         document = await PdfDocument.openFile(
           filePath,
@@ -75,7 +78,7 @@ class PdfThumbnailService {
         const scale = 2.5;
         double renderWidth = page.width * scale;
         double renderHeight = page.height * scale;
-        
+
         const double maxDimension = 3000.0;
         if (renderWidth > maxDimension || renderHeight > maxDimension) {
           final aspect = page.width / page.height;
@@ -88,17 +91,15 @@ class PdfThumbnailService {
           }
         }
 
-        final rendered = await page.render(
+        rendered = await page.render(
           fullWidth: renderWidth,
           fullHeight: renderHeight,
         );
 
         if (rendered == null) return null;
 
-        final image = await rendered.createImage();
-        final byteData =
-            await image.toByteData(format: ui.ImageByteFormat.png);
-        image.dispose();
+        image = await rendered.createImage();
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
         if (byteData == null) return null;
 
@@ -108,15 +109,11 @@ class PdfThumbnailService {
         log.d('渲染 PDF 首页失败 ($filePath): $e');
         return null;
       } finally {
-        document?.dispose();
+        image?.dispose();
+        rendered?.dispose();
+        await document?.dispose();
       }
-    }).timeout(
-      _renderTimeout,
-      onTimeout: () {
-        log.d('渲染 PDF 首页超时 ($filePath)');
-        return null;
-      },
-    );
+    });
   }
 
   /// 删除指定文件的缩略图缓存

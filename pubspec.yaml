@@ -116,6 +116,7 @@ dependencies:
   # 桌面拖入 PDF。^0.7.1 = ≥0.7.1 <0.8.0，不会漂到 0.8.0（后者要求 AGP 9；本仓 AGP 8.11.1 且禁止改 android/）
   desktop_drop: ^0.7.1
 
+  pdfrx_engine: ^0.4.6
 dev_dependencies:
   flutter_test:
     sdk: flutter

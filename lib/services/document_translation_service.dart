@@ -1,9 +1,12 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
 
-import '../providers/api_provider.dart';
+import '../data/models/ai/agent_config.dart';
 import '../providers/translation_config_provider.dart';
 import '../utils/doc_paths.dart';
 import 'markdown_paragraph_extractor.dart';
@@ -15,20 +18,37 @@ import '../core/app_logger.dart';
 /// 设计原则（参考 anx-reader 的"单段独立"模型 + Dart 协程并发）：
 /// 1. **段粒度独立**：每段一次 LLM 请求，**不再用 `%%%%` 合批**——彻底
 ///    消除"LLM 漏分隔符 → 整批失败"的塌陷模式（之前一段错全批废）；
-/// 2. **N=[_kConcurrency] 协程池并发**：worker 抢占式从队列取段，吃满
-///    LLM API 的 RPM 配额，相比之前批次串行可提速 5-10 倍；
-/// 3. **指数退避重试**：单段失败重试 2 次（200ms / 400ms 退避），单段
-///    最终失败仅丢这一段、不影响其他；
+/// 2. 多篇文档共享 [_kConcurrency] 个翻译名额，避免文档越多请求越多；
+/// 3. **指数退避重试**：瞬时错误单段重试 2 次（1s / 2s 退避）；额度、订阅
+///    等不可恢复错误立即终止整篇翻译；
 /// 4. **写盘串行化 + 节流**：所有 `translations.json` 写入通过
-///    [_saveLock] Future 链顺序执行（避免并发 read-modify-write race），
+///    [_fileWrites] Future 链顺序执行（避免并发 read-modify-write race），
 ///    每 [_kSaveEveryN] 段触发一次中间保存，结束时强制最终保存；
 /// 5. **段落级持久化** & **多语言共存**：同一 JSON 文件内按目标语言分层。
 class DocumentTranslationService {
   DocumentTranslationService._();
 
-  /// 并发请求数。受 LLM provider 的 RPM 限制约束；
-  /// 实测 OpenAI / Anthropic / Gemini fast model 都能撑 8。
+  /// 所有全文翻译合计的并发上限。
   static const _kConcurrency = 8;
+  static final _requests = TranslationRequestQueue(_kConcurrency);
+  static final _fileWrites = <String, Future<void>>{};
+
+  static Future<void> _withFileLock(
+    String documentId,
+    Future<void> Function() action,
+  ) async {
+    final previous = _fileWrites[documentId] ?? Future<void>.value();
+    final next = previous.then((_) => action());
+    final settled = next.catchError((Object _) {});
+    _fileWrites[documentId] = settled;
+    try {
+      await next;
+    } finally {
+      if (identical(_fileWrites[documentId], settled)) {
+        _fileWrites.remove(documentId);
+      }
+    }
+  }
 
   /// 每完成多少段触发一次中间写盘。
   /// 太小：fsync 频繁拖慢；太大：意外退出丢失最近段。
@@ -87,7 +107,7 @@ class DocumentTranslationService {
     String pdfPath,
     String targetLang,
     Map<String, String> translations,
-  ) async {
+  ) => _withFileLock(pdfPath, () async {
     final file = File(translationFilePath(pdfPath));
     Map<String, dynamic> root = {};
     if (file.existsSync()) {
@@ -97,9 +117,12 @@ class DocumentTranslationService {
         );
       } catch (_) {}
     }
-    root[targetLang] = translations;
+    root[targetLang] = {
+      ...?root[targetLang] as Map<String, dynamic>?,
+      ...translations,
+    };
     await _writeJsonAtomic(file, root);
-  }
+  });
 
   /// 保存单条翻译（figure title 等外部来源单独翻译后写回共享缓存）。
   static Future<void> saveSingleTranslation(
@@ -108,33 +131,27 @@ class DocumentTranslationService {
     String hash,
     String translation,
   ) async {
-    final existing = loadTranslations(pdfPath, targetLang);
-    existing[hash] = translation;
-    await _saveTranslations(pdfPath, targetLang, existing);
+    await _saveTranslations(pdfPath, targetLang, {hash: translation});
   }
 
   /// 清除指定语言的翻译。文件中无其他语言时删除整个文件。
-  static Future<void> clearTranslations(
-    String pdfPath,
-    String targetLang,
-  ) async {
-    final file = File(translationFilePath(pdfPath));
-    if (!file.existsSync()) return;
-    try {
-      final root = Map<String, dynamic>.from(
-        jsonDecode(file.readAsStringSync()) as Map,
-      );
-      root.remove(targetLang);
-      if (root.isEmpty) {
-        await file.delete();
-      } else {
-        await _writeJsonAtomic(file, root);
-      }
-    } catch (_) {}
-    log.d(
-      '[DocumentTranslation] cleared translations: lang="$targetLang"',
-    );
-  }
+  static Future<void> clearTranslations(String pdfPath, String targetLang) =>
+      _withFileLock(pdfPath, () async {
+        final file = File(translationFilePath(pdfPath));
+        if (!file.existsSync()) return;
+        try {
+          final root = Map<String, dynamic>.from(
+            jsonDecode(file.readAsStringSync()) as Map,
+          );
+          root.remove(targetLang);
+          if (root.isEmpty) {
+            await file.delete();
+          } else {
+            await _writeJsonAtomic(file, root);
+          }
+        } catch (_) {}
+        log.d('[DocumentTranslation] cleared translations: lang="$targetLang"');
+      });
 
   // ── 核心入口 ─────────────────────────────────────────────────────────
 
@@ -146,8 +163,7 @@ class DocumentTranslationService {
   ///   `nextIdx++` 与读取之间无 await，多 worker 间天然原子；
   /// - **写盘串行**：所有 `translations.json` 写都通过 `saveLock` Future
   ///   链顺序执行。任何 worker 都不直接 await 写盘，避免阻塞；
-  /// - **取消语义**：worker 在循环顶检查 [cancelToken]——已在飞的最多
-  ///   [_kConcurrency] 个请求会跑完（dio 单次最长 60s），但不再启动新段。
+  /// - 取消会中止排队、网络请求及重试等待；已完成的段落仍然保存。
   ///
   /// [useCache] 为 false 时跳过文件缓存查询，所有段都进入 pending（专供
   /// "重新翻译"用）；写入仍执行。
@@ -170,6 +186,7 @@ class DocumentTranslationService {
       onProgress(0, 0);
       return false;
     }
+    final operationToken = cancelToken ?? TranslationCancelToken();
     onProgress(0, total);
 
     final targetLang = config.targetLanguage;
@@ -218,19 +235,36 @@ class DocumentTranslationService {
       agentState: agentState,
       translationConfig: config,
       useCache: useCache,
+      cancelToken: operationToken.requestToken,
     );
 
     await runConcurrent<TranslatableParagraph>(
       items: partition.pending,
       concurrency: _kConcurrency,
-      isCancelled: () => cancelToken?.isCancelled == true,
+      isCancelled: () => operationToken.isCancelled,
       task: (p) async {
-        // 接缝 2（重试策略）：单段失败重试 + 退避，最终失败仅丢该段、保留原文。
-        final translation = await translateWithRetry(
-          text: p.text,
-          translator: translateOne,
-          debugLabel: p.hash,
-        );
+        // 接缝 2（重试策略）：瞬时错误重试，不可恢复错误取消整篇任务。
+        String? translation;
+        try {
+          translation = await _requests.run(
+            () => translateWithRetry(
+              text: p.text,
+              translator: translateOne,
+              debugLabel: p.hash,
+              cancelToken: operationToken,
+            ),
+            cancelToken: operationToken.requestToken,
+          );
+        } on DioException catch (e) {
+          if (!CancelToken.isCancel(e)) rethrow;
+          return;
+        } catch (e) {
+          if (e is TranslationRequestException && !e.retryable) {
+            operationToken.cancel(e);
+          }
+          rethrow;
+        }
+        if (operationToken.isCancelled) return;
         if (translation != null && translation.isNotEmpty) {
           all[p.hash] = translation;
           onResult(p.hash, translation);
@@ -283,8 +317,9 @@ class DocumentTranslationService {
 
   /// 接缝 2：单段翻译 + 指数退避重试。注入 [translator] 以便无 LLM 单测；
   /// [backoff] 默认 1s × 2^attempt（attempt 0/1 = 1s/2s），给短时接口限流窗恢复
-  /// 时间；测试可注入 no-op 跳过等待。空译文按失败重试。
-  /// 全部尝试失败返回 null（保留原文，不抛，避免连累并发池里的其他 worker）。
+  /// 时间；测试可注入 no-op 跳过等待。空译文按失败重试；不可重试的请求异常
+  /// 直接抛出，由文档级并发池终止整篇任务。
+  /// 可重试错误全部尝试失败返回 null（保留原文，不抛，避免连累其它 worker）。
   @visibleForTesting
   static Future<String?> translateWithRetry({
     required String text,
@@ -292,19 +327,30 @@ class DocumentTranslationService {
     int maxRetries = _kMaxRetries,
     Future<void> Function(int attempt)? backoff,
     String? debugLabel,
+    TranslationCancelToken? cancelToken,
   }) async {
     Object? lastErr;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      if (cancelToken?.isCancelled == true) return null;
       try {
         final result = await translator(text);
         if (result.trim().isNotEmpty) return result;
         lastErr = Exception('empty translation result');
       } catch (e) {
+        if (e is DioException && CancelToken.isCancel(e)) return null;
+        if (cancelToken?.isCancelled == true) return null;
+        if (e is TranslationRequestException && !e.retryable) rethrow;
         lastErr = e;
       }
       if (attempt < maxRetries) {
-        await (backoff?.call(attempt) ??
-            Future<void>.delayed(Duration(milliseconds: 1000 * (1 << attempt))));
+        await Future.any<void>([
+          backoff?.call(attempt) ??
+              Future<void>.delayed(
+                Duration(milliseconds: 1000 * (1 << attempt)),
+              ),
+          if (cancelToken != null)
+            cancelToken.requestToken.whenCancel.then((_) {}),
+        ]);
       }
     }
     log.d(
@@ -352,10 +398,55 @@ class TranslationPartition {
 
 // ── 取消令牌 ───────────────────────────────────────────────────────────
 
-/// 翻译取消令牌——简单布尔闭包，不与 dio.CancelToken 混用。
-/// 单批请求一旦发出就不可中断；cancel 只阻止后续批次。
 class TranslationCancelToken {
-  bool _cancelled = false;
-  bool get isCancelled => _cancelled;
-  void cancel() => _cancelled = true;
+  final requestToken = CancelToken();
+  Object? _failure;
+  bool get isCancelled => requestToken.isCancelled;
+  Object? get failure => _failure;
+
+  void cancel([Object? reason]) {
+    if (reason != null) _failure ??= reason;
+    if (!requestToken.isCancelled) requestToken.cancel(reason);
+  }
+}
+
+class TranslationRequestQueue {
+  TranslationRequestQueue(this.limit) : assert(limit > 0);
+
+  final int limit;
+  int _active = 0;
+  final _waiting = Queue<Completer<void>>();
+
+  Future<T> run<T>(
+    Future<T> Function() task, {
+    CancelToken? cancelToken,
+  }) async {
+    if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+    final ready = Completer<void>();
+    if (_active < limit) {
+      _active++;
+      ready.complete();
+    } else {
+      _waiting.add(ready);
+    }
+    try {
+      await Future.any<void>([
+        ready.future,
+        if (cancelToken != null) cancelToken.whenCancel.then((_) {}),
+      ]);
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+      return await task();
+    } finally {
+      // 已获准的任务负责归还名额；排队取消只移除自己，不能抢还别人的名额。
+      if (ready.isCompleted) {
+        _active--;
+        if (_waiting.isNotEmpty) {
+          _active++;
+          _waiting.removeFirst().complete();
+        }
+      } else {
+        _waiting.remove(ready);
+      }
+    }
+  }
 }

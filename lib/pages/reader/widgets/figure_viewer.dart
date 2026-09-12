@@ -16,7 +16,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../data/models/book/document.dart';
-import '../../../providers/api_provider.dart';
+import '../../../providers/agent_api_provider.dart';
 import '../../../router/app_routes.dart';
 import '../chat/document_chat_page.dart';
 import '../../../services/haptics.dart';
@@ -304,7 +304,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: IconButton(
-              icon: const Icon(Symbols.close_rounded),
+              icon: const Icon(Symbols.close_rounded, fill: 1),
               color: Colors.white70,
               onPressed: () {
                 Haptics.soft();
@@ -634,7 +634,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       width: 36,
       height: 36,
       child: IconButton(
-        icon: const Icon(Symbols.auto_awesome_rounded, size: 18),
+        icon: const Icon(Symbols.auto_awesome_rounded, size: 18, fill: 1),
         style: IconButton.styleFrom(
           backgroundColor: const Color(0x1AFFFFFF),
           foregroundColor: Colors.white60,
@@ -698,6 +698,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                       ? Symbols.title_rounded
                       : Symbols.translate_rounded,
                   size: 18,
+                  fill: 1,
                 ),
                 style: IconButton.styleFrom(
                   backgroundColor: isTranslated

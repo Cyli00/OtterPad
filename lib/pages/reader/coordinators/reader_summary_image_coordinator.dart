@@ -1,3 +1,4 @@
+import '../../../widgets/setting_controls.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -13,8 +14,9 @@ import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/animation_constants.dart';
+import '../../../core/app_logger.dart';
 import '../../../data/models/book/document.dart';
-import '../../../providers/api_provider.dart';
+import '../../../providers/agent_api_provider.dart';
 import '../../../providers/document_task_provider.dart';
 import '../../../providers/image_generation_config_provider.dart';
 import '../../../providers/reader_session_provider.dart';
@@ -115,6 +117,7 @@ class ReaderSummaryImageCoordinator {
     if (newPath != null) {
       // 在 revision/state 更新前清缓存，确保新缩略图可点击前 extended_image 键已失效。
       await evictSummaryImageCaches(newPath);
+      if (!context.mounted) return;
       final revision = latest.revision + 1;
       sessionNotifier.setSummaryImagePath(newPath);
       summaryImageState.value = SummaryImageState(
@@ -162,37 +165,40 @@ class ReaderSummaryImageCoordinator {
   /// **必须**关闭压缩：file_picker 默认 compressionQuality=30 会在 Android
   /// 的 Pictures 目录写出压缩副本，表现为相册多出一张所选图的新副本。
   Future<void> uploadFromGallery() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowCompression: false,
-      compressionQuality: 0,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final sourcePath = result.files.first.path;
-    if (sourcePath == null) return;
-
-    final destPath = DocumentSummaryImageService.imagePathFor(document.id);
-    final destFile = File(destPath);
-    final metaFile = File(DocPaths.summaryMeta(document.id));
+    File? staged;
     try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowCompression: false,
+        compressionQuality: 0,
+      );
+      if (!context.mounted || result == null || result.files.isEmpty) return;
+      final sourcePath = result.files.first.path;
+      if (sourcePath == null) return;
+
+      final destPath = DocumentSummaryImageService.imagePathFor(document.id);
+      final destFile = File(destPath);
+      final metaFile = File(DocPaths.summaryMeta(document.id));
       await destFile.parent.create(recursive: true);
 
-      // 先驱逐缓存，再删旧文件，避免解码器锁住 summary.png 导致覆盖失败
-      // 或 UI 仍显示旧图 A。
+      final bytes = await File(sourcePath).readAsBytes();
+      if (!context.mounted) return;
+      staged = File('$destPath.${DateTime.now().microsecondsSinceEpoch}.tmp');
+      await staged.writeAsBytes(bytes, flush: true);
+
+      // 先完成暂存再替换，选到当前总结图或读取失败时也不会提前删除旧图。
       await evictSummaryImageCaches(destPath);
-      if (await destFile.exists()) {
-        await destFile.delete();
-      }
+
+      if (!context.mounted) return;
+      await staged.rename(destPath);
       if (await metaFile.exists()) {
         await metaFile.delete();
       }
 
-      // 读字节再写入固定路径，语义是「替换」而非「另存一份」
-      final bytes = await File(sourcePath).readAsBytes();
-      await destFile.writeAsBytes(bytes, flush: true);
       // 写入后再清一次（含 extended_image 键），且必须在 revision/state 更新前完成。
       await evictSummaryImageCaches(destPath);
 
+      if (!context.mounted) return;
       final current = summaryImageState.value;
       final revision = current.revision + 1;
       sessionNotifier.setSummaryImagePath(destPath);
@@ -202,11 +208,21 @@ class ReaderSummaryImageCoordinator {
       );
       // 与 document_task / 其它订阅 summaryImageProvider 的路径保持一致
       ref.read(summaryImageProvider(document.id).notifier).generated(destPath);
-    } catch (e) {
+    } catch (e, st) {
+      log.w('[SummaryImage] 上传失败', error: e, stackTrace: st);
       if (!context.mounted) return;
       ref
           .read(snackBarServiceProvider)
           .showResult(message: context.l10n.summaryUploadFailed);
+    } finally {
+      final pending = staged;
+      try {
+        if (pending != null && await pending.exists()) {
+          await pending.delete();
+        }
+      } catch (e, st) {
+        log.w('[SummaryImage] 临时文件清理失败', error: e, stackTrace: st);
+      }
     }
   }
 
@@ -412,7 +428,7 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── 画幅比例 ──
-              _titleRow(l10n.aspectRatio, l10n.aspectRatioHint),
+              SettingTitle(l10n.aspectRatio, l10n.aspectRatioHint),
               const SizedBox(height: 12),
               SettingPicker<String>(
                 current: cfg.aspectRatio,
@@ -435,7 +451,7 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
               ),
               const SizedBox(height: 20),
               // ── 清晰度 ──
-              _titleRow(l10n.resolution, l10n.resolutionHint),
+              SettingTitle(l10n.resolution, l10n.resolutionHint),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -474,9 +490,18 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
               ),
               const SizedBox(height: 20),
               // ── 参考图数量 ──
-              _buildSliderRow(
-                value: cfg.maxReferenceImages,
-                onChanged: notifier.setMaxReferenceImages,
+              SettingSlider(
+                title: context.l10n.referenceImageCount,
+                tooltip: context.l10n.imageRefCountHint,
+                padding: EdgeInsets.zero,
+                value: cfg.maxReferenceImages.toDouble(),
+                fallback: kSummaryReferenceImageMin.toDouble(),
+                min: kSummaryReferenceImageMin.toDouble(),
+                max: kSummaryReferenceImageMax.toDouble(),
+                divisions:
+                    kSummaryReferenceImageMax - kSummaryReferenceImageMin,
+                formatter: (v) => v.round().toString(),
+                onChanged: (v) => notifier.setMaxReferenceImages(v.round()),
               ),
               const SizedBox(height: 16),
               Divider(color: cs.outlineVariant.withAlpha(80), height: 1),
@@ -562,107 +587,6 @@ class _CostDialogState extends ConsumerState<_CostDialog> {
               ? () => Navigator.of(context).pop(_SummaryImageChoice.confirm)
               : null,
           child: Text(l10n.confirm),
-        ),
-      ],
-    );
-  }
-
-  /// 设置项标题行：titleSmall w600 + 帮助图标。
-  Widget _titleRow(String title, String tooltip) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        const SizedBox(width: 4),
-        Tooltip(
-          message: tooltip,
-          triggerMode: TooltipTriggerMode.tap,
-          showDuration: const Duration(seconds: 5),
-          preferBelow: true,
-          verticalOffset: 16,
-          decoration: BoxDecoration(
-            color: cs.inverseSurface,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Icon(
-              Symbols.help_rounded,
-              size: 16,
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 参考图数量滑块行：标题 + primaryContainer 徽标 + Slider。
-  Widget _buildSliderRow({
-    required int value,
-    required ValueChanged<int> onChanged,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final l10n = context.l10n;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _titleRow(
-                l10n.referenceImageCount,
-                l10n.imageRefCountHint,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$value',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: cs.onPrimaryContainer,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-            trackHeight: 3,
-          ),
-          child: Slider(
-            value: value.toDouble(),
-            min: kSummaryReferenceImageMin.toDouble(),
-            max: kSummaryReferenceImageMax.toDouble(),
-            divisions: kSummaryReferenceImageMax - kSummaryReferenceImageMin,
-            onChanged: (v) {
-              Haptics.soft();
-              onChanged(v.round());
-            },
-            padding: EdgeInsets.zero,
-          ),
         ),
       ],
     );

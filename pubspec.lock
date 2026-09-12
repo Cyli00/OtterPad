@@ -1062,7 +1062,7 @@ packages:
     source: hosted
     version: "2.4.7"
   pdfrx_engine:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: pdfrx_engine
       sha256: ef8f8cfa64255bfc91a559dd2d32d7cfe7a0f8003bac297bbf9a0aed1182fae5

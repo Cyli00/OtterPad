@@ -6,11 +6,24 @@ import 'package:flutter/foundation.dart';
 
 import '../core/storage/app_database.dart';
 import '../core/storage/storage.dart';
-import '../providers/api_provider.dart';
+import '../data/models/ai/agent_config.dart';
 import '../providers/translation_config_provider.dart';
 import 'agent_chat_service.dart';
 import 'prompts.dart';
 import 'translation_protected_spans.dart';
+
+class TranslationRequestException implements Exception {
+  final String message;
+  final bool retryable;
+
+  const TranslationRequestException(
+    this.message, {
+    this.retryable = true,
+  });
+
+  @override
+  String toString() => message;
+}
 
 /// 轻量翻译服务——使用用户已配置的 Agent API（快速模型优先）完成文本翻译。
 ///
@@ -34,8 +47,10 @@ class TranslationService {
     required AgentApiState agentState,
     required TranslationConfig translationConfig,
     bool useCache = true,
+    CancelToken? cancelToken,
     ThinkingLevel? translationThinkingLevel = ThinkingLevel.off,
   }) async {
+    if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
     if (text.trim().isEmpty) return '';
 
     // ── 查缓存 ──
@@ -89,10 +104,12 @@ class TranslationService {
         userPrompt: userPrompt,
         temperature: translationConfig.temperature,
         modelParams: modelParams,
+        cancelToken: cancelToken,
       ),
     );
 
     // ── 写缓存 ──
+    if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
     await _putCache(cacheKey, result);
 
     return result;
@@ -179,11 +196,18 @@ class TranslationService {
       streamErr = e;
     }
 
-    // 流式失败（含已收到部分增量的中途断流）→ fallback 非流式一次性返回。
+    // 仅可重试的传输失败允许非流式补偿；取消、额度与鉴权错误直接上抛。
     // 部分增量不可信：断流可能截在句子中间，残缺译文一旦进缓存会在 TTL 内
     // 反复命中——宁可重发一次完整请求，fallback 也失败则把原始错误抛给调用方。
     if (streamErr != null) {
       final err = streamErr;
+      final retryable = err is AgentChatException
+          ? err.retryable
+          : err is DioException &&
+              (err.type == DioExceptionType.connectionTimeout ||
+                  err.type == DioExceptionType.receiveTimeout ||
+                  err.type == DioExceptionType.connectionError);
+      if (!retryable) throw err;
       try {
         final result = await _callApi(
           provider: agentState.provider,
@@ -283,6 +307,7 @@ class TranslationService {
     required String userPrompt,
     double? temperature,
     AgentModelParams modelParams = const AgentModelParams(),
+    CancelToken? cancelToken,
   }) async {
     try {
       return await AgentChatService.send(
@@ -295,9 +320,13 @@ class TranslationService {
         userPrompt: userPrompt,
         temperature: temperature,
         receiveTimeout: const Duration(seconds: 60),
+        cancelToken: cancelToken,
       );
     } on AgentChatException catch (e) {
-      throw Exception('翻译请求失败：${e.message}');
+      throw TranslationRequestException(
+        '翻译请求失败：${e.message}',
+        retryable: e.retryable,
+      );
     }
   }
 
@@ -318,9 +347,9 @@ class TranslationService {
 
   /// 命中且未过 7 天 TTL 返回译文，否则 null。过期行不在此清，交给写路径顺带清理。
   static Future<String?> _getCache(String key) async {
-    final row = await (GStorage.db.select(GStorage.db.translations)
-          ..where((t) => t.cacheKey.equals(key)))
-        .getSingleOrNull();
+    final row = await (GStorage.db.select(
+      GStorage.db.translations,
+    )..where((t) => t.cacheKey.equals(key))).getSingleOrNull();
     if (row == null) return null;
     final cutoff =
         DateTime.now().millisecondsSinceEpoch - _cacheTtl.inMilliseconds;
@@ -331,17 +360,19 @@ class TranslationService {
   /// 写入（PK 冲突即覆盖）并顺带清掉过期行，替代旧的「落盘时清」。
   static Future<void> _putCache(String key, String translation) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    await GStorage.db.into(GStorage.db.translations).insertOnConflictUpdate(
-      TranslationsCompanion(
-        cacheKey: Value(key),
-        translation: Value(translation),
-        createdAt: Value(now),
-      ),
-    );
+    await GStorage.db
+        .into(GStorage.db.translations)
+        .insertOnConflictUpdate(
+          TranslationsCompanion(
+            cacheKey: Value(key),
+            translation: Value(translation),
+            createdAt: Value(now),
+          ),
+        );
     final cutoff = now - _cacheTtl.inMilliseconds;
-    await (GStorage.db.delete(GStorage.db.translations)
-          ..where((t) => t.createdAt.isSmallerThanValue(cutoff)))
-        .go();
+    await (GStorage.db.delete(
+      GStorage.db.translations,
+    )..where((t) => t.createdAt.isSmallerThanValue(cutoff))).go();
   }
 
   // ── 测试缝（@visibleForTesting）：脱离 LLM 单测 Drift 缓存 ──

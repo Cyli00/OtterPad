@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
@@ -22,6 +23,12 @@ class ReaderBottomBar extends StatelessWidget {
   final VoidCallback onOpenNotes;
   final VoidCallback onOpenTheme;
   final bool desktop;
+  final bool pdfView;
+  final ValueListenable<double>? readingProgress;
+
+  /// 下一次点击翻译按钮后的模式：由父层按「宽屏三态 / 窄屏两态」统一计算，
+  /// 与 icon/tooltip 以及实际执行结果保持同源。
+  final DocTranslationMode? nextTranslationMode;
 
   const ReaderBottomBar({
     super.key,
@@ -36,6 +43,9 @@ class ReaderBottomBar extends StatelessWidget {
     required this.onOpenNotes,
     required this.onOpenTheme,
     this.desktop = false,
+    this.pdfView = false,
+    this.readingProgress,
+    this.nextTranslationMode,
   });
 
   @override
@@ -63,7 +73,43 @@ class ReaderBottomBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: _buildActionRow(context, cs, compact: true),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildActionRow(context, cs, compact: true),
+                    if (readingProgress != null) ...[
+                      SizedBox(
+                        height: 24,
+                        child: VerticalDivider(
+                          width: 16,
+                          color: cs.outlineVariant.withAlpha(80),
+                        ),
+                      ),
+                      ValueListenableBuilder<double>(
+                        valueListenable: readingProgress!,
+                        builder: (context, progress, _) => Tooltip(
+                          message: context.l10n.readerReadingProgress,
+                          child: Semantics(
+                            label: context.l10n.readerReadingProgress,
+                            value: '${(progress.clamp(0, 1) * 100).round()}%',
+                            child: SizedBox(
+                              width: 48,
+                              child: Text(
+                                '${(progress.clamp(0, 1) * 100).round()}%',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -121,13 +167,14 @@ class ReaderBottomBar extends StatelessWidget {
               activeSheet == ReaderSheetType.notes,
           onTap: onOpenNotes,
         ),
-        _bottomButton(
-          cs,
-          icon: Symbols.palette_rounded,
-          tooltip: l10n.appearance,
-          active: activeSheet == ReaderSheetType.theme,
-          onTap: onOpenTheme,
-        ),
+        if (!pdfView || desktop)
+          _bottomButton(
+            cs,
+            icon: Symbols.palette_rounded,
+            tooltip: l10n.appearance,
+            active: activeSheet == ReaderSheetType.theme,
+            onTap: onOpenTheme,
+          ),
       ],
     );
   }
@@ -146,7 +193,7 @@ class ReaderBottomBar extends StatelessWidget {
     }
 
     if (translation.hasResult) {
-      final next = _nextMode(translation.mode);
+      final next = nextTranslationMode ?? _nextMode(translation.mode);
       return _bottomButton(
         cs,
         icon: _modeIcon(next),

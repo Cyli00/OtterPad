@@ -27,9 +27,19 @@ class ApplyPagination extends ReaderUpdate {
   const ApplyPagination(this.mode);
 }
 
+class ApplyBilingualLayout extends ReaderUpdate {
+  final bool enabled;
+  const ApplyBilingualLayout(this.enabled);
+}
+
 class ApplyTranslationStyle extends ReaderUpdate {
   final String styleId;
   const ApplyTranslationStyle(this.styleId);
+}
+
+class ApplyTranslations extends ReaderUpdate {
+  final List<Map<String, dynamic>> entries;
+  const ApplyTranslations(this.entries);
 }
 
 /// 高亮列表变化——把 [oldHighlights] → [newHighlights] 的差异同步到 WebView。
@@ -48,16 +58,20 @@ class ApplySearchQuery extends ReaderUpdate {
 /// [planUpdates] 的纯输入快照——从 widget 抽出参与"该做什么"判断的字段。
 class ReaderProps {
   final String markdownData;
+  final List<Map<String, dynamic>> readerEntries;
   final int contentRevision;
   final ReaderPalette palette;
   final ReaderSettingsState settings;
   final String translationStyleId;
+  final bool bilingualColumns;
   final List<Highlight> highlights;
   final String? highlightQuery;
 
   const ReaderProps({
     required this.markdownData,
+    this.readerEntries = const [],
     this.contentRevision = 0,
+    this.bilingualColumns = false,
     required this.palette,
     required this.settings,
     required this.translationStyleId,
@@ -68,10 +82,9 @@ class ReaderProps {
 
 /// 对比两份 props，返回需要对 WebView 执行的更新清单（纯函数，可无 mock 单测）。
 ///
-/// 规则与原 didUpdateWidget 完全一致：
-/// - data 变化必须重写 HTML + reload —— DOM 内容不在 CSS 变量控制范围。
-///   主题/翻页/翻译样式/高亮单独变 → 仅增量更新，**不销毁** DOM/KaTeX 缓存/
-///   已绘 SVG 高亮。因此 data 变化时这四项不单独应用（reload 会带新状态重建）。
+/// - 正文或索引版本变化才重写 HTML；译文按段落身份提交差量。
+/// - 主题、翻页、翻译样式及高亮单独变化只更新相应 DOM 或 CSS。
+///   正文重载会带入这些状态，无需重复提交。
 /// - highlightQuery 不受 data 变化约束：无论是否 reload 都应用搜索。
 List<ReaderUpdate> planUpdates(ReaderProps oldProps, ReaderProps newProps) {
   final updates = <ReaderUpdate>[];
@@ -83,6 +96,16 @@ List<ReaderUpdate> planUpdates(ReaderProps oldProps, ReaderProps newProps) {
   if (dataChanged) {
     updates.add(const ReloadContent());
   } else {
+    if (newProps.readerEntries != oldProps.readerEntries) {
+      final previous = {for (final e in oldProps.readerEntries) e['id']: e};
+      final changed = newProps.readerEntries
+          .where((e) => !identical(previous[e['id']], e))
+          .toList();
+      if (changed.isNotEmpty) updates.add(ApplyTranslations(changed));
+    }
+    if (newProps.bilingualColumns != oldProps.bilingualColumns) {
+      updates.add(ApplyBilingualLayout(newProps.bilingualColumns));
+    }
     final themeChanged =
         newProps.palette != oldProps.palette ||
         newProps.settings.fontSize != oldProps.settings.fontSize ||

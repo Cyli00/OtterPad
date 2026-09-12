@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert' show utf8;
+import 'dart:convert' show utf8, jsonEncode;
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
@@ -15,8 +15,10 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/animation_constants.dart';
 import '../../../data/models/book/highlight.dart';
+import '../../../data/models/book/reader_anchor.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/haptics.dart';
+import '../../../utils/desktop.dart';
 import '../../../services/reader_localhost_server.dart';
 import '../../../services/reader/reader_html_cache.dart';
 import 'reader_background.dart';
@@ -27,8 +29,13 @@ import '../../../core/app_logger.dart';
 
 class WebViewMarkdownReader extends StatefulWidget {
   final String markdownData;
+  final List<Map<String, dynamic>> readerEntries;
+  final ValueChanged<ReaderAnchor?>? onSelectionAnchor;
+  final ValueChanged<String?>? onReadingParagraphChanged;
+  final String? initialParagraphId;
   final int contentRevision;
   final ReaderSettingsState settings;
+  final bool bilingualColumns;
   final ReaderPalette palette;
   final List<Highlight> highlights;
   final String documentDir;
@@ -63,8 +70,13 @@ class WebViewMarkdownReader extends StatefulWidget {
   const WebViewMarkdownReader({
     super.key,
     required this.markdownData,
+    this.readerEntries = const [],
+    this.onSelectionAnchor,
+    this.onReadingParagraphChanged,
+    this.initialParagraphId,
     this.contentRevision = 0,
     required this.settings,
+    this.bilingualColumns = false,
     required this.palette,
     this.highlights = const [],
     required this.documentDir,
@@ -142,7 +154,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   /// 首次 HTML 是否已写好——写好前 WebView 不挂载（initialUrlRequest 会
   /// 立即加载，HTML 必须先落盘），build 用纸张底色占位。
   bool _htmlReady = false;
-  Future<void>? _htmlWriteFuture;
+  Future<ReaderHtmlWriteResult>? _htmlWriteFuture;
   int _reloadEpoch = 0;
 
   /// 揭幕控制：纸色幕布盖在 WebView 上方，遮住原生实例创建 → HTML 首帧
@@ -162,7 +174,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   Future<void> _prepareInitialHtml() async {
     await _writeHtmlFile();
-    Future<void>? pending;
+    Future<ReaderHtmlWriteResult>? pending;
     do {
       pending = _htmlWriteFuture;
       await pending;
@@ -235,10 +247,13 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   ///
   /// Isolate 闭包不能捕获 `this`（State 持有 controller 等不可发送对象），
   /// 全部输入先提为局部变量。
-  Future<void> _writeHtmlFile() {
+  Future<ReaderHtmlWriteResult> _writeHtmlFile() {
     final markdown = widget.markdownData;
+    final entries = widget.readerEntries;
     final palette = widget.palette;
     final settings = widget.settings;
+    final desktop = isDesktopOs;
+    final bilingualColumns = widget.bilingualColumns;
     final styleId = widget.translationStyleId;
     final baseHref = _docBaseHref;
     final buster = _figuresCacheBuster();
@@ -249,25 +264,36 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     // 否则 file:// 重写失效、图片裂成 alt 文本（见 _rootRelativeUrlForPath）。
     final serverRoot = ReaderLocalhostServer.instance.root;
     final revision = widget.contentRevision;
-    return _htmlWriteFuture = ReaderHtmlCache.write(
-      path: path,
-      fingerprint: _appVersion().then((version) =>
-          '${md5.convert(utf8.encode(markdown))}|$buster|$version|$revision'),
-      allowReuse: !kDebugMode,
-      buildHtml: () => Isolate.run(() => buildReaderHtml(
-        markdownContent: markdown,
-        palette: palette,
-        settings: settings,
-        baseHref: baseHref,
-        serverRoot: serverRoot,
-        translationStyleId: styleId,
-        imageCacheBuster: '$buster-$revision',
-        topInset: inset,
-        bottomInset: bottomInset,
-      )),
-    ).then((reused) {
-      if (reused) log.d('[WebViewMarkdownReader] HTML 指纹命中');
-    });
+    return _htmlWriteFuture =
+        ReaderHtmlCache.write(
+          path: path,
+          fingerprint: () => _appVersion().then(
+            (version) =>
+                '${md5.convert(utf8.encode(markdown + jsonEncode(entries)))}|$buster|$version|$revision|incremental-reader-1',
+          ),
+          allowReuse: !kDebugMode,
+          buildHtml: () => Isolate.run(
+            () => buildReaderHtml(
+              markdownContent: markdown,
+              readerEntries: entries,
+              palette: palette,
+              settings: settings,
+              desktop: desktop,
+              bilingualColumns: bilingualColumns,
+              baseHref: baseHref,
+              serverRoot: serverRoot,
+              translationStyleId: styleId,
+              imageCacheBuster: '$buster-$revision',
+              topInset: inset,
+              bottomInset: bottomInset,
+            ),
+          ),
+        ).then((result) {
+          if (result == ReaderHtmlWriteResult.reused) {
+            log.d('[WebViewMarkdownReader] HTML 指纹命中');
+          }
+          return result;
+        });
   }
 
   @override
@@ -282,7 +308,9 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   ReaderProps _propsOf(WebViewMarkdownReader w) => ReaderProps(
     markdownData: w.markdownData,
+    readerEntries: w.readerEntries,
     contentRevision: w.contentRevision,
+    bilingualColumns: w.bilingualColumns,
     palette: w.palette,
     settings: w.settings,
     translationStyleId: w.translationStyleId,
@@ -292,12 +320,16 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   void _applyUpdate(ReaderUpdate update) {
     switch (update) {
+      case ApplyTranslations(:final entries):
+        _bridge?.applyTranslations(entries);
       case ReloadContent():
         _reloadContent();
+      case ApplyBilingualLayout(:final enabled):
+        _bridge?.applyBilingualLayout(enabled);
       case ApplyTheme(:final palette, :final settings):
         _bridge?.applyTheme(palette, settings);
-      case ApplyPagination(:final mode):
-        _bridge?.applyPagination(mode);
+      case ApplyPagination():
+        _bridge?.applyPagination(_effectivePagination);
       case ApplyTranslationStyle(:final styleId):
         _bridge?.applyTranslationStyle(styleId);
       case SyncHighlights(:final oldHighlights, :final newHighlights):
@@ -317,8 +349,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   void _reloadContent() {
     final epoch = ++_reloadEpoch;
-    _writeHtmlFile().then((_) {
-      if (!mounted || epoch != _reloadEpoch) return;
+    _writeHtmlFile().then((result) {
+      if (!mounted ||
+          epoch != _reloadEpoch ||
+          result == ReaderHtmlWriteResult.superseded) {
+        return;
+      }
       final url = _readerUrl(cacheBust: true);
       if (url == null) {
         log.d(
@@ -366,6 +402,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   }
 
   void clearSelection() => _bridge?.clearSelection();
+  void holdTranslations(bool value) => _bridge?.holdTranslations(value);
 
   void flashImage(String filename) => _bridge?.flashImage(filename);
 
@@ -467,6 +504,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     ),
   );
 
+  // 桌面用连续纵向滚动（翻页设置只在移动端生效）；
+  // 宽屏双语布局由 bilingualColumns 决定，不代表翻页。
+  ReaderPaginationMode get _effectivePagination => isDesktopOs
+      ? ReaderPaginationMode.vertical
+      : widget.settings.paginationMode;
+
   @override
   Widget build(BuildContext context) {
     // HTML 还在后台 isolate 生成——先铺纸张底色占位，避免 WebView 加载到
@@ -480,7 +523,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     // server 未启动时退化到 about:blank（理论上不应发生：main.dart 启动时已 start）。
     final url = _readerUrl() ?? 'about:blank';
     final isHorizontal =
-        widget.settings.paginationMode == ReaderPaginationMode.horizontal;
+        _effectivePagination == ReaderPaginationMode.horizontal;
 
     // _webViewKey 挂在 SizedBox 而非 InAppWebView：PlatformView 的 RenderBox
     // 在 release 模式下 localToGlobal 可能返回 (0,0)，导致坐标转换偏移缺失。
@@ -593,17 +636,32 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     // bridge 的 !_contentReady 丢弃，而 planUpdates 是新旧 props 差分——丢弃
     // 后差异不再出现，永不重试。ready 时用 widget 当前值兜底（幂等：HTML
     // 生成时本就带这些值，重放只是覆写同名 CSS 变量/属性）。
+    _bridge?.applyDesktopMode(isDesktopOs);
+    _bridge?.applyBilingualLayout(widget.bilingualColumns);
     _bridge?.applyTheme(widget.palette, widget.settings);
     _bridge?.applyTranslationStyle(widget.translationStyleId);
+    _bridge?.applyTranslations(widget.readerEntries);
     _bridge?.applyTopInset(widget.topInset);
     _bridge?.applyBottomInset(widget.bottomInset);
     // 翻页方式必须在首屏注入：JS 默认 body 没 data-pagination 属性，
     // 视为 vertical；horizontal 时若不注入会以 vertical 渲染首屏，
     // 直到第一次 didUpdateWidget 才切，造成"先看到 vertical 一闪"。
-    _bridge?.applyPagination(widget.settings.paginationMode);
+    _bridge?.applyPagination(_effectivePagination);
     _bridge?.restoreAllHighlights(widget.highlights);
     _bridge?.applySearchQuery(widget.highlightQuery);
-    if (widget.initialScrollProgress > 0 || widget.initialAnchorBlock != null) {
+    if (widget.initialParagraphId != null) {
+      _bridge
+          ?.scrollToParagraph(widget.initialParagraphId!)
+          .then((found) async {
+            if (!found) {
+              await _bridge?.restoreScrollProgress(
+                widget.initialScrollProgress,
+              );
+            }
+          })
+          .whenComplete(_reveal);
+    } else if (widget.initialScrollProgress > 0 ||
+        widget.initialAnchorBlock != null) {
       // 揭幕必须等进度恢复的 JS 执行完，否则会看到「先顶部、再跳到上次
       // 位置」的闪动；剩余的 paint 延迟由幕布 240ms 淡出动画掩盖。
       _bridge
@@ -618,7 +676,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   }
 
   @override
+  void onReadingParagraph(String? paragraphId) =>
+      widget.onReadingParagraphChanged?.call(paragraphId);
+
+  @override
   void onSelectionEnd(String text, Map<String, dynamic> rawRect) {
+    widget.onSelectionAnchor?.call(ReaderAnchor.parse(rawRect['anchor']));
     final rect = _viewportToScreen(rawRect);
     if (rect == null) return;
     final lineCount = (rawRect['lineCount'] as num?)?.toInt() ?? 1;

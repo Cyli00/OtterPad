@@ -1,3 +1,4 @@
+import '../../../core/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -103,7 +104,9 @@ ThemeData buildReaderThemeData(ThemeData parent, ReaderTheme readerTheme) {
   );
   return ThemeData(
     colorScheme: localCs,
+    sliderTheme: appSliderTheme,
     useMaterial3: true,
+    iconTheme: const IconThemeData(fill: 1.0),
     textTheme: parent.textTheme.apply(
       bodyColor: palette.text,
       displayColor: palette.text,

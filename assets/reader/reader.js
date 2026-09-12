@@ -15,6 +15,22 @@ function _onInitialRenderDone() {
   }
 }
 
+const _readerMathOptions = {
+  delimiters: [
+    {left: '$$', right: '$$', display: true},
+    {left: '\\[', right: '\\]', display: true},
+    {left: '$', right: '$', display: false},
+    {left: '\\(', right: '\\)', display: false},
+  ],
+  throwOnError: false,
+};
+
+function _renderReaderMath(element) {
+  if (typeof renderMathInElement !== 'function') return;
+  renderMathInElement(element, _readerMathOptions);
+  window.readerInvalidateBindings?.();
+}
+
 function _initLazyMath() {
   const content = document.getElementById('content');
   if (typeof renderMathInElement !== 'function') {
@@ -22,15 +38,6 @@ function _initLazyMath() {
     return;
   }
 
-  const opts = {
-    delimiters: [
-      {left: '$$', right: '$$', display: true},
-      {left: '\\[', right: '\\]', display: true},
-      {left: '$', right: '$', display: false},
-      {left: '\\(', right: '\\)', display: false},
-    ],
-    throwOnError: false,
-  };
   const mathRe = /\$|\\\[|\\\(/;
   const vh = window.innerHeight;
   const deferred = [];
@@ -39,7 +46,7 @@ function _initLazyMath() {
     if (el.tagName === 'svg' || el.tagName === 'SVG') continue;
     if (!el.classList.contains('math-display') && !mathRe.test(el.textContent)) continue;
     if (el.getBoundingClientRect().top < vh + 300) {
-      renderMathInElement(el, opts);
+      _renderReaderMath(el);
     } else {
       deferred.push(el);
     }
@@ -66,7 +73,7 @@ function _initLazyMath() {
   function flushQueue(deadline) {
     scheduled = false;
     while (queue.length && (deadline.timeRemaining() > 3 || deadline.didTimeout)) {
-      renderMathInElement(queue.shift(), opts);
+      _renderReaderMath(queue.shift());
     }
     if (window._overlayer) window._overlayer.redraw();
     window.dispatchEvent(new Event('scroll'));
@@ -230,9 +237,24 @@ class Overlayer {
     if (!items || !items.length) return;
     const idx = this._buildTextIndex();
     for (const item of items) {
+      if (item.anchor || (window.readerEntries || []).length) {
+        this.addAnchored(item);
+        continue;
+      }
       const range = this._findTextRangeWithIndex(idx, item.text);
       if (range) this.add(item.id, range, item.color);
     }
+  }
+
+  addAnchored(item) {
+    const ranges = window.readerHighlightRanges?.(item) || [];
+    // 当前语言不可见时仍保留锚点，后续译文到达或模式切换后可重新定位。
+    this.remove(item.id);
+    const rects = ranges.flatMap(range => this._getContentRects(range));
+    this._syncSvgSize();
+    const g = this._drawGroup(item.id, rects, item.color);
+    this.svg.appendChild(g);
+    this.map.set(item.id, { range: ranges[0], ranges, item, color: item.color, element: g, rects });
   }
 
   remove(id) {
@@ -256,7 +278,11 @@ class Overlayer {
     this._syncSvgSize();
     const updates = [];
     for (const [id, obj] of this.map) {
-      updates.push({ id, obj, rects: this._getContentRects(obj.range) });
+      if (obj.item) {
+        obj.ranges = window.readerHighlightRanges?.(obj.item) || [];
+        obj.range = obj.ranges[0];
+      }
+      updates.push({ id, obj, rects: (obj.ranges || [obj.range]).flatMap(r => this._getContentRects(r)) });
     }
     for (const { id, obj, rects } of updates) {
       obj.element.remove();
@@ -316,7 +342,7 @@ class Overlayer {
       acceptNode: (node) => {
         let el = node.parentElement;
         while (el && el !== content) {
-          if (el.classList.contains('katex-mathml')) return NodeFilter.FILTER_REJECT;
+          if (el.hidden || el.classList.contains('katex-mathml')) return NodeFilter.FILTER_REJECT;
           el = el.parentElement;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -350,6 +376,7 @@ class Overlayer {
     if (!normalized) return null;
     const findIdx = idx.normFull.indexOf(normalized);
     if (findIdx < 0) return null;
+    if (idx.normFull.indexOf(normalized, findIdx + 1) >= 0) return null;
 
     const origStart = idx.normToOrig[findIdx] || 0;
     const origEnd =
@@ -396,12 +423,18 @@ let _pointerIsDown = false;
 let _pointerDownTimer = null;
 let _selectionDirty = false;
 
-document.addEventListener('pointerdown', () => {
+document.addEventListener('pointerdown', (event) => {
+  document.body.classList.remove('reader-select-source', 'reader-select-target');
+  const cell = event.target.closest?.('.reader-language');
+  if (cell && document.body.dataset.desktop === 'true') {
+    document.body.classList.add(cell.dataset.language === 'source' ? 'reader-select-source' : 'reader-select-target');
+  }
   _pointerIsDown = true;
   _selectionDirty = false;
   // Android WebView 可能吞掉 pointerup。兜底解锁后必须补处理长按期间
   // 被拦下的 selectionchange，否则操作栏要等到第一次拖动手柄才出现。
   clearTimeout(_pointerDownTimer);
+  if (event.pointerType === 'mouse') return;
   _pointerDownTimer = setTimeout(() => {
     _pointerIsDown = false;
     if (_selectionDirty) _scheduleSelection(120);
@@ -451,8 +484,9 @@ function _emitSelection() {
       window.flutter_inappwebview.callHandler('onSelectionCleared');
     return;
   }
-  const text = sel.toString();
   const range = sel.getRangeAt(0);
+  const anchor = window.readerSelectionAnchor?.(range);
+  const text = anchor?.ranges.length ? anchor.ranges.map(r => r.quote).join('\n\n') : sel.toString();
   const rect = range.getBoundingClientRect();
   const lineCount = _selectionLineCount(range);
 
@@ -469,6 +503,7 @@ function _emitSelection() {
     window.flutter_inappwebview.callHandler('onSelectionEnd', {
       text: text,
       lineCount: lineCount,
+      anchor: anchor,
       left: rect.left,
       top: rect.top,
       right: rect.right,
@@ -499,6 +534,11 @@ document.addEventListener('pointerup', (e) => {
   clearTimeout(_pointerDownTimer);
   _scheduleSelection(80);
 });
+document.addEventListener('pointercancel', () => {
+  _pointerIsDown = false;
+  clearTimeout(_pointerDownTimer);
+});
+
 document.addEventListener('selectionchange', () => {
   if (_pointerIsDown) {
     _selectionDirty = true;
@@ -578,6 +618,7 @@ function _reportScrollProgress() {
     window.flutter_inappwebview.callHandler('onScrollProgress', {
       progress: ratio,
       anchorBlock: _findAnchorBlockIndex(),
+      paragraphId: window.readerVisibleParagraph?.(),
     });
   }, 500);
 }
@@ -665,6 +706,36 @@ window._restoreProgress = function(ratio, anchorBlock) {
 // 单一 click listener：图片点击优先短路；其次横向模式下按 X 分三段——
 // 左 30% 上一页 / 右 30% 下一页 / 中央 toggle 工具栏。
 // 高亮点击不走这里——SVG <g data-hl-id> 自带 click 已 stopPropagation。
+let _desktopPointerStart = null;
+let _desktopPointerDragged = false;
+document.addEventListener('pointerdown', e => {
+  _desktopPointerStart = {x: e.clientX, y: e.clientY};
+  _desktopPointerDragged = false;
+}, {passive: true});
+document.addEventListener('pointermove', e => {
+  if (_desktopPointerStart && Math.hypot(e.clientX - _desktopPointerStart.x,
+      e.clientY - _desktopPointerStart.y) > 4) _desktopPointerDragged = true;
+}, {passive: true});
+
+function _readerBlankPoint(e) {
+  if (e.target.closest('a, img, figure, table, .katex, mark, g[data-hl-id], button, input, textarea, select')) return false;
+  const caret = document.caretRangeFromPoint(e.clientX, e.clientY);
+  if (!caret || caret.startContainer.nodeType !== Node.TEXT_NODE) return true;
+  const node = caret.startContainer;
+  // caret 会吸附到最近的文字；再检查相邻字符的实际矩形，才能识别行尾留白。
+  for (const i of [caret.startOffset - 1, caret.startOffset]) {
+    if (i < 0 || i >= node.length) continue;
+    const range = document.createRange();
+    range.setStart(node, i);
+    range.setEnd(node, i + 1);
+    for (const rect of range.getClientRects()) {
+      if (e.clientX >= rect.left && e.clientX <= rect.right &&
+          e.clientY >= rect.top && e.clientY <= rect.bottom) return false;
+    }
+  }
+  return true;
+}
+
 document.addEventListener('click', (e) => {
   // 触摸拖动刚结束时部分 WebView 会补发合成 click——窗口期内一律忽略
   // （_suppressClickUntil 由触摸手势层维护，见横向翻页触摸区段）。
@@ -678,6 +749,13 @@ document.addEventListener('click', (e) => {
   if (img && window.flutter_inappwebview) {
     e.preventDefault();
     window.flutter_inappwebview.callHandler('onImageClick', { src: img.src });
+    return;
+  }
+
+  if (document.body.dataset.desktop === 'true') {
+    const selection = window.getSelection();
+    if (e.detail !== 1 || _desktopPointerDragged || (selection && !selection.isCollapsed)) return;
+    if (_readerBlankPoint(e)) window.flutter_inappwebview?.callHandler('onToggleToolbar');
     return;
   }
 
@@ -760,7 +838,7 @@ window.syncHighlightsBatch = function(b64Payload) {
     const json = decodeURIComponent(escape(atob(b64Payload)));
     const diff = JSON.parse(json);
     if (diff.remove) for (const id of diff.remove) window._overlayer.remove(id);
-    if (diff.add) for (const h of diff.add) window._overlayer.addByText(h.id, h.text, h.color);
+    if (diff.add) window._overlayer.addByTextBatch(diff.add);
     if (diff.updateColor) for (const u of diff.updateColor) window._overlayer.updateColor(u.id, u.color);
   } catch(e) {
     console.error('syncHighlightsBatch failed', e);
@@ -804,8 +882,10 @@ function _findHeading(block) {
   return '';
 }
 
+let _readerSearchActive = false;
 window.highlightSearch = function(query, caseSensitive, wholeWord) {
   window.clearSearchHighlight();
+  _readerSearchActive = !!query;
   if (!query) return JSON.stringify({ count: 0, results: [] });
 
   const content = document.getElementById('content');
@@ -818,7 +898,7 @@ window.highlightSearch = function(query, caseSensitive, wholeWord) {
     acceptNode: (node) => {
       let el = node.parentElement;
       while (el && el !== content) {
-        if (el.classList.contains('katex') || el.tagName === 'MARK')
+        if (el.hidden || el.classList.contains('katex') || el.tagName === 'MARK')
           return NodeFilter.FILTER_REJECT;
         el = el.parentElement;
       }
@@ -873,12 +953,15 @@ window.highlightSearch = function(query, caseSensitive, wholeWord) {
 };
 
 window.clearSearchHighlight = function() {
+  _readerSearchActive = false;
   document.querySelectorAll('.search-hl').forEach(mark => {
     const parent = mark.parentNode;
     while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
     parent.removeChild(mark);
     parent.normalize();
   });
+  window.readerInvalidateBindings?.();
+  window.readerScheduleTranslations?.();
 };
 
 window.scrollToSearchResult = function(index) {
@@ -909,14 +992,13 @@ window.flashImage = function(filename) {
 // ─── 翻页模式切换（Flutter 调用）───
 // 由 Flutter 在 onContentReady 与 settings.paginationMode 变化时触发。
 // 模式变化导致容器尺寸/坐标系变化：
-//   1) sync --page-width 让 column 按当前 viewport 重排；
+//   1) 同步栏数与栏宽，让正文按当前视口重排；
 //   2) Overlayer.redraw() 重算所有高亮 rect；
 //   3) dispatchEvent('scroll') 让 lazy 图片在新视口下重新评估。
-window.setPaginationMode = function(mode) {
+window.setPaginationMode = function(mode, anchorIdx = _findAnchorBlockIndex()) {
   if (mode !== 'vertical' && mode !== 'horizontal') return;
-  // 切换前抓当前锚点——用旧模式的坐标系找到视口起始块
-  const anchorIdx = _findAnchorBlockIndex();
 
+  document.body.dataset.requestedPagination = mode;
   document.body.dataset.pagination = mode;
   _syncPaginationVars();
   _setTouchTakeover(mode === 'horizontal');
@@ -931,6 +1013,20 @@ window.setPaginationMode = function(mode) {
     if (window._overlayer) window._overlayer.redraw();
     _updateFooter();
     window.dispatchEvent(new Event('scroll'));
+  });
+};
+
+window.setBilingualLayout = function(enabled) {
+  const value = String(!!enabled);
+  if (document.body.dataset.bilingualColumns === value) return;
+  const idx = _findAnchorBlockIndex();
+  const anchor = _content().children[idx];
+  const top = anchor?.getBoundingClientRect().top;
+  document.body.dataset.bilingualColumns = value;
+  requestAnimationFrame(() => {
+    if (anchor && Number.isFinite(top)) window.scrollBy(0, anchor.getBoundingClientRect().top - top);
+    window._overlayer?.redraw();
+    _reportScrollMetrics();
   });
 };
 
@@ -1022,13 +1118,15 @@ function _nudgeEdge(dir) {
   _flipRAF = requestAnimationFrame(step);
 }
 
-// ─── --page-width 同步 + resize 响应 ───
+// ─── 栏宽同步与窗口尺寸变化 ───
 // vw 在某些 WebView 实现里不触发 column reflow，必须用 JS 主动 setProperty。
 // resize 时记录视觉锚点（视口起始侧第一个可见 block 的索引），重排后恢复——
 // 避免内容重排后 scrollLeft 数值含义失效导致页码错乱。
 function _syncPaginationVars() {
-  document.documentElement.style.setProperty(
-    '--page-width', window.innerWidth + 'px');
+  const columns = 1;
+  const root = document.documentElement.style;
+  root.setProperty('--reader-columns', columns);
+  root.setProperty('--reader-column-width', Math.max(1, window.innerWidth / columns - 64) + 'px');
 }
 _syncPaginationVars();
 
@@ -1044,7 +1142,8 @@ function _findAnchorBlockIndex() {
     const el = children[i];
     if (el.tagName === 'svg' || el.tagName === 'SVG') continue;
     const r = el.getBoundingClientRect();
-    if (horizontal ? r.right > cRect.left + 8 : r.bottom > 8) return i;
+    const top = Math.max(8, parseFloat(getComputedStyle(el).scrollMarginTop) || 0);
+    if (horizontal ? r.right > cRect.left + 8 : r.bottom > top) return i;
   }
   return -1;
 }
@@ -1063,9 +1162,9 @@ function _restoreToAnchor(idx) {
     el.scrollIntoView({ block: 'start', inline: 'nearest' });
     return true;
   }
-  el.scrollIntoView({ block: 'nearest', inline: 'start' });
+  const left = el.getClientRects()[0].left + c.scrollLeft - c.getBoundingClientRect().left;
   const page = Math.max(0, Math.min(_maxPage(),
-      Math.round(c.scrollLeft / window.innerWidth)));
+      Math.floor(left / window.innerWidth)));
   c.scrollTo({ left: page * window.innerWidth, behavior: 'auto' });
   _targetPage = page;
   return true;

@@ -23,24 +23,6 @@ enum ReaderTheme {
   dark,
   green;
 
-  /// 详细中文名（设置页等需要完整描述的场景）。
-  String get label => switch (this) {
-    ReaderTheme.themed => '白色',
-    ReaderTheme.sepia => '羊皮纸',
-    ReaderTheme.green => '护眼绿',
-    ReaderTheme.night => '夜间',
-    ReaderTheme.dark => '纯黑',
-  };
-
-  /// 阅读器底部面板用的短名（空间紧张、视觉整齐）。
-  String get shortLabel => switch (this) {
-    ReaderTheme.themed => '白色',
-    ReaderTheme.sepia => '羊皮',
-    ReaderTheme.green => '护眼',
-    ReaderTheme.night => '夜间',
-    ReaderTheme.dark => '纯黑',
-  };
-
   /// 该阅读器背景对应的亮度。
   ///
   /// 阅读器页面用此值通过 `buildReaderThemeData()` 生成局部主题，
@@ -75,11 +57,6 @@ enum DefaultReadingMode {
 enum ReaderFont {
   serif,
   sans;
-
-  String get label => switch (this) {
-    ReaderFont.serif => 'Serif',
-    ReaderFont.sans => 'Sans',
-  };
 
   /// 映射到实际字体族名（首选字体）。
   ///
@@ -129,11 +106,6 @@ enum ReaderPaginationMode {
   vertical,
   horizontal;
 
-  String get label => switch (this) {
-    ReaderPaginationMode.vertical => '上下翻页',
-    ReaderPaginationMode.horizontal => '左右翻页',
-  };
-
   /// JS `setPaginationMode(...)` 接受的字符串 id。
   String get jsId => switch (this) {
     ReaderPaginationMode.vertical => 'vertical',
@@ -147,6 +119,8 @@ class ReaderSettingsState {
   final double fontSize;
   final DefaultReadingMode defaultReadingMode;
   final ReaderPaginationMode paginationMode;
+  final double desktopHorizontalMargin;
+  final double desktopVerticalMargin;
 
   const ReaderSettingsState({
     this.theme = ReaderTheme.themed,
@@ -154,6 +128,8 @@ class ReaderSettingsState {
     this.fontSize = 16.0,
     this.defaultReadingMode = DefaultReadingMode.markdown,
     this.paginationMode = ReaderPaginationMode.vertical,
+    this.desktopHorizontalMargin = 32,
+    this.desktopVerticalMargin = 24,
   });
 
   ReaderSettingsState copyWith({
@@ -162,6 +138,8 @@ class ReaderSettingsState {
     double? fontSize,
     DefaultReadingMode? defaultReadingMode,
     ReaderPaginationMode? paginationMode,
+    double? desktopHorizontalMargin,
+    double? desktopVerticalMargin,
   }) {
     return ReaderSettingsState(
       theme: theme ?? this.theme,
@@ -169,6 +147,10 @@ class ReaderSettingsState {
       fontSize: fontSize ?? this.fontSize,
       defaultReadingMode: defaultReadingMode ?? this.defaultReadingMode,
       paginationMode: paginationMode ?? this.paginationMode,
+      desktopHorizontalMargin:
+          desktopHorizontalMargin ?? this.desktopHorizontalMargin,
+      desktopVerticalMargin:
+          desktopVerticalMargin ?? this.desktopVerticalMargin,
     );
   }
 
@@ -213,6 +195,19 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
         ReaderSettingsState.minFontSize,
         ReaderSettingsState.maxFontSize,
       ),
+      desktopHorizontalMargin:
+          (box.get(
+                    SettingsKeys.readerDesktopHorizontalMargin,
+                    defaultValue: 32.0,
+                  )
+                  as num)
+              .toDouble()
+              .clamp(0, 120),
+      desktopVerticalMargin:
+          (box.get(SettingsKeys.readerDesktopVerticalMargin, defaultValue: 24.0)
+                  as num)
+              .toDouble()
+              .clamp(0, 80),
       defaultReadingMode: DefaultReadingMode.values[modeIndex.clamp(0, 1)],
       paginationMode:
           ReaderPaginationMode.values[paginationIndex.clamp(
@@ -249,6 +244,18 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   void setPaginationMode(ReaderPaginationMode mode) {
     state = state.copyWith(paginationMode: mode);
     GStorage.setting.put(_kPaginationMode, mode.index);
+  }
+
+  void setDesktopHorizontalMargin(double value) {
+    final margin = value.clamp(0.0, 120.0);
+    state = state.copyWith(desktopHorizontalMargin: margin);
+    GStorage.setting.put(SettingsKeys.readerDesktopHorizontalMargin, margin);
+  }
+
+  void setDesktopVerticalMargin(double value) {
+    final margin = value.clamp(0.0, 80.0);
+    state = state.copyWith(desktopVerticalMargin: margin);
+    GStorage.setting.put(SettingsKeys.readerDesktopVerticalMargin, margin);
   }
 
   void reload() {

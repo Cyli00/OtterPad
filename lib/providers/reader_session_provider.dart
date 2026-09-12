@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../data/models/book/highlight.dart';
+import '../data/models/book/reader_anchor.dart';
 import '../services/document_summary_image_service.dart';
 import '../services/reader/markdown_document_cache_service.dart';
 import '../utils/doc_paths.dart';
@@ -496,8 +497,13 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     }
   }
 
-  void toggleToolbars() {
-    if (!canReactToReaderScroll) return;
+  void toggleToolbars({bool allowDockOpen = false}) {
+    if (state.sheetOpen ||
+        state.searchActive ||
+        state.highlightQuery != null ||
+        (state.dockOpen && !allowDockOpen)) {
+      return;
+    }
     state = state.copyWith(toolbarsVisible: !state.toolbarsVisible);
   }
 
@@ -505,13 +511,13 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     state = state.copyWith(summaryImagePath: imagePath);
   }
 
-  Highlight? addHighlight(String text, String color) {
+  Highlight? addHighlight(String text, String color, {ReaderAnchor? anchor}) {
     final trimmed = text.trim();
     if (trimmed.isEmpty || args.documentId.isEmpty) return null;
     // 非乐观（ADR-0001）：add 返回它构造的 Highlight，不靠流即时反映做 diff。
     return _ref
         .read(highlightProvider(args.documentId).notifier)
-        .add(trimmed, color: color);
+        .add(trimmed, color: color, anchor: anchor);
   }
 
   void removeHighlight(String highlightId) {

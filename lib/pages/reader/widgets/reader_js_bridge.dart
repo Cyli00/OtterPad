@@ -52,6 +52,7 @@ abstract class ReaderJsBridgeListener {
   /// [anchorBlock] 是视口起始处第一个可见内容块的索引（位置的内容引用），
   /// 横向翻页恢复时优先于比率；JS 侧无法定位时为 null。
   void onScrollProgress(double progress, int? anchorBlock);
+  void onReadingParagraph(String? paragraphId);
   void onScrollMetrics(ReaderScrollMetrics metrics);
   void onToggleToolbar();
 
@@ -145,6 +146,7 @@ class ReaderJsBridge {
         final raw = data['progress'];
         if (raw is num) {
           final anchor = data['anchorBlock'];
+          _listener.onReadingParagraph(data['paragraphId'] as String?);
           _listener.onScrollProgress(
             raw.toDouble().clamp(0.0, 1.0),
             anchor is num && anchor >= 0 ? anchor.toInt() : null,
@@ -212,6 +214,20 @@ class ReaderJsBridge {
 
   /// 增量更新 palette + 字体相关 CSS 变量——直接 setProperty 改 :root vars。
   /// 浏览器只对受 var(--xxx) 影响的属性重排，零页面重载。
+  void applyBilingualLayout(bool enabled) {
+    if (!_contentReady) return;
+    _controller.evaluateJavascript(
+      source: 'window.setBilingualLayout($enabled);',
+    );
+  }
+
+  void applyDesktopMode(bool desktop) {
+    if (!_contentReady) return;
+    _controller.evaluateJavascript(
+      source: "document.body.dataset.desktop = '$desktop';",
+    );
+  }
+
   void applyTheme(ReaderPalette palette, ReaderSettingsState settings) {
     if (!_contentReady) return;
     _controller.evaluateJavascript(
@@ -232,6 +248,21 @@ class ReaderJsBridge {
     if (!_contentReady) return;
     _controller.evaluateJavascript(
       source: "window.setTranslationStyle('$styleId')",
+    );
+  }
+
+  void applyTranslations(List<Map<String, dynamic>> entries) {
+    if (!_contentReady || entries.isEmpty) return;
+    final payload = base64Encode(utf8.encode(jsonEncode(entries)));
+    _controller.evaluateJavascript(
+      source: "window.applyReaderTranslations('$payload');",
+    );
+  }
+
+  void holdTranslations(bool value) {
+    if (!_contentReady) return;
+    _controller.evaluateJavascript(
+      source: 'window.holdReaderTranslations($value);',
     );
   }
 
@@ -262,8 +293,7 @@ class ReaderJsBridge {
       _controller.evaluateJavascript(source: 'window.clearSearchHighlight()');
     } else {
       _controller.evaluateJavascript(
-        source:
-            "window.highlightSearch('${_jsLiteral(query)}', false, false)",
+        source: "window.highlightSearch('${_jsLiteral(query)}', false, false)",
       );
     }
   }
@@ -312,8 +342,16 @@ class ReaderJsBridge {
     _controller.evaluateJavascript(source: 'window.scrollToBlock($index)');
   }
 
+  Future<bool> scrollToParagraph(String id) async =>
+      await _controller.evaluateJavascript(
+        source: 'window.readerScrollToParagraph(${jsonEncode(id)})',
+      ) ==
+      true;
+
   void scrollToFigure(String id) {
-    _controller.evaluateJavascript(source: "window.scrollToFigure('${_jsLiteral(id)}')");
+    _controller.evaluateJavascript(
+      source: "window.scrollToFigure('${_jsLiteral(id)}')",
+    );
   }
 
   void scrollToSearchResult(int index) {
@@ -321,7 +359,6 @@ class ReaderJsBridge {
       source: 'window.scrollToSearchResult($index)',
     );
   }
-
 
   /// [anchorBlock] 优先于比率（见 JS `_restoreProgress`）；null = 仅按比率。
   /// 返回 Future——widget 的揭幕幕布等 JS 执行完再淡出，避免露出跳变。
@@ -350,7 +387,14 @@ class ReaderJsBridge {
   void restoreAllHighlights(List<Highlight> highlights) {
     if (highlights.isEmpty) return;
     final payload = highlights
-        .map((h) => {'id': h.id, 'text': h.text, 'color': h.color})
+        .map(
+          (h) => {
+            'id': h.id,
+            'text': h.text,
+            'color': h.color,
+            'anchor': h.anchor?.toJson(),
+          },
+        )
         .toList();
     final encoded = base64Encode(utf8.encode(jsonEncode(payload)));
     _controller.evaluateJavascript(
@@ -373,7 +417,7 @@ class ReaderJsBridge {
     final newMap = {for (final h in newList) h.id: h};
 
     final remove = <String>[];
-    final add = <Map<String, String>>[];
+    final add = <Map<String, dynamic>>[];
     final updateColor = <Map<String, String>>[];
 
     for (final id in oldMap.keys) {
@@ -382,7 +426,12 @@ class ReaderJsBridge {
     for (final hl in newList) {
       if (!oldMap.containsKey(hl.id)) {
         if (skipNewIds.contains(hl.id)) continue;
-        add.add({'id': hl.id, 'text': hl.text, 'color': hl.color});
+        add.add({
+          'id': hl.id,
+          'text': hl.text,
+          'color': hl.color,
+          'anchor': hl.anchor?.toJson(),
+        });
       } else if (oldMap[hl.id]!.color != hl.color) {
         updateColor.add({'id': hl.id, 'color': hl.color});
       }

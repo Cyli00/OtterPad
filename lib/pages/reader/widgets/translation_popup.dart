@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../data/models/book/highlight.dart';
-import '../../../providers/api_provider.dart';
+import '../../../providers/agent_api_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../services/ai_settings_prompt.dart';

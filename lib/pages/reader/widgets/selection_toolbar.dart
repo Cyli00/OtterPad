@@ -17,12 +17,10 @@ class ReaderContextMenuHandle {
   bool _removed = false;
 
   ReaderContextMenuHandle._({
-    required OverlayEntry entry,
-    required Rect selectionRect,
-    VoidCallback? onDismiss,
-  }) : _entry = entry,
-       _selectionRect = selectionRect,
-       _onDismiss = onDismiss;
+    required this._entry,
+    required this._selectionRect,
+    this._onDismiss,
+  });
 
   void updateVerticalAnchor(Rect selectionRect) {
     if (_removed) return;
@@ -299,6 +297,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
                       onTap: () => widget.onHighlight(color),
                     ),
                   const _Divider(),
+
                   _ActionIcon(
                     icon: _showNotePanel
                         ? Symbols.edit_note_rounded
@@ -387,6 +386,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
                       Symbols.check_circle_rounded,
                       color: Color(0xFF4FC3F7),
                       size: 22,
+                      fill: 1,
                     ),
                     onPressed: () {
                       Haptics.soft();
@@ -439,7 +439,12 @@ class _ColorDot extends StatelessWidget {
             border: isActive ? Border.all(color: Colors.white, width: 2) : null,
           ),
           child: isActive
-              ? const Icon(Symbols.check_rounded, size: 13, color: Colors.white)
+              ? const Icon(
+                  Symbols.check_rounded,
+                  size: 13,
+                  color: Colors.white,
+                  fill: 1,
+                )
               : null,
         ),
       ),
@@ -470,7 +475,7 @@ class _ActionIcon extends StatelessWidget {
         baseColor: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         padding: const EdgeInsets.all(8),
-        child: Icon(icon, color: color, size: 20),
+        child: Icon(icon, color: color, size: 20, fill: 1),
       ),
     );
   }

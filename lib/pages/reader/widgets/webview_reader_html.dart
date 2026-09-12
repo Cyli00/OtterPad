@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'package:markdown/markdown.dart' as md;
+import 'package:html/parser.dart' as html;
+import 'package:html/dom.dart' as dom;
 import 'package:path/path.dart' as p;
 
 import '../../../providers/reader_settings_provider.dart';
 import '../../../services/translation_style.dart';
+import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
 import 'reader_typography.dart';
 
@@ -27,14 +31,44 @@ String buildReaderHtml({
   required String serverRoot,
   String translationStyleId = 'themed',
   String imageCacheBuster = '',
+  bool desktop = false,
+  bool bilingualColumns = false,
   double topInset = 0,
   double bottomInset = 0,
+  List<Map<String, dynamic>> readerEntries = const [],
 }) {
-  final htmlBody = _markdownToHtml(
-    markdownContent,
-    serverRoot,
-    imageCacheBuster,
-  );
+  var htmlBody = _markdownToHtml(markdownContent, serverRoot, imageCacheBuster);
+  if (readerEntries.isNotEmpty) {
+    final fragment = html.parseFragment(htmlBody);
+    _pairTranslations(fragment, readerEntries);
+    final captions = fragment.querySelectorAll('figcaption');
+    final pairedIds = fragment
+        .querySelectorAll('[data-reader-pair]')
+        .map((element) => element.attributes['data-reader-pair'])
+        .toSet();
+    final byText = <String, List<Map<String, dynamic>>>{};
+    for (final entry in readerEntries) {
+      if (entry['caption'] == false || pairedIds.contains(entry['id'])) {
+        continue;
+      }
+      byText.putIfAbsent(entry['source'] as String, () => []).add(entry);
+    }
+    for (final group in byText.entries) {
+      final matches = captions
+          .where(
+            (c) => c.text.replaceAll(RegExp(r'\s+'), ' ').trim() == group.key,
+          )
+          .toList();
+      if (matches.length != group.value.length) continue;
+      for (var i = 0; i < matches.length; i++) {
+        final caption = matches[i];
+        final original = caption.nodes.toList();
+        caption.nodes.clear();
+        _fillPair(caption, group.value[i], original);
+      }
+    }
+    htmlBody = fragment.outerHtml;
+  }
   // CSS 变量块按文档注入 :root：palette/字体可热更新，排版 token 静态注入
   // 一次（reader.css 的数字全部来自 ReaderTypography，不在 CSS 里硬编码）。
   // 静态 CSS 在 assets/reader/reader.css、JS 在 assets/reader/reader.js，
@@ -64,13 +98,101 @@ String buildReaderHtml({
 $rootVars
 }</style>
 </head>
-<body data-translation-style="$translationStyleId">
+<body data-bilingual-columns="$bilingualColumns" data-desktop="$desktop" data-translation-style="$translationStyleId">
 <article id="content">$htmlBody</article>
 <script src="/_assets/katex/katex.min.js"></script>
 <script src="/_assets/katex/contrib/auto-render.min.js"></script>
+<script>window.readerEntries = JSON.parse(decodeURIComponent(escape(atob('${base64Encode(utf8.encode(jsonEncode(readerEntries)))}'))));</script>
+<script src="/_assets/reader/reader_anchors.js"></script>
 <script src="/_assets/reader/reader.js"></script>
+<script src="/_assets/reader/reader_translations.js"></script>
 </body>
 </html>''';
+}
+
+dom.Element _languageCell(String id, String language) => dom.Element.tag('div')
+  ..classes.add('reader-language')
+  ..attributes['data-paragraph-id'] = id
+  ..attributes['data-language'] = language;
+
+void _pairTranslations(dom.Node parent, List<Map<String, dynamic>> entries) {
+  final byId = {for (final entry in entries) entry['id']: entry};
+  void visit(dom.Node parent) {
+    final nodes = parent.nodes.toList();
+    for (var i = 0; i < nodes.length; i++) {
+      final node = nodes[i];
+      if (node is! dom.Comment ||
+          !(node.data?.startsWith(' reader-pair:') ?? false)) {
+        if (node is dom.Element) visit(node);
+        continue;
+      }
+      final key = (node.data ?? '').trim().substring('reader-pair:'.length);
+      final id = utf8.decode(base64Url.decode(key));
+      var end = -1;
+      for (var j = i + 1; j < nodes.length; j++) {
+        final next = nodes[j];
+        if (next is! dom.Comment) continue;
+        if (next.data?.trim() == 'reader-end') {
+          end = j;
+          break;
+        }
+      }
+      final entry = byId[id];
+      if (end < 0 || entry == null) continue;
+      final pair = dom.Element.tag('div')..classes.add('reader-pair');
+      parent.insertBefore(pair, node);
+      _fillPair(pair, entry, nodes.sublist(i + 1, end));
+      node.remove();
+      nodes[end].remove();
+      i = end;
+    }
+  }
+
+  visit(parent);
+}
+
+String buildReaderTranslationHtml(String translation) =>
+    _markdownToHtml(MarkdownPreprocessor.processTranslation(translation), '');
+
+void _fillPair(
+  dom.Element pair,
+  Map<String, dynamic> entry,
+  List<dom.Node> original,
+) {
+  final id = entry['id'] as String;
+  final translated = entry['translated'] as String? ?? '';
+  final showTarget = entry['showTranslation'] != false && translated.isNotEmpty;
+  pair.classes.add('reader-pair');
+  pair.attributes['data-reader-pair'] = id;
+  pair.attributes['data-bilingual'] =
+      (entry['bilingual'] ??
+              (entry['showSource'] != false &&
+                  entry['showTranslation'] != false))
+          .toString();
+  final source = _languageCell(id, 'source')..nodes.addAll(original);
+  if (entry['showSource'] == false && showTarget) {
+    source.attributes['hidden'] = '';
+  }
+  final target = _languageCell(id, entry['language'] as String? ?? 'translated')
+    ..classes.add('reader-target')
+    ..nodes.addAll(
+      html
+          .parseFragment(
+            _sanitizeReaderHtml(
+              entry['html'] as String? ??
+                  buildReaderTranslationHtml(translated),
+            ),
+          )
+          .nodes
+          .toList(),
+    );
+  if (!showTarget) target.attributes['hidden'] = '';
+  if (pair.attributes['data-bilingual'] == 'true') {
+    target.classes.add('translated');
+  }
+  pair
+    ..append(source)
+    ..append(target);
 }
 
 String buildThemeCssVars(ReaderPalette palette, ReaderSettingsState settings) {
@@ -122,7 +244,122 @@ String _markdownToHtml(
     RegExp(r'<!-- otter-figure:([a-zA-Z0-9_-]+) -->\s*<figure>'),
     (m) => '<figure id="otter-figure-${m[1]}">',
   );
-  return html;
+  return _sanitizeReaderHtml(html);
+}
+
+const _blockedReaderHtmlTags = <String>{
+  'applet',
+  'audio',
+  'base',
+  'body',
+  'embed',
+  'form',
+  'frame',
+  'frameset',
+  'head',
+  'html',
+  'iframe',
+  'input',
+  'link',
+  'math',
+  'meta',
+  'object',
+  'option',
+  'script',
+  'select',
+  'source',
+  'style',
+  'svg',
+  'template',
+  'textarea',
+  'track',
+  'video',
+};
+
+const _readerUrlAttributes = <String>{
+  'action',
+  'background',
+  'cite',
+  'data',
+  'formaction',
+  'href',
+  'imagesrcset',
+  'poster',
+  'src',
+  'srcset',
+  'xlink:href',
+};
+
+final _unsafeReaderCss = RegExp(
+  r'(?:url\s*\(|expression\s*\(|@import|behavior\s*:|-moz-binding\s*:|javascript\s*:)',
+  caseSensitive: false,
+);
+
+String _sanitizeReaderHtml(String value) {
+  final fragment = html.parseFragment(value);
+  for (final node in fragment.nodes.toList()) {
+    _sanitizeReaderNode(node);
+  }
+  return fragment.outerHtml;
+}
+
+void _sanitizeReaderNode(dom.Node node) {
+  if (node is! dom.Element) return;
+  final tag = node.localName?.toLowerCase();
+  if (tag == null || _blockedReaderHtmlTags.contains(tag)) {
+    node.remove();
+    return;
+  }
+
+  for (final name in node.attributes.keys.toList()) {
+    final lowerName = name.toString().toLowerCase();
+    final value = node.attributes[name] ?? '';
+    final hasUnsafeHandler = lowerName.startsWith('on');
+    final hasUnsafeCss =
+        lowerName == 'style' && _unsafeReaderCss.hasMatch(value);
+    if (hasUnsafeHandler || lowerName == 'srcdoc' || hasUnsafeCss) {
+      node.attributes.remove(name);
+      continue;
+    }
+    if (_readerUrlAttributes.contains(lowerName) &&
+        !_isSafeReaderUrl(
+          value,
+          allowDataImage: tag == 'img' && lowerName == 'src',
+          allowNavigation: lowerName == 'href' || lowerName == 'cite',
+        )) {
+      node.attributes.remove(name);
+    }
+  }
+
+  for (final child in node.nodes.toList()) {
+    _sanitizeReaderNode(child);
+  }
+}
+
+bool _isSafeReaderUrl(
+  String raw, {
+  required bool allowDataImage,
+  required bool allowNavigation,
+}) {
+  final value = raw.trim();
+  if (value.isEmpty) return true;
+  if (value.startsWith('//')) return false;
+  final normalized = value.replaceAll(RegExp(r'[\u0000-\u0020]'), '');
+  final uri = Uri.tryParse(normalized);
+  if (uri == null) return false;
+  final scheme = uri.scheme.toLowerCase();
+  if (scheme.isEmpty || scheme == 'http' || scheme == 'https') return true;
+  if (allowNavigation && (scheme == 'mailto' || scheme == 'tel')) return true;
+  if (!allowDataImage || scheme != 'data') return false;
+  final comma = normalized.indexOf(',');
+  final mediaType =
+      (comma < 0 ? normalized.substring(5) : normalized.substring(5, comma))
+          .toLowerCase();
+  return mediaType.startsWith('image/png') ||
+      mediaType.startsWith('image/jpeg') ||
+      mediaType.startsWith('image/gif') ||
+      mediaType.startsWith('image/webp') ||
+      mediaType.startsWith('image/bmp');
 }
 
 /// `<img alt="fig:Caption text" src="...">` → `<figure><img><figcaption>`。

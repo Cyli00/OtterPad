@@ -17,7 +17,7 @@ import '../../../core/storage/settings_keys.dart';
 import '../../../core/storage/storage.dart';
 import '../../../data/models/book/document.dart';
 import '../../../data/models/chat/chat_session.dart';
-import '../../../providers/api_provider.dart';
+import '../../../data/models/ai/agent_config.dart';
 import '../../../providers/document_chat_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../router/app_routes.dart';
@@ -492,6 +492,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       context: context,
       error: message,
     );
+    if (!mounted) return;
     if (!handled) {
       ref.read(snackBarServiceProvider).showResult(message: message);
     }
@@ -1119,23 +1120,25 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                   ),
                 ),
               ),
-              if (embedded) ...[
-                Wrap(spacing: 0, runSpacing: 0, children: toolButtons),
-                Align(alignment: Alignment.centerRight, child: sendButton),
-              ] else
-                Row(children: [...toolButtons, const Spacer(), sendButton]),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 0,
+                      runSpacing: 0,
+                      children: toolButtons,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  sendButton,
+                ],
+              ),
             ],
           ),
         ),
       ],
     );
-
-    if (embedded) {
-      inner = ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 280),
-        child: inner,
-      );
-    }
 
     return Container(
       width: double.infinity,

@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
+import '../core/app_logger.dart';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/storage/app_database.dart' show AppDatabase;
+import '../core/storage/app_database.dart' show AppDatabase, HighlightsCompanion;
 import '../core/storage/app_database_provider.dart';
 import '../core/storage/db_convert.dart';
 import '../data/models/book/highlight.dart';
+import '../data/models/book/reader_anchor.dart';
+import '../services/reader/reader_document_index.dart';
 import '../utils/uuid.dart';
 
 /// 按文献 ID 管理划线标注（ADR-0001：Drift `watch()` 异步视图，family by docId）。
@@ -64,17 +68,20 @@ class HighlightNotifier extends StreamNotifier<List<Highlight>> {
   /// 新增标注并**同步**返回构造的 Highlight——阅读器 JS 桥需要立即拿到 id
   /// 画高亮（见 ReaderSessionNotifier.addHighlight），故写盘 fire-and-forget，
   /// 是 ADR-0001「写必 await 上抛」的有意例外。
-  Highlight? add(String text, {String color = kDefaultHighlightColor}) {
-    if (_current.any((h) => h.text == text)) return null;
+  Highlight? add(String text, {String color = kDefaultHighlightColor, ReaderAnchor? anchor}) {
+    if (_current.any((h) => h.text == text && h.anchor?.toJson().toString() == anchor?.toJson().toString())) return null;
 
     final highlight = Highlight(
       id: generateUuid(),
       documentId: documentId,
       text: text,
       color: color,
+      anchor: anchor,
       createdAt: DateTime.now(),
     );
-    unawaited(_upsert(highlight));
+    unawaited(_upsert(highlight).catchError((Object e, StackTrace st) {
+      log.w('[Highlight] 标注保存失败：$documentId', error: e, stackTrace: st);
+    }));
     return highlight;
   }
 
@@ -99,6 +106,42 @@ class HighlightNotifier extends StreamNotifier<List<Highlight>> {
     final match = await _findById(highlightId);
     if (match == null) return;
     await _upsert(match.withNote(note.isEmpty ? null : note));
+  }
+
+  Future<void> restoreAnchors(ReaderDocumentIndex index, Map<String, String> translations, String language) async {
+    final rows = await (_db.select(_db.highlights)..where((t) => t.docId.equals(documentId))).get();
+    for (final row in rows) {
+      final h = highlightFromRow(row);
+      if (h.anchor != null && h.anchor!.ranges.every((r) => index.byId(r.paragraphId) != null)) continue;
+      final oldRanges = h.anchor?.ranges;
+      final repaired = <ReaderAnchorRange>[];
+      for (final old in oldRanges ?? <ReaderAnchorRange?>[null]) {
+        final matches = <ReaderAnchorRange>[];
+        for (final p in index.paragraphs) {
+          for (final entry in {'source': p.plainText,
+            if (translations[p.hash]?.isNotEmpty == true) language: readerTranslatedText(translations[p.hash]!)}.entries) {
+            if (old != null && old.language != entry.key) continue;
+            final quote = old?.paragraphId.startsWith('pdf-page:') == true
+                ? old!.quote.replaceAll(RegExp(r'\s+'), ' ').trim()
+                : old?.quote ?? h.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+            final at = entry.value.indexOf(quote);
+            if (quote.isEmpty || at < 0 || entry.value.indexOf(quote, at + 1) >= 0) continue;
+            if (old != null && (!entry.value.substring(0, at).endsWith(old.prefix) ||
+                !entry.value.substring(at + quote.length).startsWith(old.suffix))) {
+              continue;
+            }
+            matches.add(p.anchor(language: entry.key, displayText: entry.value, start: at, end: at + quote.length).ranges.single);
+          }
+        }
+        if (matches.length != 1) { repaired.clear(); break; }
+        repaired.add(matches.single);
+      }
+      if (repaired.isEmpty) continue;
+      final value = jsonEncode(ReaderAnchor(repaired).toJson());
+      // 只补锚点，异步定位期间新增的笔记或颜色不能被旧快照覆盖。
+      await (_db.update(_db.highlights)..where((t) => t.id.equals(h.id) & t.docId.equals(documentId)))
+        .write(HighlightsCompanion(anchor: Value(value)));
+    }
   }
 }
 

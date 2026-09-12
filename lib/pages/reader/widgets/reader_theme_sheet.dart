@@ -1,4 +1,5 @@
-import 'dart:ui' show ImageFilter;
+import '../../../l10n/reader_labels.dart';
+import '../../../widgets/translation_style_label.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,7 +56,7 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: AppShadows.sheet,
+        boxShadow: AppShadows.sheet,
       ),
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
       // 六个 section 高度必然超出 9/16 屏幕上限——包一层 ScrollView，
@@ -109,19 +110,12 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
               trailing: '${_localFontSize.round()}px',
             ),
             const SizedBox(height: 8),
-            SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-              ),
-              child: Slider(
-                value: _localFontSize,
-                min: ReaderSettingsState.minFontSize,
-                max: ReaderSettingsState.maxFontSize,
-                onChanged: (v) => setState(() => _localFontSize = v),
-                onChangeEnd: notifier.setFontSize,
-              ),
+            Slider(
+              value: _localFontSize,
+              min: ReaderSettingsState.minFontSize,
+              max: ReaderSettingsState.maxFontSize,
+              onChanged: (v) => setState(() => _localFontSize = v),
+              onChangeEnd: notifier.setFontSize,
             ),
 
             const SizedBox(height: 16),
@@ -132,7 +126,7 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
               cs,
               Symbols.text_fields_rounded,
               l10n.fontFamily,
-              trailing: settings.font.label,
+              trailing: settings.font.localizedLabel(context.l10n),
             ),
             const SizedBox(height: 12),
             _FontFamilyRow(current: settings.font, onChanged: notifier.setFont),
@@ -145,7 +139,7 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
               cs,
               Symbols.menu_book_rounded,
               l10n.paginationMode,
-              trailing: settings.paginationMode.label,
+              trailing: settings.paginationMode.localizedLabel(context.l10n),
             ),
             const SizedBox(height: 12),
             _PaginationModeRow(
@@ -161,7 +155,7 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
               cs,
               Symbols.translate_rounded,
               l10n.translationStyle,
-              trailing: currentStyle.label,
+              trailing: translationStyleLabel(context.l10n, currentStyle.id),
             ),
             const SizedBox(height: 12),
             _TranslationStyleRow(currentId: translationCfg.displayStyleId),
@@ -429,7 +423,7 @@ class _BackgroundCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            theme.shortLabel,
+            theme.localizedLabel(context.l10n, short: true),
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: selected ? cs.primary : cs.onSurfaceVariant,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
@@ -477,7 +471,7 @@ class _FontFamilyRow extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  f.label,
+                  f.localizedLabel(context.l10n),
                   style: TextStyle(
                     fontFamily: f.fontFamily,
                     fontFamilyFallback: f.fontFamilyFallback,
@@ -548,7 +542,7 @@ class _PaginationModeRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      m.label,
+                      m.localizedLabel(context.l10n),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: selected
@@ -665,7 +659,10 @@ class _TranslationStyleRowState extends ConsumerState<_TranslationStyleRow> {
                   ),
                 ),
                 alignment: Alignment.center,
-                child: _styledLabel(s.id, s.label, cs, theme),
+                child: TranslationStyleLabel(
+                  styleId: s.id,
+                  label: translationStyleLabel(context.l10n, s.id),
+                ),
               ),
             );
           },
@@ -691,63 +688,5 @@ class _TranslationStyleRowState extends ConsumerState<_TranslationStyleRow> {
       blendMode: BlendMode.dstIn,
       child: list,
     );
-  }
-
-  /// 把样式 id 映射为"自描述 chip"的预览内容——文本本身就反映该样式特征。
-  /// 与 translation_settings_section 的 _buildStyledLabel 视觉一致。
-  Widget _styledLabel(
-    String styleId,
-    String label,
-    ColorScheme cs,
-    ThemeData theme,
-  ) {
-    final base = theme.textTheme.bodyMedium!.copyWith(color: cs.onSurface);
-    return switch (styleId) {
-      'themed' => Text(label, style: base.copyWith(color: cs.primary)),
-      'bold' => Text(label, style: base.copyWith(fontWeight: FontWeight.bold)),
-      'italic' => Text(
-        label,
-        style: base.copyWith(fontStyle: FontStyle.italic),
-      ),
-      'weakened' => Text(
-        label,
-        style: base.copyWith(color: cs.onSurface.withAlpha(120)),
-      ),
-      'dashed' => Text(
-        label,
-        style: base.copyWith(
-          color: cs.primary,
-          decoration: TextDecoration.underline,
-          decorationStyle: TextDecorationStyle.dashed,
-          decorationColor: cs.primary.withAlpha(140),
-        ),
-      ),
-      'highlight' => Text(
-        label,
-        style: base.copyWith(backgroundColor: cs.primaryContainer),
-      ),
-      'blur' => ClipRect(
-        child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-          child: Text(label, style: base),
-        ),
-      ),
-      'quote' => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 3,
-            height: 16,
-            decoration: BoxDecoration(
-              color: cs.outlineVariant,
-              borderRadius: BorderRadius.circular(1.5),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(label, style: base.copyWith(color: cs.onSurfaceVariant)),
-        ],
-      ),
-      _ => Text(label, style: base),
-    };
   }
 }

@@ -87,9 +87,18 @@ class ReaderLocalhostServer {
       );
       return null;
     }
+    final relSegments = rel.split(RegExp(r'[/\\]'));
+    if (relSegments.isEmpty || relSegments.first != 'library') {
+      log.d(
+        '[ReaderLocalhostServer] urlForPath rejected (outside library): $absPath',
+      );
+      return null;
+    }
     // Windows 路径用反斜杠，URL 必须用正斜杠
-    final urlPath =
-        rel.split(RegExp(r'[/\\]')).map(Uri.encodeComponent).join('/');
+    final urlPath = rel
+        .split(RegExp(r'[/\\]'))
+        .map(Uri.encodeComponent)
+        .join('/');
     return 'http://localhost:$port/$urlPath';
   }
 
@@ -136,8 +145,12 @@ class ReaderLocalhostServer {
   /// 修法：拿 `/` split urlPath 得到段列表，用 `p.joinAll` 按 platform
   /// 偏好的 separator 重组——天然跨平台正确，URL 的 `/` 永远不进 path 包。
   Future<void> _serveFile(HttpRequest req, String urlPath) async {
-    final segments =
-        urlPath.split('/').where((s) => s.isNotEmpty).toList();
+    final segments = urlPath.split('/').where((s) => s.isNotEmpty).toList();
+    if (segments.isEmpty || segments.first != 'library') {
+      req.response.statusCode = HttpStatus.notFound;
+      await req.response.close();
+      return;
+    }
     final fullPath = p.normalize(p.joinAll([_root, ...segments]));
 
     // 路径穿越防护：normalize 后必须仍在 root 下。
