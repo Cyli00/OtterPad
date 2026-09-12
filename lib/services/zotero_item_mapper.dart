@@ -1,6 +1,19 @@
 import '../data/models/book/document.dart';
 import 'identifier_parser.dart';
 
+class ZoteroPdfAttachment {
+  const ZoteroPdfAttachment(this.key, this.title);
+  final String key;
+  final String title;
+}
+
+class ZoteroImportCandidate {
+  const ZoteroImportCandidate(this.key, this.document, this.attachments);
+  final String key;
+  final Document document;
+  final List<ZoteroPdfAttachment> attachments;
+}
+
 /// Zotero item JSON ↔ [Document] 的转换层（防腐层）。
 ///
 /// 这是整个 Zotero 同步里**唯一**触碰格式差异的地方：Zotero 有 ~35 种 itemType、
@@ -13,6 +26,49 @@ class ZoteroItemMapper {
 
   /// 不导入的非文献条目类型（附件 / 笔记 / 标注）。
   static const _skippedItemTypes = {'attachment', 'note', 'annotation'};
+
+  static List<ZoteroImportCandidate> localCandidates(
+    List<Map<String, dynamic>> items,
+  ) {
+    final attachments = <String, List<ZoteroPdfAttachment>>{};
+    for (final item in items) {
+      final data = item['data'];
+      if (data is! Map ||
+          data['deleted'] == true ||
+          data['itemType'] != 'attachment' ||
+          data['contentType'] != 'application/pdf' ||
+          !const {
+            'imported_file',
+            'imported_url',
+            'linked_file',
+          }.contains(data['linkMode'])) {
+        continue;
+      }
+      final parent = data['parentItem'];
+      final key = item['key'];
+      if (parent is! String || key is! String) continue;
+      attachments
+          .putIfAbsent(parent, () => [])
+          .add(
+            ZoteroPdfAttachment(
+              key,
+              (data['filename'] ?? data['title'] ?? key).toString(),
+            ),
+          );
+    }
+    final result = <ZoteroImportCandidate>[];
+    for (final item in items) {
+      final data = item['data'];
+      if (data is! Map || data['deleted'] == true) continue;
+      final document = toDocument(item);
+      final key = item['key'];
+      if (document == null || key is! String) continue;
+      final pdfs = attachments[key] ?? <ZoteroPdfAttachment>[];
+      pdfs.sort((a, b) => a.key.compareTo(b.key));
+      result.add(ZoteroImportCandidate(key, document, pdfs));
+    }
+    return result;
+  }
 
   /// 把单个 Zotero item（含顶层 `key`/`version` 与 `data` 字段）映射为 [Document]。
   ///

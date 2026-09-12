@@ -10,6 +10,43 @@ import 'document_metadata_parser.dart';
 class DocumentMetadataChecks {
   DocumentMetadataChecks._();
 
+  static Document mergeFromSource(
+    Document current,
+    Document incoming,
+    Document? previous,
+  ) {
+    final values = current.toJson();
+    final source = incoming.toJson();
+    final baseline = previous?.toJson();
+    for (final key in [
+      'title',
+      'authors',
+      'journal',
+      'year',
+      'doi',
+      'keywords',
+    ]) {
+      final value = values[key];
+      final old = baseline?[key];
+      final unchanged = value is List && old is List
+          ? value.length == old.length &&
+                List.generate(
+                  value.length,
+                  (i) => value[i] == old[i],
+                ).every((v) => v)
+          : value == old;
+      // 已有内容只有仍等于上次导入值时才更新；首次关联只补空字段，保留用户编辑。
+      if ((baseline != null && unchanged) ||
+          (baseline == null &&
+              (value == null ||
+                  value == '' ||
+                  value is List && value.isEmpty))) {
+        values[key] = source[key];
+      }
+    }
+    return Document.fromJson(values);
+  }
+
   /// 文献是否需要元数据修复（已落盘但字段缺失 / 内容可疑）。
   static bool needsRepair(Document doc) {
     if (doc.contentHash == null) return false;

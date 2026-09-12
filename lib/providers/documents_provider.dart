@@ -1,3 +1,5 @@
+import '../core/l10n.dart';
+import '../router/app_router.dart' show rootNavigatorKey;
 import 'dart:async';
 import 'dart:io';
 
@@ -11,6 +13,7 @@ import '../core/storage/app_database.dart' show AppDatabase;
 import '../core/storage/app_database_provider.dart';
 import '../core/storage/storage.dart';
 import '../core/storage/document_file_operations.dart';
+import '../core/storage/zotero_local_store.dart';
 import '../data/models/book/document.dart';
 import '../services/chinese_metadata_extractor.dart';
 import '../services/chinese_text_detector.dart';
@@ -126,7 +129,10 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }
 
   Future<void> _deleteDoc(String id) async {
-    await (_db.delete(_db.documents)..where((t) => t.id.equals(id))).go();
+    await _db.transaction(() async {
+      await (_db.delete(_db.documents)..where((t) => t.id.equals(id))).go();
+      await ZoteroLocalStore(_db).removeDocument(id);
+    });
   }
 
   /// 按 id 从 DB 查单篇（唯一真值源）——不读 watch() 流 state，
@@ -206,7 +212,15 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
 
     // 元数据提取异步：不阻塞 addFile 返回，批量导入时多个文件快速建卡，
     // 元数据后台逐篇提取 + upsert（watch() 流自动刷新卡片）。
-    unawaited(_repairAndUpdate(doc, cancelToken: cancelToken));
+    unawaited(
+      _repairAndUpdate(doc, cancelToken: cancelToken).catchError((
+        Object e,
+        StackTrace st,
+      ) {
+        if (e is DioException && CancelToken.isCancel(e)) return;
+        log.w('[Documents] 后台元数据修复失败：${doc.id}', error: e, stackTrace: st);
+      }),
+    );
 
     return AddFileResult(
       type: AddFileResultType.imported,
@@ -225,11 +239,13 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     // 提前取库实例：本方法 fire-and-forget，避免 await 之后 ref 已被释放。
     final database = _db;
     final repaired = await _repairDocument(doc, cancelToken: cancelToken);
+    if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
     final row = await (database.select(
       database.documents,
     )..where((t) => t.id.equals(doc.id))).getSingleOrNull();
     if (row == null) return;
     final merged = _mergeRepaired(doc, documentFromRow(row), repaired.document);
+    if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
     await (database.update(
       database.documents,
     )..where((t) => t.id.equals(doc.id))).write(documentCompanion(merged));
@@ -371,13 +387,17 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     void Function(RebuildProgress)? onProgress,
     CancelToken? cancelToken,
   }) async {
+    final l10n = rootNavigatorKey.currentContext?.l10n;
     final docsDir = await getDocsDir();
     var addedCount = 0;
     var removedCount = 0;
     var repairedCount = 0;
 
     onProgress?.call(
-      const RebuildProgress(fileName: 'OtterPad 文库', status: '正在扫描 PDF 文件...'),
+      RebuildProgress(
+        fileName: l10n?.libraryName ?? '',
+        status: l10n?.rebuildScanningFiles ?? '',
+      ),
     );
 
     // 基线从 DB 读（唯一真值源）：流未 emit 时 state 为空，若以空基线 upsert，
@@ -408,7 +428,10 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     }
 
     onProgress?.call(
-      const RebuildProgress(fileName: 'OtterPad 文库', status: '正在检查文件完整性...'),
+      RebuildProgress(
+        fileName: l10n?.libraryName ?? '',
+        status: l10n?.rebuildCheckingFiles ?? '',
+      ),
     );
 
     final validDocs = <Document>[];
@@ -447,7 +470,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
             current: i + 1,
             total: toRepair.length,
             fileName: p.basename(DocPaths.pdf(doc.id)),
-            status: '正在提取 PDF 元数据...',
+            status: l10n?.rebuildExtractingMetadata ?? '',
           ),
         );
 
@@ -523,6 +546,84 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     );
   }
 
+  Future<Document?> mergeSourceMetadata(
+    String id,
+    Document incoming,
+    Document? previous,
+  ) => _db.transaction(() async {
+    final current = await _findById(id);
+    if (current == null) return null;
+    final merged = DocumentMetadataChecks.mergeFromSource(
+      current,
+      incoming,
+      previous,
+    );
+    if (!DocumentMetadataChecks.sameCore(current, merged) ||
+        current.keywords.join('\u0000') != merged.keywords.join('\u0000')) {
+      await _upsertDoc(merged);
+    }
+    return merged;
+  });
+
+  Future<bool> attachMissingFile(
+    String docId,
+    String sourcePath, {
+    CancelToken? cancelToken,
+  }) async {
+    void checkCancelled() {
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+    }
+
+    checkCancelled();
+    if (await _findById(docId) == null) return false;
+    final destination = File(DocPaths.pdf(docId));
+    if (await destination.exists()) return false;
+    await Directory(DocPaths.docDir(docId)).create(recursive: true);
+    final staged = File(
+      p.join(DocPaths.docDir(docId), '.zotero-${generateUuid()}.part'),
+    );
+    try {
+      final output = await staged.open(mode: FileMode.write);
+      try {
+        await for (final chunk in File(sourcePath).openRead()) {
+          checkCancelled();
+          await output.writeFrom(chunk);
+        }
+        await output.flush();
+      } finally {
+        await output.close();
+      }
+      checkCancelled();
+      final input = await staged.open();
+      try {
+        final header = await input.read(1024);
+        if (!String.fromCharCodes(header).contains('%PDF-')) {
+          throw const FormatException('invalid_pdf');
+        }
+      } finally {
+        await input.close();
+      }
+      final hash = await DocPaths.computeHash(staged);
+      checkCancelled();
+      return await _db.transaction(() async {
+        final current = await _findById(docId);
+        if (current == null || await destination.exists()) return false;
+        checkCancelled();
+        // 完整副本验证通过后才发布；提交期间不再响应取消，避免留下半次文件绑定。
+        await staged.rename(destination.path);
+        try {
+          await _upsertDoc(current.copyWith(contentHash: hash));
+        } catch (_) {
+          await destination.delete();
+          rethrow;
+        }
+        return true;
+      });
+    } finally {
+      if (await staged.exists()) await staged.delete();
+    }
+  }
+
   Future<bool> redownloadPdf(String docId, {CancelToken? cancelToken}) async {
     // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致重下载静默不执行）。
     final found = await _findById(docId);
@@ -542,6 +643,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
           await _upsertDoc(doc);
         }
       } catch (e) {
+        if (e is DioException && CancelToken.isCancel(e)) rethrow;
         log.d('标题搜索补全 DOI 失败: $e');
       }
     }
@@ -570,8 +672,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       final newHash = await DocPaths.computeHash(File(downloadedPath));
       final contentChanged = doc.contentHash != newHash;
 
-      final existingPdf = File(pdfPath);
-      if (await existingPdf.exists()) await existingPdf.delete();
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
       await File(downloadedPath).rename(pdfPath);
 
       // 内容变化 → 旧 extract.md / figures / summary / 翻译缓存与缩略图全部失效。
@@ -594,6 +695,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       unawaited(PdfThumbnailService.instance.getThumbnailPath(pdfPath));
       return true;
     } catch (error) {
+      if (error is DioException && CancelToken.isCancel(error)) rethrow;
       log.d('重新下载 PDF 失败: $error');
       if (await tempFile.exists()) {
         try {

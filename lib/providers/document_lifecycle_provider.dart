@@ -47,6 +47,12 @@ class DocumentLifecycleNotifier {
     return _documents.attachFile(documentId, sourcePath);
   }
 
+  Future<bool> attachMissingPdf(String documentId, String sourcePath, {CancelToken? cancelToken}) =>
+      _documents.attachMissingFile(documentId, sourcePath, cancelToken: cancelToken);
+
+  Future<Document?> mergeSourceMetadata(String id, Document incoming, Document? previous) =>
+      _documents.mergeSourceMetadata(id, incoming, previous);
+
   Future<bool> redownloadPdf(String documentId, {CancelToken? cancelToken}) {
     return _documents.redownloadPdf(documentId, cancelToken: cancelToken);
   }

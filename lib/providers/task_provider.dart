@@ -19,6 +19,7 @@ import 'documents_provider.dart';
 import 'task_runner.dart';
 import 'task_types.dart';
 import 'zotero_sync_provider.dart';
+import 'zotero_local_import_provider.dart';
 
 // 对外 re-export：外部只 import 'task_provider.dart' 即可拿到 TaskType/TaskStatus
 export 'task_types.dart' show TaskType, TaskStatus, TaskInfo;
@@ -280,6 +281,28 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   }
 
   // ── 消息格式化 ──
+
+  Future<ZoteroLocalImportResult?> importLocalZotero({
+    required ZoteroLocalLibrary library,
+    required String source,
+    required List<ZoteroImportCandidate> candidates,
+    required Map<String, String?> attachments,
+  }) => runTask<ZoteroLocalImportResult>(
+    type: TaskType.zoteroSync,
+    initialStatus: _l10n?.importingDocuments ?? '',
+    busyMessage: _l10n?.zoteroSyncInProgress,
+    cancelledMessage: _l10n?.zoteroSyncCancelled,
+    body: (token, progress) => _ref.read(zoteroLocalImportProvider).run(
+      library: library, source: source, candidates: candidates,
+      attachments: attachments, cancelToken: token,
+      onProgress: (done, total) => progress(ListenableProgress(
+        current: done, total: total, status: _l10n?.importingDocuments ?? '',
+      )),
+    ),
+    onSuccess: (r) => TaskFinish(message: _l10n?.zoteroLocalResult(
+      r.added, r.updated, r.copied, r.missing, r.kept, r.failedTitles.length)),
+    onError: (e) => TaskFinish(message: _l10n == null ? null : zoteroLocalErrorMessage(_l10n!, e)),
+  );
 
   String _buildAddFileMessage({
     required bool cancelled,
