@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
+import 'proxy_adapter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
@@ -45,25 +45,11 @@ class IdentifierResolver {
   ///
   /// [mode] 接受 ProxyMode 枚举的任意子类，通过 name 属性匹配模式（便于跨包传递）。
   void applyProxy(Enum mode, String host, int port) {
-    final adapter = IOHttpClientAdapter();
-    switch (mode.name) {
-      case 'custom':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'PROXY $host:$port';
-          client.badCertificateCallback = (_, _, _) => true;
-          return client;
-        };
-      case 'system':
-        adapter.createHttpClient = () => HttpClient();
-      case 'none':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'DIRECT';
-          return client;
-        };
-    }
-    _dio.httpClientAdapter = adapter;
+    _dio.httpClientAdapter = buildProxyAdapter(
+      mode.name,
+      host,
+      port,
+    );
   }
 
   /// 测试网络连通性，返回请求耗时（毫秒）。
@@ -675,6 +661,7 @@ class IdentifierResolver {
         cancelToken: cancelToken,
       );
     } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) rethrow;
       log.d('出版商 PDF 下载失败: $e');
     }
     if (filePath.isNotEmpty) return filePath;
@@ -701,6 +688,7 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) rethrow;
       log.d('Unpaywall PDF 下载失败: $e');
     }
     if (filePath.isNotEmpty) return filePath;
@@ -741,6 +729,7 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) rethrow;
       log.d('Sci-Hub PDF 下载失败: $e');
     }
 
@@ -796,6 +785,7 @@ class IdentifierResolver {
         cancelToken: cancelToken,
       );
     } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) rethrow;
       log.d('PMC PDF 下载失败: $e');
       return '';
     }
@@ -840,6 +830,7 @@ class IdentifierResolver {
         );
       }
     } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) rethrow;
       log.d('DOI 重定向失败: $e');
     }
 
@@ -859,6 +850,7 @@ class IdentifierResolver {
           );
           if (path.isNotEmpty) return path;
         } catch (e) {
+          if (e is DioException && CancelToken.isCancel(e)) rethrow;
           log.d('出版商 URL 模式下载失败: $e');
         }
       }
@@ -1183,6 +1175,7 @@ class IdentifierResolver {
   }
 
   IdentifierResolveException _handleDioError(DioException e) {
+    if (CancelToken.isCancel(e)) throw e;
     if (e.response?.statusCode == 404) {
       return const IdentifierResolveException('未找到该标识符对应的文献');
     }

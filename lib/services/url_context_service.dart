@@ -1,7 +1,5 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
+import 'proxy_adapter.dart';
 import 'package:html/parser.dart' as html_parser;
 
 /// 客户端 URL 内容提取——为不支持原生 URL 工具的模型（OpenAI / 兼容端、
@@ -35,25 +33,11 @@ class UrlContextService {
 
   /// 接入 `ProxyProvider` 代理总线，签名与其他网络服务一致。
   void applyProxy(Enum mode, String host, int port) {
-    final adapter = IOHttpClientAdapter();
-    switch (mode.name) {
-      case 'custom':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'PROXY $host:$port';
-          client.badCertificateCallback = (_, _, _) => true;
-          return client;
-        };
-      case 'system':
-        adapter.createHttpClient = () => HttpClient();
-      case 'none':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'DIRECT';
-          return client;
-        };
-    }
-    _dio.httpClientAdapter = adapter;
+    _dio.httpClientAdapter = buildProxyAdapter(
+      mode.name,
+      host,
+      port,
+    );
   }
 
   static bool containsUrl(String text) => _urlPattern.hasMatch(text);

@@ -1,8 +1,7 @@
-import 'dart:io';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
+import 'proxy_adapter.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/models/book/document.dart';
@@ -48,30 +47,14 @@ class MetadataSearchService {
     ),
   );
 
-  final List<MetadataSearchSource> _sources = [
-    _CrossRefSearchSource(),
-  ];
+  final List<MetadataSearchSource> _sources = [_CrossRefSearchSource()];
 
   void applyProxy(Enum mode, String host, int port) {
-    final adapter = IOHttpClientAdapter();
-    switch (mode.name) {
-      case 'custom':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'PROXY $host:$port';
-          client.badCertificateCallback = (_, _, _) => true;
-          return client;
-        };
-      case 'system':
-        adapter.createHttpClient = () => HttpClient();
-      case 'none':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'DIRECT';
-          return client;
-        };
-    }
-    _dio.httpClientAdapter = adapter;
+    _dio.httpClientAdapter = buildProxyAdapter(
+      mode.name,
+      host,
+      port,
+    );
   }
 
   /// 用标题（和可选作者）在学术数据库中搜索，返回最佳匹配的 Document。
@@ -98,6 +81,7 @@ class MetadataSearchService {
         final best = _findBestMatch(normalizedQuery, results);
         if (best != null) return best;
       } catch (e) {
+        if (e is DioException && CancelToken.isCancel(e)) rethrow;
         log.d('${source.name} 标题搜索失败: $e');
       }
     }
@@ -159,10 +143,7 @@ class MetadataSearchService {
   static String _normalizeForComparison(String text) {
     return text
         .toLowerCase()
-        .replaceAll(
-          RegExp(r'[^a-z0-9一-鿿㐀-䶿]+'),
-          ' ',
-        )
+        .replaceAll(RegExp(r'[^a-z0-9一-鿿㐀-䶿]+'), ' ')
         .trim();
   }
 }
@@ -201,19 +182,23 @@ class _CrossRefSearchSource implements MetadataSearchSource {
     final msg = resp.data['message'] as Map<String, dynamic>;
     final items = msg['items'] as List<dynamic>? ?? [];
 
-    return items.map((item) {
-      final map = item as Map<String, dynamic>;
-      return Document(
-        id: '',
-        title: _extractFirst(map['title']) ?? '',
-        authors: _extractAuthors(map['author']),
-        journal: _extractFirst(map['container-title']) ??
-            _extractFirst(map['short-container-title']),
-        year: _extractYear(map),
-        doi: (map['DOI'] as String?)?.toLowerCase(),
-        addedAt: DateTime.now(),
-      );
-    }).where((doc) => doc.title.isNotEmpty).toList();
+    return items
+        .map((item) {
+          final map = item as Map<String, dynamic>;
+          return Document(
+            id: '',
+            title: _extractFirst(map['title']) ?? '',
+            authors: _extractAuthors(map['author']),
+            journal:
+                _extractFirst(map['container-title']) ??
+                _extractFirst(map['short-container-title']),
+            year: _extractYear(map),
+            doi: (map['DOI'] as String?)?.toLowerCase(),
+            addedAt: DateTime.now(),
+          );
+        })
+        .where((doc) => doc.title.isNotEmpty)
+        .toList();
   }
 
   String? _extractFirst(dynamic list) {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../services/agent_http.dart';
+import '../services/backup_s3_service.dart';
 import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
 import '../services/identifier_resolver.dart';
@@ -77,10 +78,15 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
 
   void _applyToResolver() {
     AgentHttp.instance.applyProxy(state.mode, state.host, state.port);
+    BackupS3Service.instance.applyProxy(state.mode, state.host, state.port);
     IdentifierResolver.instance.applyProxy(state.mode, state.host, state.port);
     DocExtractService.instance.applyProxy(state.mode, state.host, state.port);
     BatchExtractService.instance.applyProxy(state.mode, state.host, state.port);
-    MinerUExtractService.instance.applyProxy(state.mode, state.host, state.port);
+    MinerUExtractService.instance.applyProxy(
+      state.mode,
+      state.host,
+      state.port,
+    );
     ZoteroSyncService.instance.applyProxy(state.mode, state.host, state.port);
     MetadataSearchService.instance.applyProxy(
       state.mode,

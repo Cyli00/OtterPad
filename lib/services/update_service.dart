@@ -1,7 +1,5 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
+import 'proxy_adapter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/storage/settings_keys.dart';
@@ -61,7 +59,8 @@ class UpdateInfo {
     return UpdateInfo(
       currentVersion: currentVersion,
       remoteVersion: remoteVersion,
-      hasUpdate: UpdateService.compareVersions(remoteVersion, currentVersion) > 0,
+      hasUpdate:
+          UpdateService.compareVersions(remoteVersion, currentVersion) > 0,
       releaseUrl: releaseUrl,
       changelogLines: UpdateService.extractChangelogLines(body),
       arm64Asset: arm64Asset,
@@ -93,25 +92,11 @@ class UpdateService {
   /// 更新代理配置，与其它联网服务共用 `ProxyProvider` 总线。
   /// [mode] 收 `Enum` 便于跨包传 `ProxyMode`（按 name 匹配）。
   void applyProxy(Enum mode, String host, int port) {
-    final adapter = IOHttpClientAdapter();
-    switch (mode.name) {
-      case 'custom':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'PROXY $host:$port';
-          client.badCertificateCallback = (_, _, _) => true;
-          return client;
-        };
-      case 'system':
-        adapter.createHttpClient = () => HttpClient();
-      case 'none':
-        adapter.createHttpClient = () {
-          final client = HttpClient();
-          client.findProxy = (_) => 'DIRECT';
-          return client;
-        };
-    }
-    _dio.httpClientAdapter = adapter;
+    _dio.httpClientAdapter = buildProxyAdapter(
+      mode.name,
+      host,
+      port,
+    );
   }
 
   Future<UpdateInfo> checkForUpdate() async {
@@ -127,7 +112,9 @@ class UpdateService {
   static int compareVersions(String a, String b) {
     final partsA = a.split('.');
     final partsB = b.split('.');
-    final length = partsA.length > partsB.length ? partsA.length : partsB.length;
+    final length = partsA.length > partsB.length
+        ? partsA.length
+        : partsB.length;
     for (var i = 0; i < length; i++) {
       final numA = i < partsA.length ? int.tryParse(partsA[i]) ?? 0 : 0;
       final numB = i < partsB.length ? int.tryParse(partsB[i]) ?? 0 : 0;
