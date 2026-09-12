@@ -633,6 +633,15 @@ class Highlights extends Table with TableInfo<Highlights, Highlight> {
     requiredDuringInsert: false,
     $customConstraints: '',
   );
+  static const VerificationMeta _anchorMeta = const VerificationMeta('anchor');
+  late final GeneratedColumn<String> anchor = GeneratedColumn<String>(
+    'anchor',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: '',
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -652,6 +661,7 @@ class Highlights extends Table with TableInfo<Highlights, Highlight> {
     note,
     color,
     groupId,
+    anchor,
     createdAt,
   ];
   @override
@@ -707,6 +717,12 @@ class Highlights extends Table with TableInfo<Highlights, Highlight> {
         groupId.isAcceptableOrUnknown(data['groupId']!, _groupIdMeta),
       );
     }
+    if (data.containsKey('anchor')) {
+      context.handle(
+        _anchorMeta,
+        anchor.isAcceptableOrUnknown(data['anchor']!, _anchorMeta),
+      );
+    }
     if (data.containsKey('createdAt')) {
       context.handle(
         _createdAtMeta,
@@ -748,6 +764,10 @@ class Highlights extends Table with TableInfo<Highlights, Highlight> {
         DriftSqlType.string,
         data['${effectivePrefix}groupId'],
       ),
+      anchor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anchor'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}createdAt'],
@@ -773,6 +793,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
   final String? note;
   final String color;
   final String? groupId;
+  final String? anchor;
   final int createdAt;
   const Highlight({
     required this.id,
@@ -781,6 +802,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     this.note,
     required this.color,
     this.groupId,
+    this.anchor,
     required this.createdAt,
   });
   @override
@@ -796,6 +818,9 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     if (!nullToAbsent || groupId != null) {
       map['groupId'] = Variable<String>(groupId);
     }
+    if (!nullToAbsent || anchor != null) {
+      map['anchor'] = Variable<String>(anchor);
+    }
     map['createdAt'] = Variable<int>(createdAt);
     return map;
   }
@@ -810,6 +835,9 @@ class Highlight extends DataClass implements Insertable<Highlight> {
       groupId: groupId == null && nullToAbsent
           ? const Value.absent()
           : Value(groupId),
+      anchor: anchor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(anchor),
       createdAt: Value(createdAt),
     );
   }
@@ -826,6 +854,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
       note: serializer.fromJson<String?>(json['note']),
       color: serializer.fromJson<String>(json['color']),
       groupId: serializer.fromJson<String?>(json['groupId']),
+      anchor: serializer.fromJson<String?>(json['anchor']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
     );
   }
@@ -839,6 +868,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
       'note': serializer.toJson<String?>(note),
       'color': serializer.toJson<String>(color),
       'groupId': serializer.toJson<String?>(groupId),
+      'anchor': serializer.toJson<String?>(anchor),
       'createdAt': serializer.toJson<int>(createdAt),
     };
   }
@@ -850,6 +880,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     Value<String?> note = const Value.absent(),
     String? color,
     Value<String?> groupId = const Value.absent(),
+    Value<String?> anchor = const Value.absent(),
     int? createdAt,
   }) => Highlight(
     id: id ?? this.id,
@@ -858,6 +889,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     note: note.present ? note.value : this.note,
     color: color ?? this.color,
     groupId: groupId.present ? groupId.value : this.groupId,
+    anchor: anchor.present ? anchor.value : this.anchor,
     createdAt: createdAt ?? this.createdAt,
   );
   Highlight copyWithCompanion(HighlightsCompanion data) {
@@ -868,6 +900,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
       note: data.note.present ? data.note.value : this.note,
       color: data.color.present ? data.color.value : this.color,
       groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      anchor: data.anchor.present ? data.anchor.value : this.anchor,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -881,6 +914,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
           ..write('note: $note, ')
           ..write('color: $color, ')
           ..write('groupId: $groupId, ')
+          ..write('anchor: $anchor, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -888,7 +922,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
 
   @override
   int get hashCode =>
-      Object.hash(id, docId, content, note, color, groupId, createdAt);
+      Object.hash(id, docId, content, note, color, groupId, anchor, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -899,6 +933,7 @@ class Highlight extends DataClass implements Insertable<Highlight> {
           other.note == this.note &&
           other.color == this.color &&
           other.groupId == this.groupId &&
+          other.anchor == this.anchor &&
           other.createdAt == this.createdAt);
 }
 
@@ -909,6 +944,7 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
   final Value<String?> note;
   final Value<String> color;
   final Value<String?> groupId;
+  final Value<String?> anchor;
   final Value<int> createdAt;
   final Value<int> rowid;
   const HighlightsCompanion({
@@ -918,6 +954,7 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     this.note = const Value.absent(),
     this.color = const Value.absent(),
     this.groupId = const Value.absent(),
+    this.anchor = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -928,6 +965,7 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     this.note = const Value.absent(),
     required String color,
     this.groupId = const Value.absent(),
+    this.anchor = const Value.absent(),
     required int createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -942,6 +980,7 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     Expression<String>? note,
     Expression<String>? color,
     Expression<String>? groupId,
+    Expression<String>? anchor,
     Expression<int>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -952,6 +991,7 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
       if (note != null) 'note': note,
       if (color != null) 'color': color,
       if (groupId != null) 'groupId': groupId,
+      if (anchor != null) 'anchor': anchor,
       if (createdAt != null) 'createdAt': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -964,6 +1004,7 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     Value<String?>? note,
     Value<String>? color,
     Value<String?>? groupId,
+    Value<String?>? anchor,
     Value<int>? createdAt,
     Value<int>? rowid,
   }) {
@@ -974,6 +1015,7 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
       note: note ?? this.note,
       color: color ?? this.color,
       groupId: groupId ?? this.groupId,
+      anchor: anchor ?? this.anchor,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -1000,6 +1042,9 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     if (groupId.present) {
       map['groupId'] = Variable<String>(groupId.value);
     }
+    if (anchor.present) {
+      map['anchor'] = Variable<String>(anchor.value);
+    }
     if (createdAt.present) {
       map['createdAt'] = Variable<int>(createdAt.value);
     }
@@ -1018,6 +1063,7 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
           ..write('note: $note, ')
           ..write('color: $color, ')
           ..write('groupId: $groupId, ')
+          ..write('anchor: $anchor, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -3631,6 +3677,7 @@ typedef $HighlightsCreateCompanionBuilder =
       Value<String?> note,
       required String color,
       Value<String?> groupId,
+      Value<String?> anchor,
       required int createdAt,
       Value<int> rowid,
     });
@@ -3642,6 +3689,7 @@ typedef $HighlightsUpdateCompanionBuilder =
       Value<String?> note,
       Value<String> color,
       Value<String?> groupId,
+      Value<String?> anchor,
       Value<int> createdAt,
       Value<int> rowid,
     });
@@ -3698,6 +3746,11 @@ class $HighlightsFilterComposer extends Composer<_$AppDatabase, Highlights> {
 
   ColumnFilters<String> get groupId => $composableBuilder(
     column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get anchor => $composableBuilder(
+    column: $table.anchor,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3763,6 +3816,11 @@ class $HighlightsOrderingComposer extends Composer<_$AppDatabase, Highlights> {
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get anchor => $composableBuilder(
+    column: $table.anchor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -3815,6 +3873,9 @@ class $HighlightsAnnotationComposer
 
   GeneratedColumn<String> get groupId =>
       $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get anchor =>
+      $composableBuilder(column: $table.anchor, builder: (column) => column);
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -3877,6 +3938,7 @@ class $HighlightsTableManager
                 Value<String?> note = const Value.absent(),
                 Value<String> color = const Value.absent(),
                 Value<String?> groupId = const Value.absent(),
+                Value<String?> anchor = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => HighlightsCompanion(
@@ -3886,6 +3948,7 @@ class $HighlightsTableManager
                 note: note,
                 color: color,
                 groupId: groupId,
+                anchor: anchor,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -3897,6 +3960,7 @@ class $HighlightsTableManager
                 Value<String?> note = const Value.absent(),
                 required String color,
                 Value<String?> groupId = const Value.absent(),
+                Value<String?> anchor = const Value.absent(),
                 required int createdAt,
                 Value<int> rowid = const Value.absent(),
               }) => HighlightsCompanion.insert(
@@ -3906,6 +3970,7 @@ class $HighlightsTableManager
                 note: note,
                 color: color,
                 groupId: groupId,
+                anchor: anchor,
                 createdAt: createdAt,
                 rowid: rowid,
               ),

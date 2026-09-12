@@ -18,6 +18,8 @@ class SettingsKeys {
   static const http2Enabled = 'general_http2_enabled';
   static const ignoredUpdateVersion = 'general_ignored_update_version';
   static const locale = 'app_locale';
+  static const zoteroLocalPort = 'zotero_local_port';
+  static const zoteroLocalDirectory = 'zotero_local_directory';
   static const hasSeenOnboarding = 'hasSeenOnboarding';
 
   /// 导航栏是否展开文字标签；缺省 null = 跟随宽度自动（≥1200 展开）
@@ -38,6 +40,9 @@ class SettingsKeys {
   static const readerTheme = 'reader_theme';
   static const readerFont = 'reader_font';
   static const readerFontSize = 'reader_font_size';
+  static const readerDesktopHorizontalMargin =
+      'reader_desktop_horizontal_margin';
+  static const readerDesktopVerticalMargin = 'reader_desktop_vertical_margin';
   static const readerDefaultMode = 'reader_default_mode';
   static const readerPaginationMode = 'reader_pagination_mode';
 

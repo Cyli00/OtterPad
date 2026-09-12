@@ -27,6 +27,7 @@ CREATE TABLE highlights (
   note       TEXT,
   color      TEXT NOT NULL,
   groupId    TEXT,
+  anchor     TEXT,
   createdAt  INTEGER NOT NULL
 );
 CREATE INDEX idx_highlights_docId ON highlights(docId);

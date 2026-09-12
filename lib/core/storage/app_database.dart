@@ -19,7 +19,7 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => currentSchemaVersion;
 
-  static const currentSchemaVersion = 1;
+  static const currentSchemaVersion = 2;
 
   static Future<void> validateBackup(
     String path, {
@@ -70,6 +70,10 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      if (from > to) throw const StorageException(StorageFailure.unsupportedBackup);
+      if (from < 2) await m.addColumn(highlights, highlights.anchor);
+    },
     onCreate: (m) async {
       // 9 张普通表 + 索引（来自 tables.drift）。FTS5 虚表与触发器在
       // [ensureFts5] 里建——它依赖 simple 扩展（simple tokenizer = jieba 分词 + 拼音），与 Drift 迁移

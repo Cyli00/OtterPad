@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' show Value;
 
 import '../../data/models/book/document.dart';
 import '../../data/models/book/highlight.dart';
+import '../../data/models/book/reader_anchor.dart';
 import '../../data/models/book/history_entry.dart';
 import '../../data/models/collection/favorite.dart';
 import 'app_database.dart' as db;
@@ -55,6 +56,7 @@ Highlight highlightFromRow(db.Highlight r) => Highlight(
       note: r.note,
       color: r.color,
       groupId: r.groupId,
+      anchor: ReaderAnchor.parse(r.anchor),
       createdAt: DateTime.fromMillisecondsSinceEpoch(r.createdAt),
     );
 
@@ -66,6 +68,7 @@ db.HighlightsCompanion highlightCompanion(Highlight h) =>
       note: Value(h.note),
       color: h.color,
       groupId: Value(h.groupId),
+      anchor: Value(h.anchor == null ? null : jsonEncode(h.anchor!.toJson())),
       createdAt: h.createdAt.millisecondsSinceEpoch,
     );
 

@@ -53,11 +53,11 @@ class SettingsStore {
     _cache
       ..clear()
       ..addEntries([
-        for (final r in rows) MapEntry(r.settingKey, _decode(r.value)),
+        for (final r in rows) MapEntry(r.settingKey, decodeRaw(r.value)),
       ]);
   }
 
-  static Object? _decode(String raw) {
+  static Object? decodeRaw(String raw) {
     if (raw.isEmpty) return null;
     try {
       return jsonDecode(raw);
