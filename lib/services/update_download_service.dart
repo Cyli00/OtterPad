@@ -25,11 +25,7 @@ class UpdateDownloadService {
   /// 更新代理配置，与其它联网服务共用 `ProxyProvider` 总线。
   /// [mode] 收 `Enum` 便于跨包传 `ProxyMode`（按 name 匹配）。
   void applyProxy(Enum mode, String host, int port) {
-    _dio.httpClientAdapter = buildProxyAdapter(
-      mode.name,
-      host,
-      port,
-    );
+    _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
   }
 
   Future<String> downloadApk({
@@ -41,7 +37,7 @@ class UpdateDownloadService {
     final tempDir = await getTemporaryDirectory();
     final dir = Directory(p.join(tempDir.path, 'OtterPad', 'updates'));
     if (!await dir.exists()) await dir.create(recursive: true);
-    final savePath = p.join(dir.path, 'OtterPad-$version-arm64-v8a.apk');
+    final savePath = p.join(dir.path, 'OtterPad-$version-${asset.abi}.apk');
 
     await _dio.download(
       asset.downloadUrl,

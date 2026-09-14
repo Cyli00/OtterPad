@@ -6,9 +6,9 @@
 
 **Mobile Academic Literature Reader & Manager**
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.41.3-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.11.1-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![License](https://img.shields.io/github/license/Cyli00/NightReader)](./LICENSE)
+[![Flutter](https://img.shields.io/badge/Flutter-3.44.6-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.12.2-0175C2?logo=dart&logoColor=white)](https://dart.dev)
+[![License](https://img.shields.io/github/license/Cyli00/OtterPad)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android-brightgreen)]()
 
 English | [简体中文](docs/README_zh.md)
@@ -68,20 +68,22 @@ OtterPad uses PaddleOCR-VL under the hood to power a figure extraction and layou
 
 ## Installation
 
-Grab the APK for your architecture from [Releases](https://github.com/Cyli00/NightReader/releases):
+Grab the APK for your architecture from [Releases](https://github.com/Cyli00/OtterPad/releases):
 - `arm64-v8a` — Most modern Android devices
 - `armeabi-v7a` — Older 32-bit devices
 
+Desktop features are available in the source; v0.2.0 distributes Android APKs only.
+
 ## Development
 
-This project was built with the help of [Claude Code](https://claude.com/claude-code), using Flutter 3.41.3 + Dart 3.11.1.
+This project was built with the help of [Claude Code](https://claude.com/claude-code), using Flutter 3.44.6 + Dart 3.12.2.
 
 | Layer | Stack |
 | :--- | :--- |
-| Framework | Flutter 3.41.3 + Dart 3.11.1 |
+| Framework | Flutter 3.44.6 + Dart 3.12.2 |
 | State Management | Riverpod |
 | Routing | GoRouter |
-| Local Storage | Hive + Flutter Secure Storage (credentials) |
+| Local Storage | SQLite / Drift + Flutter Secure Storage (credentials) |
 | Networking | Dio + HTTP/2 |
 | OCR / Layout Analysis | PaddleOCR-VL |
 | Design | Material Design 3 |

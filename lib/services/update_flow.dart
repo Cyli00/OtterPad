@@ -45,7 +45,7 @@ Future<void> _handleUpdateNow(
   UpdateInfo info,
 ) async {
   Navigator.of(ctx).pop();
-  final asset = info.arm64Asset;
+  final asset = info.apkAsset;
   // 非 Android 或无匹配 APK：回退到浏览器打开发布页
   if (!Platform.isAndroid || asset == null) {
     await _openReleasePage(info);

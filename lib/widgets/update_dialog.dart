@@ -25,7 +25,7 @@ class UpdateDialog extends StatelessWidget {
   });
 
   bool get _canInstallInApp =>
-      !kIsWeb && Platform.isAndroid && info.arm64Asset != null;
+      !kIsWeb && Platform.isAndroid && info.apkAsset != null;
 
   @override
   Widget build(BuildContext context) {

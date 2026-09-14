@@ -1,16 +1,25 @@
+import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'proxy_adapter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
+import '../core/app_logger.dart';
 
-/// GitHub release 里匹配到的 arm64-v8a APK 资源。
+/// GitHub release 里与设备 ABI 匹配的 APK 资源。
 class ApkAsset {
   final String downloadUrl;
   final int size;
+  final String abi;
 
-  const ApkAsset({required this.downloadUrl, required this.size});
+  const ApkAsset({
+    required this.downloadUrl,
+    required this.size,
+    required this.abi,
+  });
 }
 
 /// 一次版本检查的结果。
@@ -20,7 +29,7 @@ class UpdateInfo {
   final bool hasUpdate;
   final String releaseUrl;
   final List<String> changelogLines;
-  final ApkAsset? arm64Asset;
+  final ApkAsset? apkAsset;
 
   const UpdateInfo({
     required this.currentVersion,
@@ -28,13 +37,14 @@ class UpdateInfo {
     required this.hasUpdate,
     required this.releaseUrl,
     required this.changelogLines,
-    this.arm64Asset,
+    this.apkAsset,
   });
 
   /// 从 GitHub `GET /repos/{owner}/{repo}/releases/latest` 的响应体解析。
   factory UpdateInfo.fromGithubRelease(
     Map<String, dynamic> json, {
     required String currentVersion,
+    List<String> supportedAbis = const [],
   }) {
     final tagName = json['tag_name'] as String;
     final remoteVersion = tagName.startsWith('v')
@@ -44,16 +54,21 @@ class UpdateInfo {
     final body = json['body'] as String? ?? '';
     final assets = json['assets'] as List<dynamic>? ?? [];
 
-    ApkAsset? arm64Asset;
-    for (final asset in assets) {
-      final name = asset['name'] as String? ?? '';
-      if (name.endsWith('.apk') && name.contains('arm64-v8a')) {
-        arm64Asset = ApkAsset(
-          downloadUrl: asset['browser_download_url'] as String,
-          size: asset['size'] as int? ?? 0,
-        );
-        break;
+    ApkAsset? apkAsset;
+    // ABI 顺序由设备提供；不能用 Release 附件顺序决定安装哪个架构。
+    for (final abi in supportedAbis) {
+      for (final asset in assets) {
+        final name = asset['name'] as String? ?? '';
+        if (name.endsWith('-$abi.apk')) {
+          apkAsset = ApkAsset(
+            downloadUrl: asset['browser_download_url'] as String,
+            size: asset['size'] as int? ?? 0,
+            abi: abi,
+          );
+          break;
+        }
       }
+      if (apkAsset != null) break;
     }
 
     return UpdateInfo(
@@ -63,7 +78,7 @@ class UpdateInfo {
           UpdateService.compareVersions(remoteVersion, currentVersion) > 0,
       releaseUrl: releaseUrl,
       changelogLines: UpdateService.extractChangelogLines(body),
-      arm64Asset: arm64Asset,
+      apkAsset: apkAsset,
     );
   }
 }
@@ -92,19 +107,24 @@ class UpdateService {
   /// 更新代理配置，与其它联网服务共用 `ProxyProvider` 总线。
   /// [mode] 收 `Enum` 便于跨包传 `ProxyMode`（按 name 匹配）。
   void applyProxy(Enum mode, String host, int port) {
-    _dio.httpClientAdapter = buildProxyAdapter(
-      mode.name,
-      host,
-      port,
-    );
+    _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
   }
 
   Future<UpdateInfo> checkForUpdate() async {
     final packageInfo = await PackageInfo.fromPlatform();
+    List<String> supportedAbis = const [];
+    if (Platform.isAndroid) {
+      try {
+        supportedAbis = (await DeviceInfoPlugin().androidInfo).supportedAbis;
+      } catch (e) {
+        log.w('[UpdateService] 无法读取设备 ABI，使用发布页更新：$e');
+      }
+    }
     final response = await _dio.get<Map<String, dynamic>>(_apiUrl);
     return UpdateInfo.fromGithubRelease(
       response.data!,
       currentVersion: packageInfo.version,
+      supportedAbis: supportedAbis,
     );
   }
 

@@ -7,11 +7,19 @@ on:
   workflow_dispatch: # 手动触发=只构建打包、不发 Release，可用于演练
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
   # ── Android 构建并打包成可分发格式，统一命名后作为 artifact 上传 ──
   build:
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -24,6 +32,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ needs.checks.outputs.flutter-version }}
           cache: true
 
       # 恢复签名密钥（仓库 Settings → Secrets → Actions 需配置）：
@@ -35,20 +44,14 @@ jobs:
           ANDROID_KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
         shell: bash
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.jks
-          echo "$ANDROID_KEY_PROPERTIES" > android/key.properties
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEY_PROPERTIES" ]]; then
+            echo '缺少 Android 发布签名配置。' >&2
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.jks
+          printf '%s\n' "$ANDROID_KEY_PROPERTIES" > android/key.properties
 
-      - run: flutter pub get
-
-      # 从 tag 取版本号 (去掉前导 v)；手动触发时回退为 0.0.0-dev
-      - name: Resolve version
-        id: ver
-        shell: bash
-        run: |
-          ref="${{ github.ref_name }}"
-          v="${ref#v}"
-          [ "$v" = "$ref" ] && v="0.0.0-dev"
-          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - run: flutter pub get --enforce-lockfile
 
       - name: Prepare dist dir
         shell: bash
@@ -56,56 +59,55 @@ jobs:
 
       # ── Android：拆分 APK，直接 flutter build（命名确定，不走 distributor）──
       - name: Build Android APKs
-        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+        env:
+          RELEASE_VERSION: ${{ needs.checks.outputs.version }}
+          BUILD_NUMBER: ${{ needs.checks.outputs.build-number }}
+        run: >-
+          flutter build apk --release --no-pub --split-per-abi
+          --target-platform android-arm,android-arm64
+          --build-name="$RELEASE_VERSION" --build-number="$BUILD_NUMBER"
       - name: Collect Android
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.checks.outputs.version }}
         run: |
-          v="${{ steps.ver.outputs.version }}"
+          v="$RELEASE_VERSION"
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "release-dist/OtterPad-$v-android-arm64-v8a.apk"
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "release-dist/OtterPad-$v-android-armeabi-v7a.apk"
+          cd release-dist
+          sha256sum ./*.apk > SHA256SUMS
 
       - uses: actions/upload-artifact@v6
         with:
           name: android-release
           path: release-dist/
-          retention-days: 3
+          if-no-files-found: error
+          retention-days: 7
 
-  # ── 汇总所有产物 + 自动生成 changelog + 建 GitHub Release ──
+  # ── 汇总检查与构建产物后创建 GitHub Release ──
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
       - uses: actions/download-artifact@v7
         with:
           name: android-release
           path: release-dist
 
-      - name: Generate release notes
-        shell: bash
-        run: |
-          tag="${{ github.ref_name }}"
-          version="${tag#v}"
-          sed "s|VERSION|$version|g" .github/release_template.md > notes.md
-          prev=$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)
-          range="${prev:+$prev..}$tag"
-          {
-            echo
-            git log --no-merges --pretty=format:'- %s' "$range" | grep -v 'Update changelog' || true
-            echo
-          } >> notes.md
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes/
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
           files: release-dist/*
-          body_path: notes.md
+          body_path: release-notes/notes.md
+          fail_on_unmatched_files: true
           prerelease: ${{ contains(github.ref_name, '-') }}
 
   # ── iOS TestFlight（骨架，默认禁用）──

@@ -4,27 +4,19 @@ on:
   push:
     branches: [dev, main]
   pull_request:
-    branches: [main]
+    branches: [dev, main]
   workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  # ── 静态分析 + 单元测试（最快，所有平台构建的前置门槛）──
   analyze-and-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos
-      # test/tools 是本机 PDF + 真实 LLM 的手工 demo，标了 tools tag，CI 不跑。
-      - run: flutter test --exclude-tags tools
+    uses: ./.github/workflows/checks.yml
 
   # ── Android APK ──
   build-android:
@@ -39,10 +31,11 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ needs.analyze-and-test.outputs.flutter-version }}
           cache: true
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       # 仅产出 armeabi-v7a 与 arm64-v8a 两个 ABI 的拆分 APK
-      - run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+      - run: flutter build apk --release --no-pub --split-per-abi --target-platform android-arm,android-arm64
       - uses: actions/upload-artifact@v6
         with:
           name: android-apk
@@ -50,4 +43,5 @@ jobs:
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           retention-days: 7
+          if-no-files-found: error
 

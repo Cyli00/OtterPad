@@ -6,9 +6,9 @@
 
 **移动端学术文献阅读与管理工具**
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.41.3-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.11.1-0175C2?logo=dart&logoColor=white)](https://dart.dev)
-[![License](https://img.shields.io/github/license/Cyli00/NightReader)](../LICENSE)
+[![Flutter](https://img.shields.io/badge/Flutter-3.44.6-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.12.2-0175C2?logo=dart&logoColor=white)](https://dart.dev)
+[![License](https://img.shields.io/github/license/Cyli00/OtterPad)](../LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android-brightgreen)]()
 
 [English](../README.md) | 简体中文
@@ -68,20 +68,22 @@ OtterPad 在 PaddleOCR-VL 的基础上做了一套图表提取与版面重排引
 
 ## 安装
 
-从 [Releases](https://github.com/Cyli00/NightReader/releases) 下载对应架构的 APK：
+从 [Releases](https://github.com/Cyli00/OtterPad/releases) 下载对应架构的 APK：
 - `arm64-v8a` — 大多数现代 Android 设备
 - `armeabi-v7a` — 较旧的 32 位设备
 
+桌面功能已包含在源码中；v0.2.0 暂仅分发 Android APK。
+
 ## 开发
 
-本项目使用 [Claude Code](https://claude.com/claude-code) 辅助开发，基于 Flutter 3.41.3 + Dart 3.11.1。
+本项目使用 [Claude Code](https://claude.com/claude-code) 辅助开发，基于 Flutter 3.44.6 + Dart 3.12.2。
 
 | 层面 | 选型 |
 | :--- | :--- |
-| 框架 | Flutter 3.41.3 + Dart 3.11.1 |
+| 框架 | Flutter 3.44.6 + Dart 3.12.2 |
 | 状态管理 | Riverpod |
 | 路由 | GoRouter |
-| 本地存储 | Hive + Flutter Secure Storage（凭据） |
+| 本地存储 | SQLite / Drift + Flutter Secure Storage（凭据） |
 | 网络 | Dio + HTTP/2 |
 | OCR / 版面分析 | PaddleOCR-VL |
 | 设计 | Material Design 3 |

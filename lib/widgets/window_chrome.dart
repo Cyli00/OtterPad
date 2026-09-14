@@ -144,7 +144,7 @@ class _Btn extends StatefulWidget {
     required this.onTap,
     this.isClose = false,
     this.highlight = false,
-    this.fill = 1,
+    this.fill = 0,
   });
 
   @override
