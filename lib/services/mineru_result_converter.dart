@@ -16,6 +16,7 @@ import 'document_structure.dart';
 import 'extraction_artifacts.dart';
 import 'figure_extract_service.dart';
 import 'pdf_process_lock.dart';
+import 'pdf_caption_recovery.dart';
 
 class MinerUConversionResult {
   final String mdPath;
@@ -103,12 +104,13 @@ class MinerUResultConverter {
         await File(path).writeAsBytes(image.value, flush: true);
         assets[image.key] = path;
       }
-      final structure = layout != null
+      var structure = layout != null
           ? DocumentStructure.fromMinerULayout(layout)
           : DocumentStructure.fromMinerUV2(
               v2!,
               pageSizes: await _pageSizes(pdfPath),
             );
+      structure = await PdfCaptionRecovery.recover(structure, pdfPath);
       final tableSources = <String?>[];
       for (final page in v2 ?? const []) {
         for (final block in (page as List).whereType<Map>()) {
@@ -243,7 +245,14 @@ class MinerUResultConverter {
         p.join(DocPaths.docDir(pdfPath), path as String),
       ),
     );
-    final structure = DocumentStructure.parse(jsonText);
+    final structure = await PdfCaptionRecovery.recover(
+      DocumentStructure.parse(jsonText),
+      pdfPath,
+    );
+    final recoveredJson = jsonEncode({
+      ...json,
+      ...structure.toJson(source: 'mineru'),
+    });
     final generation = await createFigureGeneration(
       DocPaths.figuresDir(pdfPath),
     );
@@ -268,7 +277,7 @@ class MinerUResultConverter {
       );
       await ExtractionArtifacts.publish(pdfPath, DocExtractProvider.mineru, {
         DocPaths.rawMd(pdfPath): raw,
-        DocPaths.json(pdfPath): jsonText,
+        DocPaths.json(pdfPath): recoveredJson,
         DocPaths.figuresManifest(pdfPath): FigureExtractService.encodeManifest(
           manifest,
           pdfPath,

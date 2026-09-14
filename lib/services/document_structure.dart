@@ -163,10 +163,15 @@ class DocumentStructure {
       } else {
         return empty;
       }
-      return DocumentStructure([
+      final pages = [
         for (var i = 0; i < rawPages.length; i++)
           _parsePage(rawPages[i] as Map<String, dynamic>, i),
-      ]);
+      ];
+      return DocumentStructure(
+        decoded is Map && decoded['_source'] == 'mineru'
+            ? _mineruTextRegions(pages)
+            : _paddleTextRegions(pages),
+      );
     } catch (_) {
       return empty;
     }
@@ -176,7 +181,32 @@ class DocumentStructure {
   /// blocks. Preserve explicit ownership instead of synthesizing caption boxes.
   static DocumentStructure fromMinerULayout(Map<String, dynamic> layout) {
     final pages = <StructurePage>[];
-    for (final raw in (layout['pdf_info'] as List? ?? const [])) {
+    final linePages = <String, Set<int>>{};
+    String lineKey(Map line) => jsonEncode([
+      _bboxValues(line['bbox'], 4),
+      for (final span in (line['spans'] as List? ?? []).whereType<Map>())
+        [span['type'], span['content'], span['html']],
+    ]);
+    void indexLines(Map block, int pageIndex) {
+      for (final line in (block['lines'] as List? ?? []).whereType<Map>()) {
+        (linePages[lineKey(line)] ??= {}).add(pageIndex);
+      }
+      for (final child in (block['blocks'] as List? ?? []).whereType<Map>()) {
+        indexLines(child, pageIndex);
+      }
+    }
+
+    final rawPages = layout['pdf_info'] as List? ?? const [];
+    for (var i = 0; i < rawPages.length; i++) {
+      final raw = rawPages[i];
+      if (raw is! Map) continue;
+      final pi = (raw['page_idx'] as num?)?.toInt() ?? i;
+      for (final block
+          in (raw['preproc_blocks'] as List? ?? []).whereType<Map>()) {
+        indexLines(block, pi);
+      }
+    }
+    for (final raw in rawPages) {
       if (raw is! Map<String, dynamic>) continue;
       final pi = (raw['page_idx'] as num?)?.toInt() ?? pages.length;
       final size = _bboxValues(raw['page_size'], 2);
@@ -213,7 +243,15 @@ class DocumentStructure {
               final crossPage = (line['spans'] as List? ?? []).any(
                 (s) => s is Map && s['cross_page'] == true,
               );
-              final regionPage = crossPage ? pi + 1 : pi;
+              // cross_page 表示来自后续正文页，中间可能隔着整页图表。
+              final matches = linePages[lineKey(line)]
+                  ?.where((pageIndex) => pageIndex > pi)
+                  .toList();
+              final regionPage = !crossPage
+                  ? pi
+                  : matches?.length == 1
+                  ? matches!.single
+                  : pi + 1;
               final b = [for (final v in lineBox) v * 2];
               final previous = regions.lastOrNull;
               if (previous != null &&
@@ -292,7 +330,7 @@ class DocumentStructure {
         ),
       );
     }
-    return DocumentStructure(pages);
+    return DocumentStructure(_mineruTextRegions(pages));
   }
 
   Map<String, dynamic> toJson({String? source}) => {
@@ -420,66 +458,145 @@ class DocumentStructure {
     }
   }
 
-  static List<LayoutBlock> _paddleTextRegions(
-    List<LayoutBlock> blocks,
-    int pageIndex,
-  ) {
-    return blocks.map((block) {
-      if (block.groupId == null ||
-          block.textRegions.isNotEmpty ||
-          block.blockContent.trim().isEmpty ||
-          !const {
-            'text',
-            'paragraph',
-            'abstract',
-            'list',
-          }.contains(block.blockLabel)) {
-        return block;
-      }
-      final group = blocks
-          .where(
-            (other) =>
-                other.groupId == block.groupId &&
-                other.blockLabel == block.blockLabel &&
-                other.blockBbox.length == 4 &&
-                other.blockBbox[2] > other.blockBbox[0] &&
-                other.blockBbox[3] > other.blockBbox[1],
-          )
-          .toList();
-      if (group.length < 2 ||
-          group.where((b) => b.blockContent.trim().isNotEmpty).length != 1) {
-        return block;
-      }
-      group.sort(
-        (a, b) => (a.blockOrder ?? blocks.indexOf(a)).compareTo(
-          b.blockOrder ?? blocks.indexOf(b),
+  static List<StructurePage> _withTextRegions(
+    List<StructurePage> pages,
+    Map<LayoutBlock, List<LayoutTextRegion>> replacements,
+  ) => [
+    for (final page in pages)
+      StructurePage(
+        pageIndex: page.pageIndex,
+        pageSize: page.pageSize,
+        markdown: page.markdown,
+        images: page.images,
+        blocks: [
+          for (final block in page.blocks)
+            if (replacements[block] case final regions?)
+              LayoutBlock.fromJson({
+                ...block.toJson(),
+                'text_regions': regions.map((r) => r.toJson()).toList(),
+              })
+            else
+              block,
+        ],
+      ),
+  ];
+
+  static const _bodyLabels = {'text', 'paragraph', 'abstract', 'list'};
+
+  static List<StructurePage> _paddleTextRegions(List<StructurePage> pages) {
+    final groups =
+        <(int?, int, String), List<({int page, LayoutBlock block})>>{};
+    for (final page in pages) {
+      final ordered = [...page.blocks];
+      ordered.sort(
+        (a, b) => (a.blockOrder ?? page.blocks.indexOf(a)).compareTo(
+          b.blockOrder ?? page.blocks.indexOf(b),
         ),
       );
-      final areas = group
-          .map(
-            (b) =>
-                (b.blockBbox[2] - b.blockBbox[0]) *
-                (b.blockBbox[3] - b.blockBbox[1]),
-          )
-          .toList();
+      for (final block in ordered) {
+        if (!_bodyLabels.contains(block.blockLabel)) continue;
+        final global = block.globalGroupId;
+        final local = block.groupId;
+        final key = global != null && global >= 0
+            ? (null, global, block.blockLabel)
+            : local != null && local >= 0
+            ? (page.pageIndex, local, block.blockLabel)
+            : null;
+        if (key != null) {
+          (groups[key] ??= []).add((page: page.pageIndex, block: block));
+        }
+      }
+    }
+    final replacements = <LayoutBlock, List<LayoutTextRegion>>{};
+    for (final group in groups.values) {
+      final owners = group.where((e) => e.block.blockContent.trim().isNotEmpty);
+      if (group.length < 2 ||
+          owners.length != 1 ||
+          group.any((e) => e.block.blockBbox.length != 4)) {
+        continue;
+      }
+      final owner = owners.single.block;
+      if (owner.textRegions.isNotEmpty &&
+          (owner.textRegions.length >= group.length ||
+              owner.textRegions.any(
+                (r) => !group.any(
+                  (e) =>
+                      e.page == r.pageIndex &&
+                      e.block.blockBbox.length == r.bbox.length &&
+                      r.bbox.indexed.every(
+                        (v) => e.block.blockBbox[v.$1] == v.$2,
+                      ),
+                ),
+              ))) {
+        continue;
+      }
+      final areas = group.map((e) {
+        final b = e.block.blockBbox;
+        return (b[2] - b[0]) * (b[3] - b[1]);
+      }).toList();
       final total = areas.fold<double>(0, (sum, area) => sum + area);
-      // Paddle 将合并后的全文放在组首，续栏留下空文本框；保留框的顺序，
-      // 不改变段落内容和哈希，已有译文与标注可直接复用。
-      return LayoutBlock.fromJson({
-        ...block.toJson(),
-        'text_regions': [
-          for (var i = 0; i < group.length; i++)
-            LayoutTextRegion(
-              pageIndex,
-              group[i].blockBbox,
-              (block.blockContent.length * areas[i] / total).round().clamp(
-                1,
-                1 << 30,
-              ),
-            ).toJson(),
-        ],
-      });
-    }).toList();
+      // 全文只在一个块中，其余空框仍占据排版容量；保持正文与缓存哈希不变。
+      replacements[owner] = [
+        for (var i = 0; i < group.length; i++)
+          LayoutTextRegion(
+            group[i].page,
+            group[i].block.blockBbox,
+            (owner.blockContent.length * areas[i] / total).round().clamp(
+              1,
+              1 << 30,
+            ),
+          ),
+      ];
+    }
+    return _withTextRegions(pages, replacements);
+  }
+
+  static List<StructurePage> _mineruTextRegions(List<StructurePage> pages) {
+    final entries = [
+      for (final page in pages)
+        for (final block in page.blocks) (page: page.pageIndex, block: block),
+    ];
+    final replacements = <LayoutBlock, List<LayoutTextRegion>>{};
+    for (var i = 0; i < entries.length; i++) {
+      final owner = entries[i];
+      if (!_bodyLabels.contains(owner.block.blockLabel)) continue;
+      final regions = [...owner.block.textRegions];
+      for (var ri = 0; ri < regions.length; ri++) {
+        final region = regions[ri];
+        if (region.pageIndex <= owner.page || region.bbox.length != 4) continue;
+        // 旧缓存没有原始行来源；仅在下一段正文前寻找唯一且紧密包围行组的空续框。
+        // 图表和题注不终止查找，也不参与坐标匹配。
+        final candidates = <int>[];
+        for (final next in entries.skip(i + 1)) {
+          if (!_bodyLabels.contains(next.block.blockLabel)) continue;
+          if (next.block.blockContent.trim().isNotEmpty) break;
+          final b = next.block.blockBbox;
+          final a = region.bbox;
+          if (next.page <= owner.page ||
+              b.length != 4 ||
+              next.block.blockLabel != owner.block.blockLabel) {
+            continue;
+          }
+          if (a[0] >= b[0] - 4 &&
+              a[1] >= b[1] - 4 &&
+              a[2] <= b[2] + 4 &&
+              a[3] <= b[3] + 4 &&
+              (a[2] - a[0]) * (a[3] - a[1]) >=
+                  (b[2] - b[0]) * (b[3] - b[1]) * .7) {
+            candidates.add(next.page);
+          }
+        }
+        if (candidates.length == 1 && candidates.single != region.pageIndex) {
+          regions[ri] = LayoutTextRegion(
+            candidates.single,
+            region.bbox,
+            region.sourceLength,
+          );
+          replacements[owner.block] = regions;
+        }
+      }
+    }
+    return _withTextRegions(pages, replacements);
   }
 
   static StructurePage _parsePage(Map<String, dynamic> page, int index) {
@@ -498,10 +615,10 @@ class DocumentStructure {
       images: ((page['markdown'] as Map?)?['images'] as Map? ?? const {}).map(
         (key, value) => MapEntry(key.toString(), value.toString()),
       ),
-      blocks: _paddleTextRegions([
+      blocks: [
         for (final b in blockList)
           LayoutBlock.fromJson(b as Map<String, dynamic>),
-      ], (page['page_index'] as int?) ?? index),
+      ],
       markdown:
           ((page['markdown'] as Map<String, dynamic>?)?['text'] as String?) ??
           '',

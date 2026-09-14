@@ -306,26 +306,6 @@ class FigureExtractResult {
   });
 }
 
-/// 页面上一个 caption 标题的公开视图，用于 AI 排版修复的 title inventory。
-/// bbox 为 144 DPI [left, top, right, bottom]；markdown 兜底来源时为空数组。
-class TitleInfo {
-  final int pageIndex;
-  final String text;
-  final String kind; // figure / table / chart
-  final List<double> bbox;
-  final String? blockId;
-  final CaptionSource source;
-
-  const TitleInfo({
-    required this.pageIndex,
-    required this.text,
-    required this.kind,
-    required this.bbox,
-    required this.blockId,
-    required this.source,
-  });
-}
-
 /// 页面栏位布局的公开视图，用于 AI 排版修复判断跨栏图/表。
 /// 坐标为 144 DPI。单栏时 leftColRight/rightColLeft 为 null。
 class ColumnLayout {
@@ -344,7 +324,7 @@ class ColumnLayout {
 
 /// 单页 caption 召回的公开视图（caption-first AI 修缮用）。
 ///
-/// 与 [TitleInfo] 的区别：保留 [continuationBlocks]（多行合并的延续行原 block，
+/// 保留 [continuationBlocks]（多行合并的延续行原 block，
 /// 其 blockId 必须进 manifest 的 blockIds 以满足 md 替换契约）与 anchor 的
 /// [groupId]/[blockOrder]。bbox 为 144 DPI [left,top,right,bottom]，
 /// markdownFallback 来源时为 null。
@@ -997,6 +977,23 @@ class FigureExtractService {
       final pageCaptions = collected[original.pageIndex]!
           .where((c) => !numberedNearby || isMainCaption(c.text))
           .toList();
+      final visuals = original.blocks.where(_isVisualBlock).toList();
+      final visualRegion = _Bbox.union(visuals);
+      final pageRegion = _Bbox.union(original.blocks);
+      final plate =
+          numberedNearby &&
+          visuals.length > 1 &&
+          !pageCaptions.any((c) => isMainCaption(c.text)) &&
+          (visualRegion.right - visualRegion.left) *
+                  (visualRegion.bottom - visualRegion.top) >
+              pageRegion.right * pageRegion.bottom * 0.5 &&
+          !original.blocks.any(
+            (b) =>
+                b.blockLabel == 'text' &&
+                (b.blockContent.length > 80 ||
+                    !_contains(visualRegion, _Bbox.fromBlock(b))),
+          );
+      // 整页图内部的短说明属于图内标记，不能阻断子图聚类；正文页仍保留阻断。
       // 编号主图附近的无编号 OCR 标题通常是图内标记；长段落仍保留正文阻断语义。
       final blocks = original.blocks.map((b) {
         final repeatedHeader =
@@ -1022,7 +1019,8 @@ class FigureExtractService {
           );
         }
         if (!numberedNearby ||
-            b.blockLabel != 'figure_title' ||
+            (b.blockLabel != 'figure_title' &&
+                !(plate && b.blockLabel == 'text')) ||
             isMainCaption(b.blockContent) ||
             isSubfigureLabelBlock(b)) {
           return b;
@@ -1721,7 +1719,7 @@ class FigureExtractService {
       });
     }
 
-    final candidates = <_Cluster, List<(double, _CaptionCandidate)>>{};
+    final candidates = <_Cluster, List<(int, double, _CaptionCandidate)>>{};
     for (final cluster in clusters) {
       final imagePage = byPage[cluster.pageIndex]!;
       for (final caption in inv.captions) {
@@ -1763,7 +1761,18 @@ class FigureExtractService {
         final dominant =
             pageArea > 0 &&
             imageArea / pageArea >= 0.5 &&
-            !inv.captions.any((c) => c.pageIndex == imagePage.pageIndex);
+            !inv.captions.any((c) => c.pageIndex == imagePage.pageIndex) &&
+            !imagePage.blocks.any(
+              (b) =>
+                  !const [
+                    'header',
+                    'footer',
+                    'header_image',
+                    'number',
+                  ].contains(b.blockLabel) &&
+                  _isStableBlocker(b) &&
+                  !_contains(cluster.bbox, _Bbox.fromBlock(b)),
+            );
         if (!dominant &&
             !boundaryClear(
               imagePage,
@@ -1773,6 +1782,16 @@ class FigureExtractService {
             )) {
           continue;
         }
+        // 整页复合图常把题注放在下一页正文下方；该布局优先于上一页的题注。
+        final followingLegend =
+            dominant &&
+            forward &&
+            isMainCaption(caption.text) &&
+            caption.bbox != null &&
+            !capPage.blocks.any(_isVisualBlock) &&
+            caption.bbox!.top > _Bbox.union(capPage.blocks).bottom * 0.5 &&
+            caption.bbox!.right - caption.bbox!.left >=
+                (cluster.bbox.right - cluster.bbox.left) * 0.65;
         if (caption.bbox == null) {
           final lines = capPage.markdown.split('\n');
           final before = forward
@@ -1783,10 +1802,11 @@ class FigureExtractService {
             continue;
           }
         } else {
-          if (!boundaryClear(capPage, caption.bbox!, !forward, {
-            ?capBlock,
-            ...caption.continuationBlocks,
-          })) {
+          if (!followingLegend &&
+              !boundaryClear(capPage, caption.bbox!, !forward, {
+                ?capBlock,
+                ...caption.continuationBlocks,
+              })) {
             continue;
           }
           final a = _PageColumns.detect(
@@ -1812,8 +1832,23 @@ class FigureExtractService {
                   math.max(0.0, capBox.top - capBounds.top)
             : math.max(0.0, cluster.bbox.top - imageBounds.top) +
                   math.max(0.0, capBounds.bottom - capBox.bottom);
-        candidates.putIfAbsent(cluster, () => []).add((distance, caption));
+        candidates.putIfAbsent(cluster, () => []).add((
+          followingLegend ? 0 : 1,
+          distance,
+          caption,
+        ));
       }
+    }
+    final preferred = candidates.values
+        .expand((v) => v)
+        .where((c) => c.$1 == 0)
+        .map((c) => c.$3)
+        .toSet();
+    for (final options in candidates.values) {
+      final hasFollowingLegend = options.any((c) => c.$1 == 0);
+      options.removeWhere(
+        (c) => c.$1 != 0 && (hasFollowingLegend || preferred.contains(c.$3)),
+      );
     }
     final result = <_FigureBlock, (double, _CaptionCandidate)>{};
     // 按完整视觉簇检查双向唯一，不能在遍历中删除竞争者制造伪唯一。
@@ -1821,13 +1856,13 @@ class FigureExtractService {
       if (entry.value.length != 1) continue;
       final best = entry.value.single;
       if (candidates.values
-              .where((v) => v.any((c) => c.$2 == best.$2))
+              .where((v) => v.any((c) => c.$3 == best.$3))
               .length !=
           1) {
         continue;
       }
       for (final visual in entry.key.blocks) {
-        result[visual] = best;
+        result[visual] = (best.$2, best.$3);
       }
     }
     return result;
@@ -2766,31 +2801,6 @@ class FigureExtractService {
     );
   }
 
-  /// 收集单页所有 caption 标题（含 orphan），用于 AI 排版修复的 title
-  /// inventory。复用 [_collectCaptionCandidates] 的多行合并 + markdown 兜底，
-  /// 按 [classifyKind] 分类 kind。bbox 为 144 DPI，markdown 兜底来源时为空。
-  /// 使用前须 [init]。
-  List<TitleInfo> collectTitleInventory(
-    List<LayoutBlock> pageBlocks,
-    String markdown,
-    int pageIndex,
-  ) {
-    assert(_initialized, 'FigureExtractService.init() 未调用');
-    final page = _PageData(pageIndex, pageBlocks, markdown);
-    return _collectCaptionCandidates(page)
-        .map(
-          (c) => TitleInfo(
-            pageIndex: c.pageIndex,
-            text: c.text,
-            kind: classifyKind(c.text),
-            bbox: c.bbox?.toList() ?? const <double>[],
-            blockId: c.blockId,
-            source: c.source,
-          ),
-        )
-        .toList();
-  }
-
   /// 收集单页所有 caption 候选（含 continuationBlocks + groupId + blockOrder），
   /// 用于 caption-first AI 修缮的预处理。复用 [_collectCaptionCandidates] 的
   /// 三阶段召回（anchor 识别 → 多行合并 → markdown 兜底）。使用前须 [init]。
@@ -3081,13 +3091,6 @@ class FigureExtractService {
     ];
     final inv = _buildInventory(pageData);
     return _pair(inv, profile: profile).segments;
-  }
-
-  /// 测试入口:单页用 `List<LayoutBlock>` 输入,返回 `List<List<LayoutBlock>>`.
-  /// 等价于 `findFigures([blocks])` 然后投影到 `blocks` 字段.
-  @visibleForTesting
-  List<List<LayoutBlock>> findFigureSegments(List<LayoutBlock> blocks) {
-    return findFigures([blocks]).map((s) => s.blocks).toList();
   }
 
   /// 从版面解析 JSON + PDF 中提取所有 figure,保存到 `{hash}/figures/`.

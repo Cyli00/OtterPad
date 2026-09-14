@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "OtterPad · 文档提取与阅读器更新",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1240,
+      800
+    ]
+  },
+  "components": [
+    {
+      "id": "extract_tasks",
+      "type": "frontend",
+      "label": "提取任务入口",
+      "sublabel": "DocumentTaskNotifier",
+      "pos": [
+        40,
+        55
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "paddle_jobs",
+      "type": "backend",
+      "label": "PaddleOCR 异步任务",
+      "sublabel": "BatchExtractService",
+      "pos": [
+        455,
+        55
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "paddle_result",
+      "type": "backend",
+      "label": "Paddle 结果处理",
+      "sublabel": "DocExtractService.saveResult",
+      "pos": [
+        870,
+        55
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "mineru_jobs",
+      "type": "backend",
+      "label": "MinerU 上传与轮询",
+      "sublabel": "MinerUExtractService",
+      "pos": [
+        455,
+        230
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "mineru_result",
+      "type": "backend",
+      "label": "MinerU 转换与题注补回",
+      "sublabel": "MinerUResultConverter",
+      "pos": [
+        870,
+        230
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "layout_model",
+      "type": "backend",
+      "label": "统一页面与块结构",
+      "sublabel": "DocumentStructure",
+      "pos": [
+        870,
+        445
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "figure_ownership",
+      "type": "backend",
+      "label": "题注归属与子图合并",
+      "sublabel": "FigureExtractService",
+      "pos": [
+        455,
+        445
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "reader_markdown",
+      "type": "backend",
+      "label": "按来源重建阅读版",
+      "sublabel": "图区域替换 · Markdown 清理",
+      "pos": [
+        40,
+        445
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "artifact_publish",
+      "type": "database",
+      "label": "发布提取产物",
+      "sublabel": "ExtractionArtifacts",
+      "pos": [
+        40,
+        660
+      ],
+      "size": [
+        300,
+        80
+      ]
+    },
+    {
+      "id": "reader_refresh",
+      "type": "frontend",
+      "label": "阅读器自动刷新",
+      "sublabel": "ReaderSessionNotifier",
+      "pos": [
+        455,
+        660
+      ],
+      "size": [
+        300,
+        80
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "choose_paddle",
+      "from": "extract_tasks",
+      "to": "paddle_jobs",
+      "label": "提交与轮询"
+    },
+    {
+      "id": "receive_paddle",
+      "from": "paddle_jobs",
+      "to": "paddle_result",
+      "label": "JSONL 结果"
+    },
+    {
+      "id": "choose_mineru",
+      "from": "extract_tasks",
+      "to": "mineru_jobs",
+      "label": "按来源分派"
+    },
+    {
+      "id": "receive_mineru",
+      "from": "mineru_jobs",
+      "to": "mineru_result",
+      "label": "下载 ZIP"
+    },
+    {
+      "id": "normalize_paddle",
+      "from": "paddle_result",
+      "to": "layout_model",
+      "label": "页面块数组",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          1210,
+          95
+        ],
+        [
+          1210,
+          485
+        ]
+      ]
+    },
+    {
+      "id": "normalize_mineru",
+      "from": "mineru_result",
+      "to": "layout_model",
+      "label": "布局适配与补回",
+      "labelDy": 65
+    },
+    {
+      "id": "pair_figures",
+      "from": "layout_model",
+      "to": "figure_ownership",
+      "label": "候选块与题注",
+      "variant": "emphasis"
+    },
+    {
+      "id": "crop_and_replace",
+      "from": "figure_ownership",
+      "to": "reader_markdown",
+      "label": "PDF 裁图与清单",
+      "variant": "emphasis"
+    },
+    {
+      "id": "publish_files",
+      "from": "reader_markdown",
+      "to": "artifact_publish",
+      "label": "正文与图清单",
+      "labelDy": 65
+    },
+    {
+      "id": "refresh_revision",
+      "from": "artifact_publish",
+      "to": "reader_refresh",
+      "label": "完成通知后重读"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "重新排版走本地",
+      "items": [
+        "按来源读取已有底稿，再执行图提取与 Markdown 重建。"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "题注补回有前提",
+      "items": [
+        "MinerU 可读取 PDF 文本层补题注；缺失文本层时仍有漏图风险。"
+      ]
+    }
+  ]
+}

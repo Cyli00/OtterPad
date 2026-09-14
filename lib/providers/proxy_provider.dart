@@ -7,6 +7,7 @@ import '../services/agent_http.dart';
 import '../services/backup_s3_service.dart';
 import '../services/batch_extract_service.dart';
 import '../services/doc_extract_service.dart';
+import '../services/download/pdf_fetch_service.dart';
 import '../services/identifier_resolver.dart';
 import '../services/metadata_search_service.dart';
 import '../services/mineru_extract_service.dart';
@@ -80,6 +81,7 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
     AgentHttp.instance.applyProxy(state.mode, state.host, state.port);
     BackupS3Service.instance.applyProxy(state.mode, state.host, state.port);
     IdentifierResolver.instance.applyProxy(state.mode, state.host, state.port);
+    PdfFetchService.instance.applyProxy(state.mode, state.host, state.port);
     DocExtractService.instance.applyProxy(state.mode, state.host, state.port);
     BatchExtractService.instance.applyProxy(state.mode, state.host, state.port);
     MinerUExtractService.instance.applyProxy(

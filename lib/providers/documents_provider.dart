@@ -20,6 +20,7 @@ import '../services/chinese_text_detector.dart';
 import '../services/document_metadata_checks.dart';
 import '../services/document_metadata_parser.dart';
 import '../services/document_structure.dart';
+import '../services/download/pdf_fetch_service.dart';
 import '../services/identifier_parser.dart';
 import '../services/identifier_resolver.dart';
 import '../services/layout_metadata_extractor.dart';
@@ -293,7 +294,6 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   }) async {
     final resolved = await IdentifierResolver.instance.resolve(
       identifier,
-      metadataOnly: true,
       cancelToken: cancelToken,
     );
 
@@ -314,7 +314,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     final pdfPath = DocPaths.pdf(doc.id);
     String downloadedPath = '';
     if (!DocumentMetadataChecks.isBlank(doc.doi)) {
-      downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
+      downloadedPath = await PdfFetchService.instance.fetchByDoi(
         doi: doc.doi!,
         year: doc.year,
         authors: doc.authors,
@@ -325,7 +325,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       );
     }
     if (downloadedPath.isEmpty && parsed.type == IdentifierType.pmid) {
-      downloadedPath = await IdentifierResolver.instance.downloadPdfByPmid(
+      downloadedPath = await PdfFetchService.instance.fetchByPmid(
         pmid: parsed.value,
         year: doc.year,
         authors: doc.authors,
@@ -658,7 +658,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     try {
       if (await tempFile.exists()) await tempFile.delete();
 
-      final downloadedPath = await IdentifierResolver.instance.downloadPdfByDoi(
+      final downloadedPath = await PdfFetchService.instance.fetchByDoi(
         doi: doc.doi!,
         year: doc.year,
         authors: doc.authors,
@@ -823,7 +823,6 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
         try {
           final resolved = await IdentifierResolver.instance.resolve(
             identifier!,
-            metadataOnly: true,
             cancelToken: cancelToken,
           );
           doc = _applyResolvedDocument(doc, resolved);

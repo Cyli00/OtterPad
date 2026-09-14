@@ -51,21 +51,41 @@ Future<DocExtractApiState?> showExtractProviderDialog({
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
-        final cs = Theme.of(context).colorScheme;
-        return AlertDialog(
-          backgroundColor: cs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          title: Text(context.l10n.textExtraction),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+        final theme = Theme.of(context);
+        final cs = theme.colorScheme;
+        // 视觉对齐 §3.1 Dialog 规范（titleLarge bold + fromLTRB(24,24,24,20) +
+        // 宽度 clamp），不用 Material AlertDialog（其默认 headlineSmall 标题与
+        // padding 不符，且在 surfaceContainerLow 上显得笨重）。
+        final width = (MediaQuery.of(context).size.width * 0.85).clamp(
+          320.0,
+          480.0,
+        );
+        return Material(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(28),
+          clipBehavior: Clip.antiAlias,
+          child: Container(
+            width: width,
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.l10n.extractProviderChoiceHelp),
-                const SizedBox(height: 16),
+                Text(
+                  context.l10n.textExtraction,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  context.l10n.extractProviderChoiceHelp,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   child: SegmentedButton<DocExtractProvider>(
@@ -78,9 +98,14 @@ Future<DocExtractApiState?> showExtractProviderDialog({
                     style: SegmentedButton.styleFrom(
                       backgroundColor: cs.surface,
                       selectedBackgroundColor: cs.primaryContainer,
+                      foregroundColor: cs.onSurfaceVariant,
+                      selectedForegroundColor: cs.onPrimaryContainer,
                       side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     onSelectionChanged: (value) {
@@ -89,22 +114,27 @@ Future<DocExtractApiState?> showExtractProviderDialog({
                     },
                   ),
                 ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(context.l10n.cancel),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () {
+                        Haptics.light();
+                        Navigator.pop(context, selected);
+                      },
+                      child: Text(context.l10n.confirm),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(context.l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () {
-                Haptics.light();
-                Navigator.pop(context, selected);
-              },
-              child: Text(context.l10n.confirm),
-            ),
-          ],
         );
       },
     ),

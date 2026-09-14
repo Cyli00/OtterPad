@@ -69,11 +69,7 @@ class DocExtractService {
   );
 
   void applyProxy(Enum mode, String host, int port) {
-    _dio.httpClientAdapter = buildProxyAdapter(
-      mode.name,
-      host,
-      port,
-    );
+    _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
   }
 
   Future<DocExtractResult> extract({
@@ -407,66 +403,6 @@ class DocExtractService {
       mdPath: processedMarkdown,
     });
     return (mdPath, processedMarkdown);
-  }
-
-  /// 规范化图片标签并将相对路径解析为 `file:///` 绝对路径。
-  static String resolveMarkdownImagePaths(String markdown, String imageDir) {
-    var processed = markdown;
-
-    processed = processed.replaceAllMapped(
-      RegExp(r'<div[^>]*>\s*<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>\s*</div>'),
-      (match) {
-        final src = match.group(1)!;
-        final altMatch = RegExp(r'alt="([^"]*)"').firstMatch(match.group(0)!);
-        final alt = altMatch?.group(1) ?? '';
-        return '![$alt]($src)';
-      },
-    );
-
-    processed = processed.replaceAllMapped(
-      RegExp(r'<div\s+style="text-align:\s*center;\s*">\s*(.+?)\s*</div>'),
-      (match) {
-        final content = match.group(1)!;
-        if (content.contains('<img')) return match.group(0)!;
-        return '*$content*';
-      },
-    );
-
-    processed = processed.replaceAllMapped(
-      RegExp(r'<img\s+[^>]*?src="([^"]+)"[^>]*/?\s*>'),
-      (match) {
-        final src = match.group(1)!;
-        final altMatch = RegExp(r'alt="([^"]*)"').firstMatch(match.group(0)!);
-        final alt = altMatch?.group(1) ?? '';
-        return '![$alt]($src)';
-      },
-    );
-
-    processed = MarkdownPreprocessor.process(processed);
-
-    processed = processed.replaceAllMapped(
-      RegExp(r'!\[([^\]]*)\]\(([^)]+)\)'),
-      (match) {
-        final alt = match.group(1)!;
-        final imgPath = match.group(2)!;
-
-        if (imgPath.startsWith('http://') ||
-            imgPath.startsWith('https://') ||
-            imgPath.startsWith('file:///')) {
-          return match.group(0)!;
-        }
-
-        final localFile = File(p.join(imageDir, imgPath));
-        if (localFile.existsSync()) {
-          final uri = Uri.file(localFile.path);
-          return '![$alt]($uri)';
-        }
-
-        return match.group(0)!;
-      },
-    );
-
-    return processed;
   }
 
   // ─── Figure 替换（移植自 PaddleApiTest/replace_md.py） ─────────────────

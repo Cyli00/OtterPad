@@ -8,8 +8,10 @@ import '../../data/models/book/reader_anchor.dart';
 import '../../utils/doc_paths.dart';
 import '../../utils/markdown_preprocessor.dart';
 import '../document_structure.dart';
+import '../figure_extract_service.dart';
 import '../markdown_paragraph_extractor.dart';
 import '../translation_skip_sections.dart';
+import 'reader_figure_captions.dart';
 
 String readerPlainText(String value) =>
     html
@@ -61,6 +63,7 @@ class ReaderParagraph {
   final LayoutBlock block;
   final List<double>? pageSize;
   final String text;
+  final String? translationText;
   final int? markdownStart;
   final int? markdownEnd;
   final List<List<double>> visualBboxes;
@@ -72,6 +75,7 @@ class ReaderParagraph {
     required this.block,
     required this.pageSize,
     required this.text,
+    this.translationText,
     this.markdownStart,
     this.markdownEnd,
     this.visualBboxes = const [],
@@ -82,7 +86,9 @@ class ReaderParagraph {
       ? block.textRegions
       : [LayoutTextRegion(pageIndex, block.blockBbox, plainText.length)];
 
-  late final String hash = MarkdownParagraphExtractor.computeHash(text);
+  late final String hash = MarkdownParagraphExtractor.computeHash(
+    translationText ?? text,
+  );
   late final String plainText = readerPlainText(text).trim();
   late final String revision = readerTextRevision(plainText);
   bool get isHeading => const {
@@ -91,14 +97,7 @@ class ReaderParagraph {
     'title',
     'section_title',
   }.contains(block.blockLabel);
-  bool get isCaption => const {
-    'figure_title',
-    'chart_title',
-    'table_title',
-    'image_caption',
-    'table_caption',
-    'chart_caption',
-  }.contains(block.blockLabel);
+  bool get isCaption => readerCaptionLabels.contains(block.blockLabel);
 
   TranslatableParagraph get translatable => TranslatableParagraph(
     offset: markdownStart ?? -1,
@@ -135,28 +134,37 @@ class ReaderDocumentIndex {
   final List<ReaderParagraph> paragraphs;
   final bool hasStructure;
   final List<StructurePage> pages;
+  final List<FigureManifestEntry> figures;
   const ReaderDocumentIndex(
     this.paragraphs, {
     this.hasStructure = true,
     this.pages = const [],
+    this.figures = const [],
   });
   static const empty = ReaderDocumentIndex([], hasStructure: false);
 
   static Future<ReaderDocumentIndex> load(
     String documentId,
     String markdown,
-  ) async =>
-      build(await DocumentStructure.load(DocPaths.json(documentId)), markdown);
+  ) async {
+    final figures = FigureExtractService.loadManifest(documentId);
+    final structure = await DocumentStructure.load(DocPaths.json(documentId));
+    return build(structure, markdown, figures: await figures ?? const []);
+  }
+
+  List<TranslatableParagraph> get figureParagraphs => [
+    for (final figure in figures.where((f) => f.isDisplayFigure))
+      TranslatableParagraph(
+        offset: -1,
+        length: 0,
+        text: figure.captionText.trim(),
+        hash: MarkdownParagraphExtractor.computeHash(figure.captionText),
+        kind: ParagraphKind.text,
+      ),
+  ];
 
   static bool canTranslate(LayoutBlock block, StructurePage page) {
-    const captions = {
-      'figure_title',
-      'chart_title',
-      'table_title',
-      'image_caption',
-      'table_caption',
-      'chart_caption',
-    };
+    const captions = readerCaptionLabels;
     const allowed = {
       'text',
       'paragraph',
@@ -195,21 +203,37 @@ class ReaderDocumentIndex {
               block.parentId == visual.blockId)) {
         return false;
       }
-      final a = block.blockBbox;
       final b = visual.blockBbox;
-      if (a.length != 4 || b.length != 4) continue;
-      final w = (a[2].clamp(b[0], b[2]) - a[0].clamp(b[0], b[2]));
-      final h = (a[3].clamp(b[1], b[3]) - a[1].clamp(b[1], b[3]));
-      if (w * h > 0) return false;
+      if (b.length != 4) continue;
+      final boxes = block.textRegions.isEmpty
+          ? [block.blockBbox]
+          : block.textRegions
+                .where((r) => r.pageIndex == page.pageIndex)
+                .map((r) => r.bbox);
+      // 合并段落的总外框可能跨过图表，只检查当前页实际占用的文字区域。
+      for (final a in boxes) {
+        if (a.length != 4) continue;
+        final w = a[2].clamp(b[0], b[2]) - a[0].clamp(b[0], b[2]);
+        final h = a[3].clamp(b[1], b[3]) - a[1].clamp(b[1], b[3]);
+        if (w * h > 0) return false;
+      }
     }
     return block.blockContent.trim().isNotEmpty;
   }
 
   static ReaderDocumentIndex build(
     DocumentStructure structure,
-    String markdown,
-  ) {
-    if (structure.isEmpty) return empty;
+    String markdown, {
+    List<FigureManifestEntry> figures = const [],
+  }) {
+    if (structure.isEmpty) {
+      return ReaderDocumentIndex(
+        const [],
+        hasStructure: false,
+        figures: figures,
+      );
+    }
+    structure = readerFigureCaptionStructure(structure, figures);
     final raw = _ComparableText(markdown);
     final markdownParagraphs = MarkdownParagraphExtractor.extract(markdown);
     final eligible =
@@ -292,6 +316,9 @@ class ReaderDocumentIndex {
               .toList(),
           block: entry.block,
           pageSize: entry.page.pageSize,
+          translationText: readerCaptionLabels.contains(entry.block.blockLabel)
+              ? entry.block.blockContent.trim()
+              : null,
           text: start == null
               ? entry.block.blockContent.trim()
               : markdown.substring(start, end!),
@@ -300,7 +327,11 @@ class ReaderDocumentIndex {
         ),
       );
     }
-    return ReaderDocumentIndex(result, pages: structure.pages);
+    return ReaderDocumentIndex(
+      result,
+      pages: structure.pages,
+      figures: figures,
+    );
   }
 
   List<ReaderParagraph> translationParagraphs(
@@ -330,22 +361,35 @@ class ReaderDocumentIndex {
     return null;
   }
 
-  List<Map<String, dynamic>> bridgeEntries(
-    Map<String, String> translations,
-    String language,
-  ) => [
-    for (final p in paragraphs)
-      {
-        'id': p.id,
-        'source': p.plainText,
-        'sourceRevision': p.revision,
-        'translated': readerTranslatedText(translations[p.hash] ?? ''),
-        'language': language,
-        'translatedRevision': readerTextRevision(
-          readerTranslatedText(translations[p.hash] ?? ''),
-        ),
-      },
-  ];
+  ReaderParagraph? paragraphForQuote(
+    String quote, {
+    ReaderAnchor? anchor,
+    Map<String, String> translations = const {},
+  }) {
+    for (final range in anchor?.ranges ?? <ReaderAnchorRange>[]) {
+      final paragraph = byId(range.paragraphId);
+      if (paragraph == null) continue;
+      final text = range.language == 'source'
+          ? paragraph.plainText
+          : readerTranslatedText(translations[paragraph.hash] ?? '');
+      if (text.isEmpty && range.language != 'source' ||
+          range.resolve(text, readerTextRevision(text)) != null) {
+        return paragraph;
+      }
+    }
+    String comparable(String value) =>
+        readerPlainText(value).replaceAll(RegExp(r'[\s\u00ad\u200b]+'), '');
+    final key = comparable(quote);
+    if (key.isEmpty) return null;
+    final matches = paragraphs
+        .where(
+          (paragraph) =>
+              comparable(paragraph.plainText).contains(key) ||
+              comparable(translations[paragraph.hash] ?? '').contains(key),
+        )
+        .toList();
+    return matches.length == 1 ? matches.single : null;
+  }
 }
 
 class _ComparableText {

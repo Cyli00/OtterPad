@@ -1,12 +1,8 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'proxy_adapter.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
 
-import '../core/storage/storage.dart';
 import '../data/models/book/document.dart';
 import 'identifier_parser.dart';
 import 'metadata_names.dart';
@@ -62,12 +58,8 @@ class IdentifierResolver {
 
   /// 解析标识符字符串，返回填充了元数据的 Document。
   ///
-  /// [metadataOnly] 为 true 时仅获取元数据，不尝试下载 PDF。
-  Future<Document> resolve(
-    String rawInput, {
-    bool metadataOnly = false,
-    CancelToken? cancelToken,
-  }) async {
+  /// 只负责元数据；PDF 获取见 [PdfFetchService]。
+  Future<Document> resolve(String rawInput, {CancelToken? cancelToken}) async {
     final parsed = IdentifierParser.parse(rawInput);
 
     switch (parsed.type) {
@@ -83,29 +75,13 @@ class IdentifierResolver {
           if (arxivId == null) {
             throw const IdentifierResolveException('未找到该标识符对应的文献');
           }
-          return _resolveArxiv(
-            arxivId,
-            metadataOnly: metadataOnly,
-            cancelToken: cancelToken,
-          );
+          return _resolveArxiv(arxivId, cancelToken: cancelToken);
         }
-        return _resolveDoi(
-          parsed.value,
-          metadataOnly: metadataOnly,
-          cancelToken: cancelToken,
-        );
+        return _resolveDoi(parsed.value, cancelToken: cancelToken);
       case IdentifierType.pmid:
-        return _resolvePmid(
-          parsed.value,
-          metadataOnly: metadataOnly,
-          cancelToken: cancelToken,
-        );
+        return _resolvePmid(parsed.value, cancelToken: cancelToken);
       case IdentifierType.arxiv:
-        return _resolveArxiv(
-          parsed.value,
-          metadataOnly: metadataOnly,
-          cancelToken: cancelToken,
-        );
+        return _resolveArxiv(parsed.value, cancelToken: cancelToken);
       case IdentifierType.isbn:
         return _resolveIsbn(parsed.value, cancelToken: cancelToken);
       case IdentifierType.unknown:
@@ -117,7 +93,6 @@ class IdentifierResolver {
 
   Future<Document> _resolveDoi(
     String doi, {
-    bool metadataOnly = false,
     CancelToken? cancelToken,
   }) async {
     final normalizedDoiForMetadata = normalizeElifeDoiForMetadata(doi);
@@ -127,7 +102,6 @@ class IdentifierResolver {
         return await _resolveElifeArticle(
           articleId: elifeArticleId,
           doi: normalizedDoiForMetadata,
-          metadataOnly: metadataOnly,
           cancelToken: cancelToken,
         );
       } catch (e) {
@@ -152,49 +126,6 @@ class IdentifierResolver {
       final resolvedDoi = (msg['DOI'] as String? ?? normalizedDoiForMetadata)
           .toLowerCase();
 
-      String filePath = '';
-      if (!metadataOnly) {
-        try {
-          filePath = await _tryPublisherPdf(
-            doi: resolvedDoi,
-            year: year,
-            authors: authors,
-            title: title,
-            fallbackId: normalizedDoiForMetadata.replaceAll('/', '_'),
-            cancelToken: cancelToken,
-          );
-        } catch (e) {
-          log.d('出版商 PDF 下载失败: $e');
-        }
-
-        if (filePath.isEmpty) {
-          try {
-            final unpaywallResponse = await _dio.get(
-              'https://api.unpaywall.org/v2/${_encodeDoiPathSegment(normalizedDoiForMetadata)}',
-              queryParameters: {'email': 'dev@otterpad.app'},
-              cancelToken: cancelToken,
-            );
-            final bestOa =
-                (unpaywallResponse.data
-                    as Map<String, dynamic>)['best_oa_location'];
-            final pdfUrl =
-                (bestOa as Map<String, dynamic>?)?['url_for_pdf'] as String?;
-            if (pdfUrl != null && pdfUrl.isNotEmpty) {
-              filePath = await _downloadPdf(
-                url: pdfUrl,
-                year: year,
-                authors: authors,
-                title: title,
-                fallbackId: normalizedDoiForMetadata.replaceAll('/', '_'),
-                cancelToken: cancelToken,
-              );
-            }
-          } catch (e) {
-            log.d('Unpaywall PDF 下载失败: $e');
-          }
-        }
-      }
-
       return Document(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
@@ -215,7 +146,6 @@ class IdentifierResolver {
   Future<Document> _resolveElifeArticle({
     required String articleId,
     required String doi,
-    bool metadataOnly = false,
     CancelToken? cancelToken,
   }) async {
     final resp = await _dio.get(
@@ -233,24 +163,6 @@ class IdentifierResolver {
         doi.toLowerCase();
     final keywords = _extractElifeKeywords(data['keywords'], data['subjects']);
 
-    if (!metadataOnly) {
-      final pdfUrl = data['pdf'] as String?;
-      if (pdfUrl != null && pdfUrl.isNotEmpty) {
-        try {
-          await _downloadPdf(
-            url: pdfUrl,
-            year: year,
-            authors: authors,
-            title: resolvedTitle,
-            fallbackId: articleId,
-            cancelToken: cancelToken,
-          );
-        } catch (e) {
-          log.d('eLife PDF 下载失败: $e');
-        }
-      }
-    }
-
     return Document(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: resolvedTitle,
@@ -265,7 +177,6 @@ class IdentifierResolver {
 
   Future<Document> _resolvePmid(
     String pmid, {
-    bool metadataOnly = false,
     CancelToken? cancelToken,
   }) async {
     try {
@@ -363,9 +274,8 @@ class IdentifierResolver {
         year = _extractYearFromString(medlineDate);
       }
 
-      // DOI + PMCID 在 PubmedData/ArticleIdList 下
+      // DOI 在 PubmedData/ArticleIdList 下
       String? doi;
-      String? pmcid;
       final articleIds = articleNode
           .findElements('PubmedData')
           .firstOrNull
@@ -373,11 +283,9 @@ class IdentifierResolver {
           .firstOrNull;
       if (articleIds != null) {
         for (final aid in articleIds.findElements('ArticleId')) {
-          final idType = aid.getAttribute('IdType');
+          if (aid.getAttribute('IdType') != 'doi') continue;
           final value = aid.innerText.trim();
-          if (value.isEmpty) continue;
-          if (idType == 'doi') doi = value;
-          if (idType == 'pmc') pmcid = value;
+          if (value.isNotEmpty) doi = value;
         }
       }
       final normalizedDoi = doi?.toLowerCase();
@@ -409,68 +317,6 @@ class IdentifierResolver {
         }
       }
 
-      String filePath = '';
-      if (!metadataOnly) {
-        if (normalizedDoi != null && normalizedDoi.isNotEmpty) {
-          try {
-            filePath = await _tryPublisherPdf(
-              doi: normalizedDoi,
-              year: year,
-              authors: authors,
-              title: title,
-              fallbackId: pmid,
-              cancelToken: cancelToken,
-            );
-          } catch (e) {
-            log.d('出版商 PDF 下载失败: $e');
-          }
-        }
-
-        if (filePath.isEmpty && pmcid != null && pmcid.isNotEmpty) {
-          try {
-            filePath = await _downloadPdf(
-              url: _pmcPdfUrl(pmcid),
-              year: year,
-              authors: authors,
-              title: title,
-              fallbackId: pmid,
-              cancelToken: cancelToken,
-            );
-          } catch (e) {
-            log.d('PMC PDF 下载失败: $e');
-          }
-        }
-
-        if (filePath.isEmpty &&
-            normalizedDoi != null &&
-            normalizedDoi.isNotEmpty) {
-          try {
-            final unpaywallResponse = await _dio.get(
-              'https://api.unpaywall.org/v2/${_encodeDoiPathSegment(normalizedDoi)}',
-              queryParameters: {'email': 'dev@otterpad.app'},
-              cancelToken: cancelToken,
-            );
-            final bestOa =
-                (unpaywallResponse.data
-                    as Map<String, dynamic>)['best_oa_location'];
-            final pdfUrl =
-                (bestOa as Map<String, dynamic>?)?['url_for_pdf'] as String?;
-            if (pdfUrl != null && pdfUrl.isNotEmpty) {
-              filePath = await _downloadPdf(
-                url: pdfUrl,
-                year: year,
-                authors: authors,
-                title: title,
-                fallbackId: pmid,
-                cancelToken: cancelToken,
-              );
-            }
-          } catch (e) {
-            log.d('Unpaywall PDF 下载失败: $e');
-          }
-        }
-      }
-
       return Document(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
@@ -493,7 +339,6 @@ class IdentifierResolver {
 
   Future<Document> _resolveArxiv(
     String arxivId, {
-    bool metadataOnly = false,
     CancelToken? cancelToken,
   }) async {
     try {
@@ -549,21 +394,6 @@ class IdentifierResolver {
               .trim()
               .toLowerCase() ??
           arxivCanonicalDoi(arxivId);
-
-      if (!metadataOnly) {
-        try {
-          await _downloadPdf(
-            url: 'https://arxiv.org/pdf/$arxivId.pdf',
-            year: year,
-            authors: authors,
-            title: title,
-            fallbackId: arxivId.replaceAll('/', '_'),
-            cancelToken: cancelToken,
-          );
-        } catch (e) {
-          log.d('arXiv PDF 下载失败: $e');
-        }
-      }
 
       return Document(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -636,306 +466,6 @@ class IdentifierResolver {
     }
   }
 
-  // ─── 根据 DOI 下载 PDF ────────────────────────────────────────────────────
-
-  Future<String> downloadPdfByDoi({
-    required String doi,
-    String? year,
-    List<String> authors = const [],
-    required String title,
-    required String fallbackId,
-    String? targetPath,
-    CancelToken? cancelToken,
-  }) async {
-    String filePath = '';
-
-    // 步骤 1: 出版商直接获取（DOI 重定向 + URL 模式）
-    try {
-      filePath = await _tryPublisherPdf(
-        doi: doi,
-        year: year,
-        authors: authors,
-        title: title,
-        fallbackId: fallbackId,
-        targetPath: targetPath,
-        cancelToken: cancelToken,
-      );
-    } catch (e) {
-      if (e is DioException && CancelToken.isCancel(e)) rethrow;
-      log.d('出版商 PDF 下载失败: $e');
-    }
-    if (filePath.isNotEmpty) return filePath;
-
-    // 步骤 2: Unpaywall 开放获取
-    try {
-      final uResp = await _dio.get(
-        'https://api.unpaywall.org/v2/${_encodeDoiPathSegment(doi)}',
-        queryParameters: {'email': 'dev@otterpad.app'},
-        cancelToken: cancelToken,
-      );
-      final bestOa = (uResp.data as Map<String, dynamic>)['best_oa_location'];
-      final pdfUrl =
-          (bestOa as Map<String, dynamic>?)?['url_for_pdf'] as String?;
-      if (pdfUrl != null && pdfUrl.isNotEmpty) {
-        filePath = await _downloadPdf(
-          url: pdfUrl,
-          year: year,
-          authors: authors,
-          title: title,
-          fallbackId: fallbackId,
-          targetPath: targetPath,
-          cancelToken: cancelToken,
-        );
-      }
-    } catch (e) {
-      if (e is DioException && CancelToken.isCancel(e)) rethrow;
-      log.d('Unpaywall PDF 下载失败: $e');
-    }
-    if (filePath.isNotEmpty) return filePath;
-
-    // 步骤 3: Sci-Hub 兜底
-    try {
-      final sResp = await _dio.get(
-        'https://sci-hub.se/${_encodeDoiPathSegment(doi)}',
-        cancelToken: cancelToken,
-      );
-      final html = sResp.data as String;
-      // 提取 <embed src="..."> 或 <iframe src="...">
-      final embedMatch =
-          RegExp(
-            r'<embed[^>]+src="([^"]+)"',
-            caseSensitive: false,
-          ).firstMatch(html) ??
-          RegExp(
-            r'<iframe[^>]+src="([^"]+)"',
-            caseSensitive: false,
-          ).firstMatch(html);
-
-      if (embedMatch != null) {
-        var pdfUrl = embedMatch.group(1)!;
-        if (pdfUrl.startsWith('//')) {
-          pdfUrl = 'https:$pdfUrl';
-        } else if (pdfUrl.startsWith('/')) {
-          pdfUrl = 'https://sci-hub.se$pdfUrl';
-        }
-        filePath = await _downloadPdf(
-          url: pdfUrl,
-          year: year,
-          authors: authors,
-          title: title,
-          fallbackId: fallbackId,
-          targetPath: targetPath,
-          cancelToken: cancelToken,
-        );
-      }
-    } catch (e) {
-      if (e is DioException && CancelToken.isCancel(e)) rethrow;
-      log.d('Sci-Hub PDF 下载失败: $e');
-    }
-
-    return filePath;
-  }
-
-  // ─── 根据 PMID 下载 PDF（PMC 开放获取兜底） ───────────────────────────────
-
-  /// Europe PMC PDF 直出端点。旧端点 backend/ptpmcrender.fcgi 已失效（520）。
-  static String _pmcPdfUrl(String pmcid) =>
-      'https://europepmc.org/articles/$pmcid?pdf=render';
-
-  /// PMID 输入的 PDF 兑底：esummary 取 PMCID → Europe PMC 直出；任一步失败返回空。
-  Future<String> downloadPdfByPmid({
-    required String pmid,
-    String? year,
-    List<String> authors = const [],
-    required String title,
-    required String fallbackId,
-    String? targetPath,
-    CancelToken? cancelToken,
-  }) async {
-    try {
-      final resp = await _dio.get(
-        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi',
-        queryParameters: {'db': 'pubmed', 'id': pmid, 'retmode': 'json'},
-        cancelToken: cancelToken,
-      );
-      final result = (resp.data as Map<String, dynamic>)['result'];
-      final article = (result as Map<String, dynamic>?)?[pmid];
-      final ids = (article as Map<String, dynamic>?)?['articleids'];
-      String? pmcid;
-      if (ids is List) {
-        for (final id in ids) {
-          final map = id as Map<String, dynamic>;
-          if (map['idtype'] == 'pmc') {
-            final value = map['value'] as String?;
-            if (value != null && value.isNotEmpty) {
-              pmcid = value;
-              break;
-            }
-          }
-        }
-      }
-      if (pmcid == null) return '';
-      return await _downloadPdf(
-        url: _pmcPdfUrl(pmcid),
-        year: year,
-        authors: authors,
-        title: title,
-        fallbackId: fallbackId,
-        targetPath: targetPath,
-        cancelToken: cancelToken,
-      );
-    } catch (e) {
-      if (e is DioException && CancelToken.isCancel(e)) rethrow;
-      log.d('PMC PDF 下载失败: $e');
-      return '';
-    }
-  }
-  // ─── 出版商直接获取 PDF ───────────────────────────────────────────────────
-
-  /// 优先通过 HEAD doi.org 重定向判断出版商，再构造 PDF 直链 / 出版商 URL 模式下载。
-  ///
-  /// 先通过 HEAD 请求 DOI 重定向，判断 content-type 及出版商 URL 再构造 PDF 链接。
-  Future<String> _tryPublisherPdf({
-    required String doi,
-    String? year,
-    List<String> authors = const [],
-    required String title,
-    required String fallbackId,
-    String? targetPath,
-    CancelToken? cancelToken,
-  }) async {
-    Uri? publisherUri;
-    try {
-      final resp = await _dio.head(
-        _doiUrl(doi),
-        options: Options(
-          followRedirects: true,
-          maxRedirects: 10,
-          validateStatus: (s) => s != null && s >= 200 && s < 400,
-        ),
-        cancelToken: cancelToken,
-      );
-      publisherUri = resp.realUri;
-
-      // 出版商直接返回 PDF（如预印本服务器）
-      if (_isPdfContentType(resp.headers)) {
-        return await _downloadPdf(
-          url: publisherUri.toString(),
-          year: year,
-          authors: authors,
-          title: title,
-          fallbackId: fallbackId,
-          targetPath: targetPath,
-          cancelToken: cancelToken,
-        );
-      }
-    } catch (e) {
-      if (e is DioException && CancelToken.isCancel(e)) rethrow;
-      log.d('DOI 重定向失败: $e');
-    }
-
-    // 根据出版商域名构造 PDF 直链
-    if (publisherUri != null) {
-      final pdfUrl = buildPublisherPdfUrl(publisherUri, doi);
-      if (pdfUrl != null) {
-        try {
-          final path = await _downloadPdf(
-            url: pdfUrl,
-            year: year,
-            authors: authors,
-            title: title,
-            fallbackId: fallbackId,
-            targetPath: targetPath,
-            cancelToken: cancelToken,
-          );
-          if (path.isNotEmpty) return path;
-        } catch (e) {
-          if (e is DioException && CancelToken.isCancel(e)) rethrow;
-          log.d('出版商 URL 模式下载失败: $e');
-        }
-      }
-    }
-
-    return '';
-  }
-
-  /// 根据出版商域名构造 PDF 直链，不支持则返回 null。
-  @visibleForTesting
-  static String? buildPublisherPdfUrl(Uri publisherUri, String doi) {
-    final host = publisherUri.host.toLowerCase();
-
-    // arXiv：/abs/{id} → /pdf/{id}。Unpaywall 未索引规范 DOI（10.48550/arxiv.*），
-    // 必须出版商直达。
-    if (host.contains('arxiv.org')) {
-      final match = RegExp(r'^/abs/(.+)$').firstMatch(publisherUri.path);
-      if (match != null) return 'https://arxiv.org/pdf/${match.group(1)}';
-      return null;
-    }
-
-    // bioRxiv / medRxiv：realUri 为 /content/{doi}vN 页面，附 .full.pdf 后缀
-    // 即为 PDF。直连可减少对 Unpaywall 的依赖，并降低触发 Cloudflare 限流的
-    // 请求次数。
-    if (host.contains('biorxiv.org') || host.contains('medrxiv.org')) {
-      final path = publisherUri.path.replaceFirst(RegExp(r'/$'), '');
-      if (path.startsWith('/content/10.1101/')) {
-        return 'https://$host$path.full.pdf';
-      }
-      return null;
-    }
-
-    // Springer
-    if (host.contains('link.springer.com')) {
-      return 'https://link.springer.com/content/pdf/$doi.pdf';
-    }
-
-    // Nature
-    if (host.contains('nature.com')) {
-      final seg = publisherUri.pathSegments;
-      if (seg.length >= 2 && seg[seg.length - 2] == 'articles') {
-        return 'https://www.nature.com/articles/${seg.last}.pdf';
-      }
-    }
-
-    // Wiley
-    if (host.contains('onlinelibrary.wiley.com')) {
-      return 'https://onlinelibrary.wiley.com/doi/pdfdirect/$doi?download=true';
-    }
-
-    // Elsevier / ScienceDirect
-    if (host.contains('sciencedirect.com') ||
-        host.contains('linkinghub.elsevier.com')) {
-      final base = publisherUri.toString().split('?').first;
-      return '$base/pdfft?download=true';
-    }
-
-    // ACS
-    if (host.contains('pubs.acs.org')) {
-      return 'https://pubs.acs.org/doi/pdf/$doi';
-    }
-
-    // Taylor & Francis
-    if (host.contains('tandfonline.com')) {
-      return 'https://www.tandfonline.com/doi/pdf/$doi';
-    }
-
-    // RSC
-    if (host.contains('pubs.rsc.org')) {
-      final path = publisherUri.path;
-      if (path.contains('articlelanding')) {
-        final pdfPath = path.replaceFirst('articlelanding', 'articlepdf');
-        return 'https://pubs.rsc.org$pdfPath';
-      }
-    }
-
-    // MDPI
-    if (host.contains('mdpi.com')) {
-      final base = publisherUri.toString().split('?').first;
-      return base.endsWith('/') ? '${base}pdf' : '$base/pdf';
-    }
-
-    return null;
-  }
-
   // ─── arXiv 规范 DOI ─────────────────────────────────────────────────────
 
   /// 判断是否为 arXiv 规范 DataCite DOI（10.48550/arxiv.*）。
@@ -987,90 +517,12 @@ class IdentifierResolver {
     }
   }
 
-  bool _isPdfContentType(Headers headers) {
-    final ct = headers.value('content-type');
-    return ct != null && ct.contains('application/pdf');
-  }
-
   String _doiUrl(String doi) {
     return 'https://doi.org/${_encodeDoiPathSegment(doi)}';
   }
 
   String _encodeDoiPathSegment(String doi) {
     return Uri.encodeComponent(doi);
-  }
-
-  // ─── PDF 下载 ─────────────────────────────────────────────────────────────
-
-  /// 下载 PDF 到文档目录，校验 %PDF 魔数后返回文件路径，校验失败则删除文件并返回空字符串。
-  Future<String> _downloadPdf({
-    required String url,
-    String? year,
-    List<String> authors = const [],
-    required String title,
-    required String fallbackId,
-    String? targetPath,
-    CancelToken? cancelToken,
-  }) async {
-    final pdfPath =
-        targetPath ??
-        p.join(
-          GStorage.libraryDirPath,
-          buildPdfFileName(
-            year: year,
-            authors: authors,
-            title: title,
-            fallbackId: fallbackId,
-          ),
-        );
-
-    if (await File(pdfPath).exists()) return pdfPath;
-    await Directory(p.dirname(pdfPath)).create(recursive: true);
-
-    await _dio.download(url, pdfPath, cancelToken: cancelToken);
-
-    // 校验 PDF 魔数（%PDF），非法文件直接删除
-    final file = File(pdfPath);
-    final raf = await file.open();
-    final header = await raf.read(4);
-    await raf.close();
-    if (header.length < 4 || String.fromCharCodes(header) != '%PDF') {
-      await file.delete();
-      return '';
-    }
-
-    return pdfPath;
-  }
-
-  // ─── 文件名生成 ───────────────────────────────────────────────────────────
-
-  /// 根据年份、作者、标题生成规范 PDF 文件名：year-mainAuthor-title.pdf
-  static String buildPdfFileName({
-    String? year,
-    List<String> authors = const [],
-    required String title,
-    required String fallbackId,
-  }) {
-    final parts = <String>[];
-
-    if (year != null && year.isNotEmpty) parts.add(year);
-
-    if (authors.isNotEmpty) {
-      final first = authors.first.trim();
-      final spaceIdx = first.lastIndexOf(' ');
-      final lastName = spaceIdx > 0 ? first.substring(spaceIdx + 1) : first;
-      parts.add(lastName);
-    }
-
-    parts.add(title.length > 80 ? title.substring(0, 80).trim() : title);
-
-    final raw = parts.join('-');
-    final sanitized = raw
-        .replaceAll(RegExp(r'[<>:"/\\|?*]'), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-
-    return '${sanitized.isEmpty ? fallbackId : sanitized}.pdf';
   }
 
   // ─── 元数据提取工具 ───────────────────────────────────────────────────────
