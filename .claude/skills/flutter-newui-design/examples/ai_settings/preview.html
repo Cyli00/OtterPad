@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OtterPad · {{TITLE}} · 双端预览</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f2f0ec;color:#1f1e1b;font:14px/1.6 system-ui,sans-serif}header,main{max-width:1760px;margin:auto;padding:22px 28px}header{display:flex;gap:18px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #d9d5cd}.brand{font-weight:650;letter-spacing:.12em}nav{display:flex;gap:8px;flex-wrap:wrap}a{color:inherit;text-underline-offset:4px}nav a{padding:7px 14px;text-decoration:none;border-radius:8px}nav a[aria-current=page]{background:#dfdbd4}h1{font:600 28px/1.3 Georgia,serif;margin:0 0 8px}.intro{margin-bottom:24px;color:#66635b}.previews{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:24px;align-items:start}.device{min-width:0}.device-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:13px;color:#66635b}.stage{overflow:hidden;border:1px solid #d9d5cd;border-radius:16px;background:#f9f8f5;position:relative}.stage iframe{border:0;display:block;transform-origin:top left;height:960px}.mobile{max-width:390px}.mobile iframe{height:844px}.note{margin:22px 0;color:#66635b;font-size:12px}@media(max-width:1100px){.previews{grid-template-columns:1fr}.mobile{width:min(100%,390px)}}@media(max-width:600px){header,main{padding:18px 16px}h1{font-size:24px}}
+</style>
+<header><span class="brand">OTTERPAD / UI LAB</span><nav aria-label="预览页面"><a href="demo.html" data-page="ai">AI 设置</a><a href="demo-backup_setting.html" data-page="backup">数据管理</a><a href="demo-default_widget.html" data-page="widgets">基础组件</a></nav></header>
+<main>
+  <h1>{{TITLE}}</h1>
+  <p class="intro">桌面与移动端同时展示 · 两侧可独立滚动、打开弹窗和操作控件</p>
+  <div class="previews">
+    <section class="device"><div class="device-head"><span>桌面 / Desktop · 1100 × 960</span><a href="index.html?page={{PAGE}}&device=desktop" target="_blank" rel="noopener">独立打开 ↗</a></div><div class="stage" data-width="1100" data-height="960"><iframe title="桌面预览" width="1100" src="index.html?page={{PAGE}}&device=desktop"></iframe></div></section>
+    <section class="device mobile"><div class="device-head"><span>移动端 / Mobile · 390 × 844</span><a href="index.html?page={{PAGE}}&device=mobile" target="_blank" rel="noopener">独立打开 ↗</a></div><div class="stage" data-width="390" data-height="844"><iframe title="移动端预览" width="390" src="index.html?page={{PAGE}}&device=mobile"></iframe></div></section>
+  </div>
+  <p class="note">真实 Dart / Flutter Web 组件。演示数据只存在于各自预览中；不连接服务商、不访问数据库或本机文献。每侧顶部工具可切换主题、语言、文字大小与减少动态效果。预览栏不属于产品导航。</p>
+</main>
+<script>
+if(location.protocol==='file:')location.replace('http://127.0.0.1:8123/'+location.pathname.split('/').pop());
+document.querySelector('[data-page="{{PAGE}}"]').setAttribute('aria-current','page');
+const observer=new ResizeObserver(entries=>{for(const {target} of entries){const scale=Math.min(1,(target.clientWidth)/Number(target.dataset.width));target.querySelector('iframe').style.transform=`scale(${scale})`;target.style.height=`${Number(target.dataset.height)*scale+2}px`;}});
+document.querySelectorAll('.stage').forEach(stage=>observer.observe(stage));
+</script>
+</html>

@@ -1,0 +1,20 @@
+name: newui_ai_demo
+description: OtterPad 新 UI 的独立 AI 设置组件示例。
+publish_to: none
+version: 1.0.0+1
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  # 2026-09-14 核对 pub.dev 稳定版；intl 版本由 flutter_localizations 固定。
+  intl: any
+  material_symbols_icons: 4.2960.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  generate: true
+  uses-material-design: true

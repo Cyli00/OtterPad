@@ -1,0 +1,370 @@
+{
+  "@@locale": "en",
+  "aiSettings": "AI settings",
+  "subtitle": "Configure model connections, translation preferences, and summary images.",
+  "demoNote": "Interactive preview · Changes stay on this page",
+  "darkMode": "Toggle light and dark",
+  "language": "Switch language",
+  "fontScale": "Adjust text size",
+  "reduceMotion": "Reduce motion",
+  "modelApi": "Model connections",
+  "modelApiHelp": "Connect a provider for reading, translation and images.",
+  "provider": "Provider",
+  "providerHint": "Choose the service that hosts your models.",
+  "apiKey": "API key",
+  "keyHint": "No real key is needed. Input stays in this preview.",
+  "keyPlaceholder": "Enter a demo key",
+  "showKey": "Show API key",
+  "hideKey": "Hide API key",
+  "endpoint": "API address",
+  "endpointHint": "Enter the base address for the API.",
+  "endpointError": "Enter a valid HTTPS address.",
+  "models": "Models",
+  "modelHint": "Choose a model and inspect its capabilities. Fetch models loads a local demo catalog without contacting a provider.",
+  "vision": "Vision",
+  "tools": "Tools",
+  "reasoning": "Reasoning",
+  "roles": "Global model roles",
+  "expert": "Expert model",
+  "expertHint": "For careful reasoning, complex analysis and detailed answers.",
+  "fast": "Fast model",
+  "fastHint": "For everyday questions and quick responses.",
+  "imageModel": "Image model",
+  "imageModelHint": "For creating illustrated paper summaries.",
+  "search": "Web search",
+  "searchHint": "Give the reading assistant access to web sources.",
+  "searchKey": "Search API key",
+  "clear": "Not assigned",
+  "translation": "Translation",
+  "translationHelp": "Choose how translations read and appear.",
+  "targetLanguage": "Target language",
+  "simplifiedChinese": "Chinese (Simplified)",
+  "english": "English",
+  "japanese": "Japanese",
+  "korean": "Korean",
+  "french": "French",
+  "german": "German",
+  "styles": "Translation style",
+  "styleHint": "Choose one translation style at a time.",
+  "normal": "Default",
+  "accent": "Accent",
+  "bold": "Bold",
+  "italic": "Italic",
+  "muted": "Muted",
+  "underline": "Dashed underline",
+  "background": "Background",
+  "blur": "Blur",
+  "quote": "Quote",
+  "ignore": "Exclude from translation",
+  "references": "References",
+  "acknowledgments": "Acknowledgments",
+  "contributions": "Contributions / competing interests",
+  "funding": "Funding / data statements",
+  "supplement": "Appendices / supplements",
+  "ethics": "Ethics / figure captions",
+  "ignoreHint": "Selected sections are excluded from translation.",
+  "temperature": "Temperature",
+  "temperatureHelp": "Steps of 0.05. Lower values are steadier; higher values allow more variation.",
+  "resetTemperature": "Reset temperature",
+  "systemPrompt": "System prompt",
+  "userPrompt": "User prompt",
+  "promptHint": "Keep template variables intact while editing the instructions.",
+  "promptError": "Keep both text and targetLanguage variables. This draft is not active.",
+  "resetPrompt": "Restore the default prompt",
+  "imageSettings": "Image generation",
+  "imageHelp": "Choose the proportions, quality and references for summary images.",
+  "aspectRatio": "Aspect ratio",
+  "aspectHint": "Choose the proportions of the generated image.",
+  "quality": "Image quality",
+  "auto": "Automatic",
+  "standard": "Standard",
+  "high": "High",
+  "referenceImages": "Reference images",
+  "referenceImagesHelp": "Use 1–10 paper figures as references. The default is 10.",
+  "resetReferences": "Reset reference image count",
+  "imagePrompt": "Summary image prompt",
+  "imagePromptHint": "Describe the focus, structure and style of the image.",
+  "fetchModels": "Fetch models",
+  "retryModels": "Retry fetch",
+  "fetchingModels": "Loading demo models…",
+  "modelsFetched": "Fetched {count} demo models",
+  "modelsDemoHint": "Local demo catalog · No network request",
+  "fetchModelsError": "Could not fetch models. Correct the API endpoint, then retry.",
+  "@modelsFetched": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "account": "Account",
+  "address": "Address",
+  "author": "Author",
+  "autoBackup": "Auto Backup",
+  "autoBackupDaily": "Daily",
+  "autoBackupHint": "Backs up to the remote in the background when due, only if content has changed",
+  "autoBackupOff": "Off",
+  "autoBackupWeekly": "Weekly",
+  "backupMethod": "Backup Method",
+  "backupScopeData": "Data only",
+  "backupScopeDataDesc": "Settings, metadata, highlights, translations and chats; excludes PDFs and extracted files",
+  "backupScopeFull": "Full backup",
+  "backupScopeFullDesc": "Includes PDFs and extracted files; archive can be large",
+  "backupScopeTitle": "Backup Scope",
+  "backupTo": "Backup to {target}",
+  "@backupTo": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "cancel": "Cancel",
+  "clearField": "Clear",
+  "close": "Close",
+  "configure": "Configure",
+  "dataManagement": "Data Management",
+  "delete": "Delete",
+  "downloadAndRestore": "Download from {target} and restore",
+  "@downloadAndRestore": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "edit": "Edit",
+  "editFavorite": "Edit Favorite",
+  "enterFavoriteName": "Enter a name",
+  "exportBackup": "Export Backup",
+  "favoriteName": "Favorite name",
+  "fullResync": "Full Resync",
+  "generateZipAndSave": "Generate zip backup and save locally",
+  "getToken": "Get Token",
+  "journal": "Journal",
+  "localBackup": "Local Backup",
+  "objectPath": "Object Path",
+  "password": "Password",
+  "pleaseConfigureFirst": "Please configure {target} connection first",
+  "@pleaseConfigureFirst": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "pleaseFillApiKey": "Please fill in API Key first",
+  "region": "Region",
+  "reimport": "Re-import",
+  "remoteBackup": "Remote Backup",
+  "remoteNotConfigured": "{target} remote backup not configured",
+  "@remoteNotConfigured": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "resetZoteroConfirm": "This will clear local Zotero import records and re-pull from library: deleted entries will reappear, existing ones won't duplicate. Continue?",
+  "resetZoteroSync": "Reset Zotero Sync",
+  "restoreFromBackup": "Restore from Backup",
+  "restoreFromRemote": "Restore from {target}",
+  "@restoreFromRemote": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "restoreMethod": "Restore Method",
+  "restoreModeMerge": "Merge",
+  "restoreModeMergeDescription": "Keep local data and add missing content from the backup",
+  "restoreModeOverwrite": "Overwrite",
+  "restoreModeOverwriteDescription": "Replace local data with the backup",
+  "restoreScope": "Restore Scope",
+  "restoreScopeFull": "Full restore",
+  "restoreScopeFullDescription": "Restore the library and settings",
+  "restoreScopeLibrary": "Library only",
+  "restoreScopeLibraryDescription": "Restore documents, collections, annotations and document files",
+  "restoreScopeSettings": "Settings only",
+  "restoreScopeSettingsDescription": "Restore application settings",
+  "restoreSettingsTitle": "Restore Settings",
+  "s3Config": "S3 Configuration",
+  "s3Endpoint": "S3 / R2 / MinIO Endpoint",
+  "s3ObjectPathDefault": "Default: otter-pad/otter_pad_backup.zip",
+  "s3PathStyleHint": "MinIO / R2 / S3-compatible usually recommended",
+  "save": "Save",
+  "selectIcon": "Select Icon",
+  "selectLocalZipRestore": "Select local zip backup file to restore",
+  "startBackup": "Start Backup",
+  "startMerge": "Start Merge",
+  "startRestore": "Start Restore",
+  "storage": "Storage",
+  "storageSpace": "Storage Space",
+  "syncZoteroLibrary": "Sync Zotero Library",
+  "thumbnailsAndTemp": "Thumbnails, temp files, etc",
+  "unnamed": "Unnamed",
+  "uploadBackupTo": "Upload full backup to {target}",
+  "@uploadBackupTo": {
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "usePathStyle": "Use path-style URL",
+  "viewLibraryTotal": "Library · {count} items",
+  "@viewLibraryTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "webDavConfig": "WebDAV Configuration",
+  "webDavServerAddress": "WebDAV server address",
+  "year": "Year",
+  "zoteroImportHint": "Import documents from Zotero personal library",
+  "zoteroImportedPull": "Imported {count} · Pull new entries",
+  "@zoteroImportedPull": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "zoteroLocalDirectory": "Choose Zotero data folder",
+  "zoteroLocalEntryHint": "Import metadata and PDFs from Zotero on this computer",
+  "zoteroLocalMetadataOnly": "Metadata only",
+  "zoteroLocalTitle": "Local Zotero",
+  "zoteroResetHint": "Clear import records and re-pull from library (recover deleted entries)",
+  "zoteroSync": "Zotero Sync",
+  "demoBackupHelp": "Manage remote backups, Zotero papers, and local data.",
+  "demoWidgetTitle": "Component library",
+  "demoWidgetHelp": "One paper and graphite language for content, overlays, and feedback.",
+  "demoOperationDone": "Demo complete. No real data was read or written.",
+  "demoOperationRunning": "Running demo…",
+  "demoArchiveHint": "Sample archive only. This preview does not create or select real files.",
+  "demoRemoteHelp": "Configure S3 or WebDAV, schedule backups, and back up or restore.",
+  "demoZoteroHelp": "Import Zotero papers. Local import is available on desktop only.",
+  "demoLocalHelp": "Export a ZIP backup, or restore and merge an existing archive.",
+  "demoLocalSource": "Sample library",
+  "demoLocalSourceHint": "Preview the import flow with fixtures, without scanning a local Zotero library.",
+  "demoLocalPapers": "3 sample papers selected",
+  "demoImport": "Import samples",
+  "demoStorageHint": "The following usage figures are sample data.",
+  "demoDocuments": "Document files",
+  "demoThumbnails": "Thumbnails",
+  "demoTemporary": "Temporary files",
+  "demoStorageSummary": "896 MB · Sample usage",
+  "demoConfigured": "Configured for this preview · No remote connection",
+  "demoTokenHint": "The product opens this address; the preview displays the entry only.",
+  "demoConfiguration": "Local configuration preview",
+  "demoConfigurationHint": "Use sample values to preview the configured state. No real credentials needed.",
+  "demoFill": "Fill sample configuration",
+  "demoInvalidConfig": "Complete the configuration",
+  "demoInvalidConfigHint": "Enter an HTTPS address and required fields. The object path is optional.",
+  "demoResult": "Demo result",
+  "demoDialogs": "Dialogs and panels",
+  "demoDialogsHelp": "Open an overlay. Escape or Cancel dismisses it; form drafts apply only after confirmation.",
+  "demoDocumentInfo": "Document information",
+  "demoDocumentInfoHelp": "Title, authors, journal, year, DOI, and keywords support selection and copying.",
+  "demoEditFavoriteHelp": "Choose an icon, edit the name, and preview it. An empty name cannot be saved.",
+  "demoDeleteFavorite": "Delete collection",
+  "demoDeleteHint": "Remove this demo collection only, leaving papers intact. You can undo this action.",
+  "demoFavoriteSaved": "Collection updated in this preview",
+  "demoFavoriteRemoved": "Demo collection removed",
+  "demoUndo": "Undo",
+  "demoUndoHint": "Restore the demo collection you just removed.",
+  "demoFavoriteTitle": "My collection",
+  "demoFavoriteMenu": "Collection actions",
+  "demoFavoriteCards": "Collection cards",
+  "demoFavoriteCardsHelp": "Empty cover for 0 papers; centered for 1; paired for 2; one large and two small for 3; a grid for 4; one large and four small for 5 or more. Right-click, hold the cover, or use More for actions.",
+  "demoCoverCount": "Paper count in the first card",
+  "demoMethodsCollection": "Research methods",
+  "demoVisualCollection": "Visual interaction",
+  "demoEmptyLibrary": "This collection is empty",
+  "demoEmptyLibraryHint": "Add papers and the cover layout will adapt to their count.",
+  "demoPaperTitle": "Organizing knowledge for deep reading",
+  "demoKeywords": "Keywords",
+  "demoKeywordValues": "Deep reading, knowledge organization, interaction design",
+  "demoCopied": "Copied to clipboard",
+  "demoCopyFailed": "Could not copy. Select the text and copy it manually.",
+  "demoDocumentActions": "Document action sheet",
+  "demoSheetHelp": "A scrollable sheet with a drag handle and safe-area padding, without blur.",
+  "demoAddFavorite": "Add to collection",
+  "demoExportCitation": "Export citation",
+  "demoFeedback": "Feedback and notices",
+  "demoFeedbackHelp": "Use transient snackbars for results, progress for tasks, and inline alerts for issues requiring action.",
+  "demoResultSnack": "Result snackbar",
+  "demoErrorSnack": "Error and retry",
+  "demoProgressSnack": "Single task",
+  "demoAggregateSnack": "Multiple tasks",
+  "demoResultMessage": "Demo settings updated",
+  "demoNetworkError": "Demo connection interrupted. You can retry.",
+  "demoRetry": "Retry",
+  "demoRetryReady": "Demo retry complete. No network request was sent.",
+  "demoTaskCanceled": "Demo task canceled",
+  "demoAlertTitle": "Backup cannot continue",
+  "demoAlertMessage": "This is a connection-failure example. Your configuration and content are preserved. Check the address and retry.",
+  "demoAlertResolved": "Demo issue resolved",
+  "demoResetExample": "Reset example",
+  "demoBasicControls": "Selection and actions",
+  "demoBasicControlsHelp": "Choices, switches, and buttons share consistent borders, focus, and target sizes.",
+  "demoNotifications": "Task notifications",
+  "demoNotificationsHelp": "Show a result when a task ends. This switch previews its state only.",
+  "demoSort": "Sort papers",
+  "demoRecent": "Recently added",
+  "demoSortTitle": "Title",
+  "demoFileTypes": "File types",
+  "demoFileTypesHelp": "Select multiple file types.",
+  "demoPrimaryAction": "Primary action",
+  "demoSecondaryAction": "Secondary action",
+  "demoTextAction": "Text action",
+  "demoDisabledAction": "Unavailable",
+  "demoUsage": "Usage and progress",
+  "demoUsageHelp": "Keep over-quota values visible while clamping the progress bar to 0–100%. Label local estimates.",
+  "demoQuota": "Sample usage ratio",
+  "demoQuotaHelp": "Drag above 1.0 to preview the over-quota state.",
+  "demoEstimatedUsage": "Local estimate",
+  "demoOverQuota": "Usage exceeds quota",
+  "demoOverQuotaHint": "The full value stays visible; the progress bar remains inside its track.",
+  "demoIconBook": "Book",
+  "demoIconScience": "Science",
+  "demoIconSchool": "Academic",
+  "demoIconFolder": "Folder",
+  "demoIconStar": "Star",
+  "demoIconReading": "Reading",
+  "demoNameRequired": "Enter a collection name",
+  "demoLivePreview": "Name preview",
+  "demoPaperCount": "{count} papers",
+  "@demoPaperCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "demoTasks": "{count} demo tasks running",
+  "@demoTasks": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "demoCopyField": "Copy {field}",
+  "@demoCopyField": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "demoSelection": "Segmented selection",
+  "demoSelectionHelp": "Fixed choices share one equal-width single-selection control. Fill and a check mark indicate selection. Narrow layouts stack the segments to keep every option visible.",
+  "generalLogLevel": "Minimum log level",
+  "demoLogInfo": "Info",
+  "demoLogWarning": "Warning",
+  "demoLogError": "Error"
+}
