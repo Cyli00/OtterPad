@@ -3177,6 +3177,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatSourceNotFound => '未找到对应原文，文献内容可能已更新。';
+
+  @override
+  String get metadataCertificateFailed => '无法验证元数据服务的 TLS 证书，请检查系统信任证书和代理配置。';
+
+  @override
+  String get metadataProxyFailed => '代理连接或认证失败，请检查代理及网络设置。';
+
+  @override
+  String get metadataRequestTimedOut => '元数据请求超时，请稍后重试。';
+
+  @override
+  String get metadataNotFound => '未找到对应的文献元数据。';
+
+  @override
+  String get metadataConnectionFailed => '无法连接元数据服务，请检查网络。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).

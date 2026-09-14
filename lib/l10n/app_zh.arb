@@ -1059,5 +1059,10 @@
   "chatReadLink": "读取链接",
   "chatExpandQuote": "展开引用",
   "chatCollapseQuote": "收起引用",
-  "chatSourceNotFound": "未找到对应原文，文献内容可能已更新。"
+  "chatSourceNotFound": "未找到对应原文，文献内容可能已更新。",
+  "metadataCertificateFailed": "无法验证元数据服务的 TLS 证书，请检查系统信任证书和代理配置。",
+  "metadataProxyFailed": "代理连接或认证失败，请检查代理及网络设置。",
+  "metadataRequestTimedOut": "元数据请求超时，请稍后重试。",
+  "metadataNotFound": "未找到对应的文献元数据。",
+  "metadataConnectionFailed": "无法连接元数据服务，请检查网络。"
 }

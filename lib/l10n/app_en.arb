@@ -1224,5 +1224,10 @@
   "chatReadLink": "Read link",
   "chatExpandQuote": "Expand quote",
   "chatCollapseQuote": "Collapse quote",
-  "chatSourceNotFound": "The quoted source could not be found. The document may have changed."
+  "chatSourceNotFound": "The quoted source could not be found. The document may have changed.",
+  "metadataCertificateFailed": "Cannot verify the metadata service TLS certificate. Check system trust and proxy settings.",
+  "metadataProxyFailed": "Proxy connection or authentication failed. Check proxy and network settings.",
+  "metadataRequestTimedOut": "Metadata request timed out. Please try again later.",
+  "metadataNotFound": "No matching document metadata found.",
+  "metadataConnectionFailed": "Cannot connect to the metadata service. Check your network."
 }

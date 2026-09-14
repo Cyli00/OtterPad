@@ -1,3 +1,4 @@
+import 'metadata_network_exception.dart';
 import 'package:dio/dio.dart';
 import 'proxy_adapter.dart';
 import 'package:flutter/foundation.dart';
@@ -10,8 +11,14 @@ import '../core/app_logger.dart';
 
 /// 标识符解析过程中抛出的异常。
 class IdentifierResolveException implements Exception {
-  final String message;
-  const IdentifierResolveException(this.message);
+  final String? _message;
+  final MetadataNetworkException? networkFailure;
+  const IdentifierResolveException(String message)
+    : _message = message,
+      networkFailure = null;
+  const IdentifierResolveException.network(this.networkFailure)
+    : _message = null;
+  String get message => _message ?? networkFailure.toString();
 
   @override
   String toString() => message;
@@ -40,12 +47,11 @@ class IdentifierResolver {
   /// 更新代理配置，后续 Dio 发出的 HTTP 请求会走该代理。
   ///
   /// [mode] 接受 ProxyMode 枚举的任意子类，通过 name 属性匹配模式（便于跨包传递）。
+  bool _usesProxy = false;
+
   void applyProxy(Enum mode, String host, int port) {
-    _dio.httpClientAdapter = buildProxyAdapter(
-      mode.name,
-      host,
-      port,
-    );
+    _usesProxy = mode.name == 'custom';
+    _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
   }
 
   /// 测试网络连通性，返回请求耗时（毫秒）。
@@ -91,10 +97,7 @@ class IdentifierResolver {
 
   // ─── DOI → CrossRef REST API ─────────────────────────────────────────────
 
-  Future<Document> _resolveDoi(
-    String doi, {
-    CancelToken? cancelToken,
-  }) async {
+  Future<Document> _resolveDoi(String doi, {CancelToken? cancelToken}) async {
     final normalizedDoiForMetadata = normalizeElifeDoiForMetadata(doi);
     final elifeArticleId = _extractElifeArticleId(normalizedDoiForMetadata);
     if (elifeArticleId != null) {
@@ -175,10 +178,7 @@ class IdentifierResolver {
     );
   }
 
-  Future<Document> _resolvePmid(
-    String pmid, {
-    CancelToken? cancelToken,
-  }) async {
+  Future<Document> _resolvePmid(String pmid, {CancelToken? cancelToken}) async {
     try {
       // 切换到 efetch XML 接口：esummary 不返回 MeSH / KeywordList，
       // 只有 efetch 能拿到受控主题词，用于后续的推荐算法。
@@ -628,14 +628,8 @@ class IdentifierResolver {
 
   IdentifierResolveException _handleDioError(DioException e) {
     if (CancelToken.isCancel(e)) throw e;
-    if (e.response?.statusCode == 404) {
-      return const IdentifierResolveException('未找到该标识符对应的文献');
-    }
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.connectionError) {
-      return const IdentifierResolveException('网络连接失败，请检查网络');
-    }
-    return const IdentifierResolveException('网络请求失败，请稍后重试');
+    return IdentifierResolveException.network(
+      MetadataNetworkException.fromDio(e, usesProxy: _usesProxy),
+    );
   }
 }

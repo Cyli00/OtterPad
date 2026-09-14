@@ -5811,6 +5811,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The quoted source could not be found. The document may have changed.'**
   String get chatSourceNotFound;
+
+  /// No description provided for @metadataCertificateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot verify the metadata service TLS certificate. Check system trust and proxy settings.'**
+  String get metadataCertificateFailed;
+
+  /// No description provided for @metadataProxyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy connection or authentication failed. Check proxy and network settings.'**
+  String get metadataProxyFailed;
+
+  /// No description provided for @metadataRequestTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata request timed out. Please try again later.'**
+  String get metadataRequestTimedOut;
+
+  /// No description provided for @metadataNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching document metadata found.'**
+  String get metadataNotFound;
+
+  /// No description provided for @metadataConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot connect to the metadata service. Check your network.'**
+  String get metadataConnectionFailed;
 }
 
 class _AppLocalizationsDelegate

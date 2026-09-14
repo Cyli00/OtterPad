@@ -3295,4 +3295,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get chatSourceNotFound =>
       'The quoted source could not be found. The document may have changed.';
+
+  @override
+  String get metadataCertificateFailed =>
+      'Cannot verify the metadata service TLS certificate. Check system trust and proxy settings.';
+
+  @override
+  String get metadataProxyFailed =>
+      'Proxy connection or authentication failed. Check proxy and network settings.';
+
+  @override
+  String get metadataRequestTimedOut =>
+      'Metadata request timed out. Please try again later.';
+
+  @override
+  String get metadataNotFound => 'No matching document metadata found.';
+
+  @override
+  String get metadataConnectionFailed =>
+      'Cannot connect to the metadata service. Check your network.';
 }

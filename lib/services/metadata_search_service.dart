@@ -1,3 +1,4 @@
+import 'metadata_network_exception.dart';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
@@ -49,7 +50,10 @@ class MetadataSearchService {
 
   final List<MetadataSearchSource> _sources = [_CrossRefSearchSource()];
 
+  bool _usesProxy = false;
+
   void applyProxy(Enum mode, String host, int port) {
+    _usesProxy = mode.name == 'custom';
     _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
   }
 
@@ -65,6 +69,8 @@ class MetadataSearchService {
     final normalizedQuery = _normalizeForComparison(title);
     if (normalizedQuery.length < 4) return null;
 
+    MetadataNetworkException? networkFailure;
+    var receivedResponse = false;
     for (final source in _sources) {
       if (!source.canSearch(title)) continue;
       try {
@@ -74,13 +80,23 @@ class MetadataSearchService {
           author: author,
           cancelToken: cancelToken,
         );
+        receivedResponse = true;
         final best = _findBestMatch(normalizedQuery, results);
         if (best != null) return best;
       } catch (e) {
         if (e is DioException && CancelToken.isCancel(e)) rethrow;
-        log.d('${source.name} 标题搜索失败: $e');
+        if (e is DioException) {
+          networkFailure ??= MetadataNetworkException.fromDio(
+            e,
+            usesProxy: _usesProxy,
+          );
+          log.d('${source.name} 标题搜索失败: ${networkFailure.reason.name}');
+        } else {
+          log.d('${source.name} 标题搜索失败: $e');
+        }
       }
     }
+    if (!receivedResponse && networkFailure != null) throw networkFailure;
     return null;
   }
 
