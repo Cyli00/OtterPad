@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'ai_settings_demo.dart';
+import 'appearance_demo.dart';
 import 'backup_settings_demo.dart';
 import 'default_widgets_demo.dart';
 import 'l10n.dart';
 import 'paper_theme.dart';
 import 'paper_widgets.dart';
+import 'paper_display_settings.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,38 +17,66 @@ void main() {
   runApp(
     NewUiDemo(
       page: Uri.base.queryParameters['page'] ?? 'ai',
-      mobile: Uri.base.queryParameters['device'] == 'mobile',
+      mobile: const [
+        'mobile',
+        'xiaomi15',
+        'iphone17pro',
+      ].contains(Uri.base.queryParameters['device']),
+      device: Uri.base.queryParameters['device'],
     ),
   );
 }
 
 class NewUiDemo extends StatefulWidget {
-  const NewUiDemo({super.key, this.page = 'ai', this.mobile = false});
+  const NewUiDemo({
+    super.key,
+    this.page = 'ai',
+    this.mobile = false,
+    this.device,
+  });
   final String page;
   final bool mobile;
+  final String? device;
   @override
   State<NewUiDemo> createState() => _NewUiDemoState();
 }
 
 class _NewUiDemoState extends State<NewUiDemo> {
-  bool _dark = false;
+  bool _dark = Uri.base.queryParameters['theme'] == 'dark';
+  PaperFont _font = PaperFont.sans;
+  TargetPlatform get _platform => widget.device == 'iphone17pro'
+      ? TargetPlatform.iOS
+      : widget.mobile
+      ? TargetPlatform.android
+      : TargetPlatform.windows;
   bool _reduceMotion = false;
   Locale _locale = const Locale('zh');
   double _scale = 1;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) {
+    if (widget.page == 'appearance') {
+      return AppearanceDemo(
+        mobile: widget.mobile,
+        platform: _platform,
+        initialMode: switch (Uri.base.queryParameters['theme']) {
+          'light' => ThemeMode.light,
+          'dark' => ThemeMode.dark,
+          _ => ThemeMode.system,
+        },
+      );
+    }
+    return _settingsDemo(context);
+  }
+
+  Widget _settingsDemo(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'OtterPad · AI settings',
     locale: _locale,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    theme: paperTheme(Brightness.light).copyWith(
-      platform: widget.mobile ? TargetPlatform.android : TargetPlatform.windows,
-    ),
-    darkTheme: paperTheme(Brightness.dark).copyWith(
-      platform: widget.mobile ? TargetPlatform.android : TargetPlatform.windows,
-    ),
+    theme: paperTheme(Brightness.light, font: _font, platform: _platform),
+    darkTheme: paperTheme(Brightness.dark, font: _font, platform: _platform),
     themeMode: _dark ? ThemeMode.dark : ThemeMode.light,
     themeAnimationDuration: _reduceMotion ? Duration.zero : kAnim,
     builder: (context, child) => MediaQuery(
@@ -69,9 +99,9 @@ class _NewUiDemoState extends State<NewUiDemo> {
                 return SingleChildScrollView(
                   key: const PageStorageKey('ai-settings-scroll'),
                   padding: EdgeInsets.fromLTRB(
-                    narrow ? 16 : 48,
-                    narrow ? 24 : 46,
-                    narrow ? 16 : 48,
+                    narrow ? 16 : 32,
+                    narrow ? 20 : 28,
+                    narrow ? 16 : 32,
                     64,
                   ),
                   child: Center(
@@ -136,6 +166,19 @@ class _NewUiDemoState extends State<NewUiDemo> {
                                     ),
                                     icon: const Icon(Symbols.text_fields),
                                   ),
+                                  IconButton(
+                                    tooltip: l.displaySettings,
+                                    onPressed: () async {
+                                      final next =
+                                          await showPaperDisplaySettings(
+                                            context,
+                                            _font,
+                                          );
+                                      if (next != null && mounted)
+                                        setState(() => _font = next);
+                                    },
+                                    icon: const Icon(Symbols.tune),
+                                  ),
                                   Tooltip(
                                     message: l.reduceMotion,
                                     child: Semantics(
@@ -154,7 +197,7 @@ class _NewUiDemoState extends State<NewUiDemo> {
                           ),
                           const SizedBox(height: 10),
                           Text(l.demoNote, style: text.bodySmall),
-                          const SizedBox(height: 34),
+                          const SizedBox(height: 20),
                           if (widget.page == 'backup')
                             const BackupSettingsDemo()
                           else if (widget.page == 'widgets')

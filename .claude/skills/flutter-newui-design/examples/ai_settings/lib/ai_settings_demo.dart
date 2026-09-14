@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'l10n.dart';
 import 'paper_widgets.dart';
+import 'paper_theme.dart';
 import 'paper_surfaces.dart';
 
 const _systemPrompt = '你是一名学术翻译助手。仅输出译文，保留 Markdown 结构、专业术语和公式。';
@@ -114,6 +115,12 @@ class _AiSettingsDemoState extends State<AiSettingsDemo> {
       (_user.text.contains('{{text}}') &&
           _user.text.contains('{{targetLanguage}}'));
 
+  List<String> _modelBadges(String model, AppLocalizations l) {
+    if (model == _models.keys.first) return [l.tools, l.reasoning];
+    if (model.startsWith('demo/')) return [];
+    return [l.vision, l.tools];
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
@@ -173,26 +180,55 @@ class _AiSettingsDemoState extends State<AiSettingsDemo> {
       String value,
       ValueChanged<String> change, {
       bool image = false,
-    }) => PaperFieldRow(
-      label: label,
-      hint: hint,
+    }) => PaperRoleCard(
       role: identity,
-      child: PaperSelect(
-        label: label,
-        value: value,
-        options: {
-          '': l.clear,
-          if (image) 'gpt-image-1': 'gpt-image-1' else ..._availableModels,
-        },
-        onChanged: change,
-      ),
+      title: label,
+      help: hint,
+      value: value,
+      options: {
+        '': l.clear,
+        if (image) 'gpt-image-1': 'gpt-image-1' else ..._availableModels,
+      },
+      onChanged: change,
     );
+    final getApiKey = IconButton(
+      key: const ValueKey('get-api-key'),
+      tooltip: l.getApiKey,
+      onPressed: () => paperSnack(context, l.apiKeyActionMessage),
+      icon: const Icon(Symbols.key),
+    );
+    final fetchModels = IconButton(
+      key: const ValueKey('fetch-models'),
+      tooltip: _fetchError
+          ? l.retryModels
+          : _fetching
+          ? l.fetchingModels
+          : l.fetchModels,
+      onPressed: _fetching ? null : _fetchModels,
+      icon: _fetching
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            )
+          : const Icon(Symbols.refresh),
+    );
+    final modelCards = [
+      for (final entry in _availableModels.entries)
+        PaperModelCard(
+          model: entry.value,
+          selected: _model == entry.key,
+          badges: _modelBadges(entry.key, l),
+          onSelected: (value) => setState(() => _model = value),
+        ),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: spaced([
         PaperSection(
           title: l.modelApi,
           help: l.modelApiHelp,
+          action: getApiKey,
           children: [
             PaperFieldRow(
               label: l.provider,
@@ -234,29 +270,11 @@ class _AiSettingsDemoState extends State<AiSettingsDemo> {
             PaperSubsection(
               title: l.models,
               help: l.modelHint,
-              action: OutlinedButton.icon(
-                key: const ValueKey('fetch-models'),
-                onPressed: _fetching ? null : _fetchModels,
-                icon: _fetching
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 1.5),
-                      )
-                    : const Icon(Symbols.refresh, size: 20),
-                label: Text(_fetchError ? l.retryModels : l.fetchModels),
-              ),
+              action: fetchModels,
               children: [
-                PaperSelect(
-                  label: l.models,
-                  value: _model,
-                  options: _availableModels,
-                  badges: _model == _models.keys.first
-                      ? [l.tools, l.reasoning]
-                      : _model.startsWith('demo/')
-                      ? []
-                      : [l.vision, l.tools],
-                  onChanged: (v) => setState(() => _model = v),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: spaced(modelCards, 10),
                 ),
                 Semantics(
                   liveRegion: true,
@@ -279,27 +297,31 @@ class _AiSettingsDemoState extends State<AiSettingsDemo> {
             PaperSubsection(
               title: l.roles,
               children: [
-                role(
-                  l.expert,
-                  l.expertHint,
-                  PaperModelRole.expert,
-                  _expert,
-                  (v) => setState(() => _expert = v),
-                ),
-                role(
-                  l.fast,
-                  l.fastHint,
-                  PaperModelRole.fast,
-                  _fast,
-                  (v) => setState(() => _fast = v),
-                ),
-                role(
-                  l.imageModel,
-                  l.imageModelHint,
-                  PaperModelRole.image,
-                  _imageModel,
-                  (v) => setState(() => _imageModel = v),
-                  image: true,
+                PaperRoleGroup(
+                  children: [
+                    role(
+                      l.expert,
+                      l.expertHint,
+                      PaperModelRole.expert,
+                      _expert,
+                      (v) => setState(() => _expert = v),
+                    ),
+                    role(
+                      l.fast,
+                      l.fastHint,
+                      PaperModelRole.fast,
+                      _fast,
+                      (v) => setState(() => _fast = v),
+                    ),
+                    role(
+                      l.imageModel,
+                      l.imageModelHint,
+                      PaperModelRole.image,
+                      _imageModel,
+                      (v) => setState(() => _imageModel = v),
+                      image: true,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -462,7 +484,7 @@ class _AiSettingsDemoState extends State<AiSettingsDemo> {
             _prompt(l.imagePrompt, l.imagePromptHint, _image, _imagePrompt),
           ],
         ),
-      ], 36),
+      ], PaperMetrics.groupGap),
     );
   }
 
@@ -568,14 +590,14 @@ class _AiSettingsDemoState extends State<AiSettingsDemo> {
             controller: controller,
             minLines: 4,
             maxLines: 8,
-            style: theme.textTheme.bodyLarge?.copyWith(height: 1.8),
+            style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               errorText: error,
               errorMaxLines: 4,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 22,
-                vertical: 18,
+                horizontal: 12,
+                vertical: 12,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),

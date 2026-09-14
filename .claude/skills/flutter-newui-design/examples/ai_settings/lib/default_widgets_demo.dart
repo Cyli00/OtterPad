@@ -6,6 +6,62 @@ import 'l10n.dart';
 import 'paper_favorite_card.dart';
 import 'paper_surfaces.dart';
 import 'paper_widgets.dart';
+import 'paper_theme.dart';
+
+/// 收藏夹身份图标：沿用生产 `Favorite.emoji` 的 emoji 字符串与顺序，
+/// 不新增 Symbols 引用，也不再加分类层级——直接在一格里挑。
+const List<String> _emojis = [
+  '\u{1F4DA}',
+  '\u{1F4D6}',
+  '\u{1F4D8}',
+  '\u{1F4D5}',
+  '\u{1F4D7}',
+  '\u{1F4D9}',
+  '\u{1F4D3}',
+  '\u{1F4DD}',
+  '\u{270F}\u{FE0F}',
+  '\u{1F58A}\u{FE0F}',
+  '\u{1F393}',
+  '\u{1F3EB}',
+  '\u{1F52C}',
+  '\u{1F52D}',
+  '\u{1F9EA}',
+  '\u{1F4BB}',
+  '\u{2699}\u{FE0F}',
+  '\u{1F4CE}',
+  '\u{1F4C1}',
+  '\u{1F4C2}',
+  '\u{1F5C2}\u{FE0F}',
+  '\u{1F4CB}',
+  '\u{1F4CA}',
+  '\u{1F4C8}',
+  '\u{2B50}',
+  '\u{1F31F}',
+  '\u{1F525}',
+  '\u{1F4A1}',
+  '\u{2764}\u{FE0F}',
+  '\u{1F308}',
+  '\u{1F33F}',
+  '\u{1F33B}',
+  '\u{1F340}',
+  '\u{1F30D}',
+  '\u{2600}\u{FE0F}',
+  '\u{1F319}',
+  '\u{1F3AF}',
+  '\u{1F680}',
+  '\u{1F48E}',
+  '\u{1F3C6}',
+  '\u{1F381}',
+  '\u{1F9E9}',
+  '\u{2705}',
+  '\u{1F4CC}',
+  '\u{1F516}',
+  '\u{1F3F7}\u{FE0F}',
+  '\u{1F4AC}',
+  '\u{1F4AD}',
+];
+const String _bookEmoji = '\u{1F4DA}';
+const String _folderEmoji = '\u{1F4C1}';
 
 class DefaultWidgetsDemo extends StatefulWidget {
   const DefaultWidgetsDemo({super.key});
@@ -16,7 +72,7 @@ class DefaultWidgetsDemo extends StatefulWidget {
 class _DefaultWidgetsDemoState extends State<DefaultWidgetsDemo> {
   int _count = 0, _resultVersion = 0;
   final _names = <int, String>{};
-  final _identities = <int, int>{};
+  final _emojis = <int, String>{};
   final _deleted = <int>{};
   bool _alert = true, _enabled = true;
   String _name(int id) =>
@@ -26,20 +82,20 @@ class _DefaultWidgetsDemoState extends State<DefaultWidgetsDemo> {
         context.l10n.demoMethodsCollection,
         context.l10n.demoVisualCollection,
       ][id];
+
+  /// 演示数据里每个收藏夹的文献数；卡片与编辑器预览共用同一来源。
+  int _papers(int id) => switch (id) {
+    0 => _count,
+    1 => 3,
+    _ => 8,
+  };
+  String _emoji(int id) => _emojis[id] ?? (id == 0 ? _bookEmoji : _folderEmoji);
   String _picker = 'recent', _remote = 'S3', _logLevel = 'error';
   final _checked = <String>{'pdf'};
   double _usage = .68;
   Timer? _timer;
   final _progress = ValueNotifier<double>(0);
   int _tasks = 1;
-  final _icons = const [
-    Symbols.book,
-    Symbols.science,
-    Symbols.school,
-    Symbols.folder,
-    Symbols.star,
-    Symbols.auto_stories,
-  ];
   @override
   void dispose() {
     _timer?.cancel();
@@ -48,17 +104,18 @@ class _DefaultWidgetsDemoState extends State<DefaultWidgetsDemo> {
   }
 
   Future<void> _editFavorite([int id = 0]) async {
-    final result = await showPaperDialog<(String, int)>(
+    final result = await showPaperDialog<(String, String)>(
       context,
       (_) => FavoriteEditorDemo(
         initialName: _name(id),
-        initialIcon: _identities[id] ?? (id == 0 ? 0 : 3),
+        initialEmoji: _emoji(id),
+        paperCount: _papers(id),
       ),
     );
     if (!mounted || result == null) return;
     setState(() {
       _names[id] = result.$1;
-      _identities[id] = result.$2;
+      _emojis[id] = result.$2;
       _deleted.remove(id);
     });
     _result(context.l10n.demoFavoriteSaved);
@@ -287,6 +344,14 @@ class _DefaultWidgetsDemoState extends State<DefaultWidgetsDemo> {
         PaperSection(
           title: l.demoSelection,
           help: l.demoSelectionHelp,
+          action: IconButton(
+            tooltip: l.demoResetExample,
+            onPressed: () => setState(() {
+              _remote = 'S3';
+              _logLevel = 'error';
+            }),
+            icon: const Icon(Symbols.restart_alt),
+          ),
           children: [
             PaperOptions(
               label: l.backupMethod,
@@ -374,9 +439,9 @@ class _DefaultWidgetsDemoState extends State<DefaultWidgetsDemo> {
                   runSpacing: 16,
                   children: [
                     for (final entry in [
-                      (0, _name(0), _count),
-                      (1, _name(1), 3),
-                      (2, _name(2), 8),
+                      (0, _name(0), _papers(0)),
+                      (1, _name(1), _papers(1)),
+                      (2, _name(2), _papers(2)),
                     ])
                       if (!_deleted.contains(entry.$1))
                         SizedBox(
@@ -385,9 +450,7 @@ class _DefaultWidgetsDemoState extends State<DefaultWidgetsDemo> {
                             key: ValueKey('favorite-${entry.$1}'),
                             title: entry.$2,
                             count: entry.$3,
-                            identity:
-                                _icons[_identities[entry.$1] ??
-                                    (entry.$1 == 0 ? 0 : 3)],
+                            emoji: _emoji(entry.$1),
                             onOpen: () => showPaperDialog<void>(
                               context,
                               (context) => PaperDialog(
@@ -604,108 +667,191 @@ class _DefaultWidgetsDemoState extends State<DefaultWidgetsDemo> {
               ),
           ],
         ),
-      ], 32),
+      ], PaperMetrics.groupGap),
     );
   }
 }
 
+/// 收藏夹编辑器：分组图标选择、名称输入与卡片效果预览。
+/// 收藏夹编辑器：分组 emoji 选择、名称输入与卡片效果预览。
 class FavoriteEditorDemo extends StatefulWidget {
   const FavoriteEditorDemo({
     super.key,
     required this.initialName,
-    required this.initialIcon,
+    required this.initialEmoji,
+    this.paperCount = 0,
   });
   final String initialName;
-  final int initialIcon;
+  final String initialEmoji;
+  final int paperCount;
   @override
   State<FavoriteEditorDemo> createState() => _FavoriteEditorDemoState();
 }
 
 class _FavoriteEditorDemoState extends State<FavoriteEditorDemo> {
+  static const _maxLength = 20;
   late final _name = TextEditingController(text: widget.initialName);
-  late int _icon = widget.initialIcon;
+  late String _emoji = widget.initialEmoji;
+  bool _touched = false;
+
   @override
   void dispose() {
     _name.dispose();
     super.dispose();
   }
 
+  bool get _valid => _name.text.trim().isNotEmpty;
+
+  void _submit() {
+    if (!_valid) {
+      setState(() => _touched = true);
+      return;
+    }
+    Navigator.pop(context, (_name.text.trim(), _emoji));
+  }
+
+  void _clear() {
+    _name.clear();
+    setState(() => _touched = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final icons = [
-      Symbols.book,
-      Symbols.science,
-      Symbols.school,
-      Symbols.folder,
-      Symbols.star,
-      Symbols.auto_stories,
-    ];
-    final names = [
-      l.demoIconBook,
-      l.demoIconScience,
-      l.demoIconSchool,
-      l.demoIconFolder,
-      l.demoIconStar,
-      l.demoIconReading,
-    ];
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final invalid = _touched && !_valid;
     return PaperDialog(
       title: l.editFavorite,
       children: [
+        // 不再分分类：一格里直接挑，对话框自身滚动承接长列表。
         PaperLabel(title: l.selectIcon),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        _picker(context),
+        Row(
           children: [
-            for (var i = 0; i < icons.length; i++)
-              IconButton(
-                isSelected: _icon == i,
-                tooltip: names[i],
-                style: IconButton.styleFrom(
-                  backgroundColor: _icon == i
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : null,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: () => setState(() => _icon = i),
-                icon: Icon(icons[i], weight: 350, fill: 0),
+            Expanded(child: PaperLabel(title: l.favoriteName)),
+            Text(
+              '${_name.text.characters.length} / $_maxLength',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: invalid ? cs.error : cs.onSurfaceVariant,
               ),
+            ),
           ],
         ),
-        PaperLabel(title: l.favoriteName),
         TextField(
           key: const ValueKey('favorite-name'),
           controller: _name,
           autofocus: true,
-          onChanged: (_) => setState(() {}),
-          onSubmitted: (_) {
-            if (_name.text.trim().isNotEmpty)
-              Navigator.pop(context, (_name.text.trim(), _icon));
-          },
+          maxLength: _maxLength,
+          textInputAction: TextInputAction.done,
+          onChanged: (_) => setState(() => _touched = true),
+          onSubmitted: (_) => _submit(),
           decoration: InputDecoration(
             hintText: l.enterFavoriteName,
-            errorText: _name.text.trim().isEmpty ? l.demoNameRequired : null,
+            counterText: '',
+            errorText: invalid ? l.demoNameRequired : null,
+            suffixIcon: _name.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: l.clearField,
+                    onPressed: _clear,
+                    icon: const Icon(Symbols.close, size: 20),
+                  ),
           ),
         ),
-        PaperNotice(
-          title: l.demoLivePreview,
-          message: _name.text.trim().isEmpty ? l.unnamed : _name.text.trim(),
-        ),
+        PaperLabel(title: l.demoLivePreview),
+        _preview(context),
       ],
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(l.cancel),
         ),
-        FilledButton(
-          onPressed: _name.text.trim().isEmpty
-              ? null
-              : () => Navigator.pop(context, (_name.text.trim(), _icon)),
-          child: Text(l.save),
-        ),
+        FilledButton(onPressed: _valid ? _submit : null, child: Text(l.save)),
       ],
+    );
+  }
+
+  Widget _picker(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [for (final emoji in _emojis) _tile(context, emoji)],
+      ),
+    );
+  }
+
+  Widget _tile(BuildContext context, String emoji) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final colors = theme.extension<PaperColors>()!;
+    final selected = _emoji == emoji;
+    final side = PaperMetrics.target(theme.platform);
+    // MergeSemantics 让 emoji 名称、选中状态与按钮落在同一语义节点。
+    return MergeSemantics(
+      child: Semantics(
+        selected: selected,
+        child: InkWell(
+          onTap: () => setState(() => _emoji = emoji),
+          borderRadius: BorderRadius.circular(12),
+          hoverColor: colors.hover,
+          child: AnimatedContainer(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : kAnimFast,
+            curve: kAnimCurve,
+            width: side,
+            height: side,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? colors.selected : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? cs.primary : Colors.transparent,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            // emoji 是身份图形，按图标处理：不跟随系统字号放大，避免撑破命中区。
+            child: Text(
+              emoji,
+              textScaler: TextScaler.noScaling,
+              style: const TextStyle(fontSize: 20, height: 1.0),
+              strutStyle: const StrutStyle(forceStrutHeight: true, height: 1.0),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 效果预览直接复用收藏夹卡片头部（标题行与 emoji＋篇数行），不再另画一份。
+  Widget _preview(BuildContext context) {
+    final l = context.l10n;
+    final cs = Theme.of(context).colorScheme;
+    final name = _name.text.trim();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: PaperFavoriteHeader(
+        title: name.isEmpty ? l.unnamed : name,
+        count: widget.paperCount,
+        emoji: _emoji,
+        titleColor: name.isEmpty ? cs.onSurfaceVariant : null,
+      ),
     );
   }
 }

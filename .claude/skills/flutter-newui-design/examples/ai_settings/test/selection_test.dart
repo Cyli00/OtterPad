@@ -29,7 +29,15 @@ void main() {
     final dav = find.widgetWithText(TextButton, 'WebDAV');
     expect(tester.getSize(s3).width, 300);
     expect(tester.getSize(dav).width, 300);
-    expect(tester.getSize(s3).height, greaterThanOrEqualTo(48));
+    expect(tester.getSize(s3).height, greaterThanOrEqualTo(40));
+    expect(
+      tester.getCenter(find.text('WebDAV')).dx,
+      closeTo(tester.getCenter(dav).dx, .5),
+    );
+    expect(
+      tester.getCenter(find.text('S3')).dx,
+      closeTo(tester.getCenter(s3).dx, .5),
+    );
     final before = tester.getTopLeft(find.text('WebDAV'));
     await tester.tap(dav);
     await tester.pumpAndSettle();

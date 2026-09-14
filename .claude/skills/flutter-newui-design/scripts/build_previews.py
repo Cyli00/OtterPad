@@ -8,6 +8,13 @@ for name, page, title in [
     ('demo.html', 'ai', 'AI 设置'),
     ('demo-backup_setting.html', 'backup', '数据管理'),
     ('demo-default_widget.html', 'widgets', '基础组件'),
+    ('demo-appearance.html', 'appearance', '外观验证'),
 ]:
-    (site / name).write_text(template.replace('{{PAGE}}', page).replace('{{TITLE}}', title), encoding='utf-8')
+    html = template.replace('{{PAGE}}', page).replace('{{TITLE}}', title)
+    if page == 'appearance':
+        html = html.replace('device=desktop', 'device=desktop&theme=light').replace('device=xiaomi15', 'device=xiaomi15&theme=dark').replace('device=iphone17pro', 'device=iphone17pro&theme=light')
+        html = html.replace('各窗口可独立操作', '初始桌面／iPhone 浅色，Xiaomi 深色；各窗口可独立操作')
+    (site / name).write_text(html, encoding='utf-8')
     print(site / name)
+    if page == 'widgets':
+        (site / 'default_widget.html').write_text(html, encoding='utf-8')

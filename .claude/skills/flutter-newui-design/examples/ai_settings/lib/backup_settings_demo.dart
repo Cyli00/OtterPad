@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'l10n.dart';
 import 'paper_surfaces.dart';
 import 'paper_widgets.dart';
+import 'paper_theme.dart';
 
 class BackupSettingsDemo extends StatefulWidget {
   const BackupSettingsDemo({super.key});
@@ -423,7 +424,7 @@ class _BackupSettingsDemoState extends State<BackupSettingsDemo> {
             ),
           ],
         ),
-      ], 32),
+      ], PaperMetrics.groupGap),
     );
   }
 }

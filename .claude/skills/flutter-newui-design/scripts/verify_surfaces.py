@@ -47,14 +47,14 @@ with sync_playwright() as p:
     page.on('pageerror', lambda error: errors.append(str(error)))
     for file in ['demo.html', 'demo-backup_setting.html', 'demo-default_widget.html']:
         page.goto(base + file)
-        expect(page.locator('iframe')).to_have_count(2)
-        for title in ['桌面预览', '移动端预览']:
+        expect(page.locator('iframe')).to_have_count(3)
+        for title in ['桌面预览', 'Xiaomi 15 预览', 'iPhone 17 Pro 预览']:
             page.frame_locator(f'iframe[title="{title}"]').get_by_role('button', name='切换深浅主题').wait_for(timeout=60000)
         page.screenshot(path=str(out / file.replace('.html', '-paired.png')))
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
     for name in ['backup', 'widgets']:
-        for device, width in [('desktop', 1100), ('mobile', 390)]:
+        for device, width in [('desktop', 1100), ('xiaomi15', 400), ('iphone17pro', 402)]:
             page.set_viewport_size({'width': width, 'height': 960})
             page.goto(base + f'index.html?page={name}&device={device}')
             theme = page.get_by_role('button', name='切换深浅主题')
@@ -133,7 +133,7 @@ with sync_playwright() as p:
     assert hashlib.sha256(latin_font.body()).digest() == hashlib.sha256(Path('C:/Windows/Fonts/times.ttf').read_bytes()).digest()
     assert not errors, errors
     assert not remote, sorted(set(remote))
-    report = {'passed': True, 'pairedPages': 3, 'devices': ['desktop 1100', 'mobile 390'], 'pages': ['backup', 'widgets'], 'checks': ['system serif bytes', 'segmented exclusivity and keyboard', 'platform entry', 'configuration dialog and save', 'automatic backup', 'document dialog', 'favorite editor cancel', 'dynamic covers', 'snackbar', 'dark English 200%'], 'pageErrors': errors, 'externalRuntimeHosts': remote}
+    report = {'passed': True, 'pairedPages': 3, 'devices': ['desktop 1100', 'Xiaomi 15 400', 'iPhone 17 Pro 402'], 'pages': ['backup', 'widgets'], 'checks': ['system serif bytes', 'segmented exclusivity and keyboard', 'platform entry', 'configuration dialog and save', 'automatic backup', 'document dialog', 'favorite editor cancel', 'dynamic covers', 'snackbar', 'dark English 200%'], 'pageErrors': errors, 'externalRuntimeHosts': remote}
     (out / 'surfaces-verification.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report, indent=2))
     browser.close()

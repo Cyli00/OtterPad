@@ -2,6 +2,94 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'l10n.dart';
 
+/// 收藏夹卡片头部：标题行（含更多操作）与 emoji＋篇数身份行。
+///
+/// 卡片本身与收藏夹编辑器的效果预览共用同一实现，避免预览再画一份。
+class PaperFavoriteHeader extends StatelessWidget {
+  const PaperFavoriteHeader({
+    super.key,
+    required this.title,
+    required this.count,
+    this.emoji = '\u{1F4DA}',
+    this.titleColor,
+    this.onMenu,
+  });
+  final String title;
+  final int count;
+  final String emoji;
+  final Color? titleColor;
+
+  /// 为空时只画更多操作图标：预览里它是示意，不提供菜单。
+  final VoidCallback? onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final l = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: titleColor ?? cs.onSurface,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (onMenu == null)
+              ExcludeSemantics(
+                child: Icon(Symbols.more_horiz, color: cs.onSurfaceVariant),
+              )
+            else
+              IconButton(
+                tooltip: l.demoFavoriteMenu,
+                onPressed: onMenu,
+                icon: const Icon(Symbols.more_horiz),
+              ),
+          ],
+        ),
+        Row(
+          children: [
+            // 与生产收藏夹卡片一致：emoji 放在 primaryContainer 小徽标里。
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                emoji,
+                style: const TextStyle(fontSize: 13, height: 1.0),
+                strutStyle: const StrutStyle(
+                  forceStrutHeight: true,
+                  height: 1.0,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l.demoPaperCount(count),
+                style: theme.textTheme.bodyMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class PaperFavoriteCard extends StatefulWidget {
   const PaperFavoriteCard({
     super.key,
@@ -10,11 +98,11 @@ class PaperFavoriteCard extends StatefulWidget {
     required this.onOpen,
     required this.onEdit,
     required this.onDelete,
-    this.identity = Symbols.book,
+    this.emoji = '\u{1F4DA}',
   });
   final String title;
   final int count;
-  final IconData identity;
+  final String emoji;
   final VoidCallback onOpen, onEdit, onDelete;
   @override
   State<PaperFavoriteCard> createState() => _PaperFavoriteCardState();
@@ -50,38 +138,17 @@ class _PaperFavoriteCardState extends State<PaperFavoriteCard> {
           ),
           clipBehavior: Clip.antiAlias,
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: l.demoFavoriteMenu,
-                      onPressed: () => controller.isOpen
-                          ? controller.close()
-                          : controller.open(),
-                      icon: const Icon(Symbols.more_horiz),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Icon(widget.identity, size: 22, weight: 350),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        l.demoPaperCount(widget.count),
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
-                  ],
+                PaperFavoriteHeader(
+                  title: widget.title,
+                  count: widget.count,
+                  emoji: widget.emoji,
+                  onMenu: () => controller.isOpen
+                      ? controller.close()
+                      : controller.open(),
                 ),
                 const SizedBox(height: 16),
                 Semantics(
@@ -92,7 +159,7 @@ class _PaperFavoriteCardState extends State<PaperFavoriteCard> {
                     onLongPress: () => controller.open(),
                     borderRadius: BorderRadius.circular(12),
                     child: SizedBox(
-                      height: 216,
+                      height: 180,
                       width: double.infinity,
                       child: ExcludeSemantics(child: _covers(context)),
                     ),

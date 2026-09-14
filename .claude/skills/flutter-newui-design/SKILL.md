@@ -1,53 +1,37 @@
 ---
 name: flutter-newui-design
-description: 为 OtterPad 的新 UI 改版设计与实现 Flutter 内容页及表单组件。用户指定新 UI、纸白石墨风格、flutter-newui-design 或简称 flutter-new-design 时使用；以 AI 设置页原型为视觉依据，独立于旧 flutter-design 的视觉规则，不改变导航、窗口外壳和阅读器工具栏。
+description: 设计与实现 OtterPad 新 UI（纸白·石墨）的内容页、表单与浮层，并维护其分端示例（简称 flutter-new-design）。用于新增或改造这类界面，或调整新 UI 组件规范。
 ---
 
 # OtterPad 新 UI：纸白 · 石墨
 
-以安静的纸面表单表达复杂设置：暖纸白、石墨文字、衬线标题、轻描边、清楚的分组和充足的控件空间。重点是信息的可读性与操作的确定性。
+新 UI 是**内容页与表单**的一套独立规范：中性纸白／石墨配色、系统 sans 默认、紧凑排版、纯图标标题动作。应用导航、窗口外壳、阅读器工具栏不属于它，见[迁移范围](references/migration.md)。核对新 UI 视觉时不使用旧 `flutter-design`。
 
-## 适用范围与优先级
+## 基准与真源
 
-- 用户要求的新 UI 改版采用本技能；普通修复不自动启动风格迁移。本技能的存在不代表已经授权修改所有页面。
-- 本技能独立定义颜色、字体、尺寸、轮廓、圆角、阴影、蒙版和视觉状态。不得用旧 `flutter-design` 的视觉规则覆盖它，也不需要先读取旧技能来进行视觉核对。
-- 导航与外壳排除在迁移范围外：应用主导航、设置分类导航、移动底部导航、窗口标题栏、窗口按钮、阅读器顶部／底部工具栏与侧栏开合行为。禁止通过全局 Theme、通用容器或 IconTheme 的连带修改改变这些区域。
-- 新样式只包在获准迁移的内容子树中；已有共享组件的行为可以复用，旧组件的外观不必继承。
-- 视觉基准来自用户提供的 `paper-snapshot.html` 本地原型 中 AI 设置内容。以设计语言统一为目标，不追求 1:1 复刻；用户后续交互要求优先于原型布局。原型的绝对坐标、编辑器工具条、导航、虚构数据和试验性交互均不属于规范。
+- 可运行基准：[基础组件页](examples/ai_settings/lib/default_widgets_demo.dart)；量化 Token 真源：[paper_theme.dart](examples/ai_settings/lib/paper_theme.dart)。
+- 示例含 AI 设置、数据管理、基础组件、外观验证四页，每页同时展示桌面、Xiaomi 15、iPhone 17 Pro，只用内存数据、不代替生产 provider。运行与截图入口见[示例说明](examples/ai_settings/README.md)。
+- 早期 AI 设置原型只提供方向，不作为 1:1 复刻目标。
 
-默认使用系统自带的 `serif` 衬线字体，适用于标题、正文和控件。不得新增字体包、恢复 `fonts:` 配置、下载字体或制作子集；原生宿主核对系统字体回退；Flutter Web 本地预览通过 `scripts/serve_demo.py` 读取已有 Windows 字体，不打包字体文件。
+## 按需读取
+
+| 要做的事 | 读 |
+|---|---|
+| 选颜色、定字号／间距／图标尺寸、明暗与阅读纸面 | [references/tokens.md](references/tokens.md) |
+| 做或改标题行、字段、卡片、分段、对话框、收藏夹 | [references/components.md](references/components.md) |
+| 把新 UI 落进生产界面 | [references/migration.md](references/migration.md) |
+| 跑示例、看三端截图、验收 | [references/verification.md](references/verification.md) |
 
 ## 工作方式
 
-1. 以 [paper_theme.dart](examples/ai_settings/lib/paper_theme.dart) 的集中 Token 和现有组件为视觉依据，确认本次内容区、层级和组件类型。
-2. 按生产源码保留业务与平台差异；[AI 设置](examples/ai_settings/lib/ai_settings_demo.dart)、[数据管理](examples/ai_settings/lib/backup_settings_demo.dart)、[基础组件](examples/ai_settings/lib/default_widgets_demo.dart) 是内存演示，不能代替业务实现。
-3. 在局部主题中实现；先完成一个包含输入、选择、滑块、说明和状态的真实区块，再迁移同类组件。
-4. 对照新规范验收浅色、深色、窄屏、长文本、键盘和减少动态效果；原有导航外观与交互也要保持稳定。
+- 新组件或新规则要落进可操作示例；示例是规范的可执行证据。
+- 复用已有业务状态、路由与浮层宿主，不为统一外观重写正常业务。
+- 保留用户已有的模型卡片、角色分组与标题动作改法。
 
-可运行的 Dart／Flutter 组件框架位于 [examples/ai_settings](examples/ai_settings/README.md)。它是视觉和交互验证示例，使用内存数据，不代表生产设置已经迁移。
+## 可以直接做
 
-用户简称 `flutter-new-design` 时也按本技能处理，不创建第二份相互漂移的规范。示例提供 AI 设置、数据管理、基础组件三个页面，每页将桌面与移动端同时展示；新组件必须补入本规范及可操作示例。
+示例的构建、Widget 测试与 localhost 浏览器检查都是本地可丢弃操作：产物落在 `build/`，不读生产凭据，只连 127.0.0.1。直接跑、修、重跑，不必逐次确认。
 
-## 保留的非视觉约束
+## 完成标准
 
-这些规则直接在这里列明，不借此引入旧技能的视觉 Token：
-
-- 用户可见文本进入 ARB，Widget 使用 `context.l10n`；服务层按项目既有方式取本地化。技术标识符、正则和 Prompt 模板不进 ARB。
-- 保持业务值、默认值、单选／多选、校验、防抖、保存频率、焦点、滚动位置和异步状态。视觉更新不重新请求模型、翻译或文档。
-- 图标语义继续使用 `material_symbols_icons` 的 `Symbols`，不以 emoji 或字符拼图代替；品牌标识保留其身份。具体字重、填充、大小按新规范。
-- 桌面与移动端按 `isDesktopOs` 区分交互，布局按实际可用宽度；不拿设备类型替代空间测量。
-- 沿用项目的弹窗／菜单／选择器宿主和路由语义，不新造一套焦点、返回键、Esc、点击外部关闭逻辑；宿主内的视觉可以独立换肤。
-- 动效复用 `lib/core/animation_constants.dart` 中的语义 Token；减少动态效果时停止装饰运动。避免用尺寸动画驱动 WebView、PDF 或整窗逐帧重排。
-- 触觉经 `Haptics` 派发，已有组件反馈不重复叠加；列表身份使用业务稳定 key。
-- 异步更新保留控件状态，互斥操作禁止重复提交；无障碍名称、值、选中、禁用、错误状态必须可被读屏和键盘访问。
-- 生产凭据继续使用现有安全存储。演示不能读取真实 API Key，也不能把输入值当日志或测试截图内容。
-
-## 最小交付与验收
-
-- 有集中维护的视觉 Token 和可组合的 Widget，业务页面不散落颜色／字号／圆角常量。
-- 同级分组外观一致，子分组不反复套卡片；解释性 subtitle 统一收进标题旁问号，当前值与状态保持可见。
-- 少量固定单选使用连体、等分的分段条，选中底色＋勾选；真正多选使用独立勾选项。不得把所有选择组一律做成分散 Chip。
-- AI 设置保留“获取模型”及其加载／结果／重试；专家、快速、图像角色使用统一线性图标与文字名称，分别使用 `Symbols.psychology`、`Symbols.bolt`、`Symbols.draw`。
-- 所有可点击控件提供 hover、focus、pressed、selected、disabled 中适用的状态；加载与错误在原位置表达。
-- 最小检查为局部静态分析、关键交互回归和实际截图；不能用“编译成功”替代视觉验收。
-- 将原型已观察到的设计、为可用性做的修正、尚未验证的推导分开记录。新增规则应来自真实需求，不积累无关禁令。
+一次新 UI 改动完成 = 示例构建通过（静态分析 + Widget 测试 + release Web 构建）+ 三端视口截图看过并确认 + 受影响的规范与示例同步更新。只写完代码、没跑构建与截图就交回，算未完成。

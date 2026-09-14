@@ -235,8 +235,10 @@ class PaperOptions extends StatelessWidget {
     required this.onChanged,
     this.help,
     this.icons = const {},
+    this.availableWidth,
   });
   final String label, value;
+  final double? availableWidth;
   final String? help;
   final Map<String, String> options;
   final Map<String, IconData> icons;
@@ -247,120 +249,123 @@ class PaperOptions extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       PaperLabel(title: label, help: help),
-      const SizedBox(height: 10),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final theme = Theme.of(context);
-          final cs = theme.colorScheme;
-          final colors = theme.extension<PaperColors>()!;
-          final style = theme.textTheme.labelLarge!;
-          // 预留勾选位，切换时文字不横跳；按真实字宽决定是否纵向排列。
-          var itemWidth = 48.0;
-          for (final text in options.values) {
-            final painter = TextPainter(
-              text: TextSpan(text: text, style: style),
-              textDirection: Directionality.of(context),
-              textScaler: MediaQuery.textScalerOf(context),
-            )..layout();
-            final width = painter.width + 56;
-            if (width > itemWidth) itemWidth = width;
-            painter.dispose();
-          }
-          final vertical = itemWidth * options.length > constraints.maxWidth;
-          return SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<String>(
-              // Flutter 渲染对象不更新 expandedInsets 状态，换轴时重新创建。
-              key: ValueKey(vertical),
-              direction: vertical ? Axis.vertical : Axis.horizontal,
-              expandedInsets: vertical ? null : EdgeInsets.zero,
-              showSelectedIcon: false,
-              segments: [
-                for (final e in options.entries)
-                  ButtonSegment(
-                    value: e.key,
-                    label: Semantics(
-                      checked: e.key == value,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ExcludeSemantics(
-                            child: SizedBox(
-                              width: 20,
-                              child: e.key == value
-                                  ? const Icon(
-                                      Symbols.check,
-                                      size: 20,
-                                      weight: 400,
-                                    )
-                                  : icons[e.key] == null
-                                  ? null
-                                  : Icon(icons[e.key], size: 20, weight: 350),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(e.value, textAlign: TextAlign.center),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-              selected: {value},
-              onSelectionChanged: onChanged == null
-                  ? null
-                  : (values) => onChanged!(values.single),
-              style: ButtonStyle(
-                textStyle: WidgetStatePropertyAll(style),
-                minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
-                padding: const WidgetStatePropertyAll(
-                  EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                ),
-                visualDensity: VisualDensity.standard,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                animationDuration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : kAnimFast,
-                backgroundColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.selected)
-                      ? colors.selected
-                      : cs.surfaceContainerLow,
-                ),
-                foregroundColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.disabled)
-                      ? cs.onSurface.withValues(alpha: .38)
-                      : cs.onSurface,
-                ),
-                overlayColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.focused)
-                      ? cs.primary.withValues(alpha: .16)
-                      : states.contains(WidgetState.pressed)
-                      ? cs.primary.withValues(alpha: .12)
-                      : states.contains(WidgetState.hovered)
-                      ? cs.primary.withValues(alpha: .06)
-                      : Colors.transparent,
-                ),
-                side: WidgetStateProperty.resolveWith(
-                  (states) => BorderSide(
-                    color: states.contains(WidgetState.focused)
-                        ? cs.primary
-                        : cs.outlineVariant,
-                    width: states.contains(WidgetState.focused) ? 2 : 1,
-                  ),
-                ),
-                shape: WidgetStatePropertyAll(
-                  RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                splashFactory: NoSplash.splashFactory,
-              ),
-            ),
-          );
-        },
-      ),
+      const SizedBox(height: 4),
+      if (availableWidth != null)
+        _segments(context, BoxConstraints(maxWidth: availableWidth!))
+      else
+        LayoutBuilder(builder: _segments),
     ],
   );
+
+  Widget _segments(BuildContext context, BoxConstraints constraints) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final colors = theme.extension<PaperColors>()!;
+    final style = theme.textTheme.labelLarge!;
+    // 预留勾选位，切换时文字不横跳；按真实字宽决定是否纵向排列。
+    var itemWidth = 48.0;
+    for (final text in options.values) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final width = painter.width + 76;
+      if (width > itemWidth) itemWidth = width;
+      painter.dispose();
+    }
+    final vertical = itemWidth * options.length > constraints.maxWidth;
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<String>(
+        // Flutter 渲染对象不更新 expandedInsets 状态，换轴时重新创建。
+        key: ValueKey(vertical),
+        direction: vertical ? Axis.vertical : Axis.horizontal,
+        expandedInsets: vertical ? null : EdgeInsets.zero,
+        showSelectedIcon: false,
+        segments: [
+          for (final e in options.entries)
+            ButtonSegment(
+              value: e.key,
+              label: Semantics(
+                checked: e.key == value,
+                // SegmentedButton 不向内部按钮传递 minimumSize，以内容约束保证命中高度。
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: PaperMetrics.target(theme.platform) - 16,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ExcludeSemantics(
+                        child: SizedBox(
+                          width: 20,
+                          child: e.key == value
+                              ? const Icon(Symbols.check, size: 20, weight: 400)
+                              : icons[e.key] == null
+                              ? null
+                              : Icon(icons[e.key], size: 20, weight: 350),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(e.value, textAlign: TextAlign.center),
+                      ),
+                      const SizedBox(width: 26),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+        selected: {value},
+        onSelectionChanged: onChanged == null
+            ? null
+            : (values) => onChanged!(values.single),
+        style: ButtonStyle(
+          textStyle: WidgetStatePropertyAll(style),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          visualDensity: VisualDensity.standard,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          animationDuration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : kAnimFast,
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? colors.selected
+                : cs.surfaceContainerLow,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.disabled)
+                ? cs.onSurface.withValues(alpha: .38)
+                : cs.onSurface,
+          ),
+          overlayColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.focused)
+                ? cs.primary.withValues(alpha: .16)
+                : states.contains(WidgetState.pressed)
+                ? cs.primary.withValues(alpha: .12)
+                : states.contains(WidgetState.hovered)
+                ? cs.primary.withValues(alpha: .06)
+                : Colors.transparent,
+          ),
+          side: WidgetStateProperty.resolveWith(
+            (states) => BorderSide(
+              color: states.contains(WidgetState.focused)
+                  ? cs.primary
+                  : cs.outlineVariant,
+              width: states.contains(WidgetState.focused) ? 2 : 1,
+            ),
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          splashFactory: NoSplash.splashFactory,
+        ),
+      ),
+    );
+  }
 }
