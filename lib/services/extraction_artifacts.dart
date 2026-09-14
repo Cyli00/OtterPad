@@ -1,3 +1,4 @@
+import '../core/storage/extraction_publication.dart';
 import 'dart:io';
 import 'dart:convert';
 
@@ -166,54 +167,6 @@ Future<void> pruneFigureGenerations(
   }
 }
 
-/// Publish extraction metadata together, rolling back on an IO failure. Images
-/// live in a fresh generation directory, so readers of the old manifest remain
-/// valid until publication finishes.
-Future<void> publishExtractionArtifacts(Map<String, String> contents) async {
-  if (contents.isEmpty) return;
-  final stage = await Directory(
-    p.dirname(contents.keys.first),
-  ).createTemp('.extract_publish_');
-  final installed = <String>[];
-  final backups = <String, String>{};
-  var canRemoveStage = true;
-  try {
-    var index = 0;
-    for (final entry in contents.entries) {
-      await File(
-        p.join(stage.path, '${index++}.new'),
-      ).writeAsString(entry.value, flush: true);
-    }
-    index = 0;
-    for (final target in contents.keys) {
-      final current = File(target);
-      if (await current.exists()) {
-        final backup = p.join(stage.path, '$index.old');
-        await current.rename(backup);
-        backups[target] = backup;
-      }
-      await File(p.join(stage.path, '$index.new')).rename(target);
-      installed.add(target);
-      index++;
-    }
-  } catch (_) {
-    canRemoveStage = false;
-    for (final target in installed.reversed) {
-      await File(target).delete();
-    }
-    for (final backup in backups.entries) {
-      await File(backup.value).rename(backup.key);
-    }
-    canRemoveStage = true;
-    rethrow;
-  } finally {
-    // Only the exact directory created by this invocation is removed.
-    if (canRemoveStage) {
-      try {
-        await stage.delete(recursive: true);
-      } on FileSystemException {
-        // Cleanup must not turn a completed publication into a failed one.
-      }
-    }
-  }
-}
+/// 多文件产物通过持久化日志发布，启动时恢复未完成的发布。
+Future<void> publishExtractionArtifacts(Map<String, String> contents) =>
+    ExtractionPublication.publish(contents);

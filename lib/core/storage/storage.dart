@@ -1,3 +1,4 @@
+import 'extraction_publication.dart';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -118,6 +119,7 @@ class GStorage {
     await ZoteroSnapshot.attach(_db);
     await _ensureDefaultFavorite();
     await DocumentFileOperations(_db, _libraryDirPath).recover();
+    await ExtractionPublication.recoverLibrary(_libraryDirPath);
 
     if (kDebugMode) await _debugFtsSelfCheck();
 
@@ -236,6 +238,7 @@ class GStorage {
     await ZoteroSnapshot.attach(_db);
     await _ensureDefaultFavorite();
     await DocumentFileOperations(_db, _libraryDirPath).recover();
+    await ExtractionPublication.recoverLibrary(_libraryDirPath);
   }
 
   /// 重新加载 settings 缓存（不重开库）。settingsOnly 覆盖恢复直接写 settings
