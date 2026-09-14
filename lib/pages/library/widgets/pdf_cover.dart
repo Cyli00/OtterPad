@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../services/pdf_thumbnail_service.dart';
@@ -28,6 +29,8 @@ class _PdfCoverRenderState extends State<PdfCoverRender> {
   String? _thumbnailPath;
   bool _isLoading = true;
   bool _hasError = false;
+  StreamSubscription<String>? _readySubscription;
+  int _request = 0;
 
   @override
   void initState() {
@@ -44,17 +47,29 @@ class _PdfCoverRenderState extends State<PdfCoverRender> {
   }
 
   Future<void> _loadThumbnail() async {
+    final request = ++_request;
+    final assetPath = widget.assetPath;
+    final service = PdfThumbnailService.instance;
+    unawaited(_readySubscription?.cancel());
+    _readySubscription = service.watchReady(assetPath).listen((path) {
+      if (!mounted || request != _request) return;
+      setState(() {
+        _thumbnailPath = path;
+        _isLoading = false;
+        _hasError = false;
+      });
+    });
     setState(() {
+      _thumbnailPath = null;
       _isLoading = true;
       _hasError = false;
     });
 
     try {
-      final path = await PdfThumbnailService.instance.getThumbnailPath(
-        widget.assetPath,
-      );
+      final path = await service.getThumbnailPath(assetPath);
 
-      if (mounted) {
+      // 已收到落盘通知后，旧等待的超时/失败不能再覆盖成功状态。
+      if (mounted && request == _request && _thumbnailPath == null) {
         setState(() {
           _thumbnailPath = path;
           _isLoading = false;
@@ -62,13 +77,20 @@ class _PdfCoverRenderState extends State<PdfCoverRender> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && request == _request && _thumbnailPath == null) {
         setState(() {
           _isLoading = false;
           _hasError = true;
         });
       }
     }
+  }
+
+  @override
+  void dispose() {
+    ++_request;
+    unawaited(_readySubscription?.cancel());
+    super.dispose();
   }
 
   @override

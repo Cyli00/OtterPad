@@ -1,3 +1,4 @@
+import '../core/storage/storage_activity.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -23,6 +24,14 @@ class PdfThumbnailService {
   // 防止同一文件的重复并发请求（如快速滚动时多次请求同一本书）
   final Map<String, Future<String?>> _cachingTasks = {};
 
+  final _ready =
+      StreamController<({String source, String thumbnail})>.broadcast();
+
+  /// PNG 落盘即通知封面，不让显示等待 PDF 原生资源释放或丢失超时后的结果。
+  Stream<String> watchReady(String filePath) => _ready.stream
+      .where((event) => event.source == filePath)
+      .map((event) => event.thumbnail);
+
   /// 单次渲染超时时间
   static const _renderTimeout = Duration(seconds: 30);
 
@@ -41,6 +50,8 @@ class PdfThumbnailService {
   Future<String?> getThumbnailPath(String filePath) async {
     final cachePath = p.join(await _cacheDir, _cacheKey(filePath));
     if (await File(cachePath).exists()) return cachePath;
+    // 恢复已经关闭入口时不启动渲染，避免未 await 的封面预热抛出拒绝异常。
+    if (StorageActivity.isRestoring) return null;
 
     // 调用方等待超时不代表原生渲染已结束，必须等真实任务结束后才能移除去重记录。
     final task = _cachingTasks.putIfAbsent(
@@ -104,6 +115,7 @@ class PdfThumbnailService {
         if (byteData == null) return null;
 
         await File(cachePath).writeAsBytes(byteData.buffer.asUint8List());
+        _ready.add((source: filePath, thumbnail: cachePath));
         return cachePath;
       } catch (e) {
         log.d('渲染 PDF 首页失败: $e');
