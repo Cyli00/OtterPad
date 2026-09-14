@@ -1,3 +1,4 @@
+import '../core/storage/storage_activity.dart';
 import 'dart:io';
 import '../core/app_logger.dart';
 
@@ -140,8 +141,7 @@ class BackupOrchestrator {
     required String archivePath,
     required BackupRestoreScope scope,
     required RestoreMode mode,
-  }) async {
-    await _drainActiveTasks();
+  }) => StorageActivity.restore(() async {
     try {
       return await BackupRestoreService.restoreBackupArchive(
         archivePath: archivePath,
@@ -152,7 +152,7 @@ class BackupOrchestrator {
       // 失败回滚也会换连接，旧订阅必须一起重建。
       _refreshAfterRestore(scope);
     }
-  }
+  }, drain: _drainActiveTasks);
 
   /// 恢复会 close Drift 连接（overwrite）或整批读写 DB（merge）——
   /// 先取消所有 Active Task 并等活集合清空，避免在飞任务（翻译写盘、

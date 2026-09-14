@@ -1,3 +1,4 @@
+import '../core/storage/storage_activity.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
@@ -28,7 +29,8 @@ Future<T?> executeTaskBody<T>({
   required Future<T> Function(
     CancelToken token,
     void Function(ListenableProgress) progress,
-  ) body,
+  )
+  body,
   required TaskFinish Function(T result) onSuccess,
   TaskFinish Function(Object error)? onError,
   String? cancelledMessage,
@@ -39,9 +41,12 @@ Future<T?> executeTaskBody<T>({
   String? debugTag,
 }) async {
   try {
-    final result = await body(token, (p) {
-      if (!token.isCancelled) onProgress(p);
-    });
+    final result = await StorageActivity.run(
+      () => body(token, (p) {
+        if (!token.isCancelled) onProgress(p);
+      }),
+      cancel: () => token.cancel(),
+    );
 
     if (token.isCancelled) {
       onCancelled();
@@ -61,7 +66,9 @@ Future<T?> executeTaskBody<T>({
       onFailed(e);
       final finish = onError?.call(e) ?? TaskFinish(message: '任务失败: $e');
       onFinished(finish);
-      if (debugTag != null) log.e('[$debugTag] failed', error: e, stackTrace: st);
+      if (debugTag != null) {
+        log.e('[$debugTag] failed', error: e, stackTrace: st);
+      }
     }
     return null;
   }
@@ -140,7 +147,9 @@ mixin TaskRunner<S> on StateNotifier<S> {
       if (showBusySnackBar) {
         final ctx = rootNavigatorKey.currentContext;
         final l10n = ctx != null ? AppLocalizations.of(ctx) : null;
-        snackBar.showResult(message: busyMessage ?? l10n?.taskBusy ?? '任务正在进行中');
+        snackBar.showResult(
+          message: busyMessage ?? l10n?.taskBusy ?? '任务正在进行中',
+        );
       }
       return null;
     }

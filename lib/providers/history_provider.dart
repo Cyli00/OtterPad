@@ -1,3 +1,4 @@
+import '../core/storage/storage_activity.dart';
 import 'dart:async';
 import '../core/app_logger.dart';
 
@@ -44,13 +45,13 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
   /// Drift 实例统一经 [appDatabaseProvider] 取（唯一来源，禁止直用 GStorage.db）。
   AppDatabase get _db => ref.read(appDatabaseProvider);
 
-  Future<void> _upsert(HistoryEntry e) async {
+  Future<void> _upsert(HistoryEntry e) => StorageActivity.run(() async {
     await _db.into(_db.history).insertOnConflictUpdate(historyCompanion(e));
-  }
+  });
 
-  Future<void> _delete(String docId) async {
+  Future<void> _delete(String docId) => StorageActivity.run(() async {
     await (_db.delete(_db.history)..where((t) => t.docId.equals(docId))).go();
-  }
+  });
 
   /// 仅保留最近 _maxEntries 条（按 openedAt 倒序），其余从 Drift 删除。
   Future<void> _cap() async {
@@ -73,7 +74,7 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
   /// 旧 entry 从 DB 读——冷启动经「继续阅读」直入阅读器时流未 emit，
   /// 若读流 state 会误判 prev=null 把进度清零，阅读位置恢复
   /// （view.dart initState 读取）拿到的永远是 0。
-  Future<void> record(String docId) async {
+  Future<void> record(String docId) => StorageActivity.run(() async {
     final prev = await _findByDocId(docId);
     final entry = HistoryEntry(
       docId: docId,
@@ -83,57 +84,55 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
     );
     await _upsert(entry);
     await _cap();
-  }
+  });
 
   Future<void> removeDoc(String docId) => _delete(docId);
 
-  Future<void> clear() async {
+  Future<void> clear() => StorageActivity.run(() async {
     await _db.delete(_db.history).go();
-  }
+  });
 
   /// 更新阅读进度。写盘走 2s 防抖；流自动刷新 state（ADR-0001 非乐观）。
   ///
   /// 仅更新已存在 entry 的 progress——`record(docId)` 在 reader 入口已建好
   /// entry，从未打开过的文献忽略。基准行优先取防抖窗口内的 pending，其次
   /// 查 DB（不读流 state：冷启动流未 emit 会误判无 entry 而丢进度）。
-  Future<void> setProgress(
-    String docId,
-    double progress, {
-    int? anchorBlock,
-  }) async {
-    final clamped = progress.clamp(0.0, 1.0).toDouble();
-    var old = _pendingProgress?.docId == docId ? _pendingProgress : null;
-    old ??= await _findByDocId(docId);
-    if (old == null) return;
-    // 同进度同锚点不写盘，避免无谓磁盘 IO
-    if ((old.progress - clamped).abs() < 1e-4 &&
-        old.anchorBlock == anchorBlock) {
-      return;
-    }
-    final updated = HistoryEntry(
-      docId: old.docId,
-      openedAt: old.openedAt,
-      progress: clamped,
-      anchorBlock: anchorBlock,
-    );
-
-    _pendingProgress = updated;
-    _progressDebounce?.cancel();
-    _progressDebounce = Timer(_progressDebounceDelay, () {
-      final pending = _pendingProgress;
-      _pendingProgress = null;
-      if (pending != null) {
-        unawaited(
-          _upsert(pending).catchError((Object e, StackTrace st) {
-            log.w('[History] 进度保存失败', error: e, stackTrace: st);
-          }),
+  Future<void> setProgress(String docId, double progress, {int? anchorBlock}) =>
+      StorageActivity.run(() async {
+        final clamped = progress.clamp(0.0, 1.0).toDouble();
+        var old = _pendingProgress?.docId == docId ? _pendingProgress : null;
+        old ??= await _findByDocId(docId);
+        if (old == null) return;
+        // 同进度同锚点不写盘，避免无谓磁盘 IO
+        if ((old.progress - clamped).abs() < 1e-4 &&
+            old.anchorBlock == anchorBlock) {
+          return;
+        }
+        final updated = HistoryEntry(
+          docId: old.docId,
+          openedAt: old.openedAt,
+          progress: clamped,
+          anchorBlock: anchorBlock,
         );
-      }
-    });
-  }
+
+        _pendingProgress = updated;
+        _progressDebounce?.cancel();
+        final generation = StorageActivity.generation;
+        _progressDebounce = Timer(_progressDebounceDelay, () {
+          final pending = _pendingProgress;
+          _pendingProgress = null;
+          if (pending != null && generation == StorageActivity.generation) {
+            unawaited(
+              _upsert(pending).catchError((Object e, StackTrace st) {
+                log.w('[History] 进度保存失败', error: e, stackTrace: st);
+              }),
+            );
+          }
+        });
+      });
 
   /// reader dispose / 退出阅读器时调，强制立即写盘，避免崩溃丢最后一次更新。
-  Future<void> flushProgress() async {
+  Future<void> flushProgress() => StorageActivity.run(() async {
     if (_progressDebounce?.isActive ?? false) {
       _progressDebounce!.cancel();
       _progressDebounce = null;
@@ -141,7 +140,7 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
       _pendingProgress = null;
       if (pending != null) await _upsert(pending);
     }
-  }
+  });
 }
 
 final historyProvider =

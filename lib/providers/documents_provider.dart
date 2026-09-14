@@ -1,3 +1,5 @@
+import '../services/document_duplicate_index.dart';
+import '../core/storage/storage_activity.dart';
 import '../core/l10n.dart';
 import '../router/app_router.dart' show rootNavigatorKey;
 import 'dart:async';
@@ -163,7 +165,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   Future<AddFileResult> addFile(
     String sourcePath, {
     CancelToken? cancelToken,
-  }) async {
+  }) => StorageActivity.run(() async {
     final sourceFile = File(sourcePath);
     if (!await sourceFile.exists()) {
       return const AddFileResult(type: AddFileResultType.duplicate);
@@ -213,8 +215,13 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
 
     // 元数据提取异步：不阻塞 addFile 返回，批量导入时多个文件快速建卡，
     // 元数据后台逐篇提取 + upsert（watch() 流自动刷新卡片）。
+    final metadataToken = CancelToken();
+    if (cancelToken != null) {
+      if (cancelToken.isCancelled) metadataToken.cancel();
+      cancelToken.whenCancel.then((_) => metadataToken.cancel());
+    }
     unawaited(
-      _repairAndUpdate(doc, cancelToken: cancelToken).catchError((
+      _repairAndUpdate(doc, cancelToken: metadataToken).catchError((
         Object e,
         StackTrace st,
       ) {
@@ -228,29 +235,31 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       document: doc,
       metadataStatus: MetadataStatus.none,
     );
-  }
+  });
 
   /// 后台提取元数据并更新（异步，不阻塞 addFile）。提取耗时数秒（联网），
   /// 期间文献可能被删除或被用户编辑：回写做字段级合并（用户改过的字段不
   /// 覆盖），并用带 where 的 UPDATE 落库——行已删时更新 0 行，不复活已删文献。
-  Future<void> _repairAndUpdate(
-    Document doc, {
-    CancelToken? cancelToken,
-  }) async {
-    // 提前取库实例：本方法 fire-and-forget，避免 await 之后 ref 已被释放。
-    final database = _db;
-    final repaired = await _repairDocument(doc, cancelToken: cancelToken);
-    if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
-    final row = await (database.select(
-      database.documents,
-    )..where((t) => t.id.equals(doc.id))).getSingleOrNull();
-    if (row == null) return;
-    final merged = _mergeRepaired(doc, documentFromRow(row), repaired.document);
-    if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
-    await (database.update(
-      database.documents,
-    )..where((t) => t.id.equals(doc.id))).write(documentCompanion(merged));
-  }
+  Future<void> _repairAndUpdate(Document doc, {CancelToken? cancelToken}) =>
+      StorageActivity.run(() async {
+        // 提前取库实例：本方法 fire-and-forget，避免 await 之后 ref 已被释放。
+        final database = _db;
+        final repaired = await _repairDocument(doc, cancelToken: cancelToken);
+        if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+        final row = await (database.select(
+          database.documents,
+        )..where((t) => t.id.equals(doc.id))).getSingleOrNull();
+        if (row == null) return;
+        final merged = _mergeRepaired(
+          doc,
+          documentFromRow(row),
+          repaired.document,
+        );
+        if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+        await (database.update(
+          database.documents,
+        )..where((t) => t.id.equals(doc.id))).write(documentCompanion(merged));
+      }, cancel: () => cancelToken?.cancel());
 
   /// 字段级合并提取结果：以 addFile 时的快照为基线，用户在提取窗口内改过的
   /// 字段（当前行 ≠ 快照）保留当前值，未动过的字段采用提取结果。
@@ -291,7 +300,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   Future<(Document, AddByIdentifierResult)> addByIdentifier(
     String identifier, {
     CancelToken? cancelToken,
-  }) async {
+  }) => StorageActivity.run(() async {
     final resolved = await IdentifierResolver.instance.resolve(
       identifier,
       cancelToken: cancelToken,
@@ -309,46 +318,52 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
 
     var doc = resolved.copyWith(id: _newDocumentId(), contentHash: null);
 
-    // PDF 下载：DOI 管道优先；PMID 输入且 DOI 无果时走 PMC 开放获取兜底。
-    final parsed = IdentifierParser.parse(identifier);
-    final pdfPath = DocPaths.pdf(doc.id);
-    String downloadedPath = '';
-    if (!DocumentMetadataChecks.isBlank(doc.doi)) {
-      downloadedPath = await PdfFetchService.instance.fetchByDoi(
-        doi: doc.doi!,
-        year: doc.year,
-        authors: doc.authors,
-        title: doc.title,
-        fallbackId: doc.id,
-        targetPath: pdfPath,
-        cancelToken: cancelToken,
-      );
-    }
-    if (downloadedPath.isEmpty && parsed.type == IdentifierType.pmid) {
-      downloadedPath = await PdfFetchService.instance.fetchByPmid(
-        pmid: parsed.value,
-        year: doc.year,
-        authors: doc.authors,
-        title: doc.title,
-        fallbackId: doc.id,
-        targetPath: pdfPath,
-        cancelToken: cancelToken,
-      );
-    }
-    if (downloadedPath.isNotEmpty) {
-      doc = doc.copyWith(
-        contentHash: await DocPaths.computeHash(File(pdfPath)),
-      );
-    }
+    await DocumentFileOperations(_db, GStorage.libraryDirPath).run(
+      doc.id,
+      deleting: false,
+      action: () async {
+        // PDF 下载：DOI 管道优先；PMID 输入且 DOI 无果时走 PMC 开放获取兜底。
+        final parsed = IdentifierParser.parse(identifier);
+        final pdfPath = DocPaths.pdf(doc.id);
+        String downloadedPath = '';
+        if (!DocumentMetadataChecks.isBlank(doc.doi)) {
+          downloadedPath = await PdfFetchService.instance.fetchByDoi(
+            doi: doc.doi!,
+            year: doc.year,
+            authors: doc.authors,
+            title: doc.title,
+            fallbackId: doc.id,
+            targetPath: pdfPath,
+            cancelToken: cancelToken,
+          );
+        }
+        if (downloadedPath.isEmpty && parsed.type == IdentifierType.pmid) {
+          downloadedPath = await PdfFetchService.instance.fetchByPmid(
+            pmid: parsed.value,
+            year: doc.year,
+            authors: doc.authors,
+            title: doc.title,
+            fallbackId: doc.id,
+            targetPath: pdfPath,
+            cancelToken: cancelToken,
+          );
+        }
+        if (downloadedPath.isNotEmpty) {
+          doc = doc.copyWith(
+            contentHash: await DocPaths.computeHash(File(pdfPath)),
+          );
+        }
 
-    await _upsertDoc(doc);
+        await _upsertDoc(doc);
+      },
+    );
     if (doc.contentHash != null) {
       unawaited(
         PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(doc.id)),
       );
     }
     return (doc, AddByIdentifierResult.success);
-  }
+  });
 
   /// 批量导入已带元数据的文献（如 Zotero 同步），不经过 `IdentifierResolver`
   /// 重新联网解析。每篇以 `contentHash: null` 入库（纯元数据、暂无 PDF），
@@ -356,24 +371,24 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   ///
   /// 返回与 [incoming] 等长、同序的结果列表：重复项返回库中已存在的那篇，
   /// 新增项返回分配了 id 后的新文献——便于调用方记录外部 key ↔ documentId 映射。
-  Future<List<Document>> importDocuments(List<Document> incoming) async {
+  Future<List<Document>> importDocuments(
+    List<Document> incoming, {
+    DocumentDuplicateIndex? index,
+  }) => StorageActivity.run(() async {
     if (incoming.isEmpty) return const [];
 
-    final base = await _allDocsFromDb();
+    final duplicates = index ?? DocumentDuplicateIndex(await _allDocsFromDb());
     final results = <Document>[];
     final additions = <Document>[];
     for (final candidate in incoming) {
-      final existing = [...base, ...additions].cast<Document?>().firstWhere(
-        (doc) =>
-            doc != null && DocumentMetadataChecks.isDuplicate(doc, candidate),
-        orElse: () => null,
-      );
+      final existing = duplicates.find(candidate);
       if (existing != null) {
         results.add(existing);
         continue;
       }
       final doc = candidate.copyWith(id: _newDocumentId(), contentHash: null);
       additions.add(doc);
+      duplicates.put(doc);
       results.add(doc);
     }
 
@@ -381,12 +396,12 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       await _upsertDocs(additions);
     }
     return results;
-  }
+  });
 
   Future<RebuildResult> rebuild({
     void Function(RebuildProgress)? onProgress,
     CancelToken? cancelToken,
-  }) async {
+  }) => StorageActivity.run(() async {
     final l10n = rootNavigatorKey.currentContext?.l10n;
     final docsDir = await getDocsDir();
     var addedCount = 0;
@@ -501,7 +516,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       noFileCount: noFileCount,
       cancelled: cancelToken?.isCancelled == true,
     );
-  }
+  });
 
   Future<void> updateDocument(
     String id, {
@@ -510,7 +525,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     String? journal,
     String? year,
     String? doi,
-  }) async {
+  }) => StorageActivity.run(() async {
     // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致编辑静默不生效）。
     final existing = await _findById(id);
     if (existing == null) return;
@@ -522,29 +537,30 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
       doi: doi,
     );
     await _upsertDoc(updated);
-  }
+  });
 
-  Future<void> attachFile(String docId, String sourcePath) async {
-    // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致补文件静默不执行）。
-    final existing = await _findById(docId);
-    if (existing == null) return;
+  Future<void> attachFile(String docId, String sourcePath) =>
+      StorageActivity.run(() async {
+        // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致补文件静默不执行）。
+        final existing = await _findById(docId);
+        if (existing == null) return;
 
-    final sourceFile = File(sourcePath);
-    if (!await sourceFile.exists()) return;
+        final sourceFile = File(sourcePath);
+        if (!await sourceFile.exists()) return;
 
-    final contentHash = await DocPaths.computeHash(sourceFile);
-    await _writePdfForDocument(docId, sourceFile, clearDerived: true);
+        final contentHash = await DocPaths.computeHash(sourceFile);
+        await _writePdfForDocument(docId, sourceFile, clearDerived: true);
 
-    var updated = existing.copyWith(contentHash: contentHash);
-    if (DocumentMetadataChecks.needsRepair(updated)) {
-      updated = (await _repairDocument(updated)).document;
-    }
+        var updated = existing.copyWith(contentHash: contentHash);
+        if (DocumentMetadataChecks.needsRepair(updated)) {
+          updated = (await _repairDocument(updated)).document;
+        }
 
-    await _upsertDoc(updated);
-    unawaited(
-      PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(docId)),
-    );
-  }
+        await _upsertDoc(updated);
+        unawaited(
+          PdfThumbnailService.instance.getThumbnailPath(DocPaths.pdf(docId)),
+        );
+      });
 
   Future<Document?> mergeSourceMetadata(
     String id,
@@ -569,7 +585,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     String docId,
     String sourcePath, {
     CancelToken? cancelToken,
-  }) async {
+  }) => StorageActivity.run(() async {
     void checkCancelled() {
       if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
     }
@@ -622,91 +638,90 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     } finally {
       if (await staged.exists()) await staged.delete();
     }
-  }
+  });
 
-  Future<bool> redownloadPdf(String docId, {CancelToken? cancelToken}) async {
-    // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致重下载静默不执行）。
-    final found = await _findById(docId);
-    if (found == null) return false;
-    var doc = found;
+  Future<bool> redownloadPdf(String docId, {CancelToken? cancelToken}) =>
+      StorageActivity.run(() async {
+        // 按 id 走 DB 查询（流未 emit 时 state 为空会找不到，导致重下载静默不执行）。
+        final found = await _findById(docId);
+        if (found == null) return false;
+        var doc = found;
 
-    // 无 DOI 时，用标题搜索补全元数据（可能拿到 DOI）
-    if (DocumentMetadataChecks.isBlank(doc.doi) &&
-        !DocumentMetadataChecks.looksLikePlaceholderTitle(doc)) {
-      try {
-        final searchResult = await MetadataSearchService.instance.searchByTitle(
-          doc.title,
-          cancelToken: cancelToken,
-        );
-        if (searchResult != null) {
-          doc = _applyResolvedDocument(doc, searchResult);
-          await _upsertDoc(doc);
+        // 无 DOI 时，用标题搜索补全元数据（可能拿到 DOI）
+        if (DocumentMetadataChecks.isBlank(doc.doi) &&
+            !DocumentMetadataChecks.looksLikePlaceholderTitle(doc)) {
+          try {
+            final searchResult = await MetadataSearchService.instance
+                .searchByTitle(doc.title, cancelToken: cancelToken);
+            if (searchResult != null) {
+              doc = _applyResolvedDocument(doc, searchResult);
+              await _upsertDoc(doc);
+            }
+          } catch (e) {
+            if (e is DioException && CancelToken.isCancel(e)) rethrow;
+            log.d('标题搜索补全 DOI 失败: $e');
+          }
         }
-      } catch (e) {
-        if (e is DioException && CancelToken.isCancel(e)) rethrow;
-        log.d('标题搜索补全 DOI 失败: $e');
-      }
-    }
 
-    if (DocumentMetadataChecks.isBlank(doc.doi)) return false;
+        if (DocumentMetadataChecks.isBlank(doc.doi)) return false;
 
-    // 下载到 source.pdf.tmp 临时路径，绕开 IdentifierResolver._downloadPdf 的
-    // "exists → skip" 短路；成功后再原子替换。失败时旧 PDF 与 derived 完整保留。
-    final pdfPath = DocPaths.pdf(docId);
-    final tempPath = '$pdfPath.tmp';
-    final tempFile = File(tempPath);
-    try {
-      if (await tempFile.exists()) await tempFile.delete();
-
-      final downloadedPath = await PdfFetchService.instance.fetchByDoi(
-        doi: doc.doi!,
-        year: doc.year,
-        authors: doc.authors,
-        title: doc.title,
-        fallbackId: doc.id,
-        targetPath: tempPath,
-        cancelToken: cancelToken,
-      );
-      if (downloadedPath.isEmpty) return false;
-
-      final newHash = await DocPaths.computeHash(File(downloadedPath));
-      final contentChanged = doc.contentHash != newHash;
-
-      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
-      await File(downloadedPath).rename(pdfPath);
-
-      // 内容变化 → 旧 extract.md / figures / summary / 翻译缓存与缩略图全部失效。
-      if (contentChanged) {
-        await _clearDerivedFiles(docId);
-        await PdfThumbnailService.instance.deleteCacheEntry(pdfPath);
-      }
-
-      var updated = doc.copyWith(contentHash: newHash);
-
-      // 下载后用 PDF 内容补全可能缺失的元数据
-      if (DocumentMetadataChecks.needsRepair(updated)) {
-        updated = (await _repairDocument(
-          updated,
-          cancelToken: cancelToken,
-        )).document;
-      }
-
-      await _upsertDoc(updated);
-      unawaited(PdfThumbnailService.instance.getThumbnailPath(pdfPath));
-      return true;
-    } catch (error) {
-      if (error is DioException && CancelToken.isCancel(error)) rethrow;
-      log.d('重新下载 PDF 失败: $error');
-      if (await tempFile.exists()) {
+        // 下载到 source.pdf.tmp 临时路径，绕开 IdentifierResolver._downloadPdf 的
+        // "exists → skip" 短路；成功后再原子替换。失败时旧 PDF 与 derived 完整保留。
+        final pdfPath = DocPaths.pdf(docId);
+        final tempPath = '$pdfPath.tmp';
+        final tempFile = File(tempPath);
         try {
-          await tempFile.delete();
-        } catch (_) {}
-      }
-      return false;
-    }
-  }
+          if (await tempFile.exists()) await tempFile.delete();
 
-  Future<void> delete(String id) async {
+          final downloadedPath = await PdfFetchService.instance.fetchByDoi(
+            doi: doc.doi!,
+            year: doc.year,
+            authors: doc.authors,
+            title: doc.title,
+            fallbackId: doc.id,
+            targetPath: tempPath,
+            cancelToken: cancelToken,
+          );
+          if (downloadedPath.isEmpty) return false;
+
+          final newHash = await DocPaths.computeHash(File(downloadedPath));
+          final contentChanged = doc.contentHash != newHash;
+
+          if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
+          await File(downloadedPath).rename(pdfPath);
+
+          // 内容变化 → 旧 extract.md / figures / summary / 翻译缓存与缩略图全部失效。
+          if (contentChanged) {
+            await _clearDerivedFiles(docId);
+            await PdfThumbnailService.instance.deleteCacheEntry(pdfPath);
+          }
+
+          var updated = doc.copyWith(contentHash: newHash);
+
+          // 下载后用 PDF 内容补全可能缺失的元数据
+          if (DocumentMetadataChecks.needsRepair(updated)) {
+            updated = (await _repairDocument(
+              updated,
+              cancelToken: cancelToken,
+            )).document;
+          }
+
+          await _upsertDoc(updated);
+          unawaited(PdfThumbnailService.instance.getThumbnailPath(pdfPath));
+          return true;
+        } catch (error) {
+          if (error is DioException && CancelToken.isCancel(error)) rethrow;
+          log.d('重新下载 PDF 失败: $error');
+          if (await tempFile.exists()) {
+            try {
+              await tempFile.delete();
+            } catch (_) {}
+          }
+          return false;
+        }
+      });
+
+  Future<void> delete(String id) => StorageActivity.run(() async {
     await DocumentFileOperations(
       _db,
       GStorage.libraryDirPath,
@@ -716,7 +731,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     } catch (error) {
       log.d('删除缩略图失败: $error');
     }
-  }
+  });
 
   Future<void> _writePdfForDocument(
     String documentId,

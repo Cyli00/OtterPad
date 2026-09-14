@@ -1,3 +1,4 @@
+import 'storage_activity.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -26,7 +27,7 @@ class DocumentFileOperations {
     String id, {
     required bool deleting,
     required Future<void> Function() action,
-  }) async {
+  }) => StorageActivity.run(() async {
     if (id.isEmpty ||
         p.basename(id) != id ||
         id == '.' ||
@@ -43,7 +44,7 @@ class DocumentFileOperations {
     } finally {
       _active.remove(operation);
     }
-  }
+  });
 
   Future<void> _run(
     String id, {

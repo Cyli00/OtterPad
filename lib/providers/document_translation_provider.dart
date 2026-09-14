@@ -1,3 +1,4 @@
+import '../core/storage/storage_activity.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -174,7 +175,10 @@ class DocumentTranslationNotifier
     if (!mounted || _activeTranslation != null) return Future.value(false);
     final token = TranslationCancelToken();
     _cancelToken = token;
-    final run = _translate(markdown, token, useCache: useCache);
+    final run = StorageActivity.run(
+      () => _translate(markdown, token, useCache: useCache),
+      cancel: () => token.cancel(),
+    );
     final settled = run.whenComplete(() {
       if (identical(_cancelToken, token)) {
         _cancelToken = null;

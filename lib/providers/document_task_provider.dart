@@ -1,3 +1,4 @@
+import '../core/storage/storage_activity.dart';
 import '../services/model_capability_store.dart';
 import 'dart:async';
 import 'dart:collection';
@@ -250,6 +251,22 @@ class DocumentTaskNotifier
     required List<BatchExtractItem> items,
     required DocExtractApiState apiState,
   }) async {
+    final cancelToken = CancelToken();
+    return StorageActivity.run(
+      () => _extractBatch(
+        items: items,
+        apiState: apiState,
+        cancelToken: cancelToken,
+      ),
+      cancel: () => cancelToken.cancel(),
+    );
+  }
+
+  Future<Map<String, String?>> _extractBatch({
+    required List<BatchExtractItem> items,
+    required DocExtractApiState apiState,
+    required CancelToken cancelToken,
+  }) async {
     if (!await AiSettingsPrompt.ensureExtractConfigured(apiState: apiState)) {
       return {for (final item in items) item.documentId: null};
     }
@@ -328,7 +345,6 @@ class DocumentTaskNotifier
       return {for (final item in items) item.documentId: null};
     }
 
-    final cancelToken = CancelToken();
     for (final item in runnable) {
       final key = DocumentTaskKey(
         type: DocumentTaskType.extractDocument,
@@ -858,7 +874,7 @@ class DocumentTaskNotifier
     TaskFinish Function(Object error)? onError,
     String? cancelledMessage,
   }) {
-    if (hasActiveDocumentTask(key.documentId)) {
+    if (StorageActivity.isRestoring || hasActiveDocumentTask(key.documentId)) {
       if (showBusySnackBar) _snackBar.showResult(message: busyMessage);
       return Future.value(null);
     }

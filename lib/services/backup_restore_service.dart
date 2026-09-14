@@ -1,3 +1,4 @@
+import '../core/storage/storage_activity.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -267,11 +268,13 @@ class BackupRestoreService {
     RestoreMode mode = RestoreMode.overwrite,
     void Function(String)? onProgress,
   }) => _runExclusive(
-    () => _restoreBackupArchive(
-      archivePath: archivePath,
-      scope: scope,
-      mode: mode,
-      onProgress: onProgress,
+    () => StorageActivity.restore(
+      () => _restoreBackupArchive(
+        archivePath: archivePath,
+        scope: scope,
+        mode: mode,
+        onProgress: onProgress,
+      ),
     ),
   );
 

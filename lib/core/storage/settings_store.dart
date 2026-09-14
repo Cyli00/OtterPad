@@ -1,3 +1,4 @@
+import 'storage_activity.dart';
 import 'dart:convert';
 
 import 'app_database.dart' as db;
@@ -23,7 +24,7 @@ class SettingsStore {
   Iterable<String> get keys => _cache.keys;
 
   /// 数据库写成功后更新缓存，避免写入失败却显示新值。
-  Future<void> put(String key, Object? value) async {
+  Future<void> put(String key, Object? value) => StorageActivity.run(() async {
     await _db
         .into(_db.settings)
         .insertOnConflictUpdate(
@@ -33,19 +34,19 @@ class SettingsStore {
           ),
         );
     _cache[key] = value;
-  }
+  });
 
-  Future<void> delete(String key) async {
+  Future<void> delete(String key) => StorageActivity.run(() async {
     await (_db.delete(
       _db.settings,
     )..where((t) => t.settingKey.equals(key))).go();
     _cache.remove(key);
-  }
+  });
 
-  Future<void> clear() async {
+  Future<void> clear() => StorageActivity.run(() async {
     await _db.delete(_db.settings).go();
     _cache.clear();
-  }
+  });
 
   /// 启动时一次性加载全部 settings 到缓存。
   Future<void> preload() async {

@@ -1,3 +1,4 @@
+import '../core/storage/storage_activity.dart';
 import 'dart:async';
 
 import 'package:drift/drift.dart';
@@ -101,85 +102,87 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
   }
 
   /// 创建新收藏夹
-  Future<Favorite> create({required String emoji, required String name}) async {
-    final favorite = Favorite(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      emoji: emoji,
-      name: name,
-      documentIds: [],
-      createdAt: DateTime.now(),
-    );
-    await _upsertFav(favorite);
-    return favorite;
-  }
+  Future<Favorite> create({required String emoji, required String name}) =>
+      StorageActivity.run(() async {
+        final favorite = Favorite(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          emoji: emoji,
+          name: name,
+          documentIds: [],
+          createdAt: DateTime.now(),
+        );
+        await _upsertFav(favorite);
+        return favorite;
+      });
 
   /// 重命名收藏夹（存在性走 DB 查询，见 [_favExists] 注释）
-  Future<void> rename(String id, {String? emoji, String? name}) async {
-    final row = await (_db.select(
-      _db.favorites,
-    )..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (row == null) return;
-    await _upsertFav(
-      Favorite(
-        id: row.id,
-        emoji: emoji ?? row.emoji,
-        name: name ?? row.name,
-        documentIds: const [],
-        createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt),
-      ),
-    );
-  }
+  Future<void> rename(String id, {String? emoji, String? name}) =>
+      StorageActivity.run(() async {
+        final row = await (_db.select(
+          _db.favorites,
+        )..where((t) => t.id.equals(id))).getSingleOrNull();
+        if (row == null) return;
+        await _upsertFav(
+          Favorite(
+            id: row.id,
+            emoji: emoji ?? row.emoji,
+            name: name ?? row.name,
+            documentIds: const [],
+            createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt),
+          ),
+        );
+      });
 
   /// 删除收藏夹（默认收藏夹不可删除）
-  Future<void> delete(String id) async {
+  Future<void> delete(String id) => StorageActivity.run(() async {
     if (id == Favorite.defaultId) return;
     await _deleteFav(id);
-  }
+  });
 
   /// 向收藏夹添加文献。重复添加由 _link 的 insertOrIgnore 天然去重。
-  Future<void> addDocument(String favoriteId, String documentId) async {
-    if (!await _favExists(favoriteId)) return;
-    await _link(favoriteId, documentId);
-  }
+  Future<void> addDocument(String favoriteId, String documentId) =>
+      StorageActivity.run(() async {
+        if (!await _favExists(favoriteId)) return;
+        await _link(favoriteId, documentId);
+      });
 
   /// 批量向收藏夹添加文献（已存在的自动跳过，单次写盘）。
   ///
   /// 返回真正新增的篇数——用于 UI 区分"已经在里面跳过了 N 篇"vs"全是新加的"。
-  Future<int> addDocuments(
-    String favoriteId,
-    Iterable<String> documentIds,
-  ) async {
-    if (!await _favExists(favoriteId)) return 0;
+  Future<int> addDocuments(String favoriteId, Iterable<String> documentIds) =>
+      StorageActivity.run(() async {
+        if (!await _favExists(favoriteId)) return 0;
 
-    // 已有关联从 DB 读（唯一真值源），计算真正新增集
-    final existing =
-        (await (_db.select(
+        // 已有关联从 DB 读（唯一真值源），计算真正新增集
+        final existing =
+            (await (_db.select(
+                  _db.favoriteDocuments,
+                )..where((t) => t.favoriteId.equals(favoriteId))).get())
+                .map((r) => r.docId)
+                .toSet();
+        final toAdd = <String>[];
+        for (final id in documentIds) {
+          if (existing.add(id)) toAdd.add(id);
+        }
+        if (toAdd.isEmpty) return 0;
+
+        await _db.batch((b) {
+          for (final id in toAdd) {
+            b.insert(
               _db.favoriteDocuments,
-            )..where((t) => t.favoriteId.equals(favoriteId))).get())
-            .map((r) => r.docId)
-            .toSet();
-    final toAdd = <String>[];
-    for (final id in documentIds) {
-      if (existing.add(id)) toAdd.add(id);
-    }
-    if (toAdd.isEmpty) return 0;
-
-    await _db.batch((b) {
-      for (final id in toAdd) {
-        b.insert(
-          _db.favoriteDocuments,
-          favoriteDocumentCompanion(favoriteId, id),
-          mode: InsertMode.insertOrIgnore,
-        );
-      }
-    });
-    return toAdd.length;
-  }
+              favoriteDocumentCompanion(favoriteId, id),
+              mode: InsertMode.insertOrIgnore,
+            );
+          }
+        });
+        return toAdd.length;
+      });
 
   /// 从收藏夹移除文献。
-  Future<void> removeDocument(String favoriteId, String documentId) async {
-    await _unlink(favoriteId, documentId);
-  }
+  Future<void> removeDocument(String favoriteId, String documentId) =>
+      StorageActivity.run(() async {
+        await _unlink(favoriteId, documentId);
+      });
 }
 
 final favoritesProvider =
