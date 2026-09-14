@@ -24,8 +24,24 @@ class ZoteroImportCandidate {
 class ZoteroItemMapper {
   ZoteroItemMapper._();
 
-  /// 不导入的非文献条目类型（附件 / 笔记 / 标注）。
-  static const _skippedItemTypes = {'attachment', 'note', 'annotation'};
+  static const _literatureTypes = {
+    'journalArticle',
+    'conferencePaper',
+    'preprint',
+    'book',
+    'bookSection',
+    'thesis',
+    'report',
+    'manuscript',
+    'patent',
+    'standard',
+    'document',
+    'dataset',
+    'encyclopediaArticle',
+    'dictionaryEntry',
+    'magazineArticle',
+    'newspaperArticle',
+  };
 
   static List<ZoteroImportCandidate> localCandidates(
     List<Map<String, dynamic>> items,
@@ -77,21 +93,39 @@ class ZoteroItemMapper {
   /// 非文献类型）时返回 null。
   static Document? toDocument(Map<String, dynamic> item) {
     final data = item['data'];
-    if (data is! Map) return null;
+    if (data is! Map || data['deleted'] == true || data['deleted'] == 1) {
+      return null;
+    }
 
     final itemType = data['itemType'] as String?;
-    if (itemType == null || _skippedItemTypes.contains(itemType)) return null;
+    if (!_literatureTypes.contains(itemType)) return null;
 
     final title = (data['title'] as String?)?.trim();
     if (title == null || title.isEmpty) return null;
 
+    final authors = _authors(data['creators']);
+    final journal = _container(itemType!, data);
+    final year = _year(data['date'] as String?);
+    final doi = IdentifierParser.normalizeDoi(
+      data['DOI'] as String?,
+    )?.toLowerCase();
+    final isbn = (data['ISBN'] as String?)?.trim() ?? '';
+    // 文件名、URL、标签和添加时间不是书目元数据；无 DOI 的书籍、报告仍可导入。
+    if (authors.isEmpty &&
+        journal == null &&
+        year == null &&
+        doi == null &&
+        isbn.isEmpty) {
+      return null;
+    }
+
     return Document(
       id: '',
       title: title,
-      authors: _authors(data['creators']),
-      journal: _container(itemType, data),
-      year: _year(data['date'] as String?),
-      doi: IdentifierParser.normalizeDoi(data['DOI'] as String?)?.toLowerCase(),
+      authors: authors,
+      journal: journal,
+      year: year,
+      doi: doi,
       keywords: _tags(data['tags']),
       contentHash: null,
       addedAt: DateTime.now(),
