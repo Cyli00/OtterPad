@@ -1,3 +1,6 @@
+import '../core/storage/storage_activity.dart';
+import '../services/document_duplicate_index.dart';
+import 'documents_provider.dart';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -65,13 +68,22 @@ class ZoteroLocalImporter {
     required Map<String, String?> attachments,
     required CancelToken cancelToken,
     void Function(int done, int total)? onProgress,
-  }) async {
+  }) => StorageActivity.run(() async {
     final database = ref.read(appDatabaseProvider);
     final lifecycle = ref.read(documentLifecycleProvider);
     final api = ref.read(zoteroSyncServiceProvider);
     final store = ZoteroLocalStore(database);
     final result = ZoteroLocalImportResult();
     await api.verifyLocalLibrary(library, cancelToken: cancelToken);
+    final attachmentJobs = <Future<void> Function()>[];
+    DocumentDuplicateIndex? index;
+    (int, int)? revision;
+    Future<(int, int)> currentRevision() async => (
+      (await database.customSelect('SELECT total_changes() AS n').getSingle())
+          .read<int>('n'),
+      (await database.customSelect('PRAGMA data_version').getSingle())
+          .read<int>('data_version'),
+    );
     for (var i = 0; i < candidates.length; i++) {
       if (cancelToken.isCancelled) throw cancelToken.cancelError!;
       final candidate = candidates[i];
@@ -85,6 +97,15 @@ class ZoteroLocalImporter {
         var added = false;
         var updated = false;
         await database.transaction(() async {
+          final now = await currentRevision();
+          // 其他写入改变库时重建；本批次自己的提交只增量更新索引。
+          if (index == null || now != revision) {
+            index = DocumentDuplicateIndex(
+              (await database.select(database.documents).get()).map(
+                documentFromRow,
+              ),
+            );
+          }
           final record = await store.read(source, candidate.key);
           Document? current;
           if (record != null) {
@@ -95,11 +116,12 @@ class ZoteroLocalImporter {
           }
           final hasRecord = current != null;
           if (current == null) {
-            final before = await database.select(database.documents).get();
-            current = (await lifecycle.importDocuments([
-              candidate.document,
-            ])).single;
-            added = !before.any((row) => row.id == current!.id);
+            final existing = index!.find(candidate.document);
+            current =
+                (await ref.read(documentsProvider.notifier).importDocuments([
+                  candidate.document,
+                ], index: index)).single;
+            added = existing == null;
           }
           documentId = current.id;
           final merged = await lifecycle.mergeSourceMetadata(
@@ -108,6 +130,7 @@ class ZoteroLocalImporter {
             hasRecord ? record!.metadata : null,
           );
           if (merged == null) throw StateError('document_removed');
+          index!.put(merged);
           if (!DocumentMetadataChecks.sameCore(current, merged) ||
               current.keywords.join('\u0000') !=
                   merged.keywords.join('\u0000')) {
@@ -122,46 +145,65 @@ class ZoteroLocalImporter {
               hasRecord ? record!.attachmentKey : null,
             ),
           );
+          revision = await currentRevision();
         });
         if (added) result.added++;
         if (updated) result.updated++;
         if (cancelToken.isCancelled) throw cancelToken.cancelError!;
-        if (chosenAttachment != null) {
-          if (await File(DocPaths.pdf(documentId)).exists()) {
-            result.kept++;
-          } else {
-            final uri = await api.localAttachmentUri(
-              library,
-              chosenAttachment,
-              cancelToken: cancelToken,
-            );
-            final path = uri?.replace(host: '').toFilePath();
-            if (path == null || !await File(path).exists()) {
-              result.missing++;
-            } else if (await lifecycle.attachMissingPdf(
-              documentId,
-              path,
-              cancelToken: cancelToken,
-            )) {
-              result.copied++;
-              await store.write(
-                source,
-                candidate.key,
-                ZoteroLocalRecord(
-                  documentId,
-                  candidate.document,
+        attachmentJobs.add(() async {
+          try {
+            if (chosenAttachment != null) {
+              if (await File(DocPaths.pdf(documentId)).exists()) {
+                result.kept++;
+              } else {
+                final uri = await api.localAttachmentUri(
+                  library,
                   chosenAttachment,
-                ),
-              );
-            } else {
-              result.kept++;
+                  cancelToken: cancelToken,
+                );
+                final path = uri?.replace(host: '').toFilePath();
+                if (path == null || !await File(path).exists()) {
+                  result.missing++;
+                } else if (await lifecycle.attachMissingPdf(
+                  documentId,
+                  path,
+                  cancelToken: cancelToken,
+                )) {
+                  result.copied++;
+                  await store.write(
+                    source,
+                    candidate.key,
+                    ZoteroLocalRecord(
+                      documentId,
+                      candidate.document,
+                      chosenAttachment,
+                    ),
+                  );
+                } else {
+                  result.kept++;
+                }
+              }
             }
+          } on DioException catch (e) {
+            if (CancelToken.isCancel(e)) rethrow;
+            result.failedTitles.add(candidate.document.title);
+          } on ZoteroLocalException catch (e) {
+            if (e.reason == ZoteroLocalFailure.changed ||
+                e.reason == ZoteroLocalFailure.unavailable ||
+                e.reason == ZoteroLocalFailure.disabled) {
+              rethrow;
+            }
+            result.failedTitles.add(candidate.document.title);
+          } catch (_) {
+            result.failedTitles.add(candidate.document.title);
           }
-        }
+        });
       } on DioException catch (e) {
+        index = null;
         if (CancelToken.isCancel(e)) rethrow;
         result.failedTitles.add(candidate.document.title);
       } on ZoteroLocalException catch (e) {
+        index = null;
         if (e.reason == ZoteroLocalFailure.changed ||
             e.reason == ZoteroLocalFailure.unavailable ||
             e.reason == ZoteroLocalFailure.disabled) {
@@ -169,10 +211,15 @@ class ZoteroLocalImporter {
         }
         result.failedTitles.add(candidate.document.title);
       } catch (_) {
+        index = null;
         result.failedTitles.add(candidate.document.title);
       }
       onProgress?.call(i + 1, candidates.length);
     }
+    for (var i = 0; i < attachmentJobs.length; i++) {
+      if (cancelToken.isCancelled) throw cancelToken.cancelError!;
+      await attachmentJobs[i]();
+    }
     return result;
-  }
+  }, cancel: () => cancelToken.cancel());
 }
