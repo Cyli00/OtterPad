@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:pdfrx/pdfrx.dart';
 
 import 'identifier_parser.dart';
@@ -11,9 +10,6 @@ import '../core/app_logger.dart';
 class PdfIdentifierExtractor {
   PdfIdentifierExtractor._();
   static final PdfIdentifierExtractor instance = PdfIdentifierExtractor._();
-
-  /// 单次 PDF 提取超时时间
-  static const _extractTimeout = Duration(seconds: 30);
 
   // 非锚定 DOI 正则，用于在散文文本中搜索
   static final _doiRegExp = RegExp(
@@ -39,48 +35,40 @@ class PdfIdentifierExtractor {
     caseSensitive: false,
   );
 
-  /// 从 PDF 前 2 页提取文本（带超时保护）
+  /// 从 PDF 前 2 页提取文本
   ///
   /// 公开以便标识符提取与中文正文元数据提取复用同一次文本读取，
   /// 避免对同一 PDF 重复加锁打开。
   Future<String?> extractText(String filePath) async {
-    return PdfProcessLock.instance
-        .run(() async {
-          PdfDocument? document;
-          try {
-            document = await PdfDocument.openFile(
-              filePath,
-              passwordProvider: () => '',
-            );
-
-            if (document.pages.isEmpty) return null;
-
-            final pageCount = document.pages.length.clamp(0, 2);
-            final buffer = StringBuffer();
-
-            for (int i = 0; i < pageCount; i++) {
-              final page = document.pages[i];
-              await page.ensureLoaded();
-              final text = await page.loadText();
-              buffer.write(text?.fullText ?? '');
-              buffer.write(' ');
-            }
-
-            return buffer.toString();
-          } catch (e) {
-            log.d('提取 PDF 文本失败: $e');
-            return null;
-          } finally {
-            document?.dispose();
-          }
-        })
-        .timeout(
-          _extractTimeout,
-          onTimeout: () {
-            log.d('提取 PDF 文本超时');
-            return null;
-          },
+    return PdfProcessLock.instance.run(() async {
+      PdfDocument? document;
+      try {
+        document = await PdfDocument.openFile(
+          filePath,
+          passwordProvider: () => '',
         );
+
+        if (document.pages.isEmpty) return null;
+
+        final pageCount = document.pages.length.clamp(0, 2);
+        final buffer = StringBuffer();
+
+        for (int i = 0; i < pageCount; i++) {
+          final page = document.pages[i];
+          await page.ensureLoaded();
+          final text = await page.loadText();
+          buffer.write(text?.fullText ?? '');
+          buffer.write(' ');
+        }
+
+        return buffer.toString();
+      } catch (e) {
+        log.d('提取 PDF 文本失败: $e');
+        return null;
+      } finally {
+        await document?.dispose();
+      }
+    });
   }
 
   /// 从已提取的文本中识别标识符，供复用同一次文本读取的调用方使用
