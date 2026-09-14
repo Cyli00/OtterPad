@@ -34,9 +34,6 @@ class SyncStatusResult {
     required this.docs,
   });
 
-  int countOf(DocSyncState state) =>
-      docs.values.where((d) => d.state == state).length;
-
   bool get hasPendingChanges =>
       docs.values.any((d) => d.state != DocSyncState.synced);
 }

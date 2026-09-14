@@ -68,7 +68,7 @@ class PdfIdentifierExtractor {
 
             return buffer.toString();
           } catch (e) {
-            log.d('提取 PDF 文本失败 ($filePath): $e');
+            log.d('提取 PDF 文本失败: $e');
             return null;
           } finally {
             document?.dispose();
@@ -77,16 +77,10 @@ class PdfIdentifierExtractor {
         .timeout(
           _extractTimeout,
           onTimeout: () {
-            log.d('提取 PDF 文本超时 ($filePath)');
+            log.d('提取 PDF 文本超时');
             return null;
           },
         );
-  }
-
-  /// 从 PDF 前 2 页提取最佳标识符（DOI > arXiv > ISBN）
-  Future<ParsedIdentifier?> extractIdentifier(String filePath) async {
-    final fullText = await extractText(filePath);
-    return extractIdentifierFromText(fullText);
   }
 
   /// 从已提取的文本中识别标识符，供复用同一次文本读取的调用方使用

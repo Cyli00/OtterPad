@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/storage/settings_keys.dart';
@@ -115,22 +114,6 @@ class ModelCapabilityStore {
   /// lookup 内部已做纯 id 提取。
   bool isImageGenerationModel(String modelId) =>
       lookup(modelId)?.imageOutput ?? false;
-
-  /// 仅测试用：注入远程表数据（绕过网络/缓存），验证 lookup 纯 id 提取、生图
-  /// 判定、未知模型默认无能力。生产代码不应调用。
-  @visibleForTesting
-  void debugInject(
-    Map<String, AgentModelCapability> models, {
-    String? version,
-  }) {
-    _models
-      ..clear()
-      ..addEntries([
-        for (final e in models.entries) MapEntry(e.key.toLowerCase(), e.value),
-      ]);
-    _version = version;
-    _loaded = true;
-  }
 
   bool get _dueForUpdate {
     if (_fetchedAt == null) return true;

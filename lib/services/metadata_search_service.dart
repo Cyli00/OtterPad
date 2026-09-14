@@ -50,11 +50,7 @@ class MetadataSearchService {
   final List<MetadataSearchSource> _sources = [_CrossRefSearchSource()];
 
   void applyProxy(Enum mode, String host, int port) {
-    _dio.httpClientAdapter = buildProxyAdapter(
-      mode.name,
-      host,
-      port,
-    );
+    _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
   }
 
   /// 用标题（和可选作者）在学术数据库中搜索，返回最佳匹配的 Document。
@@ -135,10 +131,6 @@ class MetadataSearchService {
 
     return 2 * intersection / (a.length - 1 + b.length - 1);
   }
-
-  @visibleForTesting
-  static String normalizeForComparison(String text) =>
-      _normalizeForComparison(text);
 
   static String _normalizeForComparison(String text) {
     return text

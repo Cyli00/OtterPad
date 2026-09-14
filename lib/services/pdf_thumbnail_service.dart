@@ -53,7 +53,7 @@ class PdfThumbnailService {
     return task.timeout(
       _renderTimeout,
       onTimeout: () {
-        log.d('渲染 PDF 首页超时 ($filePath)');
+        log.d('渲染 PDF 首页超时');
         return null;
       },
     );
@@ -106,7 +106,7 @@ class PdfThumbnailService {
         await File(cachePath).writeAsBytes(byteData.buffer.asUint8List());
         return cachePath;
       } catch (e) {
-        log.d('渲染 PDF 首页失败 ($filePath): $e');
+        log.d('渲染 PDF 首页失败: $e');
         return null;
       } finally {
         image?.dispose();
@@ -123,34 +123,6 @@ class PdfThumbnailService {
       if (await cache.exists()) await cache.delete();
     } catch (e) {
       log.d('删除缩略图缓存失败: $e');
-    }
-  }
-
-  /// 文件重命名后迁移缩略图缓存，避免重新渲染
-  Future<void> migrateCacheEntry(String oldPath, String newPath) async {
-    if (oldPath == newPath) return;
-    try {
-      final dir = await _cacheDir;
-      final oldCache = File(p.join(dir, _cacheKey(oldPath)));
-      if (await oldCache.exists()) {
-        final newCache = p.join(dir, _cacheKey(newPath));
-        await oldCache.rename(newCache);
-      }
-    } catch (e) {
-      log.d('迁移缩略图缓存失败: $e');
-    }
-  }
-
-  /// 清除所有缓存
-  Future<void> clearCache() async {
-    try {
-      final dir = Directory(await _cacheDir);
-      if (await dir.exists()) {
-        await dir.delete(recursive: true);
-        await dir.create(recursive: true);
-      }
-    } catch (e) {
-      log.d('清除缓存失败: $e');
     }
   }
 }

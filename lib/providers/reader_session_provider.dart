@@ -80,7 +80,6 @@ class ReaderSessionState {
 
   bool get hasResult => markdownPath != null || markdownContent != null;
   bool get hasMarkdownContent => markdownContent != null;
-  bool get showingMarkdown => showPreview && hasResult;
   bool get markdownHighlightMode => showPreview && highlightQuery != null;
 
   ReaderSessionState copyWith({

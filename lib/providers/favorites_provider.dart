@@ -70,16 +70,14 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
   /// 收藏夹存在性走 DB 查询（唯一真值源）——不读 watch() 流 state，
   /// 避免流未 emit 时误判不存在而静默丢弃写入。
   Future<bool> _favExists(String favoriteId) async {
-    final row = await (_db.select(_db.favorites)
-          ..where((t) => t.id.equals(favoriteId)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.favorites,
+    )..where((t) => t.id.equals(favoriteId))).getSingleOrNull();
     return row != null;
   }
 
   Future<void> _upsertFav(Favorite f) async {
-    await _db
-        .into(_db.favorites)
-        .insertOnConflictUpdate(favoriteCompanion(f));
+    await _db.into(_db.favorites).insertOnConflictUpdate(favoriteCompanion(f));
   }
 
   Future<void> _deleteFav(String id) async {
@@ -87,23 +85,18 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
   }
 
   Future<void> _link(String favoriteId, String docId) async {
-    await _db.into(_db.favoriteDocuments).insert(
+    await _db
+        .into(_db.favoriteDocuments)
+        .insert(
           favoriteDocumentCompanion(favoriteId, docId),
           mode: InsertMode.insertOrIgnore,
         );
   }
 
-  Future<void> _unlinkByDoc(String docId) async {
-    await (_db.delete(_db.favoriteDocuments)
-          ..where((t) => t.docId.equals(docId)))
-        .go();
-  }
-
   Future<void> _unlink(String favoriteId, String docId) async {
-    await (_db.delete(_db.favoriteDocuments)
-          ..where(
-            (t) => t.favoriteId.equals(favoriteId) & t.docId.equals(docId),
-          ))
+    await (_db.delete(_db.favoriteDocuments)..where(
+          (t) => t.favoriteId.equals(favoriteId) & t.docId.equals(docId),
+        ))
         .go();
   }
 
@@ -122,9 +115,9 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
 
   /// 重命名收藏夹（存在性走 DB 查询，见 [_favExists] 注释）
   Future<void> rename(String id, {String? emoji, String? name}) async {
-    final row = await (_db.select(_db.favorites)
-          ..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.favorites,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (row == null) return;
     await _upsertFav(
       Favorite(
@@ -159,11 +152,12 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
     if (!await _favExists(favoriteId)) return 0;
 
     // 已有关联从 DB 读（唯一真值源），计算真正新增集
-    final existing = (await (_db.select(_db.favoriteDocuments)
-              ..where((t) => t.favoriteId.equals(favoriteId)))
-            .get())
-        .map((r) => r.docId)
-        .toSet();
+    final existing =
+        (await (_db.select(
+              _db.favoriteDocuments,
+            )..where((t) => t.favoriteId.equals(favoriteId))).get())
+            .map((r) => r.docId)
+            .toSet();
     final toAdd = <String>[];
     for (final id in documentIds) {
       if (existing.add(id)) toAdd.add(id);
@@ -180,11 +174,6 @@ class FavoritesNotifier extends StreamNotifier<List<Favorite>> {
       }
     });
     return toAdd.length;
-  }
-
-  /// 从所有收藏夹中移除指定文献（不删文献本身；无关联时删除为 no-op）。
-  Future<void> removeDocumentFromAll(String documentId) async {
-    await _unlinkByDoc(documentId);
   }
 
   /// 从收藏夹移除文献。

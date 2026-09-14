@@ -64,19 +64,6 @@ class SummaryImageNotifier extends StateNotifier<SummaryImageState> {
   void finishWithoutImage() {
     state = state.copyWith(generating: false);
   }
-
-  Future<void> syncFromDisk() async {
-    if (pdfPath.isEmpty) {
-      finishWithoutImage();
-      return;
-    }
-    final imagePath = DocumentSummaryImageService.imagePathFor(pdfPath);
-    if (await File(imagePath).exists()) {
-      generated(imagePath);
-    } else {
-      finishWithoutImage();
-    }
-  }
 }
 
 final summaryImageProvider =

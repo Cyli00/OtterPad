@@ -52,11 +52,6 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
     await (_db.delete(_db.history)..where((t) => t.docId.equals(docId))).go();
   }
 
-  Future<void> _deleteMany(Iterable<String> docIds) async {
-    if (docIds.isEmpty) return;
-    await (_db.delete(_db.history)..where((t) => t.docId.isIn(docIds))).go();
-  }
-
   /// 仅保留最近 _maxEntries 条（按 openedAt 倒序），其余从 Drift 删除。
   Future<void> _cap() async {
     await _db.customStatement(
@@ -91,8 +86,6 @@ class HistoryNotifier extends StreamNotifier<List<HistoryEntry>> {
   }
 
   Future<void> removeDoc(String docId) => _delete(docId);
-
-  Future<void> removeMany(Set<String> docIds) => _deleteMany(docIds);
 
   Future<void> clear() async {
     await _db.delete(_db.history).go();

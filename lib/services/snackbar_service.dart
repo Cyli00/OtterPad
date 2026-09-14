@@ -46,97 +46,6 @@ class SnackBarService {
     return MediaQuery.sizeOf(ctx).width < 600;
   }
 
-  /// 进度型 SnackBar：spinner + 状态文字 + 文件名 + 可选进度计数 + 取消按钮
-  void showProgress({
-    int? current,
-    int? total,
-    required String fileName,
-    String? status,
-    required VoidCallback onCancel,
-    Duration duration = const Duration(minutes: 5),
-  }) {
-    final messenger = _messenger;
-    if (messenger == null) return;
-
-    final mobile = _isMobile;
-
-    // clearSnackBars 而非 hideCurrentSnackBar：前者清空整个 FIFO 队列，
-    // 避免旧 snack 未 timeout 把新 snack 卡在队尾形成感知延迟。
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          width: mobile ? null : 400,
-          margin: mobile
-              ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
-              : null,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-          elevation: 6,
-          content: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            status ?? (_l10n?.processing ?? '处理中...'),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (current != null && total != null)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8.0),
-                            child: Text(
-                              '$current / $total',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      fileName,
-                      style: const TextStyle(fontSize: 12, height: 1.4),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          action: SnackBarAction(
-            label: _l10n?.cancel ?? '取消',
-            onPressed: onCancel,
-          ),
-          duration: duration,
-        ),
-      );
-  }
-
   /// 结果/信息型 SnackBar（Transient Result）：文字消息 + 可选操作按钮。
   ///
   /// 短暂占用单槽；关闭后由 [_refreshSlot] 回收，重新呈现仍在跑的 Active Task。
@@ -157,7 +66,8 @@ class SnackBarService {
         behavior: SnackBarBehavior.floating,
         width: mobile ? null : 400,
         margin: mobile
-            ? (margin ?? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0))
+            ? (margin ??
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0))
             : null,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
@@ -198,21 +108,22 @@ class SnackBarService {
       title: title,
       onCancel: onCancel,
     );
-    return SnackBarProgressHandle._(
-      () => activity.finish(id),
-      (msg, action, dur) {
-        // 先把完成消息作为 Transient Result 占槽，再注销任务——这样后续
-        // renderActiveTasks 看到 Transient 占槽会让位，消息不会被进度回收顶掉。
-        if (msg != null) {
-          showResult(
-            message: msg,
-            action: action,
-            duration: dur ?? const Duration(seconds: 4),
-          );
-        }
-        activity.finish(id);
-      },
-    );
+    return SnackBarProgressHandle._(() => activity.finish(id), (
+      msg,
+      action,
+      dur,
+    ) {
+      // 先把完成消息作为 Transient Result 占槽，再注销任务——这样后续
+      // renderActiveTasks 看到 Transient 占槽会让位，消息不会被进度回收顶掉。
+      if (msg != null) {
+        showResult(
+          message: msg,
+          action: action,
+          duration: dur ?? const Duration(seconds: 4),
+        );
+      }
+      activity.finish(id);
+    });
   }
 
   /// snackbar surface：观察 Task Activity，把单槽同步到当前活集合。
@@ -253,10 +164,10 @@ class SnackBarService {
           margin: mobile
               ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
               : null,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
           elevation: 6,
           content: ValueListenableBuilder<ListenableProgress>(
             valueListenable: task.progress,
@@ -333,10 +244,10 @@ class SnackBarService {
           margin: mobile
               ? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0)
               : null,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
           elevation: 6,
           content: Row(
             children: [
@@ -348,7 +259,8 @@ class SnackBarService {
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
-                  _l10n?.tasksInProgress(tasks.length) ?? '${tasks.length} 个任务进行中',
+                  _l10n?.tasksInProgress(tasks.length) ??
+                      '${tasks.length} 个任务进行中',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
@@ -380,7 +292,8 @@ class SnackBarProgressHandle {
     String? finishMessage,
     SnackBarAction? finishAction,
     Duration? finishDuration,
-  ) _finish;
+  )
+  _finish;
 
   SnackBarProgressHandle._(this._dismiss, this._finish);
 
@@ -389,10 +302,6 @@ class SnackBarProgressHandle {
 
   /// 结束进度态。若 [message] 非空，关闭后以结果态展示一条短消息；
   /// [action] 用于给结果 SnackBar 附加按钮（如"前往设置"/"去添加"）。
-  void finish({
-    String? message,
-    SnackBarAction? action,
-    Duration? duration,
-  }) =>
+  void finish({String? message, SnackBarAction? action, Duration? duration}) =>
       _finish(message, action, duration);
 }

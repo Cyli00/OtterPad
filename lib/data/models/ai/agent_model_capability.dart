@@ -1,7 +1,5 @@
 import 'agent_protocol.dart';
 
-enum AgentModelModality { text, image }
-
 class AgentModelCapability {
   final bool textInput;
   final bool imageInput;
