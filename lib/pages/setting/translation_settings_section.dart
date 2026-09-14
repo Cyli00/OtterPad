@@ -79,6 +79,11 @@ class _TranslationSettingsSectionState
     });
   }
 
+  /// 设置项说明 + 该 prompt 的可用占位符清单（清单从 registry 渲染，
+  /// ARB 文案不再手写占位符名）。
+  String _promptDesc(String desc, PromptDef def) =>
+      '$desc · ${context.l10n.promptPlaceholdersAvailable(def.placeholdersLabel)}';
+
   InputDecoration _fieldDeco(
     ThemeData theme,
     ColorScheme cs, {
@@ -178,7 +183,10 @@ class _TranslationSettingsSectionState
               Expanded(
                 child: SettingTitle(
                   context.l10n.systemPrompt,
-                  context.l10n.systemPromptDesc,
+                  _promptDesc(
+                    context.l10n.systemPromptDesc,
+                    Prompts.translationSystem,
+                  ),
                 ),
               ),
               if (!cfg.isSystemPromptDefault)
@@ -214,7 +222,10 @@ class _TranslationSettingsSectionState
               Expanded(
                 child: SettingTitle(
                   context.l10n.userPrompt,
-                  context.l10n.userPromptDesc,
+                  _promptDesc(
+                    context.l10n.userPromptDesc,
+                    Prompts.translationUser,
+                  ),
                 ),
               ),
               if (!cfg.isUserPromptDefault)

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
-import 'package:flutter/foundation.dart';
 
 import '../core/storage/app_database.dart';
 import '../core/storage/storage.dart';
@@ -16,10 +15,7 @@ class TranslationRequestException implements Exception {
   final String message;
   final bool retryable;
 
-  const TranslationRequestException(
-    this.message, {
-    this.retryable = true,
-  });
+  const TranslationRequestException(this.message, {this.retryable = true});
 
   @override
   String toString() => message;
@@ -79,6 +75,9 @@ class TranslationService {
     });
     if (!protected.isEmpty) {
       systemPrompt = '$systemPrompt\n${Prompts.translationPlaceholderGuard}';
+    }
+    if (text.contains('%%%%')) {
+      systemPrompt = '$systemPrompt\n${Prompts.translationSegmentGuard}';
     }
     final userPrompt = renderPrompt(translationConfig.userPrompt, {
       'targetLanguage': targetLang,
@@ -165,6 +164,9 @@ class TranslationService {
     if (!protected.isEmpty) {
       systemPrompt = '$systemPrompt\n${Prompts.translationPlaceholderGuard}';
     }
+    if (text.contains('%%%%')) {
+      systemPrompt = '$systemPrompt\n${Prompts.translationSegmentGuard}';
+    }
     final userPrompt = renderPrompt(translationConfig.userPrompt, {
       'targetLanguage': targetLang,
       'input': protected.masked,
@@ -204,9 +206,9 @@ class TranslationService {
       final retryable = err is AgentChatException
           ? err.retryable
           : err is DioException &&
-              (err.type == DioExceptionType.connectionTimeout ||
-                  err.type == DioExceptionType.receiveTimeout ||
-                  err.type == DioExceptionType.connectionError);
+                (err.type == DioExceptionType.connectionTimeout ||
+                    err.type == DioExceptionType.receiveTimeout ||
+                    err.type == DioExceptionType.connectionError);
       if (!retryable) throw err;
       try {
         final result = await _callApi(
@@ -374,16 +376,4 @@ class TranslationService {
       GStorage.db.translations,
     )..where((t) => t.createdAt.isSmallerThanValue(cutoff))).go();
   }
-
-  // ── 测试缝（@visibleForTesting）：脱离 LLM 单测 Drift 缓存 ──
-  @visibleForTesting
-  static String debugBuildCacheKey(String text, String targetLang) =>
-      _buildCacheKey(text, targetLang);
-
-  @visibleForTesting
-  static Future<String?> debugGetCacheByKey(String key) => _getCache(key);
-
-  @visibleForTesting
-  static Future<void> debugPutCacheByKey(String key, String translation) =>
-      _putCache(key, translation);
 }

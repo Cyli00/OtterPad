@@ -50,6 +50,7 @@ class SettingsKeys {
   static const readerSidebarWidth = 'reader_sidebar_width';
 
   // ── chat ──
+  static const webSearchProvider = 'web_search_provider';
   static const chatStreamEnabled = 'chat_stream_enabled';
   static const chatNewSessionHintDismissed = 'chat_new_session_hint_dismissed';
   static const mimoSearchPluginHintDismissed =

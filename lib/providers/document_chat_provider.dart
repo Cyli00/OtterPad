@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../data/models/chat/chat_session.dart';
+import '../data/models/book/reader_anchor.dart';
+import '../data/models/chat/chat_activity.dart';
 import '../core/app_logger.dart';
 import '../services/document_chat_service.dart';
 import 'agent_api_provider.dart';
@@ -22,6 +24,7 @@ class DocumentChatState {
 
   /// 流式回答的实时累积文本；非流式中 / 未开始为 null。
   final String? streamingText;
+  final List<ChatActivity> activities;
 
   /// 最近一次发送失败的可读文案；进入下一次发送时清空。
   final String? error;
@@ -32,6 +35,7 @@ class DocumentChatState {
     this.activeSessionId,
     this.sending = false,
     this.streamingText,
+    this.activities = const [],
     this.error,
   });
 
@@ -49,6 +53,7 @@ class DocumentChatState {
     Object? activeSessionId = _sentinel,
     bool? sending,
     Object? streamingText = _sentinel,
+    List<ChatActivity>? activities,
     Object? error = _sentinel,
   }) => DocumentChatState(
     loaded: loaded ?? this.loaded,
@@ -57,6 +62,7 @@ class DocumentChatState {
         ? this.activeSessionId
         : activeSessionId as String?,
     sending: sending ?? this.sending,
+    activities: activities ?? this.activities,
     streamingText: identical(streamingText, _sentinel)
         ? this.streamingText
         : streamingText as String?,
@@ -132,8 +138,10 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
   Future<void> send({
     required String text,
     required ChatModelRole role,
+    ChatModelSelection? model,
     String? quotedText,
     String? figureImagePath,
+    ReaderAnchor? quoteAnchor,
     ThinkingLevel? thinkingOverride,
     bool webSearch = false,
     bool streaming = true,
@@ -145,26 +153,48 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     var session =
         state.activeSession ?? ChatSession.create(title: _titleFrom(question));
     final history = List<ChatMessage>.from(session.messages);
-    var userMsg = ChatMessage.user(content: question, quotedText: quotedText);
+    var userMsg = ChatMessage.user(
+      content: question,
+      quoteAnchor: quoteAnchor,
+      quotedText: quotedText,
+      figureImagePath: figureImagePath,
+    );
     session = session.append(userMsg);
     _upsert(session, sending: true);
     final cancelToken = _cancelToken = CancelToken();
     // 流式增量 80ms 节流刷入 state——每个 token 都重建 Markdown 会拖垮 UI。
     final streamBuf = StringBuffer();
+    final activities = <String, ChatActivity>{};
     Timer? flushTimer;
-    void pushDelta(String delta) {
-      streamBuf.write(delta);
+    void scheduleFlush() {
       flushTimer ??= Timer(const Duration(milliseconds: 80), () {
         flushTimer = null;
         if (!mounted || cancelToken.isCancelled) return;
-        state = state.copyWith(streamingText: streamBuf.toString());
+        state = state.copyWith(
+          streamingText: streamBuf.toString(),
+          activities: activities.values.toList(),
+        );
       });
+    }
+
+    void pushActivity(ChatActivity activity) {
+      activities[activity.id] = activity;
+      scheduleFlush();
+    }
+
+    void pushDelta(String delta) {
+      streamBuf.write(delta);
+      scheduleFlush();
     }
 
     Future<void> persistAnswer(String content) async {
       // 从 state 取最新版本再追加——标题生成可能已并发更新过同一会话。
       session = (_sessionById(session.id) ?? session).append(
-        ChatMessage.assistant(content: content, modelId: _modelIdOf(role)),
+        ChatMessage.assistant(
+          content: content,
+          modelId: model?.modelId ?? _modelIdOf(role),
+          activities: activities.values.toList(),
+        ),
       );
       _upsert(session, sending: true);
       await DocumentChatService.saveSession(documentId, session);
@@ -193,8 +223,10 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
       // 完成后挂回已落盘的 user 消息，历史重放据此与当轮保持一致。
       final urlContext = await DocumentChatService.buildUrlContextFallback(
         role: role,
+        model: model,
         question: question,
         cancelToken: cancelToken,
+        onActivity: pushActivity,
       );
       if (!mounted) return;
       if (cancelToken.isCancelled) throw cancelToken.cancelError!;
@@ -212,15 +244,18 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
       final answer = await DocumentChatService.ask(
         documentId: documentId,
         role: role,
+        model: model,
         history: history,
         question: question,
         quotedText: quotedText,
         figureImagePath: figureImagePath,
         urlContext: urlContext,
-        supportsImages: supportsImages(role),
+        supportsImages: supportsImages(role, model: model),
+        supportsReasoning: _capabilityFor(role, model).reasoning,
         thinkingOverride: thinkingOverride,
         webSearch: webSearch,
         onDelta: streaming ? pushDelta : null,
+        onActivity: pushActivity,
         cancelToken: cancelToken,
       );
       flushTimer?.cancel();
@@ -232,7 +267,14 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
       if (cancelToken.isCancelled) {
         // 用户中断：已流出的部分作为回答保留，不白等也不丢
         final partial = streamBuf.toString().trim();
-        if (partial.isEmpty) {
+        for (final step in activities.values.toList()) {
+          if (step.status == ChatActivityStatus.running) {
+            activities[step.id] = step.update(
+              status: ChatActivityStatus.cancelled,
+            );
+          }
+        }
+        if (partial.isEmpty && activities.isEmpty) {
           state = state.copyWith(sending: false, streamingText: null);
         } else {
           try {
@@ -242,6 +284,19 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
           }
         }
         return;
+      }
+      for (final step in activities.values.toList()) {
+        if (step.status == ChatActivityStatus.running) {
+          activities[step.id] = step.update(status: ChatActivityStatus.failed);
+        }
+      }
+      if (streamBuf.isNotEmpty || activities.isNotEmpty) {
+        try {
+          await persistAnswer(streamBuf.toString());
+        } catch (saveError, saveStack) {
+          _reportError(saveError, saveStack);
+          return;
+        }
       }
       _reportError(e, st);
     } finally {
@@ -253,14 +308,16 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
   /// 截断当前会话到 [keepCount] 条消息，然后以 [text] 重新发送。
   ///
   /// 编辑用户消息：`keepCount` = 被编辑消息的 index（丢弃该消息及之后的所有内容）。
-  /// 重试 AI 回答：`keepCount` = 被重试的 assistant 消息的 index（丢弃该回答），
+  /// 重试 AI 回答：`keepCount` = 该回答前 user 消息的 index（替换原提问和回答），
   ///   text 填上一条 user 消息的原文。
   Future<void> resendFrom({
     required int keepCount,
     required String text,
     required ChatModelRole role,
+    ChatModelSelection? model,
     String? quotedText,
     String? figureImagePath,
+    ReaderAnchor? quoteAnchor,
     ThinkingLevel? thinkingOverride,
     bool webSearch = false,
     bool streaming = true,
@@ -280,8 +337,10 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     if (!mounted) return;
     _upsert(truncated, sending: false);
     await send(
+      quoteAnchor: quoteAnchor,
       text: text,
       role: role,
+      model: model,
       quotedText: quotedText,
       figureImagePath: figureImagePath,
       thinkingOverride: thinkingOverride,
@@ -328,20 +387,28 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
   /// 图片输入能力判定：优先读实例上（含用户在设置里手动覆盖的）能力标记，
   /// 实例不可达时回退 id 推断——两条路都在 AgentModelCapability 接缝内。
   /// public：供 page 发图时判定是否需自动转专家模型。
-  bool supportsImages(ChatModelRole role) {
-    final roleState = DocumentChatService.resolveRoleState(role);
-    final modelId = roleState == null
-        ? null
-        : DocumentChatService.modelIdFor(roleState, role);
-    if (roleState == null || modelId == null) return false;
-    final inst = ref.read(agentApiProvider).byId(roleState.id);
-    final cap =
-        inst?.capabilityFor(modelId) ??
-        AgentModelCapability.infer(
-          provider: roleState.provider,
-          modelId: modelId,
-        );
-    return cap.imageInput;
+  bool supportsImages(ChatModelRole role, {ChatModelSelection? model}) =>
+      !DocumentChatService.isFastModel(role, model) &&
+      _capabilityFor(role, model).imageInput;
+
+  AgentModelCapability _capabilityFor(
+    ChatModelRole role,
+    ChatModelSelection? model,
+  ) {
+    final roleState = DocumentChatService.resolveModelState(role, model);
+    final modelId =
+        model?.modelId ??
+        (roleState == null
+            ? null
+            : DocumentChatService.modelIdFor(roleState, role));
+    if (roleState == null || modelId == null) {
+      return const AgentModelCapability();
+    }
+    return ref
+            .read(agentApiProvider)
+            .byId(roleState.id)
+            ?.capabilityFor(modelId) ??
+        const AgentModelCapability();
   }
 
   ChatSession? _sessionById(String id) {
@@ -394,6 +461,7 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
       activeSessionId: session.id,
       sending: sending,
       streamingText: null,
+      activities: const [],
       error: null,
     );
   }

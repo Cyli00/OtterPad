@@ -20,10 +20,10 @@ abstract class BuiltInToolNames {
 /// 搜索 → [none]。Grok 不在此列——已按 host 升格走自家 Responses API
 /// （见 [AgentApiProviderExt.wireProtocol]），搜索在 openai 线路注入。
 ///
-/// [tavily] 是伪厂商：不由域名识别（[compatSearchVendor] 不会返回它），
-/// 由 AgentChatService 在「无原生搜索 + 已配置 Tavily Key」时主动升级，
+/// [external] 是伪厂商：不由域名识别（[compatSearchVendor] 不会返回它），
+/// 由 AgentChatService 在「无原生搜索 + 已配置外部搜索 Key」时主动升级，
 /// 走客户端 function calling 搜索回退。
-enum CompatSearchVendor { qwen, zhipu, kimi, mimo, tavily, none }
+enum CompatSearchVendor { qwen, zhipu, kimi, mimo, external, none }
 
 /// 各服务商 + 模型组合的官方支持检测。不支持的组合由调用方静默跳过工具
 /// 注入（避免 400），而不是报错。

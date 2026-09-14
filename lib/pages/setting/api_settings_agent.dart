@@ -16,7 +16,7 @@ import '../../providers/model_test_provider.dart';
 import '../../providers/onboarding_provider.dart';
 import '../../services/model_capability_store.dart';
 import '../../services/haptics.dart';
-import '../../services/tavily_search_service.dart';
+import 'web_search_settings.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/onboarding_spotlight.dart';
 import '../../widgets/tactile_press.dart';
@@ -74,12 +74,6 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   final _keyDebounce = DebouncedAction();
   final _urlDebounce = DebouncedAction();
 
-  // Tavily 搜索回退的 Key 编辑态（key 本体存 SecureCredentialVault，
-  // 由 TavilySearchService 作唯一存取接缝，不挂在 provider 实例上）
-  late final TextEditingController _tavilyCtrl;
-  bool _tavilyObscured = true;
-  final _tavilyDebounce = DebouncedAction();
-
   ModelTestNotifier get _testNotifier => ref.read(modelTestProvider.notifier);
 
   @override
@@ -97,20 +91,13 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _currentId = inst?.id ?? '';
     _urlCtrl = TextEditingController(text: _urlText(inst));
     _keyCtrl = TextEditingController(text: inst?.apiKey ?? '');
-    _tavilyCtrl = TextEditingController(text: TavilySearchService.apiKey);
   }
 
   @override
   void dispose() {
     _flushEditsDeferred();
-    _tavilyDebounce.cancel();
-    final tavilyKey = _tavilyCtrl.text.trim();
-    if (tavilyKey != TavilySearchService.apiKey) {
-      TavilySearchService.setApiKey(tavilyKey);
-    }
     _urlCtrl.dispose();
     _keyCtrl.dispose();
-    _tavilyCtrl.dispose();
     super.dispose();
   }
 
@@ -916,48 +903,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             },
           ),
 
-          // ── 联网搜索回退（Tavily）──
-          const SizedBox(height: 24),
-          _sectionLabel(theme, cs, context.l10n.tavilySearchSection),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _tavilyCtrl,
-            onChanged: (v) {
-              _tavilyDebounce.run(
-                () => TavilySearchService.setApiKey(v.trim()),
-              );
-            },
-            obscureText: _tavilyObscured,
-            decoration: _fieldDeco(
-              theme,
-              cs,
-              hint: 'tvly-...',
-              suffix: IconButton(
-                icon: Icon(
-                  _tavilyObscured
-                      ? Symbols.visibility_off_rounded
-                      : Symbols.visibility_rounded,
-                  size: 20,
-                ),
-                onPressed: () {
-                  Haptics.soft();
-                  setState(() => _tavilyObscured = !_tavilyObscured);
-                },
-              ),
-            ),
-            autocorrect: false,
-            enableSuggestions: false,
-            style: theme.textTheme.bodyMedium,
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 4, top: 6),
-            child: Text(
-              context.l10n.tavilySearchDesc,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-          ),
+          const WebSearchSettings(),
         ],
       ),
     );

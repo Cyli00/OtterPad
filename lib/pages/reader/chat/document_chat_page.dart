@@ -1,11 +1,12 @@
-import 'dart:io';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:markdown_widget/markdown_widget.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,37 +17,44 @@ import '../../../core/l10n.dart';
 import '../../../core/storage/settings_keys.dart';
 import '../../../core/storage/storage.dart';
 import '../../../data/models/book/document.dart';
+import '../../../data/models/book/reader_anchor.dart';
 import '../../../data/models/chat/chat_session.dart';
 import '../../../data/models/ai/agent_config.dart';
 import '../../../providers/document_chat_provider.dart';
-import '../../../providers/reader_settings_provider.dart';
 import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
 import '../../../services/builtin_tools.dart';
 import '../../../services/document_chat_service.dart';
 import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
-import '../../../services/tavily_search_service.dart';
+import '../../../services/web_search_service.dart';
 import '../../../utils/desktop.dart';
 import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
-import '../widgets/md_widget/nr_markdown_config.dart';
+import 'chat_markdown.dart';
+import 'chat_activity_view.dart';
+import 'chat_figure_attachment.dart';
+import 'chat_model_picker.dart';
+import 'chat_user_quote.dart';
+import '../../../services/figure_extract_service.dart';
+import '../widgets/figure_viewer.dart';
+import '../../../data/models/chat/chat_activity.dart';
 
 /// 定位原文：阅读器滚动后展示「返回问 AI」引导。
 typedef LocateQuoteInReader =
-    void Function(String quote, DocumentChatPageArgs returnArgs);
+    FutureOr<bool> Function(String quote, DocumentChatPageArgs returnArgs);
 
 class DocumentChatPageArgs {
   final Document document;
 
   /// 划词进入时的引用文本；底栏入口为 null。
   final String? initialQuote;
+  final ReaderAnchor? quoteAnchor;
 
   /// 从 Figure 查看器进入时附带的单张图片路径；非空时仅向模型发送此图。
   final String? figureImagePath;
 
-  /// 会话历史「定位原文」回调——由阅读器注入（按引用文本找 markdown 偏移
-  /// 并滚动）。阅读器在导航栈下层保持存活，回调可直接驱动它。
+  /// 阅读器按消息锚点或渲染文本定位；返回成功后聊天页才退出。
   final LocateQuoteInReader? onLocateQuote;
 
   /// 定位原文返回后重新打开时保留当前会话，不重置为草稿。
@@ -58,6 +66,7 @@ class DocumentChatPageArgs {
   const DocumentChatPageArgs({
     required this.document,
     this.initialQuote,
+    this.quoteAnchor,
     this.figureImagePath,
     this.onLocateQuote,
     this.preserveSession = false,
@@ -98,9 +107,15 @@ class DocumentChatPage extends ConsumerStatefulWidget {
 class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _inputController = TextEditingController();
+  final _messageScroll = ScrollController();
+  bool _followOutput = true;
+  bool _scrollScheduled = false;
   String? _quote;
+  ReaderAnchor? _quoteAnchor;
+  bool _locatingQuote = false;
   String? _figureImagePath;
-  ChatModelRole _role = ChatModelRole.expert;
+  final ChatModelRole _role = ChatModelRole.expert;
+  ChatModelSelection? _model;
 
   /// 编辑模式：被编辑的 user 消息在 messages 中的 index。
   int? _editingIndex;
@@ -123,6 +138,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     _quote = widget.args.initialQuote?.trim();
     if (_quote?.isEmpty ?? false) _quote = null;
     _figureImagePath = widget.args.figureImagePath;
+    _quoteAnchor = widget.args.quoteAnchor;
     // 全屏且非 preserveSession：进入即新会话草稿。嵌入停靠栏跟随 provider 保活。
     if (!widget.embedded && !widget.args.preserveSession) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -144,34 +160,82 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       if (q?.isEmpty ?? false) q = null;
       _quote = q;
       _figureImagePath = widget.args.figureImagePath;
+      _quoteAnchor = widget.args.quoteAnchor;
     });
   }
 
   @override
   void dispose() {
     _inputController.dispose();
+    _messageScroll.dispose();
     super.dispose();
   }
 
-  /// 发图前角色解析：带图且当前 role 模型不支持图片 → 切专家 + 提示；
-  /// 专家也不支持 → 提示 expertRequiresVision 并返回 null（中止）。无图或
-  /// 当前模型已支持则原样返回 _role。切回快速由用户手动操作。
-  ChatModelRole? _ensureRoleForFigure() {
-    if (_figureImagePath == null) return _role;
-    if (_role == ChatModelRole.expert) return _role;
-    final notifier = ref.read(documentChatProvider(_documentId).notifier);
-    if (notifier.supportsImages(_role)) return _role;
-    if (!notifier.supportsImages(ChatModelRole.expert)) {
+  void _pauseOutputFollow() => _followOutput = false;
+
+  // 顺序列表固定展开起点；只有跟随回答时才随布局更新滚到底部。
+  // 滚动或展开会暂停跟随，避免流式更新把用户正在查看的内容移出视野。
+  void _scrollToLatest() {
+    if (_scrollScheduled || !_followOutput) return;
+    _scrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollScheduled = false;
+      if (!mounted || !_followOutput || !_messageScroll.hasClients) return;
+      final position = _messageScroll.position;
+      if (position.pixels != position.maxScrollExtent) {
+        _messageScroll.jumpTo(position.maxScrollExtent);
+      }
+    });
+  }
+
+  Future<void> _openFigure(String imagePath, String caption) async {
+    final all = await FigureExtractService.loadManifest(_documentId) ?? [];
+    if (!mounted) return;
+    final matched = all.where((e) => p.equals(e.imagePath, imagePath));
+    final selected = matched.firstOrNull;
+    final figures = selected != null && selected.isDisplayFigure
+        ? FigureManifestEntry.forDisplay(all)
+        : [
+            selected ??
+                FigureManifestEntry(
+                  imagePath: imagePath,
+                  captionText: caption,
+                  pageIndex: 0,
+                  blockIds: const [],
+                ),
+          ];
+    await showFigureViewer(
+      context,
+      figures,
+      initialIndex: selected == null ? 0 : figures.indexOf(selected),
+      documentId: _documentId,
+      document: widget.args.document,
+      onLocateQuote: widget.args.onLocateQuote,
+      onOpenChat: (args) {
+        if (!mounted) return;
+        setState(() {
+          _quote = args.initialQuote;
+          _figureImagePath = args.figureImagePath;
+          _quoteAnchor = args.quoteAnchor;
+        });
+      },
+    );
+  }
+
+  void _notifyFigurePolicy() {
+    final fast = DocumentChatService.isFastModel(_role, _model);
+    final images = ref
+        .read(documentChatProvider(_documentId).notifier)
+        .supportsImages(_role, model: _model);
+    if (fast || (_figureImagePath != null && !images)) {
       ref
           .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.expertRequiresVision);
-      return null;
+          .showResult(
+            message: fast
+                ? context.l10n.chatFastTextOnly
+                : context.l10n.chatModelTextOnly,
+          );
     }
-    setState(() => _role = ChatModelRole.expert);
-    ref
-        .read(snackBarServiceProvider)
-        .showResult(message: context.l10n.switchedToExpertForImage);
-    return ChatModelRole.expert;
   }
 
   void _send() {
@@ -180,8 +244,8 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     if (text.isEmpty || chat.sending) return;
     Haptics.soft();
 
-    final role = _ensureRoleForFigure();
-    if (role == null) return;
+    _notifyFigurePolicy();
+    final role = _role;
 
     final editIdx = _editingIndex;
     if (editIdx != null) {
@@ -191,7 +255,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             keepCount: editIdx,
             text: text,
             role: role,
+            model: _model,
             quotedText: _quote,
+            quoteAnchor: _quoteAnchor,
             figureImagePath: _figureImagePath,
             thinkingOverride: _thinking,
             webSearch: _webSearch,
@@ -203,7 +269,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           .send(
             text: text,
             role: role,
+            model: _model,
             quotedText: _quote,
+            quoteAnchor: _quoteAnchor,
             figureImagePath: _figureImagePath,
             thinkingOverride: _thinking,
             webSearch: _webSearch,
@@ -213,6 +281,8 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     _inputController.clear();
     setState(() {
       _quote = null;
+      _quoteAnchor = null;
+      _figureImagePath = null;
       _editingIndex = null;
     });
     widget.onQuoteConsumed?.call();
@@ -223,6 +293,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     setState(() {
       _editingIndex = null;
       _quote = null;
+      _quoteAnchor = null;
     });
   }
 
@@ -231,14 +302,16 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     setState(() {
       _editingIndex = messageIndex;
       _quote = msg.quotedText;
+      _quoteAnchor = msg.quoteAnchor;
+      _figureImagePath = msg.figureImagePath;
     });
   }
 
   /// 开启联网搜索时的兼容端提示：MiMo 官方端需先在平台控制台开通联网
-  /// 插件；无原生搜索且未配置 Tavily 的厂商（DeepSeek 等）提示去
-  /// AI 设置配置 Tavily Key，否则开关静默无效。
+  /// 插件；无原生搜索且未配置外部搜索 的厂商（DeepSeek 等）提示去
+  /// AI 设置配置所选服务的 Key，否则开关静默无效。
   void _maybeShowSearchHint() {
-    final state = DocumentChatService.resolveRoleState(_role);
+    final state = DocumentChatService.resolveModelState(_role, _model);
     // 按线上协议判定：xAI 已升格 Responses 线路、有原生搜索，不提示
     if (state == null ||
         state.provider.wireProtocol(state.effectiveBaseUrl) !=
@@ -254,13 +327,12 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       if (!dismissed) _showMimoSearchHintDialog();
       return;
     }
-    if (vendor == CompatSearchVendor.none &&
-        !TavilySearchService.isConfigured) {
+    if (vendor == CompatSearchVendor.none && !WebSearchService.isConfigured) {
       final l10n = context.l10n;
       ref
           .read(snackBarServiceProvider)
           .showResult(
-            message: l10n.tavilyNotConfiguredHint,
+            message: l10n.webSearchNotConfigured,
             duration: const Duration(seconds: 7),
             action: SnackBarAction(
               label: l10n.goToSettings,
@@ -471,20 +543,39 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     );
   }
 
-  /// 点击消息中的引用块 → 让下层阅读器滚到引用原文并返回。
-  void _locateQuote(String quote) {
+  Future<void> _locateQuote(ChatMessage message) async {
     final locate = widget.args.onLocateQuote;
-    if (locate == null) return;
+    if (locate == null || _locatingQuote) return;
+    _locatingQuote = true;
     Haptics.soft();
-    locate(
-      quote,
-      DocumentChatPageArgs(
-        document: widget.args.document,
-        preserveSession: true,
-        onLocateQuote: widget.args.onLocateQuote,
-      ),
-    );
-    if (!widget.embedded) context.pop();
+    try {
+      final found = await locate(
+        message.quotedText ?? '',
+        DocumentChatPageArgs(
+          document: widget.args.document,
+          preserveSession: true,
+          quoteAnchor: message.quoteAnchor,
+          figureImagePath: message.figureImagePath,
+          onLocateQuote: widget.args.onLocateQuote,
+        ),
+      );
+      if (!mounted) return;
+      if (!found) {
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(message: context.l10n.chatSourceNotFound);
+      } else if (!widget.embedded) {
+        context.pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(message: context.l10n.chatSourceNotFound);
+      }
+    } finally {
+      _locatingQuote = false;
+    }
   }
 
   Future<void> _showError(String message) async {
@@ -511,6 +602,15 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         if (next != null && next != prev) _showError(next);
       },
     );
+
+    ref.listen(documentChatProvider(_documentId), (previous, next) {
+      final changedSession = previous?.activeSessionId != next.activeSessionId;
+      final startedSending = previous?.sending != true && next.sending;
+      if (changedSession || startedSending) {
+        _followOutput = true;
+      }
+      _scrollToLatest();
+    });
 
     final session = chat.activeSession;
     final messages = session?.messages ?? const <ChatMessage>[];
@@ -621,36 +721,63 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     bool sending,
     String? streamingText,
   ) {
-    // reverse 列表让新消息自动贴底；index 0 是最新项（发送中占位优先）。
-    final itemCount = messages.length + (sending ? 1 : 0);
-    return ListView.builder(
-      reverse: true,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      itemCount: itemCount,
-      itemBuilder: (context, index) {
-        if (sending && index == 0) {
-          if (streamingText == null || streamingText.isEmpty) {
-            return _buildPendingBubble(cs);
-          }
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: _buildAssistantBubble(theme, cs, streamingText),
-          );
+    final activities = ref.watch(documentChatProvider(_documentId)).activities;
+    _scrollToLatest();
+    return NotificationListener<UserScrollNotification>(
+      onNotification: (notification) {
+        if (notification.depth == 0) {
+          _followOutput =
+              notification.direction == ScrollDirection.idle &&
+              notification.metrics.extentAfter < 48;
         }
-        final msgIndex = messages.length - 1 - (sending ? index - 1 : index);
-        final msg = messages[msgIndex];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: msg.isUser
-              ? _buildUserBubble(theme, cs, msg, msgIndex)
-              : _buildAssistantBubble(
+        return false;
+      },
+      child: NotificationListener<ScrollMetricsNotification>(
+        onNotification: (notification) {
+          if (notification.depth == 0) _scrollToLatest();
+          return false;
+        },
+        child: ListView.builder(
+          key: ValueKey(
+            ref.watch(documentChatProvider(_documentId)).activeSessionId,
+          ),
+          controller: _messageScroll,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          itemCount: messages.length + (sending ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == messages.length) {
+              if ((streamingText == null || streamingText.isEmpty) &&
+                  activities.isEmpty) {
+                return _buildPendingBubble(cs);
+              }
+              return Padding(
+                key: const ValueKey('streaming'),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: _buildAssistantBubble(
                   theme,
                   cs,
-                  msg.content,
-                  messageIndex: msgIndex,
+                  streamingText ?? '',
+                  activities: activities,
                 ),
-        );
-      },
+              );
+            }
+            final msg = messages[index];
+            return Padding(
+              key: ValueKey(msg.id),
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: msg.isUser
+                  ? _buildUserBubble(theme, cs, msg, index)
+                  : _buildAssistantBubble(
+                      theme,
+                      cs,
+                      msg.content,
+                      messageIndex: index,
+                      activities: msg.activities,
+                    ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -787,72 +914,55 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     ChatMessage msg,
     int messageIndex,
   ) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: GestureDetector(
-        onLongPressStart: (details) {
-          Haptics.medium();
-          _showUserMessageMenu(
-            context,
-            details.globalPosition,
-            messageIndex,
-            msg,
-          );
-        },
-        child: Container(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.82,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: cs.primaryContainer,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (msg.quotedText != null) ...[
-                // 点击引用块 → 回阅读器定位原文（末尾的 my_location 是可点暗示）
-                Tooltip(
-                  message: context.l10n.chatLocateSource,
-                  child: TactilePress(
-                    onTap: () => _locateQuote(msg.quotedText!),
-                    baseColor: Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Flexible(
-                            child: _QuoteBlock(
-                              text: msg.quotedText!,
-                              textColor: cs.onPrimaryContainer.withAlpha(170),
-                              accentColor: cs.onPrimaryContainer.withAlpha(100),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Icon(
-                            Symbols.my_location_rounded,
-                            size: 14,
-                            color: cs.onPrimaryContainer.withAlpha(140),
-                          ),
-                        ],
-                      ),
-                    ),
+    return LayoutBuilder(
+      builder: (context, constraints) => Align(
+        alignment: Alignment.centerRight,
+        child: GestureDetector(
+          onLongPressStart: (details) {
+            Haptics.medium();
+            _showUserMessageMenu(
+              context,
+              details.globalPosition,
+              messageIndex,
+              msg,
+            );
+          },
+          child: Container(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth * .9),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainer,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (msg.figureImagePath != null) ...[
+                  ChatFigureAttachment(
+                    imagePath: msg.figureImagePath!,
+                    onOpen: () =>
+                        _openFigure(msg.figureImagePath!, msg.quotedText ?? ''),
                   ),
+                  const SizedBox(height: 8),
+                ],
+                if (msg.quotedText != null) ...[
+                  ChatUserQuote(
+                    text: msg.quotedText!,
+                    onToggle: _pauseOutputFollow,
+                    onLocate: widget.args.onLocateQuote == null
+                        ? null
+                        : () => _locateQuote(msg),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                Text(
+                  msg.content,
+                  style: chatBodyStyle(theme).copyWith(color: cs.onSurface),
                 ),
-                const SizedBox(height: 6),
               ],
-              Text(
-                msg.content,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: cs.onPrimaryContainer,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -864,21 +974,14 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     ColorScheme cs,
     String content, {
     int? messageIndex,
+    List<ChatActivity> activities = const [],
   }) {
-    const defaultSettings = ReaderSettingsState();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        MarkdownBlock(
-          data: content,
-          selectable: true,
-          config: buildReaderMarkdownConfig(
-            settings: defaultSettings,
-            colorScheme: cs,
-          ),
-          generator: buildReaderMarkdownGenerator(settings: defaultSettings),
-        ),
+        ChatActivityView(activities: activities, onToggle: _pauseOutputFollow),
+        if (content.isNotEmpty) ChatMarkdown(data: content),
         if (messageIndex != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -929,23 +1032,27 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     final session = ref.read(documentChatProvider(_documentId)).activeSession;
     if (session == null) return;
     ChatMessage? userMsg;
+    int? userIndex;
     for (var i = assistantIndex - 1; i >= 0; i--) {
       if (session.messages[i].isUser) {
         userMsg = session.messages[i];
+        userIndex = i;
         break;
       }
     }
     if (userMsg == null) return;
-    final role = _ensureRoleForFigure();
-    if (role == null) return;
+    _notifyFigurePolicy();
+    final role = _role;
     ref
         .read(documentChatProvider(_documentId).notifier)
         .resendFrom(
-          keepCount: assistantIndex,
+          keepCount: userIndex!,
           text: userMsg.content,
           role: role,
+          model: _model,
           quotedText: userMsg.quotedText,
-          figureImagePath: _figureImagePath,
+          quoteAnchor: userMsg.quoteAnchor,
+          figureImagePath: userMsg.figureImagePath,
           thinkingOverride: _thinking,
           webSearch: _webSearch,
           streaming: _stream,
@@ -958,13 +1065,13 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     required String tooltip,
     required VoidCallback onPressed,
   }) {
-    final embedded = widget.embedded;
+    final compact = isDesktopOs || widget.embedded;
     return IconButton(
-      icon: Icon(icon, size: embedded ? 20 : 22, color: color),
-      iconSize: embedded ? 20 : 24,
+      icon: Icon(icon, size: 20, color: color),
+      iconSize: 20,
       tooltip: tooltip,
-      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(8),
-      constraints: embedded
+      padding: compact ? EdgeInsets.zero : const EdgeInsets.all(8),
+      constraints: compact
           ? BoxConstraints.tight(const Size(36, 36))
           : const BoxConstraints(minWidth: 48, minHeight: 48),
       onPressed: onPressed,
@@ -975,19 +1082,12 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     final l10n = context.l10n;
     final embedded = widget.embedded;
     final toolButtons = [
-      _composerToolButton(
-        icon: _role == ChatModelRole.expert
-            ? Symbols.psychology_rounded
-            : Symbols.bolt_rounded,
-        color: cs.onSurfaceVariant,
-        tooltip: _role == ChatModelRole.expert ? l10n.expert : l10n.fast,
-        onPressed: () {
-          Haptics.soft();
-          setState(() {
-            _role = _role == ChatModelRole.expert
-                ? ChatModelRole.fast
-                : ChatModelRole.expert;
-          });
+      ChatModelPicker(
+        selected: _model,
+        onChanged: (model) {
+          setState(() => _model = model);
+          _notifyFigurePolicy();
+          if (_webSearch) _maybeShowSearchHint();
         },
       ),
       _buildThinkingToolButton(cs),
@@ -1013,24 +1113,41 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         },
       ),
     ];
-    final sendButton = sending
-        ? IconButton.filled(
-            icon: const Icon(Symbols.stop_rounded, size: 22),
-            tooltip: l10n.cancel,
-            style: IconButton.styleFrom(
-              backgroundColor: cs.errorContainer,
-              foregroundColor: cs.onErrorContainer,
+    final sendSize = isDesktopOs ? 36.0 : 40.0;
+    final sendButton = ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _inputController,
+      builder: (context, input, _) => SizedBox.square(
+        key: const ValueKey('chat-send-button'),
+        dimension: sendSize,
+        child: IconButton.filled(
+          icon: Icon(
+            sending ? Symbols.stop_rounded : Symbols.arrow_upward_rounded,
+            size: 20,
+          ),
+          tooltip: sending ? l10n.cancel : l10n.chatSend,
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints.tight(Size.square(sendSize)),
+          style: IconButton.styleFrom(
+            minimumSize: Size.square(sendSize),
+            maximumSize: Size.square(sendSize),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-            onPressed: () {
-              Haptics.soft();
-              ref.read(documentChatProvider(_documentId).notifier).cancel();
-            },
-          )
-        : IconButton.filled(
-            icon: const Icon(Symbols.arrow_upward_rounded, size: 22),
-            tooltip: l10n.chatSend,
-            onPressed: _send,
-          );
+            backgroundColor: sending ? cs.errorContainer : null,
+            foregroundColor: sending ? cs.onErrorContainer : null,
+          ),
+          onPressed: sending
+              ? () {
+                  Haptics.soft();
+                  ref.read(documentChatProvider(_documentId).notifier).cancel();
+                }
+              : input.text.trim().isEmpty
+              ? null
+              : _send,
+        ),
+      ),
+    );
 
     Widget inner = Column(
       mainAxisSize: MainAxisSize.min,
@@ -1044,20 +1161,6 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           ),
           const SizedBox(height: 8),
         ],
-        if (_quote != null || _figureImagePath != null) ...[
-          _QuoteCard(
-            text: _quote ?? '',
-            imagePath: _figureImagePath,
-            onRemove: () {
-              Haptics.soft();
-              setState(() {
-                _quote = null;
-                _figureImagePath = null;
-              });
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
         Container(
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
@@ -1068,6 +1171,36 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_quote != null || _figureImagePath != null) ...[
+                if (_figureImagePath != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ChatFigureAttachment(
+                      imagePath: _figureImagePath!,
+                      onOpen: () =>
+                          _openFigure(_figureImagePath!, _quote ?? ''),
+                      onRemove: () => setState(() {
+                        _quote = null;
+                        _quoteAnchor = null;
+                        _figureImagePath = null;
+                      }),
+                    ),
+                  )
+                else
+                  _QuoteCard(
+                    text: _quote ?? '',
+                    onRemove: () {
+                      Haptics.soft();
+                      setState(() {
+                        _quote = null;
+                        _quoteAnchor = null;
+                        _figureImagePath = null;
+                      });
+                    },
+                  ),
+                const SizedBox(height: 8),
+              ],
+
               if (_editingIndex != null)
                 Container(
                   margin: const EdgeInsets.fromLTRB(8, 4, 4, 0),
@@ -1108,8 +1241,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                 ),
               TextField(
                 controller: _inputController,
-                minLines: 2,
-                maxLines: 6,
+                style: chatBodyStyle(theme),
+                minLines: 1,
+                maxLines: 5,
                 textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(
                   border: InputBorder.none,
@@ -1124,10 +1258,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
-                    child: Wrap(
-                      spacing: 0,
-                      runSpacing: 0,
-                      children: toolButtons,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(children: toolButtons),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1511,48 +1644,12 @@ class _SessionCard extends StatelessWidget {
 
 // ─── 子组件 ───
 
-/// 消息气泡内的引用块（不可交互）。
-class _QuoteBlock extends StatelessWidget {
-  final String text;
-  final Color textColor;
-  final Color accentColor;
-
-  const _QuoteBlock({
-    required this.text,
-    required this.textColor,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        border: Border(left: BorderSide(color: accentColor, width: 2)),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: textColor),
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-}
-
 /// 输入区上方的待发送引用卡（可移除）。
 class _QuoteCard extends StatefulWidget {
   final String text;
-  final String? imagePath;
   final VoidCallback onRemove;
 
-  const _QuoteCard({
-    required this.text,
-    this.imagePath,
-    required this.onRemove,
-  });
+  const _QuoteCard({required this.text, required this.onRemove});
 
   @override
   State<_QuoteCard> createState() => _QuoteCardState();
@@ -1596,20 +1693,6 @@ class _QuoteCardState extends State<_QuoteCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (widget.imagePath != null &&
-                            File(widget.imagePath!).existsSync()) ...[
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(widget.imagePath!),
-                              height: 72,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              cacheWidth: 360,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                        ],
                         if (widget.text.isNotEmpty)
                           Text(
                             widget.text,

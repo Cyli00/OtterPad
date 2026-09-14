@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
 import '../data/models/chat/chat_session.dart';
+import '../data/models/chat/chat_activity.dart';
 import '../providers/agent_api_provider.dart';
 import '../utils/doc_paths.dart';
 import 'agent_chat_service.dart';
@@ -16,6 +17,8 @@ import 'url_context_service.dart';
 
 /// 问 AI 的回答角色：全局专家 / 快速模型（两者可属于不同 provider 实例）。
 enum ChatModelRole { expert, fast }
+
+typedef ChatModelSelection = ({String id, String modelId});
 
 /// 问 AI 服务——会话文件存取 + 文献上下文组装 + 请求发送的唯一出口。
 ///
@@ -89,6 +92,28 @@ class DocumentChatService {
   static String? modelIdFor(AgentApiState state, ChatModelRole role) =>
       role == ChatModelRole.expert ? state.defaultModelId : state.fastModelId;
 
+  static AgentApiState? resolveModelState(
+    ChatModelRole role,
+    ChatModelSelection? model,
+  ) => model == null
+      ? resolveRoleState(role)
+      : AgentApiNotifier.loadInstance(model.id);
+
+  static bool isFastModel(ChatModelRole role, ChatModelSelection? model) {
+    if (model == null) return role == ChatModelRole.fast;
+    final fast = AgentApiNotifier.globalFastRole;
+    return fast.id == model.id && fast.modelId == model.modelId;
+  }
+
+  static bool includesFigures({
+    required bool supportsImages,
+    required bool isFast,
+  }) => supportsImages && !isFast;
+
+  static const learningGuidance = """
+优先帮助用户理解文献并保持专注。先直接回答当前问题，再用连贯段落解释依据、机制与意义；每段围绕一个主题，承接上文，避免孤立短句、碎片化结论和无关扩展。每个主题只加粗少量真正关键的概念或结论，避免整段强调、重复小标题或堆砌术语分散注意力。只有步骤或并列信息适合时才使用列表，最多两层，禁止第三层及更深的嵌套；其余用完整段落。新概念先作简短解释，再联系本文证据，必要时给一个贴切例子。明确区分文献事实、推断和不确定性；不得为便于学习而编造证据。按用户问题决定详略，不强塞练习或延伸话题。用户明确指定的输出格式优先。
+""";
+
   // ─── 提问 ───
 
   /// 发送一轮提问，返回回答文本。[history] 是当前会话中**此轮之前**的消息；
@@ -107,20 +132,27 @@ class DocumentChatService {
   static Future<String> ask({
     required String documentId,
     required ChatModelRole role,
+    ChatModelSelection? model,
     required List<ChatMessage> history,
     required String question,
     required bool supportsImages,
+    bool supportsReasoning = false,
     String? quotedText,
     String? figureImagePath,
     String? urlContext,
     ThinkingLevel? thinkingOverride,
     bool webSearch = false,
     void Function(String delta)? onDelta,
+    void Function(ChatActivity)? onActivity,
     CancelToken? cancelToken,
   }) async {
-    final state = resolveRoleState(role);
-    final modelId = state == null ? null : modelIdFor(state, role);
-    if (state == null || modelId == null || modelId.isEmpty) {
+    final state = resolveModelState(role, model);
+    final modelId =
+        model?.modelId ?? (state == null ? null : modelIdFor(state, role));
+    if (state == null ||
+        modelId == null ||
+        modelId.isEmpty ||
+        !state.models.contains(modelId)) {
       throw Exception(
         role == ChatModelRole.expert
             ? '请先在「AI 设置」中选择专家模型'
@@ -136,16 +168,21 @@ class DocumentChatService {
       throw Exception('该文献还没有提取结果，请先提取全文');
     }
     final document = await mdFile.readAsString();
-    final systemPrompt = renderPrompt(PromptStore.resolve(Prompts.chatSystem), {
-      'document': document,
-    });
+    final systemPrompt =
+        learningGuidance +
+        renderPrompt(PromptStore.resolve(Prompts.chatSystem), {
+          'document': document,
+        });
 
-    final figureImages = supportsImages
-        ? await _loadFigureImages(
-            documentId,
-            onlyImagePath: figureImagePath,
-            onlyImageLabel: quotedText,
-          )
+    final sendFigures = includesFigures(
+      supportsImages: supportsImages,
+      isFast: isFastModel(role, model),
+    );
+    final explicitFigures =
+        figureImagePath != null ||
+        history.any((m) => m.figureImagePath != null);
+    final documentFigures = sendFigures && !explicitFigures
+        ? await _loadFigureImages(documentId)
         : const <AgentChatImage>[];
 
     var params = state.paramsFor(modelId);
@@ -153,27 +190,40 @@ class DocumentChatService {
       params = params.copyWith(thinkingLevel: thinkingOverride);
     }
 
-    // figures 固定挂在会话**第一条 user 消息**上并逐轮原样重放：
-    // - 图片进入稳定前缀，可被各家 prompt cache 命中（否则每轮全价重付）；
-    // - 多轮中模型始终看得到图（历史只重放文本时第二轮起就「失明」了）。
+    // 单图引用跟随所属消息重放；全文配图仍固定在首轮，保持缓存前缀稳定。
     final firstUserIdx = history.indexWhere((m) => m.isUser);
-    final turns = [
-      for (var i = 0; i < history.length; i++)
+    final turns = <AgentChatTurn>[];
+    for (var i = 0; i < history.length; i++) {
+      final message = history[i];
+      final images =
+          sendFigures && message.isUser && message.figureImagePath != null
+          ? await _loadFigureImages(
+              documentId,
+              onlyImagePath: message.figureImagePath,
+              onlyImageLabel: message.quotedText,
+            )
+          : (i == firstUserIdx ? documentFigures : const <AgentChatImage>[]);
+      turns.add(
         AgentChatTurn(
-          isUser: history[i].isUser,
-          content: history[i].isUser
+          isUser: message.isUser,
+          content: message.isUser
               ? composeUserText(
-                  history[i].content,
-                  history[i].quotedText,
-                  history[i].urlContext,
+                  message.content,
+                  message.quotedText,
+                  message.urlContext,
                 )
-              : history[i].content,
-          images: i == firstUserIdx ? figureImages : const [],
+              : message.content,
+          images: images,
         ),
-    ];
-    final currentImages = firstUserIdx < 0
-        ? figureImages
-        : const <AgentChatImage>[];
+      );
+    }
+    final currentImages = sendFigures && figureImagePath != null
+        ? await _loadFigureImages(
+            documentId,
+            onlyImagePath: figureImagePath,
+            onlyImageLabel: quotedText,
+          )
+        : (firstUserIdx < 0 ? documentFigures : const <AgentChatImage>[]);
     final userPrompt = composeUserText(question, quotedText, urlContext);
 
     // 原生 URL 工具：会话中任一 user 文本含链接即注入（追问轮模型可按需
@@ -207,6 +257,8 @@ class DocumentChatService {
         urlContext: nativeUrlTool,
         cancelToken: cancelToken,
         onDelta: onDelta,
+        onActivity: onActivity,
+        includeReasoning: supportsReasoning,
       );
     }
     return AgentChatService.send(
@@ -224,6 +276,8 @@ class DocumentChatService {
       webSearch: webSearch,
       urlContext: nativeUrlTool,
       cancelToken: cancelToken,
+      onActivity: onActivity,
+      includeReasoning: supportsReasoning,
     );
   }
 
@@ -232,12 +286,15 @@ class DocumentChatService {
   /// null。角色未配置时也返回 null——配置错误交给 [ask] 统一抛出。
   static Future<String?> buildUrlContextFallback({
     required ChatModelRole role,
+    ChatModelSelection? model,
     required String question,
     CancelToken? cancelToken,
+    void Function(ChatActivity)? onActivity,
   }) async {
     if (!UrlContextService.containsUrl(question)) return null;
-    final state = resolveRoleState(role);
-    final modelId = state == null ? null : modelIdFor(state, role);
+    final state = resolveModelState(role, model);
+    final modelId =
+        model?.modelId ?? (state == null ? null : modelIdFor(state, role));
     if (state == null || modelId == null || modelId.isEmpty) return null;
     if (BuiltInToolsHelper.isSupported(
       provider: state.provider,
@@ -247,10 +304,40 @@ class DocumentChatService {
     )) {
       return null;
     }
-    return UrlContextService.instance.buildContext(
-      question,
-      cancelToken: cancelToken,
+    final step = ChatActivity(
+      id: 'url-context',
+      kind: ChatActivityKind.tool,
+      name: 'web_fetch',
+      text: UrlContextService.extractUrls(question).join('\n'),
+      startedAt: DateTime.now(),
     );
+    onActivity?.call(step);
+    try {
+      final content = await UrlContextService.instance.buildContext(
+        question,
+        cancelToken: cancelToken,
+      );
+      onActivity?.call(
+        step.update(
+          text: content,
+          status:
+              content != null &&
+                  (content.contains('（获取失败：') || content.contains('（不支持的内容类型：'))
+              ? ChatActivityStatus.failed
+              : ChatActivityStatus.completed,
+        ),
+      );
+      return content;
+    } catch (_) {
+      onActivity?.call(
+        step.update(
+          status: cancelToken?.isCancelled == true
+              ? ChatActivityStatus.cancelled
+              : ChatActivityStatus.failed,
+        ),
+      );
+      rethrow;
+    }
   }
 
   /// 用快速模型（强制关思考，保证「迅速」）给首条提问生成会话短标题。

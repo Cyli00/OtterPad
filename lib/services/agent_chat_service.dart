@@ -4,9 +4,11 @@ import 'package:dio/dio.dart';
 
 import '../data/models/ai/agent_config.dart';
 import 'agent_http.dart';
+import 'agent_activity_tracker.dart';
+import '../data/models/chat/chat_activity.dart';
 import 'agent_thinking_payload.dart';
 import 'builtin_tools.dart';
-import 'tavily_search_service.dart';
+import 'web_search_service.dart';
 
 /// Agent 对话请求失败（已含服务商可读文案），调用方可按语境加前缀。
 class AgentChatException implements Exception {
@@ -84,8 +86,8 @@ class AgentChatService {
 
     /// 启用模型内置网络搜索（server-side tool）。仅在 [BuiltInToolsHelper]
     /// 判定该 provider+model 官方支持时注入，不支持则静默忽略（避免 400）。
-    /// 例外：兼容端无原生搜索且已配置 Tavily Key 时，回退到客户端
-    /// function calling 搜索（[TavilySearchService]）。
+    /// 例外：兼容端无原生搜索且已配置外部搜索 Key 时，回退到客户端
+    /// function calling 搜索（[WebSearchService]）。
     bool webSearch = false,
 
     /// 启用 URL 内容提取（Anthropic `web_fetch_20250910` / Gemini
@@ -93,9 +95,15 @@ class AgentChatService {
     /// 同样经 [BuiltInToolsHelper] 把关；OpenAI 与兼容端无对应 server
     /// tool，此参数无效（调用方走客户端抓取回退）。
     bool urlContext = false,
+    void Function(ChatActivity)? onActivity,
+    bool includeReasoning = false,
     Duration receiveTimeout = const Duration(minutes: 5),
     CancelToken? cancelToken,
   }) async {
+    final activities = AgentActivityTracker(
+      onActivity,
+      requestReasoning: includeReasoning && onActivity != null,
+    );
     // xAI（Grok）按 host 升格走 OpenAI Responses 同形线路
     provider = provider.wireProtocol(baseUrl);
     final url = provider.chatUrl(baseUrl);
@@ -136,6 +144,7 @@ class AgentChatService {
             anthropicCachePrefix: anthropicCachePrefix,
             webSearch: webSearch,
             urlContext: urlContext,
+            activities: activities,
             mode: modes[m],
             cancelToken: cancelToken,
           ),
@@ -206,6 +215,7 @@ class AgentChatService {
     required bool webSearch,
     required bool urlContext,
     required String mode,
+    required AgentActivityTracker activities,
     required CancelToken? cancelToken,
   }) async {
     // 兼容端按 host 识别厂商，传完整 chat URL 等价于 baseUrl。
@@ -232,6 +242,7 @@ class AgentChatService {
         resp = await dio.post(
           url,
           data: _openAIBody(
+            showReasoning: activities.requestReasoning,
             modelId: modelId,
             modelParams: modelParams,
             systemPrompt: systemPrompt,
@@ -252,6 +263,12 @@ class AgentChatService {
         if (openAIData == null) {
           throw const AgentChatException('Empty response body');
         }
+        activities.record(
+          AgentApiProvider.openai,
+          openAIData,
+          streaming: false,
+        );
+        activities.finish();
         return _extractOpenAI(openAIData);
 
       case AgentApiProvider.anthropic:
@@ -280,12 +297,19 @@ class AgentChatService {
         if (anthropicData == null) {
           throw const AgentChatException('Empty response body');
         }
+        activities.record(
+          AgentApiProvider.anthropic,
+          anthropicData,
+          streaming: false,
+        );
+        activities.finish();
         return _extractAnthropic(anthropicData);
 
       case AgentApiProvider.gemini:
         resp = await dio.post(
           '$url/models/$modelId:generateContent',
           data: _geminiBody(
+            showReasoning: activities.requestReasoning,
             modelId: modelId,
             modelParams: modelParams,
             systemPrompt: systemPrompt,
@@ -305,6 +329,12 @@ class AgentChatService {
         if (geminiData == null) {
           throw const AgentChatException('Empty response body');
         }
+        activities.record(
+          AgentApiProvider.gemini,
+          geminiData,
+          streaming: false,
+        );
+        activities.finish();
         return _extractGemini(geminiData);
 
       case AgentApiProvider.openAICompatible:
@@ -315,9 +345,9 @@ class AgentChatService {
           images,
           userPrompt,
         );
-        // Kimi $web_search / Tavily web_search 都是「工具回环」：模型发起
+        // Kimi $web_search / 外部 web_search 都是「工具回环」：模型发起
         // tool_call，客户端回填结果后重发（Kimi 回传 arguments 即触发服务端
-        // 搜索，Tavily 由客户端真实执行）。上限 3 轮防御异常死循环，超限后
+        // 搜索，外部搜索由客户端真实执行）。上限 3 轮防御异常死循环，超限后
         // 按普通回答提取。其余厂商服务端单轮即返回。
         final loopTool = _searchLoopToolName(vendor);
         final hasImages =
@@ -344,11 +374,20 @@ class AgentChatService {
           final searchCalls = loopTool != null && round < 3
               ? _searchToolCalls(data, loopTool)
               : const <Map<String, dynamic>>[];
-          if (searchCalls.isEmpty) return _extractOpenAICompatible(data);
+          activities.record(provider, data, streaming: false);
+          if (searchCalls.isEmpty) {
+            activities.finish();
+            return _extractOpenAICompatible(data);
+          }
           messages = [
             ...messages,
             (data['choices'] as List)[0]['message'] as Map<String, dynamic>,
-            ...await _searchToolResults(vendor, searchCalls, cancelToken),
+            ...await _searchToolResults(
+              vendor,
+              searchCalls,
+              cancelToken,
+              activities,
+            ),
           ];
         }
     }
@@ -415,6 +454,7 @@ class AgentChatService {
     required double? temperature,
     required bool webSearch,
     required bool stream,
+    bool showReasoning = false,
     String mode = 'none',
     Map<String, dynamic>? schema,
     String schemaName = 'response',
@@ -431,6 +471,15 @@ class AgentChatService {
         'format': {'type': 'json_object'},
       if (modelParams.verbosity != null) 'verbosity': modelParams.verbosity,
     };
+    final reasoning = Map<String, dynamic>.from(
+      AgentThinkingPayload.forOpenAI(modelId, modelParams.thinkingLevel),
+    );
+    if (showReasoning && !modelId.toLowerCase().startsWith('grok')) {
+      reasoning['reasoning'] = {
+        ...?reasoning['reasoning'] as Map<String, dynamic>?,
+        'summary': 'auto',
+      };
+    }
     return {
       'model': modelId,
       'instructions': systemPrompt,
@@ -442,7 +491,7 @@ class AgentChatService {
           {'type': 'web_search'},
         ],
       'temperature': ?temperature,
-      ...AgentThinkingPayload.forOpenAI(modelId, modelParams.thinkingLevel),
+      ...reasoning,
     };
   }
 
@@ -509,6 +558,7 @@ class AgentChatService {
     required double? temperature,
     required bool webSearch,
     required bool urlContext,
+    bool showReasoning = false,
     String mode = 'none',
     Map<String, dynamic>? schema,
   }) {
@@ -516,6 +566,7 @@ class AgentChatService {
       modelId,
       modelParams.thinkingLevel,
     );
+    final includeThoughts = showReasoning;
     return {
       'systemInstruction': {
         'parts': [
@@ -528,7 +579,11 @@ class AgentChatService {
         'temperature': ?temperature,
         if (schema != null) 'responseMimeType': 'application/json',
         if (mode == 'schema') 'responseJsonSchema': schema,
-        if (thinkingCfg.isNotEmpty) 'thinkingConfig': thinkingCfg,
+        if (thinkingCfg.isNotEmpty || includeThoughts)
+          'thinkingConfig': {
+            ...thinkingCfg,
+            if (includeThoughts) 'includeThoughts': true,
+          },
       },
     };
   }
@@ -576,14 +631,14 @@ class AgentChatService {
     return body;
   }
 
-  /// 兼容端的生效搜索方式：原生厂商优先；无原生且已配置 Tavily Key 时
-  /// 升级为客户端 function calling 回退（[CompatSearchVendor.tavily]）。
+  /// 兼容端的生效搜索方式：原生厂商优先；无原生且已配置外部搜索 Key 时
+  /// 升级为客户端 function calling 回退（[CompatSearchVendor.external]）。
   static CompatSearchVendor _effectiveCompatVendor(bool webSearch, String url) {
     if (!webSearch) return CompatSearchVendor.none;
     final native = BuiltInToolsHelper.compatSearchVendor(url);
     if (native != CompatSearchVendor.none) return native;
-    return TavilySearchService.isConfigured
-        ? CompatSearchVendor.tavily
+    return WebSearchService.isConfigured
+        ? CompatSearchVendor.external
         : CompatSearchVendor.none;
   }
 
@@ -591,7 +646,7 @@ class AgentChatService {
   static String? _searchLoopToolName(CompatSearchVendor vendor) =>
       switch (vendor) {
         CompatSearchVendor.kimi => r'$web_search',
-        CompatSearchVendor.tavily => 'web_search',
+        CompatSearchVendor.external => 'web_search',
         _ => null,
       };
 
@@ -624,7 +679,7 @@ class AgentChatService {
         {'type': 'web_search'},
       ],
     },
-    CompatSearchVendor.tavily => const {
+    CompatSearchVendor.external => const {
       'tools': [
         {
           'type': 'function',
@@ -669,18 +724,21 @@ class AgentChatService {
   }
 
   /// 搜索回环的 tool 结果消息。Kimi：content = arguments **原样回传**，
-  /// 服务端收到回传时才真正执行搜索；Tavily：客户端解析 query 并真实
+  /// 服务端收到回传时才真正执行搜索；外部搜索：客户端解析 query 并真实
   /// 执行搜索，回填结果文本。
   static Future<List<Map<String, dynamic>>> _searchToolResults(
     CompatSearchVendor vendor,
     List<Map<String, dynamic>> calls,
     CancelToken? cancelToken,
+    AgentActivityTracker activities,
   ) async {
     final results = <Map<String, dynamic>>[];
     for (final c in calls) {
       final args =
           ((c['function'] as Map<String, dynamic>?)?['arguments'] as String?) ??
           '{}';
+      final activityId = c['id'] as String? ?? 'search-${results.length}';
+      activities.tool(activityId, 'web_search', args);
       String content;
       if (vendor == CompatSearchVendor.kimi) {
         content = args;
@@ -694,11 +752,16 @@ class AgentChatService {
         } catch (_) {}
         content = query.isEmpty
             ? '（搜索失败：未提供搜索关键词）'
-            : await TavilySearchService.instance.search(
-                query,
-                cancelToken: cancelToken,
-              );
+            : await WebSearchService.search(query, cancelToken: cancelToken);
       }
+      activities.tool(
+        activityId,
+        'web_search',
+        '$args\n\n$content',
+        status: content.startsWith('（搜索失败')
+            ? ChatActivityStatus.failed
+            : ChatActivityStatus.completed,
+      );
       results.add({
         'role': 'tool',
         'tool_call_id': c['id'],
@@ -912,10 +975,16 @@ class AgentChatService {
 
     /// 语义同 [send] 的同名参数。
     bool urlContext = false,
+    void Function(ChatActivity)? onActivity,
+    bool includeReasoning = false,
     Duration receiveTimeout = const Duration(minutes: 5),
     CancelToken? cancelToken,
     required void Function(String delta) onDelta,
   }) async {
+    final activities = AgentActivityTracker(
+      onActivity,
+      requestReasoning: includeReasoning && onActivity != null,
+    );
     // xAI（Grok）按 host 升格走 OpenAI Responses 同形线路
     provider = provider.wireProtocol(baseUrl);
     final url = provider.chatUrl(baseUrl);
@@ -951,6 +1020,7 @@ class AgentChatService {
         temperature,
         useWebSearch,
         cancelToken,
+        activities,
       ),
       AgentApiProvider.anthropic => _streamAnthropic(
         dio,
@@ -968,6 +1038,7 @@ class AgentChatService {
         useWebSearch,
         useUrlContext,
         cancelToken,
+        activities,
       ),
       AgentApiProvider.gemini => _streamGemini(
         dio,
@@ -983,6 +1054,7 @@ class AgentChatService {
         useWebSearch,
         useUrlContext,
         cancelToken,
+        activities,
       ),
       AgentApiProvider.openAICompatible => _streamOpenAICompatible(
         dio,
@@ -997,6 +1069,7 @@ class AgentChatService {
         temperature,
         _effectiveCompatVendor(webSearch, baseUrl),
         cancelToken,
+        activities,
       ),
     };
 
@@ -1006,9 +1079,18 @@ class AgentChatService {
         buffer.write(delta);
         onDelta(delta);
       }
+      activities.finish();
     } on DioException catch (e) {
+      activities.finish(
+        e.type == DioExceptionType.cancel
+            ? ChatActivityStatus.cancelled
+            : ChatActivityStatus.failed,
+      );
       if (e.type == DioExceptionType.cancel) rethrow;
       throw AgentChatException(await _readableStreamMessage(e));
+    } catch (_) {
+      activities.finish(ChatActivityStatus.failed);
+      rethrow;
     }
     return buffer.toString();
   }
@@ -1028,10 +1110,12 @@ class AgentChatService {
     double? temperature,
     bool webSearch,
     CancelToken? cancelToken,
+    AgentActivityTracker activities,
   ) async* {
     final resp = await dio.post<ResponseBody>(
       url,
       data: _openAIBody(
+        showReasoning: activities.requestReasoning,
         modelId: modelId,
         modelParams: modelParams,
         systemPrompt: systemPrompt,
@@ -1058,6 +1142,8 @@ class AgentChatService {
       if (data == null || data == '[DONE]') continue;
       try {
         final json = jsonDecode(data) as Map<String, dynamic>;
+        activities.record(AgentApiProvider.openai, json);
+        _checkStreamError(json);
         if (json['type'] == 'response.output_text.delta') {
           final d = json['delta'];
           if (d is String && d.isNotEmpty) yield d;
@@ -1071,6 +1157,8 @@ class AgentChatService {
             if (content is String && content.isNotEmpty) yield content;
           }
         }
+      } on AgentChatException {
+        rethrow;
       } catch (_) {
         // 单 event 解析失败 → 跳过，其他 event 继续
       }
@@ -1095,6 +1183,7 @@ class AgentChatService {
     bool webSearch,
     bool urlContext,
     CancelToken? cancelToken,
+    AgentActivityTracker activities,
   ) async* {
     final resp = await dio.post<ResponseBody>(
       url,
@@ -1128,6 +1217,8 @@ class AgentChatService {
       if (data == null) continue;
       try {
         final json = jsonDecode(data) as Map<String, dynamic>;
+        activities.record(AgentApiProvider.anthropic, json);
+        _checkStreamError(json);
         if (json['type'] == 'content_block_delta') {
           final delta = json['delta'] as Map<String, dynamic>?;
           if (delta?['type'] == 'text_delta') {
@@ -1135,6 +1226,8 @@ class AgentChatService {
             if (text is String && text.isNotEmpty) yield text;
           }
         }
+      } on AgentChatException {
+        rethrow;
       } catch (_) {}
     }
   }
@@ -1154,11 +1247,13 @@ class AgentChatService {
     bool webSearch,
     bool urlContext,
     CancelToken? cancelToken,
+    AgentActivityTracker activities,
   ) async* {
     final resp = await dio.post<ResponseBody>(
       '$url/models/$modelId:streamGenerateContent',
       queryParameters: {'alt': 'sse'},
       data: _geminiBody(
+        showReasoning: activities.requestReasoning,
         modelId: modelId,
         modelParams: modelParams,
         systemPrompt: systemPrompt,
@@ -1189,6 +1284,8 @@ class AgentChatService {
       if (data == null) continue;
       try {
         final json = jsonDecode(data) as Map<String, dynamic>;
+        activities.record(AgentApiProvider.gemini, json);
+        _checkStreamError(json);
         final candidates = json['candidates'] as List<dynamic>?;
         if (candidates == null || candidates.isEmpty) continue;
         final content = (candidates[0] as Map<String, dynamic>)['content'];
@@ -1201,6 +1298,8 @@ class AgentChatService {
             if (text is String && text.isNotEmpty) yield text;
           }
         }
+      } on AgentChatException {
+        rethrow;
       } catch (_) {}
     }
   }
@@ -1208,9 +1307,9 @@ class AgentChatService {
   /// OpenAI Compatible 流式：标准 `choices[].delta.content`，
   /// 过滤 `reasoning_content`（DeepSeek 思考流不进正文）。
   ///
-  /// [searchVendor] 为 kimi / tavily 时处理搜索工具回环：流中按 index
+  /// [searchVendor] 为 kimi / external 时处理搜索工具回环：流中按 index
   /// 归并 tool_calls 增量，流结束后回填结果（Kimi 原样回传 arguments /
-  /// Tavily 客户端真实执行）并重新发起流式请求（上限 3 轮，与非流式一致）。
+  /// 外部搜索客户端真实执行）并重新发起流式请求（上限 3 轮，与非流式一致）。
   static Stream<String> _streamOpenAICompatible(
     Dio dio,
     String url,
@@ -1224,6 +1323,7 @@ class AgentChatService {
     double? temperature,
     CompatSearchVendor searchVendor,
     CancelToken? cancelToken,
+    AgentActivityTracker activities,
   ) async* {
     var messages = _compatMessages(systemPrompt, history, images, userPrompt);
     final loopTool = _searchLoopToolName(searchVendor);
@@ -1261,6 +1361,10 @@ class AgentChatService {
         Map<String, dynamic> json;
         try {
           json = jsonDecode(data) as Map<String, dynamic>;
+          activities.record(AgentApiProvider.openAICompatible, json);
+          _checkStreamError(json);
+        } on AgentChatException {
+          rethrow;
         } catch (_) {
           continue;
         }
@@ -1320,20 +1424,36 @@ class AgentChatService {
       messages = [
         ...messages,
         {'role': 'assistant', 'content': '', 'tool_calls': calls},
-        ...await _searchToolResults(searchVendor, calls, cancelToken),
+        ...await _searchToolResults(
+          searchVendor,
+          calls,
+          cancelToken,
+          activities,
+        ),
       ];
+    }
+  }
+
+  static void _checkStreamError(Map<String, dynamic> data) {
+    final error = data['error'] ?? (data['response'] as Map?)?['error'];
+    if (error != null) {
+      throw AgentChatException(
+        error is Map
+            ? '${error['message'] ?? error['type'] ?? 'Stream error'}'
+            : '$error',
+      );
     }
   }
 
   // ── SSE 通用解析（与 TranslationService 同构，待收敛） ──
 
   /// 把字节流切成 SSE 事件（以 `\n\n` 或 `\r\n\r\n` 分隔）。
-  /// UTF-8 边界可能跨 chunk，用 `allowMalformed` 容忍截断的 code unit。
+  /// UTF-8 解码器跨 chunk 保留半个字符，避免中文在网络分片边界损坏。
   static Stream<String> _sseEventStream(Stream<List<int>> source) async* {
     String buffer = '';
     const decoder = Utf8Decoder(allowMalformed: true);
-    await for (final chunk in source) {
-      buffer += decoder.convert(chunk);
+    await for (final chunk in decoder.bind(source)) {
+      buffer += chunk;
       while (true) {
         int delim = buffer.indexOf('\n\n');
         int delimLen = 2;
