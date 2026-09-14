@@ -1090,5 +1090,34 @@
   "rebuildScanningFiles": "正在掃描 PDF 檔案…",
   "rebuildCheckingFiles": "正在檢查檔案完整性…",
   "rebuildExtractingMetadata": "正在擷取 PDF 中繼資料…",
-  "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } }
+  "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } },
+  "webSearchSettingsTitle": "聯網搜尋服務",
+  "webSearchSettingsDesc": "優先使用模型原生搜尋；模型不支援時使用所選服務。各服務的 API Key 獨立儲存，切換不會清空。",
+  "webSearchNotConfigured": "请在 AI 设置中为所选聯網搜尋服務配置 API Key。",
+  "chatToggleKeyVisibility": "顯示或隱藏 API Key",
+  "chatSelectModel": "選擇模型",
+  "chatNoModels": "請先在 AI 設定中新增對話模型",
+  "chatFastTextOnly": "快速模型僅接收文字，本輪及歷史中的配圖均不會傳送；正文和圖說仍保留。",
+  "chatModelTextOnly": "目前模型不支援圖片，本輪僅傳送正文和圖說。",
+  "chatProcess": "ReAct 鏈",
+  "chatProcessRunning": "ReAct 鏈執行中",
+  "chatReasoning": "思考",
+  "chatStepRunning": "進行中",
+  "chatStepCompleted": "已完成",
+  "chatStepFailed": "失敗",
+  "chatStepCancelled": "已停止",
+  "chatStepDuration": "{seconds} 秒",
+  "@chatStepDuration": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "chatImageUnavailable": "圖片暫不可用",
+  "chatPreviewFigure": "查看圖片與圖說",
+  "chatReadLink": "讀取連結",
+  "chatExpandQuote": "展開引用",
+  "chatCollapseQuote": "收合引用",
+  "chatSourceNotFound": "找不到對應原文，文獻內容可能已更新。"
 }

@@ -3372,7 +3372,7 @@ abstract class AppLocalizations {
   /// No description provided for @systemPromptDesc.
   ///
   /// In en, this message translates to:
-  /// **'Translation system prompt, supports targetLanguage placeholder'**
+  /// **'Translation system prompt'**
   String get systemPromptDesc;
 
   /// No description provided for @systemPromptHint.
@@ -3384,8 +3384,14 @@ abstract class AppLocalizations {
   /// No description provided for @userPromptDesc.
   ///
   /// In en, this message translates to:
-  /// **'Translation user prompt, supports targetLanguage and input placeholders'**
+  /// **'Translation user prompt'**
   String get userPromptDesc;
+
+  /// No description provided for @promptPlaceholdersAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available placeholders: {placeholders}'**
+  String promptPlaceholdersAvailable(String placeholders);
 
   /// No description provided for @documentsAddedCount.
   ///
@@ -5298,7 +5304,7 @@ abstract class AppLocalizations {
   /// No description provided for @zoteroLocalHint.
   ///
   /// In en, this message translates to:
-  /// **'Open Zotero and enable communication with other applications in Advanced settings. Read your personal library, copy missing PDFs, and keep existing PDFs and your edits. For multiple attachments, choose a PDF below.'**
+  /// **'Open Zotero and allow other applications to communicate with it in Advanced settings.'**
   String get zoteroLocalHint;
 
   /// No description provided for @zoteroLocalPort.
@@ -5376,7 +5382,7 @@ abstract class AppLocalizations {
   /// No description provided for @zoteroLocalImport.
   ///
   /// In en, this message translates to:
-  /// **'Import / update selected'**
+  /// **'Import selected'**
   String get zoteroLocalImport;
 
   /// No description provided for @zoteroLocalUnavailable.
@@ -5637,6 +5643,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Extracting PDF metadata…'**
   String get rebuildExtractingMetadata;
+
+  /// No description provided for @exportSelectionSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected documents: {count}'**
+  String exportSelectionSummary(int count);
+
+  /// No description provided for @exportNotesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Collect excerpts, highlights and notes in one file.'**
+  String get exportNotesDescription;
+
+  /// No description provided for @exportCitationsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Export authors, titles and publication details for citations.'**
+  String get exportCitationsDescription;
+
+  /// No description provided for @zoteroLocalConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to your local library'**
+  String get zoteroLocalConnection;
+
+  /// No description provided for @zoteroLocalDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose documents and PDFs'**
+  String get zoteroLocalDocuments;
+
+  /// No description provided for @zoteroLocalSelectionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in missing PDFs while keeping existing PDFs and manually edited metadata. Choose a PDF when an item has multiple attachments.'**
+  String get zoteroLocalSelectionHint;
+
+  /// No description provided for @webSearchSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Web search service'**
+  String get webSearchSettingsTitle;
+
+  /// No description provided for @webSearchSettingsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Native model search takes priority. When unavailable, use the selected service. API keys are saved separately and retained when switching.'**
+  String get webSearchSettingsDesc;
+
+  /// No description provided for @webSearchNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure an API key for the selected web search service in AI settings.'**
+  String get webSearchNotConfigured;
+
+  /// No description provided for @chatToggleKeyVisibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Show or hide API key'**
+  String get chatToggleKeyVisibility;
+
+  /// No description provided for @chatSelectModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Select model'**
+  String get chatSelectModel;
+
+  /// No description provided for @chatNoModels.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a chat model in AI settings first'**
+  String get chatNoModels;
+
+  /// No description provided for @chatFastTextOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Fast models receive text only. Current and historical figures will be omitted; document text and captions are kept.'**
+  String get chatFastTextOnly;
+
+  /// No description provided for @chatModelTextOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'This model does not support images. Only document text and captions will be sent.'**
+  String get chatModelTextOnly;
+
+  /// No description provided for @chatProcess.
+  ///
+  /// In en, this message translates to:
+  /// **'ReAct chain'**
+  String get chatProcess;
+
+  /// No description provided for @chatProcessRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'ReAct chain running'**
+  String get chatProcessRunning;
+
+  /// No description provided for @chatReasoning.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get chatReasoning;
+
+  /// No description provided for @chatStepRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get chatStepRunning;
+
+  /// No description provided for @chatStepCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get chatStepCompleted;
+
+  /// No description provided for @chatStepFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get chatStepFailed;
+
+  /// No description provided for @chatStepCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get chatStepCancelled;
+
+  /// No description provided for @chatStepDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String chatStepDuration(int seconds);
+
+  /// No description provided for @chatImageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Image unavailable'**
+  String get chatImageUnavailable;
+
+  /// No description provided for @chatPreviewFigure.
+  ///
+  /// In en, this message translates to:
+  /// **'View image and caption'**
+  String get chatPreviewFigure;
+
+  /// No description provided for @chatReadLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Read link'**
+  String get chatReadLink;
+
+  /// No description provided for @chatExpandQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand quote'**
+  String get chatExpandQuote;
+
+  /// No description provided for @chatCollapseQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse quote'**
+  String get chatCollapseQuote;
+
+  /// No description provided for @chatSourceNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'The quoted source could not be found. The document may have changed.'**
+  String get chatSourceNotFound;
 }
 
 class _AppLocalizationsDelegate

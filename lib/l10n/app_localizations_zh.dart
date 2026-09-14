@@ -1751,13 +1751,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get temperatureDesc => '越低越稳重，越高越发散';
 
   @override
-  String get systemPromptDesc => '翻译 System Prompt，支持 targetLanguage 占位符';
+  String get systemPromptDesc => '翻译 System Prompt';
 
   @override
   String get systemPromptHint => '例如：You are a professional translator…';
 
   @override
-  String get userPromptDesc => '翻译 User Prompt，支持 targetLanguage 和 input 占位符';
+  String get userPromptDesc => '翻译 User Prompt';
+
+  @override
+  String promptPlaceholdersAvailable(String placeholders) {
+    return '可用占位符：$placeholders';
+  }
 
   @override
   String documentsAddedCount(int added) {
@@ -2894,8 +2899,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get zoteroLocalEntryHint => '从这台电脑上的 Zotero 导入题录和 PDF';
 
   @override
-  String get zoteroLocalHint =>
-      '请打开 Zotero，并在高级设置中允许其他应用与它通信。读取个人文库，补齐缺失的 PDF，保留已有 PDF 和你手动改过的题录。多个附件时请在下方选择 PDF。';
+  String get zoteroLocalHint => '请打开 Zotero，并在高级设置中允许其他应用与它通信。';
 
   @override
   String get zoteroLocalPort => '连接端口';
@@ -2939,7 +2943,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get zoteroLocalNoPdf => '没有 PDF 附件，仍可导入题录。';
 
   @override
-  String get zoteroLocalImport => '导入 / 更新所选文献';
+  String get zoteroLocalImport => '导入所选';
 
   @override
   String get zoteroLocalUnavailable => '无法连接 Zotero。请打开 Zotero，并检查端口号。';
@@ -3083,6 +3087,96 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get rebuildExtractingMetadata => '正在提取 PDF 元数据…';
+
+  @override
+  String exportSelectionSummary(int count) {
+    return '已选 $count 篇文献';
+  }
+
+  @override
+  String get exportNotesDescription => '将原文摘录、标注和笔记整理到一个文件。';
+
+  @override
+  String get exportCitationsDescription => '导出作者、题名与出版信息，用于论文引用。';
+
+  @override
+  String get zoteroLocalConnection => '连接本机文库';
+
+  @override
+  String get zoteroLocalDocuments => '选择文献与 PDF';
+
+  @override
+  String get zoteroLocalSelectionHint =>
+      '补齐缺失的 PDF，保留已有 PDF 和你手动改过的题录。多个附件时请选择要导入的 PDF。';
+
+  @override
+  String get webSearchSettingsTitle => '联网搜索服务';
+
+  @override
+  String get webSearchSettingsDesc =>
+      '优先使用模型原生搜索；模型不支持时使用所选服务。各服务的 API Key 独立保存，切换不会清空。';
+
+  @override
+  String get webSearchNotConfigured => '请在 AI 设置中为所选联网搜索服务配置 API Key。';
+
+  @override
+  String get chatToggleKeyVisibility => '显示或隐藏 API Key';
+
+  @override
+  String get chatSelectModel => '选择模型';
+
+  @override
+  String get chatNoModels => '请先在 AI 设置中添加对话模型';
+
+  @override
+  String get chatFastTextOnly => '快速模型仅接收文本，本轮及历史中的配图均不会发送；正文和图注仍保留。';
+
+  @override
+  String get chatModelTextOnly => '当前模型不支持图片，本轮仅发送正文和图注。';
+
+  @override
+  String get chatProcess => 'ReAct 链';
+
+  @override
+  String get chatProcessRunning => 'ReAct 链运行中';
+
+  @override
+  String get chatReasoning => '思考';
+
+  @override
+  String get chatStepRunning => '进行中';
+
+  @override
+  String get chatStepCompleted => '已完成';
+
+  @override
+  String get chatStepFailed => '失败';
+
+  @override
+  String get chatStepCancelled => '已停止';
+
+  @override
+  String chatStepDuration(int seconds) {
+    return '$seconds 秒';
+  }
+
+  @override
+  String get chatImageUnavailable => '图片暂不可用';
+
+  @override
+  String get chatPreviewFigure => '查看图片与图注';
+
+  @override
+  String get chatReadLink => '读取链接';
+
+  @override
+  String get chatExpandQuote => '展开引用';
+
+  @override
+  String get chatCollapseQuote => '收起引用';
+
+  @override
+  String get chatSourceNotFound => '未找到对应原文，文献内容可能已更新。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -6157,4 +6251,73 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get rebuildExtractingMetadata => '正在擷取 PDF 中繼資料…';
+
+  @override
+  String get webSearchSettingsTitle => '聯網搜尋服務';
+
+  @override
+  String get webSearchSettingsDesc =>
+      '優先使用模型原生搜尋；模型不支援時使用所選服務。各服務的 API Key 獨立儲存，切換不會清空。';
+
+  @override
+  String get webSearchNotConfigured => '请在 AI 设置中为所选聯網搜尋服務配置 API Key。';
+
+  @override
+  String get chatToggleKeyVisibility => '顯示或隱藏 API Key';
+
+  @override
+  String get chatSelectModel => '選擇模型';
+
+  @override
+  String get chatNoModels => '請先在 AI 設定中新增對話模型';
+
+  @override
+  String get chatFastTextOnly => '快速模型僅接收文字，本輪及歷史中的配圖均不會傳送；正文和圖說仍保留。';
+
+  @override
+  String get chatModelTextOnly => '目前模型不支援圖片，本輪僅傳送正文和圖說。';
+
+  @override
+  String get chatProcess => 'ReAct 鏈';
+
+  @override
+  String get chatProcessRunning => 'ReAct 鏈執行中';
+
+  @override
+  String get chatReasoning => '思考';
+
+  @override
+  String get chatStepRunning => '進行中';
+
+  @override
+  String get chatStepCompleted => '已完成';
+
+  @override
+  String get chatStepFailed => '失敗';
+
+  @override
+  String get chatStepCancelled => '已停止';
+
+  @override
+  String chatStepDuration(int seconds) {
+    return '$seconds 秒';
+  }
+
+  @override
+  String get chatImageUnavailable => '圖片暫不可用';
+
+  @override
+  String get chatPreviewFigure => '查看圖片與圖說';
+
+  @override
+  String get chatReadLink => '讀取連結';
+
+  @override
+  String get chatExpandQuote => '展開引用';
+
+  @override
+  String get chatCollapseQuote => '收合引用';
+
+  @override
+  String get chatSourceNotFound => '找不到對應原文，文獻內容可能已更新。';
 }

@@ -650,9 +650,11 @@
   "translationStyleDesc": "Visual style for translations in full-document translation",
   "translationIgnoreDesc": "Checked sections are skipped during translation; unchecked sections merge into full paragraphs",
   "temperatureDesc": "Lower is more conservative, higher is more creative",
-  "systemPromptDesc": "Translation system prompt, supports targetLanguage placeholder",
+  "systemPromptDesc": "Translation system prompt",
   "systemPromptHint": "e.g.: You are a professional translator...",
-  "userPromptDesc": "Translation user prompt, supports targetLanguage and input placeholders",
+  "userPromptDesc": "Translation user prompt",
+  "promptPlaceholdersAvailable": "Available placeholders: {placeholders}",
+  "@promptPlaceholdersAvailable": { "placeholders": { "placeholders": { "type": "String" } } },
 
   "documentsAddedCount": "Added {added} documents",
   "@documentsAddedCount": { "placeholders": { "added": { "type": "int" } } },
@@ -1082,7 +1084,7 @@
   "documentExportSaved": "Export saved",
   "zoteroLocalTitle": "Local Zotero",
   "zoteroLocalEntryHint": "Import metadata and PDFs from Zotero on this computer",
-  "zoteroLocalHint": "Open Zotero and enable communication with other applications in Advanced settings. Read your personal library, copy missing PDFs, and keep existing PDFs and your edits. For multiple attachments, choose a PDF below.",
+  "zoteroLocalHint": "Open Zotero and allow other applications to communicate with it in Advanced settings.",
   "zoteroLocalPort": "Connection port",
   "zoteroLocalConnect": "Read library",
   "zoteroLocalInvalidPort": "Enter a port between 1 and 65535.",
@@ -1115,7 +1117,7 @@
   "zoteroLocalMetadataOnly": "Metadata only",
   "zoteroLocalChoosePdf": "Choose PDF",
   "zoteroLocalNoPdf": "No PDF attachment; metadata will still be imported.",
-  "zoteroLocalImport": "Import / update selected",
+  "zoteroLocalImport": "Import selected",
   "zoteroLocalUnavailable": "Cannot connect to Zotero. Open Zotero and check the port.",
   "zoteroLocalDisabled": "In Zotero Advanced settings, allow other applications on this computer to communicate with Zotero.",
   "zoteroLocalIncompatible": "This Zotero client does not support the required local interface. Update Zotero and try again.",
@@ -1180,5 +1182,47 @@
   "rebuildScanningFiles": "Scanning PDF files…",
   "rebuildCheckingFiles": "Checking file integrity…",
   "rebuildExtractingMetadata": "Extracting PDF metadata…",
-  "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } }
+  "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } },
+  "exportSelectionSummary": "Selected documents: {count}",
+  "exportNotesDescription": "Collect excerpts, highlights and notes in one file.",
+  "exportCitationsDescription": "Export authors, titles and publication details for citations.",
+  "zoteroLocalConnection": "Connect to your local library",
+  "zoteroLocalDocuments": "Choose documents and PDFs",
+  "zoteroLocalSelectionHint": "Fill in missing PDFs while keeping existing PDFs and manually edited metadata. Choose a PDF when an item has multiple attachments.",
+  "@exportSelectionSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "webSearchSettingsTitle": "Web search service",
+  "webSearchSettingsDesc": "Native model search takes priority. When unavailable, use the selected service. API keys are saved separately and retained when switching.",
+  "webSearchNotConfigured": "Configure an API key for the selected web search service in AI settings.",
+  "chatToggleKeyVisibility": "Show or hide API key",
+  "chatSelectModel": "Select model",
+  "chatNoModels": "Add a chat model in AI settings first",
+  "chatFastTextOnly": "Fast models receive text only. Current and historical figures will be omitted; document text and captions are kept.",
+  "chatModelTextOnly": "This model does not support images. Only document text and captions will be sent.",
+  "chatProcess": "ReAct chain",
+  "chatProcessRunning": "ReAct chain running",
+  "chatReasoning": "Thinking",
+  "chatStepRunning": "In progress",
+  "chatStepCompleted": "Completed",
+  "chatStepFailed": "Failed",
+  "chatStepCancelled": "Stopped",
+  "chatStepDuration": "{seconds}s",
+  "@chatStepDuration": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "chatImageUnavailable": "Image unavailable",
+  "chatPreviewFigure": "View image and caption",
+  "chatReadLink": "Read link",
+  "chatExpandQuote": "Expand quote",
+  "chatCollapseQuote": "Collapse quote",
+  "chatSourceNotFound": "The quoted source could not be found. The document may have changed."
 }

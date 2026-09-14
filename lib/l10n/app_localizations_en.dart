@@ -1798,15 +1798,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Lower is more conservative, higher is more creative';
 
   @override
-  String get systemPromptDesc =>
-      'Translation system prompt, supports targetLanguage placeholder';
+  String get systemPromptDesc => 'Translation system prompt';
 
   @override
   String get systemPromptHint => 'e.g.: You are a professional translator...';
 
   @override
-  String get userPromptDesc =>
-      'Translation user prompt, supports targetLanguage and input placeholders';
+  String get userPromptDesc => 'Translation user prompt';
+
+  @override
+  String promptPlaceholdersAvailable(String placeholders) {
+    return 'Available placeholders: $placeholders';
+  }
 
   @override
   String documentsAddedCount(int added) {
@@ -2994,7 +2997,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get zoteroLocalHint =>
-      'Open Zotero and enable communication with other applications in Advanced settings. Read your personal library, copy missing PDFs, and keep existing PDFs and your edits. For multiple attachments, choose a PDF below.';
+      'Open Zotero and allow other applications to communicate with it in Advanced settings.';
 
   @override
   String get zoteroLocalPort => 'Connection port';
@@ -3040,7 +3043,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'No PDF attachment; metadata will still be imported.';
 
   @override
-  String get zoteroLocalImport => 'Import / update selected';
+  String get zoteroLocalImport => 'Import selected';
 
   @override
   String get zoteroLocalUnavailable =>
@@ -3196,4 +3199,100 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rebuildExtractingMetadata => 'Extracting PDF metadata…';
+
+  @override
+  String exportSelectionSummary(int count) {
+    return 'Selected documents: $count';
+  }
+
+  @override
+  String get exportNotesDescription =>
+      'Collect excerpts, highlights and notes in one file.';
+
+  @override
+  String get exportCitationsDescription =>
+      'Export authors, titles and publication details for citations.';
+
+  @override
+  String get zoteroLocalConnection => 'Connect to your local library';
+
+  @override
+  String get zoteroLocalDocuments => 'Choose documents and PDFs';
+
+  @override
+  String get zoteroLocalSelectionHint =>
+      'Fill in missing PDFs while keeping existing PDFs and manually edited metadata. Choose a PDF when an item has multiple attachments.';
+
+  @override
+  String get webSearchSettingsTitle => 'Web search service';
+
+  @override
+  String get webSearchSettingsDesc =>
+      'Native model search takes priority. When unavailable, use the selected service. API keys are saved separately and retained when switching.';
+
+  @override
+  String get webSearchNotConfigured =>
+      'Configure an API key for the selected web search service in AI settings.';
+
+  @override
+  String get chatToggleKeyVisibility => 'Show or hide API key';
+
+  @override
+  String get chatSelectModel => 'Select model';
+
+  @override
+  String get chatNoModels => 'Add a chat model in AI settings first';
+
+  @override
+  String get chatFastTextOnly =>
+      'Fast models receive text only. Current and historical figures will be omitted; document text and captions are kept.';
+
+  @override
+  String get chatModelTextOnly =>
+      'This model does not support images. Only document text and captions will be sent.';
+
+  @override
+  String get chatProcess => 'ReAct chain';
+
+  @override
+  String get chatProcessRunning => 'ReAct chain running';
+
+  @override
+  String get chatReasoning => 'Thinking';
+
+  @override
+  String get chatStepRunning => 'In progress';
+
+  @override
+  String get chatStepCompleted => 'Completed';
+
+  @override
+  String get chatStepFailed => 'Failed';
+
+  @override
+  String get chatStepCancelled => 'Stopped';
+
+  @override
+  String chatStepDuration(int seconds) {
+    return '${seconds}s';
+  }
+
+  @override
+  String get chatImageUnavailable => 'Image unavailable';
+
+  @override
+  String get chatPreviewFigure => 'View image and caption';
+
+  @override
+  String get chatReadLink => 'Read link';
+
+  @override
+  String get chatExpandQuote => 'Expand quote';
+
+  @override
+  String get chatCollapseQuote => 'Collapse quote';
+
+  @override
+  String get chatSourceNotFound =>
+      'The quoted source could not be found. The document may have changed.';
 }

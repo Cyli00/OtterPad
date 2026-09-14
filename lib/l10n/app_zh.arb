@@ -607,9 +607,11 @@
   "translationStyleDesc": "文档全文翻译时译文的视觉区分方式",
   "translationIgnoreDesc": "勾选的区域翻译时跳过，取消勾选则合并为整段翻译",
   "temperatureDesc": "越低越稳重，越高越发散",
-  "systemPromptDesc": "翻译 System Prompt，支持 targetLanguage 占位符",
+  "systemPromptDesc": "翻译 System Prompt",
   "systemPromptHint": "例如：You are a professional translator…",
-  "userPromptDesc": "翻译 User Prompt，支持 targetLanguage 和 input 占位符",
+  "userPromptDesc": "翻译 User Prompt",
+  "promptPlaceholdersAvailable": "可用占位符：{placeholders}",
+  "@promptPlaceholdersAvailable": { "placeholders": { "placeholders": { "type": "String" } } },
 
   "documentsAddedCount": "已加入 {added} 篇文献",
   "documentsAddedSkipped": "已加入 {added} 篇文献，{skipped} 篇已存在已跳过",
@@ -959,7 +961,7 @@
   "documentExportSaved": "导出文件已保存",
   "zoteroLocalTitle": "本机 Zotero",
   "zoteroLocalEntryHint": "从这台电脑上的 Zotero 导入题录和 PDF",
-  "zoteroLocalHint": "请打开 Zotero，并在高级设置中允许其他应用与它通信。读取个人文库，补齐缺失的 PDF，保留已有 PDF 和你手动改过的题录。多个附件时请在下方选择 PDF。",
+  "zoteroLocalHint": "请打开 Zotero，并在高级设置中允许其他应用与它通信。",
   "zoteroLocalPort": "连接端口",
   "zoteroLocalConnect": "读取文库",
   "zoteroLocalInvalidPort": "请输入 1 到 65535 之间的端口号。",
@@ -972,7 +974,7 @@
   "zoteroLocalMetadataOnly": "仅导入题录",
   "zoteroLocalChoosePdf": "选择 PDF",
   "zoteroLocalNoPdf": "没有 PDF 附件，仍可导入题录。",
-  "zoteroLocalImport": "导入 / 更新所选文献",
+  "zoteroLocalImport": "导入所选",
   "zoteroLocalUnavailable": "无法连接 Zotero。请打开 Zotero，并检查端口号。",
   "zoteroLocalDisabled": "请在 Zotero 的高级设置中允许此计算机上的其他应用程序与 Zotero 通信。",
   "zoteroLocalIncompatible": "这个 Zotero 客户端不支持所需的本地接口。请更新 Zotero 后重试。",
@@ -1015,5 +1017,47 @@
   "rebuildScanningFiles": "正在扫描 PDF 文件…",
   "rebuildCheckingFiles": "正在检查文件完整性…",
   "rebuildExtractingMetadata": "正在提取 PDF 元数据…",
-  "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } }
+  "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } },
+  "exportSelectionSummary": "已选 {count} 篇文献",
+  "exportNotesDescription": "将原文摘录、标注和笔记整理到一个文件。",
+  "exportCitationsDescription": "导出作者、题名与出版信息，用于论文引用。",
+  "zoteroLocalConnection": "连接本机文库",
+  "zoteroLocalDocuments": "选择文献与 PDF",
+  "zoteroLocalSelectionHint": "补齐缺失的 PDF，保留已有 PDF 和你手动改过的题录。多个附件时请选择要导入的 PDF。",
+  "@exportSelectionSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "webSearchSettingsTitle": "联网搜索服务",
+  "webSearchSettingsDesc": "优先使用模型原生搜索；模型不支持时使用所选服务。各服务的 API Key 独立保存，切换不会清空。",
+  "webSearchNotConfigured": "请在 AI 设置中为所选联网搜索服务配置 API Key。",
+  "chatToggleKeyVisibility": "显示或隐藏 API Key",
+  "chatSelectModel": "选择模型",
+  "chatNoModels": "请先在 AI 设置中添加对话模型",
+  "chatFastTextOnly": "快速模型仅接收文本，本轮及历史中的配图均不会发送；正文和图注仍保留。",
+  "chatModelTextOnly": "当前模型不支持图片，本轮仅发送正文和图注。",
+  "chatProcess": "ReAct 链",
+  "chatProcessRunning": "ReAct 链运行中",
+  "chatReasoning": "思考",
+  "chatStepRunning": "进行中",
+  "chatStepCompleted": "已完成",
+  "chatStepFailed": "失败",
+  "chatStepCancelled": "已停止",
+  "chatStepDuration": "{seconds} 秒",
+  "@chatStepDuration": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "chatImageUnavailable": "图片暂不可用",
+  "chatPreviewFigure": "查看图片与图注",
+  "chatReadLink": "读取链接",
+  "chatExpandQuote": "展开引用",
+  "chatCollapseQuote": "收起引用",
+  "chatSourceNotFound": "未找到对应原文，文献内容可能已更新。"
 }
