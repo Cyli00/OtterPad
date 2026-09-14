@@ -13,7 +13,7 @@ dependencies:
     sdk: flutter
 
   # 状态管理
-  flutter_riverpod: ^3.2.1
+  flutter_riverpod: ^3.4.3
 
   # 声明式路由
   go_router: ^17.1.0
