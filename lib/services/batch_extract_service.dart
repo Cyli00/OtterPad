@@ -143,11 +143,7 @@ class BatchExtractService {
   // ─── 代理配置 ──────────────────────────────────────────────────────────────
 
   void applyProxy(Enum mode, String host, int port) {
-    _dio.httpClientAdapter = buildProxyAdapter(
-      mode.name,
-      host,
-      port,
-    );
+    _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
   }
 
   // ─── 内部工具 ──────────────────────────────────────────────────────────────
@@ -228,19 +224,12 @@ class BatchExtractService {
       throw BatchExtractException('提交任务失败: ${e.message ?? e.type.name}');
     }
 
-    log.d(
-      '[BatchExtract] submit response: code=${response.data?['code']}, msg=${response.data?['msg']}',
-    );
     _checkApiResponse(response.data);
     final jobId = response.data?['data']?['jobId'] as String?;
     if (jobId == null) {
       final msg = response.data?['msg'] as String? ?? '响应中无 jobId';
-      log.d(
-        '[BatchExtract] submit failed: no jobId, full response=${response.data}',
-      );
       throw BatchExtractException('提交任务失败: $msg');
     }
-    log.d('[BatchExtract] submit ok: jobId=$jobId');
     return jobId;
   }
 
@@ -278,9 +267,6 @@ class BatchExtractService {
 
     _checkApiResponse(response.data);
     final data = response.data?['data'];
-    log.d(
-      '[BatchExtract] pollBatch response data type=${data.runtimeType}, keys=${data is Map<String, dynamic> ? data.keys.toList() : 'N/A'}',
-    );
     if (data is Map<String, dynamic>) {
       final results = data['extractResult'];
       if (results is List) {
@@ -553,9 +539,7 @@ class BatchExtractService {
     final jobUrl = _jobApiUrl;
     final batchId = 'nr_${DateTime.now().millisecondsSinceEpoch}';
 
-    log.d(
-      '[BatchExtract] === extractBatch start: ${items.length} items, batchId=$batchId ===',
-    );
+    log.d('[BatchExtract] === extractBatch start: ${items.length} items ===');
     // Phase 1：并发提交 Job（每组最多 _maxConcurrent 个）
     for (int i = 0; i < items.length; i += _maxConcurrent) {
       if (cancelToken?.isCancelled == true) break;
@@ -621,11 +605,6 @@ class BatchExtractService {
     log.d(
       '[BatchExtract] === Phase 1 done: $submitted submitted, $failedSubmit failed ===',
     );
-    for (final s in jobStatuses) {
-      log.d(
-        '[BatchExtract]   ${s.documentId}: state=${s.state.name}, jobId=${s.jobId}, error=${s.error}',
-      );
-    }
     int pollDelayMs = 5000;
     bool useBatchPoll = true;
     final pollFailures = <String, int>{};
@@ -640,9 +619,6 @@ class BatchExtractService {
           )
           .toList();
       if (activeStatuses.isEmpty) break;
-      log.d(
-        '[BatchExtract] poll tick: ${activeStatuses.length} active, mode=${useBatchPoll ? "batch" : "individual"}',
-      );
 
       try {
         if (useBatchPoll) {
@@ -652,9 +628,6 @@ class BatchExtractService {
             jobUrl,
             token,
             cancelToken,
-          );
-          log.d(
-            '[BatchExtract] pollBatch returned ${jobDataList.length} items',
           );
           if (jobDataList.isEmpty && activeStatuses.isNotEmpty) {
             // 端点返回空列表，回退到逐个查询

@@ -62,10 +62,7 @@ class ReaderLocalhostServer {
         log.d('[ReaderLocalhostServer] connection error: $e');
       },
     );
-    log.d(
-      '[ReaderLocalhostServer] started on http://127.0.0.1:${server.port} '
-      '(root=$_root)',
-    );
+    log.d('[ReaderLocalhostServer] started on http://127.0.0.1:${server.port}');
   }
 
   Future<void> close() async {
@@ -82,16 +79,12 @@ class ReaderLocalhostServer {
     final rel = p.relative(normAbs, from: _root);
     // p.relative 在路径不在 _root 下时会返回 `..` 开头的相对路径
     if (rel.startsWith('..') || p.isAbsolute(rel)) {
-      log.d(
-        '[ReaderLocalhostServer] urlForPath rejected (out of root): $absPath',
-      );
+      log.d('[ReaderLocalhostServer] urlForPath rejected (out of root)');
       return null;
     }
     final relSegments = rel.split(RegExp(r'[/\\]'));
     if (relSegments.isEmpty || relSegments.first != 'library') {
-      log.d(
-        '[ReaderLocalhostServer] urlForPath rejected (outside library): $absPath',
-      );
+      log.d('[ReaderLocalhostServer] urlForPath rejected (outside library)');
       return null;
     }
     // Windows 路径用反斜杠，URL 必须用正斜杠

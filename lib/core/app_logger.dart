@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'storage/settings_keys.dart';
 import 'storage/storage.dart';
+import 'log_redactor.dart';
 
 final _fileLogOutput = _FileLogOutput();
 
@@ -15,20 +16,17 @@ final _fileLogOutput = _FileLogOutput();
 final log = Logger(
   filter: _AppLogFilter(),
   printer: _PlainPrinter(),
-  output: MultiOutput([
-    _DebugPrintOutput(),
-    _fileLogOutput,
-  ]),
+  output: MultiOutput([_DebugPrintOutput(), _fileLogOutput]),
 );
 
 const _kLogEnabled = SettingsKeys.logEnabled;
 const _kLogLevel = SettingsKeys.logLevel;
 
 Level _levelFromString(String s) => switch (s) {
-      'info' => Level.info,
-      'warning' => Level.warning,
-      _ => Level.error,
-    };
+  'info' => Level.info,
+  'warning' => Level.warning,
+  _ => Level.error,
+};
 
 /// 读取用户配置的最低日志级别；GStorage 未初始化时回退 error。
 Level _configuredMinLevel() {
@@ -72,7 +70,7 @@ class _PlainPrinter extends LogPrinter {
     final buf = StringBuffer(msg);
     if (event.error != null) buf.write('\n${event.error}');
     if (event.stackTrace != null) buf.write('\n${event.stackTrace}');
-    return [buf.toString()];
+    return [redactLogText(buf.toString())];
   }
 }
 

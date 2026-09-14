@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+uv run --no-project python scripts/check_secrets.py --staged

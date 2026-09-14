@@ -65,6 +65,20 @@ app.*.map.json
 # Local machine / credentials — never commit
 .claude/settings.local.json
 **/auth.json
+.env
+.env.*
+.npmrc
+.pypirc
+.netrc
+credentials
+secrets.*
+id_rsa*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
 
 # PDB debug files
 *.pdb
