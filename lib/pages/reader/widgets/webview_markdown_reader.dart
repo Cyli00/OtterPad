@@ -269,7 +269,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
           path: path,
           fingerprint: () => _appVersion().then(
             (version) =>
-                '${md5.convert(utf8.encode(markdown + jsonEncode(entries)))}|$buster|$version|$revision|incremental-reader-1',
+                '${md5.convert(utf8.encode(markdown + jsonEncode(entries)))}|$buster|$version|$revision|incremental-reader-1|$readerAssetVersion',
           ),
           allowReuse: !kDebugMode,
           buildHtml: () => Isolate.run(
@@ -288,12 +288,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
               bottomInset: bottomInset,
             ),
           ),
-        ).then((result) {
-          if (result == ReaderHtmlWriteResult.reused) {
-            log.d('[WebViewMarkdownReader] HTML 指纹命中');
-          }
-          return result;
-        });
+        );
   }
 
   @override
@@ -383,6 +378,18 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   // 都是单行转发到 bridge——bridge 字段未初始化时（WebView 未 ready）静默跳过。
 
   void scrollToBlockIndex(int index) => _bridge?.scrollToBlock(index);
+
+  Future<bool> locateQuote(
+    String quote, {
+    ReaderAnchor? anchor,
+    String? figureName,
+  }) async =>
+      await _bridge?.locateQuote(
+        quote,
+        anchor: anchor,
+        figureName: figureName,
+      ) ??
+      false;
 
   void scrollToFigure(String id) => _bridge?.scrollToFigure(id);
 

@@ -180,8 +180,7 @@ class _NavigationRailItem extends StatelessWidget {
 
     Widget buildWithLabel() {
       return SizedBox(
-        width: 48,
-        height: 56,
+        width: 64,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
@@ -204,16 +203,14 @@ class _NavigationRailItem extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: Text(
                 label,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: selected
                       ? colorScheme.onSurface
                       : colorScheme.onSurfaceVariant,
-                  fontSize: 11,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  height: 1.1,
                 ),
               ),
             ),
@@ -234,12 +231,10 @@ class _NavigationRailItem extends StatelessWidget {
             : KeyedSubtree(key: const ValueKey(false), child: buildIconOnly()),
       ),
     );
-    if (!extended) {
-      item = Tooltip(message: label, child: item);
-    }
+    item = Tooltip(message: label, child: item);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: extended ? 4 : 12, vertical: 4),
       child: item,
     );
   }

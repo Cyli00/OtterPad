@@ -10,6 +10,8 @@ import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
 import 'reader_typography.dart';
 
+const readerAssetVersion = 'reader-interactions-2';
+
 // ─── Public API ───
 
 /// 构建完整 HTML 文档。
@@ -93,7 +95,7 @@ String buildReaderHtml({
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
 <base href="$baseHref">
 <link rel="stylesheet" href="/_assets/katex/katex.min.css">
-<link rel="stylesheet" href="/_assets/reader/reader.css">
+<link rel="stylesheet" href="/_assets/reader/reader.css?v=$readerAssetVersion">
 <style>:root {
 $rootVars
 }</style>
@@ -103,9 +105,9 @@ $rootVars
 <script src="/_assets/katex/katex.min.js"></script>
 <script src="/_assets/katex/contrib/auto-render.min.js"></script>
 <script>window.readerEntries = JSON.parse(decodeURIComponent(escape(atob('${base64Encode(utf8.encode(jsonEncode(readerEntries)))}'))));</script>
-<script src="/_assets/reader/reader_anchors.js"></script>
-<script src="/_assets/reader/reader.js"></script>
-<script src="/_assets/reader/reader_translations.js"></script>
+<script src="/_assets/reader/reader_anchors.js?v=$readerAssetVersion"></script>
+<script src="/_assets/reader/reader.js?v=$readerAssetVersion"></script>
+<script src="/_assets/reader/reader_translations.js?v=$readerAssetVersion"></script>
 </body>
 </html>''';
 }

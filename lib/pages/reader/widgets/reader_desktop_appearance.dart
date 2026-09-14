@@ -11,7 +11,10 @@ import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../widgets/app_divider.dart';
 import '../../setting/setting_group.dart';
-import '../../setting/setting_picker.dart';
+import '../../../widgets/tactile_press.dart';
+import '../../../widgets/hover_lift.dart';
+import '../../../widgets/translation_style_label.dart';
+import 'reader_background.dart';
 
 class ReaderDesktopAppearance extends ConsumerWidget {
   const ReaderDesktopAppearance({
@@ -103,11 +106,10 @@ class ReaderDesktopAppearance extends ConsumerWidget {
                             _field(
                               context,
                               l10n.background,
-                              SettingPicker<ReaderTheme>(
-                                current: settings.theme,
-                                options: backgrounds.keys.toList(),
-                                labelFor: (v) => backgrounds[v]!,
-                                sheetTitle: l10n.background,
+                              _backgroundChoices(
+                                context,
+                                value: settings.theme,
+                                choices: backgrounds,
                                 onChanged: notifier.setTheme,
                               ),
                             ),
@@ -196,19 +198,39 @@ class ReaderDesktopAppearance extends ConsumerWidget {
                             _field(
                               context,
                               l10n.translationStyle,
-                              SettingPicker<String>(
-                                current:
-                                    translationStyles.containsKey(
-                                      translation.displayStyleId,
-                                    )
-                                    ? translation.displayStyleId
-                                    : 'themed',
-                                options: translationStyles.keys.toList(),
-                                labelFor: (v) => translationStyles[v]!,
-                                sheetTitle: l10n.translationStyle,
-                                onChanged: ref
-                                    .read(translationConfigProvider.notifier)
-                                    .setDisplayStyleId,
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final entry in translationStyles.entries)
+                                    _previewChoice(
+                                      context,
+                                      selected:
+                                          entry.key ==
+                                          (translationStyles.containsKey(
+                                                translation.displayStyleId,
+                                              )
+                                              ? translation.displayStyleId
+                                              : 'themed'),
+                                      label: entry.value,
+                                      radius: 12,
+                                      onTap: () => ref
+                                          .read(
+                                            translationConfigProvider.notifier,
+                                          )
+                                          .setDisplayStyleId(entry.key),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 10,
+                                        ),
+                                        child: TranslationStyleLabel(
+                                          styleId: entry.key,
+                                          label: entry.value,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ],
@@ -219,6 +241,161 @@ class ReaderDesktopAppearance extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _backgroundChoices(
+    BuildContext context, {
+    required ReaderTheme value,
+    required Map<ReaderTheme, String> choices,
+    required ValueChanged<ReaderTheme> onChanged,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 320 ? 3 : 2;
+        final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final entry in choices.entries)
+              SizedBox(
+                width: width,
+                child: HoverLift(
+                  child: _previewChoice(
+                    context,
+                    selected: value == entry.key,
+                    label: entry.value,
+                    radius: 16,
+                    onTap: () => onChanged(entry.key),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Builder(
+                            builder: (context) {
+                              final palette = resolveReaderPalette(
+                                entry.key,
+                                ColorScheme.fromSeed(
+                                  seedColor: cs.primary,
+                                  brightness: entry.key.brightness,
+                                ),
+                              );
+                              return Container(
+                                height: 60,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: palette.background,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    FractionallySizedBox(
+                                      widthFactor: 0.55,
+                                      child: Container(
+                                        height: 4,
+                                        color: palette.text,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      height: 3,
+                                      color: palette.secondaryText,
+                                    ),
+                                    const SizedBox(height: 5),
+                                    FractionallySizedBox(
+                                      widthFactor: 0.75,
+                                      child: Container(
+                                        height: 3,
+                                        color: palette.secondaryText,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  entry.value,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: value == entry.key
+                                        ? cs.onPrimaryContainer
+                                        : cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              if (value == entry.key) ...[
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Symbols.check_rounded,
+                                  size: 16,
+                                  color: cs.onPrimaryContainer,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _previewChoice(
+    BuildContext context, {
+    required bool selected,
+    required String label,
+    required double radius,
+    required VoidCallback onTap,
+    required Widget child,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    var focused = false;
+    return StatefulBuilder(
+      builder: (context, setState) => FocusableActionDetector(
+        onShowFocusHighlight: (value) => setState(() => focused = value),
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              onTap();
+              return null;
+            },
+          ),
+        },
+        child: Semantics(
+          button: true,
+          onTap: onTap,
+          selected: selected,
+          label: label,
+          excludeSemantics: true,
+          child: TactilePress(
+            baseColor: selected ? cs.primaryContainer : cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: focused || selected
+                  ? cs.primary.withAlpha(160)
+                  : cs.outlineVariant.withAlpha(100),
+              width: focused || selected ? 2 : 1,
+            ),
+            pressedScale: 0.98,
+            onTap: onTap,
+            child: child,
+          ),
         ),
       ),
     );

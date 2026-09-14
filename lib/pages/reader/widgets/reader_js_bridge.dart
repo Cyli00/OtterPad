@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../../../data/models/book/highlight.dart';
+import '../../../data/models/book/reader_anchor.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../utils/js_string_escape.dart';
 import 'reader_background.dart';
@@ -341,6 +342,17 @@ class ReaderJsBridge {
   void scrollToBlock(int index) {
     _controller.evaluateJavascript(source: 'window.scrollToBlock($index)');
   }
+
+  Future<bool> locateQuote(
+    String quote, {
+    ReaderAnchor? anchor,
+    String? figureName,
+  }) async =>
+      await _controller.evaluateJavascript(
+        source:
+            'window.readerLocateQuote(${jsonEncode({'quote': quote, 'anchor': anchor?.toJson(), 'figureName': figureName})})',
+      ) ==
+      true;
 
   Future<bool> scrollToParagraph(String id) async =>
       await _controller.evaluateJavascript(

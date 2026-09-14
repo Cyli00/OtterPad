@@ -12,7 +12,7 @@ enum ReaderDockPane { outline, notes, askAi }
 ///
 /// 传入 [onSidebarDragUpdate] 后，左缘分隔线变为可拖拽把手：9px 命中域 +
 /// 居中 grabber，拖拽实时调 [sidebarWidth]（范围由 Responsive.clampReaderSidebarWidth 管）
-class ReaderDockedPane extends StatelessWidget {
+class ReaderDockedPane extends StatefulWidget {
   final double sidebarWidth;
   final bool open;
   final ReaderDockPane pane;
@@ -21,8 +21,7 @@ class ReaderDockedPane extends StatelessWidget {
   final Widget chat;
   final ValueChanged<DragUpdateDetails>? onSidebarDragUpdate;
   final VoidCallback? onSidebarDragEnd;
-  final bool animateWidth;
-  final double? visibleWidth;
+  final VoidCallback? onAnimationEnd;
 
   const ReaderDockedPane({
     super.key,
@@ -34,19 +33,21 @@ class ReaderDockedPane extends StatelessWidget {
     required this.chat,
     this.onSidebarDragUpdate,
     this.onSidebarDragEnd,
-    this.animateWidth = true,
-    this.visibleWidth,
+    this.onAnimationEnd,
   });
 
-  int get _paneIndex => switch (pane) {
-    ReaderDockPane.outline => 0,
-    ReaderDockPane.notes => 1,
-    ReaderDockPane.askAi => 2,
-  };
+  @override
+  State<ReaderDockedPane> createState() => _ReaderDockedPaneState();
+}
+
+class _ReaderDockedPaneState extends State<ReaderDockedPane> {
+  final _mountedPanes = <ReaderDockPane>{};
 
   @override
   Widget build(BuildContext context) {
-    final sidebarW = sidebarWidth;
+    final sidebarW = widget.sidebarWidth;
+    final open = widget.open;
+    if (open) _mountedPanes.add(widget.pane);
     final cs = Theme.of(context).colorScheme;
 
     Widget buildPaneContent() {
@@ -57,8 +58,8 @@ class ReaderDockedPane extends StatelessWidget {
           child: Row(
             children: [
               _DockResizeDivider(
-                onDragUpdate: onSidebarDragUpdate,
-                onDragEnd: onSidebarDragEnd,
+                onDragUpdate: widget.onSidebarDragUpdate,
+                onDragEnd: widget.onSidebarDragEnd,
               ),
               Expanded(
                 child: ReaderLocalTheme(
@@ -66,8 +67,21 @@ class ReaderDockedPane extends StatelessWidget {
                     left: false,
                     right: false,
                     child: IndexedStack(
-                      index: _paneIndex,
-                      children: [outline, notes, chat],
+                      index: widget.pane.index,
+                      children: [
+                        for (final pane in ReaderDockPane.values)
+                          if (_mountedPanes.contains(pane))
+                            TickerMode(
+                              enabled: open && pane == widget.pane,
+                              child: switch (pane) {
+                                ReaderDockPane.outline => widget.outline,
+                                ReaderDockPane.notes => widget.notes,
+                                ReaderDockPane.askAi => widget.chat,
+                              },
+                            )
+                          else
+                            const SizedBox.shrink(),
+                      ],
                     ),
                   ),
                 ),
@@ -78,45 +92,40 @@ class ReaderDockedPane extends StatelessWidget {
       );
     }
 
-    if (!animateWidth) {
-      return IgnorePointer(
-        ignoring: !open,
-        child: SizedBox(
-          width: visibleWidth ?? (open ? sidebarW : 0.0),
-          child: ClipRect(
-            child: OverflowBox(
-              minWidth: sidebarW,
-              maxWidth: sidebarW,
-              alignment: Alignment.centerLeft,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: open ? 1 : 0),
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : kAnimFast,
-                curve: kAnimCurve,
-                builder: (context, value, child) => Opacity(
-                  opacity: value,
-                  child: Transform.translate(
-                    offset: Offset(12 * (1 - value), 0),
-                    child: child,
-                  ),
-                ),
-                child: buildPaneContent(),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return SingleMotionBuilder(
+      from: reduceMotion ? (open ? 1.0 : 0.0) : 0.0,
+      active: !reduceMotion,
+      onAnimationStatusChanged: (status) {
+        if (status == AnimationStatus.completed ||
+            status == AnimationStatus.dismissed) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && widget.open == open) {
+              widget.onAnimationEnd?.call();
+            }
+          });
+        }
+      },
       motion: const SpringMotion(kSpringPanel),
       value: open ? 1.0 : 0.0,
       builder: (context, t, child) {
-        final clipWidth = (sidebarW * t).clamp(0.0, sidebarW);
+        final targetWidth = open ? sidebarW : 0.0;
+        final width = (sidebarW * t).clamp(0.0, sidebarW);
+        // 弹簧会在容差内停止，吸附不足半个物理像素的尾差，避免残留细缝。
+        final clipWidth =
+            (width - targetWidth).abs() <
+                0.5 / MediaQuery.devicePixelRatioOf(context)
+            ? targetWidth
+            : width;
         return IgnorePointer(
-          ignoring: clipWidth < 1,
-          child: SizedBox(width: clipWidth, child: child),
+          ignoring: !open || clipWidth < 1,
+          child: ExcludeFocus(
+            excluding: !open,
+            child: ExcludeSemantics(
+              excluding: !open,
+              child: SizedBox(width: clipWidth, child: child),
+            ),
+          ),
         );
       },
       child: ClipRect(
@@ -124,7 +133,7 @@ class ReaderDockedPane extends StatelessWidget {
           minWidth: sidebarW,
           maxWidth: sidebarW,
           alignment: Alignment.centerLeft,
-          child: buildPaneContent(),
+          child: RepaintBoundary(child: buildPaneContent()),
         ),
       ),
     );

@@ -28,9 +28,9 @@ const SpringDescription kSpringSelection = SpringDescription(
   damping: 20,
 );
 
-/// 面板开合（dock 宽度）：ζ≈0.63，可中断。
+/// 面板开合：近临界阻尼，可中断，避免宽度越界后裁切造成停顿与回跳。
 const SpringDescription kSpringPanel = SpringDescription(
   mass: 1,
   stiffness: 500,
-  damping: 28,
+  damping: 45,
 );

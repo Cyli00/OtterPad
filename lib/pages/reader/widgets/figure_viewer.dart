@@ -17,6 +17,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/animation_constants.dart';
 import '../../../data/models/book/document.dart';
 import '../../../providers/agent_api_provider.dart';
+import '../../../providers/document_translation_provider.dart';
 import '../../../router/app_routes.dart';
 import '../chat/document_chat_page.dart';
 import '../../../services/haptics.dart';
@@ -744,6 +745,13 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         translationConfig.targetLanguage,
       )[hash];
       if (cached != null && cached.isNotEmpty) {
+        ref
+            .read(documentTranslationProvider(docId).notifier)
+            .acceptFigureTranslation(
+              hash,
+              cached,
+              translationConfig.targetLanguage,
+            );
         setState(() {
           _translations[idx] = cached;
           _showTranslation[idx] = true;
@@ -771,12 +779,20 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
 
       // 写回 translations.json 共享缓存
       if (docId != null && result.isNotEmpty) {
-        DocumentTranslationService.saveSingleTranslation(
+        await DocumentTranslationService.saveSingleTranslation(
           docId,
           translationConfig.targetLanguage,
           hash,
           result,
         );
+        if (!mounted) return;
+        ref
+            .read(documentTranslationProvider(docId).notifier)
+            .acceptFigureTranslation(
+              hash,
+              result,
+              translationConfig.targetLanguage,
+            );
       }
 
       if (!mounted) return;

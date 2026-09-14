@@ -7,7 +7,6 @@ import '../core/l10n.dart';
 import '../router/app_router.dart';
 import '../services/ai_settings_prompt.dart';
 import '../services/document_translation_service.dart';
-import '../services/figure_extract_service.dart';
 import '../services/markdown_paragraph_extractor.dart';
 import '../services/reader/reader_document_index.dart';
 import '../services/snackbar_service.dart';
@@ -106,11 +105,16 @@ class DocumentTranslationNotifier
   ValueListenable<ListenableProgress> get progress => _progress;
   int _restoreEpoch = 0;
 
-  Future<void> restoreAfterCurrent(String markdown, ReaderDocumentIndex index) async {
+  Future<void> restoreAfterCurrent(
+    String markdown,
+    ReaderDocumentIndex index,
+  ) async {
     final epoch = ++_restoreEpoch;
     final current = _activeTranslation;
     if (current != null) {
-      try { await current; } catch (_) {
+      try {
+        await current;
+      } catch (_) {
         // 任务失败不应阻止重新解析后恢复已保存的段落结果。
       }
     }
@@ -120,14 +124,35 @@ class DocumentTranslationNotifier
   void restoreCached(String markdown, ReaderDocumentIndex index) {
     if (!mounted || _activeTranslation != null || !index.hasStructure) return;
     final config = _ref.read(translationConfigProvider);
-    final eligible = index.translationParagraphs(markdown, config.ignoreSections);
-    final cached = DocumentTranslationService.loadTranslations(documentId, config.targetLanguage);
-    final translations = {for (final p in eligible) if (cached[p.hash]?.isNotEmpty == true) p.hash: cached[p.hash]!};
-    final paragraphs = eligible.where((p) => p.markdownStart != null).map((p) => p.translatable).toList()
-      ..sort((a, b) => a.offset.compareTo(b.offset));
-    state = state.copyWith(paragraphs: paragraphs, translations: translations,
-      status: translations.isNotEmpty && eligible.every((p) => translations.containsKey(p.hash))
-          ? DocTranslationStatus.done : DocTranslationStatus.idle);
+    final eligible = index.translationParagraphs(
+      markdown,
+      config.ignoreSections,
+    );
+    final cached = DocumentTranslationService.loadTranslations(
+      documentId,
+      config.targetLanguage,
+    );
+    final hashes = {
+      ...eligible.map((p) => p.hash),
+      ...index.figureParagraphs.map((p) => p.hash),
+    };
+    final translations = {
+      for (final hash in hashes)
+        if (cached[hash]?.isNotEmpty == true) hash: cached[hash]!,
+    };
+    final paragraphs =
+        eligible
+            .where((p) => p.markdownStart != null)
+            .map((p) => p.translatable)
+            .toList()
+          ..sort((a, b) => a.offset.compareTo(b.offset));
+    state = state.copyWith(
+      paragraphs: paragraphs,
+      translations: translations,
+      status: translations.isNotEmpty && hashes.every(translations.containsKey)
+          ? DocTranslationStatus.done
+          : DocTranslationStatus.idle,
+    );
   }
 
   /// 启动一次完整的文档翻译。
@@ -178,13 +203,25 @@ class DocumentTranslationNotifier
 
     final index = await ReaderDocumentIndex.load(documentId, markdown);
     if (!mounted || token.isCancelled) return false;
-    final indexed = index.translationParagraphs(markdown, config.ignoreSections);
+    final indexed = index.translationParagraphs(
+      markdown,
+      config.ignoreSections,
+    );
     final paragraphs = index.hasStructure
-        ? indexed.where((p) => p.markdownStart != null).map((p) => p.translatable).toList()
-        : MarkdownParagraphExtractor.extract(markdown, ignoreSections: config.ignoreSections);
-    final figureTitleParagraphs = index.hasStructure
-        ? indexed.where((p) => p.markdownStart == null).map((p) => p.translatable).toList()
-        : await _collectFigureTitleParagraphs();
+        ? indexed
+              .where((p) => p.markdownStart != null)
+              .map((p) => p.translatable)
+              .toList()
+        : MarkdownParagraphExtractor.extract(
+            markdown,
+            ignoreSections: config.ignoreSections,
+          );
+    final figureTitleParagraphs = [
+      ...indexed
+          .where((p) => p.markdownStart == null)
+          .map((p) => p.translatable),
+      ...index.figureParagraphs,
+    ];
     if (paragraphs.isEmpty && figureTitleParagraphs.isEmpty) {
       snackBar.showResult(
         message: _l10n?.noTranslatableParagraphs ?? '未检测到可翻译段落',
@@ -194,7 +231,9 @@ class DocumentTranslationNotifier
 
     // 收集 figure title 作为额外翻译段落（共享 translations.json 缓存）
     if (!mounted || token.isCancelled) return false;
-    final allParagraphs = {for (final p in [...paragraphs, ...figureTitleParagraphs]) p.hash: p}.values.toList();
+    final allParagraphs = {
+      for (final p in [...paragraphs, ...figureTitleParagraphs]) p.hash: p,
+    }.values.toList();
     paragraphs.sort((a, b) => a.offset.compareTo(b.offset));
 
     // 初始态：loading + 默认进入双语模式（翻完无需二次点击就能看到结果）
@@ -278,11 +317,20 @@ class DocumentTranslationNotifier
         return false;
       }
 
-      final missing = allParagraphs.where((p) => translations[p.hash]?.isNotEmpty != true).length;
+      final missing = allParagraphs
+          .where((p) => translations[p.hash]?.isNotEmpty != true)
+          .length;
       state = state.copyWith(
-        status: missing == 0 ? DocTranslationStatus.done : DocTranslationStatus.failed,
+        status: missing == 0
+            ? DocTranslationStatus.done
+            : DocTranslationStatus.failed,
         translations: translations,
-        error: missing == 0 ? null : Exception(_l10n?.readerTranslationIncomplete(missing) ?? '还有 $missing 个段落未翻译'),
+        error: missing == 0
+            ? null
+            : Exception(
+                _l10n?.readerTranslationIncomplete(missing) ??
+                    '还有 $missing 个段落未翻译',
+              ),
         clearError: missing == 0,
       );
       return fullyCached;
@@ -325,7 +373,9 @@ class DocumentTranslationNotifier
   void cancel({bool updateState = true}) {
     if (_cancelToken == null) return;
     _cancelToken!.cancel();
-    if (updateState && mounted && state.status == DocTranslationStatus.loading) {
+    if (updateState &&
+        mounted &&
+        state.status == DocTranslationStatus.loading) {
       state = state.copyWith(status: DocTranslationStatus.idle);
     }
   }
@@ -373,29 +423,18 @@ class DocumentTranslationNotifier
     );
   }
 
-  /// 从 figure manifest 收集去重后的 caption 作为额外翻译段落。
-  Future<List<TranslatableParagraph>> _collectFigureTitleParagraphs() async {
-    final figures = await FigureExtractService.loadManifest(documentId);
-    if (figures == null || figures.isEmpty) return const [];
-
-    final result = <TranslatableParagraph>[];
-    final seen = <String>{};
-    for (final fig in figures) {
-      final text = fig.captionText.trim();
-      if (text.isEmpty) continue;
-      final hash = MarkdownParagraphExtractor.computeHash(text);
-      if (!seen.add(hash)) continue;
-      result.add(
-        TranslatableParagraph(
-          offset: -1,
-          length: 0,
-          text: text,
-          hash: hash,
-          kind: ParagraphKind.text,
-        ),
-      );
+  void acceptFigureTranslation(
+    String hash,
+    String translation,
+    String language,
+  ) {
+    if (!mounted ||
+        language != _ref.read(translationConfigProvider).targetLanguage) {
+      return;
     }
-    return result;
+    state = state.copyWith(
+      translations: {...state.translations, hash: translation},
+    );
   }
 
   @override

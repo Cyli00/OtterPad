@@ -675,6 +675,7 @@ window.addEventListener('load', () => setTimeout(_reportScrollMetrics, 100));
 
 // Flutter 拖动覆盖滚动条时调这个：ratio ∈ [0,1] → window.scrollY 绝对像素值。
 window._scrollToRatio = function(ratio) {
+  window.readerStopWheel?.();
   const max = document.documentElement.scrollHeight - window.innerHeight;
   if (max <= 0) return;
   const r = Math.max(0, Math.min(1, ratio));
@@ -1195,8 +1196,79 @@ window.addEventListener('resize', () => {
   }, 120);
 });
 
+// 桌面 WebView 会把 Flutter 滚动量转换为较大的滚轮刻度；只接管粗粒度
+// 纵向滚轮，精密触控板、缩放手势及内层滚动仍交给浏览器。
+let _readerWheelFrame = 0;
+let _readerWheelTarget = 0;
+let _readerWheelPosition = 0;
+let _readerWheelTime = 0;
+window.readerStopWheel = () => {
+  cancelAnimationFrame(_readerWheelFrame);
+  _readerWheelFrame = 0;
+};
+function _smoothReaderWheel(event) {
+  if (document.body.dataset.desktop !== 'true' || event.ctrlKey || event.metaKey ||
+      event.shiftKey || event.defaultPrevented || !event.cancelable ||
+      Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+  let element = event.target instanceof Element ? event.target : null;
+  while (element && element !== document.body) {
+    if (element.matches('input, textarea, select, [contenteditable="true"]') ||
+        (/auto|scroll/.test(getComputedStyle(element).overflowY) &&
+         element.scrollHeight > element.clientHeight + 1)) return;
+    element = element.parentElement;
+  }
+  if (!event.deltaY) return;
+  if (event.deltaMode === 0 && Math.abs(event.deltaY) < 32) {
+    window.readerStopWheel();
+    return;
+  }
+  event.preventDefault();
+  const unit = event.deltaMode === 1 ? parseFloat(getComputedStyle(document.body).lineHeight) || 24
+      : event.deltaMode === 2 ? window.innerHeight : 1;
+  const delta = Math.sign(event.deltaY) * Math.min(96, Math.abs(event.deltaY * unit) * .5);
+  const current = window.scrollY;
+  const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  if (!_readerWheelFrame || Math.sign(_readerWheelTarget - current) !== Math.sign(delta)) {
+    _readerWheelTarget = current;
+  }
+  _readerWheelTarget = Math.max(0, Math.min(max,
+      current + Math.max(-window.innerHeight * .5,
+        Math.min(window.innerHeight * .5, _readerWheelTarget + delta - current))));
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    window.readerStopWheel();
+    window.scrollTo({top: _readerWheelTarget, behavior: 'instant'});
+    return;
+  }
+  if (_readerWheelFrame) return;
+  _readerWheelTime = performance.now();
+  _readerWheelPosition = current;
+  function step(now) {
+    if (_isHorizontal() || Math.abs(window.scrollY - _readerWheelPosition) > 2) {
+      window.readerStopWheel();
+      return;
+    }
+    _readerWheelTarget = Math.min(_readerWheelTarget,
+        Math.max(0, document.documentElement.scrollHeight - window.innerHeight));
+    const remaining = _readerWheelTarget - window.scrollY;
+    const next = Math.abs(remaining) < 2 ? _readerWheelTarget
+        : window.scrollY + remaining * (1 - Math.exp(-(now - _readerWheelTime) / 55));
+    _readerWheelTime = now;
+    window.scrollTo({top: next, behavior: 'instant'});
+    _readerWheelPosition = window.scrollY;
+    if (Math.abs(_readerWheelTarget - window.scrollY) < 1) {
+      _readerWheelFrame = 0;
+    } else {
+      _readerWheelFrame = requestAnimationFrame(step);
+    }
+  }
+  _readerWheelFrame = requestAnimationFrame(step);
+}
+for (const event of ['pointerdown', 'keydown', 'resize']) {
+  window.addEventListener(event, window.readerStopWheel, {passive: true});
+}
+
 // ─── 横向翻页：滚轮 + 键盘 ───
-// 仅 horizontal 模式生效；vertical 模式提前 return 不影响原生上下滚动。
+// horizontal 保留逐页翻动；vertical 分流到粗粒度滚轮缓动。
 
 // 滚轮 → 一次一页。
 // 节流：触控板 / 精密滚轮一次手势会喷出多个 wheel 事件，全响应就是"飞过头"。
@@ -1204,7 +1276,7 @@ window.addEventListener('resize', () => {
 let _wheelCooldownUntil = 0;
 let _wheelLastDir = 0;
 window.addEventListener('wheel', (e) => {
-  if (!_isHorizontal()) return;
+  if (!_isHorizontal()) { _smoothReaderWheel(e); return; }
   e.preventDefault();
   const dir = Math.sign(e.deltaY);
   if (!dir) return;

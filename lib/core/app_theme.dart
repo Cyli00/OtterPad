@@ -12,7 +12,6 @@ ThemeData buildAppTheme(ColorScheme colorScheme, {String? fontFamily}) =>
       useMaterial3: true,
       fontFamily: fontFamily,
       dialogTheme: const DialogThemeData(elevation: 0),
-      iconTheme: const IconThemeData(fill: 1.0),
       sliderTheme: appSliderTheme,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

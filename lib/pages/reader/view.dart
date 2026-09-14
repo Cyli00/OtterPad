@@ -12,7 +12,6 @@ import 'package:dio/dio.dart' show CancelToken;
 
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
-import 'package:window_manager/window_manager.dart';
 
 import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
@@ -20,7 +19,6 @@ import '../../data/models/book/document.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../providers/agent_api_provider.dart';
 import '../../providers/doc_extract_api_provider.dart';
-import '../../services/desktop_window_service.dart';
 import '../../widgets/extract_provider_dialog.dart';
 import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/document_task_provider.dart';
@@ -116,7 +114,7 @@ typedef _MainBuildKey = (
   String? markdownPath,
 );
 
-class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
+class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final ReaderPdfDocumentRef _pdfDocumentRef = ReaderPdfDocumentRef(
     DocPaths.pdf(widget.document.id),
     onPagesChanged: () => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -170,16 +168,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
   bool _dockOpen = false;
   ReaderDockPane _dockPane = ReaderDockPane.outline;
 
-  /// 右侧停靠栏展开时保存的窗口几何信息，用于关闭时还原。
-  Rect? _preDockOpenWindowBounds;
-
-  /// 停靠栏是否成功拓宽了窗口。若拓宽成功，停靠栏不挤占正文宽度。
-  bool _dockExpandedWindow = false;
-
-  /// 窗口拓宽/收拢动画防重入标志
-  bool _dockWindowResizing = false;
-  bool _dockClosing = false;
-  double _dockExpandedWidth = 0;
+  bool _dockAnimating = false;
   double? _lockedReaderWidth;
   double? _readerViewportWidth;
   bool _desktopAppearanceOpen = false;
@@ -197,14 +186,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
   }
 
   bool _useReaderDock(BuildContext context) {
-    if (isDesktopOs) return true;
     final availableWidth =
         MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
     return availableWidth >= Responsive.kReaderDockMinWidth;
   }
 
   void _toggleReaderNavigation() {
-    if (!isDesktopOs || _dockWindowResizing) return;
+    if (!isDesktopOs || _dockAnimating) return;
     final nextVisible = !_readerNavigationVisible;
     if (nextVisible &&
         _dockOpen &&
@@ -229,6 +217,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
   int? _pendingPdfRestoreSourcePage;
 
   String? _dockChatQuote;
+  ReaderAnchor? _dockChatQuoteAnchor;
   String? _dockChatFigurePath;
   int _dockChatQuoteEpoch = 0;
   DocumentChatPageArgs? _pendingChatReturnArgs;
@@ -307,9 +296,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
     );
     _sidebarWidthOverride =
         GStorage.setting.get(SettingsKeys.readerSidebarWidth) as double?;
-    if (isDesktopOs) {
-      windowManager.addListener(this);
-    }
     // 在 initState 中 cache notifier 引用——Riverpod 3.x 禁止在 dispose()
     // 中通过 ref.read 取 provider（widget 已 unmount-pending）。Notifier 实
     // 例的生命周期由 provider 管理、独立于 widget，cache 安全。
@@ -741,14 +727,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
 
   /// 停靠栏分隔线拖拽：向左拖（dx<0）变宽。宽度持久化到 drag end，避免每帧写库。
   void _onSidebarDragUpdate(DragUpdateDetails d) {
-    if (_dockWindowResizing) return;
+    if (_dockAnimating) return;
     final windowW =
         MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
-    final base =
-        _sidebarWidthOverride ??
-        (isDesktopOs
-            ? Responsive.kReaderSidebarMax
-            : Responsive.readerSidebarWidth(windowW));
+    final base = Responsive.clampReaderSidebarWidth(
+      _sidebarWidthOverride ?? Responsive.readerSidebarWidth(windowW),
+      windowW,
+    );
     final next = Responsive.clampReaderSidebarWidth(base - d.delta.dx, windowW);
     if (next == base) return;
     setState(() => _sidebarWidthOverride = next);
@@ -761,22 +746,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
     }
   }
 
+  void _beginDockTransition({required bool opening}) {
+    _dockAnimating = !MediaQuery.disableAnimationsOf(context);
+    // 展开期间只裁切正文，结束后再排版；收起先恢复完整排版，再逐渐显露。
+    _lockedReaderWidth = !_dockAnimating
+        ? null
+        : opening
+        ? _readerViewportWidth
+        : MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
+  }
+
+  void _onDockAnimationEnd() {
+    if (!mounted || !_dockAnimating) return;
+    setState(() {
+      _dockAnimating = false;
+      _lockedReaderWidth = null;
+    });
+  }
+
   Future<void> _openDock(ReaderDockPane pane) async {
-    if (_dockWindowResizing ||
-        _session.markdownContent == null ||
+    if (_session.markdownContent == null ||
         (!isDesktopOs && !_session.showPreview)) {
       return;
     }
-    final wasOpen = _dockOpen;
     setState(() {
+      if (!_dockOpen) _beginDockTransition(opening: true);
       _dockHostMounted = true;
       _dockPane = pane;
       _dockOpen = true;
       _desktopAppearanceOpen = false;
-      if (!wasOpen && isDesktopOs) {
-        _dockWindowResizing = true;
-        _lockedReaderWidth = _readerViewportWidth;
-      }
       if (pane == ReaderDockPane.askAi) {
         _pendingChatReturnArgs = null;
         _chatReturnArgs = null;
@@ -784,63 +782,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
     });
     _sessionNotifier.setDockOpen(true);
     _sessionNotifier.revealToolbars();
-
-    if (!wasOpen && isDesktopOs) {
-      final result = await DesktopWindowService.expandWindowRight(
-        _sidebarWidthOverride ?? Responsive.kReaderSidebarMax,
-        animate: !MediaQuery.disableAnimationsOf(context),
-      );
-      if (!mounted) {
-        if (result.success) {
-          await DesktopWindowService.contractWindowRight(
-            result.expandedWidth,
-            preExpandBounds: result.preExpandBounds,
-          );
-        }
-        return;
-      }
-      // 等 Flutter 收到原生窗口的最终尺寸后，再解除正文宽度锁。
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
-      setState(() {
-        _dockExpandedWindow = result.success;
-        _dockExpandedWidth = result.expandedWidth;
-        _preDockOpenWindowBounds = result.preExpandBounds;
-        _dockWindowResizing = false;
-        _lockedReaderWidth = null;
-      });
-    }
   }
 
   Future<void> _closeDock() async {
-    if (!_dockOpen || _dockWindowResizing) return;
-    if (isDesktopOs) {
-      setState(() {
-        _dockWindowResizing = true;
-        _dockClosing = true;
-        _lockedReaderWidth = _readerViewportWidth;
-      });
-    }
-    if (_dockExpandedWindow && isDesktopOs) {
-      await DesktopWindowService.contractWindowRight(
-        _dockExpandedWidth,
-        preExpandBounds: _preDockOpenWindowBounds,
-        animate: !MediaQuery.disableAnimationsOf(context),
-      );
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
-    } else if (isDesktopOs && !MediaQuery.disableAnimationsOf(context)) {
-      await Future<void>.delayed(kAnimFast);
-      if (!mounted) return;
-    }
+    if (!_dockOpen) return;
     setState(() {
-      _dockClosing = false;
+      _beginDockTransition(opening: false);
       _dockOpen = false;
-      _dockExpandedWindow = false;
-      _dockExpandedWidth = 0;
-      _preDockOpenWindowBounds = null;
-      _dockWindowResizing = false;
-      _lockedReaderWidth = null;
       if (_pendingChatReturnArgs != null) {
         _chatReturnArgs = _pendingChatReturnArgs;
         _pendingChatReturnArgs = null;
@@ -1185,7 +1133,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
         }
       },
       onCopy: () => Clipboard.setData(ClipboardData(text: text)),
-      onAskAi: () => _openAiChat(quote: text),
+      onAskAi: () => _openAiChat(quote: text, quoteAnchor: anchor),
       onTranslate: () {
         final fullText = _selectionParagraphContext(anchor, text);
         if (!_session.showPreview && _pdfController.isReady) {
@@ -1231,7 +1179,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
               duration: const Duration(seconds: 1),
             );
       },
-      onAskAi: () => _openAiChat(quote: highlight.text.trim()),
+      onAskAi: () => _openAiChat(
+        quote: highlight.text.trim(),
+        quoteAnchor: highlight.anchor,
+      ),
       onTranslate: () {
         final fullText = _selectionParagraphContext(
           highlight.anchor,
@@ -1288,7 +1239,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
               duration: const Duration(seconds: 1),
             );
       },
-      onAskAi: () => _openAiChat(quote: _webViewSelectionText.trim()),
+      onAskAi: () => _openAiChat(
+        quote: _webViewSelectionText.trim(),
+        quoteAnchor: _selectionAnchor,
+      ),
       onTranslate: () {
         final trimmed = _webViewSelectionText.trim();
         final fullText = _expandToParagraphContext(trimmed);
@@ -1345,12 +1299,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
   }
 
   /// 打开问 AI。[quote] 是划词引用；底栏入口不带引用。
-  void _openAiChat({String? quote, String? figureImagePath}) {
+  void _openAiChat({
+    String? quote,
+    String? figureImagePath,
+    ReaderAnchor? quoteAnchor,
+  }) {
     // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"新路由显示
     _webViewReaderKey.currentState?.clearSelection();
     _chatReturnArgs = null;
     _pendingChatReturnArgs = null;
     _dockChatQuote = quote?.trim();
+    _dockChatQuoteAnchor = quoteAnchor;
     if (_dockChatQuote?.isEmpty ?? false) _dockChatQuote = null;
     _dockChatFigurePath = figureImagePath;
     _dockChatQuoteEpoch++;
@@ -1366,6 +1325,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
       extra: DocumentChatPageArgs(
         document: widget.document,
         initialQuote: quote,
+        quoteAnchor: quoteAnchor,
         figureImagePath: figureImagePath,
         onLocateQuote: _locateQuoteInReader,
         quoteEpoch: _dockChatQuoteEpoch,
@@ -1375,12 +1335,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
 
   void _onDockChatQuoteConsumed() {
     _dockChatQuote = null;
+    _dockChatQuoteAnchor = null;
     _dockChatFigurePath = null;
   }
 
   void _openChatFromFigure(DocumentChatPageArgs args) {
     _openAiChat(
       quote: args.initialQuote,
+      quoteAnchor: args.quoteAnchor,
       figureImagePath: args.figureImagePath,
     );
   }
@@ -1398,26 +1360,102 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
     _openAiChat();
   }
 
-  /// 会话历史「定位原文」——按引用文本在 markdown 源里找偏移，复用大纲
-  /// 跳转的滚动管线。渲染文本与源文本可能因 Markdown 标记不一致，全文
-  /// 匹配失败时退化为引用前 30 字符。
-  void _locateQuoteInReader(String quote, DocumentChatPageArgs returnArgs) {
-    final md = _session.markdownContent;
-    final trimmed = quote.trim();
-    if (md == null || trimmed.isEmpty) return;
-    var idx = md.indexOf(trimmed);
-    if (idx < 0 && trimmed.length > 30) {
-      idx = md.indexOf(trimmed.substring(0, 30));
+  Future<bool> _locateQuoteInReader(
+    String quote,
+    DocumentChatPageArgs returnArgs,
+  ) async {
+    if (quote.trim().isEmpty && returnArgs.figureImagePath == null) {
+      return false;
     }
-    if (idx >= 0) _scrollToCharOffset(idx);
+    final paragraph = _readerIndex.paragraphForQuote(
+      quote,
+      anchor: returnArgs.quoteAnchor,
+      translations: ref
+          .read(documentTranslationProvider(widget.document.id))
+          .translations,
+    );
+    bool found;
+    if (_session.showPreview) {
+      found =
+          await _webViewReaderKey.currentState?.locateQuote(
+            quote,
+            anchor: returnArgs.quoteAnchor,
+            figureName: returnArgs.figureImagePath == null
+                ? null
+                : p.basename(returnArgs.figureImagePath!),
+          ) ??
+          false;
+    } else {
+      found = await _locatePdfQuote(paragraph, returnArgs);
+    }
+    if (!mounted || !found) return false;
+    if (paragraph != null) _readerPositionId = paragraph.id;
+    final resumeArgs = DocumentChatPageArgs(
+      document: widget.document,
+      preserveSession: true,
+      onLocateQuote: _locateQuoteInReader,
+    );
     if (_dockOpen && _dockPane == ReaderDockPane.askAi) {
-      _pendingChatReturnArgs = returnArgs;
-      if (_chatReturnArgs != null) {
-        setState(() => _chatReturnArgs = null);
-      }
-      return;
+      _pendingChatReturnArgs = resumeArgs;
+    } else {
+      setState(() => _chatReturnArgs = resumeArgs);
     }
-    setState(() => _chatReturnArgs = returnArgs);
+    return true;
+  }
+
+  Future<bool> _locatePdfQuote(
+    ReaderParagraph? paragraph,
+    DocumentChatPageArgs args,
+  ) async {
+    if (!_pdfController.isReady) return false;
+    if (paragraph != null) {
+      var pageIndex = paragraph.pageIndex;
+      final range = args.quoteAnchor?.ranges.firstOrNull;
+      if (range?.language == 'source') {
+        var offset = 0;
+        for (final region in paragraph.regions) {
+          offset += region.sourceLength;
+          if (range!.start < offset) {
+            pageIndex = region.pageIndex;
+            break;
+          }
+        }
+      }
+      final slot = _pdfDocumentRef.slotForSourcePage(pageIndex + 1);
+      final page = _pdfController.pages.elementAtOrNull(slot - 1);
+      if (page is! ReaderPdfPage) return false;
+      final layout = await page.layout;
+      if (!mounted || !_pdfController.isReady) return false;
+      final blocks = layout.blocks.where(
+        (block) => block.paragraph.id == paragraph.id,
+      );
+      if (blocks.isEmpty) return false;
+      final box = blocks.first.rect;
+      final target = _pdfController.calcRectForRectInsidePage(
+        pageNumber: slot,
+        rect: readerRectToPdf(box, page),
+      );
+      await _pdfController.goTo(
+        _pdfController.calcMatrixFor(target.center),
+        duration: kAnim,
+      );
+      return true;
+    }
+    if (args.figureImagePath != null) {
+      final figures =
+          await FigureExtractService.loadManifest(widget.document.id) ?? [];
+      if (!mounted || !_pdfController.isReady) return false;
+      final figure = figures
+          .where((f) => p.equals(f.imagePath, args.figureImagePath!))
+          .firstOrNull;
+      if (figure == null) return false;
+      await _pdfController.goToPage(
+        pageNumber: _pdfDocumentRef.slotForSourcePage(figure.pageIndex + 1),
+        duration: kAnim,
+      );
+      return true;
+    }
+    return false;
   }
 
   void _returnToChat() {
@@ -1484,9 +1522,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
     _readerActive = false;
     _translationNotifier.invalidateRestore();
     _translationNotifier.cancel(updateState: false);
-    if (isDesktopOs) {
-      windowManager.removeListener(this);
-    }
     _pdfController.removeListener(_onPdfControllerChanged);
     // 强制把防抖窗口里的最后一次进度落盘；fire-and-forget——dispose 同步路径
     // 不能 await，但 HistoryNotifier 内部用 await _save()，下一帧前会完成。
@@ -1502,13 +1537,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
     super.dispose();
   }
 
-  @override
-  void onWindowMaximize() {
-    _dockExpandedWindow = false;
-    _preDockOpenWindowBounds = null;
-    if (mounted) setState(() {});
-  }
-
   // ─── UI ───
 
   /// 统一退出入口：先把 WebView 冻结成截图再 pop。
@@ -1518,7 +1546,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
   /// PDF 模式 / WebView 未挂载时 currentState 为 null，直接 pop。
   bool _popping = false;
   Future<void> _handleBack() async {
-    if (_popping || _dockWindowResizing) return;
+    if (_popping) return;
     _popping = true;
     if (_dockOpen) await _closeDock();
     if (!mounted) return;
@@ -1554,7 +1582,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_useReaderDock(context) && _dockOpen) {
+    final useDock = _useReaderDock(context);
+    if (_dockAnimating &&
+        (!useDock || MediaQuery.disableAnimationsOf(context))) {
+      _dockAnimating = false;
+      _lockedReaderWidth = null;
+    }
+    if (!useDock && _dockOpen) {
       _dockOpen = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _sessionNotifier.setDockOpen(false);
@@ -1712,11 +1746,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
     final markdown = session.markdownContent;
     final windowW = MediaQuery.sizeOf(context).width;
     final readerContentW = windowW - _readerNavigationWidth(context);
-    final sidebarW =
-        _sidebarWidthOverride ??
-        (isDesktopOs
-            ? Responsive.kReaderSidebarMax
-            : Responsive.readerSidebarWidth(readerContentW));
+    final sidebarW = Responsive.clampReaderSidebarWidth(
+      _sidebarWidthOverride ?? Responsive.readerSidebarWidth(readerContentW),
+      readerContentW,
+    );
 
     return Theme(
       data: theme,
@@ -1933,17 +1966,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
                         if (useDock && _dockHostMounted)
                           ReaderDockedPane(
                             sidebarWidth: sidebarW,
-                            open: _dockOpen && !_dockClosing,
+                            open: _dockOpen,
                             pane: _dockPane,
-                            animateWidth: !isDesktopOs,
-                            visibleWidth:
-                                _dockWindowResizing &&
-                                    _lockedReaderWidth != null
-                                ? (readerContentW - _lockedReaderWidth!).clamp(
-                                    0.0,
-                                    sidebarW,
-                                  )
-                                : null,
+                            onAnimationEnd: _onDockAnimationEnd,
                             onSidebarDragUpdate: _onSidebarDragUpdate,
                             onSidebarDragEnd: _onSidebarDragEnd,
                             outline: OutlinePanel(
@@ -1977,6 +2002,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
                               args: DocumentChatPageArgs(
                                 document: widget.document,
                                 initialQuote: _dockChatQuote,
+                                quoteAnchor: _dockChatQuoteAnchor,
                                 figureImagePath: _dockChatFigurePath,
                                 onLocateQuote: _locateQuoteInReader,
                                 quoteEpoch: _dockChatQuoteEpoch,
@@ -1998,14 +2024,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
   Widget _buildStableReaderViewport(Widget child) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (!_dockWindowResizing) _readerViewportWidth = constraints.maxWidth;
+        if (!_dockAnimating) _readerViewportWidth = constraints.maxWidth;
         final width = _lockedReaderWidth ?? constraints.maxWidth;
         return ClipRect(
           child: OverflowBox(
             alignment: Alignment.topLeft,
             minWidth: width,
             maxWidth: width,
-            child: SizedBox(width: width, child: child),
+            child: SizedBox(
+              width: width,
+              child: RepaintBoundary(child: child),
+            ),
           ),
         );
       },
@@ -2095,7 +2124,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> with WindowListener {
         AdaptiveNavigationRail(
           selectedIndex: -1,
           onDestinationSelected: (index) async {
-            if (_dockWindowResizing) return;
             final route = switch (index) {
               0 => AppRoutes.library,
               1 => AppRoutes.shelf,

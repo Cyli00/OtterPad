@@ -61,9 +61,6 @@ class Responsive {
       isDesktopOs &&
       MediaQuery.sizeOf(context).width >= kCompactDensityMinWidth;
 
-  static bool useReaderDock(BuildContext context) =>
-      MediaQuery.sizeOf(context).width >= kReaderDockMinWidth;
-
   /// 阅读器停靠栏宽度。调用方须先满足 [kReaderDockMinWidth]（640）。
   static double readerSidebarWidth(double windowWidth) {
     const lo = kReaderSidebarMin;

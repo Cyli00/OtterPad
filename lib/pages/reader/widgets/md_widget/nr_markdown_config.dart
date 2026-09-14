@@ -6,6 +6,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import '../../../../providers/reader_settings_provider.dart';
 import '../reader_background.dart';
 import '../reader_typography.dart';
+import '../../../../utils/cjk_emphasis_syntax.dart';
 import 'nr_custom_text_node.dart';
 import 'nr_image_node.dart';
 import 'nr_latex_node.dart';
@@ -153,6 +154,7 @@ MarkdownConfig buildReaderMarkdownConfig({
 MarkdownGenerator buildReaderMarkdownGenerator({
   required ReaderSettingsState settings,
   Widget Function(InlineSpan span)? searchRichTextBuilder,
+  double? blockSpacing,
   Color? translatedColor,
   String? translatedStyleId,
   ValueListenable<String?>? selectedTextListenable,
@@ -160,7 +162,10 @@ MarkdownGenerator buildReaderMarkdownGenerator({
   final generators = <SpanNodeGeneratorWithTag>[
     nrLatexGenerator(selectedTextListenable: selectedTextListenable),
   ];
-  final inlineSyntaxes = <md.InlineSyntax>[NRLatexInlineSyntax()];
+  final inlineSyntaxes = <md.InlineSyntax>[
+    NRLatexInlineSyntax(),
+    CjkEmphasisSyntax(),
+  ];
 
   if (translatedColor != null) {
     generators.add(
@@ -181,7 +186,8 @@ MarkdownGenerator buildReaderMarkdownGenerator({
         NRCustomTextNode(node.textContent, config, visitor),
     richTextBuilder: searchRichTextBuilder ?? (span) => Text.rich(span),
     linesMargin: EdgeInsets.symmetric(
-      vertical: settings.fontSize * ReaderTypography.blockMarginScale,
+      vertical:
+          blockSpacing ?? settings.fontSize * ReaderTypography.blockMarginScale,
     ),
   );
 }

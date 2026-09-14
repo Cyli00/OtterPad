@@ -321,3 +321,11 @@ body[data-translation-style="italic"] .reader-target.translated { color: var(--t
 body[data-translation-style="quote"] .reader-target.translated {
   color: var(--secondary); border-inline-start: 3px solid var(--secondary); padding-inline-start: 0.8em;
 }
+
+::highlight(reader-locate) {
+  background-color: color-mix(in srgb, var(--link, var(--text)) 28%, transparent);
+}
+.reader-locate-target {
+  outline: 2px solid var(--link, var(--text));
+  outline-offset: 4px;
+}

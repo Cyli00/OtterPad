@@ -136,11 +136,12 @@ class ReaderTypesetText {
       return painter;
     }
 
+    // 两端对齐的公式框可能因浮点舍入略越边界，不能因此触发整段缩字。
     bool fits(TextPainter p) =>
         p.height <= rect.height &&
         p.width <= rect.width &&
         (p.inlinePlaceholderBoxes?.every(
-              (b) => b.left >= 0 && b.right <= rect.width,
+              (b) => b.left >= -.01 && b.right <= rect.width + .01,
             ) ??
             true);
     var preferred = preferredFontSize;

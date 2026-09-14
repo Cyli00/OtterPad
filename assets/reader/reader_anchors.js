@@ -35,7 +35,7 @@
     visit(content);
     const entries = [];
     for (const p of window.readerEntries || []) {
-      if (p.showSource !== false) entries.push({ id: p.id, text: p.source, language: 'source', revision: p.sourceRevision });
+      if (p.showSource !== false || tagged.has(p.id + '/source')) entries.push({ id: p.id, text: p.source, language: 'source', revision: p.sourceRevision });
       if (p.translated && p.showTranslation !== false) entries.push({ id: p.id, text: p.translated, language: p.language, revision: p.translatedRevision });
     }
     const groups = new Map();
@@ -69,7 +69,7 @@
       group.forEach((entry, i) => bindings.push({ ...entry, start: hits[i], end: hits[i] + key.length }));
     }
     bindings.sort((a, b) => a.start - b.start);
-    cached = { points, bindings };
+    cached = { points, bindings, text };
     return cached;
   }
   function rangeAt(start, end) {
@@ -154,6 +154,93 @@
       }
     }
     return ranges.filter(Boolean);
+  };
+  let locateTimer;
+  function originalRange(binding) {
+    const source = Array.from(document.querySelectorAll('[data-paragraph-id][data-language="source"]'))
+      .find(el => el.dataset.paragraphId === binding.id);
+    if (source?.hidden) {
+      source.hidden = false;
+      window.readerInvalidateBindings();
+    }
+    const original = index().bindings.find(b => b.id === binding.id && b.language === 'source') || binding;
+    return rangeAt(original.start, original.end);
+  }
+  window.readerLocateQuote = ({quote, anchor, figureName} = {}) => {
+    let range;
+    let target;
+    if (figureName) {
+      const image = Array.from(document.querySelectorAll('#content img')).find(img => {
+        try { return decodeURIComponent(new URL(img.src).pathname.split('/').pop()) === figureName; }
+        catch (_) { return false; }
+      });
+      target = image?.closest('figure') || image;
+    }
+    if (!target && anchor?.version === 1) {
+      for (const part of anchor.ranges || []) {
+        let binding = index().bindings.find(b => b.id === part.paragraphId);
+        if (!binding) continue;
+        const entry = (window.readerEntries || []).find(p => p.id === part.paragraphId);
+        const text = part.language === 'source' ? entry?.source : entry?.translated;
+        let start = part.start;
+        if (text && text.slice(start, part.end) !== part.quote) {
+          start = text.indexOf(part.quote);
+          if (start < 0 || text.indexOf(part.quote, start + 1) >= 0 ||
+              !text.slice(0, start).endsWith(part.prefix || '') ||
+              !text.slice(start + part.quote.length).startsWith(part.suffix || '')) continue;
+        }
+        range = originalRange(binding);
+        binding = index().bindings.find(b => b.id === part.paragraphId && b.language === 'source');
+        if (binding && text && part.language === 'source') {
+          const at = compact(text.slice(0, start)).length;
+          range = rangeAt(binding.start + at, binding.start + at + compact(part.quote).length);
+        }
+        if (range) break;
+      }
+    }
+    if (!target && !range) {
+      const key = compact(quote || '');
+      if (!key) return false;
+      const hits = index().bindings.filter(b => compact(b.text).includes(key));
+      const ids = new Set(hits.map(b => b.id));
+      if (ids.size === 1) {
+        const hit = hits.find(b => b.language === 'source') || hits[0];
+        range = originalRange(hit);
+        if (hit.language === 'source') {
+          const at = compact(hit.text).indexOf(key);
+          if (compact(hit.text).indexOf(key, at + 1) >= 0) return false;
+          range = rangeAt(hit.start + at, hit.start + at + key.length);
+        }
+      } else if (ids.size > 1) {
+        return false;
+      } else {
+        const at = index().text.indexOf(key);
+        if (at < 0 || index().text.indexOf(key, at + 1) >= 0) return false;
+        range = rangeAt(at, at + key.length);
+      }
+    }
+    if (!target && !range) return false;
+    window.readerStopWheel?.();
+    const rect = target?.getBoundingClientRect() || Array.from(range.getClientRects()).find(r => r.height > 0);
+    if (!rect) return false;
+    const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
+    if (document.body.dataset.pagination === 'horizontal') {
+      const content = document.getElementById('content');
+      const page = Math.floor((content.scrollLeft + rect.left) / window.innerWidth);
+      content.scrollTo({left: Math.max(0, page) * window.innerWidth, behavior});
+    } else {
+      window.scrollBy({top: rect.top - Math.max(80, window.innerHeight * .3), behavior});
+    }
+    document.querySelectorAll('.reader-locate-target').forEach(el => el.classList.remove('reader-locate-target'));
+    CSS.highlights?.delete('reader-locate');
+    if (target) target.classList.add('reader-locate-target');
+    else if (CSS.highlights) CSS.highlights.set('reader-locate', new Highlight(range));
+    clearTimeout(locateTimer);
+    locateTimer = setTimeout(() => {
+      target?.classList.remove('reader-locate-target');
+      CSS.highlights?.delete('reader-locate');
+    }, 4000);
+    return true;
   };
   window.readerScrollToParagraph = id => {
     const binding = index().bindings.find(b => b.id === id);
