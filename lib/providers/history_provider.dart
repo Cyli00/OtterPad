@@ -148,18 +148,18 @@ final historyProvider =
       HistoryNotifier.new,
     );
 
-/// 派生：docId → 阅读进度。中间层隔离高频 progress 更新——
-/// 卡片经 [docProgressProvider] 按 docId select 订阅，只在自己那一条进度
-/// 变化时重建；书架顶层不再 watch 整个 historyProvider（此前阅读器每
-/// 500ms 的 setProgress 会让导航栈下层的书架页全列表 rebuild）。
-final _progressByDocProvider = Provider<Map<String, double>>((ref) {
-  final history = ref.watch(historyProvider).value ?? const <HistoryEntry>[];
-  return {for (final e in history) e.docId: e.progress};
-});
-
 /// 单文档阅读进度（无记录 = 0.0）。select 在值未变时抑制重建。
+/// 直接选择历史流，避免 Sliver 布局中读取卡片时补算中间 Map，
+/// 再同步失效其他进度 provider，触发 ProviderScope 在构建期刷新。
 final docProgressProvider = Provider.family<double, String>((ref, docId) {
-  return ref.watch(_progressByDocProvider.select((m) => m[docId] ?? 0.0));
+  return ref.watch(
+    historyProvider.select((history) {
+      for (final entry in history.value ?? const <HistoryEntry>[]) {
+        if (entry.docId == docId) return entry.progress;
+      }
+      return 0.0;
+    }),
+  );
 });
 
 /// 历史分组区段：一个日期桶及其下属文档列表。
