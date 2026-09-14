@@ -88,3 +88,8 @@ android/app/src/main/jniLibs/
 
 # reference
 /ref/
+
+# archify review receipts (regenerable)
+docs/diagrams/*.visual-check.*
+docs/diagrams/*.delivery.json
+docs/diagrams/*.review.json
