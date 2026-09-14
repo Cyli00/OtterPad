@@ -49,7 +49,7 @@ class ReaderLocalhostServer {
   /// 绑定 127.0.0.1 + port 0（系统自动分配空闲端口），仅 loopback 可访问。
   Future<void> start({String? documentRoot}) async {
     if (_server != null) return;
-    _root = p.normalize(documentRoot ?? GStorage.appRootPath);
+    _root = p.normalize(p.absolute(documentRoot ?? GStorage.appRootPath));
     final server = await HttpServer.bind(
       InternetAddress.loopbackIPv4,
       0,
@@ -144,23 +144,42 @@ class ReaderLocalhostServer {
       await req.response.close();
       return;
     }
+    if (segments.any(
+      (s) =>
+          s == '..' ||
+          s.codeUnits.contains(92) ||
+          s.contains(':') ||
+          s.codeUnits.contains(0),
+    )) {
+      req.response.statusCode = HttpStatus.forbidden;
+      await req.response.close();
+      return;
+    }
+    final library = p.join(_root, 'library');
     final fullPath = p.normalize(p.joinAll([_root, ...segments]));
 
-    // 路径穿越防护：normalize 后必须仍在 root 下。
-    // p.isWithin 不接受相等情况，单独判等。
-    if (fullPath != _root && !p.isWithin(_root, fullPath)) {
+    // 最终路径必须留在文献库，不能访问同级数据库或日志。
+    if (!p.isWithin(library, fullPath)) {
       req.response.statusCode = HttpStatus.forbidden;
       await req.response.close();
       return;
     }
 
-    final file = File(fullPath);
+    var file = File(fullPath);
     if (!await file.exists()) {
       req.response.statusCode = HttpStatus.notFound;
       await req.response.close();
       return;
     }
 
+    final realLibrary = await Directory(library).resolveSymbolicLinks();
+    final realFile = await file.resolveSymbolicLinks();
+    if (!p.isWithin(realLibrary, realFile)) {
+      req.response.statusCode = HttpStatus.forbidden;
+      await req.response.close();
+      return;
+    }
+    file = File(realFile);
     final stat = await file.stat();
     req.response.headers
       ..contentType = ContentType.parse(_mimeType(fullPath))
