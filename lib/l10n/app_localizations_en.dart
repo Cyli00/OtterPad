@@ -2784,27 +2784,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mineruModelHelp =>
-      'VLM is recommended; Pipeline uses the traditional parsing pipeline. VLM remains the app default.';
+      'VLM parsing is currently enabled; Pipeline is temporarily unavailable.';
 
   @override
-  String get mineruModelVlm => 'VLM (recommended)';
-
-  @override
-  String get mineruModelPipeline => 'Pipeline';
-
-  @override
-  String get mineruPageRanges => 'Page range';
-
-  @override
-  String get mineruPageRangesHelp =>
-      'Leave empty for all pages. Use 2,4-6 or 2--2 (page 2 through the second-to-last page). Applies to each file in a batch.';
-
-  @override
-  String get mineruPageRangesHint => 'All pages, e.g. 2,4-6';
-
-  @override
-  String get mineruPageRangesInvalid =>
-      'Enter a valid range, e.g. 2,4-6 or 2--2';
+  String get mineruModelVlm => 'VLM';
 
   @override
   String get mineruExtraFormats => 'Additional export formats';

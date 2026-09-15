@@ -82,11 +82,6 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
       mineruEnableFormula: mineruEnableFormula,
       mineruEnableTable: mineruEnableTable,
       mineruLanguage: mineruLanguage,
-      mineruModelVersion:
-          box.get('${_prefix}mineruModelVersion', defaultValue: 'vlm')
-              as String,
-      mineruPageRanges:
-          box.get('${_prefix}mineruPageRanges', defaultValue: '') as String,
       mineruExtraFormats:
           (box.get('${_prefix}mineruExtraFormats') as List?)?.cast<String>() ??
           const [],
@@ -157,10 +152,6 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
         state = state.copyWith(layoutShapeMode: value);
       case 'mineruLanguage':
         state = state.copyWith(mineruLanguage: value);
-      case 'mineruModelVersion':
-        state = state.copyWith(mineruModelVersion: value);
-      case 'mineruPageRanges':
-        state = state.copyWith(mineruPageRanges: value);
     }
     await GStorage.setting.put('$_prefix$field', value);
   }

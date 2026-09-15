@@ -4932,44 +4932,14 @@ abstract class AppLocalizations {
   /// No description provided for @mineruModelHelp.
   ///
   /// In en, this message translates to:
-  /// **'VLM is recommended; Pipeline uses the traditional parsing pipeline. VLM remains the app default.'**
+  /// **'VLM parsing is currently enabled; Pipeline is temporarily unavailable.'**
   String get mineruModelHelp;
 
   /// No description provided for @mineruModelVlm.
   ///
   /// In en, this message translates to:
-  /// **'VLM (recommended)'**
+  /// **'VLM'**
   String get mineruModelVlm;
-
-  /// No description provided for @mineruModelPipeline.
-  ///
-  /// In en, this message translates to:
-  /// **'Pipeline'**
-  String get mineruModelPipeline;
-
-  /// No description provided for @mineruPageRanges.
-  ///
-  /// In en, this message translates to:
-  /// **'Page range'**
-  String get mineruPageRanges;
-
-  /// No description provided for @mineruPageRangesHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Leave empty for all pages. Use 2,4-6 or 2--2 (page 2 through the second-to-last page). Applies to each file in a batch.'**
-  String get mineruPageRangesHelp;
-
-  /// No description provided for @mineruPageRangesHint.
-  ///
-  /// In en, this message translates to:
-  /// **'All pages, e.g. 2,4-6'**
-  String get mineruPageRangesHint;
-
-  /// No description provided for @mineruPageRangesInvalid.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter a valid range, e.g. 2,4-6 or 2--2'**
-  String get mineruPageRangesInvalid;
 
   /// No description provided for @mineruExtraFormats.
   ///

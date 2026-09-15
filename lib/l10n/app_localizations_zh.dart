@@ -2694,26 +2694,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mineruModel => '解析模型';
 
   @override
-  String get mineruModelHelp => 'VLM 为推荐模型；Pipeline 使用传统流水线解析。默认沿用 VLM。';
+  String get mineruModelHelp => '当前固定使用 VLM 解析；Pipeline 暂未开放。';
 
   @override
-  String get mineruModelVlm => 'VLM（推荐）';
-
-  @override
-  String get mineruModelPipeline => 'Pipeline';
-
-  @override
-  String get mineruPageRanges => '解析页码范围';
-
-  @override
-  String get mineruPageRangesHelp =>
-      '留空解析全部页。支持 2,4-6 或 2--2（第 2 页至倒数第 2 页）。批量解析时应用于每个文件。';
-
-  @override
-  String get mineruPageRangesHint => '全部页，例如 2,4-6';
-
-  @override
-  String get mineruPageRangesInvalid => '请输入有效页码，如 2,4-6 或 2--2';
+  String get mineruModelVlm => 'VLM';
 
   @override
   String get mineruExtraFormats => '额外导出格式';
@@ -5873,26 +5857,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get mineruModel => '解析模型';
 
   @override
-  String get mineruModelHelp => '建議使用 VLM；Pipeline 採用傳統解析流程。預設仍為 VLM。';
+  String get mineruModelHelp => '目前固定使用 VLM 解析；Pipeline 暫未開放。';
 
   @override
-  String get mineruModelVlm => 'VLM（建議）';
-
-  @override
-  String get mineruModelPipeline => 'Pipeline';
-
-  @override
-  String get mineruPageRanges => '解析頁面範圍';
-
-  @override
-  String get mineruPageRangesHelp =>
-      '留空解析全部頁面。支援 2,4-6 或 2--2（第 2 頁至倒數第 2 頁）。批次解析時套用於每個檔案。';
-
-  @override
-  String get mineruPageRangesHint => '全部頁面，例如 2,4-6';
-
-  @override
-  String get mineruPageRangesInvalid => '請輸入有效頁碼，如 2,4-6 或 2--2';
+  String get mineruModelVlm => 'VLM';
 
   @override
   String get mineruExtraFormats => '額外匯出格式';

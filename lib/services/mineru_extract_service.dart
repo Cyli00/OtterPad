@@ -33,7 +33,7 @@ class MinerUExtractException implements Exception {
 ///   (= documentId) 关联结果（本地 PDF 统一叫 source.pdf，文件名不可靠）。
 /// - `state=done` 时下载 `full_zip_url`，交给 [MinerUResultConverter] 落盘。
 ///
-/// 默认使用 VLM，也可选择 Pipeline。
+/// 固定使用 VLM 解析（Pipeline 尚未接入）。
 class MinerUExtractService {
   MinerUExtractService({
     Dio? client,
@@ -76,32 +76,23 @@ class MinerUExtractService {
     DocExtractApiState state,
     List<({String name, String dataId})> files,
   ) {
-    if (!MinerUParseOptions.models.contains(state.mineruModelVersion) ||
-        !MinerUParseOptions.languages.contains(state.mineruLanguage) ||
-        !MinerUParseOptions.isValidPageRanges(state.mineruPageRanges) ||
+    if (!MinerUParseOptions.languages.contains(state.mineruLanguage) ||
         state.mineruExtraFormats.any(
           (f) => !MinerUParseOptions.extraFormats.contains(f),
         )) {
       throw ArgumentError('MinerU 解析参数无效');
     }
-    final pageRanges = MinerUParseOptions.normalizePageRanges(
-      state.mineruPageRanges,
-    );
     return {
       'enable_formula': state.mineruEnableFormula,
       'enable_table': state.mineruEnableTable,
       'language': state.mineruLanguage,
-      'model_version': state.mineruModelVersion,
+      // 当前只接入 VLM，不随状态或旧设置变化。
+      'model_version': MinerUParseOptions.onlyModel,
       if (state.mineruExtraFormats.isNotEmpty)
         'extra_formats': state.mineruExtraFormats.toSet().toList(),
       'files': [
         for (final f in files)
-          {
-            'name': f.name,
-            'is_ocr': state.mineruIsOcr,
-            'data_id': f.dataId,
-            if (pageRanges.isNotEmpty) 'page_ranges': pageRanges,
-          },
+          {'name': f.name, 'is_ocr': state.mineruIsOcr, 'data_id': f.dataId},
       ],
     };
   }

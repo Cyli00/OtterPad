@@ -968,13 +968,8 @@
   "aiFixNotForMinerU": "MinerU 擷取的文件已自帶圖表說明，無須 AI 修繕",
 
   "mineruModel": "解析模型",
-  "mineruModelHelp": "建議使用 VLM；Pipeline 採用傳統解析流程。預設仍為 VLM。",
-  "mineruModelVlm": "VLM（建議）",
-  "mineruModelPipeline": "Pipeline",
-  "mineruPageRanges": "解析頁面範圍",
-  "mineruPageRangesHelp": "留空解析全部頁面。支援 2,4-6 或 2--2（第 2 頁至倒數第 2 頁）。批次解析時套用於每個檔案。",
-  "mineruPageRangesHint": "全部頁面，例如 2,4-6",
-  "mineruPageRangesInvalid": "請輸入有效頁碼，如 2,4-6 或 2--2",
+  "mineruModelHelp": "目前固定使用 VLM 解析；Pipeline 暫未開放。",
+  "mineruModelVlm": "VLM",
   "mineruExtraFormats": "額外匯出格式",
   "mineruExtraFormatsHelp": "Markdown 與 JSON 一律產生。勾選的額外格式隨結果保存在文件目錄的 mineru.exports.zip。",
 

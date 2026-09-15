@@ -145,8 +145,6 @@ class SettingsKeys {
     'mineruEnableFormula',
     'mineruEnableTable',
     'mineruLanguage',
-    'mineruModelVersion',
-    'mineruPageRanges',
     'mineruExtraFormats',
   ];
 }

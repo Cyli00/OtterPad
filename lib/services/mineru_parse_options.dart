@@ -1,7 +1,8 @@
 class MinerUParseOptions {
   MinerUParseOptions._();
 
-  static const models = ['vlm', 'pipeline'];
+  /// 当前只接入 VLM；Pipeline 的结构化输出暂不进入请求链路。
+  static const onlyModel = 'vlm';
   static const languages = [
     'ch',
     'ch_server',
@@ -21,22 +22,4 @@ class MinerUParseOptions {
     'devanagari',
   ];
   static const extraFormats = ['docx', 'html', 'latex'];
-
-  static String normalizePageRanges(String value) =>
-      value.replaceAll(RegExp(r'\s+'), '').replaceAll('，', ',');
-
-  static bool isValidPageRanges(String value) {
-    final normalized = normalizePageRanges(value);
-    if (normalized.isEmpty) return true;
-    final pattern = RegExp(r'^([1-9][0-9]*)(?:-(-?[1-9][0-9]*))?$');
-    for (final part in normalized.split(',')) {
-      final match = pattern.firstMatch(part);
-      if (match == null) return false;
-      final start = int.tryParse(match[1]!);
-      final end = match[2] == null ? null : int.tryParse(match[2]!);
-      if (start == null || (match[2] != null && end == null)) return false;
-      if (end != null && end > 0 && end < start) return false;
-    }
-    return true;
-  }
 }

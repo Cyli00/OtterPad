@@ -102,8 +102,6 @@ class DocExtractApiState {
   final bool mineruEnableFormula;
   final bool mineruEnableTable;
   final String mineruLanguage;
-  final String mineruModelVersion;
-  final String mineruPageRanges;
   final List<String> mineruExtraFormats;
 
   /// 当前提供商的 API Key/token
@@ -135,8 +133,6 @@ class DocExtractApiState {
     this.mineruEnableFormula = true,
     this.mineruEnableTable = true,
     this.mineruLanguage = 'ch',
-    this.mineruModelVersion = 'vlm',
-    this.mineruPageRanges = '',
     this.mineruExtraFormats = const [],
   });
 
@@ -160,8 +156,6 @@ class DocExtractApiState {
     bool? mineruEnableFormula,
     bool? mineruEnableTable,
     String? mineruLanguage,
-    String? mineruModelVersion,
-    String? mineruPageRanges,
     List<String>? mineruExtraFormats,
   }) => DocExtractApiState(
     provider: provider ?? this.provider,
@@ -184,8 +178,6 @@ class DocExtractApiState {
     mineruEnableFormula: mineruEnableFormula ?? this.mineruEnableFormula,
     mineruEnableTable: mineruEnableTable ?? this.mineruEnableTable,
     mineruLanguage: mineruLanguage ?? this.mineruLanguage,
-    mineruModelVersion: mineruModelVersion ?? this.mineruModelVersion,
-    mineruPageRanges: mineruPageRanges ?? this.mineruPageRanges,
     mineruExtraFormats: mineruExtraFormats ?? this.mineruExtraFormats,
   );
 }

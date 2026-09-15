@@ -115,8 +115,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
 
   late final Map<DocExtractProvider, TextEditingController> _keyCtrls;
 
-  late final TextEditingController _mineruPageRangesCtrl;
-
   bool _keyObscured = true;
   Timer? _keyTimer;
 
@@ -124,7 +122,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
   void initState() {
     super.initState();
     final s = ref.read(docExtractApiProvider);
-    _mineruPageRangesCtrl = TextEditingController(text: s.mineruPageRanges);
     _keyCtrls = {
       DocExtractProvider.paddle: TextEditingController(text: s.paddleApiKey),
       DocExtractProvider.mineru: TextEditingController(text: s.mineruApiKey),
@@ -137,7 +134,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
       c.dispose();
     }
     _keyTimer?.cancel();
-    _mineruPageRangesCtrl.dispose();
     super.dispose();
   }
 
@@ -657,10 +653,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 ),
               ),
             ] else ...[
-              ..._buildMineruGroups(
-                docState,
-                fieldDeco(hint: context.l10n.mineruPageRangesHint),
-              ),
+              ..._buildMineruGroups(docState),
             ],
 
             const SizedBox(height: 24),
@@ -706,10 +699,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     );
   }
 
-  List<Widget> _buildMineruGroups(
-    DocExtractApiState state,
-    InputDecoration pageRangeDecoration,
-  ) {
+  List<Widget> _buildMineruGroups(DocExtractApiState state) {
     final l10n = context.l10n;
     final cs = Theme.of(context).colorScheme;
     final notifier = ref.read(docExtractApiProvider.notifier);
@@ -726,33 +716,16 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             _mineruField(
               l10n.mineruModel,
               l10n.mineruModelHelp,
-              SettingPicker<String>(
-                current: state.mineruModelVersion,
-                options: MinerUParseOptions.models,
-                labelFor: (v) =>
-                    v == 'vlm' ? l10n.mineruModelVlm : l10n.mineruModelPipeline,
-                sheetTitle: l10n.mineruModel,
-                onChanged: (v) => notifier.setString('mineruModelVersion', v),
-              ),
-            ),
-            _mineruField(
-              l10n.mineruPageRanges,
-              l10n.mineruPageRangesHelp,
-              TextFormField(
-                controller: _mineruPageRangesCtrl,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                validator: (v) => MinerUParseOptions.isValidPageRanges(v ?? '')
-                    ? null
-                    : l10n.mineruPageRangesInvalid,
-                onChanged: (v) {
-                  if (MinerUParseOptions.isValidPageRanges(v)) {
-                    notifier.setString(
-                      'mineruPageRanges',
-                      MinerUParseOptions.normalizePageRanges(v),
-                    );
-                  }
-                },
-                decoration: pageRangeDecoration.copyWith(errorMaxLines: 2),
+              Row(
+                children: [
+                  Text(l10n.mineruModelVlm),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Symbols.lock_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ],
               ),
             ),
             _mineruField(
@@ -858,9 +831,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     if (!mounted || confirmed != true) return;
     await ref.read(docExtractApiProvider.notifier).resetExceptApiKey();
     if (!mounted) return;
-    _mineruPageRangesCtrl.text = ref
-        .read(docExtractApiProvider)
-        .mineruPageRanges;
     ref
         .read(snackBarServiceProvider)
         .showResult(message: context.l10n.ocrSettingsReset);
