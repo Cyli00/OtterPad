@@ -4,12 +4,12 @@
 
 # OtterPad
 
-**Mobile Academic Literature Reader & Manager**
+**Academic Literature Reader & Manager for Mobile & Desktop**
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.44.6-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.12.2-0175C2?logo=dart&logoColor=white)](https://dart.dev)
 [![License](https://img.shields.io/github/license/Cyli00/OtterPad)](./LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Android-brightgreen)]()
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20macOS-brightgreen)]()
 
 English | [简体中文](docs/README_zh.md)
 
@@ -21,22 +21,45 @@ Reading PDF papers on a phone is a miserable experience — cramped layout, tiny
 
 OtterPad uses PaddleOCR-VL under the hood to power a figure extraction and layout reflow engine that adapts PDF content for small screens while keeping figures, tables, and formulas intact. Full-text translation and AI Q&A round it out, so you can actually get through a paper on your phone.
 
+## Screenshots
+
+### Desktop
+
+Read the same PDF page side by side: original on the left, translation on the right, with figures in the sidebar.
+
+<p align="center">
+  <img src="./docs/screenshots/desktop-pdf-bilingual.png" width="1100" alt="Desktop PDF with side-by-side original and translation, and a figure sidebar"/>
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="50%"><b>Library</b><br/>
+      <img src="./docs/screenshots/desktop-library.png" width="540" alt="Desktop document library"/>
+    </td>
+    <td align="center" width="50%"><b>Reflow & Figure Sidebar</b><br/>
+      <img src="./docs/screenshots/desktop-reading.png" width="540" alt="Desktop bilingual reflow with annotations and a figure sidebar"/>
+    </td>
+  </tr>
+</table>
+
+### Mobile
+
 <div align="center">
 <table>
   <tr>
     <td align="center" width="50%"><b>PDF Reader</b><br/>
-      <img src="./docs/PDF_reader_framed.png" width="280" alt="PDF Reader"/>
+      <img src="./docs/screenshots/mobile-pdf.png" width="280" alt="PDF Reader"/>
     </td>
     <td align="center" width="50%"><b>Immersive Reading</b><br/>
-      <img src="./docs/immersive_reading_experience_framed.png" width="280" alt="Immersive Reading"/>
+      <img src="./docs/screenshots/mobile-reading.png" width="280" alt="Immersive Reading"/>
     </td>
   </tr>
   <tr>
     <td align="center" width="50%"><b>Figure Extraction</b><br/>
-      <img src="./docs/extract_figures_for_reading_framed.png" width="280" alt="Figure Extraction"/>
+      <img src="./docs/screenshots/mobile-figures.png" width="280" alt="Figure Extraction"/>
     </td>
     <td align="center" width="50%"><b>AI Full-Text Q&A</b><br/>
-      <img src="./docs/ask_anything_with_fullcontext_framed.png" width="280" alt="AI Full-Text Q&A"/>
+      <img src="./docs/screenshots/mobile-ai.png" width="280" alt="AI Full-Text Q&A"/>
     </td>
   </tr>
 </table>
@@ -68,11 +91,18 @@ OtterPad uses PaddleOCR-VL under the hood to power a figure extraction and layou
 
 ## Installation
 
-Grab the APK for your architecture from [Releases](https://github.com/Cyli00/OtterPad/releases):
+Download the package for your platform from [Releases](https://github.com/Cyli00/OtterPad/releases):
+
+**Android**
+
 - `arm64-v8a` — Most modern Android devices
 - `armeabi-v7a` — Older 32-bit devices
 
-Desktop features are available in the source; v0.2.0 distributes Android APKs only.
+**Windows** — x64 installer (`-setup.exe`) or portable zip
+
+**macOS** — Apple silicon DMG. This build is unsigned; allow it in System Settings → Privacy & Security on first launch.
+
+Linux desktop is not supported yet.
 
 ## Development
 

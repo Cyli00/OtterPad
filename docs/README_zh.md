@@ -4,12 +4,12 @@
 
 # 獭祭鱼 OtterPad
 
-**移动端学术文献阅读与管理工具**
+**移动端与桌面端学术文献阅读与管理工具**
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.44.6-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.12.2-0175C2?logo=dart&logoColor=white)](https://dart.dev)
 [![License](https://img.shields.io/github/license/Cyli00/OtterPad)](../LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Android-brightgreen)]()
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20macOS-brightgreen)]()
 
 [English](../README.md) | 简体中文
 
@@ -21,22 +21,45 @@
 
 OtterPad 在 PaddleOCR-VL 的基础上做了一套图表提取与版面重排引擎，把 PDF 转成适合小屏阅读的排版，同时保留图表和公式。再加上全文翻译和 AI 问答，让读论文这件事在手机上不再痛苦。
 
+## 界面预览
+
+### 桌面端
+
+同页 PDF 双排对照：左侧原文、右侧译文，图表侧栏随时查阅。
+
+<p align="center">
+  <img src="./screenshots/desktop-pdf-bilingual.png" width="1100" alt="桌面 PDF 双排翻译对照阅读与图表侧栏"/>
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="50%"><b>文献库</b><br/>
+      <img src="./screenshots/desktop-library.png" width="540" alt="桌面文献库"/>
+    </td>
+    <td align="center" width="50%"><b>重排阅读与图表侧栏</b><br/>
+      <img src="./screenshots/desktop-reading.png" width="540" alt="桌面双语重排阅读、标注与图表侧栏"/>
+    </td>
+  </tr>
+</table>
+
+### 移动端
+
 <div align="center">
 <table>
   <tr>
     <td align="center" width="50%"><b>PDF 阅读</b><br/>
-      <img src="./PDF_reader_framed.png" width="280" alt="PDF 阅读"/>
+      <img src="./screenshots/mobile-pdf.png" width="280" alt="PDF 阅读"/>
     </td>
     <td align="center" width="50%"><b>沉浸式阅读</b><br/>
-      <img src="./immersive_reading_experience_framed.png" width="280" alt="沉浸式阅读"/>
+      <img src="./screenshots/mobile-reading.png" width="280" alt="沉浸式阅读"/>
     </td>
   </tr>
   <tr>
     <td align="center" width="50%"><b>图表提取</b><br/>
-      <img src="./extract_figures_for_reading_framed.png" width="280" alt="图表提取"/>
+      <img src="./screenshots/mobile-figures.png" width="280" alt="图表提取"/>
     </td>
     <td align="center" width="50%"><b>AI 全文问答</b><br/>
-      <img src="./ask_anything_with_fullcontext_framed.png" width="280" alt="AI 全文问答"/>
+      <img src="./screenshots/mobile-ai.png" width="280" alt="AI 全文问答"/>
     </td>
   </tr>
 </table>
@@ -68,11 +91,18 @@ OtterPad 在 PaddleOCR-VL 的基础上做了一套图表提取与版面重排引
 
 ## 安装
 
-从 [Releases](https://github.com/Cyli00/OtterPad/releases) 下载对应架构的 APK：
+从 [Releases](https://github.com/Cyli00/OtterPad/releases) 下载对应平台的安装包：
+
+**Android**
+
 - `arm64-v8a` — 大多数现代 Android 设备
 - `armeabi-v7a` — 较旧的 32 位设备
 
-桌面功能已包含在源码中；v0.2.0 暂仅分发 Android APK。
+**Windows** — x64 安装器（`-setup.exe`）或免安装便携版
+
+**macOS** — Apple 芯片 DMG。该包未做签名与公证，首次打开需在「系统设置 → 隐私与安全性」中放行。
+
+Linux 桌面端暂不支持。
 
 ## 开发
 
