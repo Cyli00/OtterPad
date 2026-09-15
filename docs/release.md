@@ -24,23 +24,27 @@ Release 工作流先执行共用检查，再按同一版本并行构建三个平
 
 正式构建使用 Actions 已有的 `ANDROID_KEYSTORE_BASE64` 和 `ANDROID_KEY_PROPERTIES` 配置；必须沿用上个发布版本的签名证书。缺失配置会立即失败，不会回落到测试签名。
 
-桌面端固定使用 `fastforge 0.6.12`，复用现有 Windows EXE 和 macOS DMG 配置。Windows 需要 Inno Setup，macOS 需要 appdmg。版本号直接读取 `pubspec.yaml`；产物按版本和构建号的确定路径收集，避免误取应用本体或旧安装包。macOS 打包前检查 runner 为 arm64。
+桌面端固定使用 `fastforge 0.6.12`，复用现有 Windows EXE 和 macOS DMG 配置。Windows 固定安装 Chocolatey 已收录的 Inno Setup 6.7.1，macOS 需要 appdmg。版本号直接读取 `pubspec.yaml`；产物按版本和构建号的确定路径收集，避免误取应用本体或旧安装包。macOS 打包前检查 runner 为 arm64。
+
+macOS 构建通过 `FLUTTER_XCODE_MACOSX_DEPLOYMENT_TARGET=11.0` 设置最低系统版本，满足 `gal` 的要求。Flutter 将该设置传给 Xcode，并同步到生成的 `FlutterGeneratedPluginSwiftPackage`；仅设置普通的 `MACOSX_DEPLOYMENT_TARGET` 环境变量不足以覆盖工程配置。本地 macOS 打包也需给 fastforge 命令设置此前缀。保留 Swift Package Manager，尚未支持它的插件由 Flutter 回退到 CocoaPods；相关兼容性警告不等同于本次最低系统版本冲突。
 
 Windows 本地构建（Git Bash）：
 
 ```bash
 dart pub global activate fastforge 0.6.12
 flutter pub get --enforce-lockfile
-# Inno Setup 6.7.3 默认不附带简体中文，缺失时打包器会跳过 zh。
+# Inno Setup 6.7.1 默认不附带简体中文，缺失时打包器会跳过 zh。
 inno_dir=${INNO_SETUP_PATH:-'C:/Program Files (x86)/Inno Setup 6'}
 curl --fail --location --retry 3 \
   https://raw.githubusercontent.com/kira-96/Inno-Setup-Chinese-Simplified-Translation/1ff90acc4ed4aee82b1cda43253243deee3daed4/ChineseSimplified.isl \
   --output "$inno_dir/Languages/ChineseSimplified.isl"
-CL=/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS \
+CL=-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS \
   dart pub global run fastforge:main package --platform windows --targets exe,zip --skip-clean
 ```
 
 若 Inno Setup 安装在非默认目录，设置 `INNO_SETUP_PATH` 为包含 `ISCC.exe` 的目录。`fastforge` 命令映射到包内的 `main.dart`，因此 `dart pub global run` 使用 `fastforge:main`。`--skip-clean` 保留本地构建缓存。0.1.5 的原始产物为 `dist/0.1.5+6/otter_pad-0.1.5+6-windows-setup.exe` 和同目录下的 `otter_pad-0.1.5+6-windows.zip`。
+
+`CL` 中的宏定义使用 MSVC 同样支持的 `-D` 写法。Git Bash 会把以 `/D` 开头的环境变量值误转为 Windows 路径，导致 CMake 的编译器识别失败并报 `No CMAKE_CXX_COMPILER could be found`；此时并不一定缺少编译器。
 
 Windows 阅读器需要 WebView2 Runtime；Windows 10 设备可能需要先安装 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。便携版仅表示免安装，资料与设置仍保存在系统应用数据目录。
 

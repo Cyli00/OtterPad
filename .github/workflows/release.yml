@@ -102,11 +102,11 @@ jobs:
         run: dart pub global activate fastforge 0.6.12
 
       # Windows：Inno Setup 生成安装器；zip 为免安装便携版。
-      # CL 宏用于压制 Flutter Windows 协程特性弃用告警。
+      # CL 宏用于压制 Flutter Windows 协程特性弃用告警；使用 -D 避免 Git Bash 将 /D 转成路径。
       - name: Install Inno Setup
         if: matrix.platform == 'windows'
         run: |
-          choco install innosetup --version=6.7.3 --allow-downgrade --no-progress -y
+          choco install innosetup --version=6.7.1 --allow-downgrade --no-progress -y
           # Inno Setup 不内置简体中文；固定社区翻译版本，避免打包器静默跳过 zh。
           curl --fail --location --retry 3 \
             https://raw.githubusercontent.com/kira-96/Inno-Setup-Chinese-Simplified-Translation/1ff90acc4ed4aee82b1cda43253243deee3daed4/ChineseSimplified.isl \
@@ -114,7 +114,7 @@ jobs:
       - name: Package Windows
         if: matrix.platform == 'windows'
         env:
-          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
+          CL: -D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
         run: dart pub global run fastforge:main package --platform windows --targets exe,zip --skip-clean
       - name: Collect Windows
         if: matrix.platform == 'windows'
@@ -135,6 +135,9 @@ jobs:
         run: npm install -g appdmg
       - name: Package macOS
         if: matrix.platform == 'macos'
+        env:
+          # gal 的最低版本为 11.0；Flutter 将此设置同步到生成的 Swift Package。
+          FLUTTER_XCODE_MACOSX_DEPLOYMENT_TARGET: '11.0'
         run: |
           test "$(uname -m)" = arm64
           dart pub global run fastforge:main package --platform macos --targets dmg --skip-clean
