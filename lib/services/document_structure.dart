@@ -484,8 +484,9 @@ class DocumentStructure {
   static const _bodyLabels = {'text', 'paragraph', 'abstract', 'list'};
 
   static List<StructurePage> _paddleTextRegions(List<StructurePage> pages) {
-    final groups =
-        <(int?, int, String), List<({int page, LayoutBlock block})>>{};
+    final entries = <({int page, LayoutBlock block})>[];
+    final globalGroups = <(int, String), List<int>>{};
+    final localGroups = <(int, int, String), List<int>>{};
     for (final page in pages) {
       final ordered = [...page.blocks];
       ordered.sort(
@@ -495,17 +496,68 @@ class DocumentStructure {
       );
       for (final block in ordered) {
         if (!_bodyLabels.contains(block.blockLabel)) continue;
-        final global = block.globalGroupId;
-        final local = block.groupId;
-        final key = global != null && global >= 0
-            ? (null, global, block.blockLabel)
-            : local != null && local >= 0
-            ? (page.pageIndex, local, block.blockLabel)
-            : null;
-        if (key != null) {
-          (groups[key] ??= []).add((page: page.pageIndex, block: block));
+        final index = entries.length;
+        entries.add((page: page.pageIndex, block: block));
+        if (block.globalGroupId case final global? when global >= 0) {
+          (globalGroups[(global, block.blockLabel)] ??= []).add(index);
+        }
+        if (block.groupId case final local? when local >= 0) {
+          (localGroups[(page.pageIndex, local, block.blockLabel)] ??= []).add(
+            index,
+          );
         }
       }
+    }
+
+    // 全局分组用于跨页续文；同一页内 Paddle 有时会给续栏分配相邻但不同的
+    // global_group_id，此时仅在页内分组恰好只有一个非空正文块、且补上这条关联
+    // 后整个分区仍只有一个非空块时才建立关联。这样既能恢复左右栏，也不会把
+    // 同号的两个独立正文块合并，或把两个已成形的全局分组串成一个双非空块。
+    final parent = List<int>.generate(entries.length, (i) => i);
+    int root(int value) {
+      var current = value;
+      while (parent[current] != current) {
+        parent[current] = parent[parent[current]];
+        current = parent[current];
+      }
+      return current;
+    }
+
+    void union(int a, int b) {
+      final left = root(a);
+      final right = root(b);
+      if (left != right) parent[right] = left;
+    }
+
+    for (final group in globalGroups.values) {
+      for (var i = 1; i < group.length; i++) {
+        union(group.first, group[i]);
+      }
+    }
+    for (final group in localGroups.values) {
+      if (group.length < 2) continue;
+      final owners = group
+          .where((i) => entries[i].block.blockContent.trim().isNotEmpty)
+          .toList();
+      if (owners.length != 1) continue;
+      // 合并后若出现第二个非空正文块，整组会在下方被跳过，连带丢掉全局续框；
+      // 先按当前分区状态确认合并结果仍只有一个非空块。
+      final roots = {for (final i in group) root(i)};
+      final mergedOwners = [
+        for (var i = 0; i < entries.length; i++)
+          if (roots.contains(root(i)) &&
+              entries[i].block.blockContent.trim().isNotEmpty)
+            i,
+      ];
+      if (mergedOwners.length != 1) continue;
+      for (var i = 1; i < group.length; i++) {
+        union(group.first, group[i]);
+      }
+    }
+
+    final groups = <int, List<({int page, LayoutBlock block})>>{};
+    for (var i = 0; i < entries.length; i++) {
+      (groups[root(i)] ??= []).add(entries[i]);
     }
     final replacements = <LayoutBlock, List<LayoutTextRegion>>{};
     for (final group in groups.values) {
