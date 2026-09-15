@@ -23,33 +23,11 @@ OtterPad 在 PaddleOCR-VL 的基础上做了一套图表提取与版面重排引
 
 ## 界面预览
 
-### 桌面端
-
-同页原文与译文左右对照，图表侧栏随时查阅。
-
-<table>
-  <tr>
-    <td colspan="2" align="center">
-      <b>PDF 双排对照</b><br/>
-      <img src="./screenshots/desktop-pdf-bilingual.png" width="940" alt="桌面端 PDF 页面，左侧原文、右侧译文"/>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <b>文献库</b><br/>
-      <img src="./screenshots/desktop-library.png" width="460" alt="桌面端文献库，含封面、元数据与阅读进度"/>
-    </td>
-    <td align="center" width="50%">
-      <b>重排阅读与图表侧栏</b><br/>
-      <img src="./screenshots/desktop-reading.png" width="460" alt="桌面端双语重排阅读，含高亮标注与图表侧栏"/>
-    </td>
-  </tr>
-</table>
-
 ### 移动端
 
 同一篇文献在小屏上的重排阅读、图表提取与全文问答。
 
+<div align="center">
 <table>
   <tr>
     <td align="center" width="50%">
@@ -72,6 +50,32 @@ OtterPad 在 PaddleOCR-VL 的基础上做了一套图表提取与版面重排引
     </td>
   </tr>
 </table>
+</div>
+
+### 桌面端
+
+同页原文与译文左右对照，图表侧栏随时查阅。
+
+<div align="center">
+<table>
+  <tr>
+    <td colspan="2" align="center">
+      <b>文献库</b><br/>
+      <img src="./screenshots/desktop-library.png" alt="桌面端文献库，含封面、元数据与阅读进度"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>PDF 双排对照</b><br/>
+      <img src="./screenshots/desktop-pdf-bilingual.png" alt="桌面端 PDF 页面，左侧原文、右侧译文"/>
+    </td>
+    <td align="center" width="50%">
+      <b>重排阅读与图表侧栏</b><br/>
+      <img src="./screenshots/desktop-reading.png" alt="桌面端双语重排阅读，含高亮标注与图表侧栏"/>
+    </td>
+  </tr>
+</table>
+</div>
 
 ## 主要功能
 
