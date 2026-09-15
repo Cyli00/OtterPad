@@ -23,43 +23,55 @@ OtterPad uses PaddleOCR-VL under the hood to power a figure extraction and layou
 
 ## Screenshots
 
-### Desktop
-
-Read the same PDF page side by side: original on the left, translation on the right, with figures in the sidebar.
-
-<p align="center">
-  <img src="./docs/screenshots/desktop-pdf-bilingual.png" width="1100" alt="Desktop PDF with side-by-side original and translation, and a figure sidebar"/>
-</p>
-
-<table>
-  <tr>
-    <td align="center" width="50%"><b>Library</b><br/>
-      <img src="./docs/screenshots/desktop-library.png" width="540" alt="Desktop document library"/>
-    </td>
-    <td align="center" width="50%"><b>Reflow & Figure Sidebar</b><br/>
-      <img src="./docs/screenshots/desktop-reading.png" width="540" alt="Desktop bilingual reflow with annotations and a figure sidebar"/>
-    </td>
-  </tr>
-</table>
-
 ### Mobile
+
+The same paper reflowed for a phone, with figure extraction and full-text Q&amp;A.
 
 <div align="center">
 <table>
   <tr>
-    <td align="center" width="50%"><b>PDF Reader</b><br/>
-      <img src="./docs/screenshots/mobile-pdf.png" width="280" alt="PDF Reader"/>
+    <td align="center" width="50%">
+      <b>PDF Reader</b><br/>
+      <img src="./docs/screenshots/mobile-pdf-framed.png" width="280" alt="Mobile PDF reader showing the original page layout"/>
     </td>
-    <td align="center" width="50%"><b>Immersive Reading</b><br/>
-      <img src="./docs/screenshots/mobile-reading.png" width="280" alt="Immersive Reading"/>
+    <td align="center" width="50%">
+      <b>Bilingual Reflow</b><br/>
+      <img src="./docs/screenshots/mobile-reading-bilingual-framed.png" width="280" alt="Mobile reflowed reading with the original paragraph and its translation"/>
     </td>
   </tr>
   <tr>
-    <td align="center" width="50%"><b>Figure Extraction</b><br/>
-      <img src="./docs/screenshots/mobile-figures.png" width="280" alt="Figure Extraction"/>
+    <td align="center" width="50%">
+      <b>Figure Extraction</b><br/>
+      <img src="./docs/screenshots/mobile-figures-framed.png" width="280" alt="Mobile figure list extracted from the paper"/>
     </td>
-    <td align="center" width="50%"><b>AI Full-Text Q&A</b><br/>
-      <img src="./docs/screenshots/mobile-ai.png" width="280" alt="AI Full-Text Q&A"/>
+    <td align="center" width="50%">
+      <b>Full-Text Q&amp;A</b><br/>
+      <img src="./docs/screenshots/mobile-ai-en-framed.png" width="280" alt="Mobile AI chat grounded in the extracted full text and figures"/>
+    </td>
+  </tr>
+</table>
+</div>
+
+### Desktop
+
+Read the original and the translation side by side, with figures docked beside the page.
+
+<div align="center">
+<table>
+  <tr>
+    <td colspan="2" align="center">
+      <b>Library</b><br/>
+      <img src="./docs/screenshots/desktop-library-en.png" alt="Desktop document library with covers, metadata, and reading progress"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>Bilingual PDF Reading</b><br/>
+      <img src="./docs/screenshots/desktop-pdf-bilingual.png" alt="Desktop PDF page with the original on the left and the translation on the right"/>
+    </td>
+    <td align="center" width="50%">
+      <b>Reflow Reading &amp; Figure Sidebar</b><br/>
+      <img src="./docs/screenshots/desktop-reading.png" alt="Desktop bilingual reflow reading with highlights and a figure sidebar"/>
     </td>
   </tr>
 </table>

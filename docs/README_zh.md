@@ -25,45 +25,53 @@ OtterPad 在 PaddleOCR-VL 的基础上做了一套图表提取与版面重排引
 
 ### 桌面端
 
-同页 PDF 双排对照：左侧原文、右侧译文，图表侧栏随时查阅。
-
-<p align="center">
-  <img src="./screenshots/desktop-pdf-bilingual.png" width="1100" alt="桌面 PDF 双排翻译对照阅读与图表侧栏"/>
-</p>
+同页原文与译文左右对照，图表侧栏随时查阅。
 
 <table>
   <tr>
-    <td align="center" width="50%"><b>文献库</b><br/>
-      <img src="./screenshots/desktop-library.png" width="540" alt="桌面文献库"/>
+    <td colspan="2" align="center">
+      <b>PDF 双排对照</b><br/>
+      <img src="./screenshots/desktop-pdf-bilingual.png" width="940" alt="桌面端 PDF 页面，左侧原文、右侧译文"/>
     </td>
-    <td align="center" width="50%"><b>重排阅读与图表侧栏</b><br/>
-      <img src="./screenshots/desktop-reading.png" width="540" alt="桌面双语重排阅读、标注与图表侧栏"/>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>文献库</b><br/>
+      <img src="./screenshots/desktop-library.png" width="460" alt="桌面端文献库，含封面、元数据与阅读进度"/>
+    </td>
+    <td align="center" width="50%">
+      <b>重排阅读与图表侧栏</b><br/>
+      <img src="./screenshots/desktop-reading.png" width="460" alt="桌面端双语重排阅读，含高亮标注与图表侧栏"/>
     </td>
   </tr>
 </table>
 
 ### 移动端
 
-<div align="center">
+同一篇文献在小屏上的重排阅读、图表提取与全文问答。
+
 <table>
   <tr>
-    <td align="center" width="50%"><b>PDF 阅读</b><br/>
-      <img src="./screenshots/mobile-pdf.png" width="280" alt="PDF 阅读"/>
+    <td align="center" width="50%">
+      <b>PDF 阅读</b><br/>
+      <img src="./screenshots/mobile-pdf-framed.png" width="280" alt="移动端 PDF 阅读，保留原始版面"/>
     </td>
-    <td align="center" width="50%"><b>沉浸式阅读</b><br/>
-      <img src="./screenshots/mobile-reading.png" width="280" alt="沉浸式阅读"/>
+    <td align="center" width="50%">
+      <b>双语重排</b><br/>
+      <img src="./screenshots/mobile-reading-bilingual-framed.png" width="280" alt="移动端重排阅读，原文段落与译文对照"/>
     </td>
   </tr>
   <tr>
-    <td align="center" width="50%"><b>图表提取</b><br/>
-      <img src="./screenshots/mobile-figures.png" width="280" alt="图表提取"/>
+    <td align="center" width="50%">
+      <b>图表提取</b><br/>
+      <img src="./screenshots/mobile-figures-framed.png" width="280" alt="移动端从论文中提取的图表列表"/>
     </td>
-    <td align="center" width="50%"><b>AI 全文问答</b><br/>
-      <img src="./screenshots/mobile-ai.png" width="280" alt="AI 全文问答"/>
+    <td align="center" width="50%">
+      <b>全文问答</b><br/>
+      <img src="./screenshots/mobile-ai-framed.png" width="280" alt="移动端基于提取全文与图表的 AI 问答"/>
     </td>
   </tr>
 </table>
-</div>
 
 ## 主要功能
 
