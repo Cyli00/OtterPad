@@ -45,6 +45,7 @@ import '../../providers/reader_document_index_provider.dart';
 import '../../services/reader/reader_document_index.dart';
 import 'widgets/reader_layout_page.dart';
 import 'coordinators/reader_pdf_interaction.dart';
+import 'coordinators/reader_dock_window.dart';
 import 'widgets/reader_adaptive_layout.dart';
 import 'widgets/reader_pdf_document.dart';
 import '../../providers/highlight_provider.dart';
@@ -166,6 +167,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _reprocessing = false;
   bool _dockHostMounted = false;
   bool _dockOpen = false;
+  final _dockWindow = ReaderDockWindow();
+  bool _dockExpandsWindow = false;
+  double? _outwardSidebarWidth;
+  int _dockRequest = 0;
   ReaderDockPane _dockPane = ReaderDockPane.outline;
 
   bool _dockAnimating = false;
@@ -201,6 +206,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             Responsive.kReaderDockMinWidth) {
       _dockOpen = false;
       _sessionNotifier.setDockOpen(false);
+      unawaited(_dockWindow.restore());
     }
     setState(() => _readerNavigationVisible = nextVisible);
   }
@@ -731,7 +737,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final windowW =
         MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
     final base = Responsive.clampReaderSidebarWidth(
-      _sidebarWidthOverride ?? Responsive.readerSidebarWidth(windowW),
+      _sidebarWidthOverride ??
+          _outwardSidebarWidth ??
+          Responsive.readerSidebarWidth(windowW),
       windowW,
     );
     final next = Responsive.clampReaderSidebarWidth(base - d.delta.dx, windowW);
@@ -769,8 +777,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         (!isDesktopOs && !_session.showPreview)) {
       return;
     }
+    final request = ++_dockRequest;
+    if (!_dockOpen && isDesktopOs) {
+      final contentWidth =
+          MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
+      final sidebarWidth = Responsive.clampReaderSidebarWidth(
+        _sidebarWidthOverride ?? Responsive.readerSidebarWidth(contentWidth),
+        contentWidth,
+      );
+      final expanded = await _dockWindow.expand(sidebarWidth);
+      if (!mounted || request != _dockRequest) return;
+      _dockExpandsWindow = expanded;
+      _outwardSidebarWidth = expanded ? sidebarWidth : null;
+    }
+    if (!mounted || request != _dockRequest) return;
     setState(() {
-      if (!_dockOpen) _beginDockTransition(opening: true);
+      if (!_dockOpen && !_dockExpandsWindow) {
+        _beginDockTransition(opening: true);
+      }
       _dockHostMounted = true;
       _dockPane = pane;
       _dockOpen = true;
@@ -785,9 +809,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _closeDock() async {
-    if (!_dockOpen) return;
+    ++_dockRequest;
+    if (!_dockOpen) {
+      await _dockWindow.restore();
+      return;
+    }
     setState(() {
-      _beginDockTransition(opening: false);
+      if (!_dockExpandsWindow) _beginDockTransition(opening: false);
       _dockOpen = false;
       if (_pendingChatReturnArgs != null) {
         _chatReturnArgs = _pendingChatReturnArgs;
@@ -795,6 +823,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       }
     });
     _sessionNotifier.setDockOpen(false);
+    await _dockWindow.restore();
   }
 
   void _toggleDock(ReaderDockPane pane) {
@@ -1519,6 +1548,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   void dispose() {
+    ++_dockRequest;
+    unawaited(_dockWindow.restore());
     _readerActive = false;
     _translationNotifier.invalidateRestore();
     _translationNotifier.cancel(updateState: false);
@@ -1590,6 +1621,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     if (!useDock && _dockOpen) {
       _dockOpen = false;
+      unawaited(_dockWindow.restore());
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _sessionNotifier.setDockOpen(false);
       });
@@ -1747,7 +1779,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final windowW = MediaQuery.sizeOf(context).width;
     final readerContentW = windowW - _readerNavigationWidth(context);
     final sidebarW = Responsive.clampReaderSidebarWidth(
-      _sidebarWidthOverride ?? Responsive.readerSidebarWidth(readerContentW),
+      _sidebarWidthOverride ??
+          _outwardSidebarWidth ??
+          Responsive.readerSidebarWidth(readerContentW),
       readerContentW,
     );
 
@@ -1967,6 +2001,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                           ReaderDockedPane(
                             sidebarWidth: sidebarW,
                             open: _dockOpen,
+                            animate: !_dockExpandsWindow,
                             pane: _dockPane,
                             onAnimationEnd: _onDockAnimationEnd,
                             onSidebarDragUpdate: _onSidebarDragUpdate,

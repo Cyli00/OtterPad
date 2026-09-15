@@ -15,6 +15,7 @@ enum ReaderDockPane { outline, notes, askAi }
 class ReaderDockedPane extends StatefulWidget {
   final double sidebarWidth;
   final bool open;
+  final bool animate;
   final ReaderDockPane pane;
   final Widget outline;
   final Widget notes;
@@ -27,6 +28,7 @@ class ReaderDockedPane extends StatefulWidget {
     super.key,
     required this.sidebarWidth,
     required this.open,
+    this.animate = true,
     required this.pane,
     required this.outline,
     required this.notes,
@@ -92,7 +94,8 @@ class _ReaderDockedPaneState extends State<ReaderDockedPane> {
       );
     }
 
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final reduceMotion =
+        !widget.animate || MediaQuery.disableAnimationsOf(context);
     return SingleMotionBuilder(
       from: reduceMotion ? (open ? 1.0 : 0.0) : 0.0,
       active: !reduceMotion,

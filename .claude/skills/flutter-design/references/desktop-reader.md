@@ -12,6 +12,7 @@
 | 半透明侧栏 | 桌面 AdaptiveScaffold 使用 surfaceContainer.withAlpha(180)，与主内容分栏避让，不叠层遮挡内容 |
 | 紧凑布局 | 使用 Responsive.compactDensity(context)，仅缩小行距，不改列距和字号 |
 | 窗口尺寸 | 最小与初始尺寸由 DisplayMetrics 推导 |
+| 阅读器右侧栏 | 桌面默认保持窗口左边缘，向右扩宽窗口；当前显示器工作区放不下、最大化或全屏时在窗口内展开。收起撤回自动增加的宽度，用户手动调宽后保留其尺寸 |
 | 修饰键 | Windows/Linux 使用 Ctrl 点选；Shift 仅在已多选时划选，不把 Win/Super 当作多选键 |
 
 参考 `lib/widgets/window_chrome.dart`、`lib/widgets/layout/adaptive_navigation.dart`、`lib/utils/responsive.dart`、`lib/services/display_metrics.dart`。
