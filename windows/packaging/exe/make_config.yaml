@@ -1,9 +1,11 @@
 # Inno Setup 安装器配置 (flutter_distributor exe maker)
 app_id: 7B2A1F4C-3D6E-4A8B-9C1D-2E5F8A0B6C3D
 publisher_name: Cyli00
-publisher_url: https://github.com/Cyli00/NightReader
+publisher_url: https://github.com/Cyli00/OtterPad
 display_name: OtterPad
 create_desktop_icon: true
+# 默认值是 {autopf64}\otter_pad（取自 CMake 的 BINARY_NAME），这里显式改成与显示名一致。
+install_dir_name: "{autopf64}\\OtterPad"
 locales:
   - en
   - zh

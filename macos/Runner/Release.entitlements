@@ -4,5 +4,14 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- 出站网络：AI/元数据/PDF 下载、WebDAV/S3 备份。缺失则沙箱内应用完全断网。 -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- 入站监听：ReaderLocalhostServer 绑定 127.0.0.1 提供阅读器静态资源。 -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- 用户选定文件的读写：导入 PDF、导出 Markdown/BibTeX、另存图片与备份文件。 -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
 </dict>
 </plist>

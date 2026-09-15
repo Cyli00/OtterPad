@@ -17,14 +17,29 @@ jobs:
   checks:
     uses: ./.github/workflows/checks.yml
 
-  # ── Android 构建并打包成可分发格式，统一命名后作为 artifact 上传 ──
+  # ── 各平台并行构建并打包成可分发格式，统一命名后作为 artifact 上传 ──
+  # fail-fast: false —— 单个平台失败不取消其余平台，一次看清全部问题。
   build:
     needs: checks
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-java@v5
+      - if: matrix.platform == 'android'
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -35,10 +50,17 @@ jobs:
           flutter-version: ${{ needs.checks.outputs.flutter-version }}
           cache: true
 
+      - run: flutter pub get --enforce-lockfile
+
+      - name: Prepare dist dir
+        shell: bash
+        run: mkdir -p release-dist
+
       # 恢复签名密钥（仓库 Settings → Secrets → Actions 需配置）：
       #   ANDROID_KEYSTORE_BASE64   release.jks 的 base64
       #   ANDROID_KEY_PROPERTIES    key.properties 内容（keyAlias/keyPassword/storePassword）
       - name: Restore Android signing keystore
+        if: matrix.platform == 'android'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
@@ -51,14 +73,9 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.jks
           printf '%s\n' "$ANDROID_KEY_PROPERTIES" > android/key.properties
 
-      - run: flutter pub get --enforce-lockfile
-
-      - name: Prepare dist dir
-        shell: bash
-        run: mkdir -p release-dist
-
-      # ── Android：拆分 APK，直接 flutter build（命名确定，不走 distributor）──
+      # ── Android：拆分 APK，直接 flutter build（命名确定，不走打包器）──
       - name: Build Android APKs
+        if: matrix.platform == 'android'
         env:
           RELEASE_VERSION: ${{ needs.checks.outputs.version }}
           BUILD_NUMBER: ${{ needs.checks.outputs.build-number }}
@@ -67,6 +84,7 @@ jobs:
           --target-platform android-arm,android-arm64
           --build-name="$RELEASE_VERSION" --build-number="$BUILD_NUMBER"
       - name: Collect Android
+        if: matrix.platform == 'android'
         shell: bash
         env:
           RELEASE_VERSION: ${{ needs.checks.outputs.version }}
@@ -74,12 +92,65 @@ jobs:
           v="$RELEASE_VERSION"
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "release-dist/OtterPad-$v-android-arm64-v8a.apk"
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "release-dist/OtterPad-$v-android-armeabi-v7a.apk"
-          cd release-dist
-          sha256sum ./*.apk > SHA256SUMS
+
+      # ── 桌面端：fastforge ──
+      # flutter_distributor 已废弃并由 fastforge 继任，配置格式相同，
+      # 故 windows/packaging/exe 与 macos/packaging/dmg 下的 make_config.yaml 原样复用。
+      # 版本号由 fastforge 直接读 pubspec.yaml，与 checks 校验过的 tag 一致。
+      - name: Activate fastforge
+        if: matrix.platform != 'android'
+        run: dart pub global activate fastforge 0.6.12
+
+      # Windows：Inno Setup 生成安装器；zip 为免安装便携版。
+      # CL 宏用于压制 Flutter Windows 协程特性弃用告警。
+      - name: Install Inno Setup
+        if: matrix.platform == 'windows'
+        run: |
+          choco install innosetup --version=6.7.3 --allow-downgrade --no-progress -y
+          # Inno Setup 不内置简体中文；固定社区翻译版本，避免打包器静默跳过 zh。
+          curl --fail --location --retry 3 \
+            https://raw.githubusercontent.com/kira-96/Inno-Setup-Chinese-Simplified-Translation/1ff90acc4ed4aee82b1cda43253243deee3daed4/ChineseSimplified.isl \
+            --output '/c/Program Files (x86)/Inno Setup 6/Languages/ChineseSimplified.isl'
+      - name: Package Windows
+        if: matrix.platform == 'windows'
+        env:
+          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
+        run: dart pub global run fastforge:main package --platform windows --targets exe,zip --skip-clean
+      - name: Collect Windows
+        if: matrix.platform == 'windows'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.checks.outputs.version }}
+          BUILD_NUMBER: ${{ needs.checks.outputs.build-number }}
+        run: |
+          v="$RELEASE_VERSION"
+          source="dist/$v+$BUILD_NUMBER/otter_pad-$v+$BUILD_NUMBER-windows"
+          cp "$source-setup.exe" "release-dist/OtterPad-$v-windows-x64-setup.exe"
+          cp "$source.zip" "release-dist/OtterPad-$v-windows-x64-portable.zip"
+
+      # macOS：appdmg 生成带图标布局的 DMG。未做签名与公证，
+      # 首次打开需用户在「系统设置 → 隐私与安全性」放行（见 docs/release.md）。
+      - name: Install appdmg
+        if: matrix.platform == 'macos'
+        run: npm install -g appdmg
+      - name: Package macOS
+        if: matrix.platform == 'macos'
+        run: |
+          test "$(uname -m)" = arm64
+          dart pub global run fastforge:main package --platform macos --targets dmg --skip-clean
+      - name: Collect macOS
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.checks.outputs.version }}
+          BUILD_NUMBER: ${{ needs.checks.outputs.build-number }}
+        run: |
+          v="$RELEASE_VERSION"
+          cp "dist/$v+$BUILD_NUMBER/otter_pad-$v+$BUILD_NUMBER-macos.dmg" "release-dist/OtterPad-$v-macos-arm64.dmg"
 
       - uses: actions/upload-artifact@v6
         with:
-          name: android-release
+          name: dist-${{ matrix.platform }}
           path: release-dist/
           if-no-files-found: error
           retention-days: 7
@@ -94,13 +165,23 @@ jobs:
     steps:
       - uses: actions/download-artifact@v7
         with:
-          name: android-release
+          pattern: dist-*
+          merge-multiple: true
           path: release-dist
 
       - uses: actions/download-artifact@v7
         with:
           name: release-notes
           path: release-notes/
+
+      # 三个平台产物汇总到同一目录后再统一生成校验文件，
+      # 避免各平台各自产出一份 SHA256SUMS 互相覆盖。
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd release-dist
+          sha256sum ./* > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Create Release
         uses: softprops/action-gh-release@v3

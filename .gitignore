@@ -45,6 +45,8 @@ untranslated.txt
 .pub/
 /build/
 /coverage/
+# 桌面端打包器（fastforge）的输出目录
+/dist/
 
 # Symbolication related
 app.*.symbols
