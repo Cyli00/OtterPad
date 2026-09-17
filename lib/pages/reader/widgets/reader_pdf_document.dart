@@ -41,7 +41,6 @@ class ReaderPdfDocumentRef extends PdfDocumentRefFile {
   List<PdfPage> _basePages = const [];
   ReaderDocumentIndex _index = ReaderDocumentIndex.empty;
   Map<String, String> _translations = const {};
-  Map<String, String>? _translationInput;
   String _language = 'source';
   TextStyle _style = const TextStyle();
   ReaderPdfLayerMode _layer = ReaderPdfLayerMode.source;
@@ -98,8 +97,7 @@ class ReaderPdfDocumentRef extends PdfDocumentRefFile {
     ReaderPdfLayerMode layer,
   ) {
     if (identical(_index, index) &&
-        (identical(_translationInput, translations) ||
-            mapEquals(_translations, translations)) &&
+        mapEquals(_translations, translations) &&
         _language == language &&
         _style == style &&
         _layer == layer) {
@@ -119,7 +117,6 @@ class ReaderPdfDocumentRef extends PdfDocumentRefFile {
       }
     }
     _index = index;
-    _translationInput = translations;
     _translations = Map.unmodifiable(translations);
     _language = language;
     _style = style;
