@@ -52,10 +52,17 @@ extension AgentApiProviderExt on AgentApiProvider {
   /// baseUrl 末尾已带版本段（/v1、/v3、/v4、/v1beta…）时不再追加默认版本、
   /// 直接接资源路径——兼容 Zhipu(/api/paas/v4)、Doubao(/api/v3) 等非 /v1
   /// 版本段的厂商，以及用户填带版本反代地址的场景。
-  /// Gemini 返回值不含 `/models/{model}:generateContent`，由调用方追加。
-  String chatUrl(String baseUrl) {
+  /// Gemini 指定模型时返回完整地址；省略时保留版本根路径。
+  String chatUrl(String baseUrl, {String? modelId, bool stream = false}) {
     final wire = wireProtocol(baseUrl);
     final base = _trimTrailingSlash(baseUrl);
+    if (wire == AgentApiProvider.gemini && modelId != null) {
+      final root = _versionTailRe.hasMatch(base)
+          ? base
+          : '$base${wire.chatPath}';
+      final action = stream ? 'streamGenerateContent' : 'generateContent';
+      return '$root/models/$modelId:$action';
+    }
     if (!_versionTailRe.hasMatch(base)) return '$base${wire.chatPath}';
     return switch (wire) {
       AgentApiProvider.openai => '$base/responses',
@@ -83,4 +90,4 @@ bool _isXaiHost(String url) {
 }
 
 String _trimTrailingSlash(String url) =>
-    url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+    url.trim().replaceFirst(RegExp(r'/+$'), '');

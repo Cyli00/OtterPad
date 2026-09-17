@@ -106,7 +106,7 @@ class AgentChatService {
     );
     // xAI（Grok）按 host 升格走 OpenAI Responses 同形线路
     provider = provider.wireProtocol(baseUrl);
-    final url = provider.chatUrl(baseUrl);
+    final url = provider.chatUrl(baseUrl, modelId: modelId);
     final dio = AgentHttp.instance.dio(receiveTimeout: receiveTimeout);
 
     final modes = schema == null
@@ -307,7 +307,7 @@ class AgentChatService {
 
       case AgentApiProvider.gemini:
         resp = await dio.post(
-          '$url/models/$modelId:generateContent',
+          url,
           data: _geminiBody(
             showReasoning: activities.requestReasoning,
             modelId: modelId,
@@ -987,7 +987,7 @@ class AgentChatService {
     );
     // xAI（Grok）按 host 升格走 OpenAI Responses 同形线路
     provider = provider.wireProtocol(baseUrl);
-    final url = provider.chatUrl(baseUrl);
+    final url = provider.chatUrl(baseUrl, modelId: modelId, stream: true);
     final dio = AgentHttp.instance.dio(receiveTimeout: receiveTimeout);
     final useWebSearch =
         webSearch &&
@@ -1250,7 +1250,7 @@ class AgentChatService {
     AgentActivityTracker activities,
   ) async* {
     final resp = await dio.post<ResponseBody>(
-      '$url/models/$modelId:streamGenerateContent',
+      url,
       queryParameters: {'alt': 'sse'},
       data: _geminiBody(
         showReasoning: activities.requestReasoning,

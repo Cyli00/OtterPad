@@ -51,7 +51,7 @@ Future<String?> testAgentModel({
         );
       case AgentApiProvider.gemini:
         await dio.post(
-          '${provider.chatUrl(baseUrl)}/models/$modelId:generateContent',
+          provider.chatUrl(baseUrl, modelId: modelId),
           data: {
             'contents': [
               {
