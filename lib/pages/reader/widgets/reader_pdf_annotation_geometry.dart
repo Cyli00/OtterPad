@@ -15,22 +15,14 @@ class ReaderPdfAnnotationMark {
     required this.paragraphId,
     required this.language,
     required this.lines,
-    required this.isAssociation,
-    this.edge,
   });
 
   final Highlight highlight;
   final String paragraphId;
   final String language;
 
-  /// 合并后的行框（页坐标，y 轴向下）；关联标记为提示底色。
+  /// 合并后的同语言高亮行框（页坐标，y 轴向下）。
   final List<Rect> lines;
-
-  /// 跨语言关联标记：只在段落上叠轻底色，不伪造逐字对应。
-  final bool isAssociation;
-
-  /// 关联边标（贴段落左缘的竖线）；非关联标记为 null。
-  final Rect? edge;
 
   Rect get bounds => lines.reduce((a, b) => a.expandToInclude(b));
 }
@@ -41,23 +33,18 @@ class ReaderPdfAnnotationHit {
 
   final ReaderPdfAnnotationMark mark;
 
-  /// 被点中的行框（或关联边标），用于锚定悬浮工具栏。
+  /// 被点中的高亮行框，用于锚定悬浮工具栏。
   final Rect line;
 }
 
 /// PDF 标注几何：绘制与命中共用同一份行框结果，避免看得到却点不中。
 ///
-/// 只做行框合并、关联边标和命中计算；页面几何或标注列表实例变化时由
+/// 只做同语言行框合并和命中计算；页面几何或标注列表实例变化时由
 /// [ReaderPdfPage.annotationGeometry] 重建，单击不会重排整页。
 class ReaderPdfAnnotationGeometry {
-  ReaderPdfAnnotationGeometry._(this.marks, this._paragraphRects);
+  ReaderPdfAnnotationGeometry._(this.marks);
 
   final List<ReaderPdfAnnotationMark> marks;
-  final List<({String paragraphId, Rect rect})> _paragraphRects;
-
-  /// 关联边标相对段落左缘的偏移与宽度（页坐标）。
-  static const associationOffset = 2.0;
-  static const associationWidth = 1.5;
 
   static ReaderPdfAnnotationGeometry build({
     required ReaderPdfPage page,
@@ -65,7 +52,6 @@ class ReaderPdfAnnotationGeometry {
     required List<Highlight> highlights,
   }) {
     final marks = <ReaderPdfAnnotationMark>[];
-    final associationKeys = <(String, String, Rect)>{};
     final blocksById = <String, List<ReaderPdfBlock>>{};
     for (final block in layout.blocks) {
       (blocksById[block.paragraph.id] ??= []).add(block);
@@ -98,7 +84,6 @@ class ReaderPdfAnnotationGeometry {
                 paragraphId: anchor.paragraphId,
                 language: anchor.language,
                 lines: lines,
-                isAssociation: false,
               ),
             );
           }
@@ -106,28 +91,7 @@ class ReaderPdfAnnotationGeometry {
         }
         for (final block
             in blocksById[anchor.paragraphId] ?? const <ReaderPdfBlock>[]) {
-          if (anchor.language != block.language) {
-            // 一条标注可能带多个 range；关联标记按 标注 + 段落 + 语言 去重。
-            final key = (highlight.id, block.language, block.rect);
-            if (associationKeys.add(key)) {
-              marks.add(
-                ReaderPdfAnnotationMark(
-                  highlight: highlight,
-                  paragraphId: anchor.paragraphId,
-                  language: anchor.language,
-                  lines: _associationLines(block, layout, page),
-                  isAssociation: true,
-                  edge: Rect.fromLTWH(
-                    block.rect.left - associationOffset,
-                    block.rect.top,
-                    associationWidth,
-                    block.rect.height,
-                  ),
-                ),
-              );
-            }
-            continue;
-          }
+          if (anchor.language != block.language) continue;
           final range = anchor.resolve(
             block.text,
             revisions.putIfAbsent(
@@ -152,27 +116,22 @@ class ReaderPdfAnnotationGeometry {
                 paragraphId: anchor.paragraphId,
                 language: anchor.language,
                 lines: lines,
-                isAssociation: false,
               ),
             );
           }
         }
       }
     }
-    return ReaderPdfAnnotationGeometry._(marks, [
-      for (final block in layout.blocks)
-        (paragraphId: block.paragraph.id, rect: block.rect),
-    ]);
+    return ReaderPdfAnnotationGeometry._(marks);
   }
 
-  /// 命中精确高亮；没有时退回段落内唯一的关联标注，再按距离取最近边标。
+  /// 只命中实际高亮行框，不把同段落的未标记正文作为点击目标。
   ///
   /// [tolerance] 是页坐标下的容差，调用方按当前缩放从屏幕逻辑像素换算。
   ReaderPdfAnnotationHit? hitTest(Offset point, {double tolerance = 0}) {
     ReaderPdfAnnotationHit? exact;
     var exactDistance = double.infinity;
     for (final mark in marks) {
-      if (mark.isAssociation) continue;
       for (final line in mark.lines) {
         if (!line.inflate(tolerance).contains(point)) continue;
         final distance = _distanceToRect(line, point);
@@ -182,90 +141,7 @@ class ReaderPdfAnnotationGeometry {
         }
       }
     }
-    if (exact != null) return exact;
-
-    final paragraphId = _paragraphAt(point);
-    if (paragraphId != null) {
-      ReaderPdfAnnotationHit? nearest;
-      var distance = double.infinity;
-      for (final mark in marks) {
-        if (mark.paragraphId != paragraphId) continue;
-        final line = _nearestLine(mark.lines, point);
-        final d = _distanceToRect(line, point);
-        if (d < distance) {
-          distance = d;
-          nearest = ReaderPdfAnnotationHit(mark, line);
-        }
-      }
-      if (nearest != null) return nearest;
-    }
-    ReaderPdfAnnotationHit? nearest;
-    var nearestDistance = double.infinity;
-    for (final mark in marks) {
-      if (!mark.isAssociation) continue;
-      if (mark.edge?.inflate(tolerance).contains(point) ?? false) {
-        return ReaderPdfAnnotationHit(mark, _nearestLine(mark.lines, point));
-      }
-      for (final line in mark.lines) {
-        if (!line.inflate(tolerance).contains(point)) continue;
-        final distance = _distanceToRect(line, point);
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          nearest = ReaderPdfAnnotationHit(mark, line);
-        }
-      }
-    }
-    return nearest;
-  }
-
-  String? _paragraphAt(Offset point) {
-    String? match;
-    var smallest = double.infinity;
-    for (final paragraph in _paragraphRects) {
-      if (!paragraph.rect.contains(point)) continue;
-      final area = paragraph.rect.width * paragraph.rect.height;
-      if (area < smallest) {
-        smallest = area;
-        match = paragraph.paragraphId;
-      }
-    }
-    return match;
-  }
-
-  static Rect _nearestLine(List<Rect> lines, Offset point) {
-    var nearest = lines.first;
-    var distance = double.infinity;
-    for (final line in lines) {
-      final d = _distanceToRect(line, point);
-      if (d < distance) {
-        distance = d;
-        nearest = line;
-      }
-    }
-    return nearest;
-  }
-
-  /// 关联提示的可见范围：优先用排版后的可见行，原生文字按字框合并成行。
-  static List<Rect> _associationLines(
-    ReaderPdfBlock block,
-    ReaderPdfPageLayout layout,
-    ReaderPdfPage page,
-  ) {
-    if (block.lines.isNotEmpty) {
-      return [for (final line in block.lines) line.rect];
-    }
-    final mapped = mergeLineRects(block.charRects);
-    if (mapped.isNotEmpty) return mapped;
-    final boxes = <Rect>[];
-    for (final box in layout.text.charRects) {
-      final rect = box.toRect(page: page);
-      if (rect.isEmpty || !block.rect.inflate(1).contains(rect.center)) {
-        continue;
-      }
-      boxes.add(rect);
-    }
-    final merged = mergeLineRects(boxes);
-    return merged.isEmpty ? [block.rect] : merged;
+    return exact;
   }
 
   static double _distanceToRect(Rect rect, Offset point) {

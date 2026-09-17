@@ -137,9 +137,7 @@
     const ranges = [];
     for (const anchor of highlight.anchor.ranges || []) {
       for (const b of index().bindings.filter(b => b.id === anchor.paragraphId)) {
-        if (b.language !== anchor.language) {
-          ranges.push(rangeAt(b.start, b.start + 1)); continue;
-        }
+        if (b.language !== anchor.language) continue;
         let start = anchor.start;
         let end = anchor.end;
         if (anchor.revision !== b.revision || b.text.slice(start, end) !== anchor.quote) {

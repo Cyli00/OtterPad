@@ -83,12 +83,7 @@ class _ReaderLayoutPageState extends State<ReaderLayoutPage> {
               children: [
                 RepaintBoundary(
                   child: CustomPaint(
-                    painter: _PagePainter(
-                      widget.page,
-                      layout,
-                      geometry,
-                      Theme.of(context).colorScheme.primary,
-                    ),
+                    painter: _PagePainter(widget.page, layout, geometry),
                   ),
                 ),
                 if (layout.blocks.any((b) => b.typeset != null))
@@ -116,12 +111,10 @@ class _PagePainter extends CustomPainter {
   final ReaderPdfPage page;
   final ReaderPdfPageLayout layout;
   final ReaderPdfAnnotationGeometry geometry;
-  final Color associatedColor;
-  _PagePainter(this.page, this.layout, this.geometry, this.associatedColor);
+  _PagePainter(this.page, this.layout, this.geometry);
 
-  /// 与 HTML 覆盖层一致的 0.3 透明度与轻圆角；关联提示更淡。
+  /// 与 HTML 覆盖层一致的 0.3 透明度与轻圆角。
   static const _highlightAlpha = 77;
-  static const _associationAlpha = 45;
   static const _radius = Radius.circular(2);
 
   @override
@@ -137,24 +130,9 @@ class _PagePainter extends CustomPainter {
       typeset.paint(canvas, block.rect.topLeft);
     }
 
-    // 持久标注：行级合并后的轻透明圆角块；跨语言关联提示用更淡的同色底色
-    // 加一条 ColorScheme 边标，不伪造逐字对应。
+    // 持久标注只绘制同语言选区。
     for (final mark in geometry.marks) {
       final highlight = _highlightColor(mark.highlight);
-      if (mark.isAssociation) {
-        final fill = Paint()..color = highlight.withAlpha(_associationAlpha);
-        for (final line in mark.lines) {
-          canvas.drawRRect(RRect.fromRectAndRadius(line, _radius), fill);
-        }
-        final edge = mark.edge;
-        if (edge != null) {
-          canvas.drawRRect(
-            RRect.fromRectAndRadius(edge, _radius),
-            Paint()..color = associatedColor,
-          );
-        }
-        continue;
-      }
       final paint = Paint()..color = highlight.withAlpha(_highlightAlpha);
       for (final line in mark.lines) {
         canvas.drawRRect(RRect.fromRectAndRadius(line, _radius), paint);
@@ -170,8 +148,7 @@ class _PagePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _PagePainter oldDelegate) =>
       !identical(oldDelegate.geometry, geometry) ||
-      oldDelegate.layout != layout ||
-      oldDelegate.associatedColor != associatedColor;
+      oldDelegate.layout != layout;
 }
 
 // 译文与持久标注保持独立绘制边界；鼠标选区只重绘这一层。
