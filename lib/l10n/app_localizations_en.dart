@@ -3297,4 +3297,481 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get metadataConnectionFailed =>
       'Cannot connect to the metadata service. Check your network.';
+
+  @override
+  String get tableCopyTsv => 'Copy for spreadsheet (TSV)';
+
+  @override
+  String get tableCopyMarkdown => 'Copy Markdown';
+
+  @override
+  String get tableFlattenNote =>
+      'TSV and Markdown flatten merged cells; text appears only in the first cell.';
+
+  @override
+  String tableSourcePages(String pages) {
+    return 'Source pages: $pages';
+  }
+
+  @override
+  String figureFallback(String kind, int page) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'table': 'Table',
+      'chart': 'Chart',
+      'other': 'Figure',
+    });
+    return '$_temp0 · Page $page';
+  }
+
+  @override
+  String get figureDataLayer => 'Parsed overlay';
+
+  @override
+  String get figureDataSource =>
+      'From the document’s extraction JSON · No AI request';
+
+  @override
+  String get figureDataUnavailable =>
+      'No parsed table or chart content is available for this image. The original remains available.';
+
+  @override
+  String get figureDataLoadFailed =>
+      'Could not read the extraction JSON. You can still view and export the original.';
+
+  @override
+  String get figureDataStale =>
+      'The extraction JSON no longer matches this image’s source version. Re-extract the figures before viewing parsed data.';
+
+  @override
+  String get figureDataIncomplete =>
+      'Some source blocks have no usable data. This overlay and its exports contain only the available parts.';
+
+  @override
+  String get figureFitImage => 'Fit image';
+
+  @override
+  String get figureOverlayOpacity => 'Overlay opacity';
+
+  @override
+  String get figureCopyCaption => 'Copy caption';
+
+  @override
+  String get figureExport => 'Export';
+
+  @override
+  String get figureExportHtml => 'Table/chart data (.html)';
+
+  @override
+  String get figureExportTsv => 'Spreadsheet data (.tsv)';
+
+  @override
+  String get figureExportMarkdown => 'Table/chart data (.md)';
+
+  @override
+  String get figurePrevious => 'Previous figure';
+
+  @override
+  String get figureNext => 'Next figure';
+
+  @override
+  String get figureCaption => 'Caption';
+
+  @override
+  String get figureHideCaption => 'Collapse caption';
+
+  @override
+  String get figureShowCaption => 'Expand caption';
+
+  @override
+  String get websiteTitle => 'OtterPad · A little closer to the paper';
+
+  @override
+  String get websiteDocsTitle => 'Getting started · OtterPad guide';
+
+  @override
+  String get websiteDescription =>
+      'Read and manage academic papers on mobile and desktop. PDF reflow, bilingual reading, figure extraction, and full-text AI chat.';
+
+  @override
+  String get websiteSkip => 'Skip to content';
+
+  @override
+  String get websiteNavigation => 'Main navigation';
+
+  @override
+  String get websiteFeatures => 'Features';
+
+  @override
+  String get websiteGuide => 'Docs';
+
+  @override
+  String get websiteDownload => 'Download';
+
+  @override
+  String get websiteDownloadApp => 'Download OtterPad';
+
+  @override
+  String get websiteGetStarted => 'Getting started';
+
+  @override
+  String get websiteResources => 'Resources';
+
+  @override
+  String get websiteFooterDescription =>
+      'Made for reading papers, on your phone and at your desk.';
+
+  @override
+  String get websiteReleases => 'Releases';
+
+  @override
+  String get websiteFeedback => 'Report an issue';
+
+  @override
+  String get websiteOpenSource => 'Open source';
+
+  @override
+  String get websiteEyebrow => 'A home for your academic reading';
+
+  @override
+  String get websiteHeroFirst => 'A little closer';
+
+  @override
+  String get websiteHeroSecond => 'to the paper.';
+
+  @override
+  String get websiteHeroDescription =>
+      'Turn a dense PDF into a paper you can settle into. Reflow, translation, figures, and answers, together in one reading space.';
+
+  @override
+  String get websitePreview => 'Reading interface preview';
+
+  @override
+  String get websiteBilingual => 'Bilingual reflow';
+
+  @override
+  String get websitePdf => 'Side-by-side PDF';
+
+  @override
+  String get websiteLibrary => 'Library';
+
+  @override
+  String get websiteDesktopPreview => 'Desktop · Theme preview';
+
+  @override
+  String get websiteReadingAlt =>
+      'OtterPad desktop reader with the original text, Chinese translation, and a figure in context';
+
+  @override
+  String get websitePdfAlt =>
+      'Original and translated PDF pages side by side in OtterPad';
+
+  @override
+  String get websiteLibraryAlt =>
+      'Paper covers, journal information, and reading progress in the OtterPad library';
+
+  @override
+  String get websiteReadingCaption =>
+      'Original and translation side by side. Figures stay in context.';
+
+  @override
+  String get websitePdfCaption =>
+      'Keep the original PDF layout while reading its translation.';
+
+  @override
+  String get websiteLibraryCaption =>
+      'Covers, journals, and reading progress help you find your next paper.';
+
+  @override
+  String get websiteReadingGuide => 'Reading guide';
+
+  @override
+  String get websiteLibraryGuide => 'Explore the library';
+
+  @override
+  String get websiteSummaryRead => 'Read comfortably';
+
+  @override
+  String get websiteSummaryReadBody =>
+      'Reflow complex layouts, compare translations, and set the type and theme to suit you.';
+
+  @override
+  String get websiteSummaryUnderstand => 'Stay with the paper';
+
+  @override
+  String get websiteSummaryUnderstandBody =>
+      'Open a figure and ask questions with the full text in context. Return to the source to check.';
+
+  @override
+  String get websiteSummaryOrganize => 'Keep things together';
+
+  @override
+  String get websiteSummaryOrganizeBody =>
+      'Search, organize, sync with Zotero, and back up the papers you want to keep.';
+
+  @override
+  String get websiteReadingLabel => 'Reading & understanding';
+
+  @override
+  String get websiteMobileTitle => 'A whole paper. A smaller screen.';
+
+  @override
+  String get websiteMobileBody =>
+      'From a two-column PDF to a continuous page. Keep the figures, translation, and questions close to what you are reading.';
+
+  @override
+  String get websiteMobileReadingAlt =>
+      'Bilingual reflow on mobile with original paragraphs and their translations';
+
+  @override
+  String get websiteMobileFiguresAlt =>
+      'Extracted paper figures available to open individually on mobile';
+
+  @override
+  String get websiteReflow => 'Reflow for smaller screens';
+
+  @override
+  String get websiteReflowBody =>
+      'Use PaddleOCR or MinerU to turn paragraphs, formulas, and figures into a continuous reading view.';
+
+  @override
+  String get websiteFigures => 'Figures & tables';
+
+  @override
+  String get websiteFiguresBody =>
+      'Open, zoom, copy, and share extracted figures. See the details, then return to the text.';
+
+  @override
+  String get websiteChat => 'Full-text AI chat';
+
+  @override
+  String get websiteScreenshotNote =>
+      'Based on actual app screenshots, with colors adapted to the website theme. The interface may vary by version.';
+
+  @override
+  String get websiteLibraryLabel => 'Library & workflow';
+
+  @override
+  String get websiteWorkspaceTitle => 'What you have read. What comes next.';
+
+  @override
+  String get websiteSearchTitle => 'Find a paper. Keep it in order.';
+
+  @override
+  String get websiteSearchBody =>
+      'Search across sources, resolve metadata, and organize your library with categories, tags, and AI file naming.';
+
+  @override
+  String get websiteZoteroTitle => 'Connect your existing library';
+
+  @override
+  String get websiteZoteroBody =>
+      'Import a local Zotero library or use two-way sync to keep your existing workflow.';
+
+  @override
+  String get websiteBackupTitle => 'Back up to your own storage';
+
+  @override
+  String get websiteBackupBody =>
+      'Connect S3 or WebDAV to back up and restore your data, with optional automatic backups.';
+
+  @override
+  String get websiteModelTitle => 'Ask with the paper in context';
+
+  @override
+  String get websiteModelBody =>
+      'Ask about extracted text and figures, or translate a paragraph. Connect OpenAI, Anthropic, Google, or a compatible provider.';
+
+  @override
+  String get websiteServiceNote =>
+      'Papers are stored locally. OCR, translation, and AI chat use your configured services. Sync and backups require separate setup.';
+
+  @override
+  String get websiteLearnMore => 'Services & data';
+
+  @override
+  String get websiteDownloadTitle => 'Start with your next paper.';
+
+  @override
+  String get websiteDownloadBody =>
+      'Choose the package for your device. Source code and release notes are available on GitHub.';
+
+  @override
+  String get websiteViewDownloads => 'View GitHub Releases';
+
+  @override
+  String get websiteWindowsPackage => 'x64 · Installer or portable ZIP';
+
+  @override
+  String get websiteMacNote =>
+      'The macOS build is for Apple silicon and is unsigned. Allow it in Privacy & Security on first launch. Linux is not supported yet.';
+
+  @override
+  String get websiteInstallation => 'Installation';
+
+  @override
+  String get websiteOverview => 'Overview';
+
+  @override
+  String get websiteFirstPaper => 'Your first paper';
+
+  @override
+  String get websiteReadingAndTranslation => 'Reading & translation';
+
+  @override
+  String get websiteSync => 'Sync & backup';
+
+  @override
+  String get websiteServices => 'Services & data';
+
+  @override
+  String get websiteViewSource => 'View source';
+
+  @override
+  String get websiteDocsIntro =>
+      'OtterPad is an open-source academic reader and library manager for Android, Windows, and macOS.';
+
+  @override
+  String get websiteDocsIntroBody =>
+      'This guide starts with importing a PDF, then covers reflow, translation, figures, AI chat, and keeping your library in sync.';
+
+  @override
+  String get websiteBeforeStart => 'Before you begin';
+
+  @override
+  String get websiteBeforeStartBody =>
+      'You can start by importing and reading a PDF. Reflow requires an OCR service; translation and chat require an AI provider and model. These are configured separately.';
+
+  @override
+  String get websiteInstallBody =>
+      'Open GitHub Releases and choose the package for your device and architecture. You can back up your library in the app before upgrading.';
+
+  @override
+  String get websitePlatform => 'Platform';
+
+  @override
+  String get websitePackage => 'Package';
+
+  @override
+  String get websiteAndroidInstall =>
+      'Choose arm64-v8a for modern devices, or armeabi-v7a for older 32-bit devices.';
+
+  @override
+  String get websiteStepImport => 'Import a PDF';
+
+  @override
+  String get websiteStepImportBody =>
+      'Use the import action in the library to select a local PDF, then open it. Start in PDF mode to read the original layout.';
+
+  @override
+  String get websiteStepExtract => 'Set up OCR and extract the content';
+
+  @override
+  String get websiteStepExtractBody =>
+      'In OCR settings, choose PaddleOCR or MinerU and enter the service token. Return to the paper and extract its content to use reflow and extracted figures.';
+
+  @override
+  String get websiteStepRead => 'Choose how to read';
+
+  @override
+  String get websiteStepReadBody =>
+      'Switch between the original PDF and reflow. To read a translation, add a provider and model in AI settings, then translate the paper and use bilingual view.';
+
+  @override
+  String get websiteReadingDoc =>
+      'PDF mode preserves pages and layout. Reflow creates continuous paragraphs for smaller screens. On desktop, you can read the original and translation side by side.';
+
+  @override
+  String get websiteTranslationTitle =>
+      'Paragraph translation & bilingual reading';
+
+  @override
+  String get websiteTranslationDoc =>
+      'Translation works paragraph by paragraph and protects formulas, code blocks, and citation markers. Completed translations are cached, and unfinished paragraphs can be retried.';
+
+  @override
+  String get websiteAppearanceDoc =>
+      'Adjust font size, typeface, and theme in reading appearance settings. Highlight text, add annotations, and navigate sections through the outline.';
+
+  @override
+  String get websiteFiguresDoc =>
+      'After extraction, open images and tables from the figure list, zoom in, and use the available copy or share actions.';
+
+  @override
+  String get websiteFiguresDetail =>
+      'Extraction depends on the PDF and OCR service. Check the original page when verifying captions, values, or the relationship between a figure and its text.';
+
+  @override
+  String get websiteAiDoc =>
+      'Add OpenAI, Anthropic, Google, or a compatible provider in AI settings, configure the connection, and select a model. After extracting the paper, open chat in the reader to ask questions about it.';
+
+  @override
+  String get websiteAiTipTitle => 'Start with a specific question';
+
+  @override
+  String get websiteAiTipBody =>
+      'Try “How did the authors set up the control group?” or “Which conclusion does Figure 2 support?” A specific question makes it easier to check the answer against the paper.';
+
+  @override
+  String get websiteAiVerify =>
+      'Chat uses extracted text and figures as context, but model responses can still be wrong. Check the source before citing a conclusion.';
+
+  @override
+  String get websiteLibraryDoc =>
+      'Search and resolve metadata through DOI, PubMed, Crossref, Semantic Scholar, and other sources to fill in titles, authors, and journals.';
+
+  @override
+  String get websiteLibraryDetail =>
+      'Organize topics with categories and tags, and find papers by their covers and reading progress. With an AI provider configured, you can also use automatic file naming.';
+
+  @override
+  String get websiteZoteroDoc =>
+      'Configure a Zotero API key in data management to sync your library. You can also import from an existing local Zotero library.';
+
+  @override
+  String get websiteBackupDoc =>
+      'Choose S3 or WebDAV in data management, configure your storage, and run a backup or restore. Enable automatic backups if you want a regular schedule.';
+
+  @override
+  String get websiteServicesIntro =>
+      'Different features use different data. External service calls depend on the features you use and the services you configure.';
+
+  @override
+  String get websiteLocalFiles => 'Local reading';
+
+  @override
+  String get websiteLocalFilesBody =>
+      'Imported papers and generated reading content are stored on your device.';
+
+  @override
+  String get websiteOcrService =>
+      'Document extraction sends the paper to your selected PaddleOCR or MinerU service.';
+
+  @override
+  String get websiteAiServiceTitle => 'Translation & chat';
+
+  @override
+  String get websiteAiService =>
+      'Relevant text or figures are sent to your configured model provider. Availability, quotas, and costs depend on that provider.';
+
+  @override
+  String get websiteSyncService =>
+      'When enabled, data is transferred to your configured Zotero, S3, or WebDAV service.';
+
+  @override
+  String get websiteNeedHelp =>
+      'Found an issue or something missing from this guide?';
+
+  @override
+  String get websiteOnThisPage => 'On this page';
+
+  @override
+  String get websiteMobilePdfAlt =>
+      'Original PDF reading on mobile, preserving columns and figures';
+
+  @override
+  String get websiteOriginalPdf => 'Return to the original';
+
+  @override
+  String get websiteOriginalPdfBody =>
+      'Keep the original pages and layout. Return to the PDF to check formulas, citations, or context.';
 }

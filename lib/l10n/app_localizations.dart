@@ -5811,6 +5811,822 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cannot connect to the metadata service. Check your network.'**
   String get metadataConnectionFailed;
+
+  /// No description provided for @tableCopyTsv.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy for spreadsheet (TSV)'**
+  String get tableCopyTsv;
+
+  /// No description provided for @tableCopyMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Markdown'**
+  String get tableCopyMarkdown;
+
+  /// No description provided for @tableFlattenNote.
+  ///
+  /// In en, this message translates to:
+  /// **'TSV and Markdown flatten merged cells; text appears only in the first cell.'**
+  String get tableFlattenNote;
+
+  /// No description provided for @tableSourcePages.
+  ///
+  /// In en, this message translates to:
+  /// **'Source pages: {pages}'**
+  String tableSourcePages(String pages);
+
+  /// No description provided for @figureFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, table{Table} chart{Chart} other{Figure}} · Page {page}'**
+  String figureFallback(String kind, int page);
+
+  /// No description provided for @figureDataLayer.
+  ///
+  /// In en, this message translates to:
+  /// **'Parsed overlay'**
+  String get figureDataLayer;
+
+  /// No description provided for @figureDataSource.
+  ///
+  /// In en, this message translates to:
+  /// **'From the document’s extraction JSON · No AI request'**
+  String get figureDataSource;
+
+  /// No description provided for @figureDataUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No parsed table or chart content is available for this image. The original remains available.'**
+  String get figureDataUnavailable;
+
+  /// No description provided for @figureDataLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the extraction JSON. You can still view and export the original.'**
+  String get figureDataLoadFailed;
+
+  /// No description provided for @figureDataStale.
+  ///
+  /// In en, this message translates to:
+  /// **'The extraction JSON no longer matches this image’s source version. Re-extract the figures before viewing parsed data.'**
+  String get figureDataStale;
+
+  /// No description provided for @figureDataIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Some source blocks have no usable data. This overlay and its exports contain only the available parts.'**
+  String get figureDataIncomplete;
+
+  /// No description provided for @figureFitImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Fit image'**
+  String get figureFitImage;
+
+  /// No description provided for @figureOverlayOpacity.
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay opacity'**
+  String get figureOverlayOpacity;
+
+  /// No description provided for @figureCopyCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy caption'**
+  String get figureCopyCaption;
+
+  /// No description provided for @figureExport.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get figureExport;
+
+  /// No description provided for @figureExportHtml.
+  ///
+  /// In en, this message translates to:
+  /// **'Table/chart data (.html)'**
+  String get figureExportHtml;
+
+  /// No description provided for @figureExportTsv.
+  ///
+  /// In en, this message translates to:
+  /// **'Spreadsheet data (.tsv)'**
+  String get figureExportTsv;
+
+  /// No description provided for @figureExportMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Table/chart data (.md)'**
+  String get figureExportMarkdown;
+
+  /// No description provided for @figurePrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous figure'**
+  String get figurePrevious;
+
+  /// No description provided for @figureNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next figure'**
+  String get figureNext;
+
+  /// No description provided for @figureCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Caption'**
+  String get figureCaption;
+
+  /// No description provided for @figureHideCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse caption'**
+  String get figureHideCaption;
+
+  /// No description provided for @figureShowCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand caption'**
+  String get figureShowCaption;
+
+  /// No description provided for @websiteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'OtterPad · A little closer to the paper'**
+  String get websiteTitle;
+
+  /// No description provided for @websiteDocsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting started · OtterPad guide'**
+  String get websiteDocsTitle;
+
+  /// No description provided for @websiteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Read and manage academic papers on mobile and desktop. PDF reflow, bilingual reading, figure extraction, and full-text AI chat.'**
+  String get websiteDescription;
+
+  /// No description provided for @websiteSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip to content'**
+  String get websiteSkip;
+
+  /// No description provided for @websiteNavigation.
+  ///
+  /// In en, this message translates to:
+  /// **'Main navigation'**
+  String get websiteNavigation;
+
+  /// No description provided for @websiteFeatures.
+  ///
+  /// In en, this message translates to:
+  /// **'Features'**
+  String get websiteFeatures;
+
+  /// No description provided for @websiteGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'Docs'**
+  String get websiteGuide;
+
+  /// No description provided for @websiteDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get websiteDownload;
+
+  /// No description provided for @websiteDownloadApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Download OtterPad'**
+  String get websiteDownloadApp;
+
+  /// No description provided for @websiteGetStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting started'**
+  String get websiteGetStarted;
+
+  /// No description provided for @websiteResources.
+  ///
+  /// In en, this message translates to:
+  /// **'Resources'**
+  String get websiteResources;
+
+  /// No description provided for @websiteFooterDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Made for reading papers, on your phone and at your desk.'**
+  String get websiteFooterDescription;
+
+  /// No description provided for @websiteReleases.
+  ///
+  /// In en, this message translates to:
+  /// **'Releases'**
+  String get websiteReleases;
+
+  /// No description provided for @websiteFeedback.
+  ///
+  /// In en, this message translates to:
+  /// **'Report an issue'**
+  String get websiteFeedback;
+
+  /// No description provided for @websiteOpenSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Open source'**
+  String get websiteOpenSource;
+
+  /// No description provided for @websiteEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'A home for your academic reading'**
+  String get websiteEyebrow;
+
+  /// No description provided for @websiteHeroFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'A little closer'**
+  String get websiteHeroFirst;
+
+  /// No description provided for @websiteHeroSecond.
+  ///
+  /// In en, this message translates to:
+  /// **'to the paper.'**
+  String get websiteHeroSecond;
+
+  /// No description provided for @websiteHeroDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn a dense PDF into a paper you can settle into. Reflow, translation, figures, and answers, together in one reading space.'**
+  String get websiteHeroDescription;
+
+  /// No description provided for @websitePreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading interface preview'**
+  String get websitePreview;
+
+  /// No description provided for @websiteBilingual.
+  ///
+  /// In en, this message translates to:
+  /// **'Bilingual reflow'**
+  String get websiteBilingual;
+
+  /// No description provided for @websitePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Side-by-side PDF'**
+  String get websitePdf;
+
+  /// No description provided for @websiteLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get websiteLibrary;
+
+  /// No description provided for @websiteDesktopPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Desktop · Theme preview'**
+  String get websiteDesktopPreview;
+
+  /// No description provided for @websiteReadingAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'OtterPad desktop reader with the original text, Chinese translation, and a figure in context'**
+  String get websiteReadingAlt;
+
+  /// No description provided for @websitePdfAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'Original and translated PDF pages side by side in OtterPad'**
+  String get websitePdfAlt;
+
+  /// No description provided for @websiteLibraryAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper covers, journal information, and reading progress in the OtterPad library'**
+  String get websiteLibraryAlt;
+
+  /// No description provided for @websiteReadingCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Original and translation side by side. Figures stay in context.'**
+  String get websiteReadingCaption;
+
+  /// No description provided for @websitePdfCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the original PDF layout while reading its translation.'**
+  String get websitePdfCaption;
+
+  /// No description provided for @websiteLibraryCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers, journals, and reading progress help you find your next paper.'**
+  String get websiteLibraryCaption;
+
+  /// No description provided for @websiteReadingGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading guide'**
+  String get websiteReadingGuide;
+
+  /// No description provided for @websiteLibraryGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'Explore the library'**
+  String get websiteLibraryGuide;
+
+  /// No description provided for @websiteSummaryRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read comfortably'**
+  String get websiteSummaryRead;
+
+  /// No description provided for @websiteSummaryReadBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Reflow complex layouts, compare translations, and set the type and theme to suit you.'**
+  String get websiteSummaryReadBody;
+
+  /// No description provided for @websiteSummaryUnderstand.
+  ///
+  /// In en, this message translates to:
+  /// **'Stay with the paper'**
+  String get websiteSummaryUnderstand;
+
+  /// No description provided for @websiteSummaryUnderstandBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a figure and ask questions with the full text in context. Return to the source to check.'**
+  String get websiteSummaryUnderstandBody;
+
+  /// No description provided for @websiteSummaryOrganize.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep things together'**
+  String get websiteSummaryOrganize;
+
+  /// No description provided for @websiteSummaryOrganizeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Search, organize, sync with Zotero, and back up the papers you want to keep.'**
+  String get websiteSummaryOrganizeBody;
+
+  /// No description provided for @websiteReadingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading & understanding'**
+  String get websiteReadingLabel;
+
+  /// No description provided for @websiteMobileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A whole paper. A smaller screen.'**
+  String get websiteMobileTitle;
+
+  /// No description provided for @websiteMobileBody.
+  ///
+  /// In en, this message translates to:
+  /// **'From a two-column PDF to a continuous page. Keep the figures, translation, and questions close to what you are reading.'**
+  String get websiteMobileBody;
+
+  /// No description provided for @websiteMobileReadingAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'Bilingual reflow on mobile with original paragraphs and their translations'**
+  String get websiteMobileReadingAlt;
+
+  /// No description provided for @websiteMobileFiguresAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracted paper figures available to open individually on mobile'**
+  String get websiteMobileFiguresAlt;
+
+  /// No description provided for @websiteReflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Reflow for smaller screens'**
+  String get websiteReflow;
+
+  /// No description provided for @websiteReflowBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Use PaddleOCR or MinerU to turn paragraphs, formulas, and figures into a continuous reading view.'**
+  String get websiteReflowBody;
+
+  /// No description provided for @websiteFigures.
+  ///
+  /// In en, this message translates to:
+  /// **'Figures & tables'**
+  String get websiteFigures;
+
+  /// No description provided for @websiteFiguresBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Open, zoom, copy, and share extracted figures. See the details, then return to the text.'**
+  String get websiteFiguresBody;
+
+  /// No description provided for @websiteChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Full-text AI chat'**
+  String get websiteChat;
+
+  /// No description provided for @websiteScreenshotNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Based on actual app screenshots, with colors adapted to the website theme. The interface may vary by version.'**
+  String get websiteScreenshotNote;
+
+  /// No description provided for @websiteLibraryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Library & workflow'**
+  String get websiteLibraryLabel;
+
+  /// No description provided for @websiteWorkspaceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What you have read. What comes next.'**
+  String get websiteWorkspaceTitle;
+
+  /// No description provided for @websiteSearchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find a paper. Keep it in order.'**
+  String get websiteSearchTitle;
+
+  /// No description provided for @websiteSearchBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Search across sources, resolve metadata, and organize your library with categories, tags, and AI file naming.'**
+  String get websiteSearchBody;
+
+  /// No description provided for @websiteZoteroTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect your existing library'**
+  String get websiteZoteroTitle;
+
+  /// No description provided for @websiteZoteroBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Import a local Zotero library or use two-way sync to keep your existing workflow.'**
+  String get websiteZoteroBody;
+
+  /// No description provided for @websiteBackupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Back up to your own storage'**
+  String get websiteBackupTitle;
+
+  /// No description provided for @websiteBackupBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect S3 or WebDAV to back up and restore your data, with optional automatic backups.'**
+  String get websiteBackupBody;
+
+  /// No description provided for @websiteModelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask with the paper in context'**
+  String get websiteModelTitle;
+
+  /// No description provided for @websiteModelBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about extracted text and figures, or translate a paragraph. Connect OpenAI, Anthropic, Google, or a compatible provider.'**
+  String get websiteModelBody;
+
+  /// No description provided for @websiteServiceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Papers are stored locally. OCR, translation, and AI chat use your configured services. Sync and backups require separate setup.'**
+  String get websiteServiceNote;
+
+  /// No description provided for @websiteLearnMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Services & data'**
+  String get websiteLearnMore;
+
+  /// No description provided for @websiteDownloadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start with your next paper.'**
+  String get websiteDownloadTitle;
+
+  /// No description provided for @websiteDownloadBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the package for your device. Source code and release notes are available on GitHub.'**
+  String get websiteDownloadBody;
+
+  /// No description provided for @websiteViewDownloads.
+  ///
+  /// In en, this message translates to:
+  /// **'View GitHub Releases'**
+  String get websiteViewDownloads;
+
+  /// No description provided for @websiteWindowsPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'x64 · Installer or portable ZIP'**
+  String get websiteWindowsPackage;
+
+  /// No description provided for @websiteMacNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The macOS build is for Apple silicon and is unsigned. Allow it in Privacy & Security on first launch. Linux is not supported yet.'**
+  String get websiteMacNote;
+
+  /// No description provided for @websiteInstallation.
+  ///
+  /// In en, this message translates to:
+  /// **'Installation'**
+  String get websiteInstallation;
+
+  /// No description provided for @websiteOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get websiteOverview;
+
+  /// No description provided for @websiteFirstPaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Your first paper'**
+  String get websiteFirstPaper;
+
+  /// No description provided for @websiteReadingAndTranslation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading & translation'**
+  String get websiteReadingAndTranslation;
+
+  /// No description provided for @websiteSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync & backup'**
+  String get websiteSync;
+
+  /// No description provided for @websiteServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services & data'**
+  String get websiteServices;
+
+  /// No description provided for @websiteViewSource.
+  ///
+  /// In en, this message translates to:
+  /// **'View source'**
+  String get websiteViewSource;
+
+  /// No description provided for @websiteDocsIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'OtterPad is an open-source academic reader and library manager for Android, Windows, and macOS.'**
+  String get websiteDocsIntro;
+
+  /// No description provided for @websiteDocsIntroBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This guide starts with importing a PDF, then covers reflow, translation, figures, AI chat, and keeping your library in sync.'**
+  String get websiteDocsIntroBody;
+
+  /// No description provided for @websiteBeforeStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you begin'**
+  String get websiteBeforeStart;
+
+  /// No description provided for @websiteBeforeStartBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can start by importing and reading a PDF. Reflow requires an OCR service; translation and chat require an AI provider and model. These are configured separately.'**
+  String get websiteBeforeStartBody;
+
+  /// No description provided for @websiteInstallBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Open GitHub Releases and choose the package for your device and architecture. You can back up your library in the app before upgrading.'**
+  String get websiteInstallBody;
+
+  /// No description provided for @websitePlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform'**
+  String get websitePlatform;
+
+  /// No description provided for @websitePackage.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get websitePackage;
+
+  /// No description provided for @websiteAndroidInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose arm64-v8a for modern devices, or armeabi-v7a for older 32-bit devices.'**
+  String get websiteAndroidInstall;
+
+  /// No description provided for @websiteStepImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Import a PDF'**
+  String get websiteStepImport;
+
+  /// No description provided for @websiteStepImportBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the import action in the library to select a local PDF, then open it. Start in PDF mode to read the original layout.'**
+  String get websiteStepImportBody;
+
+  /// No description provided for @websiteStepExtract.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up OCR and extract the content'**
+  String get websiteStepExtract;
+
+  /// No description provided for @websiteStepExtractBody.
+  ///
+  /// In en, this message translates to:
+  /// **'In OCR settings, choose PaddleOCR or MinerU and enter the service token. Return to the paper and extract its content to use reflow and extracted figures.'**
+  String get websiteStepExtractBody;
+
+  /// No description provided for @websiteStepRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how to read'**
+  String get websiteStepRead;
+
+  /// No description provided for @websiteStepReadBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch between the original PDF and reflow. To read a translation, add a provider and model in AI settings, then translate the paper and use bilingual view.'**
+  String get websiteStepReadBody;
+
+  /// No description provided for @websiteReadingDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF mode preserves pages and layout. Reflow creates continuous paragraphs for smaller screens. On desktop, you can read the original and translation side by side.'**
+  String get websiteReadingDoc;
+
+  /// No description provided for @websiteTranslationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Paragraph translation & bilingual reading'**
+  String get websiteTranslationTitle;
+
+  /// No description provided for @websiteTranslationDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Translation works paragraph by paragraph and protects formulas, code blocks, and citation markers. Completed translations are cached, and unfinished paragraphs can be retried.'**
+  String get websiteTranslationDoc;
+
+  /// No description provided for @websiteAppearanceDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust font size, typeface, and theme in reading appearance settings. Highlight text, add annotations, and navigate sections through the outline.'**
+  String get websiteAppearanceDoc;
+
+  /// No description provided for @websiteFiguresDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'After extraction, open images and tables from the figure list, zoom in, and use the available copy or share actions.'**
+  String get websiteFiguresDoc;
+
+  /// No description provided for @websiteFiguresDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Extraction depends on the PDF and OCR service. Check the original page when verifying captions, values, or the relationship between a figure and its text.'**
+  String get websiteFiguresDetail;
+
+  /// No description provided for @websiteAiDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Add OpenAI, Anthropic, Google, or a compatible provider in AI settings, configure the connection, and select a model. After extracting the paper, open chat in the reader to ask questions about it.'**
+  String get websiteAiDoc;
+
+  /// No description provided for @websiteAiTipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start with a specific question'**
+  String get websiteAiTipTitle;
+
+  /// No description provided for @websiteAiTipBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Try “How did the authors set up the control group?” or “Which conclusion does Figure 2 support?” A specific question makes it easier to check the answer against the paper.'**
+  String get websiteAiTipBody;
+
+  /// No description provided for @websiteAiVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat uses extracted text and figures as context, but model responses can still be wrong. Check the source before citing a conclusion.'**
+  String get websiteAiVerify;
+
+  /// No description provided for @websiteLibraryDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Search and resolve metadata through DOI, PubMed, Crossref, Semantic Scholar, and other sources to fill in titles, authors, and journals.'**
+  String get websiteLibraryDoc;
+
+  /// No description provided for @websiteLibraryDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Organize topics with categories and tags, and find papers by their covers and reading progress. With an AI provider configured, you can also use automatic file naming.'**
+  String get websiteLibraryDetail;
+
+  /// No description provided for @websiteZoteroDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure a Zotero API key in data management to sync your library. You can also import from an existing local Zotero library.'**
+  String get websiteZoteroDoc;
+
+  /// No description provided for @websiteBackupDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose S3 or WebDAV in data management, configure your storage, and run a backup or restore. Enable automatic backups if you want a regular schedule.'**
+  String get websiteBackupDoc;
+
+  /// No description provided for @websiteServicesIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Different features use different data. External service calls depend on the features you use and the services you configure.'**
+  String get websiteServicesIntro;
+
+  /// No description provided for @websiteLocalFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Local reading'**
+  String get websiteLocalFiles;
+
+  /// No description provided for @websiteLocalFilesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported papers and generated reading content are stored on your device.'**
+  String get websiteLocalFilesBody;
+
+  /// No description provided for @websiteOcrService.
+  ///
+  /// In en, this message translates to:
+  /// **'Document extraction sends the paper to your selected PaddleOCR or MinerU service.'**
+  String get websiteOcrService;
+
+  /// No description provided for @websiteAiServiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Translation & chat'**
+  String get websiteAiServiceTitle;
+
+  /// No description provided for @websiteAiService.
+  ///
+  /// In en, this message translates to:
+  /// **'Relevant text or figures are sent to your configured model provider. Availability, quotas, and costs depend on that provider.'**
+  String get websiteAiService;
+
+  /// No description provided for @websiteSyncService.
+  ///
+  /// In en, this message translates to:
+  /// **'When enabled, data is transferred to your configured Zotero, S3, or WebDAV service.'**
+  String get websiteSyncService;
+
+  /// No description provided for @websiteNeedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Found an issue or something missing from this guide?'**
+  String get websiteNeedHelp;
+
+  /// No description provided for @websiteOnThisPage.
+  ///
+  /// In en, this message translates to:
+  /// **'On this page'**
+  String get websiteOnThisPage;
+
+  /// No description provided for @websiteMobilePdfAlt.
+  ///
+  /// In en, this message translates to:
+  /// **'Original PDF reading on mobile, preserving columns and figures'**
+  String get websiteMobilePdfAlt;
+
+  /// No description provided for @websiteOriginalPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to the original'**
+  String get websiteOriginalPdf;
+
+  /// No description provided for @websiteOriginalPdfBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the original pages and layout. Return to the PDF to check formulas, citations, or context.'**
+  String get websiteOriginalPdfBody;
 }
 
 class _AppLocalizationsDelegate

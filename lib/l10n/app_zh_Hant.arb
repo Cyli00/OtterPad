@@ -1114,5 +1114,45 @@
   "chatReadLink": "讀取連結",
   "chatExpandQuote": "展開引用",
   "chatCollapseQuote": "收合引用",
-  "chatSourceNotFound": "找不到對應原文，文獻內容可能已更新。"
+  "chatSourceNotFound": "找不到對應原文，文獻內容可能已更新。",
+  "tableCopyTsv": "複製到試算表（TSV）",
+  "tableCopyMarkdown": "複製 Markdown",
+  "tableFlattenNote": "TSV 和 Markdown 會展平合併儲存格；內容僅放在起始格。",
+  "tableSourcePages": "來源頁碼：{pages}",
+  "figureFallback": "{kind, select, table{表格} chart{圖表} other{插圖}} · 第 {page} 頁",
+  "@tableSourcePages": {
+    "placeholders": {
+      "pages": {
+        "type": "String"
+      }
+    }
+  },
+  "@figureFallback": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "page": {
+        "type": "int"
+      }
+    }
+  },
+  "figureDataLayer": "解析遮罩",
+  "figureDataSource": "來自文獻擷取 JSON · 不請求 AI",
+  "figureDataUnavailable": "此圖沒有可用的表格或圖表解析內容，仍可查看與匯出原圖。",
+  "figureDataLoadFailed": "無法讀取擷取 JSON，仍可查看與匯出原圖。",
+  "figureDataStale": "擷取 JSON 與此圖的來源版本不一致，請重新擷取圖表後查看解析內容。",
+  "figureDataIncomplete": "部分來源區塊沒有可用資料，遮罩及其匯出僅包含已取得的部分。",
+  "figureFitImage": "符合視窗",
+  "figureOverlayOpacity": "遮罩不透明度",
+  "figureCopyCaption": "複製圖說",
+  "figureExport": "匯出",
+  "figureExportHtml": "表格／圖表資料（.html）",
+  "figureExportTsv": "試算表資料（.tsv）",
+  "figureExportMarkdown": "表格／圖表資料（.md）",
+  "figurePrevious": "上一張",
+  "figureNext": "下一張",
+  "figureCaption": "圖說",
+  "figureHideCaption": "收合圖說",
+  "figureShowCaption": "展開圖說"
 }

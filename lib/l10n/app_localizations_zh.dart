@@ -3176,6 +3176,447 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get metadataConnectionFailed => '无法连接元数据服务，请检查网络。';
+
+  @override
+  String get tableCopyTsv => '复制到电子表格（TSV）';
+
+  @override
+  String get tableCopyMarkdown => '复制 Markdown';
+
+  @override
+  String get tableFlattenNote => 'TSV 和 Markdown 会展平合并单元格；内容仅放在起始格。';
+
+  @override
+  String tableSourcePages(String pages) {
+    return '来源页码：$pages';
+  }
+
+  @override
+  String figureFallback(String kind, int page) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'table': '表格',
+      'chart': '图表',
+      'other': '插图',
+    });
+    return '$_temp0 · 第 $page 页';
+  }
+
+  @override
+  String get figureDataLayer => '解析蒙版';
+
+  @override
+  String get figureDataSource => '来自文献提取 JSON · 不请求 AI';
+
+  @override
+  String get figureDataUnavailable => '此图没有可用的表格或图表解析内容，仍可查看与导出原图。';
+
+  @override
+  String get figureDataLoadFailed => '无法读取提取 JSON，仍可查看与导出原图。';
+
+  @override
+  String get figureDataStale => '提取 JSON 与此图的来源版本不一致，请重新提取图表后查看解析内容。';
+
+  @override
+  String get figureDataIncomplete => '部分来源块没有可用数据，蒙版及其导出仅包含已取得的部分。';
+
+  @override
+  String get figureFitImage => '适应窗口';
+
+  @override
+  String get figureOverlayOpacity => '蒙版不透明度';
+
+  @override
+  String get figureCopyCaption => '复制题注';
+
+  @override
+  String get figureExport => '导出';
+
+  @override
+  String get figureExportHtml => '表格／图表数据（.html）';
+
+  @override
+  String get figureExportTsv => '电子表格数据（.tsv）';
+
+  @override
+  String get figureExportMarkdown => '表格／图表数据（.md）';
+
+  @override
+  String get figurePrevious => '上一张';
+
+  @override
+  String get figureNext => '下一张';
+
+  @override
+  String get figureCaption => '题注';
+
+  @override
+  String get figureHideCaption => '收起题注';
+
+  @override
+  String get figureShowCaption => '展开题注';
+
+  @override
+  String get websiteTitle => 'OtterPad · 把论文读进去';
+
+  @override
+  String get websiteDocsTitle => '开始使用 · OtterPad 使用指南';
+
+  @override
+  String get websiteDescription =>
+      '在手机和桌面上阅读与管理学术文献。PDF 重排、双语对照、图表提取与全文问答，让注意力回到论文。';
+
+  @override
+  String get websiteSkip => '跳转到正文';
+
+  @override
+  String get websiteNavigation => '主导航';
+
+  @override
+  String get websiteFeatures => '功能';
+
+  @override
+  String get websiteGuide => '使用指南';
+
+  @override
+  String get websiteDownload => '下载';
+
+  @override
+  String get websiteDownloadApp => '下载 OtterPad';
+
+  @override
+  String get websiteGetStarted => '开始使用';
+
+  @override
+  String get websiteResources => '资源';
+
+  @override
+  String get websiteFooterDescription => '为手机与桌面上的学术阅读而做。';
+
+  @override
+  String get websiteReleases => '版本发布';
+
+  @override
+  String get websiteFeedback => '反馈问题';
+
+  @override
+  String get websiteOpenSource => '开源';
+
+  @override
+  String get websiteEyebrow => '学术文献阅读与管理';
+
+  @override
+  String get websiteHeroFirst => '在手机和桌面，';
+
+  @override
+  String get websiteHeroSecond => '好好读论文。';
+
+  @override
+  String get websiteHeroDescription =>
+      '把复杂的 PDF 变成好读的文献。重排、翻译、图表与问答，放在同一个阅读空间里。';
+
+  @override
+  String get websitePreview => '阅读界面预览';
+
+  @override
+  String get websiteBilingual => '双语重排';
+
+  @override
+  String get websitePdf => 'PDF 对照';
+
+  @override
+  String get websiteLibrary => '文献库';
+
+  @override
+  String get websiteDesktopPreview => '桌面端 · 主题预览';
+
+  @override
+  String get websiteReadingAlt => 'OtterPad 桌面阅读器，左侧英文原文、右侧中文译文，正文中保留论文图表';
+
+  @override
+  String get websitePdfAlt => 'OtterPad PDF 原文与译文左右对照，保留论文版面';
+
+  @override
+  String get websiteLibraryAlt => 'OtterPad 文献库中的论文封面、期刊信息和阅读进度';
+
+  @override
+  String get websiteReadingCaption => '原文与译文并排，图表留在上下文里。';
+
+  @override
+  String get websitePdfCaption => '保留熟悉的 PDF 版面，对照阅读原文与译文。';
+
+  @override
+  String get websiteLibraryCaption => '封面、期刊与阅读进度，让下一篇文献更容易找到。';
+
+  @override
+  String get websiteReadingGuide => '阅读指南';
+
+  @override
+  String get websiteLibraryGuide => '了解文献管理';
+
+  @override
+  String get websiteSummaryRead => '读得顺';
+
+  @override
+  String get websiteSummaryReadBody => '复杂版面重新排，原文与译文对照。字号与主题按你的习惯调整。';
+
+  @override
+  String get websiteSummaryUnderstand => '看得明白';
+
+  @override
+  String get websiteSummaryUnderstandBody => '把图表展开，带着全文提问。需要核对时，回到原文继续读。';
+
+  @override
+  String get websiteSummaryOrganize => '放得有序';
+
+  @override
+  String get websiteSummaryOrganizeBody => '检索、分类、Zotero 同步与云备份，让读过的文献有处可寻。';
+
+  @override
+  String get websiteReadingLabel => '阅读与理解';
+
+  @override
+  String get websiteMobileTitle => '小屏幕，也容得下整篇论文。';
+
+  @override
+  String get websiteMobileBody =>
+      '从双栏 PDF 到连贯的段落，在通勤或桌前都能接着读。图表、译文和问题，始终围绕同一篇文献。';
+
+  @override
+  String get websiteMobileReadingAlt => '手机上的双语重排阅读，英文段落与中文译文上下排列';
+
+  @override
+  String get websiteMobileFiguresAlt => '手机上的论文图表列表，可单独打开查看';
+
+  @override
+  String get websiteReflow => '适合小屏的重排';
+
+  @override
+  String get websiteReflowBody =>
+      '通过 PaddleOCR 或 MinerU 解析版面，把段落、公式与图表整理为可连续阅读的内容。';
+
+  @override
+  String get websiteFigures => '图表提取';
+
+  @override
+  String get websiteFiguresBody => '图表单独打开、缩放、复制与分享。看清细节，再回到正文。';
+
+  @override
+  String get websiteChat => '全文问答';
+
+  @override
+  String get websiteScreenshotNote => '截图来自实际应用，展示配色已适配网站主题；界面可能随版本变化。';
+
+  @override
+  String get websiteLibraryLabel => '文献与工作流';
+
+  @override
+  String get websiteWorkspaceTitle => '读过的，和接下来要读的。';
+
+  @override
+  String get websiteSearchTitle => '找到文献，也理清文献';
+
+  @override
+  String get websiteSearchBody => '多源检索与元数据解析，配合分类、标签和 AI 自动命名，整理自己的文献库。';
+
+  @override
+  String get websiteZoteroTitle => '接上已有的文献库';
+
+  @override
+  String get websiteZoteroBody => '支持 Zotero 本地文献导入与双向同步，延续已有的文献管理习惯。';
+
+  @override
+  String get websiteBackupTitle => '备份到自己的存储';
+
+  @override
+  String get websiteBackupBody => '连接 S3 或 WebDAV，备份与恢复文献数据，也可以设置自动备份。';
+
+  @override
+  String get websiteModelTitle => '带着全文，向模型提问';
+
+  @override
+  String get websiteModelBody =>
+      '基于提取的正文与图表问答、翻译段落。支持 OpenAI、Anthropic、Google 与兼容接口。';
+
+  @override
+  String get websiteServiceNote => '文献保存在本地。OCR、翻译与 AI 问答会使用你配置的服务；同步和备份需另行配置。';
+
+  @override
+  String get websiteLearnMore => '服务与数据';
+
+  @override
+  String get websiteDownloadTitle => '从下一篇论文开始。';
+
+  @override
+  String get websiteDownloadBody => '选择设备对应的安装包。源代码与版本记录都在 GitHub 上公开。';
+
+  @override
+  String get websiteViewDownloads => '前往 GitHub Releases';
+
+  @override
+  String get websiteWindowsPackage => 'x64 · 安装器或便携 ZIP';
+
+  @override
+  String get websiteMacNote =>
+      'macOS 版本适用于 Apple 芯片，尚未签名；首次打开需在系统「隐私与安全性」中放行。Linux 暂不支持。';
+
+  @override
+  String get websiteInstallation => '下载与安装';
+
+  @override
+  String get websiteOverview => '概览';
+
+  @override
+  String get websiteFirstPaper => '读第一篇论文';
+
+  @override
+  String get websiteReadingAndTranslation => '阅读与翻译';
+
+  @override
+  String get websiteSync => '同步与备份';
+
+  @override
+  String get websiteServices => '服务与数据';
+
+  @override
+  String get websiteViewSource => '查看源代码';
+
+  @override
+  String get websiteDocsIntro =>
+      'OtterPad 是一款开源的学术文献阅读与管理工具，支持 Android、Windows 和 macOS。';
+
+  @override
+  String get websiteDocsIntroBody =>
+      '这份指南从导入第一篇 PDF 开始，介绍重排阅读、翻译、图表与问答，以及文献库的同步和备份。';
+
+  @override
+  String get websiteBeforeStart => '开始前';
+
+  @override
+  String get websiteBeforeStartBody =>
+      '可以先导入 PDF 阅读原文。重排需要配置 OCR 服务；翻译和问答需要配置 AI 服务与模型。两类服务分别设置。';
+
+  @override
+  String get websiteInstallBody =>
+      '打开 GitHub Releases，按设备与架构选择安装包。升级前可以在应用中备份现有文献数据。';
+
+  @override
+  String get websitePlatform => '平台';
+
+  @override
+  String get websitePackage => '安装包';
+
+  @override
+  String get websiteAndroidInstall => '现代设备选 arm64-v8a；旧款 32 位设备选 armeabi-v7a。';
+
+  @override
+  String get websiteStepImport => '导入一份 PDF';
+
+  @override
+  String get websiteStepImportBody =>
+      '在文献库中使用导入入口选择本地 PDF，然后打开文献。你可以先用 PDF 模式阅读原始版面。';
+
+  @override
+  String get websiteStepExtract => '配置 OCR 并提取内容';
+
+  @override
+  String get websiteStepExtractBody =>
+      '在设置的 OCR 页面选择 PaddleOCR 或 MinerU，填入对应服务的 Token。回到文献，运行内容提取，完成后即可使用重排视图与提取的图表。';
+
+  @override
+  String get websiteStepRead => '选择阅读方式';
+
+  @override
+  String get websiteStepReadBody =>
+      '在原始 PDF 与重排视图间切换。需要译文时，先在 AI 设置中添加服务商和模型，再发起翻译，使用双语对照阅读。';
+
+  @override
+  String get websiteReadingDoc =>
+      'PDF 模式保留原始页码与排版；重排模式把内容整理成连续段落，更适合手机。桌面上可以并排阅读原文和译文，根据阅读任务选择视图。';
+
+  @override
+  String get websiteTranslationTitle => '段落翻译与双语对照';
+
+  @override
+  String get websiteTranslationDoc =>
+      '翻译按段落进行，并保护公式、代码块和引用编号。已完成的译文会缓存；有未完成的段落时，可重试继续翻译。';
+
+  @override
+  String get websiteAppearanceDoc =>
+      '在阅读外观设置中调整字号、字体和主题。阅读时可以高亮、添加批注，并通过大纲定位章节。';
+
+  @override
+  String get websiteFiguresDoc =>
+      '内容提取完成后，可从图表列表打开论文中的图片与表格，放大查看，并使用界面提供的复制或分享操作。';
+
+  @override
+  String get websiteFiguresDetail =>
+      '图表识别结果取决于原始 PDF 和 OCR 服务。需要核对题注、数值或图文关系时，以原始页面为准。';
+
+  @override
+  String get websiteAiDoc =>
+      '在 AI 设置中添加 OpenAI、Anthropic、Google 或兼容服务商，填写接口信息并选择模型。提取全文后，在阅读器中打开问答，围绕当前论文提问。';
+
+  @override
+  String get websiteAiTipTitle => '从具体问题开始';
+
+  @override
+  String get websiteAiTipBody =>
+      '例如：“作者如何设置对照组？”“图 2 的结果支持了哪一个结论？”带着明确的问题，更容易回到相应段落核对。';
+
+  @override
+  String get websiteAiVerify => '问答使用提取的正文与图表作为上下文，但模型仍可能出错。引用结论之前，请对照原文确认。';
+
+  @override
+  String get websiteLibraryDoc =>
+      '通过 DOI、PubMed、Crossref、Semantic Scholar 等来源检索与解析元数据，为文献补齐标题、作者和期刊信息。';
+
+  @override
+  String get websiteLibraryDetail =>
+      '使用分类与标签整理阅读主题，通过封面和阅读进度找回文献。配置 AI 后，也可使用自动命名来整理文件。';
+
+  @override
+  String get websiteZoteroDoc =>
+      '在数据管理中配置 Zotero API Key，进行文献库同步。也可以使用本地导入入口，从已有的 Zotero 文献库导入内容。';
+
+  @override
+  String get websiteBackupDoc =>
+      '在数据管理中选择 S3 或 WebDAV，配置自己的存储服务，执行备份或恢复。需要定期备份时，可以启用并配置自动备份。';
+
+  @override
+  String get websiteServicesIntro => '不同功能使用的数据范围不同。是否调用外部服务，取决于你使用的功能和配置。';
+
+  @override
+  String get websiteLocalFiles => '本地阅读';
+
+  @override
+  String get websiteLocalFilesBody => '导入的文献与已生成的阅读内容保存在设备上。';
+
+  @override
+  String get websiteOcrService => '文档提取会把待解析的文献发送给选定的 PaddleOCR 或 MinerU 服务。';
+
+  @override
+  String get websiteAiServiceTitle => '翻译与问答';
+
+  @override
+  String get websiteAiService => '相关文本或图表会发送给所配置的模型服务商；可用额度与费用由服务商决定。';
+
+  @override
+  String get websiteSyncService => '启用后，数据会传输到你配置的 Zotero、S3 或 WebDAV 服务。';
+
+  @override
+  String get websiteNeedHelp => '遇到问题，或想补充这份指南？';
+
+  @override
+  String get websiteOnThisPage => '本页内容';
+
+  @override
+  String get websiteMobilePdfAlt => '手机上的原始 PDF 阅读，保留双栏版面与文献图表';
+
+  @override
+  String get websiteOriginalPdf => '随时回到原文';
+
+  @override
+  String get websiteOriginalPdfBody => '保留 PDF 的页码与排版。需要核对公式、引用或上下文时，回到原始页面。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -6303,4 +6744,82 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get chatSourceNotFound => '找不到對應原文，文獻內容可能已更新。';
+
+  @override
+  String get tableCopyTsv => '複製到試算表（TSV）';
+
+  @override
+  String get tableCopyMarkdown => '複製 Markdown';
+
+  @override
+  String get tableFlattenNote => 'TSV 和 Markdown 會展平合併儲存格；內容僅放在起始格。';
+
+  @override
+  String tableSourcePages(String pages) {
+    return '來源頁碼：$pages';
+  }
+
+  @override
+  String figureFallback(String kind, int page) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'table': '表格',
+      'chart': '圖表',
+      'other': '插圖',
+    });
+    return '$_temp0 · 第 $page 頁';
+  }
+
+  @override
+  String get figureDataLayer => '解析遮罩';
+
+  @override
+  String get figureDataSource => '來自文獻擷取 JSON · 不請求 AI';
+
+  @override
+  String get figureDataUnavailable => '此圖沒有可用的表格或圖表解析內容，仍可查看與匯出原圖。';
+
+  @override
+  String get figureDataLoadFailed => '無法讀取擷取 JSON，仍可查看與匯出原圖。';
+
+  @override
+  String get figureDataStale => '擷取 JSON 與此圖的來源版本不一致，請重新擷取圖表後查看解析內容。';
+
+  @override
+  String get figureDataIncomplete => '部分來源區塊沒有可用資料，遮罩及其匯出僅包含已取得的部分。';
+
+  @override
+  String get figureFitImage => '符合視窗';
+
+  @override
+  String get figureOverlayOpacity => '遮罩不透明度';
+
+  @override
+  String get figureCopyCaption => '複製圖說';
+
+  @override
+  String get figureExport => '匯出';
+
+  @override
+  String get figureExportHtml => '表格／圖表資料（.html）';
+
+  @override
+  String get figureExportTsv => '試算表資料（.tsv）';
+
+  @override
+  String get figureExportMarkdown => '表格／圖表資料（.md）';
+
+  @override
+  String get figurePrevious => '上一張';
+
+  @override
+  String get figureNext => '下一張';
+
+  @override
+  String get figureCaption => '圖說';
+
+  @override
+  String get figureHideCaption => '收合圖說';
+
+  @override
+  String get figureShowCaption => '展開圖說';
 }
