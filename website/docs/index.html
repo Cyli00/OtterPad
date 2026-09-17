@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FFFFFF">
+  <title>开始使用 · OtterPad 使用指南</title>
+  <meta name="description" content="在手机和桌面上阅读与管理学术文献。PDF 重排、双语对照、图表提取与全文问答，让注意力回到论文。">
+  <meta property="og:title" content="开始使用 · OtterPad 使用指南">
+  <meta property="og:description" content="在手机和桌面上阅读与管理学术文献。PDF 重排、双语对照、图表提取与全文问答，让注意力回到论文。">
+  <meta property="og:image" content="../assets/desktop-reading.webp">
+  <link rel="icon" type="image/png" href="../assets/otter-swim.png">
+  <link rel="stylesheet" href="../style.css">
+  <script src="../site.js" defer></script>
+</head>
+<body class="docs-page">
+  <a class="skip-link" href="#main">跳转到正文</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="../index.html"><img src="../assets/otter-swim.png" alt="" width="34" height="34">OtterPad</a>
+      <nav class="desktop-nav" aria-label="主导航">
+        <a href="../index.html#features">功能</a>
+        <a href="../docs/index.html" class="docs-nav-link">使用指南</a>
+        <a href="https://github.com/Cyli00/OtterPad">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+      <div class="header-actions">
+        <a class="language-link" href="../en/docs/index.html" data-language-link>English</a>
+        <a class="button button-small" href="../index.html#download">下载 <span aria-hidden="true">↓</span></a>
+        <details class="mobile-menu">
+          <summary aria-label="主导航"><span class="menu-icon" aria-hidden="true"></span></summary>
+          <nav aria-label="主导航">
+            <a href="../index.html#features">功能</a>
+            <a href="../docs/index.html">使用指南</a>
+            <a href="https://github.com/Cyli00/OtterPad">GitHub ↗</a>
+          </nav>
+        </details>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-layout frame">
+    <aside class="docs-sidebar">
+      <details class="docs-directory" open>
+        <summary>使用指南 <span aria-hidden="true">⌄</span></summary>
+        <nav aria-label="使用指南">
+          <p>开始使用</p>
+          <a href="#overview">概览</a>
+          <a href="#installation">下载与安装</a>
+          <a href="#first-paper">读第一篇论文</a>
+          <p>阅读与理解</p>
+          <a href="#reading">阅读与翻译</a>
+          <a href="#figures">图表提取</a>
+          <a href="#ai">全文问答</a>
+          <p>文献与工作流</p>
+          <a href="#library">文献库</a>
+          <a href="#sync">同步与备份</a>
+          <a href="#services">服务与数据</a>
+        </nav>
+      </details>
+      <a class="sidebar-source" href="https://github.com/Cyli00/OtterPad">查看源代码 ↗</a>
+    </aside>
+    <main id="main" class="docs-main">
+      <div class="doc-breadcrumb">OtterPad <span>/</span> 使用指南</div>
+      <section id="overview" class="doc-section">
+        <h1>开始使用</h1>
+        <p class="doc-lead">OtterPad 是一款开源的学术文献阅读与管理工具，支持 Android、Windows 和 macOS。</p>
+        <p>这份指南从导入第一篇 PDF 开始，介绍重排阅读、翻译、图表与问答，以及文献库的同步和备份。</p>
+        <div class="doc-callout"><strong>开始前</strong><p>可以先导入 PDF 阅读原文。重排需要配置 OCR 服务；翻译和问答需要配置 AI 服务与模型。两类服务分别设置。</p></div>
+        <div class="doc-quicklinks"><a href="#installation">下载与安装 <span aria-hidden="true">↓</span></a><a href="#first-paper">读第一篇论文 <span aria-hidden="true">↓</span></a></div>
+      </section>
+      <section id="installation" class="doc-section">
+        <h2><a href="#installation">下载与安装</a></h2>
+        <p>打开 GitHub Releases，按设备与架构选择安装包。升级前可以在应用中备份现有文献数据。</p>
+        <div class="table-scroll"><table><thead><tr><th scope="col">平台</th><th scope="col">安装包</th></tr></thead><tbody>
+          <tr><td>Android</td><td>现代设备选 arm64-v8a；旧款 32 位设备选 armeabi-v7a。</td></tr>
+          <tr><td>Windows</td><td>x64 · 安装器或便携 ZIP</td></tr>
+          <tr><td>macOS</td><td>DMG · Apple silicon</td></tr>
+        </tbody></table></div>
+        <p class="doc-note">macOS 版本适用于 Apple 芯片，尚未签名；首次打开需在系统「隐私与安全性」中放行。Linux 暂不支持。</p>
+        <a class="button button-outline" href="https://github.com/Cyli00/OtterPad/releases">前往 GitHub Releases <span aria-hidden="true">↗</span></a>
+      </section>
+      <section id="first-paper" class="doc-section">
+        <h2><a href="#first-paper">读第一篇论文</a></h2>
+        <ol class="quick-start">
+          <li><h3>导入一份 PDF</h3><p>在文献库中使用导入入口选择本地 PDF，然后打开文献。你可以先用 PDF 模式阅读原始版面。</p></li>
+          <li><h3>配置 OCR 并提取内容</h3><p>在设置的 OCR 页面选择 PaddleOCR 或 MinerU，填入对应服务的 Token。回到文献，运行内容提取，完成后即可使用重排视图与提取的图表。</p></li>
+          <li><h3>选择阅读方式</h3><p>在原始 PDF 与重排视图间切换。需要译文时，先在 AI 设置中添加服务商和模型，再发起翻译，使用双语对照阅读。</p></li>
+        </ol>
+      </section>
+      <section id="reading" class="doc-section">
+        <h2><a href="#reading">阅读与翻译</a></h2>
+        <p>PDF 模式保留原始页码与排版；重排模式把内容整理成连续段落，更适合手机。桌面上可以并排阅读原文和译文，根据阅读任务选择视图。</p>
+        <figure class="doc-image"><img src="../assets/desktop-pdf-bilingual.webp" alt="OtterPad PDF 原文与译文左右对照，保留论文版面" width="2359" height="1623" loading="lazy"><figcaption>保留熟悉的 PDF 版面，对照阅读原文与译文。</figcaption></figure>
+        <h3>段落翻译与双语对照</h3><p>翻译按段落进行，并保护公式、代码块和引用编号。已完成的译文会缓存；有未完成的段落时，可重试继续翻译。</p>
+        <p>在阅读外观设置中调整字号、字体和主题。阅读时可以高亮、添加批注，并通过大纲定位章节。</p>
+      </section>
+      <section id="figures" class="doc-section">
+        <h2><a href="#figures">图表提取</a></h2>
+        <p>内容提取完成后，可从图表列表打开论文中的图片与表格，放大查看，并使用界面提供的复制或分享操作。</p>
+        <p>图表识别结果取决于原始 PDF 和 OCR 服务。需要核对题注、数值或图文关系时，以原始页面为准。</p>
+      </section>
+      <section id="ai" class="doc-section">
+        <h2><a href="#ai">全文问答</a></h2>
+        <p>在 AI 设置中添加 OpenAI、Anthropic、Google 或兼容服务商，填写接口信息并选择模型。提取全文后，在阅读器中打开问答，围绕当前论文提问。</p>
+        <div class="doc-callout"><strong>从具体问题开始</strong><p>例如：“作者如何设置对照组？”“图 2 的结果支持了哪一个结论？”带着明确的问题，更容易回到相应段落核对。</p></div>
+        <p>问答使用提取的正文与图表作为上下文，但模型仍可能出错。引用结论之前，请对照原文确认。</p>
+      </section>
+      <section id="library" class="doc-section">
+        <h2><a href="#library">文献库</a></h2>
+        <p>通过 DOI、PubMed、Crossref、Semantic Scholar 等来源检索与解析元数据，为文献补齐标题、作者和期刊信息。</p>
+        <p>使用分类与标签整理阅读主题，通过封面和阅读进度找回文献。配置 AI 后，也可使用自动命名来整理文件。</p>
+      </section>
+      <section id="sync" class="doc-section">
+        <h2><a href="#sync">同步与备份</a></h2>
+        <h3>Zotero</h3><p>在数据管理中配置 Zotero API Key，进行文献库同步。也可以使用本地导入入口，从已有的 Zotero 文献库导入内容。</p>
+        <h3>S3 / WebDAV</h3><p>在数据管理中选择 S3 或 WebDAV，配置自己的存储服务，执行备份或恢复。需要定期备份时，可以启用并配置自动备份。</p>
+      </section>
+      <section id="services" class="doc-section">
+        <h2><a href="#services">服务与数据</a></h2>
+        <p>不同功能使用的数据范围不同。是否调用外部服务，取决于你使用的功能和配置。</p>
+        <dl class="service-list">
+          <div><dt>本地阅读</dt><dd>导入的文献与已生成的阅读内容保存在设备上。</dd></div>
+          <div><dt>OCR</dt><dd>文档提取会把待解析的文献发送给选定的 PaddleOCR 或 MinerU 服务。</dd></div>
+          <div><dt>翻译与问答</dt><dd>相关文本或图表会发送给所配置的模型服务商；可用额度与费用由服务商决定。</dd></div>
+          <div><dt>同步与备份</dt><dd>启用后，数据会传输到你配置的 Zotero、S3 或 WebDAV 服务。</dd></div>
+        </dl>
+      </section>
+      <div class="doc-end"><p>遇到问题，或想补充这份指南？</p><a class="text-link" href="https://github.com/Cyli00/OtterPad/issues">反馈问题 ↗</a></div>
+    </main>
+    <aside class="docs-toc"><p>本页内容</p><nav aria-label="本页内容">
+      <a href="#overview">概览</a>
+      <a href="#installation">下载与安装</a>
+      <a href="#first-paper">读第一篇论文</a>
+      <a href="#reading">阅读与翻译</a>
+      <a href="#figures">图表提取</a>
+      <a href="#ai">全文问答</a>
+      <a href="#library">文献库</a>
+      <a href="#sync">同步与备份</a>
+      <a href="#services">服务与数据</a>
+    </nav></aside>
+  </div>
+  <footer class="site-footer frame">
+    <div class="footer-top">
+      <div><a class="brand" href="../index.html">OtterPad</a><p>为手机与桌面上的学术阅读而做。</p></div>
+      <nav aria-label="资源">
+        <a href="../docs/index.html">使用指南</a>
+        <a href="https://github.com/Cyli00/OtterPad/releases">版本发布 ↗</a>
+        <a href="https://github.com/Cyli00/OtterPad/issues">反馈问题 ↗</a>
+      </nav>
+    </div>
+    <div class="footer-bottom"><span>© 2026 OtterPad</span><a href="https://github.com/Cyli00/OtterPad/blob/HEAD/LICENSE">GPL-3.0 · 开源 ↗</a></div>
+  </footer>
+</body>
+</html>

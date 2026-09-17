@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FFFFFF">
+  <title>Getting started · OtterPad guide</title>
+  <meta name="description" content="Read and manage academic papers on mobile and desktop. PDF reflow, bilingual reading, figure extraction, and full-text AI chat.">
+  <meta property="og:title" content="Getting started · OtterPad guide">
+  <meta property="og:description" content="Read and manage academic papers on mobile and desktop. PDF reflow, bilingual reading, figure extraction, and full-text AI chat.">
+  <meta property="og:image" content="../../assets/desktop-reading.webp">
+  <link rel="icon" type="image/png" href="../../assets/otter-swim.png">
+  <link rel="stylesheet" href="../../style.css">
+  <script src="../../site.js" defer></script>
+</head>
+<body class="docs-page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="../../en/index.html"><img src="../../assets/otter-swim.png" alt="" width="34" height="34">OtterPad</a>
+      <nav class="desktop-nav" aria-label="Main navigation">
+        <a href="../../en/index.html#features">Features</a>
+        <a href="../../en/docs/index.html" class="docs-nav-link">Docs</a>
+        <a href="https://github.com/Cyli00/OtterPad">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+      <div class="header-actions">
+        <a class="language-link" href="../../docs/index.html" data-language-link>简体中文</a>
+        <a class="button button-small" href="../../en/index.html#download">Download <span aria-hidden="true">↓</span></a>
+        <details class="mobile-menu">
+          <summary aria-label="Main navigation"><span class="menu-icon" aria-hidden="true"></span></summary>
+          <nav aria-label="Main navigation">
+            <a href="../../en/index.html#features">Features</a>
+            <a href="../../en/docs/index.html">Docs</a>
+            <a href="https://github.com/Cyli00/OtterPad">GitHub ↗</a>
+          </nav>
+        </details>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-layout frame">
+    <aside class="docs-sidebar">
+      <details class="docs-directory" open>
+        <summary>Docs <span aria-hidden="true">⌄</span></summary>
+        <nav aria-label="Docs">
+          <p>Getting started</p>
+          <a href="#overview">Overview</a>
+          <a href="#installation">Installation</a>
+          <a href="#first-paper">Your first paper</a>
+          <p>Reading &amp; understanding</p>
+          <a href="#reading">Reading &amp; translation</a>
+          <a href="#figures">Figures &amp; tables</a>
+          <a href="#ai">Full-text AI chat</a>
+          <p>Library &amp; workflow</p>
+          <a href="#library">Library</a>
+          <a href="#sync">Sync &amp; backup</a>
+          <a href="#services">Services &amp; data</a>
+        </nav>
+      </details>
+      <a class="sidebar-source" href="https://github.com/Cyli00/OtterPad">View source ↗</a>
+    </aside>
+    <main id="main" class="docs-main">
+      <div class="doc-breadcrumb">OtterPad <span>/</span> Docs</div>
+      <section id="overview" class="doc-section">
+        <h1>Getting started</h1>
+        <p class="doc-lead">OtterPad is an open-source academic reader and library manager for Android, Windows, and macOS.</p>
+        <p>This guide starts with importing a PDF, then covers reflow, translation, figures, AI chat, and keeping your library in sync.</p>
+        <div class="doc-callout"><strong>Before you begin</strong><p>You can start by importing and reading a PDF. Reflow requires an OCR service; translation and chat require an AI provider and model. These are configured separately.</p></div>
+        <div class="doc-quicklinks"><a href="#installation">Installation <span aria-hidden="true">↓</span></a><a href="#first-paper">Your first paper <span aria-hidden="true">↓</span></a></div>
+      </section>
+      <section id="installation" class="doc-section">
+        <h2><a href="#installation">Installation</a></h2>
+        <p>Open GitHub Releases and choose the package for your device and architecture. You can back up your library in the app before upgrading.</p>
+        <div class="table-scroll"><table><thead><tr><th scope="col">Platform</th><th scope="col">Package</th></tr></thead><tbody>
+          <tr><td>Android</td><td>Choose arm64-v8a for modern devices, or armeabi-v7a for older 32-bit devices.</td></tr>
+          <tr><td>Windows</td><td>x64 · Installer or portable ZIP</td></tr>
+          <tr><td>macOS</td><td>DMG · Apple silicon</td></tr>
+        </tbody></table></div>
+        <p class="doc-note">The macOS build is for Apple silicon and is unsigned. Allow it in Privacy &amp; Security on first launch. Linux is not supported yet.</p>
+        <a class="button button-outline" href="https://github.com/Cyli00/OtterPad/releases">View GitHub Releases <span aria-hidden="true">↗</span></a>
+      </section>
+      <section id="first-paper" class="doc-section">
+        <h2><a href="#first-paper">Your first paper</a></h2>
+        <ol class="quick-start">
+          <li><h3>Import a PDF</h3><p>Use the import action in the library to select a local PDF, then open it. Start in PDF mode to read the original layout.</p></li>
+          <li><h3>Set up OCR and extract the content</h3><p>In OCR settings, choose PaddleOCR or MinerU and enter the service token. Return to the paper and extract its content to use reflow and extracted figures.</p></li>
+          <li><h3>Choose how to read</h3><p>Switch between the original PDF and reflow. To read a translation, add a provider and model in AI settings, then translate the paper and use bilingual view.</p></li>
+        </ol>
+      </section>
+      <section id="reading" class="doc-section">
+        <h2><a href="#reading">Reading &amp; translation</a></h2>
+        <p>PDF mode preserves pages and layout. Reflow creates continuous paragraphs for smaller screens. On desktop, you can read the original and translation side by side.</p>
+        <figure class="doc-image"><img src="../../assets/desktop-pdf-bilingual.webp" alt="Original and translated PDF pages side by side in OtterPad" width="2359" height="1623" loading="lazy"><figcaption>Keep the original PDF layout while reading its translation.</figcaption></figure>
+        <h3>Paragraph translation &amp; bilingual reading</h3><p>Translation works paragraph by paragraph and protects formulas, code blocks, and citation markers. Completed translations are cached, and unfinished paragraphs can be retried.</p>
+        <p>Adjust font size, typeface, and theme in reading appearance settings. Highlight text, add annotations, and navigate sections through the outline.</p>
+      </section>
+      <section id="figures" class="doc-section">
+        <h2><a href="#figures">Figures &amp; tables</a></h2>
+        <p>After extraction, open images and tables from the figure list, zoom in, and use the available copy or share actions.</p>
+        <p>Extraction depends on the PDF and OCR service. Check the original page when verifying captions, values, or the relationship between a figure and its text.</p>
+      </section>
+      <section id="ai" class="doc-section">
+        <h2><a href="#ai">Full-text AI chat</a></h2>
+        <p>Add OpenAI, Anthropic, Google, or a compatible provider in AI settings, configure the connection, and select a model. After extracting the paper, open chat in the reader to ask questions about it.</p>
+        <div class="doc-callout"><strong>Start with a specific question</strong><p>Try “How did the authors set up the control group?” or “Which conclusion does Figure 2 support?” A specific question makes it easier to check the answer against the paper.</p></div>
+        <p>Chat uses extracted text and figures as context, but model responses can still be wrong. Check the source before citing a conclusion.</p>
+      </section>
+      <section id="library" class="doc-section">
+        <h2><a href="#library">Library</a></h2>
+        <p>Search and resolve metadata through DOI, PubMed, Crossref, Semantic Scholar, and other sources to fill in titles, authors, and journals.</p>
+        <p>Organize topics with categories and tags, and find papers by their covers and reading progress. With an AI provider configured, you can also use automatic file naming.</p>
+      </section>
+      <section id="sync" class="doc-section">
+        <h2><a href="#sync">Sync &amp; backup</a></h2>
+        <h3>Zotero</h3><p>Configure a Zotero API key in data management to sync your library. You can also import from an existing local Zotero library.</p>
+        <h3>S3 / WebDAV</h3><p>Choose S3 or WebDAV in data management, configure your storage, and run a backup or restore. Enable automatic backups if you want a regular schedule.</p>
+      </section>
+      <section id="services" class="doc-section">
+        <h2><a href="#services">Services &amp; data</a></h2>
+        <p>Different features use different data. External service calls depend on the features you use and the services you configure.</p>
+        <dl class="service-list">
+          <div><dt>Local reading</dt><dd>Imported papers and generated reading content are stored on your device.</dd></div>
+          <div><dt>OCR</dt><dd>Document extraction sends the paper to your selected PaddleOCR or MinerU service.</dd></div>
+          <div><dt>Translation &amp; chat</dt><dd>Relevant text or figures are sent to your configured model provider. Availability, quotas, and costs depend on that provider.</dd></div>
+          <div><dt>Sync &amp; backup</dt><dd>When enabled, data is transferred to your configured Zotero, S3, or WebDAV service.</dd></div>
+        </dl>
+      </section>
+      <div class="doc-end"><p>Found an issue or something missing from this guide?</p><a class="text-link" href="https://github.com/Cyli00/OtterPad/issues">Report an issue ↗</a></div>
+    </main>
+    <aside class="docs-toc"><p>On this page</p><nav aria-label="On this page">
+      <a href="#overview">Overview</a>
+      <a href="#installation">Installation</a>
+      <a href="#first-paper">Your first paper</a>
+      <a href="#reading">Reading &amp; translation</a>
+      <a href="#figures">Figures &amp; tables</a>
+      <a href="#ai">Full-text AI chat</a>
+      <a href="#library">Library</a>
+      <a href="#sync">Sync &amp; backup</a>
+      <a href="#services">Services &amp; data</a>
+    </nav></aside>
+  </div>
+  <footer class="site-footer frame">
+    <div class="footer-top">
+      <div><a class="brand" href="../../en/index.html">OtterPad</a><p>Made for reading papers, on your phone and at your desk.</p></div>
+      <nav aria-label="Resources">
+        <a href="../../en/docs/index.html">Docs</a>
+        <a href="https://github.com/Cyli00/OtterPad/releases">Releases ↗</a>
+        <a href="https://github.com/Cyli00/OtterPad/issues">Report an issue ↗</a>
+      </nav>
+    </div>
+    <div class="footer-bottom"><span>© 2026 OtterPad</span><a href="https://github.com/Cyli00/OtterPad/blob/HEAD/LICENSE">GPL-3.0 · Open source ↗</a></div>
+  </footer>
+</body>
+</html>

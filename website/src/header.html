@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="{{lang}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FFFFFF">
+  <title>{{pageTitle}}</title>
+  <meta name="description" content="{{websiteDescription}}">
+  <meta property="og:title" content="{{pageTitle}}">
+  <meta property="og:description" content="{{websiteDescription}}">
+  <meta property="og:image" content="{{root}}assets/desktop-reading.webp">
+  <link rel="icon" type="image/png" href="{{root}}assets/otter-swim.png">
+  <link rel="stylesheet" href="{{root}}style.css">
+  <script src="{{root}}site.js" defer></script>
+</head>
+<body class="{{pageClass}}">
+  <a class="skip-link" href="#main">{{websiteSkip}}</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="{{home}}"><img src="{{root}}assets/otter-swim.png" alt="" width="34" height="34">OtterPad</a>
+      <nav class="desktop-nav" aria-label="{{websiteNavigation}}">
+        <a href="{{home}}#features">{{websiteFeatures}}</a>
+        <a href="{{docs}}" class="docs-nav-link">{{websiteGuide}}</a>
+        <a href="https://github.com/Cyli00/OtterPad">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+      <div class="header-actions">
+        <a class="language-link" href="{{languageUrl}}" data-language-link>{{languageLabel}}</a>
+        <a class="button button-small" href="{{home}}#download">{{websiteDownload}} <span aria-hidden="true">↓</span></a>
+        <details class="mobile-menu">
+          <summary aria-label="{{websiteNavigation}}"><span class="menu-icon" aria-hidden="true"></span></summary>
+          <nav aria-label="{{websiteNavigation}}">
+            <a href="{{home}}#features">{{websiteFeatures}}</a>
+            <a href="{{docs}}">{{websiteGuide}}</a>
+            <a href="https://github.com/Cyli00/OtterPad">GitHub ↗</a>
+          </nav>
+        </details>
+      </div>
+    </div>
+  </header>
