@@ -29,9 +29,15 @@ const double _kMenuMaxWidth = 480;
 /// + grabber）· §3.4 搜索框 · §3.8 选项行（透明底色，选中 = primary 文字 + 勾）。
 /// 图标统一走 [AiBrandIcon] 的固定外框，折叠态与列表内同尺寸。
 class ChatModelPicker extends ConsumerWidget {
+  final bool requireImageInput;
   final ChatModelSelection? selected;
   final ValueChanged<ChatModelSelection> onChanged;
-  const ChatModelPicker({super.key, this.selected, required this.onChanged});
+  const ChatModelPicker({
+    super.key,
+    this.selected,
+    required this.onChanged,
+    this.requireImageInput = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,7 +47,9 @@ class ChatModelPicker extends ConsumerWidget {
     final l10n = context.l10n;
     final current =
         selected ??
-        (state.defaultRole.id != null && state.defaultRole.modelId != null
+        (!requireImageInput &&
+                state.defaultRole.id != null &&
+                state.defaultRole.modelId != null
             ? (id: state.defaultRole.id!, modelId: state.defaultRole.modelId!)
             : null);
 
@@ -99,10 +107,7 @@ class ChatModelPicker extends ConsumerWidget {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
           maximumSize: WidgetStatePropertyAll(
-            Size(
-              _kMenuMaxWidth,
-              pickerMenuMaxHeight(size.height),
-            ),
+            Size(_kMenuMaxWidth, pickerMenuMaxHeight(size.height)),
           ),
         ),
         builder: (_, controller, _) => button(
@@ -113,6 +118,7 @@ class ChatModelPicker extends ConsumerWidget {
             width: (size.width - 48).clamp(_kMenuMinWidth, _kMenuMaxWidth),
             height: pickerMenuMaxHeight(size.height),
             child: _ModelOptions(
+              requireImageInput: requireImageInput,
               selected: current,
               onChanged: (option) {
                 controller.close();
@@ -160,6 +166,7 @@ class ChatModelPicker extends ConsumerWidget {
                   ),
                   Flexible(
                     child: _ModelOptions(
+                      requireImageInput: requireImageInput,
                       selected: current,
                       onChanged: (option) {
                         Navigator.of(sheetContext).pop();
@@ -178,9 +185,14 @@ class ChatModelPicker extends ConsumerWidget {
 }
 
 class _ModelOptions extends ConsumerStatefulWidget {
+  final bool requireImageInput;
   final ChatModelSelection? selected;
   final ValueChanged<ChatModelSelection> onChanged;
-  const _ModelOptions({required this.selected, required this.onChanged});
+  const _ModelOptions({
+    required this.selected,
+    required this.onChanged,
+    this.requireImageInput = false,
+  });
 
   @override
   ConsumerState<_ModelOptions> createState() => _ModelOptionsState();
@@ -203,6 +215,8 @@ class _ModelOptionsState extends ConsumerState<_ModelOptions> {
           .where(
             (model) =>
                 instance.capabilityFor(model).textOutput &&
+                (!widget.requireImageInput ||
+                    instance.capabilityFor(model).imageInput) &&
                 !instance.capabilityFor(model).embedding &&
                 '$model ${instance.name}'.toLowerCase().contains(_query),
           )
@@ -343,9 +357,7 @@ class _ModelOptionsState extends ConsumerState<_ModelOptions> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: cs.outlineVariant.withAlpha(100),
-                ),
+                borderSide: BorderSide(color: cs.outlineVariant.withAlpha(100)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -368,9 +380,7 @@ class _ModelOptionsState extends ConsumerState<_ModelOptions> {
                   child: Text(
                     l10n.chatNoModels,
                     textAlign: TextAlign.center,
-                    style: text.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 )
               : ListView(

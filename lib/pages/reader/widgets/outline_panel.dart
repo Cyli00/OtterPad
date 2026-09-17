@@ -368,7 +368,12 @@ class _FiguresTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                fig.captionText,
+                fig.captionText.trim().isEmpty
+                    ? context.l10n.figureFallback(
+                        fig.kind ?? 'figure',
+                        fig.pageIndex + 1,
+                      )
+                    : fig.captionText,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: cs.onSurface,

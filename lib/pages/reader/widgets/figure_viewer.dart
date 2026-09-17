@@ -1,18 +1,20 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:extended_image/extended_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gal/gal.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:path/path.dart' as p;
 
 import '../../../core/animation_constants.dart';
 import '../../../data/models/book/document.dart';
@@ -30,6 +32,10 @@ import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
 import '../../../services/translation_service.dart';
 import '../../../utils/desktop.dart';
+import '../../../utils/doc_paths.dart';
+import '../../../services/table_parse_service.dart';
+import '../../../widgets/app_context_menu.dart';
+import 'table_parse_sheet.dart';
 
 /// 以 fade 转场打开 [FigureViewer]。
 ///
@@ -48,6 +54,8 @@ Future<void> showFigureViewer(
   LocateQuoteInReader? onLocateQuote,
   void Function(DocumentChatPageArgs args)? onOpenChat,
 }) async {
+  if (figures.isEmpty) return;
+
   // 截取背景：找到最外层 RepaintBoundary（阅读器全屏画面）
   Uint8List? bgSnapshot;
   RenderRepaintBoundary? boundary;
@@ -124,16 +132,59 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
 
   bool get _isGallery => widget.figures.length > 1;
 
-  static const _kCaptionStyle = TextStyle(
-    color: Colors.white,
-    fontSize: 15,
-    height: 1.55,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0.1,
-  );
   static const _kMinCaptionH = 60.0;
 
   double _captionHeight = 120.0;
+  bool _captionExpanded = true;
+  bool _showData = false;
+  double _dataOpacity = .96;
+  int _imageRevision = 0;
+  TableParseService? _tableSource;
+  bool _loadingData = false;
+  bool _dataError = false;
+  bool _exporting = false;
+  final Map<int, FigureParsedData> _parsedData = {};
+
+  FigureManifestEntry get _figure => widget.figures[_currentIndex];
+  FigureParsedData get _data => _parsedData.putIfAbsent(
+    _currentIndex,
+    () => _tableSource?.forFigure(_figure) ?? const FigureParsedData(),
+  );
+
+  Future<void> _loadData() async {
+    final id = widget.documentId ?? widget.document?.id;
+    if (id == null) return;
+    setState(() {
+      _loadingData = true;
+      _dataError = false;
+    });
+    try {
+      final source = await TableParseService.read(DocPaths.json(id));
+      if (!mounted) return;
+      setState(() {
+        _tableSource = source;
+        _parsedData.clear();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _dataError = true);
+    } finally {
+      if (mounted) setState(() => _loadingData = false);
+    }
+  }
+
+  void _changePage(int delta) {
+    final index = _currentIndex + delta;
+    if (index < 0 || index >= widget.figures.length) return;
+    _pageController.animateToPage(index, duration: kAnim, curve: kAnimCurve);
+  }
+
+  void _resetZoom() {
+    _doubleTapController.stop();
+    setState(() {
+      _imageRevision++;
+      _isZoomed = false;
+    });
+  }
 
   /// 放大后禁用 PageView 水平翻页，避免与图片平移手势竞争。
   bool _isZoomed = false;
@@ -151,9 +202,12 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _currentIndex = widget.figures.isEmpty
+        ? 0
+        : widget.initialIndex.clamp(0, widget.figures.length - 1);
     _pageController = ExtendedPageController(initialPage: _currentIndex);
     _doubleTapController = AnimationController(vsync: this, duration: kAnim);
+    _loadData();
   }
 
   @override
@@ -194,70 +248,117 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.figures.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: CloseButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ),
+        body: Center(child: Text(context.l10n.imageNotFound)),
+      );
+    }
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    return ExtendedImageSlidePage(
-      slideAxis: SlideAxis.vertical,
-      slideType: SlideType.onlyImage,
-      slidePageBackgroundHandler: (_, _) => Colors.transparent,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            // ── 背景：低分辨率截图 + 暗色蒙版 ──
-            Positioned.fill(child: _buildBackground()),
-            // ── 主体内容 ──
-            SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  _buildTopBar(),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        ExtendedImageGesturePageView.builder(
-                          controller: _pageController,
-                          itemCount: widget.figures.length,
-                          canScrollPage: (details) =>
-                              !_isZoomed &&
-                              (details?.totalScale ?? 1.0) <= 1.01,
-                          onPageChanged: (i) => setState(() {
-                            _currentIndex = i;
-                            _isZoomed = false;
-                          }),
-                          itemBuilder: (_, i) => _buildImage(widget.figures[i]),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            Navigator.of(context).maybePop(),
+        if (!_showData) ...{
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _changePage(-1),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _changePage(1),
+        },
+      },
+      child: Focus(
+        autofocus: true,
+        child: ExtendedImageSlidePage(
+          slideAxis: SlideAxis.vertical,
+          slideType: SlideType.onlyImage,
+          slidePageBackgroundHandler: (_, _) => Colors.transparent,
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Stack(
+              children: [
+                // ── 背景：低分辨率截图 + 暗色蒙版 ──
+                Positioned.fill(child: _buildBackground()),
+                // ── 主体内容 ──
+                SafeArea(
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      _buildTopBar(),
+                      _buildActionBar(),
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            ExtendedImageGesturePageView.builder(
+                              controller: _pageController,
+                              itemCount: widget.figures.length,
+                              canScrollPage: (details) =>
+                                  !_isZoomed &&
+                                  (details?.totalScale ?? 1.0) <= 1.01,
+                              onPageChanged: (i) {
+                                _doubleTapController.stop();
+                                setState(() {
+                                  _currentIndex = i;
+                                  _isZoomed = false;
+                                  _showData = false;
+                                  _imageRevision++;
+                                });
+                              },
+                              itemBuilder: (_, i) =>
+                                  _buildImage(widget.figures[i]),
+                            ),
+                            if (_showData)
+                              Positioned.fill(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: _isGallery ? 52 : 12,
+                                    vertical: 8,
+                                  ),
+                                  child: Material(
+                                    color: Theme.of(context).colorScheme.surface
+                                        .withValues(alpha: _dataOpacity),
+                                    borderRadius: BorderRadius.circular(16),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: _buildDataLayer(),
+                                  ),
+                                ),
+                              ),
+                            if (_isGallery && _currentIndex > 0)
+                              _buildArrow(
+                                true,
+                                () => _pageController.previousPage(
+                                  duration: kAnimSlow,
+                                  curve: Curves.easeInOut,
+                                ),
+                              ),
+                            if (_isGallery &&
+                                _currentIndex < widget.figures.length - 1)
+                              _buildArrow(
+                                false,
+                                () => _pageController.nextPage(
+                                  duration: kAnimSlow,
+                                  curve: Curves.easeInOut,
+                                ),
+                              ),
+                          ],
                         ),
-                        if (_isGallery && _currentIndex > 0)
-                          _buildArrow(
-                            true,
-                            () => _pageController.previousPage(
-                              duration: kAnimSlow,
-                              curve: Curves.easeInOut,
-                            ),
-                          ),
-                        if (_isGallery &&
-                            _currentIndex < widget.figures.length - 1)
-                          _buildArrow(
-                            false,
-                            () => _pageController.nextPage(
-                              duration: kAnimSlow,
-                              curve: Curves.easeInOut,
-                            ),
-                          ),
-                      ],
-                    ),
+                      ),
+                      if (widget.figures[_currentIndex].captionText
+                          .trim()
+                          .isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildCaptionPanel(bottomPadding),
+                      ] else
+                        SizedBox(height: bottomPadding + 8),
+                    ],
                   ),
-                  // 无 caption 时不占底部栏（匿名 visualOnly / 空标题）
-                  if (widget.figures[_currentIndex].captionText
-                      .trim()
-                      .isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _buildCaptionPanel(bottomPadding),
-                  ] else
-                    SizedBox(height: bottomPadding + 8),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -282,39 +383,190 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   }
 
   Widget _buildTopBar() {
-    return SizedBox(
-      height: 48,
-      child: Row(
-        children: [
-          const SizedBox(width: 48),
-          if (_isGallery)
+    final theme = Theme.of(context), cs = theme.colorScheme;
+    return Material(
+      color: cs.surfaceContainer,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 16, right: 4),
+        child: Row(
+          children: [
             Expanded(
-              child: Center(
+              child: Text(
+                context.l10n.figureFallback(
+                  _figure.kind ?? 'figure',
+                  _figure.pageIndex + 1,
+                ),
+                style: theme.textTheme.titleSmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (_isGallery)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   '${_currentIndex + 1} / ${widget.figures.length}',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                  style: theme.textTheme.labelMedium,
+                ),
+              ),
+            IconButton(
+              icon: const Icon(Symbols.close_rounded),
+              tooltip: context.l10n.closeImage,
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionBar() {
+    final l10n = context.l10n, cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surfaceContainer,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            if (_figure.kind == 'table' ||
+                _figure.kind == 'chart' ||
+                _data.hasData)
+              TextButton.icon(
+                onPressed: () => setState(() => _showData = !_showData),
+                icon: Icon(
+                  _showData
+                      ? Symbols.image_rounded
+                      : Symbols.table_view_rounded,
+                ),
+                label: Text(_showData ? l10n.original : l10n.figureDataLayer),
+              ),
+            if (!_showData)
+              IconButton(
+                onPressed: _resetZoom,
+                tooltip: l10n.figureFitImage,
+                icon: const Icon(Symbols.fit_screen_rounded),
+              ),
+            if (_showData && _data.hasData)
+              Tooltip(
+                message: l10n.figureOverlayOpacity,
+                child: SizedBox(
+                  width: 120,
+                  child: Slider(
+                    value: _dataOpacity,
+                    min: .35,
+                    max: 1,
+                    label: '${(_dataOpacity * 100).round()}%',
+                    semanticFormatterCallback: (v) =>
+                        '${l10n.figureOverlayOpacity} ${(v * 100).round()}%',
+                    onChanged: (value) => setState(() => _dataOpacity = value),
                   ),
                 ),
               ),
-            )
-          else
-            const Spacer(),
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
-              icon: const Icon(Symbols.close_rounded, fill: 1),
-              color: Colors.white70,
-              onPressed: () {
-                Haptics.soft();
-                Navigator.of(context).pop();
-              },
-              tooltip: context.l10n.closeImage,
+            PopupMenuButton<String>(
+              tooltip: l10n.copy,
+              onSelected: (action) => _performAction(action, _figure),
+              itemBuilder: (_) => [
+                if (!Platform.isLinux)
+                  PopupMenuItem(value: 'copy', child: Text(l10n.copyImage)),
+                PopupMenuItem(
+                  value: 'caption',
+                  enabled: _figure.captionText.trim().isNotEmpty,
+                  child: Text(l10n.figureCopyCaption),
+                ),
+                PopupMenuItem(
+                  value: 'tsv',
+                  enabled: _data.canCopyTsv,
+                  child: Text(l10n.tableCopyTsv),
+                ),
+                PopupMenuItem(
+                  value: 'markdown',
+                  enabled: _data.hasData,
+                  child: Text(l10n.tableCopyMarkdown),
+                ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    const Icon(Symbols.content_copy_rounded, size: 20),
+                    const SizedBox(width: 6),
+                    Text(l10n.copy),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+            PopupMenuButton<String>(
+              enabled: !_exporting,
+              tooltip: l10n.figureExport,
+              onSelected: (action) => _performAction(action, _figure),
+              itemBuilder: (_) => [
+                PopupMenuItem(value: 'save', child: Text(l10n.saveImage)),
+                PopupMenuItem(value: 'share', child: Text(l10n.shareImage)),
+                PopupMenuItem(
+                  value: 'html',
+                  enabled: _data.hasData,
+                  child: Text(l10n.figureExportHtml),
+                ),
+                PopupMenuItem(
+                  value: 'exportTsv',
+                  enabled: _data.canCopyTsv,
+                  child: Text(l10n.figureExportTsv),
+                ),
+                PopupMenuItem(
+                  value: 'exportMarkdown',
+                  enabled: _data.hasData,
+                  child: Text(l10n.figureExportMarkdown),
+                ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    if (_exporting)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      const Icon(Symbols.download_rounded, size: 20),
+                    const SizedBox(width: 6),
+                    Text(l10n.figureExport),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataLayer() {
+    final l10n = context.l10n;
+    if (_loadingData) return const Center(child: CircularProgressIndicator());
+    if (_data.hasData) return FigureDataOverlay(data: _data);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Symbols.table_view_rounded, size: 32),
+            const SizedBox(height: 12),
+            Text(
+              _dataError
+                  ? l10n.figureDataLoadFailed
+                  : _data.stale
+                  ? l10n.figureDataStale
+                  : l10n.figureDataUnavailable,
+              textAlign: TextAlign.center,
+            ),
+            if (_dataError)
+              TextButton(onPressed: _loadData, child: Text(l10n.retry)),
+          ],
+        ),
       ),
     );
   }
@@ -332,9 +584,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           _showSaveMenu(fig, details.globalPosition),
       child: ExtendedImage.file(
         File(fig.imagePath),
+        key: ValueKey('${fig.imagePath}:$_imageRevision'),
         fit: BoxFit.contain,
         mode: ExtendedImageMode.gesture,
-        enableSlideOutPage: true,
+        enableSlideOutPage: !_showData && !_isZoomed,
         heroBuilderForSlidingPage: (child) =>
             Hero(tag: 'figure_${fig.imagePath}', child: child),
         initGestureConfigHandler: (_) => GestureConfig(
@@ -349,12 +602,22 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           gestureDetailsIsChanged: _onGestureDetailsChanged,
         ),
         onDoubleTap: _handleDoubleTap,
+        loadStateChanged: (state) =>
+            state.extendedImageLoadState == LoadState.failed
+            ? Center(
+                child: Text(
+                  context.l10n.imageNotFound,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.white),
+                ),
+              )
+            : null,
       ),
     );
   }
 
   void _onGestureDetailsChanged(GestureDetails? details) {
-    if (!_isGallery) return;
     final zoomed = (details?.totalScale ?? 1.0) > 1.01;
     if (zoomed == _isZoomed) return;
     setState(() => _isZoomed = zoomed);
@@ -364,80 +627,156 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     FigureManifestEntry fig,
     Offset globalPosition,
   ) async {
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final selected = await showMenu<String>(
+    final l10n = context.l10n;
+    final selected = await showAppContextMenu<String>(
       context: context,
-      color: const Color(0xFF2C2C2E),
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        overlay.size.width - globalPosition.dx,
-        overlay.size.height - globalPosition.dy,
-      ),
+      globalPosition: globalPosition,
       items: [
-        if (isDesktopOs)
-          PopupMenuItem<String>(
+        if (!Platform.isLinux)
+          AppContextMenuItem(
             value: 'copy',
-            height: 40,
-            child: Row(
-              children: [
-                const Icon(
-                  Symbols.content_copy_rounded,
-                  size: 18,
-                  color: Colors.white70,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  context.l10n.copyImage,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                ),
-              ],
-            ),
-          )
-        else
-          PopupMenuItem<String>(
-            value: 'share',
-            height: 40,
-            child: Row(
-              children: [
-                const Icon(
-                  Symbols.share_rounded,
-                  size: 18,
-                  color: Colors.white70,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  context.l10n.shareImage,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                ),
-              ],
-            ),
+            label: l10n.copyImage,
+            icon: Symbols.content_copy_rounded,
           ),
-        PopupMenuItem<String>(
-          value: 'save',
-          height: 40,
-          child: Row(
-            children: [
-              const Icon(
-                Symbols.download_rounded,
-                size: 18,
-                color: Colors.white70,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                context.l10n.saveImage,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-              ),
-            ],
-          ),
+        AppContextMenuItem(
+          value: 'share',
+          label: l10n.shareImage,
+          icon: Symbols.share_rounded,
         ),
+        AppContextMenuItem(
+          value: 'save',
+          label: l10n.saveImage,
+          icon: Symbols.download_rounded,
+        ),
+        if (fig.captionText.trim().isNotEmpty)
+          AppContextMenuItem(
+            value: 'caption',
+            label: l10n.figureCopyCaption,
+            icon: Symbols.title_rounded,
+          ),
+        if (_data.canCopyTsv)
+          AppContextMenuItem(
+            value: 'tsv',
+            label: l10n.tableCopyTsv,
+            icon: Symbols.table_view_rounded,
+          ),
+        if (_data.hasData) ...[
+          AppContextMenuItem(
+            value: 'markdown',
+            label: l10n.tableCopyMarkdown,
+            icon: Symbols.content_copy_rounded,
+          ),
+          AppContextMenuItem(
+            value: 'html',
+            label: l10n.figureExportHtml,
+            icon: Symbols.download_rounded,
+          ),
+        ],
       ],
     );
-    if (selected == 'copy') await _copyFigure(fig);
-    if (selected == 'share') await _shareFigure(fig);
-    if (selected == 'save') await _saveFigure(fig);
+    if (mounted && selected != null) await _performAction(selected, fig);
+  }
+
+  Future<void> _performAction(String action, FigureManifestEntry fig) async {
+    if (_exporting) return;
+    final data = _tableSource?.forFigure(fig) ?? const FigureParsedData();
+    switch (action) {
+      case 'copy':
+        await _copyFigure(fig);
+      case 'share':
+        await _shareFigure(fig);
+      case 'save':
+        await _saveFigure(fig);
+      case 'caption' || 'tsv' || 'markdown':
+        final text = action == 'caption'
+            ? fig.captionText
+            : action == 'tsv'
+            ? data.tsv
+            : data.markdown;
+        if (text.isEmpty) return;
+        try {
+          await Clipboard.setData(ClipboardData(text: text));
+          if (mounted) {
+            ref
+                .read(snackBarServiceProvider)
+                .showResult(message: context.l10n.copiedToClipboard);
+          }
+        } catch (e) {
+          if (mounted) {
+            ref
+                .read(snackBarServiceProvider)
+                .showResult(message: context.l10n.copyFailed('$e'));
+          }
+        }
+      case 'html' || 'exportTsv' || 'exportMarkdown':
+        if (data.hasData) await _exportData(fig, data, action);
+    }
+  }
+
+  Future<void> _exportData(
+    FigureManifestEntry fig,
+    FigureParsedData data,
+    String format,
+  ) async {
+    final l10n = context.l10n;
+    final extension = format == 'html'
+        ? 'html'
+        : format == 'exportTsv'
+        ? 'tsv'
+        : 'md';
+    final content = format == 'html'
+        ? data.htmlDocument(fig.captionText)
+        : format == 'exportTsv'
+        ? data.tsv
+        : '${fig.captionText}\n\n${data.markdown}';
+    final name = '${p.basenameWithoutExtension(fig.imagePath)}.$extension';
+    final bytes = Uint8List.fromList(utf8.encode(content));
+    setState(() => _exporting = true);
+    try {
+      if (isDesktopOs) {
+        final path = await FilePicker.platform.saveFile(
+          dialogTitle: l10n.figureExport,
+          fileName: name,
+          type: FileType.custom,
+          allowedExtensions: [extension],
+          lockParentWindow: true,
+        );
+        if (path == null) return;
+        await File(path).writeAsBytes(bytes, flush: true);
+        if (mounted) {
+          ref
+              .read(snackBarServiceProvider)
+              .showResult(message: l10n.savedToPath(path));
+        }
+      } else {
+        final box = context.findRenderObject() as RenderBox?;
+        await Share.shareXFiles(
+          [
+            XFile.fromData(
+              bytes,
+              name: name,
+              mimeType: switch (extension) {
+                'html' => 'text/html',
+                'tsv' => 'text/tab-separated-values',
+                _ => 'text/markdown',
+              },
+            ),
+          ],
+          fileNameOverrides: [name],
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ref
+            .read(snackBarServiceProvider)
+            .showResult(message: l10n.exportFailed('$e'));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   Future<void> _copyFigure(FigureManifestEntry fig) async {
@@ -469,7 +808,15 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     }
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
     try {
-      await Share.shareXFiles([XFile(fig.imagePath)], subject: fileName);
+      if (!mounted) return;
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.shareXFiles(
+        [XFile(fig.imagePath)],
+        subject: fileName,
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
+      );
     } catch (e) {
       if (!mounted) return;
       snackBar.showResult(message: context.l10n.shareFailed('$e'));
@@ -497,7 +844,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         );
         if (targetPath == null) return;
         final target = File(targetPath);
-        if (await target.exists()) await target.delete();
+        if (p.equals(source.absolute.path, target.absolute.path)) return;
         await source.copy(target.path);
         if (!mounted) return;
         snackBar.showResult(message: context.l10n.savedToPath(target.path));
@@ -533,25 +880,18 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       top: 0,
       bottom: 0,
       child: Center(
-        child: GestureDetector(
-          onTap: () {
+        child: IconButton.filledTonal(
+          tooltip: isLeft
+              ? context.l10n.figurePrevious
+              : context.l10n.figureNext,
+          onPressed: () {
             Haptics.soft();
             onTap();
           },
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-              color: Color(0x59000000),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isLeft
-                  ? Symbols.chevron_left_rounded
-                  : Symbols.chevron_right_rounded,
-              color: Colors.white70,
-              size: 28,
-            ),
+          icon: Icon(
+            isLeft
+                ? Symbols.chevron_left_rounded
+                : Symbols.chevron_right_rounded,
           ),
         ),
       ),
@@ -566,66 +906,74 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final displayText = isTranslated ? _translations[idx]! : fig.captionText;
     final maxH = math.max(_kMinCaptionH, MediaQuery.sizeOf(context).height / 4);
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── 拖拽指示条 ──
-          GestureDetector(
-            onVerticalDragUpdate: (d) {
-              setState(() {
+    final theme = Theme.of(context), cs = theme.colorScheme;
+    return Material(
+      color: cs.surfaceContainerLow,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onVerticalDragUpdate: (d) => setState(() {
+                _captionExpanded = true;
                 _captionHeight = (_captionHeight - d.delta.dy).clamp(
                   _kMinCaptionH,
                   maxH,
                 );
-              });
-            },
-            behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0x50FFFFFF),
-                    borderRadius: BorderRadius.all(Radius.circular(2)),
-                  ),
-                  child: SizedBox(width: 32, height: 4),
+              }),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 16, right: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        context.l10n.figureCaption,
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                    if (widget.document != null) _buildAskAiButton(fig),
+                    _buildTranslateButton(idx, fig, isTranslated),
+                    IconButton(
+                      tooltip: _captionExpanded
+                          ? context.l10n.figureHideCaption
+                          : context.l10n.figureShowCaption,
+                      onPressed: () =>
+                          setState(() => _captionExpanded = !_captionExpanded),
+                      icon: Icon(
+                        _captionExpanded
+                            ? Symbols.expand_more_rounded
+                            : Symbols.expand_less_rounded,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          // ── 文本 + 翻译按钮 ──
-          SizedBox(
-            height: _captionHeight.clamp(_kMinCaptionH, maxH),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(20, 0, 16, bottomPadding + 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: SelectionArea(
-                      child: SingleChildScrollView(
-                        child: Text(displayText, style: _kCaptionStyle),
+            if (_captionExpanded)
+              SizedBox(
+                height: _captionHeight.clamp(_kMinCaptionH, maxH),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: SelectionArea(
+                    child: SingleChildScrollView(
+                      child: Align(
+                        alignment: AlignmentDirectional.topStart,
+                        child: Text(
+                          displayText,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.55,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    children: [
-                      if (widget.document != null) _buildAskAiButton(fig),
-                      if (widget.document != null) const SizedBox(height: 8),
-                      _buildTranslateButton(idx, fig, isTranslated),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -637,10 +985,12 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       child: IconButton(
         icon: const Icon(Symbols.auto_awesome_rounded, size: 18, fill: 1),
         style: IconButton.styleFrom(
-          backgroundColor: const Color(0x1AFFFFFF),
-          foregroundColor: Colors.white60,
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.surfaceContainerHighest,
+          foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
           padding: EdgeInsets.zero,
         ),
@@ -686,11 +1036,11 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
         width: 36,
         height: 36,
         child: isLoading
-            ? const Padding(
-                padding: EdgeInsets.all(8),
+            ? Padding(
+                padding: const EdgeInsets.all(8),
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.white60,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               )
             : IconButton(
@@ -703,11 +1053,13 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                 ),
                 style: IconButton.styleFrom(
                   backgroundColor: isTranslated
-                      ? const Color(0x33FFFFFF)
-                      : const Color(0x1AFFFFFF),
-                  foregroundColor: Colors.white60,
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foregroundColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   padding: EdgeInsets.zero,
                 ),
