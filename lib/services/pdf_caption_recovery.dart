@@ -141,6 +141,11 @@ class PdfCaptionRecovery {
           groupId: existing?.groupId,
           globalGroupId: existing?.globalGroupId,
           captionKind: service.classifyKind(content),
+          sourceData: {
+            ...?existing?.sourceData,
+            'recovered_from': 'pdf_text',
+            'physical_page': page.pageIndex,
+          },
           textRegions: [LayoutTextRegion(page.pageIndex, box, content.length)],
           blockOrder:
               existing?.blockOrder ?? page.blocks.length + recovered.length,

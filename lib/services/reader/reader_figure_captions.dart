@@ -21,6 +21,97 @@ DocumentStructure readerFigureCaptionStructure(
   DocumentStructure structure,
   List<FigureManifestEntry> figures,
 ) {
+  // 混合正文只能按已记录的字符范围拆分，不能把整个 OCR 块改成图注。
+  final ranges = <(int, String), List<FigureCaptionRef>>{};
+  for (final figure in figures.where((f) => f.isDisplayFigure)) {
+    for (final ref in figure.captionRefs) {
+      if (ref.blockId != null && ref.start != null && ref.end != null) {
+        ranges.putIfAbsent((ref.pageIndex, ref.blockId!), () => []).add(ref);
+      }
+    }
+  }
+  final remapped = <(int, String, int), String>{};
+  final split = <LayoutBlock, List<LayoutBlock>>{};
+  for (final page in structure.pages) {
+    for (final block in page.blocks) {
+      final refs = ranges[(page.pageIndex, block.blockId)];
+      if (refs == null) continue;
+      final valid =
+          refs
+              .where(
+                (r) =>
+                    r.start! >= 0 &&
+                    r.end! <= block.blockContent.length &&
+                    r.end! > r.start! &&
+                    block.blockContent.substring(r.start!, r.end!) == r.text,
+              )
+              .toList()
+            ..sort((a, b) => a.start!.compareTo(b.start!));
+      if (!valid.any(
+        (r) =>
+            block.blockContent.substring(0, r.start!).trim().isNotEmpty ||
+            block.blockContent.substring(r.end!).trim().isNotEmpty,
+      )) {
+        continue;
+      }
+      final parts = <LayoutBlock>[];
+      void append(int start, int end, String label) {
+        final text = block.blockContent.substring(start, end).trim();
+        if (text.isEmpty) return;
+        parts.add(
+          LayoutBlock(
+            blockId: '${block.blockId}:$start',
+            blockLabel: label,
+            blockBbox: const [],
+            blockContent: text,
+            parentId: block.parentId,
+            sourceData: block.sourceData,
+          ),
+        );
+      }
+
+      var cursor = 0;
+      for (final ref in valid) {
+        if (ref.start! < cursor) continue;
+        append(cursor, ref.start!, block.blockLabel);
+        append(ref.start!, ref.end!, 'figure_title');
+        remapped[(page.pageIndex, block.blockId, ref.start!)] =
+            '${block.blockId}:${ref.start}';
+        cursor = ref.end!;
+      }
+      append(cursor, block.blockContent.length, block.blockLabel);
+      split[block] = parts;
+    }
+  }
+  if (split.isNotEmpty) {
+    structure = DocumentStructure([
+      for (final page in structure.pages)
+        StructurePage(
+          pageIndex: page.pageIndex,
+          pageSize: page.pageSize,
+          markdown: page.markdown,
+          images: page.images,
+          blocks: [
+            for (final block in page.blocks) ...split[block] ?? [block],
+          ],
+        ),
+    ]);
+    figures = [
+      for (final figure in figures)
+        FigureManifestEntry.fromJson({
+          ...figure.toJson(),
+          'caption_refs': [
+            for (final ref in figure.captionRefs)
+              {
+                ...ref.toJson(),
+                if (remapped[(ref.pageIndex, ref.blockId, ref.start)]
+                    case final String id)
+                  'block_id': id,
+              },
+          ],
+        }),
+    ];
+  }
   final replacements = <LayoutBlock, LayoutBlock>{};
   final consumed = <LayoutBlock>{};
   final additions = <int, List<LayoutBlock>>{};
@@ -39,16 +130,17 @@ DocumentStructure readerFigureCaptionStructure(
       final page = pages[pageIndex];
       if (page == null) continue;
       for (final block in page.blocks) {
+        final referenced = refs.any(
+          (r) => r.pageIndex == pageIndex && r.blockId == block.blockId,
+        );
         if (consumed.contains(block) ||
-            !(readerCaptionLabels.contains(block.blockLabel) ||
+            !(referenced ||
+                readerCaptionLabels.contains(block.blockLabel) ||
                 const {'text', 'paragraph'}.contains(block.blockLabel))) {
           continue;
         }
         final text = _captionKey(block.blockContent);
         if (text.isEmpty || !key.contains(text)) continue;
-        final referenced = refs.any(
-          (r) => r.pageIndex == pageIndex && r.blockId == block.blockId,
-        );
         if (referenced ||
             figure.blockIds.contains(block.blockId) ||
             readerCaptionLabels.contains(block.blockLabel) ||

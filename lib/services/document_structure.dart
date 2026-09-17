@@ -42,7 +42,7 @@ class LayoutBlock {
 
   final String blockContent;
 
-  /// PaddleOCR 页内逻辑分组 ID，同组 block 属于同一逻辑实体（如复合图的子图）。
+  /// PaddleOCR 页内分组提示，不作为不可拆分的实体身份。
   final int? groupId;
 
   /// PaddleOCR 跨页全局分组 ID。
@@ -56,6 +56,7 @@ class LayoutBlock {
   final String? sourceImage;
   final String? captionKind;
   final List<LayoutTextRegion> textRegions;
+  final Map<String, dynamic> sourceData;
 
   LayoutBlock({
     required this.blockId,
@@ -70,6 +71,7 @@ class LayoutBlock {
     this.sourceImage,
     this.captionKind,
     this.textRegions = const [],
+    this.sourceData = const {},
   }) : rawBbox = rawBbox ?? blockBbox;
 
   factory LayoutBlock.fromJson(Map<String, dynamic> json) {
@@ -84,6 +86,9 @@ class LayoutBlock {
         : const <num>[];
     return LayoutBlock(
       blockId: json['block_id']?.toString() ?? '',
+      sourceData: Map<String, dynamic>.from(
+        json['source_data'] as Map? ?? json,
+      ),
       blockLabel: json['block_label'] as String? ?? '',
       blockBbox: [for (final v in rawBbox) v.toDouble()],
       rawBbox: List.unmodifiable(rawBbox),
@@ -108,6 +113,7 @@ class LayoutBlock {
     'block_label': blockLabel,
     'block_bbox': rawBbox,
     'block_content': blockContent,
+    if (sourceData.isNotEmpty) 'source_data': sourceData,
     if (groupId != null) 'group_id': groupId,
     if (globalGroupId != null) 'global_group_id': globalGroupId,
     if (blockOrder != null) 'block_order': blockOrder,
@@ -251,7 +257,8 @@ class DocumentStructure {
                   ? pi
                   : matches?.length == 1
                   ? matches!.single
-                  : pi + 1;
+                  : null;
+              if (regionPage == null) continue;
               final b = [for (final v in lineBox) v * 2];
               final previous = regions.lastOrNull;
               if (previous != null &&
@@ -290,6 +297,12 @@ class DocumentStructure {
         blocks.add(
           LayoutBlock(
             blockId: 'mu_p${pi}_b${order++}',
+            sourceData: {
+              'provider': 'mineru',
+              'page': pi,
+              'order': order - 1,
+              'native': block,
+            },
             blockLabel: label,
             blockBbox: size == null || box == null
                 ? const []
@@ -304,7 +317,10 @@ class DocumentStructure {
         );
       }
 
-      for (final block in (raw['para_blocks'] as List? ?? const [])) {
+      for (final block in [
+        ...?raw['para_blocks'] as List?,
+        ...?raw['discarded_blocks'] as List?,
+      ]) {
         if (block is! Map<String, dynamic>) continue;
         final children = block['blocks'];
         if (children is List && children.isNotEmpty) {
@@ -355,14 +371,36 @@ class DocumentStructure {
     List<dynamic> rawPages, {
     List<List<double>> pageSizes = const [],
   }) {
+    if (rawPages.any(
+      (page) =>
+          page is! List ||
+          page.any(
+            (block) =>
+                block is! Map ||
+                block['type'] is! String ||
+                block['content'] is! Map,
+          ),
+    )) {
+      throw const FormatException('unsupported_mineru_v2_schema');
+    }
     final pages = <StructurePage>[];
-    String text(Object? items) => items is List
-        ? items
-              .whereType<Map>()
-              .map((v) => v['content'])
-              .whereType<String>()
-              .join(' ')
-        : '';
+    String text(Object? items) {
+      if (items is String) return items;
+      if (items is List) {
+        return items.map(text).where((s) => s.isNotEmpty).join(' ');
+      }
+      if (items is Map) {
+        return text(
+          items['content'] ??
+              items['item_content'] ??
+              items['list_content'] ??
+              items['list_items'] ??
+              items['children'],
+        );
+      }
+      return '';
+    }
+
     for (var pi = 0; pi < rawPages.length; pi++) {
       final size = pi < pageSizes.length ? pageSizes[pi] : null;
       final blocks = <LayoutBlock>[];
@@ -386,6 +424,12 @@ class DocumentStructure {
         blocks.add(
           LayoutBlock(
             blockId: parent,
+            sourceData: {
+              'provider': 'mineru',
+              'page': pi,
+              'order': order - 1,
+              'native': raw,
+            },
             blockLabel: visual
                 ? type
                 : type == 'title'
@@ -401,10 +445,31 @@ class DocumentStructure {
             blockOrder: blocks.length,
             blockContent: type == 'table'
                 ? content['html'] as String? ?? ''
-                : text(content['${type}_content']),
+                : text(
+                    type == 'list'
+                        ? content['list_items']
+                        : content['${type}_content'],
+                  ),
           ),
         );
         if (visual) {
+          final footnote = text(content['${type}_footnote']);
+          if (footnote.isNotEmpty) {
+            blocks.add(
+              LayoutBlock(
+                blockId: '${parent}_note',
+                blockLabel: 'vision_footnote',
+                blockBbox: const [],
+                blockContent: footnote,
+                parentId: parent,
+                sourceData: {
+                  'provider': 'mineru',
+                  'page': pi,
+                  'native': content['${type}_footnote'],
+                },
+              ),
+            );
+          }
           final caption = text(content['${type}_caption']);
           if (caption.trim().isNotEmpty) {
             blocks.add(
@@ -416,6 +481,25 @@ class DocumentStructure {
                 parentId: parent,
                 captionKind: kind,
                 blockOrder: blocks.length,
+              ),
+            );
+          }
+        }
+        // 非视觉容器也可能携带被误分类的题注，不把字段白名单当作召回边界。
+        if (!visual) {
+          for (final field in content.keys.where(
+            (key) => key is String && key.endsWith('_caption'),
+          )) {
+            final caption = text(content[field]);
+            if (caption.trim().isEmpty) continue;
+            blocks.add(
+              LayoutBlock(
+                blockId: '${parent}_$field',
+                blockLabel: field.toString(),
+                blockBbox: const [],
+                blockContent: caption,
+                parentId: parent,
+                sourceData: {'provider': 'mineru', 'native': content[field]},
               ),
             );
           }
@@ -652,18 +736,32 @@ class DocumentStructure {
   }
 
   static StructurePage _parsePage(Map<String, dynamic> page, int index) {
+    if ((page['prunedResult'] is! Map ||
+            (page['prunedResult'] as Map)['parsing_res_list'] is! List) &&
+        (page['markdown'] is! Map ||
+            (page['markdown'] as Map)['text'] is! String)) {
+      throw const FormatException('unsupported_paddle_page');
+    }
+    final preprocessor =
+        (page['prunedResult'] as Map?)?['doc_preprocessor_res'] as Map?;
+    final transformed =
+        preprocessor != null &&
+        (((preprocessor['angle'] as num?) ?? 0) != 0 ||
+            (preprocessor['model_settings'] as Map?)?['use_doc_unwarping'] ==
+                true);
     final blockList =
         ((page['prunedResult'] as Map<String, dynamic>?)?['parsing_res_list']
             as List<dynamic>?) ??
         const [];
     return StructurePage(
       pageIndex: (page['page_index'] as int?) ?? index,
-      pageSize:
-          _bboxValues(page['page_size'], 2) ??
-          _bboxValues([
-            (page['prunedResult'] as Map?)?['width'],
-            (page['prunedResult'] as Map?)?['height'],
-          ], 2),
+      pageSize: transformed
+          ? null
+          : _bboxValues(page['page_size'], 2) ??
+                _bboxValues([
+                  (page['prunedResult'] as Map?)?['width'],
+                  (page['prunedResult'] as Map?)?['height'],
+                ], 2),
       images: ((page['markdown'] as Map?)?['images'] as Map? ?? const {}).map(
         (key, value) => MapEntry(key.toString(), value.toString()),
       ),

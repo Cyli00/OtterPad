@@ -1,30 +1,108 @@
 {
-    "number_pattern": "\\s*(?:\\d+(?:[.\\-]\\d+)?|[A-Z](?:\\.\\d+)?|S\\d+)",
-    "suffix_pattern": "(?:[.:()\\uff1a\\uff0e\\u3001]|\\s|$)",
+    "number_pattern": "\\s*(?:(?:No\\.?|N[°º]|№)\\s*)?(?:[(（]\\s*)?(?:(?:[A-Z][.．\\-‐‑–]?\\s*)?[0-9٠-٩۰-۹०-९০-৯๐-๙０-９]+(?:[.．\\-‐‑–][0-9٠-٩۰-۹०-९০-৯๐-๙０-９]+)*(?:[a-z]|\\([a-z]\\))?|[IVXLCDM]+|[Ⅰ-ⅫⅬⅭⅮⅯⅰ-ⅻⅼⅽⅾⅿ]+|[A-Z]|[〇零一二三四五六七八九十百千]+)(?:[)）])?",
+    "supplementary_number_pattern": "\\s*S\\s*[0-9０-９]+(?:[.\\-][0-9０-９]+)*(?:[a-z]|\\([a-z]\\))?",
+    "suffix_pattern": "(?:[.:：．、|｜\\-‐‑–—]|\\s|$)",
     "en": {
         "figure": ["Figure", "Fig.", "Fig"],
-        "table": ["Table"],
+        "table": ["Table", "Tab.", "Tbl."],
         "other": ["Scheme", "Chart", "Plate", "Map", "Box", "Diagram", "Exhibit"]
     },
     "zh": {
         "figure": ["图", "附图"],
-        "table": ["表"]
+        "table": ["表", "附表", "续表"],
+        "other": ["图版", "图式"]
+    },
+    "zh-Hant": {
+        "figure": ["圖", "附圖"],
+        "table": ["表", "附表", "續表"],
+        "other": ["圖版", "圖式"]
     },
     "de": {
-        "figure": ["Abbildung", "Abb."],
-        "table": ["Tabelle"]
+        "figure": ["Abbildung", "Abb.", "Abb"],
+        "table": ["Tabelle", "Tab."],
+        "other": ["Schema", "Tafel"]
+    },
+    "fr": {
+        "figure": ["Figure", "Fig."],
+        "table": ["Tableau", "Table", "Tab."],
+        "other": ["Schéma", "Planche", "Carte", "Encadré"]
     },
     "es": {
-        "figure": ["Figura"],
-        "table": ["Tabla", "Cuadro"]
+        "figure": ["Figura", "Fig."],
+        "table": ["Tabla", "Cuadro"],
+        "other": ["Esquema", "Gráfico", "Lámina", "Mapa"]
+    },
+    "pt": {
+        "figure": ["Figura", "Fig."],
+        "table": ["Tabela", "Tab.", "Quadro"],
+        "other": ["Esquema", "Gráfico", "Mapa"]
+    },
+    "it": {
+        "figure": ["Figura", "Fig."],
+        "table": ["Tabella", "Tab."],
+        "other": ["Schema", "Tavola", "Grafico"]
+    },
+    "nl": {
+        "figure": ["Figuur", "Fig.", "Afbeelding", "Afb."],
+        "table": ["Tabel", "Tab."]
+    },
+    "pl": {
+        "figure": ["Rysunek", "Rys.", "Rycina", "Ryc."],
+        "table": ["Tabela", "Tab."]
+    },
+    "cs": {
+        "figure": ["Obrázek", "Obr."],
+        "table": ["Tabulka", "Tab."]
+    },
+    "sk": {
+        "figure": ["Obrázok", "Obr."],
+        "table": ["Tabuľka", "Tab."]
+    },
+    "uk": {
+        "figure": ["Рисунок", "Рис.", "Малюнок", "Мал."],
+        "table": ["Таблиця", "Табл."]
+    },
+    "tr": {
+        "figure": ["Şekil", "Şek."],
+        "table": ["Tablo"]
+    },
+    "el": {
+        "figure": ["Σχήμα", "Σχ.", "Εικόνα", "Εικ."],
+        "table": ["Πίνακας", "Πίν."]
+    },
+    "sv": {
+        "figure": ["Figur", "Fig."],
+        "table": ["Tabell", "Tab."]
+    },
+    "da": {
+        "figure": ["Figur", "Fig."],
+        "table": ["Tabel", "Tab."]
+    },
+    "no": {
+        "figure": ["Figur", "Fig."],
+        "table": ["Tabell", "Tab."]
+    },
+    "fi": {
+        "figure": ["Kuva", "Kuvio"],
+        "table": ["Taulukko"]
+    },
+    "ro": {
+        "figure": ["Figura", "Fig."],
+        "table": ["Tabel", "Tabelul", "Tabela"]
+    },
+    "hu": {
+        "figure": ["Ábra"],
+        "table": ["Táblázat"]
     },
     "ja": {
         "figure": ["図"],
-        "table": ["表"]
+        "table": ["表"],
+        "other": ["図版", "スキーム"]
     },
     "ru": {
-        "figure": ["Рис.", "Рисунок"],
-        "table": ["Таблица"]
+        "figure": ["Рис.", "Рис", "Рисунок"],
+        "table": ["Таблица", "Табл.", "Табл"],
+        "other": ["Схема", "Диаграмма"]
     },
     "ko": {
         "figure": ["그림"],
@@ -34,24 +112,72 @@
         "figure": ["Hình"],
         "table": ["Bảng"]
     },
+    "id": {
+        "figure": ["Gambar", "Gbr."],
+        "table": ["Tabel"]
+    },
+    "ms": {
+        "figure": ["Rajah"],
+        "table": ["Jadual"]
+    },
+    "ar": {
+        "figure": ["شكل", "الشكل"],
+        "table": ["جدول", "الجدول"]
+    },
+    "fa": {
+        "figure": ["شکل", "شكل"],
+        "table": ["جدول"]
+    },
+    "he": {
+        "figure": ["איור"],
+        "table": ["טבלה"]
+    },
+    "hi": {
+        "figure": ["चित्र"],
+        "table": ["तालिका"]
+    },
+    "bn": {
+        "figure": ["চিত্র"],
+        "table": ["সারণী", "সারণি"]
+    },
+    "th": {
+        "figure": ["รูปที่", "รูป", "ภาพที่", "ภาพ"],
+        "table": ["ตารางที่", "ตาราง"]
+    },
+    "number_first": [
+        {
+            "number_pattern": "S\\s*[0-9０-９]+(?:[.\\-][0-9０-９]+)*",
+            "figure": ["Fig.", "Fig", "Figure"],
+            "table": ["Table"],
+            "supplementary": true
+        },
+        {
+            "number_pattern": "[0-9]+(?:[.\\-][0-9]+)*\\.",
+            "figure": ["ábra"],
+            "table": ["táblázat"]
+        }
+    ],
     "supplementary": {
         "modifiers": {
             "en": [
-                "Supplementary", "Extended Data", "Ext. Data", "Ext Data",
-                "Supporting Information", "Supporting", "SI", "Online", "ESM",
-                "Suppl.", "Suppl", "Appendix"
+                "Supplementary", "Supplemental", "Supplementary Material", "Supplementary Materials",
+                "Extended Data", "Ext. Data", "Ext Data", "Supporting Information", "Supporting",
+                "SI", "SI Appendix", "Online", "Online Supplementary", "Online Supplemental", "ESM",
+                "Suppl.", "Suppl", "Supp.", "Supp", "Appendix"
             ],
             "zh": ["补充材料", "补充", "附录", "附"],
             "zh-Hant": ["補充材料", "補充", "附錄", "附"],
             "ja": ["補足", "付録", "サプリメント"],
             "de": ["Ergänzende", "Ergänzungs", "Zusatz", "Erweiterte Daten", "Suppl.", "Suppl.-", "Suppl"],
             "es": ["Datos ampliados"],
+            "fr": ["Supplémentaire"],
             "ru": ["Дополнительный", "Дополнительная", "Доп.", "Доп"],
             "ko": ["보조", "보충", "부록", "보충자료"],
             "vi": ["bổ sung", "phụ", "phụ lục"]
         },
-        "standalone": [
-            "S1 Fig.", "S1 Fig",
+        "standalone": {
+          "figure": [
+            "eFigure", "eFig.", "eFig",
             "Figure supplémentaire", "Fig. suppl.", "Fig. suppl",
             "Figura suplementaria", "Fig. suplementaria",
             "Figura complementaria", "Fig. complementaria",
@@ -59,22 +185,37 @@
             "Datos ampliados Figura", "Datos ampliados Fig.",
             "Figura supplementare", "Fig. supplementare",
             "Figura integrativa", "Fig. integrativa",
+            "Figura suplementar", "Fig. suplementar",
+            "Figure annexe", "Fig. annexe",
             "Ergänzungsabbildung", "Zusatzabbildung",
             "Erweiterte Daten Abbildung", "Erweiterte Daten Abb.",
             "Suppl. Abb.", "Suppl.-Abb.", "Suppl. Abb", "Suppl Abb",
             "Дополнительный рисунок", "Дополнительная фигура",
             "Доп. рис.", "Доп. Рис.", "Доп. рисунок",
-            "Рис. S", "Рисунок S",
             "보조 그림", "보충 그림", "부록 그림", "보충자료 그림",
             "Hình bổ sung", "Hình phụ", "Hình phụ lục",
             "补充材料图", "补充 图", "补充图",
-            "附录图", "附录 图", "附表",
+            "附录图", "附录 图", "附图", "附圖",
             "補充材料圖", "補充 圖", "補充圖",
             "附錄圖", "附錄 圖",
             "補足図", "補足 図", "補図",
             "付録図", "付録 図",
-            "サプリメント図", "サプリメント 図",
-            "補足表", "補足 表"
-        ]
+            "サプリメント図", "サプリメント 図"
+          ],
+          "table": [
+            "eTable", "eTab.", "eTab",
+            "Tableau supplémentaire", "Table supplémentaire", "Tab. suppl.", "Tableau annexe",
+            "Tabla suplementaria", "Tabla complementaria", "Tabla adicional",
+            "Tabela suplementar", "Tabela complementar",
+            "Tabella supplementare", "Tabella integrativa",
+            "Ergänzungstabelle", "Zusatztabelle",
+            "Дополнительная таблица", "Доп. табл.",
+            "Bảng bổ sung", "Bảng phụ", "Bảng phụ lục",
+            "补充表", "补充材料表", "附录表", "附表",
+            "補充表", "補充材料表", "附錄表",
+            "補足表", "補表", "付録表"
+          ],
+          "other": ["Schéma supplémentaire", "Esquema suplementar", "Schema supplementare"]
+        }
     }
 }

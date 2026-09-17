@@ -15,6 +15,7 @@ import '../utils/markdown_preprocessor.dart';
 import 'document_structure.dart';
 import 'extraction_artifacts.dart';
 import 'figure_extract_service.dart';
+import 'figure_markdown.dart';
 import 'pdf_process_lock.dart';
 import 'pdf_caption_recovery.dart';
 
@@ -87,7 +88,13 @@ class MinerUResultConverter {
             layout = data;
           }
         }
-        if (name.startsWith('images/')) images[p.basename(name)] = file.content;
+        if (name.startsWith('images/')) {
+          final safe = FigureMarkdown.sourcePath(name);
+          if (!safe.startsWith('images/') || safe.contains('../')) {
+            throw const FormatException('unsafe_asset');
+          }
+          images[safe] = file.content;
+        }
       }
       if (raw == null || (v2 == null && layout == null)) {
         throw FormatException(
@@ -101,6 +108,7 @@ class MinerUResultConverter {
       final assets = <String, String>{};
       for (final image in images.entries) {
         final path = p.join(generation.path, image.key);
+        await Directory(p.dirname(path)).create(recursive: true);
         await File(path).writeAsBytes(image.value, flush: true);
         assets[image.key] = path;
       }
@@ -110,6 +118,10 @@ class MinerUResultConverter {
               v2!,
               pageSizes: await _pageSizes(pdfPath),
             );
+      if (structure.isEmpty ||
+          !structure.pages.any((page) => page.blocks.isNotEmpty)) {
+        throw const FormatException('unsupported_mineru_structure');
+      }
       structure = await PdfCaptionRecovery.recover(structure, pdfPath);
       final tableSources = <String?>[];
       for (final page in v2 ?? const []) {
@@ -118,7 +130,9 @@ class MinerUResultConverter {
           final source =
               ((block['content'] as Map?)?['image_source'] as Map?)?['path']
                   as String?;
-          tableSources.add(source == null ? null : p.basename(source));
+          tableSources.add(
+            source == null ? null : FigureMarkdown.sourcePath(source),
+          );
         }
       }
       if (v2 == null) {
@@ -127,7 +141,9 @@ class MinerUResultConverter {
             (b) => b.blockLabel == 'table',
           )) {
             final source = block.sourceImage;
-            tableSources.add(source == null ? null : p.basename(source));
+            tableSources.add(
+              source == null ? null : FigureMarkdown.sourcePath(source),
+            );
           }
         }
       }
@@ -144,12 +160,15 @@ class MinerUResultConverter {
         tableSources: tableSources,
         structure: structure,
         title: title,
+        recordReferences: true,
       );
       manifest.removeWhere(
         (e) => e.isDisplayFigure && !processed.contains(e.markdownAnchor),
       );
       final json = structure.toJson(source: 'mineru')
         ..addAll({
+          '_mineru_raw_layout': layout,
+          '_mineru_raw_v2': v2,
           '_mineru_table_sources': tableSources,
           '_mineru_assets': assets.map(
             (name, path) => MapEntry(
@@ -271,6 +290,7 @@ class MinerUResultConverter {
         tableSources: (json['_mineru_table_sources'] as List?)?.cast<String?>(),
         structure: structure,
         title: title,
+        recordReferences: true,
       );
       manifest.removeWhere(
         (e) => e.isDisplayFigure && !md.contains(e.markdownAnchor),
@@ -343,63 +363,7 @@ class MinerUResultConverter {
         )).entries,
       );
     }
-    final claimed = entries
-        .expand((e) => e.sourceImageNames ?? const <String>[])
-        .toSet();
-    // Only a single explicitly captioned body is safe without rendering.
-    for (final page in structure.pages) {
-      final parents = <String, List<LayoutBlock>>{};
-      for (final block in page.blocks) {
-        if (block.parentId != null) {
-          parents.putIfAbsent(block.parentId!, () => []).add(block);
-        }
-      }
-      final numberedNearby = structure.pages
-          .where((p) => (p.pageIndex - page.pageIndex).abs() <= 1)
-          .any(
-            (p) => p.blocks.any(
-              (b) =>
-                  FigureExtractService.instance.isMainCaption(b.blockContent),
-            ),
-          );
-      for (final blocks in parents.values) {
-        final visuals = blocks
-            .where(
-              (b) => const ['image', 'table', 'chart'].contains(b.blockLabel),
-            )
-            .toList();
-        final captions = blocks
-            .where(
-              (b) =>
-                  b.blockLabel == 'figure_title' &&
-                  FigureManifestEntry.isUsableCaption(b.blockContent) &&
-                  (!numberedNearby ||
-                      FigureExtractService.instance.isMainCaption(
-                        b.blockContent,
-                      )),
-            )
-            .toList();
-        if (visuals.length != 1 || captions.length != 1) continue;
-        final name = visuals.single.sourceImage;
-        if (name == null || claimed.contains(p.basename(name))) continue;
-        final path = assets[p.basename(name)];
-        if (path == null || !await File(path).exists()) continue;
-        final ids = blocks.map((b) => b.blockId).toList();
-        entries.add(
-          FigureManifestEntry(
-            id: FigureManifestEntry.identity(page.pageIndex, ids),
-            imagePath: path,
-            captionText: captions.single.blockContent,
-            pageIndex: page.pageIndex,
-            blockIds: ids,
-            sourceImageNames: [p.basename(name)],
-            kind: captions.single.captionKind,
-            captionSource: CaptionSource.blockMatch.name,
-            pairMethod: PairMethod.samePage.name,
-          ),
-        );
-      }
-    }
+    FigureMarkdown.retainSourceFigures(structure, assets, entries);
     final order = <String, int>{};
     for (final page in structure.pages) {
       for (final block in page.blocks) {
@@ -414,7 +378,6 @@ class MinerUResultConverter {
     return entries;
   }
 
-  /// Table slots include missing images; uncertain references remain readable.
   static String buildReaderMarkdown(
     String raw,
     List<FigureManifestEntry> entries, {
@@ -422,187 +385,26 @@ class MinerUResultConverter {
     List<String?>? tableSources,
     DocumentStructure? structure,
     String? title,
+    bool recordReferences = false,
   }) {
-    final bySource = <String, FigureManifestEntry>{};
-    for (final entry in entries.where((e) => e.isDisplayFigure)) {
-      for (final name
-          in entry.sourceImageNames ?? [p.basename(entry.imagePath)]) {
-        bySource[name] = entry;
-      }
-    }
-    final imageRe = RegExp(r'!\[[^\]]*\]\((?:images/)?([^\s()]+)\)');
-    final tableRe = RegExp(
-      r'<table\b[^>]*>[\s\S]*?</table>',
-      caseSensitive: false,
+    final result = FigureMarkdown.replace(
+      raw,
+      entries,
+      assets: assets,
+      structure: structure ?? DocumentStructure.empty,
     );
-    final tables = tableRe.allMatches(raw).toList();
-    final replacements = <({int start, int end, String text})>[];
-    final emitted = <FigureManifestEntry>{};
-    final owned = <({int start, int end, FigureManifestEntry entry})>[];
-    String tag(FigureManifestEntry e) =>
-        '\n${e.markdownAnchor}\n\n![fig:${_normalize(e.captionText).replaceAll('[', r'\[').replaceAll(']', r'\]')}](${Uri.file(e.imagePath)})\n';
-    void replace(int start, int end, FigureManifestEntry entry) {
-      replacements.add((
-        start: start,
-        end: end,
-        text: emitted.add(entry) ? tag(entry) : '',
-      ));
-      owned.add((start: start, end: end, entry: entry));
-    }
-
-    for (final image in imageRe.allMatches(raw)) {
-      final name = p.basename(image[1]!);
-      final entry = bySource[name];
-      if (entry != null) {
-        replace(image.start, image.end, entry);
-      } else {
-        replacements.add((start: image.start, end: image.end, text: ''));
+    if (recordReferences) {
+      for (var i = 0; i < entries.length; i++) {
+        final entry = entries[i];
+        entries[i] = FigureManifestEntry.fromJson({
+          ...entry.toJson(),
+          'replacement_refs': result.replacements[entry] ?? const [],
+        });
       }
     }
-    if (tableSources != null && tableSources.length == tables.length) {
-      for (var i = 0; i < tables.length; i++) {
-        final entry = bySource[tableSources[i]];
-        if (entry != null && entry.kind == 'table') {
-          replace(tables[i].start, tables[i].end, entry);
-        }
-      }
-    }
-    // Delete captions only at the source boundary, never by global text search.
-    for (final span in owned) {
-      final caption = _captionMatch(span.entry.captionText);
-      final labels = <String>{
-        if (span.entry.cropBbox != null && structure != null)
-          for (final page in structure.pages)
-            for (final block in page.blocks)
-              if (span.entry.blockIds.contains(block.blockId) &&
-                  FigureExtractService.instance.isSubfigureLabelBlock(block))
-                _normalize(block.blockContent),
-      };
-      for (final before in [false, true]) {
-        final boundary = before
-            ? raw.substring(0, span.start)
-            : raw.substring(span.end);
-        final lines = boundary.split('\n');
-        final ordered = before ? lines.reversed.toList() : lines;
-        var consumed = 0;
-        var probe = '';
-        for (final line in ordered) {
-          consumed += line.length + 1;
-          final text = _captionMatch(line);
-          if (text.isEmpty && probe.isEmpty) continue;
-          if (probe.isEmpty && labels.contains(text)) {
-            final length = consumed - 1;
-            replacements.add((
-              start: before ? span.start - length : span.end,
-              end: before ? span.start : span.end + length,
-              text: '',
-            ));
-            continue;
-          }
-          if (text.startsWith('![') ||
-              text.startsWith('<') ||
-              text.startsWith('#')) {
-            break;
-          }
-          probe = before
-              ? _normalize('$text $probe')
-              : _normalize('$probe $text');
-          if (probe == caption) {
-            final length = consumed - 1;
-            replacements.add((
-              start: before ? span.start - length : span.end,
-              end: before ? span.start : span.end + length,
-              text: '',
-            ));
-            break;
-          }
-          if (before ? !caption.endsWith(probe) : !caption.startsWith(probe)) {
-            break;
-          }
-        }
-      }
-    }
-    if (structure != null) {
-      final blocks = structure.pages.expand((p) => p.blocks).toList();
-      final rawImages = imageRe.allMatches(raw).toList();
-      for (final entry in emitted) {
-        for (final ref in entry.captionRefs) {
-          final page = structure.pages
-              .where((p) => p.pageIndex == ref.pageIndex)
-              .firstOrNull;
-          final block = page?.blocks
-              .where((b) => b.blockId == ref.blockId)
-              .firstOrNull;
-          if (block == null) continue;
-          final index = blocks.indexOf(block);
-          var start = 0;
-          var end = raw.length;
-          // 用结构中的前后图片限定原始题注位置，避免删除正文里的同名引用。
-          for (final previous in blocks.take(index).toList().reversed) {
-            if (previous.sourceImage == null) continue;
-            final match = rawImages
-                .where(
-                  (m) => p.basename(m[1]!) == p.basename(previous.sourceImage!),
-                )
-                .firstOrNull;
-            if (match != null) {
-              start = match.end;
-              break;
-            }
-          }
-          for (final next in blocks.skip(index + 1)) {
-            if (next.sourceImage == null) continue;
-            final match = rawImages
-                .where(
-                  (m) => p.basename(m[1]!) == p.basename(next.sourceImage!),
-                )
-                .firstOrNull;
-            if (match != null) {
-              end = match.start;
-              break;
-            }
-          }
-          if (start >= end) continue;
-          final target = _captionMatch(block.blockContent);
-          final matches = RegExp(r'[^\n]+')
-              .allMatches(raw.substring(start, end))
-              .where((m) => _captionMatch(m[0]!) == target)
-              .toList();
-          if (matches.length == 1) {
-            replacements.add((
-              start: start + matches.single.start,
-              end: start + matches.single.end,
-              text: '',
-            ));
-          }
-        }
-      }
-    }
-    replacements.sort((a, b) {
-      final start = a.start.compareTo(b.start);
-      return start != 0 ? start : b.end.compareTo(a.end);
-    });
-    final out = StringBuffer();
-    var cursor = 0;
-    for (final replacement in replacements) {
-      if (replacement.start < cursor || replacement.end > raw.length) continue;
-      out.write(raw.substring(cursor, replacement.start));
-      out.write(replacement.text);
-      cursor = replacement.end;
-    }
-    out.write(raw.substring(cursor));
     return MarkdownPreprocessor.filterBeforeTitle(
-      MarkdownPreprocessor.process(out.toString()),
+      MarkdownPreprocessor.process(result.markdown),
       title,
     );
   }
-
-  static String _normalize(String text) =>
-      text.trim().replaceAll(RegExp(r'\s+'), ' ');
-  static String _captionMatch(String text) => _normalize(
-    text
-        .replaceAll(r'\~', '~')
-        .replaceAllMapped(RegExp(r'(\w)-\s+(\w)'), (m) => '${m[1]}${m[2]}')
-        .replaceAll(RegExp(r'<[^>]+>|\$'), ''),
-  );
 }

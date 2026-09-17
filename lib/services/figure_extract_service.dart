@@ -29,7 +29,7 @@ enum CaptionSource {
   /// Phase 3: markdown 行兜底
   markdownFallback,
 
-  /// General profile: 无编号 caption 的匿名 figure
+  /// 兼容旧清单；新提取不会创建无题注实体。
   none,
 }
 
@@ -47,15 +47,13 @@ enum PairMethod {
   /// Pass 4: 分离式排版序号配对（预印本 Figure Legends 布局）
   ordinalMatch,
 
-  /// General profile: 无 caption，仅靠 visual cluster 成图
+  /// 兼容旧清单；新提取不再使用此配对方式。
   visualOnly,
 }
 
 /// 提取策略 profile。
 ///
-/// * [paper] — caption-first：无编号 caption 的 visual 丢弃（论文/编号教材）。
-/// * [general] — visual-first：合格 visual 匿名保留（手册/无编号插图）。
-/// * [auto] — 按编号 caption 密度相对 image/chart 数量自动分流。
+/// 保留旧调用接口；三种策略均以题注为入口，auto 仅用于诊断分流。
 enum FigureExtractProfile { auto, paper, general }
 
 // ─── 公开数据模型 ─────────────────────────────────────────
@@ -69,12 +67,16 @@ class FigureCaptionRef {
   final String? blockId;
   final String text;
   final int? lineIndex;
+  final int? start;
+  final int? end;
 
   const FigureCaptionRef({
     required this.pageIndex,
     required this.text,
     this.blockId,
     this.lineIndex,
+    this.start,
+    this.end,
   });
 
   Map<String, dynamic> toJson() => {
@@ -82,6 +84,8 @@ class FigureCaptionRef {
     'text': text,
     if (blockId != null) 'block_id': blockId,
     if (lineIndex != null) 'line_index': lineIndex,
+    if (start != null) 'start': start,
+    if (end != null) 'end': end,
   };
 
   factory FigureCaptionRef.fromJson(Map<String, dynamic> json) =>
@@ -90,6 +94,8 @@ class FigureCaptionRef {
         text: json['text'] as String,
         blockId: json['block_id'] as String?,
         lineIndex: json['line_index'] as int?,
+        start: json['start'] as int?,
+        end: json['end'] as int?,
       );
 }
 
@@ -114,7 +120,39 @@ class FigureSegment {
 }
 
 /// manifest 中的一条记录,持久化到 figures.json
+class FigureVisualRegion {
+  final int pageIndex;
+  final List<double> bbox;
+  final List<String> blockIds;
+  final String imagePath;
+  const FigureVisualRegion({
+    required this.pageIndex,
+    required this.bbox,
+    required this.blockIds,
+    required this.imagePath,
+  });
+  Map<String, dynamic> toJson() => {
+    'page_idx': pageIndex,
+    'bbox': bbox,
+    'block_ids': blockIds,
+    'img': imagePath,
+  };
+  factory FigureVisualRegion.fromJson(Map<String, dynamic> json) =>
+      FigureVisualRegion(
+        pageIndex: json['page_idx'] as int,
+        bbox: (json['bbox'] as List).map((v) => (v as num).toDouble()).toList(),
+        blockIds: (json['block_ids'] as List).cast<String>(),
+        imagePath: json['img'] as String,
+      );
+}
+
 class FigureManifestEntry {
+  final List<FigureVisualRegion> visualRegions;
+  final List<Map<String, dynamic>> sourceRefs;
+  final List<Map<String, dynamic>> replacementRefs;
+  final String assignment;
+  final String? sourceVersion;
+  final List<String> notes;
   final String? id;
   final String imagePath;
   final String captionText;
@@ -154,6 +192,12 @@ class FigureManifestEntry {
   final String? kind;
 
   const FigureManifestEntry({
+    this.visualRegions = const [],
+    this.sourceRefs = const [],
+    this.replacementRefs = const [],
+    this.assignment = 'confirmed',
+    this.sourceVersion,
+    this.notes = const [],
     required this.imagePath,
     required this.captionText,
     required this.pageIndex,
@@ -172,7 +216,7 @@ class FigureManifestEntry {
     this.kind,
   });
 
-  /// 兼容旧清单中的匿名条目；新提取不再保存未匹配题注的图片。
+  /// 兼容读取旧清单，匿名条目不再进入展示链路。
   bool get isAnonymous =>
       pairMethod == PairMethod.visualOnly.name || captionSource == 'none';
 
@@ -188,9 +232,27 @@ class FigureManifestEntry {
 
   /// 是否适合出现在用户可见的 figure 面。
   ///
-  /// 要求有可读 caption；匿名 visualOnly / `captionSource=none` 默认隐藏，
-  /// 避免封面、装饰图、空白标题污染正文和 Outline。
-  bool get isDisplayFigure => !isAnonymous && isUsableCaption(captionText);
+  /// 视觉区域本身不能绕过题注与归属检查。
+  bool get isDisplayFigure =>
+      assignment == 'confirmed' && !isAnonymous && isUsableCaption(captionText);
+
+  List<FigureVisualRegion> get regions => visualRegions.isNotEmpty
+      ? visualRegions
+      : [
+          FigureVisualRegion(
+            pageIndex: pageIndex,
+            bbox: cropBbox ?? const [],
+            blockIds: blockIds,
+            imagePath: imagePath,
+          ),
+        ];
+
+  Set<String> blocksOnPage(int page) => {
+    for (final region in regions.where((r) => r.pageIndex == page))
+      ...region.blockIds,
+    for (final ref in captionRefs.where((r) => r.pageIndex == page))
+      if (ref.blockId != null) ref.blockId!,
+  };
 
   /// 用户可见子集：Outline 列表、正文替换、查看器画廊、摘要配图共用此过滤。
   /// manifest 全量仍留给 AI 补检 / 点图定位。
@@ -203,6 +265,13 @@ class FigureManifestEntry {
 
   Map<String, dynamic> toJson() {
     final m = <String, dynamic>{
+      if (visualRegions.isNotEmpty)
+        'visual_regions': visualRegions.map((r) => r.toJson()).toList(),
+      if (sourceRefs.isNotEmpty) 'source_refs': sourceRefs,
+      if (replacementRefs.isNotEmpty) 'replacement_refs': replacementRefs,
+      'assignment': assignment,
+      if (sourceVersion != null) 'source_version': sourceVersion,
+      if (notes.isNotEmpty) 'notes': notes,
       'img': imagePath,
       'figure_title': captionText,
       'page_idx': pageIndex,
@@ -229,6 +298,21 @@ class FigureManifestEntry {
 
   factory FigureManifestEntry.fromJson(Map<String, dynamic> json) {
     return FigureManifestEntry(
+      visualRegions: [
+        for (final r in json['visual_regions'] as List? ?? [])
+          FigureVisualRegion.fromJson(Map<String, dynamic>.from(r as Map)),
+      ],
+      sourceRefs: [
+        for (final r in json['source_refs'] as List? ?? [])
+          Map<String, dynamic>.from(r as Map),
+      ],
+      replacementRefs: [
+        for (final r in json['replacement_refs'] as List? ?? [])
+          Map<String, dynamic>.from(r as Map),
+      ],
+      assignment: json['assignment'] as String? ?? 'confirmed',
+      sourceVersion: json['source_version'] as String?,
+      notes: (json['notes'] as List? ?? []).cast<String>(),
       id: json['id'] as String?,
       captionRefs: [
         for (final ref in json['caption_refs'] as List? ?? const [])
@@ -335,6 +419,7 @@ class CaptionCandidateInfo {
   final CaptionSource source;
   final List<double>? bbox;
   final String? blockId;
+  final List<FigureCaptionRef> sourceRefs;
 
   /// 多行 caption 合并的延续行（保留各自原始 bbox/content），其 blockId 须进
   /// 下游 manifest 的 blockIds。
@@ -353,6 +438,7 @@ class CaptionCandidateInfo {
     required this.continuationBlocks,
     required this.groupId,
     required this.blockOrder,
+    this.sourceRefs = const [],
   });
 
   List<String> get continuationBlockIds => [
@@ -368,6 +454,7 @@ class CaptionCandidateInfo {
 /// [continuationBlockIds] 是 caption 延续行——仅入 manifest blockIds 满足 md
 /// 替换契约，不参与裁剪区域（它们是 caption 文本，不是 figure 视觉）。
 class FigureCropRequest {
+  final List<double>? pageSize;
   final int pageIndex;
   final List<LayoutBlock> visualBlocks;
   final String? id;
@@ -382,6 +469,7 @@ class FigureCropRequest {
   final String captionSource;
 
   const FigureCropRequest({
+    this.pageSize,
     required this.pageIndex,
     required this.visualBlocks,
     this.id,
@@ -466,6 +554,7 @@ class _CaptionCandidate {
     this.blockOrder,
     this.continuationBlocks = const [],
     this.lineIndex,
+    this.sourceRefs = const [],
   });
 
   final int pageIndex;
@@ -484,6 +573,7 @@ class _CaptionCandidate {
 
   final List<LayoutBlock> continuationBlocks;
   final int? lineIndex;
+  final List<FigureCaptionRef> sourceRefs;
 }
 
 class _PageData {
@@ -715,32 +805,22 @@ class FigureExtractService {
 
   // ─── caption 配置(从 assets 加载) ────────────────────
 
-  static const _captionLangCodes = [
-    'en',
-    'zh',
-    'de',
-    'es',
-    'ja',
-    'ru',
-    'ko',
-    'vi',
-  ];
-
   static const _cjkModifierLangs = {'zh', 'zh-Hant', 'ja', 'ko'};
 
   late final RegExp _mainCaptionRe;
   late final RegExp _supplementaryCaptionRe;
   late final RegExp _tableCaptionRe;
   late final RegExp _otherCaptionRe;
+  late final RegExp _captionModifierTailRe;
   bool _initialized = false;
+  bool get isInitialized => _initialized;
 
   static List<String> _collectCategoryPrefixes(
     Map<String, dynamic> conf,
     String category,
   ) {
     final prefixes = <String>[];
-    for (final code in _captionLangCodes) {
-      final node = conf[code];
+    for (final node in conf.values) {
       if (node is! Map<String, dynamic>) continue;
       final items = node[category];
       if (items is List) {
@@ -758,14 +838,22 @@ class FigureExtractService {
     ];
   }
 
-  static List<String> _collectSupplementaryPrefixes(Map<String, dynamic> conf) {
+  static List<String> _collectSupplementaryPrefixes(
+    Map<String, dynamic> conf, {
+    String? category,
+  }) {
     final supplementary = conf['supplementary'];
     if (supplementary is! Map<String, dynamic>) return const [];
 
     final prefixes = <String>{};
     final standalone = supplementary['standalone'];
-    if (standalone is List) {
+    if (standalone is List && category == null) {
       prefixes.addAll(standalone.cast<String>());
+    } else if (standalone is Map) {
+      for (final kind
+          in category == null ? ['figure', 'table', 'other'] : [category]) {
+        prefixes.addAll((standalone[kind] as List? ?? []).cast<String>());
+      }
     }
 
     final modifiers = supplementary['modifiers'];
@@ -773,17 +861,11 @@ class FigureExtractService {
       return prefixes.toList();
     }
 
-    final basesByLang = <String, List<String>>{
-      for (final code in _captionLangCodes)
-        code: _langFigureAndOther(conf, code),
-      'zh-Hant': _langFigureAndOther(conf, 'zh'),
-    };
-
     for (final entry in modifiers.entries) {
       final lang = entry.key;
       final mods = entry.value;
       if (mods is! List) continue;
-      final bases = basesByLang[lang] ?? const <String>[];
+      final bases = _langPrefixes(conf, lang, category: category);
       for (final rawMod in mods) {
         final modifier = rawMod as String;
         for (final base in bases) {
@@ -798,15 +880,17 @@ class FigureExtractService {
     return prefixes.toList();
   }
 
-  static List<String> _langFigureAndOther(
+  static List<String> _langPrefixes(
     Map<String, dynamic> conf,
-    String code,
-  ) {
+    String code, {
+    String? category,
+  }) {
     final node = conf[code];
     if (node is! Map<String, dynamic>) return const [];
     final result = <String>[];
-    for (final category in ['figure', 'other']) {
-      final items = node[category];
+    for (final kind
+        in category == null ? ['figure', 'table', 'other'] : [category]) {
+      final items = node[kind];
       if (items is List) {
         result.addAll(items.cast<String>());
       }
@@ -814,26 +898,64 @@ class FigureExtractService {
     return result;
   }
 
-  static RegExp _buildCaptionPrefixRe(
-    List<String> prefixes,
-    String numberPattern,
-    String suffixPattern,
-  ) {
-    final sorted = [...prefixes]..sort((a, b) => b.length.compareTo(a.length));
-    final group = sorted.map(RegExp.escape).join('|');
-    return RegExp(
-      '^(?:$group)$numberPattern$suffixPattern',
-      caseSensitive: false,
-    );
+  static String _prefixAlternatives(Iterable<String> prefixes) {
+    final sorted = prefixes.toSet().toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    return sorted
+        .map((p) {
+          final escaped = p
+              .split(RegExp(r'\s+'))
+              .map(RegExp.escape)
+              .join(r'\s+');
+          // Figur + e 不能冒充 Figure；但允许无空格的 FigS1、FigureA1。
+          final boundary = RegExp(r'[A-Za-z]$').hasMatch(p)
+              ? r'(?![A-Za-z](?![.．\-‐‑–]?[0-9０-９]))'
+              : '';
+          return '$escaped$boundary';
+        })
+        .join('|');
   }
 
-  /// prefix-only 正则构造（无 number/suffix）：`table` / `other` 类别用，
-  /// 按 caption 前缀把这类 caption 与 figure 区分开。
-  static RegExp _buildPrefixOnlyRe(Map<String, dynamic> conf, String category) {
-    final prefixes = _collectCategoryPrefixes(conf, category)
-      ..sort((a, b) => b.length.compareTo(a.length));
-    final group = prefixes.map(RegExp.escape).join('|');
-    return RegExp('^(?:$group)', caseSensitive: false);
+  /// 召回、分类与补充材料判定使用相同的编号及词边界，避免补充表被归为图。
+  static RegExp _buildCaptionRe(
+    Map<String, dynamic> conf, {
+    String? category,
+    bool supplementaryOnly = false,
+  }) {
+    final normal = category == null
+        ? _collectMainPrefixes(conf)
+        : _collectCategoryPrefixes(conf, category);
+    final supplementary = _collectSupplementaryPrefixes(
+      conf,
+      category: category,
+    );
+    final prefixes = [...supplementary, if (!supplementaryOnly) ...normal];
+    final branches = <String>[
+      if (prefixes.isNotEmpty)
+        '(?:${_prefixAlternatives(prefixes)})${conf['number_pattern']}',
+      if (supplementaryOnly &&
+          normal.isNotEmpty &&
+          conf['supplementary_number_pattern'] is String)
+        '(?:${_prefixAlternatives(normal)})${conf['supplementary_number_pattern']}',
+    ];
+    for (final raw in conf['number_first'] as List? ?? []) {
+      final item = raw as Map;
+      if (supplementaryOnly && item['supplementary'] != true) continue;
+      final labels = <String>[
+        for (final kind
+            in category == null ? ['figure', 'table', 'other'] : [category])
+          ...(item[kind] as List? ?? []).cast<String>(),
+      ];
+      if (labels.isNotEmpty) {
+        branches.add(
+          '${item['number_pattern']}\\s+(?:${_prefixAlternatives(labels)})',
+        );
+      }
+    }
+    return RegExp(
+      '^(?:${branches.join('|')})${conf['suffix_pattern']}',
+      caseSensitive: false,
+    );
   }
 
   Future<void> init() async {
@@ -842,28 +964,16 @@ class FigureExtractService {
       'assets/config/caption_patterns.json',
     );
     final conf = jsonDecode(raw) as Map<String, dynamic>;
-    final numberPattern = conf['number_pattern'] as String;
-    final suffixPattern = conf['suffix_pattern'] as String;
-
-    final mainPrefixes = _collectMainPrefixes(conf);
-    final supplementaryPrefixes = _collectSupplementaryPrefixes(conf);
-
-    // 主正则 = 正文前缀 ∪ 补充前缀，保持 figure 提取对补充图 caption 的召回。
-    _mainCaptionRe = _buildCaptionPrefixRe(
-      {...mainPrefixes, ...supplementaryPrefixes}.toList(),
-      numberPattern,
-      suffixPattern,
-    );
-    _supplementaryCaptionRe = _buildCaptionPrefixRe(
-      supplementaryPrefixes,
-      numberPattern,
-      suffixPattern,
+    final modifiers = (conf['supplementary'] as Map)['modifiers'] as Map;
+    _captionModifierTailRe = RegExp(
+      '(?:${modifiers.values.expand((v) => (v as List).cast<String>()).map(RegExp.escape).join('|')})\\s*\$',
+      caseSensitive: false,
     );
 
-    // table / other 类别（other = Scheme/Chart/Plate/Map/Box/Diagram/Exhibit）
-    // prefix-only 正则，用于 classifyKind 把这类 caption 与 figure 区分开。
-    _tableCaptionRe = _buildPrefixOnlyRe(conf, 'table');
-    _otherCaptionRe = _buildPrefixOnlyRe(conf, 'other');
+    _mainCaptionRe = _buildCaptionRe(conf);
+    _supplementaryCaptionRe = _buildCaptionRe(conf, supplementaryOnly: true);
+    _tableCaptionRe = _buildCaptionRe(conf, category: 'table');
+    _otherCaptionRe = _buildCaptionRe(conf, category: 'other');
     _initialized = true;
   }
 
@@ -871,6 +981,56 @@ class FigureExtractService {
   /// 与本服务 trimCaptionFromRegion 的判定保持同源。使用前须 [init]。
   bool isMainCaption(String text) =>
       _mainCaptionRe.hasMatch(_normalizeCaptionText(text));
+
+  static bool isCaptionLabel(String label) =>
+      label == 'figure_title' ||
+      label == 'table_title' ||
+      label == 'chart_title' ||
+      label == 'image_title' ||
+      label == 'caption' ||
+      label.endsWith('_caption');
+
+  /// 返回原文中的题注范围；正文前后缀不能随着整块一起被消费。
+  List<({int start, int end})> captionRanges(
+    String text, {
+    bool explicit = false,
+  }) {
+    final pattern = RegExp(
+      _mainCaptionRe.pattern.substring(1),
+      caseSensitive: false,
+    );
+    final starts = <int>[];
+    for (final match in pattern.allMatches(text)) {
+      final lineStart = match.start == 0
+          ? 0
+          : text.lastIndexOf('\n', match.start - 1) + 1;
+      final prefix = text.substring(lineStart, match.start);
+      final atBoundary =
+          prefix.trim().isEmpty ||
+          RegExp(r'^[\s#*_]+$').hasMatch(prefix) ||
+          (RegExp(r'[。！？.!?]\s+$').hasMatch(prefix) &&
+              RegExp(r'[:：|]').hasMatch(match[0]!));
+      if (atBoundary) starts.add(match.start);
+    }
+    if (starts.isEmpty &&
+        explicit &&
+        FigureManifestEntry.isUsableCaption(text)) {
+      return [(start: 0, end: text.length)];
+    }
+    return [
+      for (var i = 0; i < starts.length; i++)
+        (
+          start: starts[i],
+          end: () {
+            final limit = i + 1 < starts.length ? starts[i + 1] : text.length;
+            final paragraph = RegExp(
+              r'\r?\n\s*\r?\n',
+            ).firstMatch(text.substring(starts[i], limit));
+            return paragraph == null ? limit : starts[i] + paragraph.start;
+          }(),
+        ),
+    ];
+  }
 
   /// 判断文本是否为补充 figure caption（Supplementary / Extended Data 等）。
   /// 生图参考图超限时优先剔除此类条目。使用前须 [init]。
@@ -941,8 +1101,7 @@ class FigureExtractService {
     for (final raw in parts) {
       final text = _normalizeCaptionText(raw);
       if (text.isEmpty) continue;
-      if (merged.any((existing) => existing.contains(text))) continue;
-      merged.removeWhere((existing) => text.contains(existing));
+      if (merged.contains(text)) continue;
       merged.add(text);
     }
     return merged.join(' ');
@@ -966,6 +1125,79 @@ class FigureExtractService {
     final collected = {
       for (final page in pages) page.pageIndex: _collectCaptionCandidates(page),
     };
+    // 页尾未完句与下一页首段连接时，仍保留两个页面各自的原文来源。
+    for (var pi = 0; pi + 1 < pages.length; pi++) {
+      final page = pages[pi], next = pages[pi + 1];
+      if (next.pageIndex != page.pageIndex + 1) continue;
+      bool contentBlock(LayoutBlock b) =>
+          !const {
+            'header',
+            'footer',
+            'number',
+            'page_number',
+            'header_image',
+            'footer_image',
+          }.contains(b.blockLabel) &&
+          b.blockBbox.length == 4;
+      final tail = _Bbox.union(page.blocks.where(contentBlock));
+      final head = next.blocks.where(contentBlock).firstOrNull;
+      if (head == null ||
+          !isCaptionLabel(head.blockLabel) ||
+          _isVisualBlock(head) ||
+          isMainCaption(head.blockContent)) {
+        continue;
+      }
+      final firstBox = _Bbox.fromBlock(head);
+      final nextBounds = _Bbox.union(next.blocks.where(contentBlock));
+      final candidates = collected[page.pageIndex]!;
+      for (var ci = 0; ci < candidates.length; ci++) {
+        final c = candidates[ci], box = candidates[ci].bbox;
+        if (box == null ||
+            _captionDescriptionComplete(c.text) ||
+            tail.bottom - box.bottom > 12 ||
+            firstBox.top - nextBounds.top > 12 ||
+            !RegExp(
+              r'^[a-z\u4e00-\u9fff]',
+            ).hasMatch(head.blockContent.trim()) ||
+            firstBox.right <= box.left ||
+            firstBox.left >= box.right) {
+          continue;
+        }
+        final parts = [
+          head,
+          ..._scanCaptionContinuation(next, next.blocks.indexOf(head)),
+        ];
+        final ids = parts.map((b) => b.blockId).toSet();
+        collected[next.pageIndex]!.removeWhere(
+          (other) => ids.contains(other.blockId),
+        );
+        candidates[ci] = _CaptionCandidate(
+          pageIndex: c.pageIndex,
+          text: _joinCaptionParts([
+            c.text,
+            ...parts.map((b) => b.blockContent),
+          ]),
+          captionName: c.captionName,
+          source: c.source,
+          bbox: c.bbox,
+          blockId: c.blockId,
+          groupId: c.groupId,
+          blockOrder: c.blockOrder,
+          continuationBlocks: c.continuationBlocks,
+          lineIndex: c.lineIndex,
+          sourceRefs: [
+            ...c.sourceRefs,
+            for (final b in parts)
+              FigureCaptionRef(
+                pageIndex: next.pageIndex,
+                blockId: b.blockId,
+                text: b.blockContent,
+              ),
+          ],
+        );
+        break;
+      }
+    }
     final normalized = <_PageData>[];
 
     for (final original in pages) {
@@ -974,11 +1206,22 @@ class FigureExtractService {
             (entry.key - original.pageIndex).abs() <= 1 &&
             entry.value.any((c) => isMainCaption(c.text)),
       );
-      final pageCaptions = collected[original.pageIndex]!
-          .where((c) => !numberedNearby || isMainCaption(c.text))
-          .toList();
       final visuals = original.blocks.where(_isVisualBlock).toList();
       final visualRegion = _Bbox.union(visuals);
+      final pageCaptions = collected[original.pageIndex]!.where((c) {
+        if (!numberedNearby || isMainCaption(c.text) || c.bbox == null) {
+          return true;
+        }
+        final block = original.blocks
+            .where((b) => b.blockId == c.blockId)
+            .firstOrNull;
+        if (block?.parentId != null) return true;
+        // 编号主图附近、紧贴视觉区域的短标题是图内标注；不屏蔽长的无编号题注。
+        return !(c.text.length <= 80 &&
+            c.bbox!.gapTo(visualRegion) <= 24 &&
+            c.bbox!.bottom - c.bbox!.top <
+                (visualRegion.bottom - visualRegion.top) * .1);
+      }).toList();
       final pageRegion = _Bbox.union(original.blocks);
       final plate =
           numberedNearby &&
@@ -1016,6 +1259,7 @@ class FigureExtractService {
             blockLabel: 'header',
             blockBbox: b.blockBbox,
             blockContent: b.blockContent,
+            sourceData: b.sourceData,
           );
         }
         if (!numberedNearby ||
@@ -1027,7 +1271,7 @@ class FigureExtractService {
         }
         return LayoutBlock(
           blockId: b.blockId,
-          blockLabel: b.blockContent.length > 80 ? 'text' : 'vision_footnote',
+          blockLabel: b.blockContent.length > 80 ? 'text' : 'figure_annotation',
           blockBbox: b.blockBbox,
           rawBbox: b.rawBbox,
           blockContent: b.blockContent,
@@ -1036,6 +1280,7 @@ class FigureExtractService {
           blockOrder: b.blockOrder,
           parentId: b.parentId,
           sourceImage: b.sourceImage,
+          sourceData: b.sourceData,
         );
       }).toList();
       final page = _PageData(original.pageIndex, blocks, original.markdown);
@@ -1045,6 +1290,14 @@ class FigureExtractService {
       // 排除集合 = anchor blockId ∪ 所有 continuation block ids.
       // 后者由多行 caption 合并产生, 同样不应被 figure 召回当成视觉块/子标签.
       final captionBlockIds = <String>{};
+      for (final c in collected.values.expand((v) => v)) {
+        captionBlockIds.addAll(
+          c.sourceRefs
+              .where((r) => r.pageIndex == original.pageIndex)
+              .map((r) => r.blockId)
+              .whereType<String>(),
+        );
+      }
       for (final c in pageCaptions) {
         if (c.blockId != null) captionBlockIds.add(c.blockId!);
         for (final cont in c.continuationBlocks) {
@@ -1077,22 +1330,23 @@ class FigureExtractService {
     // Phase 1: 识别 anchor — 任意 label, 仅看内容是否匹配主标题正则.
     // 同 captionName 选内容最长的 block (保留它在 page.blocks 中的索引,
     // Phase 2 从该索引向下扫描延续行).
-    final anchorByName = <String, ({int index, LayoutBlock block})>{};
+    final anchorByName =
+        <String, ({int index, LayoutBlock block, int start, int end})>{};
     for (var i = 0; i < page.blocks.length; i++) {
       final b = page.blocks[i];
-      final content = _normalizeCaptionText(b.blockContent);
-      if (content.isEmpty) continue;
-      final explicit =
-          b.blockLabel == 'figure_title' || b.blockLabel.endsWith('_caption');
-      if (!FigureManifestEntry.isUsableCaption(content)) continue;
-      if (!explicit && !_mainCaptionRe.hasMatch(content)) continue;
-
-      final name = b.blockId;
-
-      final existing = anchorByName[name];
-      if (existing == null ||
-          content.length > existing.block.blockContent.trim().length) {
-        anchorByName[name] = (index: i, block: b);
+      if (_isVisualBlock(b)) continue;
+      for (final range in captionRanges(
+        b.blockContent,
+        explicit: isCaptionLabel(b.blockLabel),
+      )) {
+        final content = b.blockContent.substring(range.start, range.end).trim();
+        if (!FigureManifestEntry.isUsableCaption(content)) continue;
+        anchorByName['${b.blockId}:${range.start}'] = (
+          index: i,
+          block: b,
+          start: range.start,
+          end: range.end,
+        );
       }
     }
 
@@ -1121,16 +1375,21 @@ class FigureExtractService {
       )) {
         continue;
       }
-      final continuations = pick.block.parentId != null
+      final continuations =
+          pick.block.parentId != null ||
+              pick.end < pick.block.blockContent.trimRight().length
           ? <LayoutBlock>[]
           : _scanCaptionContinuation(page, pick.index);
       continuations.addAll(duplicates.map((d) => d.block));
       consumed.addAll(continuations.map((b) => b.blockId));
       final anchor = pick.block;
-      final anchorContent = _normalizeCaptionText(anchor.blockContent);
+      final anchorContent = _normalizeCaptionText(
+        anchor.blockContent.substring(pick.start, pick.end),
+      );
       final mergedText = _joinCaptionParts([
         anchorContent,
-        for (final c in continuations) c.blockContent,
+        for (final c in continuations)
+          if (!duplicates.any((d) => d.block == c)) c.blockContent,
       ]);
       final mergedBbox = continuations.isEmpty
           ? _Bbox.fromBlock(anchor)
@@ -1147,6 +1406,21 @@ class FigureExtractService {
           groupId: anchor.groupId,
           blockOrder: anchor.blockOrder,
           continuationBlocks: continuations,
+          sourceRefs: [
+            FigureCaptionRef(
+              pageIndex: page.pageIndex,
+              blockId: anchor.blockId,
+              text: anchor.blockContent.substring(pick.start, pick.end),
+              start: pick.start,
+              end: pick.end,
+            ),
+            for (final block in continuations)
+              FigureCaptionRef(
+                pageIndex: page.pageIndex,
+                blockId: block.blockId,
+                text: block.blockContent,
+              ),
+          ],
         ),
       );
     }
@@ -1158,7 +1432,11 @@ class FigureExtractService {
         final t = _normalizeCaptionText(raw);
         if (t.isEmpty || !_mainCaptionRe.hasMatch(t)) continue;
         final name = _extractCaptionName(t);
-        if (name.isEmpty || knownNames.contains(name)) continue;
+        if (name.isEmpty ||
+            knownNames.contains(name) ||
+            candidates.any((c) => c.text.contains(t))) {
+          continue;
+        }
         knownNames.add(name);
         candidates.add(
           _CaptionCandidate(
@@ -1210,36 +1488,63 @@ class FigureExtractService {
       anchorHeight * _continuationGapRatio,
       _continuationGapMin,
     );
-    final anchorGroupId = anchor.groupId;
 
     final result = <LayoutBlock>[];
-    var lastBottom = anchorBbox.bottom;
+    var previousBox = anchorBbox;
     var accumulatedText = _normalizeCaptionText(anchor.blockContent);
 
     for (var j = anchorIndex + 1; j < page.blocks.length; j++) {
       final cand = page.blocks[j];
       final candContent = cand.blockContent.trim();
 
-      // 硬终止: 新 caption 出现 — 即使紧邻也不能吃
-      if (_mainCaptionRe.hasMatch(candContent)) break;
-      // 终止: 视觉块阻断
-      if (_captionMergeExcludeLabels.contains(cand.blockLabel)) break;
+      final cbox = _Bbox.fromBlock(cand);
+      final sameBand =
+          cand.blockBbox.length == 4 &&
+          cbox.left >= previousBox.right &&
+          cbox.left - previousBox.right <= anchorWidth * .2 &&
+          (cbox.top - previousBox.top).abs() <=
+              math.max(12, anchorHeight * .2) &&
+          (cbox.right - cbox.left) >= anchorWidth * .6;
+      // 左栏以补充材料修饰词结束时，右栏的图号是引用续句，不是新题注。
+      final continuedReference =
+          sameBand && _captionModifierTailRe.hasMatch(accumulatedText);
+      if (_mainCaptionRe.hasMatch(candContent) && !continuedReference) break;
+      if (_captionMergeExcludeLabels.contains(cand.blockLabel)) {
+        // JSON 中可能晚到一块图像；位于题注带上方的图不打断横向续栏。
+        if (cbox.bottom <= anchorBbox.top) continue;
+        break;
+      }
+      if (const {
+            'header',
+            'footer',
+            'number',
+            'doc_title',
+            'paragraph_title',
+          }.contains(cand.blockLabel) &&
+          !_captionNoteLeadRe.hasMatch(candContent)) {
+        break;
+      }
 
-      // group_id 段落续接: 与 anchor 同 group → 跳过空间检查直接合并
-      final sameGroup =
-          anchorGroupId != null &&
-          cand.groupId != null &&
-          cand.groupId == anchorGroupId;
-
-      if (!sameGroup) {
+      // 分组只作提示；同组也必须满足几何与正文边界，不能吞并独立段落。
+      {
         if (!isMainCaption(anchor.blockContent) &&
             _bodyTextContinuationLabels.contains(cand.blockLabel)) {
           break;
         }
-        final cbox = _Bbox.fromBlock(cand);
         // 终止: 纵向 gap 过大
-        final gap = cbox.top - lastBottom;
-        if (gap < 0 || gap > maxGap) break;
+        final gap = cbox.top - previousBox.bottom;
+        // OCR 脚注行框可能相交；阅读顺序向下且非包含关系时不能截掉续行。
+        final overlappingNote =
+            const {
+              'footnote',
+              'vision_footnote',
+              'vision_footer',
+              'footer',
+              'header',
+            }.contains(cand.blockLabel) &&
+            cbox.top > previousBox.top &&
+            cbox.bottom > previousBox.bottom;
+        if (!sameBand && ((gap < 0 && !overlappingNote) || gap > maxGap)) break;
 
         // 终止: 横向 overlap 不足 (避免吃入邻栏)
         final overlap = math.max(
@@ -1247,11 +1552,27 @@ class FigureExtractService {
           math.min(anchorBbox.right, cbox.right) -
               math.max(anchorBbox.left, cbox.left),
         );
-        if (overlap / anchorWidth < _continuationOverlapRatio) break;
+        final alignedShortNote =
+            (cbox.left - anchorBbox.left).abs() <= anchorHeight &&
+            (const {
+                  'footnote',
+                  'vision_footnote',
+                  'vision_footer',
+                }.contains(cand.blockLabel) ||
+                _captionNoteLeadRe.hasMatch(candContent));
+        final overlapWidth = alignedShortNote
+            ? math.min(anchorWidth, cbox.right - cbox.left)
+            : anchorWidth;
+        if (!sameBand &&
+            (overlapWidth <= 0 ||
+                overlap / overlapWidth < _continuationOverlapRatio)) {
+          break;
+        }
 
         // 终止: body-text label + caption 描述已完整 → 正文段落, 不是延续行
         if (_bodyTextContinuationLabels.contains(cand.blockLabel) &&
-            _captionDescriptionComplete(accumulatedText)) {
+            _captionDescriptionComplete(accumulatedText) &&
+            !_captionNoteLeadRe.hasMatch(candContent)) {
           break;
         }
 
@@ -1266,7 +1587,7 @@ class FigureExtractService {
 
         // group_id 停止信号: 候选 block 与后续 block 共享 group_id
         // (属于另一段落) → 它不是 caption 的续接
-        if (cand.groupId != null && j + 1 < page.blocks.length) {
+        if (!sameBand && cand.groupId != null && j + 1 < page.blocks.length) {
           final next = page.blocks[j + 1];
           if (next.groupId == cand.groupId) break;
         }
@@ -1274,13 +1595,13 @@ class FigureExtractService {
 
       // 跳过空内容 (PaddleOCR 偶有空 block)
       if (candContent.isEmpty) {
-        lastBottom = _Bbox.fromBlock(cand).bottom;
+        previousBox = cbox;
         continue;
       }
 
       result.add(cand);
       accumulatedText = _joinCaptionParts([accumulatedText, candContent]);
-      lastBottom = _Bbox.fromBlock(cand).bottom;
+      previousBox = cbox;
     }
 
     return result;
@@ -1320,7 +1641,7 @@ class FigureExtractService {
 
   // ─── Stage 2: 配对 ────────────────────────────────────
 
-  /// Caption-first ownership. Native hierarchy wins; geometry may abstain.
+  /// 从 v0.1.4 的聚类／四轮配对演进：保留拆分候选，在竞争范围内一起裁决。
   ({
     List<FigureSegment> segments,
     List<Map<String, dynamic>> dropped,
@@ -1331,172 +1652,218 @@ class FigureExtractService {
     _Inventory inv, {
     FigureExtractProfile profile = FigureExtractProfile.auto,
   }) {
-    final segments = <FigureSegment>[];
-    final dropped = <Map<String, dynamic>>[];
-    final assigned = <_FigureBlock, _CaptionCandidate>{};
-    final crossPage = _crossPageOwners(inv);
-    final pageByIndex = {for (final page in inv.pages) page.pageIndex: page};
-    LayoutBlock? anchor(_CaptionCandidate c) {
-      for (final b
-          in pageByIndex[c.pageIndex]?.blocks ?? const <LayoutBlock>[]) {
-        if (b.blockId == c.blockId) return b;
-      }
-      return null;
-    }
-
+    final byPage = {for (final page in inv.pages) page.pageIndex: page};
+    final visuals = inv.figureBlocks
+        .where((v) => _isVisualBlock(v.block) && v.block.blockBbox.length == 4)
+        .toList();
+    final cross = _crossPageOwners(inv);
+    final clusters = <List<_FigureBlock>>[];
     for (final page in inv.pages) {
-      final visuals = inv.figureBlocks
+      final remaining = visuals
+          .where((v) => v.pageIndex == page.pageIndex)
+          .toList();
+      final gap = _pageDiagonal(page.blocks) * .06;
+      while (remaining.isNotEmpty) {
+        final members = [remaining.removeAt(0)];
+        var changed = true;
+        while (changed) {
+          changed = false;
+          for (final v in remaining.toList()) {
+            if (!members.any(
+              (m) =>
+                  m.bbox.gapTo(v.bbox) <= gap ||
+                  ((m.bbox.top - v.bbox.top).abs() < 12 &&
+                      (m.bbox.bottom - v.bbox.bottom).abs() < 12 &&
+                      m.bbox.gapTo(v.bbox) <=
+                          math.min(
+                                m.bbox.right - m.bbox.left,
+                                v.bbox.right - v.bbox.left,
+                              ) *
+                              .3),
+            )) {
+              continue;
+            }
+            final proposed = [...members, v];
+            final box = _Bbox.union(proposed.map((m) => m.block));
+            if (page.blocks.any(
+              (b) =>
+                  b.blockBbox.length == 4 &&
+                  !proposed.any((m) => m.block == b) &&
+                  _isStableBlocker(b) &&
+                  _overlaps(box, _Bbox.fromBlock(b)) &&
+                  !proposed.any((m) => _contains(m.bbox, _Bbox.fromBlock(b))),
+            )) {
+              continue;
+            }
+            members.add(v);
+            remaining.remove(v);
+            changed = true;
+          }
+        }
+        clusters.add(members);
+      }
+    }
+    final options = <_CaptionCandidate, List<(double, List<_FigureBlock>)>>{};
+    for (final caption in inv.captions) {
+      final page = byPage[caption.pageIndex]!;
+      final cap = page.blocks
+          .where((b) => b.blockId == caption.blockId)
+          .firstOrNull;
+      final diagonal = _pageDiagonal(page.blocks);
+      final native = visuals
           .where(
             (v) =>
-                v.pageIndex == page.pageIndex &&
-                _isVisualBlock(v.block) &&
-                v.block.blockBbox.length == 4,
+                v.pageIndex == caption.pageIndex &&
+                cap?.parentId != null &&
+                v.block.parentId == cap!.parentId,
           )
           .toList();
-      final captions = inv.captions
-          .where((c) => c.pageIndex == page.pageIndex)
-          .toList();
-      final columns = _PageColumns.detect(page.blocks);
-      final diagonal = _pageDiagonal(page.blocks);
-      final threshold = diagonal * _captionMatchRatio;
-      final directionVotes = <bool>[];
-      for (final caption in captions.where(
-        (c) => c.bbox != null && !_isTableCaption(c),
-      )) {
-        final near =
-            visuals.where((v) => v.block.blockLabel != 'table').toList()..sort(
-              (a, b) => a.bbox
-                  .gapTo(caption.bbox!)
-                  .compareTo(b.bbox.gapTo(caption.bbox!)),
-            );
-        if (near.isNotEmpty) {
-          directionVotes.add(near.first.bbox.bottom <= caption.bbox!.top);
-        }
-      }
-      final preferAbove =
-          directionVotes.length >= 2 && directionVotes.every((v) => v);
-      for (final visual in visuals) {
-        final candidates = <(int, double, _CaptionCandidate)>[];
-        for (final caption in captions) {
-          final capBlock = anchor(caption);
-          final native =
-              visual.block.parentId != null &&
-              visual.block.parentId == capBlock?.parentId;
-          final grouped =
-              visual.block.groupId != null &&
-              visual.block.groupId == capBlock?.groupId;
-          final table = isMainCaption(caption.text)
-              ? _isTableCaption(caption)
-              : capBlock?.captionKind == 'table';
-          if ((visual.block.blockLabel == 'table') != table) continue;
-          if (caption.bbox == null) {
-            // Only an explicit relationship can associate geometry-free captions.
-            if (native || grouped) candidates.add((native ? 0 : 1, 0, caption));
-            if (!native &&
-                !grouped &&
-                visuals.length == 1 &&
-                captions.length == 1 &&
-                caption.source == CaptionSource.markdownFallback) {
-              candidates.add((3, 0, caption));
+      final candidates = <List<_FigureBlock>>[
+        for (final visual in visuals) [visual],
+        ...clusters,
+        if (native.isNotEmpty) native,
+        if (cross.values.any((v) => v.$2 == caption))
+          cross.entries
+              .where((e) => e.value.$2 == caption)
+              .map((e) => e.key)
+              .toList(),
+      ];
+      final seen = <String>{};
+      final choices = <(double, List<_FigureBlock>)>[];
+      for (final candidate in candidates) {
+        final key =
+            candidate.map((v) => '${v.pageIndex}:${v.block.blockId}').toList()
+              ..sort();
+        if (!seen.add(key.join('|'))) continue;
+        var score = 0.0;
+        var valid = true;
+        for (final v in candidate) {
+          final samePage = v.pageIndex == caption.pageIndex;
+          final parent =
+              samePage &&
+              cap?.parentId != null &&
+              v.block.parentId == cap!.parentId;
+          final isCross = cross[v]?.$2 == caption;
+          final visualText = v.block.blockContent.isNotEmpty
+              ? v.block.blockContent
+              : p
+                    .basenameWithoutExtension(v.block.sourceImage ?? '')
+                    .replaceAll('_', ' ');
+          final match = _mainCaptionRe.firstMatch(
+            _normalizeCaptionText(visualText),
+          );
+          final name = match
+              ?.group(0)
+              ?.replaceAll('.', '')
+              .replaceAll(' ', '_')
+              .trim();
+          final numbered =
+              name != null &&
+              name.toLowerCase() == caption.captionName.toLowerCase() &&
+              !page.blocks.any(_isVisualBlock);
+          if (!samePage && !isCross && !numbered) {
+            valid = false;
+            break;
+          }
+          if (samePage && caption.bbox != null) {
+            final distance = v.bbox.gapTo(caption.bbox!);
+            if (distance > diagonal * _captionMatchRatio ||
+                !_PageColumns.detect(
+                  page.blocks,
+                ).sameColumn(v.bbox, caption.bbox!) ||
+                _associationBlocked([v.block], caption, page.blocks)) {
+              valid = false;
+              break;
             }
-            continue;
+            score += 4 - distance / math.max(diagonal, 1) * 10;
+          } else if (parent || isCross || numbered) {
+            score += isCross ? 3.5 : 4;
+          } else if (samePage &&
+              caption.source == CaptionSource.markdownFallback &&
+              inv.captions
+                      .where((c) => c.pageIndex == caption.pageIndex)
+                      .length ==
+                  1 &&
+              clusters
+                      .where((c) => c.first.pageIndex == caption.pageIndex)
+                      .length ==
+                  1) {
+            score += 2.5;
+          } else {
+            valid = false;
+            break;
           }
-          final gap = visual.bbox.gapTo(caption.bbox!);
-          if (!native &&
-              !grouped &&
-              (gap > threshold ||
-                  !columns.sameColumn(visual.bbox, caption.bbox!))) {
-            continue;
+          if (parent) score += 1;
+          if ((v.block.blockLabel == 'table') != _isTableCaption(caption)) {
+            score -= .35;
           }
-          if (!native &&
-              _associationBlocked([visual.block], caption, page.blocks)) {
-            continue;
-          }
-          final directionPenalty =
-              preferAbove && !table && visual.bbox.top >= caption.bbox!.bottom
-              ? 1
-              : 0;
-          candidates.add((
-            native
-                ? 0
-                : grouped
-                ? 1
-                : 2 + directionPenalty,
-            gap,
-            caption,
-          ));
         }
-        final cross = crossPage[visual];
-        if (cross != null) candidates.add((2, cross.$1, cross.$2));
-        candidates.sort((a, b) {
-          final rank = a.$1.compareTo(b.$1);
-          return rank != 0 ? rank : a.$2.compareTo(b.$2);
-        });
-        if (candidates.isEmpty) continue;
-        final best = candidates.first;
-        if (candidates.length > 1 &&
-            candidates[1].$1 == best.$1 &&
-            (best.$1 < 2 || candidates[1].$2 <= best.$2 * 1.25 + 2)) {
+        if (!valid) continue;
+        if (candidate.length > 1 &&
+            candidate.every((v) => v.pageIndex == caption.pageIndex) &&
+            caption.bbox != null &&
+            _associationBlocked(
+              candidate.map((v) => v.block).toList(),
+              caption,
+              page.blocks,
+            )) {
           continue;
         }
-        assigned[visual] = best.$3;
+        choices.add((score, candidate));
       }
-
-      // Grow only from established caption owners. Check the whole proposed
-      // region, so a chain of near neighbours cannot bridge another figure.
+      choices.sort((a, b) => b.$1.compareTo(a.$1));
+      options[caption] = choices.take(24).toList();
+    }
+    // 仅在共享视觉观察的连通分量内搜索，避免全文候选形成笛卡尔积。
+    final pending = inv.captions.toSet();
+    final assigned = <_FigureBlock, _CaptionCandidate>{};
+    while (pending.isNotEmpty) {
+      final component = <_CaptionCandidate>{pending.first};
+      final related = <_FigureBlock>{};
       var changed = true;
       while (changed) {
         changed = false;
-        final additions = <_FigureBlock, _CaptionCandidate>{};
-        for (final visual in visuals.where((v) => !assigned.containsKey(v))) {
-          final owners = <_CaptionCandidate>[];
-          for (final caption in captions) {
-            final members = assigned.entries
-                .where((e) => e.value == caption)
-                .map((e) => e.key)
-                .toList();
-            if (members.isEmpty) continue;
-            if (members.any(
-              (v) =>
-                  (v.block.blockLabel == 'table') !=
-                  (visual.block.blockLabel == 'table'),
-            )) {
-              continue;
-            }
-            if (!members.any(
-              (v) =>
-                  (visual.block.groupId != null &&
-                      visual.block.groupId == v.block.groupId) ||
-                  v.bbox.gapTo(visual.bbox) <= diagonal * 0.06,
-            )) {
-              continue;
-            }
-            final proposed = [...members.map((v) => v.block), visual.block];
-            if (_associationBlocked(proposed, caption, page.blocks)) continue;
-            final region = _Bbox.union(proposed);
-            if (assigned.entries.any(
-              (e) =>
-                  e.key.pageIndex == page.pageIndex &&
-                  e.value != caption &&
-                  _overlaps(region, e.key.bbox),
-            )) {
-              continue;
-            }
-            owners.add(caption);
-          }
-          if (owners.length == 1) additions[visual] = owners.single;
+        for (final c in component) {
+          related.addAll(options[c]!.expand((v) => v.$2));
         }
-        if (additions.isNotEmpty) {
-          assigned.addAll(additions);
+        for (final c in pending.toList()) {
+          if (component.contains(c) ||
+              !options[c]!.any((v) => v.$2.any(related.contains))) {
+            continue;
+          }
+          component.add(c);
           changed = true;
         }
       }
-
-      for (final caption
-          in assigned.entries
-              .where((e) => e.key.pageIndex == page.pageIndex)
-              .map((e) => e.value)
-              .toSet()) {
+      pending.removeAll(component);
+      var beam = <(double, Map<_FigureBlock, _CaptionCandidate>)>[(0, {})];
+      for (final caption in component) {
+        final next = <(double, Map<_FigureBlock, _CaptionCandidate>)>[];
+        for (final state in beam) {
+          next.add(state);
+          for (final option in options[caption]!) {
+            if (option.$2.any(state.$2.containsKey)) continue;
+            next.add((
+              state.$1 + option.$1,
+              {...state.$2, for (final v in option.$2) v: caption},
+            ));
+          }
+        }
+        next.sort((a, b) => b.$1.compareTo(a.$1));
+        beam = next.take(64).toList();
+      }
+      final best = beam.first;
+      final competitive = beam.where((b) => best.$1 - b.$1 < .2).toList();
+      for (final entry in best.$2.entries) {
+        if (competitive.every((b) => b.$2[entry.key] == entry.value)) {
+          assigned[entry.key] = entry.value;
+        }
+      }
+    }
+    final segments = <FigureSegment>[];
+    final owned = <LayoutBlock>{};
+    for (final caption in assigned.values.toSet()) {
+      for (final page in inv.pages) {
         final members = assigned.entries
             .where(
               (e) => e.value == caption && e.key.pageIndex == page.pageIndex,
@@ -1504,76 +1871,71 @@ class FigureExtractService {
             .map((e) => e.key)
             .toList();
         if (members.isEmpty) continue;
-        final region = _Bbox.union(members.map((v) => v.block).toList());
-        // Native groups retain internal labels and notes, including text-only
-        // panel labels that were absent from the provider's image crops.
-        final capBlock = anchor(caption);
-        for (final block in page.blocks) {
-          if (members.any((v) => v.block == block) ||
-              (page.pageIndex == caption.pageIndex &&
-                  block.blockId == caption.blockId) ||
-              caption.continuationBlocks.contains(block)) {
+        final box = _Bbox.union(members.map((m) => m.block));
+        // 同一个整图中的未认领子框属于同一出现，记录来源后才能精确去重。
+        members.addAll(
+          visuals.where(
+            (v) =>
+                v.pageIndex == page.pageIndex &&
+                !assigned.containsKey(v) &&
+                members.any((m) => _contains(m.bbox, v.bbox)),
+          ),
+        );
+        final cap = byPage[caption.pageIndex]!.blocks
+            .where((b) => b.blockId == caption.blockId)
+            .firstOrNull;
+        for (final b in page.blocks) {
+          if (members.any((m) => m.block == b) ||
+              owned.contains(b) ||
+              inv.captions.any(
+                (c) =>
+                    c.sourceRefs.any(
+                      (r) =>
+                          r.pageIndex == page.pageIndex &&
+                          r.blockId == b.blockId,
+                    ) ||
+                    c.pageIndex == page.pageIndex &&
+                        (c.blockId == b.blockId ||
+                            c.continuationBlocks.any(
+                              (part) => part.blockId == b.blockId,
+                            )),
+              ) ||
+              _isVisualBlock(b)) {
             continue;
           }
-          final native =
-              capBlock?.parentId != null &&
-              block.parentId == capBlock!.parentId;
-          final label = isSubfigureLabelBlock(block);
-          final note = block.blockLabel == 'vision_footnote';
-          final shortText =
-              block.blockLabel == 'text' && block.blockContent.length <= 80;
-          if (!(label || note || shortText) || block.blockBbox.length != 4) {
-            continue;
-          }
-          final box = _Bbox.fromBlock(block);
-          final internal =
-              region.gapTo(box) <= (label ? diagonal * 0.06 : 32) &&
-              !captions.any((c) => c.bbox != null && _overlaps(c.bbox!, box)) &&
-              !assigned.entries.any(
-                (e) =>
-                    e.key.pageIndex == page.pageIndex &&
-                    e.value != caption &&
-                    e.key.bbox.gapTo(box) <= region.gapTo(box),
-              );
-          if (internal && (note || shortText)) {
+          final inside =
+              b.blockBbox.length == 4 && _contains(box, _Bbox.fromBlock(b));
+          final note = _isVisionAnnotationBlock(b);
+          final near =
+              b.blockBbox.length == 4 && box.gapTo(_Bbox.fromBlock(b)) <= 24;
+          final parent =
+              cap?.parentId != null &&
+              b.parentId == cap!.parentId &&
+              page.pageIndex == caption.pageIndex;
+          if (inside ||
+              (note && (parent || near)) ||
+              ((isSubfigureLabelBlock(b) ||
+                      b.blockLabel == 'figure_annotation') &&
+                  near)) {
             members.add(
               _FigureBlock(
                 page.pageIndex,
                 LayoutBlock(
-                  blockId: block.blockId,
-                  blockLabel: 'figure_annotation',
-                  blockBbox: block.blockBbox,
-                  rawBbox: block.rawBbox,
-                  blockContent: block.blockContent,
-                  parentId: block.parentId,
+                  blockId: b.blockId,
+                  blockLabel: note && !inside && _isCaptionNoteBlock(b)
+                      ? 'vision_footnote'
+                      : 'figure_annotation',
+                  blockBbox: b.blockBbox,
+                  rawBbox: b.rawBbox,
+                  blockContent: b.blockContent,
+                  parentId: b.parentId,
+                  sourceData: b.sourceData,
                 ),
               ),
             );
-            continue;
-          }
-          if (native ||
-              (note &&
-                  caption.pageIndex == page.pageIndex &&
-                  caption.bbox != null &&
-                  caption.bbox!.gapTo(box) <= 32) ||
-              (label &&
-                  internal &&
-                  !captions.any(
-                    (c) =>
-                        c != caption &&
-                        c.bbox != null &&
-                        c.bbox!.gapTo(box) < region.gapTo(box),
-                  ))) {
-            members.add(_FigureBlock(page.pageIndex, block));
+            owned.add(b);
           }
         }
-        members.sort(
-          (a, b) => page.blocks
-              .indexWhere((v) => v.blockId == a.block.blockId)
-              .compareTo(
-                page.blocks.indexWhere((v) => v.blockId == b.block.blockId),
-              ),
-        );
         segments.add(
           _buildSegmentFromBlocks(
             members,
@@ -1585,53 +1947,28 @@ class FigureExtractService {
         );
       }
     }
-
-    final resolved = _resolveProfile(
-      inv,
-      profile,
-      visualClusterCount:
-          segments
-              .where((s) => _visualKindFallback(s.blocks) != 'table')
-              .length +
-          inv.figureBlocks
-              .where(
-                (v) =>
-                    _isVisualBlock(v.block) &&
-                    v.block.blockLabel != 'table' &&
-                    !assigned.containsKey(v),
-              )
-              .length,
-    );
-    for (final visual in inv.figureBlocks.where(
-      (v) => _isVisualBlock(v.block) && !assigned.containsKey(v),
-    )) {
-      dropped.add({
-        'page_idx': visual.pageIndex,
-        'block_ids': [visual.block.blockId],
-        'reason': 'unresolved',
-      });
-    }
-    segments.sort((a, b) {
-      final page = a.pageIndex.compareTo(b.pageIndex);
-      if (page != 0) return page;
-      int order(FigureSegment s) => s.blocks
-          .map(
-            (b) =>
-                b.blockOrder ??
-                pageByIndex[s.pageIndex]!.blocks.indexWhere(
-                  (v) => v.blockId == b.blockId,
-                ),
-          )
-          .reduce(math.min);
-      return order(a).compareTo(order(b));
-    });
+    segments.sort((a, b) => a.pageIndex.compareTo(b.pageIndex));
     return (
       segments: segments,
-      dropped: dropped,
-      totalClusters: inv.figureBlocks
-          .where((v) => _isVisualBlock(v.block))
-          .length,
-      resolvedProfile: resolved,
+      dropped: [
+        for (final visual in visuals)
+          if (!segments.any(
+            (s) =>
+                s.pageIndex == visual.pageIndex &&
+                s.blocks.contains(visual.block),
+          ))
+            {
+              'page_idx': visual.pageIndex,
+              'block_id': visual.block.blockId,
+              'reason': 'no_confirmed_caption',
+            },
+      ],
+      totalClusters: clusters.length,
+      resolvedProfile: _resolveProfile(
+        inv,
+        profile,
+        visualClusterCount: clusters.length,
+      ),
     );
   }
 
@@ -1656,19 +1993,13 @@ class FigureExtractService {
         while (grew) {
           grew = false;
           for (final next in remaining.toList()) {
-            if (members.any(
-              (m) =>
-                  (m.block.blockLabel == 'table') !=
-                  (next.block.blockLabel == 'table'),
-            )) {
-              continue;
-            }
             final close = members.any(
               (m) =>
-                  (m.block.parentId != null &&
-                      m.block.parentId == next.block.parentId) ||
-                  (m.block.groupId != null &&
-                      m.block.groupId == next.block.groupId) ||
+                  ((m.block.parentId != null &&
+                              m.block.parentId == next.block.parentId) ||
+                          (m.block.groupId != null &&
+                              m.block.groupId == next.block.groupId)) &&
+                      m.bbox.gapTo(next.bbox) <= gap * 3 ||
                   m.bbox.gapTo(next.bbox) <= gap,
             );
             if (!close) continue;
@@ -1725,18 +2056,12 @@ class FigureExtractService {
       for (final caption in inv.captions) {
         if ((caption.pageIndex - cluster.pageIndex).abs() != 1) continue;
         final capPage = byPage[caption.pageIndex]!;
-        if (inv.captions.where((c) => c.pageIndex == caption.pageIndex).length >
-                1 &&
-            !capPage.blocks.any(_isVisualBlock)) {
-          continue;
-        }
         final capBlock = capPage.blocks
             .where((b) => b.blockId == caption.blockId)
             .firstOrNull;
-        final table = isMainCaption(caption.text)
-            ? _isTableCaption(caption)
-            : capBlock?.captionKind == 'table';
-        if ((cluster.blocks.first.block.blockLabel == 'table') != table) {
+        if (inv.captions.where((c) => c.pageIndex == caption.pageIndex).length >
+                1 &&
+            !capPage.blocks.any(_isVisualBlock)) {
           continue;
         }
         final localOwner = inv.figureBlocks.any(
@@ -1790,8 +2115,14 @@ class FigureExtractService {
             caption.bbox != null &&
             !capPage.blocks.any(_isVisualBlock) &&
             caption.bbox!.top > _Bbox.union(capPage.blocks).bottom * 0.5 &&
-            caption.bbox!.right - caption.bbox!.left >=
-                (cluster.bbox.right - cluster.bbox.left) * 0.65;
+            (caption.bbox!.right - caption.bbox!.left >=
+                    (cluster.bbox.right - cluster.bbox.left) * 0.65 ||
+                imagePage.blocks.any(
+                  (b) => RegExp(
+                    r'\b(?:legend|caption)\s+(?:on|continues?\s+on)\s+(?:the\s+)?next\s+page\b|图注见下页|圖說見下頁',
+                    caseSensitive: false,
+                  ).hasMatch(b.blockContent),
+                ));
         if (caption.bbox == null) {
           final lines = capPage.markdown.split('\n');
           final before = forward
@@ -1896,7 +2227,7 @@ class FigureExtractService {
     final region = _Bbox.union([...boxes, cap]);
     for (final b in page) {
       if (b.blockId == caption.blockId ||
-          caption.continuationBlocks.contains(b) ||
+          caption.continuationBlocks.any((part) => part.blockId == b.blockId) ||
           visuals.contains(b) ||
           !_isStableBlocker(b) ||
           b.blockBbox.length != 4) {
@@ -1985,10 +2316,12 @@ class FigureExtractService {
       if (captionAllIds.contains(b.block.blockId)) continue;
       blocks.add(b.block);
     }
+    final notes = figureBlocks
+        .where((b) => _isCaptionNoteBlock(b.block))
+        .toList();
     final captionText = _joinCaptionParts([
       caption.text,
-      for (final b in figureBlocks)
-        if (_isCaptionNoteBlock(b.block)) b.block.blockContent,
+      for (final b in notes) b.block.blockContent,
     ]);
 
     return FigureSegment(
@@ -1997,17 +2330,29 @@ class FigureExtractService {
           : caption.pageIndex,
       blocks: blocks,
       captionRefs: [
-        FigureCaptionRef(
-          pageIndex: caption.pageIndex,
-          blockId: caption.blockId,
-          text: caption.text,
-          lineIndex: caption.lineIndex,
-        ),
-        for (final block in caption.continuationBlocks)
+        if (caption.sourceRefs.isNotEmpty)
+          ...caption.sourceRefs
+        else
+          FigureCaptionRef(
+            pageIndex: caption.pageIndex,
+            blockId: caption.blockId,
+            text: caption.text,
+            lineIndex: caption.lineIndex,
+          ),
+        for (final block
+            in caption.sourceRefs.isEmpty
+                ? caption.continuationBlocks
+                : <LayoutBlock>[])
           FigureCaptionRef(
             pageIndex: caption.pageIndex,
             blockId: block.blockId,
             text: block.blockContent,
+          ),
+        for (final note in notes)
+          FigureCaptionRef(
+            pageIndex: note.pageIndex,
+            blockId: note.block.blockId,
+            text: note.block.blockContent,
           ),
       ],
       captionText: captionText,
@@ -2018,7 +2363,7 @@ class FigureExtractService {
   }
 
   bool _isCaptionNoteBlock(LayoutBlock block) {
-    if (block.blockLabel != 'vision_footnote') return false;
+    if (!_isVisionAnnotationBlock(block)) return false;
     final text = _normalizeCaptionText(block.blockContent);
     if (text.length <= _maxSubLabelLength) return false;
     return !isSubfigureLabelBlock(block);
@@ -2238,8 +2583,29 @@ class FigureExtractService {
 
   /// 无 caption 的匿名 segment 的 kind 兜底：按视觉 block label 推断。
   static String _visualKindFallback(List<LayoutBlock> blocks) {
-    if (blocks.any((b) => b.blockLabel == 'table')) return 'table';
-    if (blocks.any((b) => b.blockLabel == 'chart')) return 'chart';
+    final visuals = blocks
+        .where((b) => const ['image', 'chart', 'table'].contains(b.blockLabel))
+        .toList();
+    final outer = visuals
+        .where(
+          (b) =>
+              b.blockBbox.length != 4 ||
+              !visuals.any(
+                (a) =>
+                    a != b &&
+                    a.blockBbox.length == 4 &&
+                    _contains(_Bbox.fromBlock(a), _Bbox.fromBlock(b)) &&
+                    (a.blockBbox[2] - a.blockBbox[0]) *
+                            (a.blockBbox[3] - a.blockBbox[1]) >
+                        (b.blockBbox[2] - b.blockBbox[0]) *
+                            (b.blockBbox[3] - b.blockBbox[1]),
+              ),
+        )
+        .toList();
+    if (outer.isNotEmpty && outer.every((b) => b.blockLabel == 'table')) {
+      return 'table';
+    }
+    if (outer.any((b) => b.blockLabel == 'chart')) return 'chart';
     return 'figure';
   }
 
@@ -2755,6 +3121,7 @@ class FigureExtractService {
     );
     final picture = recorder.endRecording();
     final cropped = await picture.toImage(cropWidth, cropHeight);
+    picture.dispose();
     final byteData = await cropped.toByteData(format: ui.ImageByteFormat.png);
     cropped.dispose();
     return byteData?.buffer.asUint8List();
@@ -2823,6 +3190,7 @@ class FigureExtractService {
             continuationBlocks: c.continuationBlocks,
             groupId: c.groupId,
             blockOrder: c.blockOrder,
+            sourceRefs: c.sourceRefs,
           ),
         )
         .toList();
@@ -2845,6 +3213,7 @@ class FigureExtractService {
     CancelToken? cancelToken,
     void Function(int done, int total)? onProgress,
     bool trimWhitespace = false,
+    bool preserveVisualBounds = false,
   }) async {
     assert(_initialized, 'FigureExtractService.init() 未调用');
     if (segments.isEmpty) return const [];
@@ -2933,7 +3302,18 @@ class FigureExtractService {
                 cropBlocks,
                 pageBlocks: pageBlk,
               );
-              final proposedBbox = scaleBbox(cropInfo.bbox);
+              final bounds = preserveVisualBounds
+                  ? _Bbox.union(req.visualBlocks).toList()
+                  : cropInfo.bbox;
+              final size = req.pageSize;
+              final proposedBbox = size == null
+                  ? scaleBbox(bounds)
+                  : [
+                      bounds[0] / size[0] * fullImage.width,
+                      bounds[1] / size[1] * fullImage.height,
+                      bounds[2] / size[0] * fullImage.width,
+                      bounds[3] / size[1] * fullImage.height,
+                    ];
               final renderBbox = rgba == null
                   ? proposedBbox
                   : _tightenToInk(
@@ -2978,9 +3358,7 @@ class FigureExtractService {
                     ...req.continuationBlockIds,
                     for (final b in req.visualBlocks) b.blockId,
                   ],
-                  cropBbox: renderBbox
-                      .map((v) => v * apiZoom / renderZoom)
-                      .toList(),
+                  cropBbox: bounds,
                   captionBbox: captionOnPage ? req.captionBbox : null,
                   widthPx: cropWidth > 0 ? cropWidth : null,
                   heightPx: cropHeight > 0 ? cropHeight : null,
@@ -3072,8 +3450,7 @@ class FigureExtractService {
 
   /// 测试入口:跑完整 inventory + pair,返回 segment.
   ///
-  /// [profile] 默认 [FigureExtractProfile.auto]：按编号 caption 密度分流。
-  /// 单测若要锁 paper 行为（无 caption 必丢），传 [FigureExtractProfile.paper]。
+  /// 所有 profile 均要求有确认的题注。
   @visibleForTesting
   List<FigureSegment> findFigures(
     List<List<LayoutBlock>> pages, {
@@ -3095,7 +3472,7 @@ class FigureExtractService {
 
   /// 从版面解析 JSON + PDF 中提取所有 figure,保存到 `{hash}/figures/`.
   ///
-  /// [profile] 默认 auto：编号 caption 密 → paper；稀疏/无 → general（匿名 figure）。
+  /// [profile] 保留调用兼容，所有策略均从题注出发。
   Future<FigureExtractResult> extractFigures({
     required String resultPath,
     required String pdfPath,
@@ -3159,14 +3536,25 @@ class FigureExtractService {
     ];
     final inv = _buildInventory(pages);
     final paired = _pair(inv, profile: profile);
-    final segments = paired.segments
-        .where((s) => s.captionSource != CaptionSource.none)
-        .toList();
+    final segments = paired.segments;
     final requests = <FigureCropRequest>[];
     for (final segment in segments) {
+      final size = structure.pages
+          .where((p) => p.pageIndex == segment.pageIndex)
+          .firstOrNull
+          ?.pageSize;
+      if (size == null ||
+          size.length != 2 ||
+          size.any((v) => !v.isFinite || v <= 0)) {
+        continue;
+      }
       final caption = _findSegmentCaption(segment.blocks);
       requests.add(
         FigureCropRequest(
+          pageSize: structure.pages
+              .where((p) => p.pageIndex == segment.pageIndex)
+              .firstOrNull
+              ?.pageSize,
           pageIndex: segment.pageIndex,
           id: FigureManifestEntry.identity(segment.pageIndex, [
             for (final b in segment.blocks) b.blockId,
@@ -3178,10 +3566,16 @@ class FigureExtractService {
               .where(
                 (b) =>
                     b != caption &&
+                    !segment.captionRefs.any(
+                      (r) =>
+                          r.pageIndex == segment.pageIndex &&
+                          r.blockId == b.blockId,
+                    ) &&
                     b.blockBbox.length == 4 &&
                     (_isVisualBlock(b) ||
                         isSubfigureLabelBlock(b) ||
-                        b.blockLabel == 'figure_annotation'),
+                        b.blockLabel == 'figure_annotation' ||
+                        b.blockLabel == 'vision_footnote'),
               )
               .toList(),
           captionBlockId: caption?.blockId,
@@ -3201,7 +3595,9 @@ class FigureExtractService {
               )
               .map((b) => b.blockId)
               .toList(),
-          kind: isMainCaption(segment.captionText)
+          kind: _visualKindFallback(segment.blocks) != 'figure'
+              ? _visualKindFallback(segment.blocks)
+              : isMainCaption(segment.captionText)
               ? classifyKind(segment.captionText)
               : _visualKindFallback(segment.blocks),
           pairMethod: segment.pairMethod.name,
@@ -3225,22 +3621,65 @@ class FigureExtractService {
       pageBlocks: pageBlocks,
       outputDir: outputDir,
       onProgress: onProgress,
-      trimWhitespace: true,
+      trimWhitespace: false,
+      preserveVisualBounds: true,
     );
     final manifest = <FigureManifestEntry>[];
+    final sourceVersion = sha256
+        .convert(utf8.encode(jsonEncode(structure.toJson())))
+        .toString();
     for (final entry in cropped) {
-      final segment =
-          segments[requests.indexWhere((request) => request.id == entry.id)];
+      final request = requests.firstWhere((request) => request.id == entry.id);
+      final segment = segments.firstWhere(
+        (s) =>
+            s.pageIndex == request.pageIndex &&
+            FigureManifestEntry.identity(s.pageIndex, [
+                  for (final b in s.blocks) b.blockId,
+                  for (final c in s.captionRefs)
+                    'caption:${c.pageIndex}:${c.blockId ?? c.lineIndex}',
+                ]) ==
+                request.id,
+      );
       final ids = segment.blocks.map((b) => b.blockId).toList();
+      final anchor = segment.captionRefs.firstOrNull;
       manifest.add(
         FigureManifestEntry.fromJson({
           ...entry.toJson(),
-          'id': entry.id,
+          'id': anchor == null
+              ? entry.id
+              : FigureManifestEntry.identity(anchor.pageIndex, [
+                  anchor.blockId ?? 'line:${anchor.lineIndex}',
+                  '${anchor.start ?? 0}',
+                ]),
           'block_ids': ids,
+          'visual_regions': [
+            FigureVisualRegion(
+              pageIndex: entry.pageIndex,
+              bbox: entry.cropBbox ?? const [],
+              blockIds: ids,
+              imagePath: entry.imagePath,
+            ).toJson(),
+          ],
+          'source_version': sourceVersion,
+          'assignment': segment.captionSource == CaptionSource.none
+              ? 'unresolved'
+              : 'confirmed',
+          'notes': segment.blocks
+              .where((b) => b.blockLabel == 'vision_footnote')
+              .map((b) => b.blockContent)
+              .toList(),
+          'source_refs': [
+            for (final b in segment.blocks)
+              {
+                'page_idx': segment.pageIndex,
+                'block_id': b.blockId,
+                'label': b.blockLabel,
+                if (b.sourceImage != null) 'path': b.sourceImage,
+              },
+          ],
           'source_images': segment.blocks
               .map((b) => b.sourceImage)
               .whereType<String>()
-              .map(p.basename)
               .toSet()
               .toList(),
           'region_method': entry.regionMethod?.replaceFirst('ai_', ''),
@@ -3249,16 +3688,158 @@ class FigureExtractService {
     }
     return FigureExtractResult(
       outputDir: outputDir,
-      entries: manifest,
+      entries: await _combineRegions(manifest, outputDir),
       diagnostics: FigureExtractDiagnostics(
         totalCaptions: inv.captions.length,
         totalClusters: paired.totalClusters,
-        pairedCount: segments.length,
+        pairedCount: segments
+            .where((s) => s.captionSource != CaptionSource.none)
+            .length,
         croppedCount: manifest.length,
         droppedCount: paired.dropped.length,
         dropped: paired.dropped,
       ),
     );
+  }
+
+  Future<List<FigureManifestEntry>> _combineRegions(
+    List<FigureManifestEntry> entries,
+    String outputDir,
+  ) async {
+    final groups = <List<FigureManifestEntry>>[];
+    final continued = RegExp(
+      r'continued|cont\.|续表|接上表|續表',
+      caseSensitive: false,
+    );
+    for (final entry in entries) {
+      final target = groups.where((group) {
+        final previous = group.last;
+        final shared = entry.captionRefs.any(
+          (r) => previous.captionRefs.any(
+            (p) =>
+                p.pageIndex == r.pageIndex &&
+                p.blockId == r.blockId &&
+                p.lineIndex == r.lineIndex &&
+                p.text == r.text,
+          ),
+        );
+        if (shared) return true;
+        if (entry.pageIndex != previous.pageIndex + 1) return false;
+        final a = _mainCaptionRe.firstMatch(entry.captionText)?.group(0);
+        final b = _mainCaptionRe.firstMatch(previous.captionText)?.group(0);
+        final ab = entry.cropBbox, bb = previous.cropBbox;
+        return entry.kind == 'table' &&
+            previous.kind == 'table' &&
+            a != null &&
+            a == b &&
+            continued.hasMatch(entry.captionText) &&
+            ab != null &&
+            bb != null &&
+            (ab[0] - bb[0]).abs() < 24 &&
+            (ab[2] - bb[2]).abs() < 24;
+      }).toList();
+      if (target.length == 1) {
+        target.single.add(entry);
+      } else {
+        groups.add([entry]);
+      }
+    }
+    final result = <FigureManifestEntry>[];
+    for (final group in groups) {
+      if (group.length == 1) {
+        result.add(group.single);
+        continue;
+      }
+      final images = <ui.Image>[];
+      try {
+        for (final entry in group) {
+          final codec = await ui.instantiateImageCodec(
+            await File(entry.imagePath).readAsBytes(),
+          );
+          try {
+            images.add((await codec.getNextFrame()).image);
+          } finally {
+            codec.dispose();
+          }
+        }
+        final width = images.map((i) => i.width).reduce(math.max);
+        final height = images.fold<int>(0, (n, i) => n + i.height + 24);
+        final scale = math.min(1.0, 12000 / height);
+        final recorder = ui.PictureRecorder();
+        final canvas = ui.Canvas(recorder);
+        canvas.scale(scale);
+        canvas.drawColor(const ui.Color(0xFFF0F2F5), ui.BlendMode.src);
+        var y = 0.0;
+        for (final image in images) {
+          canvas.drawImage(
+            image,
+            ui.Offset((width - image.width) / 2, y),
+            ui.Paint(),
+          );
+          y += image.height + 24;
+        }
+        final picture = recorder.endRecording();
+        final preview = await picture.toImage(
+          (width * scale).ceil(),
+          (height * scale).ceil(),
+        );
+        picture.dispose();
+        final bytes = await preview.toByteData(format: ui.ImageByteFormat.png);
+        preview.dispose();
+        if (bytes == null) {
+          result.addAll(group);
+          continue;
+        }
+        final first = group.first;
+        final captionParts = [first.captionText];
+        for (final entry in group.skip(1)) {
+          if (entry.captionText == first.captionText) continue;
+          final extra = entry.captionText
+              .replaceFirst(_mainCaptionRe, '')
+              .replaceFirst(
+                RegExp(
+                  r'^\s*[（(]?\s*(?:continued|cont\.|续表|接上表|續表)\s*[）).:：—-]*\s*',
+                  caseSensitive: false,
+                ),
+                '',
+              )
+              .trim();
+          if (extra.isNotEmpty) captionParts.add(extra);
+        }
+        final path = p.join(outputDir, 'combined_${first.id}.png');
+        await File(path).writeAsBytes(bytes.buffer.asUint8List());
+        result.add(
+          FigureManifestEntry.fromJson({
+            ...first.toJson(),
+            'img': path,
+            'width_px': (width * scale).ceil(),
+            'height_px': (height * scale).ceil(),
+            'figure_title': _joinCaptionParts(captionParts),
+            'visual_regions': [
+              for (final entry in group)
+                ...entry.regions.map((r) => r.toJson()),
+            ],
+            'source_refs': [for (final entry in group) ...entry.sourceRefs],
+            'source_images': {
+              for (final entry in group) ...?entry.sourceImageNames,
+            }.toList(),
+            'caption_refs': [
+              for (final encoded in {
+                for (final entry in group)
+                  ...entry.captionRefs.map((r) => jsonEncode(r.toJson())),
+              })
+                jsonDecode(encoded),
+            ],
+            'notes': {for (final entry in group) ...entry.notes}.toList(),
+          }),
+        );
+      } finally {
+        for (final image in images) {
+          image.dispose();
+        }
+      }
+    }
+    return result;
   }
 
   static String encodeManifest(
@@ -3267,7 +3848,7 @@ class FigureExtractService {
     Map<String, dynamic>? diagnostics,
     String? source,
   }) => const JsonEncoder.withIndent('  ').convert({
-    'algorithm_version': 2,
+    'algorithm_version': 4,
     '_source': ?source,
     'figures': [
       for (final entry in entries)
@@ -3277,6 +3858,17 @@ class FigureExtractService {
             entry.imagePath,
             from: DocPaths.figuresDir(pdfPath),
           ),
+          if (entry.visualRegions.isNotEmpty)
+            'visual_regions': [
+              for (final region in entry.visualRegions)
+                {
+                  ...region.toJson(),
+                  'img': p.relative(
+                    region.imagePath,
+                    from: DocPaths.figuresDir(pdfPath),
+                  ),
+                },
+            ],
         },
     ],
     'diagnostics': ?diagnostics,
@@ -3315,6 +3907,12 @@ class FigureExtractService {
         final path = json['img'] as String;
         if (!p.isAbsolute(path)) {
           json['img'] = p.join(DocPaths.figuresDir(pdfPath), path);
+        }
+        for (final region in json['visual_regions'] as List? ?? []) {
+          final image = region['img'] as String;
+          if (!p.isAbsolute(image)) {
+            region['img'] = p.join(DocPaths.figuresDir(pdfPath), image);
+          }
         }
         return FigureManifestEntry.fromJson(json);
       }).toList();

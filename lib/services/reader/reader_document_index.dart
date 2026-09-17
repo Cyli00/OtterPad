@@ -153,7 +153,9 @@ class ReaderDocumentIndex {
   }
 
   List<TranslatableParagraph> get figureParagraphs => [
-    for (final figure in figures.where((f) => f.isDisplayFigure))
+    for (final figure in figures.where(
+      (f) => f.isDisplayFigure && f.captionText.trim().isNotEmpty,
+    ))
       TranslatableParagraph(
         offset: -1,
         length: 0,

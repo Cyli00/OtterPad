@@ -102,6 +102,14 @@ class ExtractionArtifacts {
               ? data
               : (data as Map)['figures'] as List;
           for (final figure in figures) {
+            for (final region in figure['visual_regions'] as List? ?? []) {
+              final path = region['img'] as String;
+              retained.add(
+                p.isAbsolute(path)
+                    ? path
+                    : p.join(DocPaths.figuresDir(pdfPath), path),
+              );
+            }
             final image = figure['img'] as String;
             retained.add(
               p.isAbsolute(image)
@@ -113,9 +121,12 @@ class ExtractionArtifacts {
         final json = File(DocPaths.json(pdfPath, source: source.artifactKey));
         if (await json.exists()) {
           final data = jsonDecode(await json.readAsString());
-          if (data is Map && data['_mineru_assets'] is Map) {
-            for (final image in (data['_mineru_assets'] as Map).values) {
-              retained.add(p.join(DocPaths.docDir(pdfPath), image as String));
+          if (data is Map) {
+            for (final key in ['_mineru_assets', '_paddle_assets']) {
+              if (data[key] is! Map) continue;
+              for (final image in (data[key] as Map).values) {
+                retained.add(p.join(DocPaths.docDir(pdfPath), image as String));
+              }
             }
           }
         }

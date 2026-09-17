@@ -10,7 +10,7 @@ import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
 import 'reader_typography.dart';
 
-const readerAssetVersion = 'reader-interactions-2';
+const readerAssetVersion = 'reader-local-highlights-5';
 
 // ─── Public API ───
 
@@ -246,6 +246,22 @@ String _markdownToHtml(
     RegExp(r'<!-- otter-figure:([a-zA-Z0-9_-]+) -->\s*<figure>'),
     (m) => '<figure id="otter-figure-${m[1]}">',
   );
+  html = html.replaceAllMapped(
+    RegExp(r'<!-- otter-caption:([a-zA-Z0-9_-]+) -->\s*<p>([\s\S]*?)</p>'),
+    (m) =>
+        '<figcaption class="figure_title" data-caption-id="${m[1]}">${m[2]}</figcaption>',
+  );
+  final fragment = dom.DocumentFragment.html(html);
+  for (final figure in fragment.querySelectorAll('figure[id]')) {
+    final caption = figure.querySelector('figcaption');
+    if (caption != null) {
+      caption.attributes['data-caption-id'] = figure.id.replaceFirst(
+        'otter-figure-',
+        '',
+      );
+    }
+  }
+  html = fragment.outerHtml;
   return _sanitizeReaderHtml(html);
 }
 
@@ -366,8 +382,7 @@ bool _isSafeReaderUrl(
 
 /// `<img alt="fig:Caption text" src="...">` → `<figure><img><figcaption>`。
 ///
-/// 空 / 空白 caption（`alt="fig:"`）视为匿名 visual：整段丢掉，不进正文。
-/// 覆盖已落盘的旧 extract.md（当时仍会把封面写成 `![fig:](...)`）。
+/// 无题注图表保留图像，只省略题注节点。
 String _convertFigCaptions(String html) {
   return html.replaceAllMapped(
     RegExp(
@@ -376,11 +391,13 @@ String _convertFigCaptions(String html) {
     ),
     (m) {
       final caption = m[2]!;
-      if (caption.trim().isEmpty) return '';
       final before = m[1]!;
       final after = m[3]!;
+      if (caption.trim().isEmpty) {
+        return '<figure><img ${before}alt=""$after /></figure>';
+      }
       return '<figure><img ${before}alt="$caption"$after />'
-          '<figcaption>$caption</figcaption></figure>';
+          '<figcaption class="figure_title">$caption</figcaption></figure>';
     },
   );
 }

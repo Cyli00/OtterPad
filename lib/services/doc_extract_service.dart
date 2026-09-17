@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show min;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'proxy_adapter.dart';
 import 'package:path/path.dart' as p;
@@ -11,6 +13,7 @@ import '../utils/doc_paths.dart';
 import '../utils/markdown_preprocessor.dart';
 import 'document_structure.dart';
 import 'figure_extract_service.dart';
+import 'figure_markdown.dart';
 import 'mineru_result_converter.dart';
 import 'extraction_artifacts.dart';
 import '../core/app_logger.dart';
@@ -178,7 +181,7 @@ class DocExtractService {
   /// 1. 保存 raw.md + JSON
   /// 2. 从 PDF 本地裁切 figure 图片（FigureExtractService）
   /// 3. 用 block_ids 匹配替换 Markdown 中的 figure 区域为本地图片
-  /// 4. 清理残留 HTML 图片标签 → LaTeX 预处理 → 标题过滤
+  /// 4. 保留未归属源图 → LaTeX 预处理 → 标题过滤
   Future<String> saveResult(
     String pdfPath,
     DocExtractResult result, {
@@ -192,24 +195,38 @@ class DocExtractService {
     final rawMdPath = DocPaths.rawMd(pdfPath);
     final mdPath = DocPaths.md(pdfPath);
     final jsonPath = DocPaths.json(pdfPath);
+    var jsonContent = result.jsonContent;
+    if (jsonContent != null && result.images.isNotEmpty) {
+      jsonContent = await localizeImages(
+        pdfPath: pdfPath,
+        jsonContent: jsonContent,
+        images: result.images,
+        fetch: (url) async => (await _dio.get<List<int>>(
+          url,
+          options: Options(responseType: ResponseType.bytes),
+        )).data,
+      );
+    }
 
     FigureExtractResult? figures;
     // 2. 从 PDF 提取 figure → 替换 Markdown 中的 figure 区域
     var processedMarkdown = result.rawMarkdown;
-    if (result.jsonContent != null) {
+    if (jsonContent != null) {
       try {
         await FigureExtractService.instance.init();
         final figResult = await FigureExtractService.instance.extractFigures(
           resultPath: jsonPath,
           pdfPath: pdfPath,
-          jsonContent: result.jsonContent,
+          jsonContent: jsonContent,
           publishManifest: false,
         );
         figures = figResult;
+        retainSourceFigures(jsonContent, dir, figResult.entries);
         processedMarkdown = replaceFigureRegions(
-          jsonContent: result.jsonContent!,
+          jsonContent: jsonContent,
           figures: figResult.entries,
           mdDir: dir,
+          recordReferences: true,
         );
       } catch (e) {
         if (await File(mdPath).exists()) rethrow;
@@ -220,14 +237,14 @@ class DocExtractService {
     // 3. 清理残留标签 + 格式预处理
     processedMarkdown = _cleanPipeline(
       processedMarkdown,
-      jsonContent: result.jsonContent,
+      jsonContent: jsonContent,
       title: title,
     );
 
     try {
       await ExtractionArtifacts.publish(pdfPath, DocExtractProvider.paddle, {
         rawMdPath: result.rawMarkdown,
-        if (result.jsonContent != null) jsonPath: result.jsonContent!,
+        jsonPath: ?jsonContent,
         DocPaths.figuresManifest(pdfPath): FigureExtractService.encodeManifest(
           _visibleInMarkdown(figures?.entries ?? const [], processedMarkdown),
           pdfPath,
@@ -310,10 +327,12 @@ class DocExtractService {
           publishManifest: false,
         );
         figures = figResult;
+        retainSourceFigures(jsonContent, dir, figResult.entries);
         processedMarkdown = replaceFigureRegions(
           jsonContent: jsonContent,
           figures: figResult.entries,
           mdDir: dir,
+          recordReferences: true,
         );
       } catch (e) {
         log.d('[DocExtract] 重新排版: 保留已有产物: $e');
@@ -405,430 +424,115 @@ class DocExtractService {
     return (mdPath, processedMarkdown);
   }
 
-  // ─── Figure 替换（移植自 PaddleApiTest/replace_md.py） ─────────────────
-
-  /// 用本地 figure 图片替换原始 Markdown 中的 figure 区域。
-  ///
-  /// 按页遍历 API JSON，通过 block_ids 在每页的 raw markdown.text 中
-  /// 精确定位 figure 行范围：可展示条目替换为
-  /// `![fig:caption](file:///path/to/figure.png)`；匿名 / 空 caption 只删
-  /// 原图行、不插入标签（与 [FigureManifestEntry.isDisplayFigure] 一致）。
   static String replaceFigureRegions({
     required String jsonContent,
     required List<FigureManifestEntry> figures,
     required String mdDir,
+    bool recordReferences = false,
   }) {
     final structure = DocumentStructure.parse(jsonContent);
-    final displayed = FigureManifestEntry.forDisplay(figures);
-    final pages = <int, String>{};
-    final emitted = <FigureManifestEntry>[];
+    if (structure.isEmpty) throw const FormatException('unsupported_layout');
+    final emitted = <FigureManifestEntry>{};
+    final output = <int, String>{};
+    final refs = <FigureManifestEntry, List<Map<String, dynamic>>>{};
+    final decoded = jsonDecode(jsonContent);
+    final assets = decoded is Map && decoded['_paddle_assets'] is Map
+        ? (decoded['_paddle_assets'] as Map).map(
+            (k, v) => MapEntry(k.toString(), p.join(mdDir, v.toString())),
+          )
+        : <String, String>{};
     for (final page in structure.pages) {
-      final local = displayed
-          .where((f) => f.pageIndex == page.pageIndex)
-          .toList();
-      final md = _replaceInPageMd(page.markdown, local, page.blocks, mdDir);
-      pages[page.pageIndex] = md;
-      emitted.addAll(
-        local.where((f) => md.contains('](${Uri.file(f.imagePath)})')),
+      final result = FigureMarkdown.replace(
+        page.markdown,
+        figures,
+        structure: structure,
+        pageIndex: page.pageIndex,
+        assets: assets,
+        emitted: emitted,
       );
-    }
-    for (final page in structure.pages) {
-      var md = pages[page.pageIndex]!;
-      final refs = emitted
-          .where((f) => f.pageIndex != page.pageIndex)
-          .expand((f) => f.captionRefs)
-          .where((r) => r.pageIndex == page.pageIndex);
-      for (final ref in refs) {
-        final block = page.blocks
-            .where((b) => b.blockId == ref.blockId)
-            .firstOrNull;
-        md = removeExactCaption(md, block?.blockContent ?? ref.text);
-      }
-      // 只有已确认图会写入 fig: 标签，原始图片不再作为匿名资源回填。
-      md = md.replaceAll(RegExp(r'!\[(?!fig:)[^\]]*\]\([^)]+\)'), '');
-      md = md.replaceAll(RegExp(r'<img\b[^>]*>', caseSensitive: false), '');
-      pages[page.pageIndex] = md;
-    }
-    return structure.pages.map((p) => pages[p.pageIndex]!).join('\n\n');
-  }
-
-  static String removeExactCaption(String markdown, String text) {
-    final target = _normalizeInlineText(text);
-    if (target.isEmpty) return markdown;
-    final lines = markdown.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      var probe = '';
-      for (var j = i; j < lines.length; j++) {
-        final line = _normalizeInlineText(lines[j]);
-        if (line.startsWith('![') || line.startsWith('<!--')) break;
-        probe = _normalizeInlineText('$probe $line');
-        if (probe == target) {
-          lines.removeRange(i, j + 1);
-          return lines.join('\n');
-        }
-        if (!target.startsWith(probe)) break;
+      output[page.pageIndex] = result.markdown;
+      for (final entry in result.replacements.entries) {
+        refs.putIfAbsent(entry.key, () => []).addAll(entry.value);
       }
     }
-    return markdown;
+    if (recordReferences) {
+      for (var i = 0; i < figures.length; i++) {
+        final entry = figures[i];
+        figures[i] = FigureManifestEntry.fromJson({
+          ...entry.toJson(),
+          'replacement_refs': refs[entry] ?? const [],
+        });
+      }
+    }
+    return structure.pages.map((p) => output[p.pageIndex]!).join('\n\n');
   }
 
-  /// 在单页 raw markdown 中替换 figure 区域为本地图片引用。
-  ///
-  /// 用**行集合**（而非连续 (start, end) 区间）精确表达每个 figure 占用的行——
-  /// 天生支持"双栏排版两个 figure 行段交错"的场景（见 `_planFigureLines` 注释）。
-  /// 替换时：可展示 figure 的 anchor 行插入 `![fig:...](path)`；匿名 figure
-  /// 只抹掉 owned 行。锚点在原始行号位置，不同 figure 的图片自然保持阅读顺序。
-  static String _replaceInPageMd(
-    String mdText,
-    List<FigureManifestEntry> pageFigures,
-    List<LayoutBlock> blocks,
+  static void retainSourceFigures(
+    String jsonContent,
     String mdDir,
+    List<FigureManifestEntry> figures,
   ) {
-    final lines = mdText.split('\n');
-
-    final blockMap = <String, LayoutBlock>{
-      for (final b in blocks)
-        if (b.blockId.isNotEmpty) b.blockId: b,
-    };
-
-    // Phase 1：按 figure 顺序收集每个 plan 的行集合。`claimed` 累积——
-    // 后到的 figure 不会把先到 figure 已占的行（或空行）抢走。
-    final claimed = <int>{};
-    final plans = <_FigurePlan>[];
-    for (final fig in pageFigures) {
-      // Unresolved resources remain in the original Markdown.
-      if (!fig.isDisplayFigure) continue;
-      final plan = _planFigureLines(lines, blockMap, fig, claimed);
-      if (plan == null) {
-        log.d(
-          '[DocExtract] 未定位到 '
-          '"${fig.captionText.substring(0, min(30, fig.captionText.length))}…"',
-        );
-        continue;
-      }
-      claimed.addAll(plan.ownedLines);
-      plans.add(plan);
-    }
-
-    if (plans.isEmpty) return mdText;
-
-    // Phase 2：锚点与占用映射
-    final anchorTag = <int, String>{};
-    final ownedByAny = <int>{};
-    for (final p in plans) {
-      anchorTag[p.anchorLine] = p.imgTag;
-      ownedByAny.addAll(p.ownedLines);
-    }
-
-    // Phase 3：扫 lines——锚点行输出 img_tag（可展示）或删除（匿名），
-    // 其它 owned 行跳过，其余原样保留。
-    final out = <String>[];
-    for (var i = 0; i < lines.length; i++) {
-      final tag = anchorTag[i];
-      if (tag != null) {
-        if (tag.isNotEmpty) out.add(tag);
-      } else if (!ownedByAny.contains(i)) {
-        out.add(lines[i]);
-      }
-      // owned but not anchor / 空 imgTag：deliberately skip (delete)
-    }
-    return out.join('\n');
+    final data = jsonDecode(jsonContent);
+    if (data is! Map || data['_paddle_assets'] is! Map) return;
+    final assets = (data['_paddle_assets'] as Map).map(
+      (k, v) => MapEntry(k.toString(), p.join(mdDir, v.toString())),
+    );
+    FigureMarkdown.retainSourceFigures(
+      DocumentStructure.parse(jsonContent),
+      assets,
+      figures,
+    );
   }
 
-  /// 为单个 figure 规划其占用的行集合 + 锚点。
-  ///
-  /// 返回 `null` 表示所有 block 都没匹配到——通常说明 API 的 block_ids 与
-  /// raw markdown 行结构对不上（版本/模型差异），caller 应降级。
-  ///
-  /// 设计要点：**不做 min/max 连续区间扩张**。旧实现假设"一个 figure 的 blocks
-  /// 在 md 里行号连续"，在双栏期刊"同页两个 figure 行号交错"时会把一个区间
-  /// 误套到另一个上（如 FIGURE 2 block 行段 `[5..50]` 被 TABLE 1 的 `[2..53]`
-  /// 包围），最终 appliedCeiling 保护把外层整体砍掉。集合方式没这个问题。
-  static _FigurePlan? _planFigureLines(
-    List<String> lines,
-    Map<String, LayoutBlock> blockMap,
-    FigureManifestEntry fig,
-    Set<int> claimed,
-  ) {
-    final owned = <int>{};
-    int? anchor;
-    // 本 figure 查找过程中累积的"禁用"行号——既含其他 figure 的占用，
-    // 也含本 figure 已匹配的行（避免不同 block 命中同一行）。
-    final skip = Set<int>.from(claimed);
-
-    for (final bid in fig.blockIds) {
-      final block = blockMap[bid];
-      if (block == null) continue;
-
-      final label = block.blockLabel;
-      final content = block.blockContent.trim();
-
-      int? idx;
-      if (label == 'image' || label == 'chart') {
-        // 探针用 rawBbox：md 行内的 bbox 编码图片名按 JSON 字面拼接，
-        // int 的 `12` 不能变成 `12.0`。
-        final bbox = block.rawBbox;
-        if (bbox.length >= 4) {
-          idx = _findLine(
-            lines,
-            '_${bbox[0]}_${bbox[1]}_${bbox[2]}_${bbox[3]}',
-            skip,
-          );
+  /// 只下载响应声明的图片，不向资源地址转发 OCR 凭据；单图失败不丢失原底稿。
+  static Future<String> localizeImages({
+    required String pdfPath,
+    required String jsonContent,
+    required Map<String, String> images,
+    required Future<List<int>?> Function(String url) fetch,
+  }) async {
+    final decoded = jsonDecode(jsonContent);
+    final root = decoded is List
+        ? <String, dynamic>{'layoutParsingResults': decoded}
+        : Map<String, dynamic>.from(decoded as Map);
+    final assets = Map<String, dynamic>.from(
+      root['_paddle_assets'] as Map? ?? {},
+    );
+    final generation = await createFigureGeneration(
+      DocPaths.figuresDir(pdfPath),
+    );
+    for (final entry in images.entries) {
+      try {
+        final uri = Uri.tryParse(entry.value);
+        if (uri == null ||
+            !const ['http', 'https', 'data'].contains(uri.scheme)) {
+          continue;
         }
-      } else if (label == 'table') {
-        // 表格 HTML：block_content 常是 `<table><tr>...` 但 md 里带属性
-        // `<table border=1 ...>`，前缀匹配不上。改用通用 `<table` 起始标签定位。
-        final tables = blockMap.values
-            .where((b) => b.blockLabel == 'table')
-            .toList();
-        final starts = <int>[];
-        for (var i = 0; i < lines.length; i++) {
-          if (lines[i].contains('<table')) starts.add(i);
-        }
-        final ordinal = tables.indexOf(block);
-        if (starts.length == tables.length &&
-            ordinal >= 0 &&
-            !skip.contains(starts[ordinal])) {
-          idx = starts[ordinal];
-        }
-      } else if (content.isNotEmpty) {
-        // figure_title / vision_footnote / 内容像 caption 的 text 等,
-        // 按内容前缀搜索。
-        final probeLen = label == 'vision_footnote' ? 32 : 120;
-        idx = _findContentLine(lines, content, probeLen, skip);
-      }
-
-      if (idx == null) continue;
-      owned.add(idx);
-      skip.add(idx);
-
-      // 首个 figure_title 作 anchor——img_tag 落在 caption 原位置，
-      // 不同 figure 的图片在最终 md 里保持阅读顺序。
-      if (anchor == null && label == 'figure_title') {
-        anchor = idx;
-      }
-
-      // `<table>...</table>` 是跨多行 HTML，把整个区间吞入 owned。
-      if (label == 'table') {
-        final tableEnd = _scanTableEnd(lines, idx);
-        for (var i = idx + 1; i < tableEnd; i++) {
-          if (!claimed.contains(i)) {
-            owned.add(i);
-            skip.add(i);
-          }
-        }
+        final bytes = uri.scheme == 'data'
+            ? uri.data?.contentAsBytes()
+            : await fetch(entry.value);
+        if (bytes == null || bytes.isEmpty) continue;
+        final codec = await ui.instantiateImageCodec(Uint8List.fromList(bytes));
+        final frame = await codec.getNextFrame();
+        frame.image.dispose();
+        codec.dispose();
+        final filename = '${sha256.convert(utf8.encode(entry.key))}.image';
+        final file = File(p.join(generation.path, filename));
+        await file.writeAsBytes(bytes, flush: true);
+        final relative = p.relative(file.path, from: p.dirname(pdfPath));
+        assets[entry.key] = relative;
+        assets[entry.value] = relative;
+      } on Exception {
+        // 保留原 URL／HTML，不能因一张失效资源阻断其他图表。
       }
     }
-
-    // markdown-only caption 兜底:manifest 带了 caption text 但 parsing_res_list
-    // 没对应 block 时,直接按 captionText 在 markdown 里搜行,占住并设为 anchor.
-    if (anchor == null && fig.captionText.isNotEmpty) {
-      final idx = _findContentLine(lines, fig.captionText, 120, skip);
-      if (idx != null) {
-        owned.add(idx);
-        skip.add(idx);
-        anchor = idx;
-      }
-    }
-
-    if (owned.isEmpty) return null;
-    _claimCaptionLines(lines, fig.captionText, owned, skip, claimed);
-    anchor ??= owned.reduce(min);
-    if (anchor != owned.reduce(min)) {
-      anchor = owned.reduce(min);
-    }
-
-    // 吸收紧邻空行——避免替换后留下连续空行堆。
-    // blockedByOthers=claimed，不越过其他 figure 的行；不触碰自身 owned 行。
-    _absorbBlankNeighbors(lines, owned, claimed);
-
-    // 匿名 / 空 caption 仍吃掉 raw 图行（避免封面留在正文），但不插入图片标签。
-    // 与 Outline / 查看器共用 [FigureManifestEntry.isDisplayFigure]。
-    final imgTag = fig.isDisplayFigure
-        ? '\n${fig.markdownAnchor}\n\n![fig:${_normalizeInlineText(fig.captionText)}](${Uri.file(fig.imagePath)})\n'
-        : '';
-    return _FigurePlan(ownedLines: owned, anchorLine: anchor, imgTag: imgTag);
-  }
-
-  /// 在行列表中找到包含 [text] 的第一行（跳过已使用的行）
-  static int? _findLine(List<String> lines, String text, Set<int> usedLines) {
-    for (var i = 0; i < lines.length; i++) {
-      if (!usedLines.contains(i) && lines[i].contains(text)) return i;
-    }
-    return null;
-  }
-
-  static int? _findContentLine(
-    List<String> lines,
-    String content,
-    int maxProbeLen,
-    Set<int> usedLines,
-  ) {
-    final normalized = _normalizeInlineText(content);
-    if (normalized.isEmpty) return null;
-
-    final lengths = <int>{
-      min(maxProbeLen, normalized.length),
-      min(80, normalized.length),
-      min(48, normalized.length),
-      min(24, normalized.length),
-    }.where((len) => len > 0).toList()..sort((a, b) => b.compareTo(a));
-
-    for (final len in lengths) {
-      final probe = normalized.substring(0, len);
-      for (var i = 0; i < lines.length; i++) {
-        if (usedLines.contains(i)) continue;
-        if (_lineSearchText(lines[i]).contains(probe)) return i;
-      }
-    }
-    return null;
-  }
-
-  static final RegExp _inlineWhitespaceRe = RegExp(r'\s+');
-  static final RegExp _centeredDivLineRe = RegExp(
-    r'^<div\s+style="text-align:\s*center;\s*">\s*(.*?)\s*</div>$',
-    caseSensitive: false,
-  );
-  static final RegExp _htmlTagRe = RegExp(r'<[^>]+>');
-  static final RegExp _captionLeadRe = RegExp(
-    r'^((?:figure|fig\.?|table|tab\.?)\s*\d+[a-z]?\s*[.)]?)',
-    caseSensitive: false,
-  );
-  static final RegExp _captionNoteLeadRe = RegExp(
-    r'^(?:\([a-z](?:\s*(?:,|and|&)\s*[a-z])*\)|[a-z](?:\s*(?:,|and|&)\s*[a-z])*[).:;-])\s+\S',
-    caseSensitive: false,
-  );
-
-  static String _normalizeInlineText(String text) {
-    return text.trim().replaceAll(_inlineWhitespaceRe, ' ');
-  }
-
-  static String _lineSearchText(String line) {
-    var text = line.trim();
-    final divMatch = _centeredDivLineRe.firstMatch(text);
-    if (divMatch != null) {
-      text = divMatch.group(1)!;
-    }
-    text = text.replaceAll(_htmlTagRe, ' ');
-    text = text.replaceAll(RegExp(r'^[*_]+|[*_]+$'), '');
-    return _normalizeInlineText(text);
-  }
-
-  static void _claimCaptionLines(
-    List<String> lines,
-    String captionText,
-    Set<int> owned,
-    Set<int> skip,
-    Set<int> claimed,
-  ) {
-    final captionLead = _captionLead(captionText);
-    if (captionLead == null) return;
-
-    final anchors = <int>[];
-    final neighboring = Set<int>.from(owned);
-    for (final index in owned) {
-      for (final direction in const [-1, 1]) {
-        var i = index + direction;
-        while (i >= 0 && i < lines.length && lines[i].trim().isEmpty) {
-          i += direction;
-        }
-        if (i >= 0 && i < lines.length) neighboring.add(i);
-      }
-    }
-    for (final i in neighboring) {
-      if (claimed.contains(i) && !owned.contains(i)) continue;
-      final text = _lineSearchText(lines[i]);
-      if (!text.toLowerCase().startsWith(captionLead.toLowerCase())) continue;
-      if (!_normalizeInlineText(captionText).contains(text)) continue;
-      owned.add(i);
-      skip.add(i);
-      anchors.add(i);
-    }
-
-    for (final anchor in anchors) {
-      _claimFollowingCaptionNotes(
-        lines,
-        anchor,
-        owned,
-        skip,
-        claimed,
-        captionText,
-      );
-    }
-  }
-
-  static String? _captionLead(String captionText) {
-    final text = _normalizeInlineText(captionText);
-    final match = _captionLeadRe.firstMatch(text);
-    return match?.group(1);
-  }
-
-  static void _claimFollowingCaptionNotes(
-    List<String> lines,
-    int anchor,
-    Set<int> owned,
-    Set<int> skip,
-    Set<int> claimed,
-    String captionText,
-  ) {
-    for (var i = anchor + 1; i < lines.length; i++) {
-      if (claimed.contains(i) && !owned.contains(i)) break;
-      final text = _lineSearchText(lines[i]);
-      if (text.isEmpty) {
-        owned.add(i);
-        skip.add(i);
-        continue;
-      }
-      if (!_captionNoteLeadRe.hasMatch(text)) break;
-      if (!_normalizeInlineText(captionText).contains(text)) break;
-      owned.add(i);
-      skip.add(i);
-    }
-  }
-
-  /// 以 [openLine] 为起点（含 `<table`）扫描到闭合 `</table>` 行，返回 end（exclusive）。
-  /// 同行闭合或到达 EOF 均正确处理。
-  static int _scanTableEnd(List<String> lines, int openLine) {
-    if (lines[openLine].contains('</table>')) return openLine + 1;
-    var j = openLine + 1;
-    while (j < lines.length && !lines[j].contains('</table>')) {
-      j++;
-    }
-    return j < lines.length ? j + 1 : j;
-  }
-
-  /// 把 [owned] 行集合两端的紧邻空行也纳入（仅当空行不在 [blockedByOthers] 内）。
-  /// 空行被纳入后会在替换阶段被丢弃，避免最终 md 里堆积连续空行。
-  static void _absorbBlankNeighbors(
-    List<String> lines,
-    Set<int> owned,
-    Set<int> blockedByOthers,
-  ) {
-    // 在集合迭代前快照，避免一边扩展一边遍历
-    final snapshot = owned.toList();
-    for (final i in snapshot) {
-      var j = i - 1;
-      while (j >= 0 &&
-          lines[j].trim().isEmpty &&
-          !owned.contains(j) &&
-          !blockedByOthers.contains(j)) {
-        owned.add(j);
-        j--;
-      }
-      j = i + 1;
-      while (j < lines.length &&
-          lines[j].trim().isEmpty &&
-          !owned.contains(j) &&
-          !blockedByOthers.contains(j)) {
-        owned.add(j);
-        j++;
-      }
-    }
+    root['_paddle_assets'] = assets;
+    return jsonEncode(root);
   }
 
   /// 清理 + 预处理管线（saveResult / reprocessMarkdown / applyFigureManifest 共用）。
   ///
-  /// 顺序固定：移除未匹配图片 → [_convertCenteredDivs] →
+  /// 顺序固定：保留未匹配图片 → [_convertCenteredDivs] →
   /// [MarkdownPreprocessor.process] → [MarkdownPreprocessor.filterBeforeTitle] →
   /// [_normalizeSectionHeadingLevels]（仅 [jsonContent] 非空时）。
   /// 改顺序即改三处渲染结果，禁止调整。
@@ -837,8 +541,7 @@ class DocExtractService {
     String? jsonContent,
     String? title,
   }) {
-    var md = markdown.replaceAll(RegExp(r'!\[(?!fig:)[^\]]*\]\([^)]+\)'), '');
-    md = md.replaceAll(RegExp(r'<img\b[^>]*>', caseSensitive: false), '');
+    var md = markdown;
     md = _convertCenteredDivs(md);
     md = MarkdownPreprocessor.process(md);
     md = MarkdownPreprocessor.filterBeforeTitle(md, title);
@@ -950,22 +653,3 @@ class DocExtractService {
 ///
 /// 行集合表达（而非连续区间）让"同页两 figure 行号交错"的双栏排版也能正确替换：
 /// 两个 figure 的 [ownedLines] 互不相交，各自的 [anchorLine] 独立定位插入点。
-class _FigurePlan {
-  /// 该 figure 占用的原始行号集合（可以不连续）。替换阶段除了 [anchorLine]
-  /// 外的行全部从输出里抹掉。
-  final Set<int> ownedLines;
-
-  /// img_tag 插入的原始行号位置——优先选 figure_title 所在行，使 caption
-  /// 保持在阅读序中的自然位置。无 figure_title 时退化为 [ownedLines] 的最小值。
-  final int anchorLine;
-
-  /// 生成的 markdown 图片标记，形如 `\n![fig:CAPTION](file:///.../FIGURE_N_.png)\n`。
-  /// 空字符串 = 匿名 figure：删除 owned 行、不插入图片。
-  final String imgTag;
-
-  const _FigurePlan({
-    required this.ownedLines,
-    required this.anchorLine,
-    required this.imgTag,
-  });
-}

@@ -33,11 +33,7 @@ class NRImgConfig extends ImgConfig {
            final alt = attrs['alt'] ?? '';
            final isFigure = alt.startsWith(_figPrefix);
            final caption = isFigure ? alt.substring(_figPrefix.length) : '';
-           // 与 WebView `_convertFigCaptions` / `isDisplayFigure` 一致：
-           // 无 caption 的 fig 图不渲染（封面、装饰图）。
-           if (isFigure && caption.trim().isEmpty) {
-             return const SizedBox.shrink();
-           }
+           // 无题注图表仍保留图像及点击入口，不能用题注是否为空判断装饰图。
 
            Widget image;
            if (url.startsWith('file://') || url.startsWith('/')) {
