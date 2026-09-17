@@ -39,9 +39,7 @@ class ReaderDockWindow {
           workArea = area;
         }
       }
-      if (workArea == null ||
-          bounds.left < workArea.left ||
-          bounds.right + sidebarWidth > workArea.right) {
+      if (workArea == null || bounds.right + sidebarWidth > workArea.right) {
         return false;
       }
       await windowManager.setBounds(

@@ -10,7 +10,7 @@ import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
 import 'reader_typography.dart';
 
-const readerAssetVersion = 'reader-local-highlights-5';
+const readerAssetVersion = 'reader-stable-viewport-6';
 
 // ─── Public API ───
 

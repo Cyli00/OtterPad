@@ -24,6 +24,7 @@ import '../../../services/reader/reader_html_cache.dart';
 import 'reader_background.dart';
 import 'reader_js_bridge.dart';
 import 'reader_update_plan.dart';
+import 'reader_webview_viewport.dart';
 import 'webview_reader_html.dart';
 import '../../../core/app_logger.dart';
 
@@ -111,6 +112,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   final InAppWebViewKeepAlive _keepAlive = InAppWebViewKeepAlive();
   bool _frozen = false;
   Uint8List? _snapshot;
+  double? _layoutWidth;
+
+  void _onLayoutWidthChanged(double width) {
+    _layoutWidth = width;
+    _bridge?.applyViewportWidth(width);
+  }
 
   // 覆盖滚动条状态：JS rAF 通道更新 metrics；UI 在 1.5s idle 后淡出。
   // _scrollbarVisible 通过 setState 直接驱动 AnimatedOpacity，不放 ValueNotifier
@@ -436,9 +443,11 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     Uint8List? shot;
     if (capture) {
       try {
-        shot = await _bridge?.takeScreenshot();
+        shot = await _bridge?.takeScreenshot().timeout(
+          const Duration(milliseconds: 160),
+        );
       } catch (_) {}
-      if (!mounted) return;
+      if (!mounted || shot == null) return;
     }
     _bridge?.pauseRendering();
     setState(() {
@@ -573,14 +582,18 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     );
 
     // 冻结态：InAppWebView 不挂载（原生 View detach 出 ViewRoot），改用截图占位。
-    Widget content = _frozen ? _buildFrozenPlaceholder() : webView;
+    final content = _frozen ? _buildFrozenPlaceholder() : webView;
 
-    // 揭幕幕布：内容（含进度恢复）就绪前盖住 WebView，淡出后整体出树。
-    if (!_curtainGone) {
-      content = Stack(
-        fit: StackFit.expand,
-        children: [
-          content,
+    // 平台视图的父链保持固定，只移除幕布，避免揭幕或开合侧栏时重新挂接。
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ReaderWebViewViewport(
+          preserveSurfaceWidth: isDesktopOs,
+          onLayoutWidthChanged: _onLayoutWidthChanged,
+          child: content,
+        ),
+        if (!_curtainGone)
           IgnorePointer(
             child: AnimatedOpacity(
               duration: kAnim,
@@ -593,41 +606,31 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
               child: _loadingCurtain(),
             ),
           ),
-        ],
-      );
-    }
-
-    // horizontal 翻页模式不需要覆盖滚动条——页内有进度页脚（x/y 页码）
-    // 和边缘点击翻页，纵向拖动滚动条的交互不存在。
-    if (isHorizontal) return content;
-
-    return Stack(
-      children: [
-        content,
-        Positioned(
-          top: widget.topInset,
-          bottom: widget.bottomInset,
-          right: 0,
-          child: IgnorePointer(
-            ignoring: !_scrollbarVisible,
-            child: AnimatedOpacity(
-              duration: kAnim,
-              opacity: _scrollbarVisible ? 1 : 0,
-              child: _OverlayScrollbar(
-                metrics: _scrollMetrics,
-                onJumpTo: _scrollToRatio,
-                onInteractionStart: () {
-                  _scrollbarPointerActive = true;
-                  _showScrollbarTransiently();
-                },
-                onInteractionEnd: () {
-                  _scrollbarPointerActive = false;
-                  _showScrollbarTransiently();
-                },
+        if (!isHorizontal)
+          Positioned(
+            top: widget.topInset,
+            bottom: widget.bottomInset,
+            right: 0,
+            child: IgnorePointer(
+              ignoring: !_scrollbarVisible,
+              child: AnimatedOpacity(
+                duration: kAnim,
+                opacity: _scrollbarVisible ? 1 : 0,
+                child: _OverlayScrollbar(
+                  metrics: _scrollMetrics,
+                  onJumpTo: _scrollToRatio,
+                  onInteractionStart: () {
+                    _scrollbarPointerActive = true;
+                    _showScrollbarTransiently();
+                  },
+                  onInteractionEnd: () {
+                    _scrollbarPointerActive = false;
+                    _showScrollbarTransiently();
+                  },
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -639,6 +642,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   @override
   void onContentReady() {
+    if (_layoutWidth != null) _bridge?.applyViewportWidth(_layoutWidth!);
     // 主题/翻译样式重放：加载期间到达的 ApplyTheme/ApplyTranslationStyle 被
     // bridge 的 !_contentReady 丢弃，而 planUpdates 是新旧 props 差分——丢弃
     // 后差异不再出现，永不重试。ready 时用 widget 当前值兜底（幂等：HTML

@@ -192,6 +192,13 @@ class ReaderJsBridge {
 
   // ─── 后台资源调度 ───
 
+  void applyViewportWidth(double width) {
+    if (!_contentReady || !width.isFinite || width <= 0) return;
+    _controller.evaluateJavascript(
+      source: 'window.readerSetViewportWidth?.($width)',
+    );
+  }
+
   /// 暂停 WebView 内所有 JS timer / 动画 / 媒体——sheet 或 dialog 弹出
   /// 期间调用，释放 CPU 让前景 Flutter UI（IME 动画、TextField）流畅。
   /// 必须配对 [resumeTimers]，否则恢复后 WebView 无响应。

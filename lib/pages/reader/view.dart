@@ -174,6 +174,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ReaderDockPane _dockPane = ReaderDockPane.outline;
 
   bool _dockAnimating = false;
+  bool _dockWindowChanging = false;
   double? _lockedReaderWidth;
   double? _readerViewportWidth;
   bool _desktopAppearanceOpen = false;
@@ -765,7 +766,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _onDockAnimationEnd() {
-    if (!mounted || !_dockAnimating) return;
+    if (!mounted || !_dockAnimating || _dockWindowChanging) return;
     setState(() {
       _dockAnimating = false;
       _lockedReaderWidth = null;
@@ -785,8 +786,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _sidebarWidthOverride ?? Responsive.readerSidebarWidth(contentWidth),
         contentWidth,
       );
+      // 原生窗口与侧栏不在同一帧变宽，期间维持正文原宽，避免先拉宽再挤回。
+      setState(() {
+        _dockWindowChanging = true;
+        _dockAnimating = true;
+        _lockedReaderWidth ??= _readerViewportWidth;
+      });
       final expanded = await _dockWindow.expand(sidebarWidth);
       if (!mounted || request != _dockRequest) return;
+      _dockWindowChanging = false;
       _dockExpandsWindow = expanded;
       _outwardSidebarWidth = expanded ? sidebarWidth : null;
     }
@@ -806,16 +814,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     });
     _sessionNotifier.setDockOpen(true);
     _sessionNotifier.revealToolbars();
+    if (_dockExpandsWindow) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (request == _dockRequest) _onDockAnimationEnd();
+      });
+    }
   }
 
   Future<void> _closeDock() async {
-    ++_dockRequest;
+    final request = ++_dockRequest;
     if (!_dockOpen) {
       await _dockWindow.restore();
+      if (!mounted || request != _dockRequest) return;
+      _dockWindowChanging = false;
+      _onDockAnimationEnd();
       return;
     }
     setState(() {
-      if (!_dockExpandsWindow) _beginDockTransition(opening: false);
+      if (_dockExpandsWindow) {
+        _dockWindowChanging = true;
+        _dockAnimating = true;
+        _lockedReaderWidth ??= _readerViewportWidth;
+      } else {
+        _beginDockTransition(opening: false);
+      }
       _dockOpen = false;
       if (_pendingChatReturnArgs != null) {
         _chatReturnArgs = _pendingChatReturnArgs;
@@ -824,6 +846,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     });
     _sessionNotifier.setDockOpen(false);
     await _dockWindow.restore();
+    if (!mounted || request != _dockRequest) return;
+    _dockWindowChanging = false;
+    if (_dockExpandsWindow) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (request == _dockRequest) _onDockAnimationEnd();
+      });
+      WidgetsBinding.instance.ensureVisualUpdate();
+    }
   }
 
   void _toggleDock(ReaderDockPane pane) {
@@ -1615,6 +1645,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     super.didChangeDependencies();
     final useDock = _useReaderDock(context);
     if (_dockAnimating &&
+        !_dockWindowChanging &&
         (!useDock || MediaQuery.disableAnimationsOf(context))) {
       _dockAnimating = false;
       _lockedReaderWidth = null;

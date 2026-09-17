@@ -21,7 +21,7 @@
     const block = content.children[_findAnchorBlockIndex()];
     const rect = content.getBoundingClientRect();
     const caret = document.caretRangeFromPoint?.(
-      Math.max(8, Math.min(window.innerWidth - 8, rect.left + 24)),
+      Math.max(8, Math.min((window.readerViewportWidth?.() ?? window.innerWidth) - 8, rect.left + 24)),
       Math.max(8, Math.min(window.innerHeight - 8, rect.top + 8)),
     );
     const caretElement = caret?.startContainer.nodeType === Node.ELEMENT_NODE

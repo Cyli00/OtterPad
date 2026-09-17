@@ -224,8 +224,8 @@
     const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
     if (document.body.dataset.pagination === 'horizontal') {
       const content = document.getElementById('content');
-      const page = Math.floor((content.scrollLeft + rect.left) / window.innerWidth);
-      content.scrollTo({left: Math.max(0, page) * window.innerWidth, behavior});
+      const page = Math.floor((content.scrollLeft + rect.left) / (window.readerViewportWidth?.() ?? window.innerWidth));
+      content.scrollTo({left: Math.max(0, page) * (window.readerViewportWidth?.() ?? window.innerWidth), behavior});
     } else {
       window.scrollBy({top: rect.top - Math.max(80, window.innerHeight * .3), behavior});
     }
@@ -249,7 +249,7 @@
   window.readerVisibleParagraph = () => {
     for (const b of index().bindings) {
       const rect = rangeAt(b.start, b.end)?.getBoundingClientRect();
-      if (rect && rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth) return b.id;
+      if (rect && rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < (window.readerViewportWidth?.() ?? window.innerWidth)) return b.id;
     }
     return null;
   };

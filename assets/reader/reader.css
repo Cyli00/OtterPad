@@ -1,6 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
+  width: var(--reader-viewport-width, 100%);
   font-family: var(--font-family);
   font-size: var(--font-size);
   line-height: var(--line-height);
@@ -231,7 +232,7 @@ body[data-pagination="horizontal"] #content {
      multi-column 的 reflow——窗口变大后会出现"一屏看到下一页"。
      JS 在 load + resize 时按视口宽度和栏数同步 CSS 变量，
      CSS var 变化会触发 column layout invalidation，浏览器才重排。 */
-  column-width: var(--reader-column-width, 100vw);
+  column-width: var(--reader-column-width, var(--reader-viewport-width, 100vw));
   column-count: var(--reader-columns, 1);
   column-fill: auto;
   column-gap: 64px;
@@ -270,7 +271,7 @@ body[data-pagination="horizontal"] img {
  * tabular-nums 让页码变化时数字不抖动。 */
 #page-footer {
   position: fixed;
-  left: 50%;
+  left: calc(var(--reader-viewport-width, 100vw) / 2);
   bottom: 6px;
   transform: translateX(-50%);
   z-index: 20;

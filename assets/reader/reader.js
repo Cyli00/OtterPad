@@ -1,3 +1,10 @@
+// 正文可见宽度与原生画布分开，侧栏开合只重排正文，不拉伸旧画面。
+let _readerLayoutWidth = null;
+function _readerViewportWidth() {
+  return _readerLayoutWidth ?? window.innerWidth;
+}
+window.readerViewportWidth = _readerViewportWidth;
+
 // ─── 初始化 ───
 // Overlayer 在 DOMContentLoaded 创建，但 onContentReady 延迟到
 // window.onload（KaTeX 渲染完、图片加载完后），确保高亮恢复时 DOM 已稳定。
@@ -693,7 +700,7 @@ window._restoreProgress = function(ratio, anchorBlock) {
       if (max > 0) {
         const idx = Math.max(0, Math.min(max, Math.round(r * max)));
         _targetPage = idx;
-        _content().scrollTo({ left: idx * window.innerWidth, behavior: 'auto' });
+        _content().scrollTo({ left: idx * _readerViewportWidth(), behavior: 'auto' });
       }
       _updateFooter();
     } else {
@@ -768,7 +775,7 @@ document.addEventListener('click', (e) => {
   const sel = window.getSelection();
   if (sel && !sel.isCollapsed) return;
 
-  const x = e.clientX / window.innerWidth;
+  const x = e.clientX / _readerViewportWidth();
   if (x < 0.3 || x > 0.7) {
     const dir = x < 0.3 ? -1 : 1;
     const before = _targetPage;
@@ -1051,12 +1058,12 @@ function _isHorizontal() {
 }
 
 function _currentPage() {
-  return Math.round(_content().scrollLeft / window.innerWidth);
+  return Math.round(_content().scrollLeft / _readerViewportWidth());
 }
 
 function _maxPage() {
   return Math.max(0,
-      Math.round(_content().scrollWidth / window.innerWidth) - 1);
+      Math.round(_content().scrollWidth / _readerViewportWidth()) - 1);
 }
 
 function _cancelFlipAnim() {
@@ -1072,7 +1079,7 @@ function _animateToPage(idx, fromOvershoot) {
   _targetPage = idx;
   _cancelFlipAnim();
   const from = c.scrollLeft;
-  const to = idx * window.innerWidth;
+  const to = idx * _readerViewportWidth();
   const over0 = fromOvershoot || 0;
   if (Math.abs(to - from) < 0.5 && Math.abs(over0) < 0.5) {
     c.scrollLeft = to;
@@ -1127,7 +1134,7 @@ function _syncPaginationVars() {
   const columns = 1;
   const root = document.documentElement.style;
   root.setProperty('--reader-columns', columns);
-  root.setProperty('--reader-column-width', Math.max(1, window.innerWidth / columns - 64) + 'px');
+  root.setProperty('--reader-column-width', Math.max(1, _readerViewportWidth() / columns - 64) + 'px');
 }
 _syncPaginationVars();
 
@@ -1165,13 +1172,35 @@ function _restoreToAnchor(idx) {
   }
   const left = el.getClientRects()[0].left + c.scrollLeft - c.getBoundingClientRect().left;
   const page = Math.max(0, Math.min(_maxPage(),
-      Math.floor(left / window.innerWidth)));
-  c.scrollTo({ left: page * window.innerWidth, behavior: 'auto' });
+      Math.floor(left / _readerViewportWidth())));
+  c.scrollTo({ left: page * _readerViewportWidth(), behavior: 'auto' });
   _targetPage = page;
   return true;
 }
 
 let _paginationResizeTimer = null;
+window.readerSetViewportWidth = (width) => {
+  if (!Number.isFinite(width) || width <= 0 || width === _readerLayoutWidth) return;
+  const anchorIdx = _findAnchorBlockIndex();
+  const anchor = _content().children[anchorIdx];
+  const anchorTop = anchor?.getBoundingClientRect().top;
+  _cancelFlipAnim();
+  window.readerStopWheel?.();
+  clearTimeout(_paginationResizeTimer);
+  _content().style.transform = '';
+  _readerLayoutWidth = width;
+  document.documentElement.style.setProperty('--reader-viewport-width', width + 'px');
+  _syncPaginationVars();
+  // 同一次 JS 调用内恢复位置，避免浏览器先显示重排后的错误位置。
+  if (_isHorizontal()) {
+    _restoreToAnchor(anchorIdx);
+  } else if (anchor && Number.isFinite(anchorTop)) {
+    window.scrollBy({top: anchor.getBoundingClientRect().top - anchorTop, behavior: 'instant'});
+  }
+  _updateFooter();
+  if (window._overlayer) window._overlayer.redraw();
+  _scheduleMetricsReport();
+};
 window.addEventListener('resize', () => {
   // vertical 模式不需要锚点保持——浏览器原生处理纵向 reflow，scrollY 保持
   // 段落相对位置足够。仅刷新 var 以便切回 horizontal 时是最新值。
@@ -1334,7 +1363,7 @@ document.addEventListener('touchstart', (e) => {
     if (_touchDragging) {
       _touchDragging = false;
       _animateToPage(
-          Math.round(_content().scrollLeft / window.innerWidth),
+          Math.round(_content().scrollLeft / _readerViewportWidth()),
           _touch ? _touch.overVisual : 0);
     }
     _touch = null;
@@ -1373,13 +1402,13 @@ function _onTouchMove(e) {
     c.style.transform = '';
     _touch.base = c.scrollLeft;
     _touch.basePage = Math.max(0, Math.min(_maxPage(),
-        Math.round(_touch.base / window.innerWidth)));
+        Math.round(_touch.base / _readerViewportWidth())));
     _touch.x0 = t.clientX;  // 认领点重置基准：从这里开始 1:1，避免 slop 跳变
   }
   e.preventDefault();
   const c = _content();
   const raw = _touch.base - (t.clientX - _touch.x0);
-  const maxLeft = _maxPage() * window.innerWidth;
+  const maxLeft = _maxPage() * _readerViewportWidth();
   const clamped = Math.max(0, Math.min(maxLeft, raw));
   const over = raw - clamped;   // <0 = 首页再往前拖；>0 = 末页再往后拖
   c.scrollLeft = clamped;
@@ -1409,7 +1438,7 @@ function _onTouchEnd(e) {
   if (Math.abs(vx) > 0.3) {
     delta = vx < 0 ? 1 : -1;
   } else {
-    const moved = (c.scrollLeft - st.base) / window.innerWidth;
+    const moved = (c.scrollLeft - st.base) / _readerViewportWidth();
     if (moved > 0.5) delta = 1;
     else if (moved < -0.5) delta = -1;
   }
@@ -1445,8 +1474,8 @@ _content().addEventListener('scroll', () => {
   _snapTimer = setTimeout(() => {
     if (!_isHorizontal() || _touchDragging || _flipRAF) return;
     const page = Math.max(0, Math.min(_maxPage(),
-        Math.round(_content().scrollLeft / window.innerWidth)));
-    if (Math.abs(_content().scrollLeft - page * window.innerWidth) > 1) {
+        Math.round(_content().scrollLeft / _readerViewportWidth())));
+    if (Math.abs(_content().scrollLeft - page * _readerViewportWidth()) > 1) {
       _animateToPage(page);
     } else {
       _targetPage = page;
