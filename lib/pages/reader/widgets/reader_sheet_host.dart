@@ -71,6 +71,18 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
   void dispose() {
     _controller.removeStatusListener(_onStatus);
     _controller.dispose();
+    final completer = _completer;
+    final resume = _onResume;
+    final result = _pendingResult;
+    _completer = null;
+    _onResume = null;
+    // 父树卸载结束后再恢复外部资源，不通知已卸载的宿主重建。
+    scheduleMicrotask(() {
+      resume?.call();
+      if (completer != null && !completer.isCompleted) {
+        completer.complete(result);
+      }
+    });
     super.dispose();
   }
 
@@ -93,7 +105,8 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
     VoidCallback? onPause,
     VoidCallback? onResume,
   }) {
-    if (_isOpen) _forceClose();
+    _controller.stop();
+    if (_completer != null) _finalize();
 
     final completer = Completer<T?>();
     _completer = completer;
@@ -118,25 +131,26 @@ class ReaderSheetHostState extends State<ReaderSheetHost>
     if (!_isOpen) return;
     _isOpen = false;
     _pendingResult = result;
+    if (_controller.value == 0) {
+      _finalize();
+      return;
+    }
     _controller.animateBack(0.0, duration: kAnim, curve: kAnimCurveReverse);
   }
 
-  void _forceClose() {
-    _isOpen = false;
-    _controller.value = 0;
-    _finalize();
-  }
-
   void _finalize() {
-    if (mounted) setState(() => _builder = null);
+    final c = _completer;
+    if (c == null) return;
     final resume = _onResume;
+    final result = _pendingResult;
+    _completer = null;
     _onResume = null;
+    _pendingResult = null;
+    _isOpen = false;
+    if (mounted) setState(() => _builder = null);
+    if (!c.isCompleted) c.complete(result);
     resume?.call();
     widget.onSheetClose?.call();
-    final c = _completer;
-    _completer = null;
-    if (c != null && !c.isCompleted) c.complete(_pendingResult);
-    _pendingResult = null;
   }
 
   // ── 拖拽 ──
