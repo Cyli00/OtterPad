@@ -1,12 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:extended_image/extended_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -39,7 +37,7 @@ import 'table_parse_sheet.dart';
 
 /// 以 fade 转场打开 [FigureViewer]。
 ///
-/// 打开前自动截取当前屏幕的超低分辨率缩略图作为模糊背景。
+/// 使用半透明压暗背景，保留底层阅读界面，不做截图或模糊。
 ///
 /// [figures] 由调用方决定范围：
 ///  - Outline / 正文可展示图：传 [FigureManifestEntry.forDisplay] 过滤后的列表；
@@ -56,27 +54,6 @@ Future<void> showFigureViewer(
 }) async {
   if (figures.isEmpty) return;
 
-  // 截取背景：找到最外层 RepaintBoundary（阅读器全屏画面）
-  Uint8List? bgSnapshot;
-  RenderRepaintBoundary? boundary;
-  RenderObject? ro = context.findRenderObject();
-  while (ro != null) {
-    if (ro is RenderRepaintBoundary) boundary = ro;
-    ro = ro.parent;
-  }
-  if (boundary != null && boundary.hasSize) {
-    try {
-      const targetLongSide = 64.0;
-      final ratio = targetLongSide / boundary.size.longestSide;
-      final image = await boundary.toImage(pixelRatio: ratio);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-      bgSnapshot = bytes?.buffer.asUint8List();
-    } catch (_) {}
-  }
-
-  if (!context.mounted) return;
-
   Navigator.of(context, rootNavigator: true).push(
     PageRouteBuilder<void>(
       opaque: false,
@@ -85,7 +62,6 @@ Future<void> showFigureViewer(
       pageBuilder: (_, _, _) => FigureViewer(
         figures: figures,
         initialIndex: initialIndex,
-        backgroundSnapshot: bgSnapshot,
         documentId: documentId,
         document: document,
         onLocateQuote: onLocateQuote,
@@ -101,7 +77,6 @@ Future<void> showFigureViewer(
 class FigureViewer extends ConsumerStatefulWidget {
   final List<FigureManifestEntry> figures;
   final int initialIndex;
-  final Uint8List? backgroundSnapshot;
   final String? documentId;
   final Document? document;
   final LocateQuoteInReader? onLocateQuote;
@@ -111,7 +86,6 @@ class FigureViewer extends ConsumerStatefulWidget {
     super.key,
     required this.figures,
     this.initialIndex = 0,
-    this.backgroundSnapshot,
     this.documentId,
     this.document,
     this.onLocateQuote,
@@ -135,9 +109,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   static const _kMinCaptionH = 60.0;
 
   double _captionHeight = 120.0;
-  bool _captionExpanded = true;
   bool _showData = false;
-  double _dataOpacity = .96;
   int _imageRevision = 0;
   TableParseService? _tableSource;
   bool _loadingData = false;
@@ -146,14 +118,17 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   final Map<int, FigureParsedData> _parsedData = {};
 
   FigureManifestEntry get _figure => widget.figures[_currentIndex];
-  FigureParsedData get _data => _parsedData.putIfAbsent(
-    _currentIndex,
-    () => _tableSource?.forFigure(_figure) ?? const FigureParsedData(),
-  );
+  FigureParsedData get _data =>
+      _parsedData.putIfAbsent(_currentIndex, () => _dataFor(_figure));
+
+  FigureParsedData _dataFor(FigureManifestEntry figure) =>
+      figure.kind == 'table'
+      ? _tableSource?.forFigure(figure) ?? const FigureParsedData()
+      : const FigureParsedData();
 
   Future<void> _loadData() async {
     final id = widget.documentId ?? widget.document?.id;
-    if (id == null) return;
+    if (id == null || !widget.figures.any((fig) => fig.kind == 'table')) return;
     setState(() {
       _loadingData = true;
       _dataError = false;
@@ -280,82 +255,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
             backgroundColor: Colors.transparent,
             body: Stack(
               children: [
-                // ── 背景：低分辨率截图 + 暗色蒙版 ──
+                // ── 背景：仅压暗底层阅读界面 ──
                 Positioned.fill(child: _buildBackground()),
                 // ── 主体内容 ──
-                SafeArea(
-                  bottom: false,
-                  child: Column(
-                    children: [
-                      _buildTopBar(),
-                      _buildActionBar(),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            ExtendedImageGesturePageView.builder(
-                              controller: _pageController,
-                              itemCount: widget.figures.length,
-                              canScrollPage: (details) =>
-                                  !_isZoomed &&
-                                  (details?.totalScale ?? 1.0) <= 1.01,
-                              onPageChanged: (i) {
-                                _doubleTapController.stop();
-                                setState(() {
-                                  _currentIndex = i;
-                                  _isZoomed = false;
-                                  _showData = false;
-                                  _imageRevision++;
-                                });
-                              },
-                              itemBuilder: (_, i) =>
-                                  _buildImage(widget.figures[i]),
-                            ),
-                            if (_showData)
-                              Positioned.fill(
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: _isGallery ? 52 : 12,
-                                    vertical: 8,
-                                  ),
-                                  child: Material(
-                                    color: Theme.of(context).colorScheme.surface
-                                        .withValues(alpha: _dataOpacity),
-                                    borderRadius: BorderRadius.circular(16),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: _buildDataLayer(),
-                                  ),
-                                ),
-                              ),
-                            if (_isGallery && _currentIndex > 0)
-                              _buildArrow(
-                                true,
-                                () => _pageController.previousPage(
-                                  duration: kAnimSlow,
-                                  curve: Curves.easeInOut,
-                                ),
-                              ),
-                            if (_isGallery &&
-                                _currentIndex < widget.figures.length - 1)
-                              _buildArrow(
-                                false,
-                                () => _pageController.nextPage(
-                                  duration: kAnimSlow,
-                                  curve: Curves.easeInOut,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (widget.figures[_currentIndex].captionText
-                          .trim()
-                          .isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _buildCaptionPanel(bottomPadding),
-                      ] else
-                        SizedBox(height: bottomPadding + 8),
-                    ],
-                  ),
-                ),
+                SafeArea(bottom: false, child: _buildContent(bottomPadding)),
               ],
             ),
           ),
@@ -364,181 +267,119 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     );
   }
 
-  Widget _buildBackground() {
-    final snapshot = widget.backgroundSnapshot;
-    if (snapshot == null) {
-      return const ColoredBox(color: Color(0xF0000000));
-    }
-    return Stack(
-      fit: StackFit.expand,
+  Widget _buildBackground() => const ColoredBox(color: Color(0x66000000));
+
+  Widget _buildContent(double bottomPadding) {
+    final hasCaption = _figure.captionText.trim().isNotEmpty;
+    return Column(
       children: [
-        Image.memory(
-          snapshot,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.low,
+        _buildTopBar(),
+        Expanded(child: _buildGallery()),
+        if (hasCaption) ...[
+          const SizedBox(height: 8),
+          _buildCaptionPanel(bottomPadding),
+        ] else
+          SizedBox(height: bottomPadding + 8),
+      ],
+    );
+  }
+
+  Widget _buildGallery() {
+    return Stack(
+      key: const ValueKey('figure-gallery'),
+      children: [
+        ExtendedImageGesturePageView.builder(
+          controller: _pageController,
+          itemCount: widget.figures.length,
+          canScrollPage: (details) =>
+              !_isZoomed && (details?.totalScale ?? 1.0) <= 1.01,
+          onPageChanged: (i) {
+            _doubleTapController.stop();
+            setState(() {
+              _currentIndex = i;
+              _isZoomed = false;
+              _showData = false;
+              _imageRevision++;
+            });
+          },
+          itemBuilder: (_, i) => _buildImage(widget.figures[i]),
         ),
-        const ColoredBox(color: Color(0xB3000000)),
+        if (_showData && _figure.kind == 'table')
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: _isGallery ? 52 : 12,
+                vertical: 8,
+              ),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onSecondaryTapDown: (details) =>
+                    _showSaveMenu(_figure, details.globalPosition),
+                onLongPressStart: (details) =>
+                    _showSaveMenu(_figure, details.globalPosition),
+                child: Material(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: .96),
+                  borderRadius: BorderRadius.circular(16),
+                  clipBehavior: Clip.antiAlias,
+                  child: _buildDataLayer(),
+                ),
+              ),
+            ),
+          ),
+        if (_isGallery && _currentIndex > 0)
+          _buildArrow(
+            true,
+            () => _pageController.previousPage(
+              duration: kAnimSlow,
+              curve: Curves.easeInOut,
+            ),
+          ),
+        if (_isGallery && _currentIndex < widget.figures.length - 1)
+          _buildArrow(
+            false,
+            () => _pageController.nextPage(
+              duration: kAnimSlow,
+              curve: Curves.easeInOut,
+            ),
+          ),
       ],
     );
   }
 
   Widget _buildTopBar() {
-    final theme = Theme.of(context), cs = theme.colorScheme;
-    return Material(
-      color: cs.surfaceContainer,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 16, right: 4),
-        child: Row(
-          children: [
+    return SizedBox(
+      height: 48,
+      child: Row(
+        children: [
+          const SizedBox(width: 48),
+          if (_isGallery)
             Expanded(
-              child: Text(
-                context.l10n.figureFallback(
-                  _figure.kind ?? 'figure',
-                  _figure.pageIndex + 1,
-                ),
-                style: theme.textTheme.titleSmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (_isGallery)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
                 child: Text(
                   '${_currentIndex + 1} / ${widget.figures.length}',
-                  style: theme.textTheme.labelMedium,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: Colors.white70),
                 ),
               ),
-            IconButton(
-              icon: const Icon(Symbols.close_rounded),
+            )
+          else
+            const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: const Icon(Symbols.close_rounded, fill: 1),
+              color: Colors.white70,
               tooltip: context.l10n.closeImage,
-              onPressed: () => Navigator.of(context).maybePop(),
+              onPressed: () {
+                Haptics.soft();
+                Navigator.of(context).maybePop();
+              },
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionBar() {
-    final l10n = context.l10n, cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.surfaceContainer,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            if (_figure.kind == 'table' ||
-                _figure.kind == 'chart' ||
-                _data.hasData)
-              TextButton.icon(
-                onPressed: () => setState(() => _showData = !_showData),
-                icon: Icon(
-                  _showData
-                      ? Symbols.image_rounded
-                      : Symbols.table_view_rounded,
-                ),
-                label: Text(_showData ? l10n.original : l10n.figureDataLayer),
-              ),
-            if (!_showData)
-              IconButton(
-                onPressed: _resetZoom,
-                tooltip: l10n.figureFitImage,
-                icon: const Icon(Symbols.fit_screen_rounded),
-              ),
-            if (_showData && _data.hasData)
-              Tooltip(
-                message: l10n.figureOverlayOpacity,
-                child: SizedBox(
-                  width: 120,
-                  child: Slider(
-                    value: _dataOpacity,
-                    min: .35,
-                    max: 1,
-                    label: '${(_dataOpacity * 100).round()}%',
-                    semanticFormatterCallback: (v) =>
-                        '${l10n.figureOverlayOpacity} ${(v * 100).round()}%',
-                    onChanged: (value) => setState(() => _dataOpacity = value),
-                  ),
-                ),
-              ),
-            PopupMenuButton<String>(
-              tooltip: l10n.copy,
-              onSelected: (action) => _performAction(action, _figure),
-              itemBuilder: (_) => [
-                if (!Platform.isLinux)
-                  PopupMenuItem(value: 'copy', child: Text(l10n.copyImage)),
-                PopupMenuItem(
-                  value: 'caption',
-                  enabled: _figure.captionText.trim().isNotEmpty,
-                  child: Text(l10n.figureCopyCaption),
-                ),
-                PopupMenuItem(
-                  value: 'tsv',
-                  enabled: _data.canCopyTsv,
-                  child: Text(l10n.tableCopyTsv),
-                ),
-                PopupMenuItem(
-                  value: 'markdown',
-                  enabled: _data.hasData,
-                  child: Text(l10n.tableCopyMarkdown),
-                ),
-              ],
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    const Icon(Symbols.content_copy_rounded, size: 20),
-                    const SizedBox(width: 6),
-                    Text(l10n.copy),
-                  ],
-                ),
-              ),
-            ),
-            PopupMenuButton<String>(
-              enabled: !_exporting,
-              tooltip: l10n.figureExport,
-              onSelected: (action) => _performAction(action, _figure),
-              itemBuilder: (_) => [
-                PopupMenuItem(value: 'save', child: Text(l10n.saveImage)),
-                PopupMenuItem(value: 'share', child: Text(l10n.shareImage)),
-                PopupMenuItem(
-                  value: 'html',
-                  enabled: _data.hasData,
-                  child: Text(l10n.figureExportHtml),
-                ),
-                PopupMenuItem(
-                  value: 'exportTsv',
-                  enabled: _data.canCopyTsv,
-                  child: Text(l10n.figureExportTsv),
-                ),
-                PopupMenuItem(
-                  value: 'exportMarkdown',
-                  enabled: _data.hasData,
-                  child: Text(l10n.figureExportMarkdown),
-                ),
-              ],
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    if (_exporting)
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      const Icon(Symbols.download_rounded, size: 20),
-                    const SizedBox(width: 6),
-                    Text(l10n.figureExport),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -546,7 +387,13 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   Widget _buildDataLayer() {
     final l10n = context.l10n;
     if (_loadingData) return const Center(child: CircularProgressIndicator());
-    if (_data.hasData) return FigureDataOverlay(data: _data);
+    if (_data.hasData) {
+      final figure = _figure;
+      return FigureDataOverlay(
+        data: _data,
+        onContextMenu: (position) => _showSaveMenu(figure, position),
+      );
+    }
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -627,11 +474,27 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     FigureManifestEntry fig,
     Offset globalPosition,
   ) async {
+    if (_exporting) return;
     final l10n = context.l10n;
+    final data = _dataFor(fig);
     final selected = await showAppContextMenu<String>(
       context: context,
       globalPosition: globalPosition,
       items: [
+        if (fig.kind == 'table')
+          AppContextMenuItem(
+            value: 'overlay',
+            label: _showData ? l10n.original : l10n.figureDataLayer,
+            icon: _showData
+                ? Symbols.image_rounded
+                : Symbols.table_view_rounded,
+          ),
+        if (!_showData)
+          AppContextMenuItem(
+            value: 'fit',
+            label: l10n.figureFitImage,
+            icon: Symbols.fit_screen_rounded,
+          ),
         if (!Platform.isLinux)
           AppContextMenuItem(
             value: 'copy',
@@ -654,13 +517,13 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
             label: l10n.figureCopyCaption,
             icon: Symbols.title_rounded,
           ),
-        if (_data.canCopyTsv)
+        if (data.canCopyTsv)
           AppContextMenuItem(
             value: 'tsv',
             label: l10n.tableCopyTsv,
             icon: Symbols.table_view_rounded,
           ),
-        if (_data.hasData) ...[
+        if (data.hasData) ...[
           AppContextMenuItem(
             value: 'markdown',
             label: l10n.tableCopyMarkdown,
@@ -671,6 +534,17 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
             label: l10n.figureExportHtml,
             icon: Symbols.download_rounded,
           ),
+          if (data.canCopyTsv)
+            AppContextMenuItem(
+              value: 'exportTsv',
+              label: l10n.figureExportTsv,
+              icon: Symbols.download_rounded,
+            ),
+          AppContextMenuItem(
+            value: 'exportMarkdown',
+            label: l10n.figureExportMarkdown,
+            icon: Symbols.download_rounded,
+          ),
         ],
       ],
     );
@@ -679,8 +553,14 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
 
   Future<void> _performAction(String action, FigureManifestEntry fig) async {
     if (_exporting) return;
-    final data = _tableSource?.forFigure(fig) ?? const FigureParsedData();
+    final data = _dataFor(fig);
     switch (action) {
+      case 'overlay':
+        if (fig.kind == 'table' && identical(fig, _figure)) {
+          setState(() => _showData = !_showData);
+        }
+      case 'fit':
+        _resetZoom();
       case 'copy':
         await _copyFigure(fig);
       case 'share':
@@ -906,74 +786,72 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final displayText = isTranslated ? _translations[idx]! : fig.captionText;
     final maxH = math.max(_kMinCaptionH, MediaQuery.sizeOf(context).height / 4);
 
-    final theme = Theme.of(context), cs = theme.colorScheme;
-    return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomPadding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onVerticalDragUpdate: (d) => setState(() {
-                _captionExpanded = true;
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── 拖拽指示条 ──
+          GestureDetector(
+            onVerticalDragUpdate: (d) {
+              setState(() {
                 _captionHeight = (_captionHeight - d.delta.dy).clamp(
                   _kMinCaptionH,
                   maxH,
                 );
-              }),
-              child: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        context.l10n.figureCaption,
-                        style: theme.textTheme.titleSmall,
-                      ),
-                    ),
-                    if (widget.document != null) _buildAskAiButton(fig),
-                    _buildTranslateButton(idx, fig, isTranslated),
-                    IconButton(
-                      tooltip: _captionExpanded
-                          ? context.l10n.figureHideCaption
-                          : context.l10n.figureShowCaption,
-                      onPressed: () =>
-                          setState(() => _captionExpanded = !_captionExpanded),
-                      icon: Icon(
-                        _captionExpanded
-                            ? Symbols.expand_more_rounded
-                            : Symbols.expand_less_rounded,
-                      ),
-                    ),
-                  ],
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color(0x50FFFFFF),
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  ),
+                  child: SizedBox(width: 32, height: 4),
                 ),
               ),
             ),
-            if (_captionExpanded)
-              SizedBox(
-                height: _captionHeight.clamp(_kMinCaptionH, maxH),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: SelectionArea(
-                    child: SingleChildScrollView(
-                      child: Align(
-                        alignment: AlignmentDirectional.topStart,
+          ),
+          // ── 文本 + 翻译按钮 ──
+          SizedBox(
+            height: _captionHeight.clamp(_kMinCaptionH, maxH) + bottomPadding,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 16, bottomPadding + 16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: SelectionArea(
+                      child: SingleChildScrollView(
                         child: Text(
                           displayText,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            height: 1.55,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: Colors.white70, height: 1.6),
                         ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        if (widget.document != null) _buildAskAiButton(fig),
+                        if (widget.document != null) const SizedBox(height: 8),
+                        _buildTranslateButton(idx, fig, isTranslated),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -985,10 +863,8 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       child: IconButton(
         icon: const Icon(Symbols.auto_awesome_rounded, size: 18, fill: 1),
         style: IconButton.styleFrom(
-          backgroundColor: Theme.of(
-            context,
-          ).colorScheme.surfaceContainerHighest,
-          foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+          backgroundColor: Colors.white10,
+          foregroundColor: Colors.white60,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -1040,7 +916,7 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                 padding: const EdgeInsets.all(8),
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: Colors.white60,
                 ),
               )
             : IconButton(
@@ -1053,11 +929,9 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                 ),
                 style: IconButton.styleFrom(
                   backgroundColor: isTranslated
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  foregroundColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant,
+                      ? Colors.white24
+                      : Colors.white10,
+                  foregroundColor: Colors.white60,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

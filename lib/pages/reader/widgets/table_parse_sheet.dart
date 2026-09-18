@@ -9,7 +9,8 @@ import '../../../services/table_parse_service.dart';
 /// 原图之上的本地解析层；不另开弹窗、不加载外部 HTML 资源。
 class FigureDataOverlay extends StatelessWidget {
   final FigureParsedData data;
-  const FigureDataOverlay({super.key, required this.data});
+  final ValueChanged<Offset>? onContextMenu;
+  const FigureDataOverlay({super.key, required this.data, this.onContextMenu});
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +21,21 @@ class FigureDataOverlay extends StatelessWidget {
             .expand((p) => p.tables)
             .fold(1, (value, table) => math.max(value, table.columnCount));
         return SelectionArea(
+          contextMenuBuilder: onContextMenu == null
+              ? (context, state) =>
+                    AdaptiveTextSelectionToolbar.selectableRegion(
+                      selectableRegionState: state,
+                    )
+              : (context, state) {
+                  final position = state.contextMenuAnchors.primaryAnchor;
+                  // 单元格的选区菜单也使用查看器菜单，避免覆盖「返回原图」。
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!context.mounted) return;
+                    state.hideToolbar();
+                    onContextMenu!(position);
+                  });
+                  return const SizedBox.shrink();
+                },
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
