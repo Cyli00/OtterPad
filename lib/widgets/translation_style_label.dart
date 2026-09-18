@@ -41,7 +41,7 @@ class TranslationStyleLabel extends StatelessWidget {
       ),
       'blur' => ClipRect(
         child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+          imageFilter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
           child: Text(label, style: base),
         ),
       ),
