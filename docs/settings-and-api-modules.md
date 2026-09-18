@@ -22,6 +22,12 @@ AI 连通性测试、普通回答和流式回答共用 `agent_protocol.dart` 的
 
 `core/app_theme.dart` 统一生成明暗主题，并提供滑块的尺寸配置。阅读器局部主题显式使用同一份滑块配置，其配色仍来自阅读器自己的 `ColorScheme`。
 
+应用字体由 `ThemeState.appFont` 与 `SettingsKeys.appFont` 持久化，`core/app_fonts.dart` 提供跨平台字体族及缺字回退；`app.dart` 同步应用于明暗主题，不修改 PDF 原文字体或阅读器独立字体偏好。移动端仅提供 Sans／Serif，跨设备恢复的桌面字体在移动端回退到 Sans。
+
+`pages/setting/app_font_settings.dart` 复用 `SettingGroup` 和 `SettingPicker`，桌面通过 `services/system_font_service.dart` 在隔离线程枚举字体：Windows 使用 `ffi` 调用 `EnumFontFamiliesExW`（DEFAULT_CHARSET，覆盖所有字符集），macOS 使用 CoreText，Linux 使用 `fc-list`。仅列举字体族并去重，不将全部字体文件加载进内存；系统字体被卸载时由回退链兜底。读取失败显示重试，仍可选择 Sans／Serif。字体列表不保证每个字体覆盖所有语言。
+
+接口依据：[Windows 字体枚举](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-enumfontfamiliesexw)、[Flutter 字体回退](https://api.flutter.dev/flutter/painting/TextStyle/fontFamily.html)。定点回归：`test/pages/setting/app_font_settings_test.dart`。
+
 `widgets/setting_controls.dart` 提供帮助图标、设置标题、重置按钮与设置滑块。滑块以 `null` 表示默认状态，始终显示实际数值；OCR 的默认值在调用处转换为此状态。已在分组内留边距的调用点使用零内边距。桌面阅读器滑块仍保留本地拖动状态和松手提交，只共享主题，不改变保存频率。
 
 ## PDF 字符循环
@@ -44,7 +50,7 @@ PaddleOCR 的候选聚类、题注配对和正文替换以 `v0.1.4`（`4c8fb7b`�
 | `table_parse_service.dart` | 只读当前 `extract.json`，通过 `DocumentStructure` 和清单的页号／块 ID／来源版本匹配已有表格与图表内容；不依赖模型配置、网络或旧 LLM 缓存 |
 | `table_parse_result.dart` | 转换 OCR 已有 HTML／Markdown 表格，保留字符串、合并跨度；拒绝越界和重叠单元格，生成 TSV、Markdown 与安全转义 HTML，不猜补数值 |
 | `table_parse_sheet.dart` | `FigureDataOverlay` 在查看器原图区显示本地解析层，复用 `SelectionArea`、`HtmlWidget` 和双向滚动，不另开解析弹窗 |
-| `figure_viewer.dart` | 可见复制／导出菜单、原图与蒙版切换、蒙版透明度、缩放复位、键盘翻页和题注收放；复用剪贴板、文件选择器、分享与主题组件 |
+| `figure_viewer.dart` | 仅压暗背景；桌面与移动端均使用底部可拖高题注，翻译／提问入口位于文字右侧；复制／导出、缩放复位和表格蒙版切换统一通过右键（移动端长按）菜单，不显示操作按钮排；仅 `kind == table` 读取对应解析结果，普通 figure、chart 不提供蒙版或数据导出 |
 
 清单 `algorithm_version: 4` 保留 `visual_regions`、`source_refs`、`replacement_refs`、`source_version`、`assignment`、`notes`，`caption_refs` 增加可选 `start/end` 原块字符范围；旧单页字段继续可读。未知变换不沿用固定 DPI 猜测，只回退有明确原生题注归属的源图。WebView 用 `figure_title` 类与 `data-caption-id` 绑定题注；阅读索引同步拆分混合正文，不为子范围伪造 PDF 坐标。
 
@@ -52,6 +58,6 @@ PaddleOCR 的候选聚类、题注配对和正文替换以 `v0.1.4`（`4c8fb7b`�
 
 词汇与格式依据：[Polyglossia 各语言题注定义](https://github.com/reutenauer/polyglossia/tree/master/tex)、[PLOS 补充材料规范](https://journals.plos.org/plosone/s/supporting-information)、[JAMA 作者规范](https://jamanetwork.com/journals/jama/pages/instructions-for-authors)、[IEEE 作者格式示例](https://ewh.ieee.org/conf/ests05/Author-Instructions.pdf)、[Nature 已发表论文中的 Extended Data 和 Supplementary 标题](https://www.nature.com/articles/s41586-020-2249-1)。配置回归入口为 `test/services/caption_patterns_test.dart`，涵盖各语言加载、类别、补充材料、完整编号及正文误召回反例。
 
-查看器不再调用 LLM 转录表格，也不读取或写入 `table_parses/`；用户已有缓存不删除。每次打开查看器读取当前提取 JSON，清单来源版本不符时拒绝展示解析数据，缺失或损坏时保留原图及其导出。跨页分片按清单顺序保留、按页号和块 ID 去重，不合并猜测续页表头。蒙版为可选择、可滚动的结构化内容对照层，不声称 HTML 单元格与原图像素精确对齐；JSON 缺少单元格坐标时不伪造坐标。表格及图表原始文本可以复制 Markdown，结构化表格可复制 TSV；HTML 导出保留合并格，TSV／Markdown 展平跨度。原图复制在剪贴板插件支持的平台提供；移动端使用原生分享导出数据。题注翻译和主动 AI 问答保持独立，不参与本地解析。
+查看器不再调用 LLM 转录表格，也不读取或写入 `table_parses/`；用户已有缓存不删除。仅当画廊包含表格时读取当前提取 JSON，清单来源版本不符时拒绝展示解析数据，缺失或损坏时保留原图及其导出。跨页分片按清单顺序保留、按页号和块 ID 去重，不合并猜测续页表头。蒙版为可选择、可滚动的结构化内容对照层，不声称 HTML 单元格与原图像素精确对齐；JSON 缺少单元格坐标时不伪造坐标。查看器仅为表格提供蒙版与 HTML／Markdown／TSV 数据复制导出，普通图片与 chart 仅保留原图及题注操作；HTML 导出保留合并格，TSV／Markdown 展平跨度。原图复制在剪贴板插件支持的平台提供；移动端使用原生分享导出数据。题注翻译和主动 AI 问答保持独立，不参与本地解析。背景只使用半透明黑色蒙版，不做模糊或截图。桌面与移动端统一使用底部拖拽面板，不保留左侧题注栏。
 
 回归入口：`test/services/caption_first_test.dart`、`figure_unified_test.dart`、`figure_source_contract_test.dart`、`mineru_result_converter_test.dart`、`reader_document_index_test.dart`；指定文档回放用 `caption_first_fixture_test.dart`（环境变量 `CAPTION_FIRST_FIXTURE` 指向文献目录，只在临时副本裁图）。表格交互另有 `table_parse_contract_test.dart`、`test/pages/reader/table_parse_sheet_test.dart`、`figure_gallery_test.dart`。仓库忽略 `test/`，运行显式路径无需修改 `.gitignore`。

@@ -20,6 +20,8 @@
 
 ## 菜单与浮层
 
+已完整显示名称的控件不再弹出同名 Tooltip；纯图标、补充说明、快捷键及被截断内容的完整提示保留。共享导航栏显示标签时，悬停／按压底色仅覆盖图标，文字仍属于点击区域。
+
 复用 `lib/widgets/app_context_menu.dart` 的 `showAppContextMenu`；桌面右键用 `onSecondaryTapDown`，移动端使用长按。
 
 `SettingPicker` 的桌面分支位于 `lib/pages/setting/setting_picker.dart`：
