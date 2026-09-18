@@ -597,6 +597,48 @@ abstract class AppLocalizations {
   /// **'Font'**
   String get fontFamily;
 
+  /// No description provided for @appFont.
+  ///
+  /// In en, this message translates to:
+  /// **'App font'**
+  String get appFont;
+
+  /// No description provided for @appFontSans.
+  ///
+  /// In en, this message translates to:
+  /// **'Sans'**
+  String get appFontSans;
+
+  /// No description provided for @appFontSerif.
+  ///
+  /// In en, this message translates to:
+  /// **'Serif'**
+  String get appFontSerif;
+
+  /// No description provided for @appFontPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Aa 123 · 中文 · 日本語 · 한국어 · العربية'**
+  String get appFontPreview;
+
+  /// No description provided for @appFontHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to the app interface. Reader fonts are configured separately. Missing characters use system fallback fonts.'**
+  String get appFontHint;
+
+  /// No description provided for @appFontLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not list system fonts. You can still choose Sans or Serif.'**
+  String get appFontLoadFailed;
+
+  /// No description provided for @appFontSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the font selection. Please try again.'**
+  String get appFontSaveFailed;
+
   /// No description provided for @paginationMode.
   ///
   /// In en, this message translates to:
@@ -5905,7 +5947,7 @@ abstract class AppLocalizations {
   /// No description provided for @figureExportHtml.
   ///
   /// In en, this message translates to:
-  /// **'Table/chart data (.html)'**
+  /// **'Table data (.html)'**
   String get figureExportHtml;
 
   /// No description provided for @figureExportTsv.
@@ -5917,7 +5959,7 @@ abstract class AppLocalizations {
   /// No description provided for @figureExportMarkdown.
   ///
   /// In en, this message translates to:
-  /// **'Table/chart data (.md)'**
+  /// **'Table data (.md)'**
   String get figureExportMarkdown;
 
   /// No description provided for @figurePrevious.

@@ -14,6 +14,7 @@ import '../../services/haptics.dart';
 import '../../widgets/tactile_press.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
+import 'app_font_settings.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
   const AppearanceSettingsPage({super.key, this.embedded = false});
@@ -108,6 +109,8 @@ class AppearanceSettingsPage extends ConsumerWidget {
               child: _buildColorGrid(context, ref, themeState),
             ),
           ),
+
+          const AppFontSettings(),
 
           // ── 阅读设置 ──
           SettingGroup(

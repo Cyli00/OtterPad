@@ -260,6 +260,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fontFamily => '字体';
 
   @override
+  String get appFont => '应用字体';
+
+  @override
+  String get appFontSans => 'Sans（无衬线）';
+
+  @override
+  String get appFontSerif => 'Serif（衬线）';
+
+  @override
+  String get appFontPreview => 'Aa 123 · 中文 · 日本語 · 한국어 · العربية';
+
+  @override
+  String get appFontHint => '用于应用界面；阅读器字体单独设置。所选字体缺少的字符会使用系统回退字体。';
+
+  @override
+  String get appFontLoadFailed => '无法读取系统字体，仍可选择 Sans 或 Serif。';
+
+  @override
+  String get appFontSaveFailed => '字体设置未能保存，请重试。';
+
+  @override
   String get paginationMode => '翻页方式';
 
   @override
@@ -3232,13 +3253,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get figureExport => '导出';
 
   @override
-  String get figureExportHtml => '表格／图表数据（.html）';
+  String get figureExportHtml => '表格数据（.html）';
 
   @override
   String get figureExportTsv => '电子表格数据（.tsv）';
 
   @override
-  String get figureExportMarkdown => '表格／图表数据（.md）';
+  String get figureExportMarkdown => '表格数据（.md）';
 
   @override
   String get figurePrevious => '上一张';
@@ -3867,6 +3888,27 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get fontFamily => '字體';
+
+  @override
+  String get appFont => '應用程式字體';
+
+  @override
+  String get appFontSans => 'Sans（無襯線）';
+
+  @override
+  String get appFontSerif => 'Serif（襯線）';
+
+  @override
+  String get appFontPreview => 'Aa 123 · 中文 · 日本語 · 한국어 · العربية';
+
+  @override
+  String get appFontHint => '用於應用程式介面；閱讀器字體另外設定。所選字體缺少的字元會使用系統後備字體。';
+
+  @override
+  String get appFontLoadFailed => '無法讀取系統字體，仍可選擇 Sans 或 Serif。';
+
+  @override
+  String get appFontSaveFailed => '字體設定未能儲存，請重試。';
 
   @override
   String get paginationMode => '翻頁方式';

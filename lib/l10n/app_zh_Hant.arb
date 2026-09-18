@@ -86,6 +86,13 @@
 
   "fontSize": "字號",
   "fontFamily": "字體",
+  "appFont": "應用程式字體",
+  "appFontSans": "Sans（無襯線）",
+  "appFontSerif": "Serif（襯線）",
+  "appFontPreview": "Aa 123 · 中文 · 日本語 · 한국어 · العربية",
+  "appFontHint": "用於應用程式介面；閱讀器字體另外設定。所選字體缺少的字元會使用系統後備字體。",
+  "appFontLoadFailed": "無法讀取系統字體，仍可選擇 Sans 或 Serif。",
+  "appFontSaveFailed": "字體設定未能儲存，請重試。",
   "paginationMode": "翻頁方式",
   "verticalPagination": "上下翻頁",
   "horizontalPagination": "左右翻頁",

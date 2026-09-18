@@ -6,16 +6,18 @@ const appSliderTheme = SliderThemeData(
   trackHeight: 3,
 );
 
-ThemeData buildAppTheme(ColorScheme colorScheme, {String? fontFamily}) =>
-    ThemeData(
-      colorScheme: colorScheme,
-      useMaterial3: true,
-      fontFamily: fontFamily,
-      dialogTheme: const DialogThemeData(elevation: 0),
-      sliderTheme: appSliderTheme,
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-        },
-      ),
-    );
+ThemeData buildAppTheme(
+  ColorScheme colorScheme, {
+  String? fontFamily,
+  List<String>? fontFamilyFallback,
+}) => ThemeData(
+  colorScheme: colorScheme,
+  useMaterial3: true,
+  fontFamily: fontFamily,
+  fontFamilyFallback: fontFamilyFallback,
+  dialogTheme: const DialogThemeData(elevation: 0),
+  sliderTheme: appSliderTheme,
+  pageTransitionsTheme: const PageTransitionsTheme(
+    builders: {TargetPlatform.android: PredictiveBackPageTransitionsBuilder()},
+  ),
+);

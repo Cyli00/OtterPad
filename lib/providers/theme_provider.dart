@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/settings_keys.dart';
+import '../core/app_fonts.dart';
 import '../core/storage/storage.dart';
 
 class ThemeState {
@@ -10,12 +11,14 @@ class ThemeState {
   final Color seedColor;
   final bool useDynamicColor;
   final double textScale;
+  final String appFont;
 
   const ThemeState({
     required this.mode,
     required this.seedColor,
     this.useDynamicColor = false,
     this.textScale = 1.0,
+    this.appFont = AppFonts.sans,
   });
 
   ThemeState copyWith({
@@ -23,12 +26,14 @@ class ThemeState {
     Color? seedColor,
     bool? useDynamicColor,
     double? textScale,
+    String? appFont,
   }) {
     return ThemeState(
       mode: mode ?? this.mode,
       seedColor: seedColor ?? this.seedColor,
       useDynamicColor: useDynamicColor ?? this.useDynamicColor,
       textScale: textScale ?? this.textScale,
+      appFont: appFont ?? this.appFont,
     );
   }
 }
@@ -70,14 +75,16 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
         box.get(_seedColorKey, defaultValue: Colors.blue.toARGB32()) as int;
     final useDynamicColor =
         box.get(_dynamicColorKey, defaultValue: false) as bool;
-    final textScale =
-        (box.get(_textScaleKey, defaultValue: 1.0) as num).toDouble();
+    final textScale = (box.get(_textScaleKey, defaultValue: 1.0) as num)
+        .toDouble();
 
     return ThemeState(
       mode: mode,
       seedColor: Color(savedColorValue),
       useDynamicColor: useDynamicColor,
       textScale: textScale,
+      appFont:
+          box.get(SettingsKeys.appFont, defaultValue: AppFonts.sans) as String,
     );
   }
 
@@ -110,6 +117,11 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
 
   void reload() {
     state = _loadTheme();
+  }
+
+  Future<void> setAppFont(String value) async {
+    await GStorage.setting.put(SettingsKeys.appFont, value);
+    if (mounted) state = state.copyWith(appFont: value);
   }
 }
 

@@ -267,6 +267,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fontFamily => 'Font';
 
   @override
+  String get appFont => 'App font';
+
+  @override
+  String get appFontSans => 'Sans';
+
+  @override
+  String get appFontSerif => 'Serif';
+
+  @override
+  String get appFontPreview => 'Aa 123 · 中文 · 日本語 · 한국어 · العربية';
+
+  @override
+  String get appFontHint =>
+      'Applies to the app interface. Reader fonts are configured separately. Missing characters use system fallback fonts.';
+
+  @override
+  String get appFontLoadFailed =>
+      'Could not list system fonts. You can still choose Sans or Serif.';
+
+  @override
+  String get appFontSaveFailed =>
+      'Could not save the font selection. Please try again.';
+
+  @override
   String get paginationMode => 'Pagination';
 
   @override
@@ -3359,13 +3383,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get figureExport => 'Export';
 
   @override
-  String get figureExportHtml => 'Table/chart data (.html)';
+  String get figureExportHtml => 'Table data (.html)';
 
   @override
   String get figureExportTsv => 'Spreadsheet data (.tsv)';
 
   @override
-  String get figureExportMarkdown => 'Table/chart data (.md)';
+  String get figureExportMarkdown => 'Table data (.md)';
 
   @override
   String get figurePrevious => 'Previous figure';

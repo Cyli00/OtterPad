@@ -1,8 +1,9 @@
 import 'core/app_theme.dart';
-import 'dart:io';
+import 'core/app_fonts.dart';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,14 +16,6 @@ import 'services/snackbar_service.dart';
 import 'utils/desktop.dart';
 import 'widgets/desktop_drop_host.dart';
 import 'widgets/window_chrome.dart';
-
-/// 各平台系统默认字体族
-String? get _systemFontFamily {
-  if (Platform.isWindows) return 'Microsoft YaHei UI';
-  if (Platform.isMacOS || Platform.isIOS) return '.AppleSystemUIFont';
-  // Android / Linux：返回 null 让 Flutter 走平台默认
-  return null;
-}
 
 class OtterPadApp extends ConsumerWidget {
   const OtterPadApp({super.key});
@@ -73,8 +66,28 @@ class OtterPadApp extends ConsumerWidget {
           supportedLocales: AppLocalizations.supportedLocales,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           themeMode: themeState.mode,
-          theme: buildAppTheme(lightScheme, fontFamily: _systemFontFamily),
-          darkTheme: buildAppTheme(darkScheme, fontFamily: _systemFontFamily),
+          theme: buildAppTheme(
+            lightScheme,
+            fontFamily: AppFonts.family(
+              themeState.appFont,
+              defaultTargetPlatform,
+            ),
+            fontFamilyFallback: AppFonts.fallbacks(
+              themeState.appFont,
+              defaultTargetPlatform,
+            ),
+          ),
+          darkTheme: buildAppTheme(
+            darkScheme,
+            fontFamily: AppFonts.family(
+              themeState.appFont,
+              defaultTargetPlatform,
+            ),
+            fontFamilyFallback: AppFonts.fallbacks(
+              themeState.appFont,
+              defaultTargetPlatform,
+            ),
+          ),
           routerConfig: router,
           builder: (context, child) {
             final brightness = Theme.of(context).brightness;

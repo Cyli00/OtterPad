@@ -30,6 +30,7 @@ class SettingsKeys {
   static const seedColor = 'seed_color';
   static const useDynamicColor = 'use_dynamic_color';
   static const textScale = 'text_scale';
+  static const appFont = 'app_font';
 
   // ── 代理 ──
   static const proxyMode = 'proxy_mode';
