@@ -16,6 +16,9 @@ class TactilePress extends StatefulWidget {
   final EdgeInsetsGeometry? padding;
   final bool haptics;
 
+  /// 仅限制顶部居中的反馈底色范围，不缩小整项的点击区域。
+  final Size? highlightSize;
+
   /// 按压回弹（kSpringPress）欠阻尼可中断；默认值见 build 中的 0.96。
 
   const TactilePress({
@@ -29,6 +32,7 @@ class TactilePress extends StatefulWidget {
     this.pressedScale,
     this.padding,
     this.haptics = true,
+    this.highlightSize,
   });
 
   @override
@@ -63,6 +67,16 @@ class _TactilePressState extends State<TactilePress> {
     final content = widget.padding == null
         ? widget.child
         : Padding(padding: widget.padding!, child: widget.child);
+    final highlight = AnimatedContainer(
+      duration: kAnimFast,
+      curve: kAnimCurve,
+      decoration: BoxDecoration(
+        color: target,
+        borderRadius: radius,
+        border: widget.border,
+      ),
+      child: widget.highlightSize == null ? content : null,
+    );
 
     return MouseRegion(
       cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
@@ -120,16 +134,26 @@ class _TactilePressState extends State<TactilePress> {
           value: scale,
           builder: (context, v, child) =>
               Transform.scale(scale: v, child: child),
-          child: AnimatedContainer(
-            duration: kAnimFast,
-            curve: kAnimCurve,
-            decoration: BoxDecoration(
-              color: target,
-              borderRadius: radius,
-              border: widget.border,
-            ),
-            child: content,
-          ),
+          child: widget.highlightSize == null
+              ? highlight
+              : Stack(
+                  children: [
+                    content,
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: IgnorePointer(
+                        child: Center(
+                          child: SizedBox.fromSize(
+                            size: widget.highlightSize,
+                            child: highlight,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

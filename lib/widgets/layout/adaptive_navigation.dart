@@ -137,6 +137,9 @@ class AdaptiveNavigationRail extends StatelessWidget {
 }
 
 class _NavigationRailItem extends StatelessWidget {
+  // 显示文字时每项的上下留白；相邻两项的间距为此值的两倍。
+  static const double _labeledItemVerticalPadding = 6;
+
   const _NavigationRailItem({
     required this.icon,
     required this.label,
@@ -221,6 +224,7 @@ class _NavigationRailItem extends StatelessWidget {
 
     Widget item = TactilePress(
       baseColor: Colors.transparent,
+      highlightSize: extended ? const Size(48, 36) : null,
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       haptics: false,
@@ -231,10 +235,13 @@ class _NavigationRailItem extends StatelessWidget {
             : KeyedSubtree(key: const ValueKey(false), child: buildIconOnly()),
       ),
     );
-    item = Tooltip(message: label, child: item);
+    if (!extended) item = Tooltip(message: label, child: item);
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: extended ? 4 : 12, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: extended ? 4 : 12,
+        vertical: extended ? _labeledItemVerticalPadding : 4,
+      ),
       child: item,
     );
   }
@@ -255,6 +262,9 @@ class AdaptiveBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final labelBehavior =
+        NavigationBarTheme.of(context).labelBehavior ??
+        NavigationDestinationLabelBehavior.alwaysShow;
     return NavigationBarTheme(
       data: NavigationBarTheme.of(context).copyWith(
         iconTheme: const WidgetStatePropertyAll(
@@ -267,11 +277,18 @@ class AdaptiveBottomNavigation extends StatelessWidget {
           Haptics.soft();
           onDestinationSelected(index);
         },
-        destinations: destinations.map((d) {
+        destinations: destinations.asMap().entries.map((entry) {
+          final d = entry.value;
+          final labelVisible =
+              labelBehavior == NavigationDestinationLabelBehavior.alwaysShow ||
+              (labelBehavior ==
+                      NavigationDestinationLabelBehavior.onlyShowSelected &&
+                  entry.key == selectedIndex);
           return NavigationDestination(
             icon: d.icon,
             selectedIcon: d.selectedIcon,
             label: d.label,
+            tooltip: labelVisible ? '' : d.label,
           );
         }).toList(),
       ),

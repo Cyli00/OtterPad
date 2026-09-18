@@ -56,7 +56,7 @@ class ChatModelPicker extends ConsumerWidget {
     /// 折叠态 chip：高度对齐同行 36×36 工具按钮（图标框 32 + 上下各 2）。
     Widget button(VoidCallback onTap) => Tooltip(
       message: current == null
-          ? l10n.chatSelectModel
+          ? ''
           : '${l10n.chatSelectModel}: ${current.modelId}',
       child: TactilePress(
         baseColor: cs.surfaceContainerHigh,

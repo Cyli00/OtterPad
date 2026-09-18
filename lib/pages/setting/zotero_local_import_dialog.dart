@@ -520,7 +520,7 @@ class _ZoteroLocalImportDialogState
               ),
             ),
             Tooltip(
-              message: _directory ?? l10n.zoteroLocalDirectoryHint,
+              message: _directory ?? '',
               child: TextButton.icon(
                 onPressed: _busy ? null : _pickDirectory,
                 icon: const Icon(Symbols.folder_open_rounded),
