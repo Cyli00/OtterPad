@@ -42,6 +42,8 @@ dependencies:
   # 文件/路径
   path_provider: ^2.1.5
   path: ^1.9.1
+  # 桌面原生系统字体枚举（不修改平台工程）
+  ffi: ^2.2.0
 
   # 图片缓存
   cached_network_image: ^3.4.1
