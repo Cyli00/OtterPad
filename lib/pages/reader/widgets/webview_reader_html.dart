@@ -10,7 +10,7 @@ import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
 import 'reader_typography.dart';
 
-const readerAssetVersion = 'reader-math-budget-7';
+const readerAssetVersion = 'reader-figure-layout-8';
 
 // ─── Public API ───
 

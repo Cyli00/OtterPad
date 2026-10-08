@@ -111,13 +111,16 @@ figure {
   scroll-margin-top: 60px;
   scroll-margin-bottom: 60px;
 }
-figure img { margin: 4px auto; }
+figure img { margin: 4px auto; border-radius: 4px; }
+/* 桌面窗口高、栏宽，沿用 33vh 会让多面板图缩成一小块 */
+body[data-desktop="true"] figure img { max-height: 70vh; }
 
 figcaption {
   font-size: calc(var(--font-size) * var(--caption-scale));
-  color: var(--secondary);
+  color: var(--text);
   line-height: 1.5;
-  padding: 4px 8px 0;
+  text-align: start;
+  padding: 6px 0 0;
 }
 
 .translated { color: var(--link); }
