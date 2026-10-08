@@ -442,7 +442,10 @@ class ReaderPdfPage extends PdfPageRenumbered {
           source: sourceDisplay,
           rect: available,
           preferredFontSize: fontSize,
-          centered: p.isHeading && rect.width > width * .6,
+          centered:
+              p.isHeading &&
+              rect.width > width * .6 &&
+              (rect.center.dx - width / 2).abs() < width * .03,
           heading: p.isHeading,
           style: style,
         );

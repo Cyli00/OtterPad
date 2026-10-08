@@ -49,14 +49,8 @@ class ReaderTypesetText {
     bool centered = false,
   }) async {
     final baseSize = style.fontSize ?? 14;
+    final cjk = _cjkText.hasMatch(text);
     final base = style.copyWith(
-      fontFamily: _cjkText.hasMatch(text) ? 'SimSun' : 'Times New Roman',
-      fontFamilyFallback: const [
-        'Times New Roman',
-        'Noto Serif CJK SC',
-        'Songti SC',
-        'serif',
-      ],
       fontWeight: heading ? FontWeight.bold : FontWeight.normal,
       height: 1.2,
     );
@@ -124,9 +118,10 @@ class ReaderTypesetText {
           children: spans,
         ),
         textDirection: TextDirection.ltr,
+        // 中文夹带不可断开的英文长词时，两端对齐会把汉字间距拉开。
         textAlign: centered
             ? TextAlign.center
-            : heading
+            : heading || cjk
             ? TextAlign.start
             : TextAlign.justify,
         textScaler: TextScaler.noScaling,
