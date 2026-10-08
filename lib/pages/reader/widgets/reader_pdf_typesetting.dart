@@ -29,6 +29,7 @@ class ReaderTypesetText {
   final List<ReaderTypesetLine> lines;
   final List<_Formula> _formulas;
   final List<Rect> _formulaRects;
+  final bool readable;
   double get height => painter.height;
   double get fontSize => painter.text!.style!.fontSize!;
   ReaderTypesetText._(
@@ -37,8 +38,11 @@ class ReaderTypesetText {
     this.lines,
     this._formulas,
     this._formulaRects,
+    this.readable,
   );
 
+  /// 字号降到参考字号的 [minFontScale] 倍仍放不下时 [readable] 为 false，
+  /// 由调用方保留原文；[minFontScale] 为 0 时不设下限。
   static Future<ReaderTypesetText> fit({
     required String text,
     required String source,
@@ -47,6 +51,7 @@ class ReaderTypesetText {
     required TextStyle style,
     double? preferredFontSize,
     bool centered = false,
+    double minFontScale = .7,
   }) async {
     final baseSize = style.fontSize ?? 14;
     final cjk = _cjkText.hasMatch(text);
@@ -97,9 +102,12 @@ class ReaderTypesetText {
       for (final part in (plain ?? display).split('\uFFFC')) {
         if (spans.isNotEmpty && plain == null) {
           final f = formulas[formulaIndex++];
+          // 比栏宽的公式单独缩到栏宽，不拖累整段字号。
+          var size = f.size * (fs / baseSize);
+          if (size.width > rect.width) size *= rect.width / size.width;
           dimensions.add(
             PlaceholderDimensions(
-              size: f.size * (fs / baseSize),
+              size: size,
               alignment: PlaceholderAlignment.middle,
             ),
           );
@@ -155,16 +163,24 @@ class ReaderTypesetText {
       }
       preferred = lo;
     }
-    var low = .1;
-    var high = preferred * 1.15;
-    for (var i = 0; i < 16; i++) {
+    final floor = math.max(.1, (preferredFontSize ?? preferred) * minFontScale);
+    var low = floor;
+    var high = math.max(floor, preferred * 1.15);
+    var found = false;
+    for (var i = 0; i < 10; i++) {
       final mid = (low + high) / 2;
       final p = create(mid);
       if (fits(p)) {
         low = mid;
+        found = true;
       } else {
         high = mid;
       }
+      p.dispose();
+    }
+    if (!found && minFontScale > 0) {
+      final p = create(floor);
+      found = fits(p);
       p.dispose();
     }
     final painter = create(math.max(.1, low * .99));
@@ -200,6 +216,7 @@ class ReaderTypesetText {
       ),
       formulas,
       painter.inlinePlaceholderBoxes?.map((b) => b.toRect()).toList() ?? [],
+      found || minFontScale <= 0,
     );
   }
 

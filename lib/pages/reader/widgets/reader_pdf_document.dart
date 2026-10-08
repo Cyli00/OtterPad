@@ -367,13 +367,13 @@ class ReaderPdfPage extends PdfPageRenumbered {
     final sourceMappings = <String, List<Rect>>{};
     for (final item in located) {
       final p = item.p;
-      final translated = translations[p.hash];
-      final text = translated == null
+      var translated = translations[p.hash];
+      var text = translated == null
           ? p.plainText
           : readerTranslatedText(translated);
       if (text.isEmpty) continue;
-      final slice = readerPdfRegionRanges(p, text)[item.regionIndex];
-      final display = text.substring(slice.start, slice.end);
+      var slice = readerPdfRegionRanges(p, text)[item.regionIndex];
+      var display = text.substring(slice.start, slice.end);
       final sourceSlice = readerPdfRegionRanges(
         p,
         p.plainText,
@@ -386,7 +386,7 @@ class ReaderPdfPage extends PdfPageRenumbered {
       var rect = item.rect;
       ReaderTypesetText? typeset;
       var lines = const <ReaderTypesetLine>[];
-      List<Rect> charRects;
+      var charRects = const <Rect>[];
       if (translated != null) {
         // 只借用当前栏内的留白，下一段、公式、图表和页眉页脚均为硬边界。
         var bottom = rect.bottom;
@@ -449,30 +449,41 @@ class ReaderPdfPage extends PdfPageRenumbered {
           heading: p.isHeading,
           style: style,
         );
-        lines = [
-          for (final line in typeset.lines)
-            ReaderTypesetLine(
-              TextRange(
-                start: slice.start + line.range.start,
-                end: slice.start + line.range.end,
+        if (!typeset.readable) {
+          // 可读字号下放不下：保留原文，不显示难以阅读和拖选的小字。
+          typeset.dispose();
+          typeset = null;
+          translated = null;
+          text = p.plainText;
+          slice = sourceSlice;
+          display = sourceDisplay;
+        } else {
+          lines = [
+            for (final line in typeset.lines)
+              ReaderTypesetLine(
+                TextRange(
+                  start: slice.start + line.range.start,
+                  end: slice.start + line.range.end,
+                ),
+                line.rect.shift(rect.topLeft),
               ),
-              line.rect.shift(rect.topLeft),
-            ),
-        ];
-        rect = Rect.fromLTRB(
-          rect.left,
-          rect.top,
-          rect.right,
-          math.max(item.rect.bottom, rect.top + typeset.height),
-        );
-        charRects = List<Rect>.filled(text.length, Rect.zero);
-        charRects.setRange(
-          slice.start,
-          slice.end,
-          typeset.charRects.map((r) => r.shift(rect.topLeft)),
-        );
-        replaced.add(item.rect);
-      } else {
+          ];
+          rect = Rect.fromLTRB(
+            rect.left,
+            rect.top,
+            rect.right,
+            math.max(item.rect.bottom, rect.top + typeset.height),
+          );
+          charRects = List<Rect>.filled(text.length, Rect.zero);
+          charRects.setRange(
+            slice.start,
+            slice.end,
+            typeset.charRects.map((r) => r.shift(rect.topLeft)),
+          );
+          replaced.add(item.rect);
+        }
+      }
+      if (translated == null) {
         final mapped = sourceMappings.putIfAbsent(
           p.id,
           () => geometry.alignedCharRects(
@@ -497,6 +508,7 @@ class ReaderPdfPage extends PdfPageRenumbered {
             rect: rect,
             heading: p.isHeading,
             style: style,
+            minFontScale: 0,
           );
           charRects = List<Rect>.filled(text.length, Rect.zero);
           charRects.setRange(
