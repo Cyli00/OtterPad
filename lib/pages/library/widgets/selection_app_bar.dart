@@ -6,7 +6,6 @@ import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../utils/responsive.dart';
 import '../../../providers/selection_provider.dart';
-import 'document_export_action.dart';
 
 /// 多选模式操作栏
 ///
@@ -55,7 +54,7 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
     final row = SizedBox(
       height: kToolbarHeight,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.only(left: 16, right: 12),
         child: Row(
           children: [
             SizedBox(
@@ -84,6 +83,7 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
             ),
             Flexible(
               flex: 3,
+              fit: FlexFit.tight,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -149,22 +149,6 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
                         fg: cs.tertiary,
                       ),
                     ],
-                    const SizedBox(width: 8),
-                    _button(
-                      icon: Symbols.ios_share_rounded,
-                      sz: sz,
-                      iconSz: iconSz,
-                      onPressed: enabled
-                          ? () => showDocumentExport(
-                              context,
-                              ref,
-                              ref.read(selectionProvider).selectedIds,
-                            )
-                          : null,
-                      tooltip: context.l10n.exportDocuments,
-                      bg: cs.primaryContainer,
-                      fg: cs.primary,
-                    ),
                     const SizedBox(width: 8),
                     _button(
                       icon: Symbols.delete_rounded,

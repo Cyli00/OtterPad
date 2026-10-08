@@ -955,12 +955,6 @@
   "mineruErrTaskFailed": "解析失败",
   "mineruErrSaveResultFailed": "保存结果失败: {detail}",
   "mineruErrResultPackageIncomplete": "MinerU 结果包缺少 full.md 或结构化结果",
-  "exportDocuments": "导出文献",
-  "exportNotesMarkdown": "笔记和标注（Markdown）",
-  "exportCitationsBibtex": "参考文献（BibTeX）",
-  "exportNoNotes": "这篇文献还没有标注或笔记。",
-  "exportNoDocuments": "所选文献已不存在。",
-  "documentExportSaved": "导出文件已保存",
   "zoteroLocalTitle": "本机 Zotero",
   "zoteroLocalEntryHint": "从这台电脑上的 Zotero 导入题录和 PDF",
   "zoteroLocalHint": "请打开 Zotero，并在高级设置中允许其他应用与它通信。",
@@ -1020,19 +1014,9 @@
   "rebuildCheckingFiles": "正在检查文件完整性…",
   "rebuildExtractingMetadata": "正在提取 PDF 元数据…",
   "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } },
-  "exportSelectionSummary": "已选 {count} 篇文献",
-  "exportNotesDescription": "将原文摘录、标注和笔记整理到一个文件。",
-  "exportCitationsDescription": "导出作者、题名与出版信息，用于论文引用。",
   "zoteroLocalConnection": "连接本机文库",
   "zoteroLocalDocuments": "选择文献与 PDF",
   "zoteroLocalSelectionHint": "补齐缺失的 PDF，保留已有 PDF 和你手动改过的题录。多个附件时请选择要导入的 PDF。",
-  "@exportSelectionSummary": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "webSearchSettingsTitle": "联网搜索服务",
   "webSearchSettingsDesc": "优先使用模型原生搜索；模型不支持时使用所选服务。各服务的 API Key 独立保存，切换不会清空。",
   "webSearchNotConfigured": "请在 AI 设置中为所选联网搜索服务配置 API Key。",

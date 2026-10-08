@@ -5265,42 +5265,6 @@ abstract class AppLocalizations {
   /// **'The MinerU result package is missing full.md or structured results'**
   String get mineruErrResultPackageIncomplete;
 
-  /// No description provided for @exportDocuments.
-  ///
-  /// In en, this message translates to:
-  /// **'Export documents'**
-  String get exportDocuments;
-
-  /// No description provided for @exportNotesMarkdown.
-  ///
-  /// In en, this message translates to:
-  /// **'Notes as Markdown'**
-  String get exportNotesMarkdown;
-
-  /// No description provided for @exportCitationsBibtex.
-  ///
-  /// In en, this message translates to:
-  /// **'Citations as BibTeX'**
-  String get exportCitationsBibtex;
-
-  /// No description provided for @exportNoNotes.
-  ///
-  /// In en, this message translates to:
-  /// **'No highlights or notes yet.'**
-  String get exportNoNotes;
-
-  /// No description provided for @exportNoDocuments.
-  ///
-  /// In en, this message translates to:
-  /// **'The selected documents no longer exist.'**
-  String get exportNoDocuments;
-
-  /// No description provided for @documentExportSaved.
-  ///
-  /// In en, this message translates to:
-  /// **'Export saved'**
-  String get documentExportSaved;
-
   /// No description provided for @zoteroLocalTitle.
   ///
   /// In en, this message translates to:
@@ -5655,24 +5619,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Extracting PDF metadata…'**
   String get rebuildExtractingMetadata;
-
-  /// No description provided for @exportSelectionSummary.
-  ///
-  /// In en, this message translates to:
-  /// **'Selected documents: {count}'**
-  String exportSelectionSummary(int count);
-
-  /// No description provided for @exportNotesDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Collect excerpts, highlights and notes in one file.'**
-  String get exportNotesDescription;
-
-  /// No description provided for @exportCitationsDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Export authors, titles and publication details for citations.'**
-  String get exportCitationsDescription;
 
   /// No description provided for @zoteroLocalConnection.
   ///

@@ -1078,12 +1078,6 @@
   "mineruErrSaveResultFailed": "Failed to save the result: {detail}",
   "@mineruErrSaveResultFailed": { "placeholders": { "detail": { "type": "String" } } },
   "mineruErrResultPackageIncomplete": "The MinerU result package is missing full.md or structured results",
-  "exportDocuments": "Export documents",
-  "exportNotesMarkdown": "Notes as Markdown",
-  "exportCitationsBibtex": "Citations as BibTeX",
-  "exportNoNotes": "No highlights or notes yet.",
-  "exportNoDocuments": "The selected documents no longer exist.",
-  "documentExportSaved": "Export saved",
   "zoteroLocalTitle": "Local Zotero",
   "zoteroLocalEntryHint": "Import metadata and PDFs from Zotero on this computer",
   "zoteroLocalHint": "Open Zotero and allow other applications to communicate with it in Advanced settings.",
@@ -1185,19 +1179,9 @@
   "rebuildCheckingFiles": "Checking file integrity…",
   "rebuildExtractingMetadata": "Extracting PDF metadata…",
   "@historyMonth": { "placeholders": { "month": { "type": "DateTime", "format": "yMMMM" } } },
-  "exportSelectionSummary": "Selected documents: {count}",
-  "exportNotesDescription": "Collect excerpts, highlights and notes in one file.",
-  "exportCitationsDescription": "Export authors, titles and publication details for citations.",
   "zoteroLocalConnection": "Connect to your local library",
   "zoteroLocalDocuments": "Choose documents and PDFs",
   "zoteroLocalSelectionHint": "Fill in missing PDFs while keeping existing PDFs and manually edited metadata. Choose a PDF when an item has multiple attachments.",
-  "@exportSelectionSummary": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "webSearchSettingsTitle": "Web search service",
   "webSearchSettingsDesc": "Native model search takes priority. When unavailable, use the selected service. API keys are saved separately and retained when switching.",
   "webSearchNotConfigured": "Configure an API key for the selected web search service in AI settings.",

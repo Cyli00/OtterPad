@@ -2880,24 +2880,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mineruErrResultPackageIncomplete => 'MinerU 结果包缺少 full.md 或结构化结果';
 
   @override
-  String get exportDocuments => '导出文献';
-
-  @override
-  String get exportNotesMarkdown => '笔记和标注（Markdown）';
-
-  @override
-  String get exportCitationsBibtex => '参考文献（BibTeX）';
-
-  @override
-  String get exportNoNotes => '这篇文献还没有标注或笔记。';
-
-  @override
-  String get exportNoDocuments => '所选文献已不存在。';
-
-  @override
-  String get documentExportSaved => '导出文件已保存';
-
-  @override
   String get zoteroLocalTitle => '本机 Zotero';
 
   @override
@@ -3092,17 +3074,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get rebuildExtractingMetadata => '正在提取 PDF 元数据…';
-
-  @override
-  String exportSelectionSummary(int count) {
-    return '已选 $count 篇文献';
-  }
-
-  @override
-  String get exportNotesDescription => '将原文摘录、标注和笔记整理到一个文件。';
-
-  @override
-  String get exportCitationsDescription => '导出作者、题名与出版信息，用于论文引用。';
 
   @override
   String get zoteroLocalConnection => '连接本机文库';
@@ -6503,24 +6474,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get mineruErrResultPackageIncomplete => 'MinerU 結果包缺少 full.md 或結構化結果';
-
-  @override
-  String get exportDocuments => '匯出文獻';
-
-  @override
-  String get exportNotesMarkdown => '筆記與標註（Markdown）';
-
-  @override
-  String get exportCitationsBibtex => '參考文獻（BibTeX）';
-
-  @override
-  String get exportNoNotes => '這篇文獻還沒有標註或筆記。';
-
-  @override
-  String get exportNoDocuments => '所選文獻已不存在。';
-
-  @override
-  String get documentExportSaved => '匯出檔案已儲存';
 
   @override
   String get zoteroLocalTitle => '本機 Zotero';

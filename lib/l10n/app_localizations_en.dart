@@ -2978,24 +2978,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The MinerU result package is missing full.md or structured results';
 
   @override
-  String get exportDocuments => 'Export documents';
-
-  @override
-  String get exportNotesMarkdown => 'Notes as Markdown';
-
-  @override
-  String get exportCitationsBibtex => 'Citations as BibTeX';
-
-  @override
-  String get exportNoNotes => 'No highlights or notes yet.';
-
-  @override
-  String get exportNoDocuments => 'The selected documents no longer exist.';
-
-  @override
-  String get documentExportSaved => 'Export saved';
-
-  @override
   String get zoteroLocalTitle => 'Local Zotero';
 
   @override
@@ -3206,19 +3188,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rebuildExtractingMetadata => 'Extracting PDF metadata…';
-
-  @override
-  String exportSelectionSummary(int count) {
-    return 'Selected documents: $count';
-  }
-
-  @override
-  String get exportNotesDescription =>
-      'Collect excerpts, highlights and notes in one file.';
-
-  @override
-  String get exportCitationsDescription =>
-      'Export authors, titles and publication details for citations.';
 
   @override
   String get zoteroLocalConnection => 'Connect to your local library';
