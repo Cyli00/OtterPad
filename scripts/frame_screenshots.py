@@ -1,81 +1,93 @@
-"""将 docs 下的手机截图套上 Google Pixel 9 Pro 机框。
+"""给 docs/screenshots 下的手机原图套上 iPhone 风格机框：uv run --with pillow scripts/frame_screenshots.py。
 
-机框资源：scripts/device_frames/pixel9pro_obsidian.png
-来源：https://github.com/jamesjingyi/mockup-device-frames (Pixel 9 Pro Obsidian)
+机框用 4 倍超采样绘制后缩小，边缘抗锯齿；机身外完全透明、不带投影，
+深浅背景下都不会出现灰边。输出尺寸与屏幕区域固定，website/prepare_images.py 依赖这些坐标。
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
-ROOT = Path(__file__).resolve().parent.parent
-DOCS = ROOT / "docs"
-FRAME_PATH = Path(__file__).resolve().parent / "device_frames" / "pixel9pro_obsidian.png"
+SHOTS = Path(__file__).resolve().parent.parent / "docs" / "screenshots"
 
-# Pixel 9 Pro Obsidian frame：透明洞为屏幕区域
-# frame size 1620x3136, screen hole (170, 142) – (1449, 2997) = 1280x2856
-SCREEN = (170, 142, 1449, 2997)  # left, top, right, bottom inclusive
+SS = 4
+CANVAS = (704, 1500)
+BODY = (0, 0, 704, 1486)
+BODY_RADIUS = 104
+SCREEN = (32, 30, 672, 1452)
+SCREEN_RADIUS = 74
+ISLAND = (298, 45, 406, 79)
 
-# README 展示用输出宽度（保持比例）
-OUT_WIDTH = 480
+RIM_TOP = (150, 157, 167)
+RIM_BOTTOM = (88, 96, 108)
+HIGHLIGHT = (196, 202, 210)
+BEZEL = (17, 20, 25)
+ISLAND_COLOR = (5, 6, 8)
+LENS = (34, 42, 54)
 
-SOURCES = [
-    "PDF_reader.png",
-    "immersive_reading_experience.png",
-    "extract_figures_for_reading.png",
-    "ask_anything_with_fullcontext.png",
-]
+SOURCES = ["mobile-pdf", "mobile-reading-bilingual", "mobile-figures", "mobile-ai", "mobile-ai-en"]
 
 
-def frame_screenshot(src_path: Path, frame: Image.Image, out_path: Path) -> None:
-    src = Image.open(src_path).convert("RGBA")
-    sw, sh = src.size
+def scaled(box: tuple[int, ...]) -> tuple[int, ...]:
+    return tuple(v * SS for v in box)
+
+
+def inset(box: tuple[int, ...], d: int) -> tuple[int, ...]:
+    l, t, r, b = box
+    return l + d, t + d, r - d, b - d
+
+
+def rounded_mask(size: tuple[int, int], box: tuple[int, ...], radius: int) -> Image.Image:
+    mask = Image.new("L", size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(scaled(box), radius * SS, fill=255)
+    return mask
+
+
+def frame(src_path: Path, out_path: Path) -> None:
+    w, h = BODY[2] * SS, BODY[3] * SS
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+
+    # 外圈钛金属边：自上而下的渐变
+    rim = Image.new("RGBA", (1, h))
+    for y in range(h):
+        t = y / (h - 1)
+        rim.putpixel((0, y), tuple(round(a + (b - a) * t) for a, b in zip(RIM_TOP, RIM_BOTTOM)) + (255,))
+    img.paste(rim.resize((w, h)), (0, 0), rounded_mask((w, h), BODY, BODY_RADIUS))
+
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(scaled(inset(BODY, 7)), (BODY_RADIUS - 7) * SS, fill=HIGHLIGHT)
+    draw.rounded_rectangle(scaled(inset(BODY, 9)), (BODY_RADIUS - 9) * SS, fill=BEZEL)
 
     sl, st, sr, sb = SCREEN
-    tw, th = sr - sl + 1, sb - st + 1
+    tw, th = (sr - sl) * SS, (sb - st) * SS
+    src = Image.open(src_path).convert("RGBA")
+    # cover 适配后居中裁切
+    scale = max(tw / src.width, th / src.height)
+    nw, nh = round(src.width * scale), round(src.height * scale)
+    src = src.resize((nw, nh), Image.Resampling.LANCZOS)
+    left, top = (nw - tw) // 2, (nh - th) // 2
+    src = src.crop((left, top, left + tw, top + th))
+    screen_bg = Image.new("RGBA", (tw, th), BEZEL + (255,))
+    screen_bg.alpha_composite(src)
+    img.paste(screen_bg, (sl * SS, st * SS), rounded_mask((w, h), SCREEN, SCREEN_RADIUS).crop(scaled(SCREEN)))
 
-    # cover-fit 填满屏幕后居中裁切
-    scale = max(tw / sw, th / sh)
-    nw, nh = int(sw * scale + 0.5), int(sh * scale + 0.5)
-    src_r = src.resize((nw, nh), Image.Resampling.LANCZOS)
-    left = (nw - tw) // 2
-    top = (nh - th) // 2
-    src_r = src_r.crop((left, top, left + tw, top + th))
+    il, it, ir, ib = ISLAND
+    draw.rounded_rectangle(scaled(ISLAND), (ib - it) * SS // 2, fill=ISLAND_COLOR)
+    cx, cy, r = ir - 17, (it + ib) / 2, 6
+    draw.ellipse(scaled((round(cx - r), round(cy - r), round(cx + r), round(cy + r))), fill=LENS)
 
-    canvas = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-    canvas.paste(src_r, (sl, st))
-    # 机框叠在上方：边框/侧键/挖孔摄像头盖住截图
-    result = Image.alpha_composite(canvas, frame)
-
-    # 缩到 README 友好尺寸
-    out_h = int(result.height * OUT_WIDTH / result.width + 0.5)
-    result = result.resize((OUT_WIDTH, out_h), Image.Resampling.LANCZOS)
-    result.save(out_path, "PNG", optimize=True)
-    print(f"  -> {out_path.name} {result.size}")
+    body = img.resize(BODY[2:], Image.Resampling.LANCZOS)
+    out = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
+    out.paste(body, BODY[:2])
+    out.save(out_path, "PNG", optimize=True)
+    print(f"{src_path.name} -> {out_path.name} {out.size}")
 
 
 def main() -> None:
-    if not FRAME_PATH.exists():
-        raise SystemExit(
-            f"缺少机框: {FRAME_PATH}\n"
-            "请从 jamesjingyi/mockup-device-frames 下载 Pixel 9 Pro Obsidian PNG。"
-        )
-
-    frame = Image.open(FRAME_PATH).convert("RGBA")
-    print(f"机框: {FRAME_PATH.name} {frame.size}")
-
     for name in SOURCES:
-        src = DOCS / name
-        if not src.exists():
-            print(f"  skip missing {name}")
-            continue
-        out = DOCS / name.replace(".png", "_framed.png")
-        print(f"Framing {name}...")
-        frame_screenshot(src, frame, out)
-
-    print("Done.")
+        frame(SHOTS / f"{name}.png", SHOTS / f"{name}-framed.png")
 
 
 if __name__ == "__main__":
