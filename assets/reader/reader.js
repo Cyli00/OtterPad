@@ -71,19 +71,26 @@ function _initLazyMath() {
   function scheduleFlush() {
     if (scheduled || !queue.length) return;
     scheduled = true;
-    // timeout 收窄到 150ms：快速 fling 时主线程持续繁忙、rIC 一直拿不到 idle，
-    // 旧的 500ms 会让公式停在未渲染态约半秒（明显露白）。150ms 上限把最坏空窗
-    // 压到约一帧多，didTimeout 分支会照常渲染。
+    // 持续滚动时也要推进队列；timeout 不能保证实际回调延迟或渲染帧数。
     rIC(flushQueue, { timeout: 150 });
   }
 
   function flushQueue(deadline) {
     scheduled = false;
-    while (queue.length && (deadline.timeRemaining() > 3 || deadline.didTimeout)) {
+    const started = performance.now();
+    let rendered = 0;
+    // 每片最多两块，且只在 4ms 预算内开始下一块；单块 KaTeX 调用不可中断。
+    // 超时仅保证推进一块，不能绕过整个队列的工作量限制。
+    while (queue.length && rendered < 2 &&
+      (rendered === 0 || performance.now() - started < 4) &&
+      (deadline.timeRemaining() > 3 || (deadline.didTimeout && rendered === 0))) {
       _renderReaderMath(queue.shift());
+      rendered++;
     }
-    if (window._overlayer) window._overlayer.redraw();
-    window.dispatchEvent(new Event('scroll'));
+    if (rendered) {
+      if (window._overlayer) window._overlayer.redraw();
+      window.dispatchEvent(new Event('scroll'));
+    }
     if (queue.length) scheduleFlush();
   }
 
