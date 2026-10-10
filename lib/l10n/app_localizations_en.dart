@@ -3163,6 +3163,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Configure an API key for the selected web search service in AI settings.';
 
   @override
+  String get aiRequestRefused =>
+      'The model declined this request under its safety policy. Try rephrasing or switching to another model.';
+
+  @override
   String get chatToggleKeyVisibility => 'Show or hide API key';
 
   @override

@@ -1,8 +1,11 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 
+import '../core/l10n.dart';
 import '../data/models/ai/agent_config.dart';
+import '../router/app_router.dart';
 import 'agent_http.dart';
 import 'agent_activity_tracker.dart';
 import '../data/models/chat/chat_activity.dart';
@@ -18,6 +21,16 @@ class AgentChatException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Claude 安全分类器拒答：HTTP 200 + `stop_reason: "refusal"`、正文为空。
+/// 不转成异常的话用户只看到空白回答。服务层经 `rootNavigatorKey` 取 l10n，
+/// 取不到时（测试 / 启动早期）回落英文。
+AgentChatException refusalException() {
+  final l10n =
+      rootNavigatorKey.currentContext?.l10n ??
+      lookupAppLocalizations(const Locale('en'));
+  return AgentChatException(l10n.aiRequestRefused);
 }
 
 /// 多模态消息中的一张图片（base64 PNG + 展示给模型的文字标签）。
@@ -1239,6 +1252,9 @@ class AgentChatService {
             final text = delta!['text'];
             if (text is String && text.isNotEmpty) yield text;
           }
+        } else if (json['type'] == 'message_delta' &&
+            (json['delta'] as Map?)?['stop_reason'] == 'refusal') {
+          throw refusalException();
         }
       } on AgentChatException {
         rethrow;
@@ -1566,6 +1582,7 @@ class AgentChatService {
   }
 
   static String _extractAnthropic(Map<String, dynamic> data) {
+    if (data['stop_reason'] == 'refusal') throw refusalException();
     final content = data['content'] as List<dynamic>?;
     if (content != null) {
       for (final block in content.reversed) {

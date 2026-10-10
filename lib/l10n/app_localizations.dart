@@ -5578,6 +5578,12 @@ abstract class AppLocalizations {
   /// **'Configure an API key for the selected web search service in AI settings.'**
   String get webSearchNotConfigured;
 
+  /// No description provided for @aiRequestRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'The model declined this request under its safety policy. Try rephrasing or switching to another model.'**
+  String get aiRequestRefused;
+
   /// No description provided for @chatToggleKeyVisibility.
   ///
   /// In en, this message translates to:

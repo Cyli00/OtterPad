@@ -3053,6 +3053,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get webSearchNotConfigured => '请在 AI 设置中为所选联网搜索服务配置 API Key。';
 
   @override
+  String get aiRequestRefused => '模型按安全策略拒绝了这个请求，可换个问法或换用其他模型重试。';
+
+  @override
   String get chatToggleKeyVisibility => '显示或隐藏 API Key';
 
   @override
@@ -6594,6 +6597,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get webSearchNotConfigured => '请在 AI 设置中为所选聯網搜尋服務配置 API Key。';
+
+  @override
+  String get aiRequestRefused => '模型依安全策略拒絕了這個請求，可換個問法或改用其他模型重試。';
 
   @override
   String get chatToggleKeyVisibility => '顯示或隱藏 API Key';

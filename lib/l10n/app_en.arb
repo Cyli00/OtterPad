@@ -1170,6 +1170,7 @@
   "webSearchSettingsTitle": "Web search service",
   "webSearchSettingsDesc": "Native model search takes priority. When unavailable, use the selected service. API keys are saved separately and retained when switching.",
   "webSearchNotConfigured": "Configure an API key for the selected web search service in AI settings.",
+  "aiRequestRefused": "The model declined this request under its safety policy. Try rephrasing or switching to another model.",
   "chatToggleKeyVisibility": "Show or hide API key",
   "chatSelectModel": "Select model",
   "chatNoModels": "Add a chat model in AI settings first",

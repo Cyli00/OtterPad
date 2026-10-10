@@ -1007,6 +1007,7 @@
   "webSearchSettingsTitle": "联网搜索服务",
   "webSearchSettingsDesc": "优先使用模型原生搜索；模型不支持时使用所选服务。各服务的 API Key 独立保存，切换不会清空。",
   "webSearchNotConfigured": "请在 AI 设置中为所选联网搜索服务配置 API Key。",
+  "aiRequestRefused": "模型按安全策略拒绝了这个请求，可换个问法或换用其他模型重试。",
   "chatToggleKeyVisibility": "显示或隐藏 API Key",
   "chatSelectModel": "选择模型",
   "chatNoModels": "请先在 AI 设置中添加对话模型",
