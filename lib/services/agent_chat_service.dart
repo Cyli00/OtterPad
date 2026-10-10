@@ -490,7 +490,8 @@ class AgentChatService {
         'tools': [
           {'type': 'web_search'},
         ],
-      'temperature': ?temperature,
+      if (AgentThinkingPayload.samplingAllowed(AgentApiProvider.openai, modelId))
+        'temperature': ?temperature,
       ...reasoning,
     };
   }
@@ -541,7 +542,12 @@ class AgentChatService {
       if (stream) 'stream': true,
       if (webSearch || urlContext)
         'tools': _anthropicTools(webSearch, urlContext),
-      'temperature': ?temperature,
+      // adaptive 系 Claude 不接受非默认采样参数（发送会 400）
+      if (AgentThinkingPayload.samplingAllowed(
+        AgentApiProvider.anthropic,
+        modelId,
+      ))
+        'temperature': ?temperature,
       if (outputConfig.isNotEmpty) 'output_config': outputConfig,
       ...thinking,
     };
@@ -576,7 +582,11 @@ class AgentChatService {
       'contents': _geminiContents(history, images, userPrompt),
       if (webSearch || urlContext) 'tools': _geminiTools(webSearch, urlContext),
       'generationConfig': {
-        'temperature': ?temperature,
+        if (AgentThinkingPayload.samplingAllowed(
+          AgentApiProvider.gemini,
+          modelId,
+        ))
+          'temperature': ?temperature,
         if (schema != null) 'responseMimeType': 'application/json',
         if (mode == 'schema') 'responseJsonSchema': schema,
         if (thinkingCfg.isNotEmpty || includeThoughts)
@@ -601,13 +611,17 @@ class AgentChatService {
     Map<String, dynamic>? schema,
     String schemaName = 'response',
   }) {
+    final sampling = AgentThinkingPayload.samplingAllowed(
+      AgentApiProvider.openAICompatible,
+      modelId,
+    );
     final body = <String, dynamic>{
       'model': modelId,
       'messages': messages,
       if (stream) 'stream': true,
-      'temperature': ?temperature,
+      if (sampling) 'temperature': ?temperature,
       if (modelParams.maxTokens != null) 'max_tokens': modelParams.maxTokens,
-      if (modelParams.topP != null) 'top_p': modelParams.topP,
+      if (sampling && modelParams.topP != null) 'top_p': modelParams.topP,
       if (modelParams.frequencyPenalty != null)
         'frequency_penalty': modelParams.frequencyPenalty,
       if (modelParams.presencePenalty != null)

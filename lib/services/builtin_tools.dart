@@ -1,4 +1,5 @@
 import '../data/models/ai/agent_config.dart';
+import 'model_capability_store.dart';
 
 /// 内置 server-side 工具的内部标识常量。
 ///
@@ -46,7 +47,18 @@ abstract class BuiltInToolsHelper {
           AgentModelCapability.isGeminiWithUrlContext(m),
         _ => false,
       },
-      AgentApiProvider.anthropic => AgentModelCapability.isModernClaude(m),
+      // web_search 额外接受远程能力表的 webSearch 标记（只增不减，且仅限
+      // Claude——经 Anthropic 兼容端接入的第三方模型不认 Anthropic server
+      // tool）；web_fetch 远程表无对应字段，仍按版本门槛判定。
+      AgentApiProvider.anthropic => switch (tool) {
+        BuiltInToolNames.search =>
+          AgentModelCapability.isModernClaude(m) ||
+              (m.contains('claude') &&
+                  (ModelCapabilityStore.instance.lookup(m)?.webSearch ??
+                      false)),
+        BuiltInToolNames.urlContext => AgentModelCapability.isModernClaude(m),
+        _ => false,
+      },
       AgentApiProvider.openai =>
         tool == BuiltInToolNames.search &&
             (_isOpenAISearchModel(m) || _isXaiSearchModel(m)),

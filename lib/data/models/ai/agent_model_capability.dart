@@ -125,7 +125,8 @@ class AgentModelCapability {
 
   // ─── Thinking / reasoning 版本识别 ───────────────────────────────────
   // 这些方法服务于请求构造层把统一的 ThinkingLevel 翻译成各家具体字段。
-  // 集中维护识别规则——后续模型升级（Gemini 3.5 / Claude Opus 5）只改这里。
+  // 远程能力表（ModelCapabilityStore.thinkingSpec）有数据时优先用远程表，
+  // 这里的识别规则只作兜底；集中维护，后续模型升级只改这里。
 
   /// Gemini 3 系列（用 `thinkingLevel` 字段，3.1 Pro 不支持 minimal）。
   static bool isGemini3(String modelId) {
@@ -168,26 +169,34 @@ class AgentModelCapability {
     return RegExp(r'qwen[\w.-]*-vl').hasMatch(id);
   }
 
-  /// Claude 是否走 adaptive thinking 模型（Opus 4.7+ / Fable）。
-  /// 这些模型上 `budget_tokens` 已移除（发送会 400），只能用 adaptive。
+  /// Claude 是否走 adaptive thinking 模型（Opus 4.7+、5 代及以后的
+  /// Opus/Sonnet/Haiku、Fable、Mythos）。这些模型上 `budget_tokens` 与非默认
+  /// 采样参数已移除（发送会 400），只能用 adaptive + effort；Opus 5.5 /
+  /// Sonnet 5.5 / Fable 连 `thinking.type:disabled` 也会 400。
   /// 其余 Claude 模型用旧 `thinking.type:disabled/enabled` + budget。
   ///
-  /// 识别策略：opus-4-7/4-8/4-9 与 fable 系列归为 adaptive；后续新系列
-  /// 上来后在此处追加正则。Anthropic 的 model id 形如 `claude-opus-4-8`。
+  /// 识别策略：opus-4-7/4-8/4-9、(opus|sonnet|haiku)-5 及以后的大版本、
+  /// fable、mythos 归为 adaptive。Anthropic 的 model id 形如 `claude-opus-5-5`。
   static bool isClaudeAdaptive(String modelId) {
     final id = modelId.toLowerCase();
-    return RegExp(r'claude-(?:opus-4-[789]|fable)(?:\b|-)').hasMatch(id);
+    return RegExp(
+      r'claude-(?:opus-4-[789]|(?:opus|sonnet|haiku)-[5-9]|fable|mythos)(?:\b|-)',
+    ).hasMatch(id);
   }
 
   // ─── Server-side 工具版本门槛 ────────────────────────────────────────
   // BuiltInToolsHelper 据此判定是否注入 search / url_context 工具。
 
-  /// Claude 3.7 起（含 4.x / Fable / Mythos），支持 web_search / web_fetch。
+  /// Claude 3.7 起（含 4.x / 5.x Opus/Sonnet / Fable / Mythos），支持
+  /// web_search / web_fetch。Haiku 5 系的 web_fetch 未确认，不在此列（其
+  /// web_search 由远程能力表的 webSearch 放行）。
   static bool isModernClaude(String modelId) {
     final id = modelId.toLowerCase();
     return id.startsWith('claude-opus-4') ||
         id.startsWith('claude-sonnet-4') ||
         id.startsWith('claude-haiku-4') ||
+        id.startsWith('claude-opus-5') ||
+        id.startsWith('claude-sonnet-5') ||
         id.startsWith('claude-fable') ||
         id.startsWith('claude-mythos') ||
         id.startsWith('claude-3-7') ||
