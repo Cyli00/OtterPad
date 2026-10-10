@@ -8,7 +8,7 @@ import 'reader_background.dart';
 enum ReaderDockPane { outline, notes, askAi }
 
 /// 阅读器右侧互斥停靠栏。关舱只改外层 clip 宽，子树始终按 [sidebarWidth] layout。
-/// 宽度由 [kSpringPanel] 弹簧补间，可中断。
+/// 宽度由 [kMotionSpatialSteady] 弹簧补间，可中断。
 ///
 /// 传入 [onSidebarDragUpdate] 后，左缘分隔线变为可拖拽把手：9px 命中域 +
 /// 居中 grabber，拖拽实时调 [sidebarWidth]（范围由 Responsive.clampReaderSidebarWidth 管）
@@ -109,7 +109,7 @@ class _ReaderDockedPaneState extends State<ReaderDockedPane> {
           });
         }
       },
-      motion: const SpringMotion(kSpringPanel),
+      motion: kMotionSpatialSteady,
       value: open ? 1.0 : 0.0,
       builder: (context, t, child) {
         final targetWidth = open ? sidebarW : 0.0;

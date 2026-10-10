@@ -34,38 +34,26 @@ class MainShell extends ConsumerWidget {
         Responsive.showExtendedRail(context);
 
     final dest2 = [
+      // 目的地图标不写 fill：选中态的实心/描边由导航组件过渡。
       AdaptiveDestination(
-        icon: const Icon(
-          Symbols.auto_awesome_mosaic_rounded,
-          weight: 600,
-          fill: 1,
-        ),
+        icon: const Icon(Symbols.auto_awesome_mosaic_rounded, weight: 600),
         selectedIcon: const Icon(
           Symbols.auto_awesome_mosaic_rounded,
           weight: 600,
-          fill: 1,
         ),
         label: l10n.home,
       ),
       AdaptiveDestination(
-        icon: const Icon(Symbols.folder_copy_rounded, weight: 600, fill: 1),
-        selectedIcon: const Icon(
-          Symbols.folder_copy_rounded,
-          weight: 600,
-          fill: 1,
-        ),
+        icon: const Icon(Symbols.folder_copy_rounded, weight: 600),
+        selectedIcon: const Icon(Symbols.folder_copy_rounded, weight: 600),
         label: l10n.library,
       ),
     ];
     final dest3 = [
       ...dest2,
       AdaptiveDestination(
-        icon: const Icon(Symbols.settings_rounded, weight: 600, fill: 1),
-        selectedIcon: const Icon(
-          Symbols.settings_rounded,
-          weight: 600,
-          fill: 1,
-        ),
+        icon: const Icon(Symbols.settings_rounded, weight: 600),
+        selectedIcon: const Icon(Symbols.settings_rounded, weight: 600),
         label: l10n.settings,
       ),
     ];

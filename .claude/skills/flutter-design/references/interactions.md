@@ -4,7 +4,7 @@
 
 ## 动画选择
 
-时长、曲线和弹簧参数统一取自 `lib/core/animation_constants.dart`，具体数值由源码维护。
+时长、曲线和弹簧 token 统一取自 `lib/core/animation_constants.dart`，具体数值由源码维护。弹簧 token 是 Material 3 Expressive 的参数（经 `motor` 提供），配合 `SingleMotionBuilder` / `MotionBuilder` 使用：位置、尺寸、缩放用 spatial，透明度、颜色用 effects。
 
 | Token | 用途 |
 |---|---|
@@ -14,7 +14,9 @@
 | kAnimEmphasis | 卡片进入阅读器的容器变换 |
 | kAnimPulse | 循环呼吸或发光 |
 | kAnimCurve / kAnimCurveReverse | 正向 / 反向缓动 |
-| kSpringPress / kSpringSelection / kSpringPanel | 按压 / 选中弹出 / 面板开合 |
+| kMotionSpatialFast | 小幅空间变化：按压回弹、选中弹出，带轻微过冲 |
+| kMotionSpatialSteady | 会被裁切的尺寸变化：面板开合、内容展开，过冲不可见 |
+| kMotionEffects | 颜色、透明度、图标填充，不过冲 |
 
 | 场景 | 项目方案 |
 |---|---|
@@ -27,7 +29,8 @@
 | 工具栏、面板滑出 | ClipRect 包裹 AnimatedSlide，kAnim |
 | Android 预测返回 | PredictiveBackPageTransitionsBuilder；非手势沿用项目转场 |
 
-路由级不使用 `flutter_animate` 的 `slideY/fade` 替代项目转场。
+导航目的地图标不写 `fill`：选中态的描边/实心由 `lib/widgets/layout/adaptive_navigation.dart` 用 `kMotionEffects` 过渡。
+系统开启「减少动态效果」（`MediaQuery.disableAnimationsOf`）时，路由和 Dialog 只做淡入淡出，`TactilePress`、`SpringPop`、`StaggeredEntrance` 直接到终态；新增的位移、缩放类动效同样遵守。
 `StaggeredEntrance` 的数量上限和交错参数由 `lib/widgets/staggered_entrance.dart` 维护。
 阅读器容器变换与 dock 见[桌面与阅读器](desktop-reader.md#阅读器动效与预览)。
 

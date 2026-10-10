@@ -52,6 +52,6 @@
 ## 阅读器动效与预览
 
 - 阅读器入场沿用卡片矩形到全屏的容器变换；没有起点时回落为缩放、淡入和轻微上移，分别使用 `kAnimEmphasis/kAnimSlow`。
-- dock 开合沿用 `SingleMotionBuilder` 与 `kSpringPanel`；原文定位返回引导条使用 `AnimatedPositioned` 与 `kAnim`。
+- dock 开合沿用 `SingleMotionBuilder` 与 `kMotionSpatialSteady`；原文定位返回引导条使用 `AnimatedPositioned` 与 `kAnim`。
 - 主题预览展示“选中后的效果”，不直接套用当前运行时配色。跟随型选项按预览语义固定色调，例如白天预览固定浅色，避免当前深色主题改变选项含义。
 - 阅读器实时预览面板不加背景模糊，保持底层效果可见。

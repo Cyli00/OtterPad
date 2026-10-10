@@ -4,6 +4,7 @@ import '../core/animation_constants.dart';
 
 /// 列表交错入场：首屏前 [maxAnimatedCount] 项按 `index * 30ms` 延迟依次
 /// fade + slideY(12px→0) 入场；之后的项与分页追加不重复动。
+/// 系统开启「减少动态效果」时不播放。
 class StaggeredEntrance extends StatefulWidget {
   const StaggeredEntrance({
     super.key,
@@ -48,6 +49,7 @@ class _StaggeredEntranceState extends State<StaggeredEntrance>
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, child) {

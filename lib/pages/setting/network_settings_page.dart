@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:motor/motor.dart';
 
 import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
@@ -211,22 +211,23 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     ),
                     value: ProxyMode.custom,
                   ),
-                  Animate(
-                    target: proxy.mode == ProxyMode.custom ? 1 : 0,
-                    effects: [
-                      FadeEffect(duration: kAnim),
-                      CustomEffect(
-                        duration: kAnim,
-                        curve: kAnimCurve,
-                        builder: (context, value, child) => ClipRect(
+                  SingleMotionBuilder(
+                    motion: kMotionSpatialSteady,
+                    value: proxy.mode == ProxyMode.custom ? 1 : 0,
+                    active: !MediaQuery.disableAnimationsOf(context),
+                    builder: (context, value, child) {
+                      final t = value.clamp(0.0, 1.0);
+                      return Opacity(
+                        opacity: t,
+                        child: ClipRect(
                           child: Align(
                             alignment: Alignment.topCenter,
-                            heightFactor: value,
+                            heightFactor: t,
                             child: child,
                           ),
                         ),
-                      ),
-                    ],
+                      );
+                    },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,

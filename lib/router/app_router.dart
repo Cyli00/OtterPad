@@ -29,6 +29,7 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 typedef ReaderArgs = ({Document doc, Rect? sourceRect});
 
 /// Android 预测返回：手势进行中走框架 PredictiveBack，否则回落 [fallback]。
+/// 系统开启「减少动态效果」时一律只做淡入淡出。
 Widget _maybePredictiveBack<T>({
   required BuildContext context,
   required Animation<double> animation,
@@ -36,6 +37,9 @@ Widget _maybePredictiveBack<T>({
   required Widget child,
   required Widget Function() fallback,
 }) {
+  if (MediaQuery.disableAnimationsOf(context)) {
+    return FadeTransition(opacity: animation, child: child);
+  }
   if (defaultTargetPlatform == TargetPlatform.android) {
     final route = ModalRoute.of(context);
     if (route is PageRoute<T>) {
@@ -125,7 +129,7 @@ CustomTransitionPage<T> _readerEntry<T>({
         curve: kAnimCurve,
         reverseCurve: kAnimCurveReverse,
       );
-      if (isDesktopOs) {
+      if (isDesktopOs || MediaQuery.disableAnimationsOf(context)) {
         return FadeTransition(opacity: curved, child: child);
       }
       final fullRect = Offset.zero & MediaQuery.sizeOf(context);
