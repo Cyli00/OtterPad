@@ -204,3 +204,74 @@ class AgentModelCapability {
     return !id.startsWith('gemini-1') && !id.startsWith('gemini-2.0');
   }
 }
+
+/// 远程能力表的思考参数规格（modelcaps `thinking` 字段，源自 LiteLLM）。
+///
+/// 只描述「该模型支持什么」；「各协议怎么写」仍在 AgentThinkingPayload。
+/// 字段为 null / 空表示上游未提供，调用方回退到 [AgentModelCapability] 的
+/// 识别规则。不进手动能力覆写，由 ModelCapabilityStore 单独查询。
+class ThinkingSpec {
+  /// Claude 是否走 adaptive thinking。
+  final bool? adaptive;
+
+  /// 思考是否无法关闭。
+  final bool? alwaysOn;
+
+  /// 是否接受 temperature / top_p 等采样参数。
+  final bool? sampling;
+
+  /// 支持的 effort 档位（none/minimal/low/medium/high/xhigh/max 的子集）。
+  final List<String> levels;
+
+  /// 服务商默认 effort。
+  final String? defaultLevel;
+
+  const ThinkingSpec({
+    this.adaptive,
+    this.alwaysOn,
+    this.sampling,
+    this.levels = const [],
+    this.defaultLevel,
+  });
+
+  factory ThinkingSpec.fromJson(Map<String, dynamic> json) => ThinkingSpec(
+    adaptive: json['adaptive'] as bool?,
+    alwaysOn: json['alwaysOn'] as bool?,
+    sampling: json['sampling'] as bool?,
+    levels: [
+      for (final l in json['levels'] as List? ?? const []) l.toString(),
+    ],
+    defaultLevel: json['default'] as String?,
+  );
+
+  /// effort 档位由低到高。
+  static const effortOrder = [
+    'none',
+    'minimal',
+    'low',
+    'medium',
+    'high',
+    'xhigh',
+    'max',
+  ];
+
+  /// 把期望档位 [want] 归并到 [levels] 中最近的一档（等距取较低档）；
+  /// [levels] 为空时原样返回。
+  String nearestLevel(String want) {
+    if (levels.isEmpty || levels.contains(want)) return want;
+    final target = effortOrder.indexOf(want);
+    String? best;
+    var bestDist = 1 << 30;
+    for (final l in levels) {
+      final i = effortOrder.indexOf(l);
+      if (i < 0) continue;
+      final dist = (i - target).abs();
+      if (dist < bestDist ||
+          (dist == bestDist && i < effortOrder.indexOf(best!))) {
+        best = l;
+        bestDist = dist;
+      }
+    }
+    return best ?? want;
+  }
+}
