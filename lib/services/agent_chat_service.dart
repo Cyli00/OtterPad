@@ -712,11 +712,18 @@ class AgentChatService {
           'type': 'function',
           'function': {
             'name': 'web_search',
-            'description': '搜索互联网获取实时或最新信息。需要联网才能准确回答时调用。',
+            'description':
+                '搜索互联网，返回最多 5 条结果（标题、URL、正文摘要），不含网页全文。'
+                '用于文献之外、需要实时或较新信息的问题（最新进展、新闻、软件版本等）；'
+                '文献本身能回答的问题不调用。搜索失败或无结果时返回一行说明文字，'
+                '据此如实告知用户。',
             'parameters': {
               'type': 'object',
               'properties': {
-                'query': {'type': 'string', 'description': '搜索关键词'},
+                'query': {
+                  'type': 'string',
+                  'description': '简洁的搜索关键词组合；需要时带上专有名词、年份或英文术语。',
+                },
               },
               'required': ['query'],
             },
