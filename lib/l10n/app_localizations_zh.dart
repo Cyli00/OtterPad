@@ -1720,9 +1720,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get aiFixNotForMinerU => 'MinerU 提取的文档已自带图表说明，无需 AI 修缮';
-
-  @override
   String get aspectSquare => '方形 · 社交配图';
 
   @override
@@ -1821,46 +1818,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String reformatFailed(String error) {
     return '排版失败: $error';
   }
-
-  @override
-  String get aiFixFigures => 'AI 修缮图表';
-
-  @override
-  String get aiFixFiguresAnalyzing => '正在分析版面...';
-
-  @override
-  String get aiFixFiguresCalling => '正在调用 AI 模型...';
-
-  @override
-  String get aiFixFiguresApplying => '正在应用修缮...';
-
-  @override
-  String aiFixFiguresCropping(int done, int total) {
-    return '正在裁剪图表 ($done/$total)';
-  }
-
-  @override
-  String get aiFixFiguresDone => '图表已修缮。如需回退请用「重新排版」';
-
-  @override
-  String aiFixFiguresFailed(String error) {
-    return 'AI 修缮失败: $error';
-  }
-
-  @override
-  String get aiFixFiguresCancelled => 'AI 修缮已取消';
-
-  @override
-  String get aiFixFiguresMissingExtract => '请先提取文档，再修缮图表';
-
-  @override
-  String get aiFixFiguresModelNotSet => '请先设置专家模型或快速模型';
-
-  @override
-  String get aiFixFiguresInvalidLlmOutput => 'AI 返回内容无法解析，请重试';
-
-  @override
-  String get aiFixFiguresFailedGeneric => 'AI 修缮失败，请重试';
 
   @override
   String addedToFavorite(String name) {
@@ -5321,9 +5278,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get aiFixNotForMinerU => 'MinerU 擷取的文件已自帶圖表說明，無須 AI 修繕';
-
-  @override
   String get aspectSquare => '方形 · 社群配圖';
 
   @override
@@ -5417,46 +5371,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String reformatFailed(String error) {
     return '排版失敗: $error';
   }
-
-  @override
-  String get aiFixFigures => 'AI 修繕圖表';
-
-  @override
-  String get aiFixFiguresAnalyzing => '正在分析版面...';
-
-  @override
-  String get aiFixFiguresCalling => '正在呼叫 AI 模型...';
-
-  @override
-  String get aiFixFiguresApplying => '正在套用修繕...';
-
-  @override
-  String aiFixFiguresCropping(int done, int total) {
-    return '正在裁剪圖表 ($done/$total)';
-  }
-
-  @override
-  String get aiFixFiguresDone => '圖表已修繕。如需復原請用「重新排版」';
-
-  @override
-  String aiFixFiguresFailed(String error) {
-    return 'AI 修繕失敗: $error';
-  }
-
-  @override
-  String get aiFixFiguresCancelled => 'AI 修繕已取消';
-
-  @override
-  String get aiFixFiguresMissingExtract => '請先提取文件，再修繕圖表';
-
-  @override
-  String get aiFixFiguresModelNotSet => '請先設定專家模型或快速模型';
-
-  @override
-  String get aiFixFiguresInvalidLlmOutput => 'AI 回傳內容無法解析，請重試';
-
-  @override
-  String get aiFixFiguresFailedGeneric => 'AI 修繕失敗，請重試';
 
   @override
   String addedToFavorite(String name) {

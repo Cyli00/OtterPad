@@ -34,9 +34,8 @@ MinerU 的 PDF 题注补回发生在归属之前。它读取统一结构中已�
 |---|---|---|---|
 | 重新提取 | 重新上传并运行所选 OCR | 重新适配、归属、裁图、生成 Markdown、发布产物 | 成功事件后自动刷新，并进入 Markdown 预览 |
 | 重新排版 | 不调用 OCR | 选择已保存来源，重跑本地处理；有多个来源时需明确选择 | 调用 `useExtractedMarkdown` 发布新内容版本 |
-| AI 修缮 figure | 单独的模型请求 | 审计图块归属，再裁图与重建正文 | 独立操作；当前阅读器会阻止对 MinerU 结果执行 |
 
-[本地重排分派](../../lib/services/doc_extract_service.dart#L261)、[重排后更新](../../lib/pages/reader/view.dart#L440)、[MinerU 的 AI 修缮限制](../../lib/pages/reader/view.dart#L483)
+[本地重排分派](../../lib/services/doc_extract_service.dart#L261)、[重排后更新](../../lib/pages/reader/view.dart#L440)
 
 这里的自动排版指提取结果的阅读版 Markdown。它不等于重新翻译全文，也不等于把译文写回一个新的 PDF 文件。此次未审计 PDF 译文覆盖层的字体选择。
 

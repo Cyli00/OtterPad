@@ -45,7 +45,7 @@ class AgentChatTurn {
 
 /// Agent 对话接缝：「provider + system/user (+images, +schema) → 文本」的
 /// 唯一出口。各 provider 的请求体形状、headers、结构化输出模式、响应提取
-/// 全部封装在此，调用方（翻译 / 排版修复 / 未来功能）只描述意图。
+/// 全部封装在此，调用方（翻译 / 问 AI / 未来功能）只描述意图。
 ///
 /// 结构化输出降级阶梯：传入 [schema] 时各 provider 先尝试原生 JSON Schema
 /// 约束（OpenAI strict json_schema / Anthropic output_config / Gemini

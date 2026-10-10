@@ -390,23 +390,7 @@ class FigureExtractResult {
   });
 }
 
-/// 页面栏位布局的公开视图，用于 AI 排版修复判断跨栏图/表。
-/// 坐标为 144 DPI。单栏时 leftColRight/rightColLeft 为 null。
-class ColumnLayout {
-  final bool isDoubleColumn;
-  final double pageLeft, pageRight;
-  final double? leftColRight, rightColLeft;
-
-  const ColumnLayout({
-    required this.isDoubleColumn,
-    required this.pageLeft,
-    required this.pageRight,
-    this.leftColRight,
-    this.rightColLeft,
-  });
-}
-
-/// 单页 caption 召回的公开视图（caption-first AI 修缮用）。
+/// 单页 caption 召回的公开视图（caption-first 归属用）。
 ///
 /// 保留 [continuationBlocks]（多行合并的延续行原 block，
 /// 其 blockId 必须进 manifest 的 blockIds 以满足 md 替换契约）与 anchor 的
@@ -446,7 +430,7 @@ class CaptionCandidateInfo {
   ];
 }
 
-/// AI 修缮后处理裁剪的单条请求（[FigureExtractService.cropFiguresFromSegments] 入参）。
+/// 按裁决结果裁剪的单条请求（[FigureExtractService.cropFiguresFromSegments] 入参）。
 ///
 /// [pageIndex] = visual 所在页（manifest 落点）；caption 在别的页时
 /// [captionPageIndex] != [pageIndex]，裁剪排除 caption 块（走 visual_union
@@ -1038,7 +1022,7 @@ class FigureExtractService {
       _supplementaryCaptionRe.hasMatch(_normalizeCaptionText(text));
 
   /// 从 caption 文本提取文件名标识（"Figure 1." → "Figure_1"）。非 caption 返回空串。
-  /// 供 AI 修缮合并阶段按 captionName 匹配启发式 manifest 条目。使用前须 [init]。
+  /// 供按 captionName 匹配启发式 manifest 条目。使用前须 [init]。
   String extractCaptionName(String text) => _extractCaptionName(text);
 
   /// 按 caption 文本分类 kind：`figure` / `table` / `chart`。
@@ -3155,21 +3139,8 @@ class FigureExtractService {
 
   // ─── 公开入口 ─────────────────────────────────────────
 
-  /// 检测页面栏位布局（单栏/双栏 + 左右栏边界），用于 AI 排版修复判断
-  /// 跨栏图/表。包装 [_PageColumns.detect]，不需 [init]。
-  static ColumnLayout detectColumns(List<LayoutBlock> pageBlocks) {
-    final pc = _PageColumns.detect(pageBlocks);
-    return ColumnLayout(
-      isDoubleColumn: pc.isDoubleColumn,
-      pageLeft: pc.pageLeft,
-      pageRight: pc.pageRight,
-      leftColRight: pc.leftColRight,
-      rightColLeft: pc.rightColLeft,
-    );
-  }
-
   /// 收集单页所有 caption 候选（含 continuationBlocks + groupId + blockOrder），
-  /// 用于 caption-first AI 修缮的预处理。复用 [_collectCaptionCandidates] 的
+  /// 用于 caption-first 归属的预处理。复用 [_collectCaptionCandidates] 的
   /// 三阶段召回（anchor 识别 → 多行合并 → markdown 兜底）。使用前须 [init]。
   List<CaptionCandidateInfo> collectCaptionCandidatesPublic(
     List<LayoutBlock> pageBlocks,
@@ -3196,7 +3167,7 @@ class FigureExtractService {
         .toList();
   }
 
-  /// 按 AI 修缮裁决的 [segments] 裁剪 figure 图片并生成 [FigureManifestEntry]。
+  /// 按已裁决的 [segments] 裁剪 figure 图片并生成 [FigureManifestEntry]。
   ///
   /// 复用 [_renderFullPage]/[_computeCropInfo]/[_cropRegion]/[scaleBbox]，在
   /// [PdfProcessLock.instance.run] 内串行执行（与 [extractFigures] 共享 PDF 锁）。
@@ -3247,7 +3218,7 @@ class FigureExtractService {
           if (cancelToken?.isCancelled ?? false) break;
           final pageIdx = entry.key;
           if (pageIdx < 0 || pageIdx >= document.pages.length) {
-            log.d('[FigureExtract] AI 修缮: 页 $pageIdx 超出 PDF 页数,跳过');
+            log.d('[FigureExtract] 裁剪: 页 $pageIdx 超出 PDF 页数,跳过');
             for (final (idx, _) in entry.value) {
               onProgress?.call(idx + 1, total);
             }
@@ -3257,7 +3228,7 @@ class FigureExtractService {
           final page = document.pages[pageIdx];
           final fullImage = await _renderFullPage(page);
           if (fullImage == null) {
-            log.d('[FigureExtract] AI 修缮: 页 $pageIdx 渲染失败');
+            log.d('[FigureExtract] 裁剪: 页 $pageIdx 渲染失败');
             for (final (idx, _) in entry.value) {
               onProgress?.call(idx + 1, total);
             }
@@ -3324,7 +3295,7 @@ class FigureExtractService {
                     );
               final pngBytes = await _cropRegion(fullImage, renderBbox);
               if (pngBytes == null) {
-                log.d('[FigureExtract] AI 修缮: 页 $pageIdx 裁剪失败');
+                log.d('[FigureExtract] 裁剪: 页 $pageIdx 裁剪失败');
                 onProgress?.call(idx + 1, total);
                 continue;
               }
@@ -3422,7 +3393,7 @@ class FigureExtractService {
     ];
   }
 
-  /// AI 修缮裁剪的文件名唯一化：captionName 清理后作 base，冲突时加 `_n`。
+  /// 裁决裁剪的文件名唯一化：captionName 清理后作 base，冲突时加 `_n`。
   String _uniqueAiFixName(
     String captionText,
     int pageIdx,

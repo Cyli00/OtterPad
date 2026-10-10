@@ -8,7 +8,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:dio/dio.dart' show CancelToken;
 
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
@@ -36,9 +35,6 @@ import '../../services/doc_extract_service.dart';
 import '../../services/extraction_artifacts.dart';
 import '../../services/document_summary_image_service.dart';
 import '../../services/figure_extract_service.dart';
-import '../../services/figure_fix_service.dart';
-import '../../services/mineru_result_converter.dart';
-import 'widgets/figure_fix_progress_dialog.dart';
 import '../../data/models/book/highlight.dart';
 import '../../data/models/book/reader_anchor.dart';
 import '../../providers/reader_document_index_provider.dart';
@@ -459,121 +455,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           .showResult(message: context.l10n.reformatFailed('$e'));
     } finally {
       if (mounted) setState(() => _reprocessing = false);
-    }
-  }
-
-  Future<void> _onAiFixFiguresPressed() async {
-    if (_reprocessing) return;
-    final l10n = context.l10n;
-    final filePath = DocPaths.pdf(widget.document.id);
-    if (widget.document.contentHash == null || !File(filePath).existsSync()) {
-      ref.read(snackBarServiceProvider).showResult(message: l10n.pdfNotFound);
-      return;
-    }
-
-    if (await MinerUResultConverter.isMinerUDocument(filePath)) {
-      if (!mounted) return;
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: l10n.aiFixNotForMinerU);
-      return;
-    }
-
-    if (!mounted) return;
-    final agentState = ref.read(effectiveAgentApiProvider);
-    if (!await AiSettingsPrompt.ensureTextModelConfigured(
-      context: context,
-      agentState: agentState,
-    )) {
-      return;
-    }
-
-    if (!mounted) return;
-    final navigator = Navigator.of(context, rootNavigator: true);
-    final stageNotifier = ValueNotifier<String>(l10n.aiFixFiguresAnalyzing);
-    final cancelToken = CancelToken();
-    var dialogClosed = false;
-    showFigureFixProgressDialog(
-      context: context,
-      stageNotifier: stageNotifier,
-      onCancel: () => cancelToken.cancel(),
-    ).whenComplete(() {
-      dialogClosed = true;
-      cancelToken.cancel();
-    });
-
-    void closeDialog() {
-      if (dialogClosed) return;
-      dialogClosed = true;
-      if (navigator.mounted) navigator.pop();
-    }
-
-    Future<void> fail(String message) async {
-      closeDialog();
-      if (!mounted) return;
-      ref.read(snackBarServiceProvider).showResult(message: message);
-    }
-
-    try {
-      final analysis = await FigureFixService.instance.analyze(
-        pdfPath: filePath,
-      );
-      if (cancelToken.isCancelled) {
-        await fail(l10n.aiFixFiguresCancelled);
-        return;
-      }
-      if (!mounted) return;
-
-      stageNotifier.value = l10n.aiFixFiguresCalling;
-      final result = await FigureFixService.instance.execute(
-        analysis: analysis,
-        agentState: agentState,
-        cancelToken: cancelToken,
-      );
-      if (cancelToken.isCancelled) {
-        await fail(l10n.aiFixFiguresCancelled);
-        return;
-      }
-      if (!mounted) return;
-
-      stageNotifier.value = l10n.aiFixFiguresApplying;
-      final (mdPath, content, _) = await FigureFixService.instance.apply(
-        analysis: analysis,
-        result: result,
-        title: widget.document.title,
-        cancelToken: cancelToken,
-        onProgress: (done, total) {
-          stageNotifier.value = l10n.aiFixFiguresCropping(done, total);
-        },
-      );
-      closeDialog();
-      if (!mounted) return;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _sessionNotifier.useExtractedMarkdown(
-          markdownPath: mdPath,
-          markdownContent: content,
-        );
-        _figuresFuture = null;
-        _figuresEpoch.value++;
-        ref
-            .read(snackBarServiceProvider)
-            .showResult(message: l10n.aiFixFiguresDone);
-      });
-    } on FigureFixException catch (e) {
-      await fail(switch (e.kind) {
-        FigureFixError.missingExtractJson => l10n.aiFixFiguresMissingExtract,
-        FigureFixError.modelNotSet => l10n.aiFixFiguresModelNotSet,
-        FigureFixError.cancelled => l10n.aiFixFiguresCancelled,
-        FigureFixError.invalidLlmOutput => l10n.aiFixFiguresInvalidLlmOutput,
-      });
-    } catch (_) {
-      // 泛型错误不上屏技术原文，统一走通用文案。
-      await fail(l10n.aiFixFiguresFailedGeneric);
-    } finally {
-      closeDialog();
-      stageNotifier.dispose();
     }
   }
 
@@ -2271,7 +2152,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       onReprocess: _onReprocessPressed,
       onRetranslate: _handleRetranslate,
       onOpenSummaryImage: () => _summaryCoordinator.openSummaryImage(),
-      onAiFixFigures: _onAiFixFiguresPressed,
       showNavigationToggle:
           isDesktopOs &&
           MediaQuery.sizeOf(context).width >= Responsive.kReaderBodyMin + 73,

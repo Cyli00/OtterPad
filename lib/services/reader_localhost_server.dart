@@ -189,7 +189,7 @@ class ReaderLocalhostServer {
       //   不变，必须强制 WebView 每次重新拉取，否则翻译完成后 loadUrl 同
       //   URL 命中旧缓存 → 译文看不见（引入 cache-control 后踩到的坑：
       //   原本 max-age=300 让翻译失效）。
-      // - 图片：figures/*.png 会被 AI 排版修复原地覆盖（URL 不变、内容变），
+      // - 图片：figures/*.png 会被重新提取 / 重新排版原地覆盖（URL 不变、内容变），
       //   max-age 会让重载后仍显示旧图——同一个坑的图片版。localhost 读
       //   本地文件毫秒级，放弃缓存没有实际代价；DOM 不重建时图片本就不会
       //   重新请求，惩罚只发生在显式 reload 后。
