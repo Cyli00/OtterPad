@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:motor/motor.dart';
 
 import '../../core/animation_constants.dart';
 import '../../services/haptics.dart';
@@ -15,6 +16,29 @@ class AdaptiveDestination {
   final Widget icon;
   final Widget selectedIcon;
   final String label;
+}
+
+/// 导航图标的选中态：Material Symbols 的 FILL 轴在 0（描边）与 1（实心）
+/// 之间过渡。图标自身不能写死 `fill`，否则盖过这里的设置。
+class _SelectedIconFill extends StatelessWidget {
+  const _SelectedIconFill({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleMotionBuilder(
+      motion: kMotionEffects,
+      value: selected ? 1 : 0,
+      active: !MediaQuery.disableAnimationsOf(context),
+      builder: (context, fill, child) => IconTheme.merge(
+        data: IconThemeData(fill: fill.clamp(0.0, 1.0)),
+        child: child!,
+      ),
+      child: child,
+    );
+  }
 }
 
 /// 侧边导航栏组件 (平板/桌面)
@@ -175,8 +199,8 @@ class _NavigationRailItem extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: IconTheme(
-          data: IconThemeData(color: iconColor, size: 24, fill: 1),
-          child: icon,
+          data: IconThemeData(color: iconColor, size: 24),
+          child: _SelectedIconFill(selected: selected, child: icon),
         ),
       );
     }
@@ -197,8 +221,8 @@ class _NavigationRailItem extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: IconTheme(
-                data: IconThemeData(color: iconColor, size: 24, fill: 1),
-                child: icon,
+                data: IconThemeData(color: iconColor, size: 24),
+                child: _SelectedIconFill(selected: selected, child: icon),
               ),
             ),
             const SizedBox(height: 3),
@@ -285,8 +309,11 @@ class AdaptiveBottomNavigation extends StatelessWidget {
                       NavigationDestinationLabelBehavior.onlyShowSelected &&
                   entry.key == selectedIndex);
           return NavigationDestination(
-            icon: d.icon,
-            selectedIcon: d.selectedIcon,
+            icon: _SelectedIconFill(selected: false, child: d.icon),
+            selectedIcon: _SelectedIconFill(
+              selected: true,
+              child: d.selectedIcon,
+            ),
             label: d.label,
             tooltip: labelVisible ? '' : d.label,
           );

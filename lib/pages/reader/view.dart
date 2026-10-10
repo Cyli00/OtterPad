@@ -2041,27 +2041,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Widget _buildReaderNavigationRail(bool extended, ColorScheme cs) {
     final l10n = context.l10n;
     final destinations = [
+      // 目的地图标不写 fill：选中态的实心/描边由导航组件过渡。
       AdaptiveDestination(
-        icon: const Icon(Symbols.home_rounded, weight: 600, fill: 1),
-        selectedIcon: const Icon(Symbols.home_rounded, weight: 600, fill: 1),
+        icon: const Icon(Symbols.home_rounded, weight: 600),
+        selectedIcon: const Icon(Symbols.home_rounded, weight: 600),
         label: l10n.home,
       ),
       AdaptiveDestination(
-        icon: const Icon(Symbols.folder_copy_rounded, weight: 600, fill: 1),
-        selectedIcon: const Icon(
-          Symbols.folder_copy_rounded,
-          weight: 600,
-          fill: 1,
-        ),
+        icon: const Icon(Symbols.folder_copy_rounded, weight: 600),
+        selectedIcon: const Icon(Symbols.folder_copy_rounded, weight: 600),
         label: l10n.library,
       ),
       AdaptiveDestination(
-        icon: const Icon(Symbols.settings_rounded, weight: 600, fill: 1),
-        selectedIcon: const Icon(
-          Symbols.settings_rounded,
-          weight: 600,
-          fill: 1,
-        ),
+        icon: const Icon(Symbols.settings_rounded, weight: 600),
+        selectedIcon: const Icon(Symbols.settings_rounded, weight: 600),
         label: l10n.settings,
       ),
     ];
