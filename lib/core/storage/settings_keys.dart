@@ -46,6 +46,7 @@ class SettingsKeys {
   static const readerDesktopVerticalMargin = 'reader_desktop_vertical_margin';
   static const readerDefaultMode = 'reader_default_mode';
   static const readerPaginationMode = 'reader_pagination_mode';
+  static const readerEngine = 'reader_engine';
 
   /// 停靠栏（目录/笔记/问 AI）用户拖拽调宽后的宽度；缺省 null = 跟随窗口自适应
   static const readerSidebarWidth = 'reader_sidebar_width';

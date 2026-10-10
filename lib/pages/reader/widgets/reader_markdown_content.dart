@@ -1,11 +1,15 @@
 import '../../../services/reader/reader_document_index.dart';
 import '../../../services/markdown_paragraph_extractor.dart';
+import '../../../utils/markdown_preprocessor.dart';
 import '../../../utils/markdown_translation_weaver.dart';
 import 'webview_reader_html.dart';
 
 typedef ReaderMarkdownContent = ({
   String markdown,
   List<Map<String, dynamic>> entries,
+
+  /// 段落 id → 译文 Markdown，供原生渲染；WebView 用 entries 里的 html。
+  Map<String, String> translatedMarkdown,
 });
 
 typedef _Source = ({
@@ -22,7 +26,16 @@ class ReaderMarkdownPresentation {
   String _markdown = '';
   List<_Source> _sources = [];
   final _translated =
-      <String, ({String raw, String text, String revision, String html})>{};
+      <
+        String,
+        ({
+          String raw,
+          String text,
+          String revision,
+          String html,
+          String markdown,
+        })
+      >{};
   final _entries = <String, Map<String, dynamic>>{};
   ReaderMarkdownContent? _content;
 
@@ -73,6 +86,7 @@ class ReaderMarkdownPresentation {
     if (_key == key) return _content!;
     _key = key;
     final entries = <Map<String, dynamic>>[];
+    final translatedMarkdown = <String, String>{};
     for (final source in _sources) {
       final raw = translations[source.paragraph.hash] ?? '';
       var translated = _translated[source.paragraph.hash];
@@ -83,9 +97,11 @@ class ReaderMarkdownPresentation {
           text: text,
           revision: readerTextRevision(text),
           html: raw.isEmpty ? '' : buildReaderTranslationHtml(raw),
+          markdown: MarkdownPreprocessor.processTranslation(raw),
         );
         _translated[source.paragraph.hash] = translated;
       }
+      if (raw.isNotEmpty) translatedMarkdown[source.id] = translated.markdown;
       final showSource = mode != DocTranslationMode.translated || raw.isEmpty;
       final showTranslation = mode != DocTranslationMode.off;
       var entry = _entries[source.id];
@@ -112,6 +128,10 @@ class ReaderMarkdownPresentation {
       }
       entries.add(entry);
     }
-    return _content = (markdown: _markdown, entries: entries);
+    return _content = (
+      markdown: _markdown,
+      entries: entries,
+      translatedMarkdown: translatedMarkdown,
+    );
   }
 }

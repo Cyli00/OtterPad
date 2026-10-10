@@ -200,6 +200,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get defaultReadingModeHint => '选择 Markdown 时，若文档无提取结果将自动回退到 PDF 视图';
 
   @override
+  String get readerEngine => 'Markdown 渲染方式';
+
+  @override
+  String get readerEngineWebView => 'WebView';
+
+  @override
+  String get readerEngineNative => '原生（实验）';
+
+  @override
+  String get readerEngineHint =>
+      '原生渲染不经过 WebView，直接绘制正文；仅支持连续纵向滚动，移动端选择横向翻页时仍使用 WebView。';
+
+  @override
   String get textSize => '字体';
 
   @override
@@ -3759,6 +3772,19 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get defaultReadingModeHint => '選擇 Markdown 時，若文件無擷取結果將自動回退到 PDF 檢視';
+
+  @override
+  String get readerEngine => 'Markdown 渲染方式';
+
+  @override
+  String get readerEngineWebView => 'WebView';
+
+  @override
+  String get readerEngineNative => '原生（實驗）';
+
+  @override
+  String get readerEngineHint =>
+      '原生渲染不經過 WebView，直接繪製正文；僅支援連續縱向捲動，行動裝置選擇橫向翻頁時仍使用 WebView。';
 
   @override
   String get textSize => '字體';

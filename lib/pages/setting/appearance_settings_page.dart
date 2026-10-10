@@ -170,6 +170,54 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  Text(
+                    l10n.readerEngine,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<ReaderEngine>(
+                      segments: [
+                        ButtonSegment(
+                          value: ReaderEngine.webview,
+                          label: Text(l10n.readerEngineWebView),
+                        ),
+                        ButtonSegment(
+                          value: ReaderEngine.native,
+                          label: Text(l10n.readerEngineNative),
+                        ),
+                      ],
+                      selected: {settings.engine},
+                      onSelectionChanged: (set) {
+                        Haptics.soft();
+                        ref
+                            .read(readerSettingsProvider.notifier)
+                            .setEngine(set.first);
+                      },
+                      style: SegmentedButton.styleFrom(
+                        backgroundColor: cs.surface,
+                        selectedBackgroundColor: cs.primaryContainer,
+                        side: BorderSide(
+                          color: cs.outlineVariant.withAlpha(100),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.readerEngineHint,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   Row(
                     children: [
                       Expanded(

@@ -54,6 +54,8 @@ import '../../utils/responsive.dart';
 import 'chat/document_chat_page.dart';
 import 'coordinators/reader_summary_image_coordinator.dart';
 import 'widgets/figure_viewer.dart';
+import 'widgets/native_markdown_reader.dart';
+import 'widgets/reader_content_handle.dart';
 import 'widgets/webview_markdown_reader.dart';
 import 'widgets/reader_markdown_content.dart';
 import 'widgets/outline_panel.dart';
@@ -245,6 +247,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // WebView 阅读器引用（通过 GlobalKey 暴露方法）
   final _webViewReaderKey = GlobalKey<WebViewMarkdownReaderState>();
+  final _nativeReaderKey = GlobalKey<NativeMarkdownReaderState>();
+
+  /// 当前挂载的 Markdown 正文渲染器（WebView 或原生，二者只挂其一）。
+  ReaderContentHandle? get _reader {
+    final ReaderContentHandle? webView = _webViewReaderKey.currentState;
+    return webView ?? _nativeReaderKey.currentState;
+  }
 
   // PDF 控制器（用于滚动滑条）
   final _pdfController = PdfViewerController();
@@ -505,7 +514,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _sessionNotifier.selectSearchResult(hitIndex, query, count);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _webViewReaderKey.currentState?.scrollToSearchResult(hitIndex);
+      _reader?.scrollToSearchResult(hitIndex);
     });
   }
 
@@ -516,14 +525,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void _goToPrevResult() {
     final index = _sessionNotifier.goToPreviousSearchResult();
     if (index != null) {
-      _webViewReaderKey.currentState?.scrollToSearchResult(index);
+      _reader?.scrollToSearchResult(index);
     }
   }
 
   void _goToNextResult() {
     final index = _sessionNotifier.goToNextSearchResult();
     if (index != null) {
-      _webViewReaderKey.currentState?.scrollToSearchResult(index);
+      _reader?.scrollToSearchResult(index);
     }
   }
 
@@ -847,7 +856,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final filename = _session.imageFilenameNearOffset(charOffset);
     if (filename == null) return;
     Future.delayed(const Duration(milliseconds: 400), () {
-      if (mounted) _webViewReaderKey.currentState?.flashImage(filename);
+      if (mounted) _reader?.flashImage(filename);
     });
   }
 
@@ -873,7 +882,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       r'^<!-- otter-figure:([a-zA-Z0-9_-]+) -->',
     ).firstMatch(md.substring(safeOffset));
     if (figureAnchor != null) {
-      _webViewReaderKey.currentState?.scrollToFigure(figureAnchor[1]!);
+      _reader?.scrollToFigure(figureAnchor[1]!);
+      return;
+    }
+    final native = _nativeReaderKey.currentState;
+    if (native != null) {
+      native.scrollToSourceOffset(safeOffset);
       return;
     }
     final marker = RegExp(
@@ -1009,10 +1023,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       anchor: _selectionAnchor,
     );
     if (created != null) {
-      _webViewReaderKey.currentState?.addHighlightFromSelection(
-        created.id,
-        color,
-      );
+      _reader?.addHighlightFromSelection(created.id, color);
     }
   }
 
@@ -1103,7 +1114,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void _handleHighlightTap(Highlight highlight, Rect rect) {
     if (!mounted) return;
     _dismissSelectionToolbar();
-    _webViewReaderKey.currentState?.holdTranslations(true);
+    _reader?.holdTranslations(true);
     _selectionToolbarEntry = showReaderContextMenu(
       context: context,
       selectionRect: rect,
@@ -1187,7 +1198,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         final trimmed = _webViewSelectionText.trim();
         final fullText = _expandToParagraphContext(trimmed);
         // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"弹窗显示
-        _webViewReaderKey.currentState?.clearSelection();
+        _reader?.clearSelection();
         showTranslationPopup(
           context,
           sourceText: trimmed,
@@ -1245,7 +1256,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ReaderAnchor? quoteAnchor,
   }) {
     // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"新路由显示
-    _webViewReaderKey.currentState?.clearSelection();
+    _reader?.clearSelection();
     _chatReturnArgs = null;
     _pendingChatReturnArgs = null;
     _dockChatQuote = quote?.trim();
@@ -1292,7 +1303,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (_useReaderDock(context) && _session.hasResult) {
       if (!(_dockOpen && _dockPane == ReaderDockPane.askAi)) {
         _chatReturnArgs = null;
-        _webViewReaderKey.currentState?.clearSelection();
+        _reader?.clearSelection();
       }
       _toggleDock(ReaderDockPane.askAi);
       return;
@@ -1317,7 +1328,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     bool found;
     if (_session.showPreview) {
       found =
-          await _webViewReaderKey.currentState?.locateQuote(
+          await _reader?.locateQuote(
             quote,
             anchor: returnArgs.quoteAnchor,
             figureName: returnArgs.figureImagePath == null
@@ -1406,7 +1417,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _chatReturnArgs = null;
       _pendingChatReturnArgs = null;
     });
-    _webViewReaderKey.currentState?.clearSelection();
+    _reader?.clearSelection();
     if (_useReaderDock(context) &&
         _session.markdownContent != null &&
         (isDesktopOs || _session.showPreview)) {
@@ -1435,7 +1446,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _clearWebViewSelectionToolbarState() {
-    _webViewReaderKey.currentState?.holdTranslations(false);
+    _reader?.holdTranslations(false);
     _selectionToolbarEntry = null;
     _webViewSelectionText = '';
     _webViewSelectionLineCount = null;
@@ -1883,14 +1894,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                             bool wholeWord = false,
                                           }) async {
                                             final results =
-                                                await _webViewReaderKey
-                                                    .currentState
-                                                    ?.searchContent(
-                                                      query,
-                                                      caseSensitive:
-                                                          caseSensitive,
-                                                      wholeWord: wholeWord,
-                                                    ) ??
+                                                await _reader?.searchContent(
+                                                  query,
+                                                  caseSensitive: caseSensitive,
+                                                  wholeWord: wholeWord,
+                                                ) ??
                                                 const [];
                                             if (mounted) {
                                               _sessionNotifier
@@ -2674,6 +2682,50 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // 控件外缘之外由底层 contentBg（Positioned.fill）铺阅读背景色，系统栏
     // 区域始终落在干净的纸张底色上。
     final safe = MediaQuery.of(context).padding;
+    void onScrollProgress(double p, int? anchor) {
+      if (!mounted) return;
+      _readingProgress = p;
+      _progressDisplay.value = p;
+      _markdownAnchorBlock = anchor;
+      _sessionNotifier.reportProgress(p, anchorBlock: anchor);
+    }
+
+    // 原生渲染只做连续纵向滚动；移动端选了横向翻页时仍走 WebView。
+    if (settings.engine == ReaderEngine.native &&
+        (isDesktopOs ||
+            settings.paginationMode == ReaderPaginationMode.vertical)) {
+      return Padding(
+        padding: EdgeInsets.only(top: safe.top, bottom: safe.bottom),
+        child: NativeMarkdownReader(
+          key: _nativeReaderKey,
+          bilingualColumns: isDesktopOs && columns == 2,
+          markdownData: content.markdown,
+          contentRevision: Object.hash(session.contentRevision, _readerIndex),
+          readerEntries: content.entries,
+          translatedMarkdown: content.translatedMarkdown,
+          onSelectionAnchor: (anchor) => _selectionAnchor = anchor,
+          settings: settings,
+          palette: palette,
+          highlights: highlights,
+          translationStyleId: displayStyle.id,
+          initialScrollProgress: _readingProgress,
+          initialParagraphId: _readerPositionId,
+          onReadingParagraphChanged: (id) {
+            if (id != null) _readerPositionId = id;
+          },
+          topInset: topPad,
+          bottomInset: bottomPad,
+          highlightQuery: session.highlightQuery,
+          onSelectionEnd: _handleWebViewSelectionEnd,
+          onSelectionCleared: _handleWebViewSelectionCleared,
+          onHighlightClick: _handleHighlightTap,
+          onImageClick: _handleMarkdownImageTap,
+          onScrollDirection: _handleWebViewScrollDirection,
+          onScrollProgress: onScrollProgress,
+          onToggleToolbar: _handleWebViewToggleToolbar,
+        ),
+      );
+    }
     return Padding(
       padding: EdgeInsets.only(top: safe.top, bottom: safe.bottom),
       child: WebViewMarkdownReader(
@@ -2702,13 +2754,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onHighlightClick: _handleHighlightTap,
         onImageClick: _handleMarkdownImageTap,
         onScrollDirection: _handleWebViewScrollDirection,
-        onScrollProgress: (p, anchor) {
-          if (!mounted) return;
-          _readingProgress = p;
-          _progressDisplay.value = p;
-          _markdownAnchorBlock = anchor;
-          _sessionNotifier.reportProgress(p, anchorBlock: anchor);
-        },
+        onScrollProgress: onScrollProgress,
         onToggleToolbar: _handleWebViewToggleToolbar,
       ),
     );
