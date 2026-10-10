@@ -251,7 +251,8 @@ class DocumentChatService {
         history: turns,
         userPrompt: userPrompt,
         images: currentImages,
-        anthropicMaxTokens: 8192,
+        // adaptive 模型的思考也计入 max_tokens；流式无 HTTP 超时顾虑，留足余量
+        anthropicMaxTokens: 32000,
         anthropicCachePrefix: true,
         webSearch: webSearch,
         urlContext: nativeUrlTool,
