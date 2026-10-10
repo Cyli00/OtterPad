@@ -205,6 +205,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'When Markdown is selected, documents without extraction results will fall back to PDF view';
 
   @override
+  String get readerEngine => 'Markdown Rendering';
+
+  @override
+  String get readerEngineWebView => 'WebView';
+
+  @override
+  String get readerEngineNative => 'Native (experimental)';
+
+  @override
+  String get readerEngineHint =>
+      'Native rendering draws the text with Flutter widgets instead of a WebView. It only supports continuous vertical scrolling; horizontal paging on mobile still uses WebView.';
+
+  @override
   String get textSize => 'Font';
 
   @override

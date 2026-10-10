@@ -22,6 +22,7 @@ import '../../../utils/desktop.dart';
 import '../../../services/reader_localhost_server.dart';
 import '../../../services/reader/reader_html_cache.dart';
 import 'reader_background.dart';
+import 'reader_content_handle.dart';
 import 'reader_js_bridge.dart';
 import 'reader_update_plan.dart';
 import 'reader_webview_viewport.dart';
@@ -102,7 +103,7 @@ class WebViewMarkdownReader extends StatefulWidget {
 }
 
 class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
-    implements ReaderJsBridgeListener {
+    implements ReaderJsBridgeListener, ReaderContentHandle {
   ReaderJsBridge? _bridge;
   final _webViewKey = GlobalKey();
 
@@ -386,6 +387,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   void scrollToBlockIndex(int index) => _bridge?.scrollToBlock(index);
 
+  @override
   Future<bool> locateQuote(
     String quote, {
     ReaderAnchor? anchor,
@@ -398,10 +400,13 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       ) ??
       false;
 
+  @override
   void scrollToFigure(String id) => _bridge?.scrollToFigure(id);
 
+  @override
   void scrollToSearchResult(int index) => _bridge?.scrollToSearchResult(index);
 
+  @override
   Future<List<SearchHit>> searchContent(
     String query, {
     bool caseSensitive = false,
@@ -415,11 +420,16 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
         const [];
   }
 
+  @override
   void clearSelection() => _bridge?.clearSelection();
+
+  @override
   void holdTranslations(bool value) => _bridge?.holdTranslations(value);
 
+  @override
   void flashImage(String filename) => _bridge?.flashImage(filename);
 
+  @override
   void addHighlightFromSelection(String id, String color) {
     _selectionHighlightIds.add(id);
     _bridge?.addHighlightFromSelection(id, color);

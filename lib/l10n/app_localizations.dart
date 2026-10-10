@@ -477,6 +477,30 @@ abstract class AppLocalizations {
   /// **'When Markdown is selected, documents without extraction results will fall back to PDF view'**
   String get defaultReadingModeHint;
 
+  /// No description provided for @readerEngine.
+  ///
+  /// In en, this message translates to:
+  /// **'Markdown Rendering'**
+  String get readerEngine;
+
+  /// No description provided for @readerEngineWebView.
+  ///
+  /// In en, this message translates to:
+  /// **'WebView'**
+  String get readerEngineWebView;
+
+  /// No description provided for @readerEngineNative.
+  ///
+  /// In en, this message translates to:
+  /// **'Native (experimental)'**
+  String get readerEngineNative;
+
+  /// No description provided for @readerEngineHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Native rendering draws the text with Flutter widgets instead of a WebView. It only supports continuous vertical scrolling; horizontal paging on mobile still uses WebView.'**
+  String get readerEngineHint;
+
   /// No description provided for @textSize.
   ///
   /// In en, this message translates to:

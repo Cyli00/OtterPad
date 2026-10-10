@@ -113,12 +113,21 @@ enum ReaderPaginationMode {
   };
 }
 
+/// 提取结果（Markdown）的渲染方式。
+///
+/// [webview]：系统 WebView 渲染 HTML（默认）；[native]：Flutter 组件直接
+/// 渲染，实验性，仅连续纵向滚动——移动端选了横向翻页时仍用 WebView。
+///
+/// 枚举尾追规则同上：持久化用 `.index`。
+enum ReaderEngine { webview, native }
+
 class ReaderSettingsState {
   final ReaderTheme theme;
   final ReaderFont font;
   final double fontSize;
   final DefaultReadingMode defaultReadingMode;
   final ReaderPaginationMode paginationMode;
+  final ReaderEngine engine;
   final double desktopHorizontalMargin;
   final double desktopVerticalMargin;
 
@@ -128,6 +137,7 @@ class ReaderSettingsState {
     this.fontSize = 16.0,
     this.defaultReadingMode = DefaultReadingMode.markdown,
     this.paginationMode = ReaderPaginationMode.vertical,
+    this.engine = ReaderEngine.webview,
     this.desktopHorizontalMargin = 32,
     this.desktopVerticalMargin = 24,
   });
@@ -138,6 +148,7 @@ class ReaderSettingsState {
     double? fontSize,
     DefaultReadingMode? defaultReadingMode,
     ReaderPaginationMode? paginationMode,
+    ReaderEngine? engine,
     double? desktopHorizontalMargin,
     double? desktopVerticalMargin,
   }) {
@@ -147,6 +158,7 @@ class ReaderSettingsState {
       fontSize: fontSize ?? this.fontSize,
       defaultReadingMode: defaultReadingMode ?? this.defaultReadingMode,
       paginationMode: paginationMode ?? this.paginationMode,
+      engine: engine ?? this.engine,
       desktopHorizontalMargin:
           desktopHorizontalMargin ?? this.desktopHorizontalMargin,
       desktopVerticalMargin:
@@ -187,6 +199,8 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
         box.get(_kDefaultMode, defaultValue: DefaultReadingMode.markdown.index)
             as int;
     final paginationIndex = box.get(_kPaginationMode, defaultValue: 0) as int;
+    final engineIndex =
+        box.get(SettingsKeys.readerEngine, defaultValue: 0) as int;
     return ReaderSettingsState(
       theme: ReaderTheme
           .values[themeIndex.clamp(0, ReaderTheme.values.length - 1)],
@@ -214,6 +228,8 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
             0,
             ReaderPaginationMode.values.length - 1,
           )],
+      engine: ReaderEngine
+          .values[engineIndex.clamp(0, ReaderEngine.values.length - 1)],
     );
   }
 
@@ -244,6 +260,11 @@ class ReaderSettingsNotifier extends StateNotifier<ReaderSettingsState> {
   void setPaginationMode(ReaderPaginationMode mode) {
     state = state.copyWith(paginationMode: mode);
     GStorage.setting.put(_kPaginationMode, mode.index);
+  }
+
+  void setEngine(ReaderEngine engine) {
+    state = state.copyWith(engine: engine);
+    GStorage.setting.put(SettingsKeys.readerEngine, engine.index);
   }
 
   void setDesktopHorizontalMargin(double value) {
