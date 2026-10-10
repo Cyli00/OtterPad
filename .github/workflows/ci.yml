@@ -1,10 +1,11 @@
 name: CI
 
+# 平时 push 分支不构建；推送 ci-* tag 才构建测试（由 ci-buildtest skill 推送）。
+# v* 发布 tag 走 release.yml，不在此触发。
 on:
   push:
-    branches: [dev, main]
-  pull_request:
-    branches: [dev, main]
+    tags:
+      - 'ci-*'
   workflow_dispatch:
 
 concurrency:
