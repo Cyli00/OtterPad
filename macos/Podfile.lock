@@ -1,0 +1,36 @@
+PODS:
+  - flutter_inappwebview_macos (0.0.1):
+    - FlutterMacOS
+    - OrderedSet (~> 6.0.3)
+  - FlutterMacOS (1.0.0)
+  - OrderedSet (6.0.3)
+  - sqlite3_simple (2.2.0):
+    - Flutter
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - flutter_inappwebview_macos (from `Flutter/ephemeral/.symlinks/plugins/flutter_inappwebview_macos/macos`)
+  - FlutterMacOS (from `Flutter/ephemeral`)
+  - sqlite3_simple (from `Flutter/ephemeral/.symlinks/plugins/sqlite3_simple/darwin`)
+
+SPEC REPOS:
+  trunk:
+    - OrderedSet
+
+EXTERNAL SOURCES:
+  flutter_inappwebview_macos:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_inappwebview_macos/macos
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+  sqlite3_simple:
+    :path: Flutter/ephemeral/.symlinks/plugins/sqlite3_simple/darwin
+
+SPEC CHECKSUMS:
+  flutter_inappwebview_macos: c2d68649f9f8f1831bfcd98d73fd6256366d9d1d
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
+  OrderedSet: e539b66b644ff081c73a262d24ad552a69be3a94
+  sqlite3_simple: 669fbad89e05aa2226ae63312dfc15456c9b09b9
+
+PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
+
+COCOAPODS: 1.17.0
