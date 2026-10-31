@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../core/animation_constants.dart';
 import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/reader_settings_provider.dart';
@@ -47,201 +46,190 @@ class ReaderDesktopAppearance extends ConsumerWidget {
         style.id: translationStyleLabel(l10n, style.id),
     };
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : kAnim,
-      curve: kAnimCurve,
-      builder: (context, value, child) => Opacity(
-        opacity: value,
-        child: Transform.translate(
-          offset: Offset(0, 12 * (1 - value)),
-          child: child,
-        ),
+    // 进出场动画由宿主（阅读页）统一负责。
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+        boxShadow: AppShadows.sheet,
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: cs.outlineVariant.withAlpha(80)),
-          boxShadow: AppShadows.sheet,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 8, 4),
-              child: Row(
-                children: [
-                  Icon(Symbols.tune_rounded, color: cs.primary, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      l10n.appearance,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 8, 4),
+            child: Row(
+              children: [
+                Icon(Symbols.tune_rounded, color: cs.primary, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    l10n.appearance,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  IconButton(
-                    onPressed: onClose,
-                    tooltip: l10n.close,
-                    icon: const Icon(Symbols.close_rounded),
-                  ),
-                ],
-              ),
+                ),
+                IconButton(
+                  onPressed: onClose,
+                  tooltip: l10n.close,
+                  icon: const Icon(Symbols.close_rounded),
+                ),
+              ],
             ),
-            const AppDivider.full(),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!pdfView)
-                      SettingGroup(
-                        title: l10n.readerTextAppearance,
-                        child: Column(
-                          children: [
-                            _field(
-                              context,
-                              l10n.background,
-                              _backgroundChoices(
-                                context,
-                                value: settings.theme,
-                                choices: backgrounds,
-                                onChanged: notifier.setTheme,
-                              ),
-                            ),
-                            _field(
-                              context,
-                              l10n.fontFamily,
-                              _choices(
-                                context,
-                                value: settings.font,
-                                choices: {
-                                  ReaderFont.serif: l10n.readerFontSerif,
-                                  ReaderFont.sans: l10n.readerFontSans,
-                                },
-                                onChanged: notifier.setFont,
-                              ),
-                            ),
-                            const AppDivider(),
-                            _AppearanceSlider(
-                              label: l10n.fontSize,
-                              hint: l10n.readerFontSizeHint,
-                              value: settings.fontSize,
-                              fallback: defaults.fontSize,
-                              min: 12,
-                              max: 28,
-                              divisions: 16,
-                              onCommitted: notifier.setFontSize,
-                            ),
-                          ],
-                        ),
-                      ),
+          ),
+          const AppDivider.full(),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!pdfView)
                     SettingGroup(
-                      title: l10n.readerPageLayout,
+                      title: l10n.readerTextAppearance,
                       child: Column(
                         children: [
                           _field(
                             context,
-                            l10n.readerWidthFluid,
+                            l10n.background,
+                            _backgroundChoices(
+                              context,
+                              value: settings.theme,
+                              choices: backgrounds,
+                              onChanged: notifier.setTheme,
+                            ),
+                          ),
+                          _field(
+                            context,
+                            l10n.fontFamily,
+                            _choices(
+                              context,
+                              value: settings.font,
+                              choices: {
+                                ReaderFont.serif: l10n.readerFontSerif,
+                                ReaderFont.sans: l10n.readerFontSans,
+                              },
+                              onChanged: notifier.setFont,
+                            ),
+                          ),
+                          const AppDivider(),
+                          _AppearanceSlider(
+                            label: l10n.fontSize,
+                            hint: l10n.readerFontSizeHint,
+                            value: settings.fontSize,
+                            fallback: defaults.fontSize,
+                            min: 12,
+                            max: 28,
+                            divisions: 16,
+                            onCommitted: notifier.setFontSize,
+                          ),
+                        ],
+                      ),
+                    ),
+                  SettingGroup(
+                    title: l10n.readerPageLayout,
+                    child: Column(
+                      children: [
+                        _field(
+                          context,
+                          l10n.readerWidthFluid,
+                          Text(
+                            l10n.readerAutoLayoutHint,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        const AppDivider(),
+                        _AppearanceSlider(
+                          label: l10n.readerHorizontalMargin,
+                          hint: l10n.readerMarginHint,
+                          value: settings.desktopHorizontalMargin,
+                          fallback: defaults.desktopHorizontalMargin,
+                          min: 0,
+                          max: 120,
+                          divisions: 30,
+                          onCommitted: notifier.setDesktopHorizontalMargin,
+                        ),
+                        const AppDivider(),
+                        _AppearanceSlider(
+                          label: l10n.readerVerticalMargin,
+                          hint: l10n.readerMarginHint,
+                          value: settings.desktopVerticalMargin,
+                          fallback: defaults.desktopVerticalMargin,
+                          min: 0,
+                          max: 80,
+                          divisions: 20,
+                          onCommitted: notifier.setDesktopVerticalMargin,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!pdfView)
+                    SettingGroup(
+                      title: l10n.readerReadingOptions,
+                      child: Column(
+                        children: [
+                          _field(
+                            context,
+                            l10n.readerContinuousReading,
                             Text(
-                              l10n.readerAutoLayoutHint,
+                              l10n.readerContinuousReadingHint,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),
                             ),
                           ),
                           const AppDivider(),
-                          _AppearanceSlider(
-                            label: l10n.readerHorizontalMargin,
-                            hint: l10n.readerMarginHint,
-                            value: settings.desktopHorizontalMargin,
-                            fallback: defaults.desktopHorizontalMargin,
-                            min: 0,
-                            max: 120,
-                            divisions: 30,
-                            onCommitted: notifier.setDesktopHorizontalMargin,
-                          ),
-                          const AppDivider(),
-                          _AppearanceSlider(
-                            label: l10n.readerVerticalMargin,
-                            hint: l10n.readerMarginHint,
-                            value: settings.desktopVerticalMargin,
-                            fallback: defaults.desktopVerticalMargin,
-                            min: 0,
-                            max: 80,
-                            divisions: 20,
-                            onCommitted: notifier.setDesktopVerticalMargin,
+                          _field(
+                            context,
+                            l10n.translationStyle,
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final entry in translationStyles.entries)
+                                  _previewChoice(
+                                    context,
+                                    selected:
+                                        entry.key ==
+                                        (translationStyles.containsKey(
+                                              translation.displayStyleId,
+                                            )
+                                            ? translation.displayStyleId
+                                            : 'themed'),
+                                    label: entry.value,
+                                    radius: 12,
+                                    onTap: () => ref
+                                        .read(
+                                          translationConfigProvider.notifier,
+                                        )
+                                        .setDisplayStyleId(entry.key),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 10,
+                                      ),
+                                      child: TranslationStyleLabel(
+                                        styleId: entry.key,
+                                        label: entry.value,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    if (!pdfView)
-                      SettingGroup(
-                        title: l10n.readerReadingOptions,
-                        child: Column(
-                          children: [
-                            _field(
-                              context,
-                              l10n.readerContinuousReading,
-                              Text(
-                                l10n.readerContinuousReadingHint,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                            const AppDivider(),
-                            _field(
-                              context,
-                              l10n.translationStyle,
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  for (final entry in translationStyles.entries)
-                                    _previewChoice(
-                                      context,
-                                      selected:
-                                          entry.key ==
-                                          (translationStyles.containsKey(
-                                                translation.displayStyleId,
-                                              )
-                                              ? translation.displayStyleId
-                                              : 'themed'),
-                                      label: entry.value,
-                                      radius: 12,
-                                      onTap: () => ref
-                                          .read(
-                                            translationConfigProvider.notifier,
-                                          )
-                                          .setDisplayStyleId(entry.key),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 10,
-                                        ),
-                                        child: TranslationStyleLabel(
-                                          styleId: entry.key,
-                                          label: entry.value,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

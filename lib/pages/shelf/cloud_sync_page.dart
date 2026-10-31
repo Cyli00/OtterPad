@@ -49,11 +49,15 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
           .read(backupOrchestratorProvider)
           .backupToRemote(scope: scope);
       if (mounted) {
-        snackBar.showResult(message: context.l10n.remoteBackupUploaded(target));
+        snackBar.showResult(
+          tone: SnackTone.success,
+          message: context.l10n.remoteBackupUploaded(target),
+        );
       }
     } catch (e) {
       if (mounted) {
         snackBar.showResult(
+          tone: SnackTone.error,
           message: context.l10n.uploadRemoteFailed(
             e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
           ),

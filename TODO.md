@@ -10,3 +10,4 @@
 - MinerU Pipeline 与 VLM（尤其 2.5）结构化输出不完全兼容：VLM 的 `model.json`、`middle.json` 字段和坐标语义有变化；`span.pdf` 仅适用于 Pipeline。当前实现仍有部分 Pipeline 分支，后续若重新开放需单独做格式适配和真实样本回归。
 - 当前阶段只支持 MinerU VLM：模型设置项、状态字段与存储键已删除，请求固定发送 `model_version=vlm`；历史 Pipeline 结果解析保留只读兼容，待完成独立适配和真实样本回归后再恢复。
 - 示例文档结构化结果里有 `table: 4`、`chart: 48`、`image: 41`，但 `figures.mineru.json` 只有 6 条且 `kind` 全为 `figure`，没有任何 table/chart 条目；MinerU 的 `extra_formats: html` 导出里表格是真 `<table>`。可用于把表格从截图改为可选中 HTML 表格，待单独评估（需先确认 HTML 与 app block 的对齐方式）。
+- WebView 阅读器问题主要来自 MinerU / PaddleOCR 提取结果的格式匹配（两种输出结构与阅读器 Markdown/锚点的对齐），待单独排查；原生渲染实验在 `origin/feat/native-markdown-reader`（未合并）。

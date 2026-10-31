@@ -251,7 +251,7 @@ class DocumentTranslationNotifier
     _progress.value = ListenableProgress(
       current: 0,
       total: allParagraphs.length,
-      status: '翻译中',
+      status: _l10n?.translatingDocument ?? '正在翻译',
     );
 
     // 登记进 Task Activity（单一真值源）：无论从哪个入口触发翻译，进度都进同一
@@ -287,7 +287,9 @@ class DocumentTranslationNotifier
           _progress.value = ListenableProgress(
             current: done,
             total: total,
-            status: done >= total ? '翻译完成' : '翻译中',
+            status: done >= total
+                ? _l10n?.translationDone ?? '已完成翻译'
+                : _l10n?.translatingDocument ?? '正在翻译',
           );
         },
       );
@@ -420,10 +422,10 @@ class DocumentTranslationNotifier
 
   void _reset() {
     state = const DocumentTranslationState();
-    _progress.value = const ListenableProgress(
+    _progress.value = ListenableProgress(
       current: 0,
       total: 0,
-      status: '准备中',
+      status: _l10n?.preparingTranslation ?? '正在准备翻译',
     );
   }
 

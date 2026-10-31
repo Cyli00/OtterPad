@@ -75,7 +75,7 @@ Future<void> _downloadAndInstall(
   // 文案在任何 await 之前一次性解析好，避免异步后再碰 BuildContext
   final startCtx = rootNavigatorKey.currentContext;
   final l10n = startCtx != null ? AppLocalizations.of(startCtx) : null;
-  final title = l10n?.updateDownloading ?? '下载更新中';
+  final title = l10n?.updateDownloading ?? '正在下载更新';
   final failMessage = l10n?.updateDownloadFailed ?? '下载更新失败';
 
   final activity = container.read(taskActivityProvider.notifier);
@@ -110,7 +110,9 @@ Future<void> _downloadAndInstall(
     // 用户主动取消不算失败，不提示
     if (!cancelToken.isCancelled) {
       log.w('[UpdateFlow] 下载/安装失败：$e');
-      container.read(snackBarServiceProvider).showResult(message: failMessage);
+      container
+          .read(snackBarServiceProvider)
+          .showResult(message: failMessage, tone: SnackTone.error);
     }
   } finally {
     activity.finish(taskId);

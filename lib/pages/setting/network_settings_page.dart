@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:motor/motor.dart';
 
 import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
@@ -41,13 +41,7 @@ class NetworkSettingsPage extends StatelessWidget {
             ),
       body: Listener(
         onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-        child: ListView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 8,
-          ).copyWith(bottom: 40),
-          children: const [_ProxySettingsSection()],
-        ),
+        child: SettingListView(children: const [_ProxySettingsSection()]),
       ),
     );
   }
@@ -139,42 +133,6 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
     }
   }
 
-  InputDecoration _fieldDeco(
-    BuildContext context, {
-    required String hint,
-    String? label,
-    Widget? suffix,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-        color: cs.onSurfaceVariant.withAlpha(120),
-      ),
-      filled: true,
-      fillColor: cs.surfaceContainerLow,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: cs.outlineVariant.withAlpha(100),
-          width: 1,
-        ),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.primary, width: 2),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      suffixIcon: suffix,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final proxy = ref.watch(proxyProvider);
@@ -211,22 +169,23 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     ),
                     value: ProxyMode.custom,
                   ),
-                  Animate(
-                    target: proxy.mode == ProxyMode.custom ? 1 : 0,
-                    effects: [
-                      FadeEffect(duration: kAnim),
-                      CustomEffect(
-                        duration: kAnim,
-                        curve: kAnimCurve,
-                        builder: (context, value, child) => ClipRect(
+                  SingleMotionBuilder(
+                    motion: kMotionSpatialSteady,
+                    value: proxy.mode == ProxyMode.custom ? 1 : 0,
+                    active: !MediaQuery.disableAnimationsOf(context),
+                    builder: (context, value, child) {
+                      final t = value.clamp(0.0, 1.0);
+                      return Opacity(
+                        opacity: t,
+                        child: ClipRect(
                           child: Align(
                             alignment: Alignment.topCenter,
-                            heightFactor: value,
+                            heightFactor: t,
                             child: child,
                           ),
                         ),
-                      ),
-                    ],
+                      );
+                    },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -238,10 +197,10 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                             flex: 3,
                             child: TextField(
                               controller: _hostController,
-                              decoration: _fieldDeco(
+                              decoration: settingFieldDecoration(
                                 context,
                                 hint: '127.0.0.1',
-                                label: context.l10n.hostAddress,
+                                labelText: context.l10n.hostAddress,
                               ),
                               onChanged: (_) => _onAddressChanged(),
                             ),
@@ -251,10 +210,10 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                             flex: 1,
                             child: TextField(
                               controller: _portController,
-                              decoration: _fieldDeco(
+                              decoration: settingFieldDecoration(
                                 context,
                                 hint: '7890',
-                                label: context.l10n.port,
+                                labelText: context.l10n.port,
                               ),
                               keyboardType: TextInputType.number,
                               inputFormatters: [
@@ -325,7 +284,7 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
                     Expanded(
                       child: TextField(
                         controller: _urlController,
-                        decoration: _fieldDeco(
+                        decoration: settingFieldDecoration(
                           context,
                           hint: 'https://google.com',
                         ),

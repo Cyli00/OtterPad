@@ -173,9 +173,9 @@ class DocumentTaskNotifier
         documentId: documentId,
       ),
       title: title,
-      initialStatus: _l10n?.waitingExtractTitle(title) ?? '等待提取: $title',
+      initialStatus: _l10n?.waitingExtractTitle(title) ?? '等待提取 · $title',
       runningStatus: _l10n?.submittingTaskTitle(title) ?? '正在提交任务: $title',
-      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务正在进行中',
+      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务在进行，请稍候',
       showBusySnackBar: showBusySnackBar,
       showProgressSnackBar: showProgressSnackBar,
       showResultSnackBar: showResultSnackBar,
@@ -227,7 +227,7 @@ class DocumentTaskNotifier
         return savedMdPath;
       },
       onSuccess: (_) => TaskFinish(
-        message: _l10n?.extractionCompleteTitle(title) ?? '文档提取完成：$title',
+        message: _l10n?.extractionCompleteTitle(title) ?? '已提取「$title」',
         duration: const Duration(seconds: 6),
       ),
       onError: (e) {
@@ -236,7 +236,7 @@ class DocumentTaskNotifier
         if (e is MinerUExtractException) return TaskFinish.text(e.message);
         if (e is DioException) {
           return TaskFinish.text(
-            _l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}',
+            _l10n?.networkError(e.message ?? '') ?? '网络错误：${e.message}',
           );
         }
         return TaskFinish.text(
@@ -366,12 +366,19 @@ class DocumentTaskNotifier
       };
     }
 
+    // 提交阶段显示正在提交的篇名；全部提交后服务端轮询期间 currentTitle 为空，
+    // 改显示「批量提取中」，避免 snackbar 只剩计数没有文字。
+    String stage(String? submittingTitle) => submittingTitle != null
+        ? _l10n?.submittingTaskTitle(submittingTitle) ??
+              '正在提交任务 · $submittingTitle'
+        : _l10n?.batchExtracting ?? '正在批量提取';
+
     final activity = _ref.read(taskActivityProvider.notifier);
     final batchProgress = ValueNotifier<ListenableProgress>(
       ListenableProgress(
         current: 0,
         total: runnable.length,
-        status: runnable.first.title,
+        status: stage(runnable.first.title),
       ),
     );
     final activityId = activity.report(
@@ -380,10 +387,13 @@ class DocumentTaskNotifier
       onCancel: () => cancelToken.cancel(),
     );
     void updateProgress(BatchExtractProgress progress) {
+      final pending = progress.statuses.where(
+        (s) => s.state == BatchJobState.pending,
+      );
       batchProgress.value = ListenableProgress(
         current: progress.completed,
         total: progress.total,
-        status: progress.currentTitle,
+        status: stage(pending.isEmpty ? null : pending.first.title),
       );
     }
 
@@ -579,7 +589,7 @@ class DocumentTaskNotifier
             total: 0,
             status:
                 _l10n?.waitingSubmitTitle(jobStatus.title) ??
-                '等待提交: ${jobStatus.title}',
+                '等待提交 · ${jobStatus.title}',
           ),
         );
 
@@ -592,7 +602,7 @@ class DocumentTaskNotifier
             total: 0,
             status:
                 _l10n?.submittedWaitingTitle(jobStatus.title) ??
-                '已提交，等待处理: ${jobStatus.title}',
+                '等待处理 · ${jobStatus.title}',
           ),
         );
 
@@ -605,7 +615,7 @@ class DocumentTaskNotifier
             total: jobStatus.totalPages,
             status:
                 _l10n?.extractingTitle(jobStatus.title) ??
-                '正在提取… · ${jobStatus.title}',
+                '正在提取 · ${jobStatus.title}',
           ),
         );
 
@@ -671,7 +681,7 @@ class DocumentTaskNotifier
       runningStatus:
           _l10n?.generatingSummaryTitle(document.title) ??
           '正在生成总结图: ${document.title}',
-      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务正在进行中',
+      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务在进行，请稍候',
       showBusySnackBar: false,
       showProgressSnackBar: false,
       cancelledMessage: _l10n?.summaryCancelled ?? '已取消总结图生成',
@@ -710,7 +720,7 @@ class DocumentTaskNotifier
         unawaited(FileImage(File(result.imagePath)).evict());
         summaryNotifier.generated(result.imagePath);
         onSuccess(result.imagePath);
-        return TaskFinish.text(_l10n?.summaryGenerated ?? '总结图已生成');
+        return TaskFinish.text(_l10n?.summaryGenerated ?? '已生成总结图');
       },
       onError: (e) {
         summaryNotifier.finishWithoutImage();
@@ -722,7 +732,7 @@ class DocumentTaskNotifier
         }
         if (e is DioException) {
           return TaskFinish.text(
-            _l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}',
+            _l10n?.networkError(e.message ?? '') ?? '网络错误：${e.message}',
           );
         }
         return TaskFinish.text(
@@ -752,9 +762,9 @@ class DocumentTaskNotifier
         documentId: documentId,
       ),
       title: title,
-      initialStatus: _l10n?.waitingDownloadTitle(title) ?? '等待下载: $title',
-      runningStatus: _l10n?.downloadingTitle(title) ?? '正在下载: $title',
-      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务正在进行中',
+      initialStatus: _l10n?.waitingDownloadTitle(title) ?? '等待下载 · $title',
+      runningStatus: _l10n?.downloadingTitle(title) ?? '正在下载 · $title',
+      busyMessage: _l10n?.taskInProgress ?? '该文献已有任务在进行，请稍候',
       showBusySnackBar: showBusySnackBar,
       showProgressSnackBar: showProgressSnackBar,
       showResultSnackBar: showResultSnackBar,
@@ -762,18 +772,19 @@ class DocumentTaskNotifier
       body: (token, _) => _ref
           .read(documentLifecycleProvider)
           .redownloadPdf(documentId, cancelToken: token),
-      onSuccess: (success) => TaskFinish.text(
-        success
-            ? (_l10n?.downloadSuccessTitle(title) ?? '下载成功：$title')
-            : (_l10n?.downloadFailedNoSource ?? '下载失败，未找到可用的 PDF 源'),
-      ),
+      onSuccess: (success) => success
+          ? TaskFinish.text(_l10n?.downloadSuccessTitle(title) ?? '已下载「$title」')
+          : TaskFinish.text(
+              _l10n?.downloadFailedNoSource ?? '下载失败，未找到可用的 PDF 源',
+              tone: SnackTone.error,
+            ),
       onError: (e) {
         if (e is DioException) {
           return TaskFinish.text(
-            _l10n?.networkError(e.message ?? '') ?? '网络错误: ${e.message}',
+            _l10n?.networkError(e.message ?? '') ?? '网络错误：${e.message}',
           );
         }
-        return TaskFinish.text(_l10n?.downloadFailed('$e') ?? '下载失败: $e');
+        return TaskFinish.text(_l10n?.downloadFailed('$e') ?? '下载失败：$e');
       },
     );
     return result ?? false;
@@ -849,9 +860,12 @@ class DocumentTaskNotifier
     } else {
       base =
           _l10n?.downloadCompletePartial(ok, fail) ??
-          '下载完成：成功 $ok 篇，失败 $fail 篇';
+          '下载完成，成功 $ok 篇，失败 $fail 篇';
     }
-    handle.finish(message: base);
+    handle.finish(
+      message: base,
+      tone: !cancelled && fail == 0 ? SnackTone.success : SnackTone.info,
+    );
     notifier.dispose();
     return results;
   }

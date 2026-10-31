@@ -563,7 +563,10 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       if (!found) {
         ref
             .read(snackBarServiceProvider)
-            .showResult(message: context.l10n.chatSourceNotFound);
+            .showResult(
+              tone: SnackTone.error,
+              message: context.l10n.chatSourceNotFound,
+            );
       } else if (!widget.embedded) {
         context.pop();
       }
@@ -571,7 +574,10 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       if (mounted) {
         ref
             .read(snackBarServiceProvider)
-            .showResult(message: context.l10n.chatSourceNotFound);
+            .showResult(
+              tone: SnackTone.error,
+              message: context.l10n.chatSourceNotFound,
+            );
       }
     } finally {
       _locatingQuote = false;
@@ -585,7 +591,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     );
     if (!mounted) return;
     if (!handled) {
-      ref.read(snackBarServiceProvider).showResult(message: message);
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: message, tone: SnackTone.error);
     }
   }
 
@@ -995,14 +1003,16 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                     Haptics.soft();
                   },
                 ),
-                _BubbleAction(
-                  icon: Symbols.share_rounded,
-                  tooltip: context.l10n.share,
-                  onTap: () {
-                    Haptics.soft();
-                    Share.share(content);
-                  },
-                ),
+                // 桌面已有复制，不弹系统分享面板
+                if (!isDesktopOs)
+                  _BubbleAction(
+                    icon: Symbols.share_rounded,
+                    tooltip: context.l10n.share,
+                    onTap: () {
+                      Haptics.soft();
+                      Share.share(content);
+                    },
+                  ),
                 _BubbleAction(
                   icon: Symbols.call_split_rounded,
                   tooltip: context.l10n.chatFork,

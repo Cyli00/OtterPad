@@ -10,11 +10,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sharedFilesImportFailed =>
-      'Could not import the shared files. Please try again from the library.';
+      'Could not import the shared files, please try again from the library';
 
   @override
   String get sharedFilesSkipped =>
-      'Some shared files were skipped because they are not readable PDF files.';
+      'Some shared files are not readable PDFs and were skipped';
 
   @override
   String readerTranslationIncomplete(int count) {
@@ -288,7 +288,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appFontSaveFailed =>
-      'Could not save the font selection. Please try again.';
+      'Could not save the font selection, please try again';
 
   @override
   String get paginationMode => 'Pagination';
@@ -351,7 +351,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get background => 'Background';
 
   @override
-  String get translationDone => 'Translation done';
+  String get translationDone => 'Translation complete';
 
   @override
   String get translationCacheUsed => 'Loaded from cache';
@@ -421,7 +421,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addByIdentifierTitle => 'Add Entry by Identifier';
 
   @override
-  String get batchExtracting => 'Batch extracting';
+  String get batchExtracting => 'Extracting in batch';
 
   @override
   String get extractionDone => 'Extraction done';
@@ -571,7 +571,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alreadyInThisFavorite => 'Already in this favorite';
 
   @override
-  String get reformatDone => 'Reformat done';
+  String get reformatDone => 'Reformatted';
 
   @override
   String get viewPdf => 'View PDF';
@@ -1220,7 +1220,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mimoSearchPluginOpenConsole => 'Open plugin console';
 
   @override
-  String get taskInProgress => 'This document already has a task running';
+  String get taskInProgress =>
+      'This document already has a task running, please wait';
 
   @override
   String get savingResult => 'Saving result';
@@ -1428,8 +1429,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get generatingAndUploading =>
-      'Generating and uploading remote backup...';
+  String get generatingAndUploading => 'Generating and uploading remote backup';
 
   @override
   String get backupScopeTitle => 'Backup Scope';
@@ -1863,7 +1863,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pdfNotFound => 'PDF file not found';
 
   @override
-  String get reformatting => 'Reformatting...';
+  String get reformatting => 'Reformatting';
 
   @override
   String reformatFailed(String error) {
@@ -2188,24 +2188,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Target language changed, please re-translate';
 
   @override
-  String get preparingTranslation => 'Preparing';
+  String get preparingTranslation => 'Preparing translation';
 
   @override
   String get noTranslatableParagraphs => 'No translatable paragraphs detected';
 
   @override
   String waitingExtractTitle(String title) {
-    return 'Waiting to extract: $title';
+    return 'Waiting to extract · $title';
   }
 
   @override
   String submittingTaskTitle(String title) {
-    return 'Submitting task: $title';
+    return 'Submitting task · $title';
   }
 
   @override
   String extractionCompleteTitle(String title) {
-    return 'Extraction complete: $title';
+    return 'Extracted \"$title\"';
   }
 
   @override
@@ -2220,27 +2220,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String waitingSubmitTitle(String title) {
-    return 'Waiting to submit: $title';
+    return 'Waiting to submit · $title';
   }
 
   @override
   String submittedWaitingTitle(String title) {
-    return 'Submitted, waiting: $title';
+    return 'Waiting for processing · $title';
   }
 
   @override
   String extractingTitle(String title) {
-    return 'Extracting… · $title';
+    return 'Extracting · $title';
   }
 
   @override
   String waitingSummaryTitle(String title) {
-    return 'Waiting to generate summary: $title';
+    return 'Waiting to generate summary · $title';
   }
 
   @override
   String generatingSummaryTitle(String title) {
-    return 'Generating summary: $title';
+    return 'Generating summary · $title';
   }
 
   @override
@@ -2250,17 +2250,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String waitingDownloadTitle(String title) {
-    return 'Waiting to download: $title';
+    return 'Waiting to download · $title';
   }
 
   @override
   String downloadingTitle(String title) {
-    return 'Downloading: $title';
+    return 'Downloading · $title';
   }
 
   @override
   String downloadSuccessTitle(String title) {
-    return 'Download complete: $title';
+    return 'Downloaded \"$title\"';
   }
 
   @override
@@ -2287,18 +2287,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String downloadCompletePartial(int ok, int fail) {
-    return 'Download complete: $ok succeeded, $fail failed';
+    return 'Download complete, $ok succeeded, $fail failed';
   }
 
   @override
-  String get preparingImport => 'Preparing to import files...';
+  String get preparingImport => 'Preparing import';
 
   @override
   String get importingFilesBusy => 'Importing files, please wait';
 
   @override
   String importingFile(String fileName) {
-    return 'Importing: $fileName';
+    return 'Importing · $fileName';
   }
 
   @override
@@ -2314,7 +2314,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String addedDocumentTitle(String title) {
-    return 'Added: $title';
+    return 'Added \"$title\"';
   }
 
   @override
@@ -2328,17 +2328,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String resolvingIdentifier(String identifier) {
-    return 'Resolving identifier: $identifier';
+    return 'Resolving identifier · $identifier';
   }
 
   @override
   String get resolvingIdentifierBusy => 'Resolving identifier, please wait';
 
   @override
-  String get preparingRebuild => 'Preparing to rebuild library...';
+  String get preparingRebuild => 'Preparing library rebuild';
 
   @override
-  String get rebuildInProgress => 'Library rebuild in progress';
+  String get rebuildInProgress => 'Rebuilding library, please wait';
 
   @override
   String get rebuildCancelled => 'Library rebuild cancelled';
@@ -2375,10 +2375,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rebuildNormal => ', library status normal';
 
   @override
-  String get fetchingZoteroItems => 'Fetching Zotero items...';
+  String get fetchingZoteroItems => 'Fetching Zotero items';
 
   @override
-  String get zoteroSyncInProgress => 'Zotero sync in progress';
+  String get zoteroSyncInProgress => 'Syncing Zotero, please wait';
 
   @override
   String get zoteroSyncCancelled => 'Zotero sync cancelled';
@@ -2387,7 +2387,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fetchingZoteroProgress => 'Fetching Zotero items';
 
   @override
-  String get importingDocuments => 'Importing documents...';
+  String get importingDocuments => 'Importing documents';
 
   @override
   String zoteroSyncCompleteAdded(int count) {
@@ -2408,7 +2408,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String existsInLibrary(String title) {
-    return 'Already in library: $title';
+    return 'Already in library: \"$title\"';
   }
 
   @override
@@ -2423,7 +2423,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String importedFile(String title) {
-    return 'Imported: $title';
+    return 'Imported \"$title\"';
   }
 
   @override
@@ -2436,7 +2436,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importCompleteLabel => 'Import complete';
 
   @override
-  String get taskBusy => 'A task is already running';
+  String get taskBusy => 'A task is already running, please wait';
 
   @override
   String promptMissingPlaceholders(String placeholders) {
@@ -2602,7 +2602,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get generalExportLogEmpty =>
-      'No log file yet — enable logging, reproduce the issue, then export';
+      'No log file yet. Enable logging, reproduce the issue, then export';
 
   @override
   String get generalExportLogFailed => 'Failed to export log';
@@ -2826,22 +2826,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose the OCR provider for this extraction. Its parsing settings apply; your default provider stays unchanged.';
 
   @override
-  String get mineruProgressRequestingUpload => 'Requesting upload URL...';
+  String get mineruProgressRequestingUpload => 'Requesting upload';
 
   @override
-  String get mineruProgressUploading => 'Uploading file...';
+  String get mineruProgressUploading => 'Uploading';
 
   @override
-  String get mineruProgressQueued => 'Queued...';
+  String get mineruProgressQueued => 'Queued';
 
   @override
-  String get mineruProgressParsing => 'Parsing...';
+  String get mineruProgressParsing => 'Parsing';
 
   @override
-  String get mineruProgressConverting => 'Converting format...';
+  String get mineruProgressConverting => 'Converting format';
 
   @override
-  String get mineruProgressDownloading => 'Downloading result...';
+  String get mineruProgressDownloading => 'Downloading result';
 
   @override
   String mineruErrInvalidParams(String msg) {
@@ -3133,13 +3133,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryName => 'OtterPad library';
 
   @override
-  String get rebuildScanningFiles => 'Scanning PDF files…';
+  String get rebuildScanningFiles => 'Scanning PDF files';
 
   @override
-  String get rebuildCheckingFiles => 'Checking file integrity…';
+  String get rebuildCheckingFiles => 'Checking file integrity';
 
   @override
-  String get rebuildExtractingMetadata => 'Extracting PDF metadata…';
+  String get rebuildExtractingMetadata => 'Extracting PDF metadata';
 
   @override
   String get zoteroLocalConnection => 'Connect to your local library';
@@ -3160,7 +3160,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webSearchNotConfigured =>
-      'Configure an API key for the selected web search service in AI settings.';
+      'Configure an API key for the selected web search service in AI settings';
 
   @override
   String get aiRequestRefused =>
@@ -3177,11 +3177,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatFastTextOnly =>
-      'Fast models receive text only. Current and historical figures will be omitted; document text and captions are kept.';
+      'Fast models receive text only. Figures are omitted; document text and captions are kept';
 
   @override
   String get chatModelTextOnly =>
-      'This model does not support images. Only document text and captions will be sent.';
+      'This model does not support images. Only document text and captions are sent';
 
   @override
   String get chatProcess => 'ReAct chain';
@@ -3226,26 +3226,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatSourceNotFound =>
-      'The quoted source could not be found. The document may have changed.';
+      'The quoted source could not be found. The document may have changed';
 
   @override
   String get metadataCertificateFailed =>
-      'Cannot verify the metadata service TLS certificate. Check system trust and proxy settings.';
+      'Cannot verify the metadata service TLS certificate. Check system trust and proxy settings';
 
   @override
   String get metadataProxyFailed =>
-      'Proxy connection or authentication failed. Check proxy and network settings.';
+      'Proxy connection or authentication failed. Check proxy and network settings';
 
   @override
   String get metadataRequestTimedOut =>
-      'Metadata request timed out. Please try again later.';
+      'Metadata request timed out. Please try again later';
 
   @override
-  String get metadataNotFound => 'No matching document metadata found.';
+  String get metadataNotFound => 'No matching document metadata found';
 
   @override
   String get metadataConnectionFailed =>
-      'Cannot connect to the metadata service. Check your network.';
+      'Cannot connect to the metadata service. Check your network';
 
   @override
   String get tableCopyTsv => 'Copy for spreadsheet (TSV)';
@@ -3723,4 +3723,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get websiteOriginalPdfBody =>
       'Keep the original pages and layout. Return to the PDF to check formulas, citations, or context.';
+
+  @override
+  String taskFailed(String error) {
+    return 'Task failed: $error';
+  }
+
+  @override
+  String get extractStageSubmitting => 'Submitting task';
+
+  @override
+  String get extractStageExtracting => 'Extracting';
+
+  @override
+  String get translatingDocument => 'Translating';
+
+  @override
+  String get autoBackupRunning => 'Backing up automatically';
+
+  @override
+  String autoBackupFailed(String error) {
+    return 'Auto backup failed: $error';
+  }
 }

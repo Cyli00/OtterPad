@@ -4,9 +4,15 @@ import '../core/animation_constants.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../utils/desktop.dart';
+
 class WindowChrome extends StatefulWidget {
   const WindowChrome({super.key});
-  static const double height = 36;
+  // macOS 保留原生红绿灯，高度对齐原生标题栏使其垂直居中
+  static double get height => isAppleDesktop ? 28 : 36;
+
+  /// macOS 红绿灯占位宽度，标题从其右侧开始
+  static const double _trafficLightInset = 78;
 
   @override
   State<WindowChrome> createState() => _WindowChromeState();
@@ -69,7 +75,11 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
                 child: Row(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.only(left: 16),
+                      padding: EdgeInsets.only(
+                        left: isAppleDesktop
+                            ? WindowChrome._trafficLightInset
+                            : 16,
+                      ),
                       child: Text(
                         'OtterPad',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -90,27 +100,30 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
                         if (mounted) setState(() => _pinned = next);
                       },
                     ),
-                    _Btn(
-                      icon: Symbols.remove_rounded,
-                      onTap: windowManager.minimize,
-                    ),
-                    _Btn(
-                      icon: _maximized
-                          ? Symbols.fullscreen_exit_rounded
-                          : Symbols.crop_square_rounded,
-                      onTap: () async {
-                        if (await windowManager.isMaximized()) {
-                          await windowManager.unmaximize();
-                        } else {
-                          await windowManager.maximize();
-                        }
-                      },
-                    ),
-                    _Btn(
-                      icon: Symbols.close_rounded,
-                      onTap: windowManager.close,
-                      isClose: true,
-                    ),
+                    // macOS 由原生红绿灯负责最小化 / 缩放 / 关闭
+                    if (!isAppleDesktop) ...[
+                      _Btn(
+                        icon: Symbols.remove_rounded,
+                        onTap: windowManager.minimize,
+                      ),
+                      _Btn(
+                        icon: _maximized
+                            ? Symbols.fullscreen_exit_rounded
+                            : Symbols.crop_square_rounded,
+                        onTap: () async {
+                          if (await windowManager.isMaximized()) {
+                            await windowManager.unmaximize();
+                          } else {
+                            await windowManager.maximize();
+                          }
+                        },
+                      ),
+                      _Btn(
+                        icon: Symbols.close_rounded,
+                        onTap: windowManager.close,
+                        isClose: true,
+                      ),
+                    ],
                   ],
                 ),
               ),

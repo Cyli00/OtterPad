@@ -18,7 +18,7 @@ flutter_launcher_icons:
 
   macos:
     generate: true
-    image_path: "assets/icons/app_icon.png"
+    image_path: "assets/icons/app_icon_macos.png"   # macOS 不自动加圆角，源图自带圆角与透明边距
 
   linux:
     generate: true

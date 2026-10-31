@@ -19,7 +19,7 @@ class TactilePress extends StatefulWidget {
   /// 仅限制顶部居中的反馈底色范围，不缩小整项的点击区域。
   final Size? highlightSize;
 
-  /// 按压回弹（kSpringPress）欠阻尼可中断；默认值见 build 中的 0.96。
+  /// 按压回弹（kMotionSpatialFast）可中断；默认值见 build 中的 0.96。
 
   const TactilePress({
     super.key,
@@ -130,8 +130,9 @@ class _TactilePressState extends State<TactilePress> {
                 }),
         },
         child: SingleMotionBuilder(
-          motion: const SpringMotion(kSpringPress),
+          motion: kMotionSpatialFast,
           value: scale,
+          active: !MediaQuery.disableAnimationsOf(context),
           builder: (context, v, child) =>
               Transform.scale(scale: v, child: child),
           child: widget.highlightSize == null

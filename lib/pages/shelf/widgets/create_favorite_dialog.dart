@@ -214,9 +214,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                         },
                                         child: Center(
                                           child: SingleMotionBuilder(
-                                            motion: const SpringMotion(
-                                              kSpringSelection,
-                                            ),
+                                            motion: kMotionSpatialFast,
                                             value: isSelected ? 1.0 : 0.0,
                                             builder: (context, t, child) =>
                                                 Transform.scale(

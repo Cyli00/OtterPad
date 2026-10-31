@@ -1,4 +1,5 @@
 import 'package:flutter/animation.dart';
+import 'package:motor/motor.dart';
 
 const Duration kAnimFast = Duration(milliseconds: 180);
 const Duration kAnim = Duration(milliseconds: 240);
@@ -13,24 +14,19 @@ const Duration kAnimEmphasis = Duration(milliseconds: 500);
 const Curve kAnimCurve = Curves.easeOutCubic;
 const Curve kAnimCurveReverse = Curves.easeInCubic;
 
-/// 按压弹簧：scale 1→pressed 欠阻尼微回弹（ζ≈0.49），可中断。
-/// 与 motor 的 `SpringMotion` 配合使用。
-const SpringDescription kSpringPress = SpringDescription(
-  mass: 1,
-  stiffness: 400,
-  damping: 22,
-);
+// ── 弹簧 token ──
+//
+// Material 3 Expressive 的弹簧参数，由 motor 提供，配合 `SingleMotionBuilder`
+// / `MotionBuilder` 使用。弹簧可中断：目标中途改变时带着当前速度继续。
+// 位置、尺寸、缩放用 spatial；透明度、颜色等用 effects。
 
-/// 选中态弹簧：勾选 / 图标盒 0.8→1 弹出，~200ms 内完成。
-const SpringDescription kSpringSelection = SpringDescription(
-  mass: 1,
-  stiffness: 500,
-  damping: 20,
-);
+/// 小幅的空间变化：按压回弹、选中弹出。带轻微过冲。
+const Motion kMotionSpatialFast = MaterialSpringMotion.expressiveSpatialFast();
 
-/// 面板开合：近临界阻尼，可中断，避免宽度越界后裁切造成停顿与回跳。
-const SpringDescription kSpringPanel = SpringDescription(
-  mass: 1,
-  stiffness: 500,
-  damping: 45,
-);
+/// 会被裁切的尺寸变化：面板开合、内容展开。标准档，过冲小到不可见，
+/// 避免越界后裁切造成停顿与回跳。
+const Motion kMotionSpatialSteady =
+    MaterialSpringMotion.standardSpatialDefault();
+
+/// 颜色、透明度、图标填充等效果变化，不过冲。
+const Motion kMotionEffects = MaterialSpringMotion.expressiveEffectsDefault();

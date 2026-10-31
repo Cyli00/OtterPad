@@ -255,12 +255,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     ThemeData theme,
     ColorScheme cs,
     DocExtractApiState docState,
-    InputDecoration Function({
-      required String hint,
-      String? label,
-      Widget? suffix,
-    })
-    fieldDeco,
   ) {
     final step = ref.watch(onboardingProvider);
     final provider = docState.provider;
@@ -328,7 +322,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           ),
         ),
         picker,
-        _buildApiKeyField(theme, cs, provider, fieldDeco, step),
+        _buildApiKeyField(theme, cs, provider, step),
         const SizedBox(height: 16),
         _buildUsageCard(theme, cs, provider),
       ],
@@ -446,37 +440,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     final docState = ref.watch(docExtractApiProvider);
     final isPaddle = docState.provider == DocExtractProvider.paddle;
 
-    InputDecoration fieldDeco({
-      required String hint,
-      String? label,
-      Widget? suffix,
-    }) => InputDecoration(
-      labelText: label,
-      hintText: hint,
-      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-        color: cs.onSurfaceVariant.withAlpha(120),
-      ),
-      filled: true,
-      fillColor: cs.surfaceContainerLow,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: cs.outlineVariant.withAlpha(100),
-          width: 1,
-        ),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.primary, width: 2),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      suffixIcon: suffix,
-    );
-
     final onboardingStep = ref.watch(onboardingProvider);
 
     return Scaffold(
@@ -500,14 +463,10 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           FocusManager.instance.primaryFocus?.unfocus();
           ScaffoldMessenger.of(context).clearSnackBars();
         },
-        child: ListView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 8,
-          ).copyWith(bottom: 40),
+        child: SettingListView(
           children: [
             // ── OCR 接口（提供商 + Token + 今日额度）──
-            _buildProviderSection(theme, cs, docState, fieldDeco),
+            _buildProviderSection(theme, cs, docState),
 
             if (isPaddle) ...[
               // ── 输出控制（PaddleOCR）──
@@ -868,12 +827,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     ThemeData theme,
     ColorScheme cs,
     DocExtractProvider provider,
-    InputDecoration Function({
-      required String hint,
-      String? label,
-      Widget? suffix,
-    })
-    fieldDeco,
     OnboardingStep step,
   ) {
     final ctrl = _keyCtrls[provider]!;
@@ -895,10 +848,11 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           }
         },
         obscureText: _keyObscured,
-        decoration: fieldDeco(
+        decoration: settingFieldDecoration(
+          context,
           hint: 'token ...',
-          label: 'API Key',
-          suffix: IconButton(
+          labelText: 'API Key',
+          suffixIcon: IconButton(
             icon: Icon(
               _keyObscured
                   ? Symbols.visibility_off_rounded
@@ -917,7 +871,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
       ),
     );
     if (step != OnboardingStep.ocrApiKey) return field;
-    return OnboardingPulse(borderRadius: 12, child: field);
+    return OnboardingPulse(borderRadius: 16, child: field);
   }
 
   Widget _buildBackButton(OnboardingStep step) {
