@@ -21,6 +21,7 @@ import '../pages/shelf/cloud_sync_page.dart';
 import '../pages/shelf/no_file_entries_page.dart';
 import '../pages/shelf/reading_history_page.dart';
 import '../pages/shelf/view.dart';
+import '../widgets/layout/fade_through_branches.dart';
 import 'app_routes.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -267,10 +268,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // 主导航 Shell（IndexedStack 保持各 Tab 页状态）
-      StatefulShellRoute.indexedStack(
+      // 主导航 Shell（分支常驻保持各 Tab 页状态）
+      StatefulShellRoute(
         builder: (context, state, navigationShell) =>
             MainShell(navigationShell: navigationShell),
+        // tab 切换走 fade through；分支常驻保留状态（同 indexedStack）
+        navigatorContainerBuilder: (context, navigationShell, children) =>
+            FadeThroughBranches(
+              currentIndex: navigationShell.currentIndex,
+              children: children,
+            ),
         branches: [
           // ── Tab 0: 文献库 ──
           StatefulShellBranch(

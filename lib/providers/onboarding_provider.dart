@@ -12,8 +12,6 @@ enum OnboardingStep {
   toolsHighlight,
   aiIntro,
   aiExpert,
-  aiFast,
-  aiImageGen,
   completed,
 }
 
@@ -51,5 +49,5 @@ class OnboardingNotifier extends StateNotifier<OnboardingStep> {
 
 final onboardingProvider =
     StateNotifierProvider<OnboardingNotifier, OnboardingStep>(
-  (ref) => OnboardingNotifier(),
-);
+      (ref) => OnboardingNotifier(),
+    );

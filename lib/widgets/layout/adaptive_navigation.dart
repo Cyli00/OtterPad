@@ -41,6 +41,68 @@ class _SelectedIconFill extends StatelessWidget {
   }
 }
 
+/// 侧栏选中指示器：选中时药丸从中心横向展开（弹簧，轻微过冲），取消选中时
+/// 收回；底色与图标颜色同步过渡。
+class _RailIndicator extends StatelessWidget {
+  const _RailIndicator({
+    required this.selected,
+    required this.height,
+    required this.colorScheme,
+    required this.icon,
+  });
+
+  final bool selected;
+  final double height;
+  final ColorScheme colorScheme;
+  final Widget icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleMotionBuilder(
+      motion: kMotionSpatialFast,
+      value: selected ? 1 : 0,
+      active: !MediaQuery.disableAnimationsOf(context),
+      builder: (context, t, child) {
+        final progress = t.clamp(0.0, 1.0);
+        return SizedBox(
+          width: 48,
+          height: height,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned.fill(
+                child: Transform.scale(
+                  scaleX: t.clamp(0.0, 1.1),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colorScheme.secondaryContainer.withValues(
+                        alpha: progress,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              IconTheme(
+                data: IconThemeData(
+                  color: Color.lerp(
+                    colorScheme.onSurfaceVariant,
+                    colorScheme.onSecondaryContainer,
+                    progress,
+                  ),
+                  size: 24,
+                ),
+                child: child!,
+              ),
+            ],
+          ),
+        );
+      },
+      child: _SelectedIconFill(selected: selected, child: icon),
+    );
+  }
+}
+
 /// 侧边导航栏组件 (平板/桌面)
 class AdaptiveNavigationRail extends StatelessWidget {
   final int selectedIndex;
@@ -89,9 +151,7 @@ class AdaptiveNavigationRail extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) => SingleChildScrollView(
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: IntrinsicHeight(
                   child: Column(
                     children: [
@@ -182,26 +242,12 @@ class _NavigationRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final indicatorColor = selected
-        ? colorScheme.secondaryContainer
-        : Colors.transparent;
-    final iconColor = selected
-        ? colorScheme.onSecondaryContainer
-        : colorScheme.onSurfaceVariant;
-
     Widget buildIconOnly() {
-      return Container(
-        width: 48,
+      return _RailIndicator(
+        selected: selected,
         height: 56,
-        decoration: BoxDecoration(
-          color: indicatorColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.center,
-        child: IconTheme(
-          data: IconThemeData(color: iconColor, size: 24),
-          child: _SelectedIconFill(selected: selected, child: icon),
-        ),
+        colorScheme: colorScheme,
+        icon: icon,
       );
     }
 
@@ -212,32 +258,31 @@ class _NavigationRailItem extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 48,
+            _RailIndicator(
+              selected: selected,
               height: 36,
-              decoration: BoxDecoration(
-                color: indicatorColor,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              alignment: Alignment.center,
-              child: IconTheme(
-                data: IconThemeData(color: iconColor, size: 24),
-                child: _SelectedIconFill(selected: selected, child: icon),
-              ),
+              colorScheme: colorScheme,
+              icon: icon,
             ),
             const SizedBox(height: 3),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              child: AnimatedDefaultTextStyle(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : kAnimFast,
+                curve: kAnimCurve,
+                style: Theme.of(context).textTheme.labelMedium!.copyWith(
                   color: selected
                       ? colorScheme.onSurface
                       : colorScheme.onSurfaceVariant,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
               ),
             ),
@@ -291,9 +336,7 @@ class AdaptiveBottomNavigation extends StatelessWidget {
         NavigationDestinationLabelBehavior.alwaysShow;
     return NavigationBarTheme(
       data: NavigationBarTheme.of(context).copyWith(
-        iconTheme: const WidgetStatePropertyAll(
-          IconThemeData(fill: 1.0),
-        ),
+        iconTheme: const WidgetStatePropertyAll(IconThemeData(fill: 1.0)),
       ),
       child: NavigationBar(
         selectedIndex: selectedIndex,

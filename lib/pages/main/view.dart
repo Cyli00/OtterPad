@@ -6,8 +6,7 @@ import '../../providers/nav_rail_provider.dart';
 import '../../services/haptics.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/layout/adaptive_scaffold.dart';
-import '../../widgets/layout/adaptive_navigation.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import '../../widgets/layout/app_destinations.dart';
 
 /// 主导航外壳，由 StatefulShellRoute 驱动 Tab 切换
 class MainShell extends ConsumerWidget {
@@ -33,33 +32,10 @@ class MainShell extends ConsumerWidget {
         ref.watch(navRailExtendedProvider) ??
         Responsive.showExtendedRail(context);
 
-    final dest2 = [
-      // 目的地图标不写 fill：选中态的实心/描边由导航组件过渡。
-      AdaptiveDestination(
-        icon: const Icon(Symbols.auto_awesome_mosaic_rounded, weight: 600),
-        selectedIcon: const Icon(
-          Symbols.auto_awesome_mosaic_rounded,
-          weight: 600,
-        ),
-        label: l10n.home,
-      ),
-      AdaptiveDestination(
-        icon: const Icon(Symbols.folder_copy_rounded, weight: 600),
-        selectedIcon: const Icon(Symbols.folder_copy_rounded, weight: 600),
-        label: l10n.library,
-      ),
-    ];
-    final dest3 = [
-      ...dest2,
-      AdaptiveDestination(
-        icon: const Icon(Symbols.settings_rounded, weight: 600),
-        selectedIcon: const Icon(Symbols.settings_rounded, weight: 600),
-        label: l10n.settings,
-      ),
-    ];
+    final destinations = appDestinations(l10n);
 
     return AdaptiveScaffold(
-      destinations: showRail ? dest3 : dest2,
+      destinations: showRail ? destinations : destinations.take(2).toList(),
       selectedIndex: showRail
           ? navigationShell.currentIndex
           : navigationShell.currentIndex.clamp(0, 1).toInt(),
@@ -67,19 +43,7 @@ class MainShell extends ConsumerWidget {
       // 设置上移为文献库同级；底部槽位改为标签展示模式切换
       railBottomDestinationCount: 0,
       extendedRail: railExtended,
-      railBottomAction: AdaptiveDestination(
-        icon: const Icon(
-          Symbols.menu_rounded,
-          weight: 600,
-          fill: 1,
-        ),
-        selectedIcon: const Icon(
-          Symbols.menu_rounded,
-          weight: 600,
-          fill: 1,
-        ),
-        label: railExtended ? l10n.navHideLabels : l10n.navShowLabels,
-      ),
+      railBottomAction: railLabelToggle(l10n, extended: railExtended),
       onRailBottomAction: () =>
           ref.read(navRailExtendedProvider.notifier).setExtended(!railExtended),
       onDestinationSelected: _onDestinationSelected,
