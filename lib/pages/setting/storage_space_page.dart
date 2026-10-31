@@ -10,6 +10,7 @@ import '../../services/storage_usage_service.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
+import 'setting_group.dart';
 
 class StorageSpacePage extends ConsumerStatefulWidget {
   const StorageSpacePage({super.key, this.embedded = false});
@@ -279,9 +280,7 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
     final segments = _computeSegments(report, cs);
     final nonEmpty = segments.where((s) => s.bytes > 0).toList();
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-          .copyWith(bottom: 40),
+    return SettingListView(
       children: [
         // ── 总览卡 ──
         _buildSection(

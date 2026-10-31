@@ -18,6 +18,7 @@ import '../../widgets/app_dialog.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 import 'setting_picker.dart';
+import 'setting_group.dart';
 
 Future<void> showZoteroLocalImport(BuildContext context) => showAppDialog<void>(
   context: context,
@@ -411,10 +412,6 @@ class _ZoteroLocalImportDialogState
     final l10n = context.l10n;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-    );
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -437,22 +434,10 @@ class _ZoteroLocalImportDialogState
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             maxLength: 5,
-            decoration: InputDecoration(
+            decoration: settingFieldDecoration(
+              context,
               labelText: l10n.zoteroLocalPort,
-              counterText: '',
-              filled: true,
-              fillColor: cs.surfaceContainerLow,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              border: border,
-              enabledBorder: border,
-              disabledBorder: border,
-              focusedBorder: border.copyWith(
-                borderSide: BorderSide(color: cs.primary, width: 2),
-              ),
-            ),
+            ).copyWith(counterText: ''),
             onChanged: (_) => setState(() {
               _library = null;
               _candidates = [];

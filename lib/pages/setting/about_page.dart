@@ -14,6 +14,7 @@ import '../../services/update_service.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
+import 'setting_group.dart';
 
 class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key, this.embedded = false});
@@ -59,9 +60,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
         backgroundColor: cs.surface,
         scrolledUnderElevation: 0,
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
-            .copyWith(bottom: 40),
+      body: SettingListView(
         children: [
           // ── App Icon + Name + Subtitle ──
           const SizedBox(height: 24),

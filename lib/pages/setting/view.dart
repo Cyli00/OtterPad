@@ -20,6 +20,7 @@ import 'backup_settings_page.dart';
 import 'general_settings_page.dart';
 import 'network_settings_page.dart';
 import 'ocr_settings_page.dart';
+import 'setting_group.dart';
 import 'storage_space_page.dart';
 
 enum SettingNavMode { shell, overlay }
@@ -117,6 +118,32 @@ class _SettingPageState extends State<SettingPage> {
       SettingsSection.storage => const StorageSpacePage(embedded: true),
       SettingsSection.about => const AboutPage(embedded: true),
     };
+  }
+
+  /// 宽屏详情：分组标题 + 分组页面。标题左缘跟随 [SettingListView] 的
+  /// 限宽内边距，与分组标题对齐。
+  Widget _buildDetail(ThemeData theme, SettingsSection section) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final side = SettingListView.sidePadding(constraints.maxWidth);
+            return Padding(
+              // 顶边与左侧列表首张卡片对齐；+16 对齐 SettingGroup 标题缩进
+              padding: EdgeInsets.fromLTRB(side + 16, 12, side, 0),
+              child: Text(
+                _sectionTitle(section),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            );
+          },
+        ),
+        Expanded(child: _sectionPage(section)),
+      ],
+    );
   }
 
   void _onShellPop({required bool showMasterDetail}) {
@@ -244,7 +271,7 @@ class _SettingPageState extends State<SettingPage> {
                 thickness: 1,
                 color: colorScheme.outlineVariant.withAlpha(80),
               ),
-              // 平级分组切换：fade through
+              // 平级分组切换：标题随内容一起 fade through
               Expanded(
                 child: PageTransitionSwitcher(
                   duration: reduceMotion ? Duration.zero : kAnimSlow,
@@ -257,7 +284,7 @@ class _SettingPageState extends State<SettingPage> {
                       ),
                   child: KeyedSubtree(
                     key: ValueKey(detailSection),
-                    child: _sectionPage(detailSection),
+                    child: _buildDetail(theme, detailSection),
                   ),
                 ),
               ),
@@ -288,52 +315,54 @@ class _SettingPageState extends State<SettingPage> {
           );
         }
 
+        // 宽屏 shell 的分组标题已画在详情顶部，AppBar 只剩返回入口时才保留
+        final showAppBar = !(showMasterDetail && _isShell && showRail);
+
         Widget page = Scaffold(
           backgroundColor: colorScheme.surface,
-          appBar: AppBar(
-            leading: inSection
-                ? IconButton(
-                    icon: const Icon(Symbols.arrow_back_rounded),
-                    tooltip: l10n.back,
-                    onPressed: () => _isShell
-                        ? setState(() => _selectedSection = null)
-                        : context.pop(),
-                  )
-                : (_isShell && !showRail
+          appBar: !showAppBar
+              ? null
+              : AppBar(
+                  leading: inSection
                       ? IconButton(
                           icon: const Icon(Symbols.arrow_back_rounded),
                           tooltip: l10n.back,
-                          onPressed: () => StatefulNavigationShell.maybeOf(
-                            context,
-                          )?.goBranch(0),
+                          onPressed: () => _isShell
+                              ? setState(() => _selectedSection = null)
+                              : context.pop(),
                         )
-                      : null),
-            automaticallyImplyLeading: !_isShell,
-            title: AnimatedSwitcher(
-              duration: reduceMotion ? Duration.zero : kAnimFast,
-              layoutBuilder: (current, previous) => Stack(
-                alignment: Alignment.centerLeft,
-                children: [...previous, ?current],
-              ),
-              child: Text(
-                showMasterDetail
-                    ? _sectionTitle(detailSection)
-                    : (inSection
+                      : (_isShell && !showRail
+                            ? IconButton(
+                                icon: const Icon(Symbols.arrow_back_rounded),
+                                tooltip: l10n.back,
+                                onPressed: () =>
+                                    StatefulNavigationShell.maybeOf(
+                                      context,
+                                    )?.goBranch(0),
+                              )
+                            : null),
+                  automaticallyImplyLeading: !_isShell,
+                  title: AnimatedSwitcher(
+                    duration: reduceMotion ? Duration.zero : kAnimFast,
+                    layoutBuilder: (current, previous) => Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [...previous, ?current],
+                    ),
+                    child: Text(
+                      inSection
                           ? _sectionTitle(_selectedSection!)
-                          : l10n.settings),
-                key: ValueKey(
-                  showMasterDetail ? detailSection : _selectedSection,
+                          : l10n.settings,
+                      key: ValueKey(inSection ? _selectedSection : null),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  centerTitle: false,
+                  backgroundColor: colorScheme.surface,
+                  scrolledUnderElevation: 0,
                 ),
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            centerTitle: false,
-            backgroundColor: colorScheme.surface,
-            scrolledUnderElevation: 0,
-          ),
-          body: body,
+          body: showAppBar ? body : SafeArea(bottom: false, child: body),
         );
 
         if (_isShell) {

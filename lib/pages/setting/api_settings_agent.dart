@@ -15,7 +15,6 @@ import '../../providers/model_test_provider.dart';
 import '../../providers/onboarding_provider.dart';
 import '../../services/model_capability_store.dart';
 import '../../services/haptics.dart';
-import 'web_search_settings.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/onboarding_spotlight.dart';
 import '../../widgets/tactile_press.dart';
@@ -24,6 +23,7 @@ import 'agent_model_list_tile.dart';
 import 'agent_model_capability_sheet.dart';
 import 'agent_model_manage_sheet.dart';
 import 'agent_model_tester.dart';
+import 'setting_group.dart';
 
 /// 协议副标题——给用户一个"选它能做什么"的简短提示。
 String _protocolSubtitle(AgentApiProvider p, AppLocalizations l10n) =>
@@ -690,9 +690,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         children: [
           // ── 服务商（点开 sheet 切换 / 添加 / 删除）──
           _sectionLabel(theme, cs, context.l10n.providers),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _providerTile(theme, cs, current),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // ── API Key ──
           Row(
@@ -714,11 +714,13 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                     color: cs.onSurfaceVariant,
                   ),
                   tooltip: context.l10n.getToken,
-                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: _labelActionSize,
+                  style: _labelActionStyle,
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           TextField(
             controller: _keyCtrl,
             onChanged: (v) {
@@ -731,13 +733,12 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               });
             },
             obscureText: _keyObscured,
-            decoration: _fieldDeco(
-              theme,
-              cs,
+            decoration: settingFieldDecoration(
+              context,
               hint:
                   AgentApiNotifier.presetKeyHint(current.id) ??
                   current.protocol.apiKeyHint,
-              suffix: IconButton(
+              suffixIcon: IconButton(
                 icon: Icon(
                   _keyObscured
                       ? Symbols.visibility_off_rounded
@@ -754,11 +755,11 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             enableSuggestions: false,
             style: theme.textTheme.bodyMedium,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // ── API 地址 ──
           _sectionLabel(theme, cs, context.l10n.apiAddress),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           TextField(
             controller: _urlCtrl,
             onChanged: (v) {
@@ -770,9 +771,8 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                     .setBaseUrl(current.id, v.trim());
               });
             },
-            decoration: _fieldDeco(
-              theme,
-              cs,
+            decoration: settingFieldDecoration(
+              context,
               hint: current.protocol.defaultBaseUrl,
             ),
             keyboardType: TextInputType.url,
@@ -799,7 +799,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           ),
 
           // ── 模型列表（永驻：无模型时只显示标题 + 管理按钮）──
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Row(
             children: [
               _sectionLabel(theme, cs, context.l10n.models),
@@ -822,11 +822,14 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 tooltip: _keyCtrl.text.trim().isNotEmpty
                     ? context.l10n.manageModels
                     : context.l10n.addApiKeyFirst,
+                padding: EdgeInsets.zero,
+                constraints: _labelActionSize,
+                style: _labelActionStyle,
               ),
             ],
           ),
           if (current.models.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Consumer(
               builder: (context, ref, _) {
                 final testState = ref.watch(modelTestProvider);
@@ -860,9 +863,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           ],
 
           // ── 全局模型角色 ──
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           _sectionLabel(theme, cs, context.l10n.globalModelRoles),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Consumer(
             builder: (context, ref, _) {
               // select 角色元组——records 有结构比较，只在角色变化时重建
@@ -875,8 +878,6 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               return _buildGlobalRoles(theme, cs, fullState);
             },
           ),
-
-          const WebSearchSettings(),
         ],
       ),
     );
@@ -1230,32 +1231,13 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     );
   }
 
-  InputDecoration _fieldDeco(
-    ThemeData theme,
-    ColorScheme cs, {
-    required String hint,
-    Widget? suffix,
-  }) => InputDecoration(
-    hintText: hint,
-    hintStyle: theme.textTheme.bodyMedium?.copyWith(
-      color: cs.onSurfaceVariant.withAlpha(120),
-    ),
-    filled: true,
-    fillColor: cs.surfaceContainerLow,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: cs.outline),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: cs.primary, width: 2),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    suffixIcon: suffix,
+  // 标签行尾的小按钮：不撑高标签行，保持各字段「标签 → 输入框」间距一致
+  static const _labelActionSize = BoxConstraints.tightFor(
+    width: 28,
+    height: 28,
+  );
+  static final _labelActionStyle = IconButton.styleFrom(
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   );
 
   Widget _sectionLabel(ThemeData theme, ColorScheme cs, String text) {
@@ -1311,29 +1293,8 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    InputDecoration deco(String hint, {Widget? suffix}) => InputDecoration(
-      hintText: hint,
-      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-        color: cs.onSurfaceVariant.withAlpha(120),
-      ),
-      filled: true,
-      fillColor: cs.surfaceContainerHighest.withAlpha(80),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outline),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.primary, width: 2),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      suffixIcon: suffix,
-      isDense: true,
-    );
+    InputDecoration deco(String hint, {Widget? suffix}) =>
+        settingFieldDecoration(context, hint: hint, suffixIcon: suffix);
 
     Widget fieldLabel(String t) => Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 6, left: 2),
