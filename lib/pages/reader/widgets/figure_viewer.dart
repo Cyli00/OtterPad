@@ -315,8 +315,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                 behavior: HitTestBehavior.opaque,
                 onSecondaryTapDown: (details) =>
                     _showSaveMenu(_figure, details.globalPosition),
-                onLongPressStart: (details) =>
-                    _showSaveMenu(_figure, details.globalPosition),
+                onLongPressStart: isDesktopOs
+                    ? null
+                    : (details) =>
+                          _showSaveMenu(_figure, details.globalPosition),
                 child: Material(
                   color: Theme.of(
                     context,
@@ -419,14 +421,16 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
   }
 
   Widget _buildImage(FigureManifestEntry fig) {
-    // 外层 GestureDetector 只监听 long-press 和右键，不会劫持 pan/scale/double-tap
-    // ——这些继续由内部的 ExtendedImage 手势系统处理。
+    // 外层 GestureDetector 只监听 long-press（仅移动端）和右键，不会劫持
+    // pan/scale/double-tap——这些继续由内部的 ExtendedImage 手势系统处理。
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onLongPressStart: (details) {
-        Haptics.medium();
-        _showSaveMenu(fig, details.globalPosition);
-      },
+      onLongPressStart: isDesktopOs
+          ? null
+          : (details) {
+              Haptics.medium();
+              _showSaveMenu(fig, details.globalPosition);
+            },
       onSecondaryTapDown: (details) =>
           _showSaveMenu(fig, details.globalPosition),
       child: ExtendedImage.file(
@@ -501,11 +505,12 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
             label: l10n.copyImage,
             icon: Symbols.content_copy_rounded,
           ),
-        AppContextMenuItem(
-          value: 'share',
-          label: l10n.shareImage,
-          icon: Symbols.share_rounded,
-        ),
+        if (!isDesktopOs)
+          AppContextMenuItem(
+            value: 'share',
+            label: l10n.shareImage,
+            icon: Symbols.share_rounded,
+          ),
         AppContextMenuItem(
           value: 'save',
           label: l10n.saveImage,
@@ -585,7 +590,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           if (mounted) {
             ref
                 .read(snackBarServiceProvider)
-                .showResult(message: context.l10n.copyFailed('$e'));
+                .showResult(
+                  tone: SnackTone.error,
+                  message: context.l10n.copyFailed('$e'),
+                );
           }
         }
       case 'html' || 'exportTsv' || 'exportMarkdown':
@@ -652,7 +660,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       if (mounted) {
         ref
             .read(snackBarServiceProvider)
-            .showResult(message: l10n.exportFailed('$e'));
+            .showResult(
+              tone: SnackTone.error,
+              message: l10n.exportFailed('$e'),
+            );
       }
     } finally {
       if (mounted) setState(() => _exporting = false);
@@ -664,7 +675,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final source = File(fig.imagePath);
     if (!await source.exists()) {
       if (!mounted) return;
-      snackBar.showResult(message: context.l10n.imageNotFound);
+      snackBar.showResult(
+        tone: SnackTone.error,
+        message: context.l10n.imageNotFound,
+      );
       return;
     }
     try {
@@ -674,7 +688,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       snackBar.showResult(message: context.l10n.copiedToClipboard);
     } catch (e) {
       if (!mounted) return;
-      snackBar.showResult(message: context.l10n.copyFailed('$e'));
+      snackBar.showResult(
+        tone: SnackTone.error,
+        message: context.l10n.copyFailed('$e'),
+      );
     }
   }
 
@@ -683,7 +700,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final source = File(fig.imagePath);
     if (!await source.exists()) {
       if (!mounted) return;
-      snackBar.showResult(message: context.l10n.imageNotFound);
+      snackBar.showResult(
+        tone: SnackTone.error,
+        message: context.l10n.imageNotFound,
+      );
       return;
     }
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
@@ -699,7 +719,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       );
     } catch (e) {
       if (!mounted) return;
-      snackBar.showResult(message: context.l10n.shareFailed('$e'));
+      snackBar.showResult(
+        tone: SnackTone.error,
+        message: context.l10n.shareFailed('$e'),
+      );
     }
   }
 
@@ -708,7 +731,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final source = File(fig.imagePath);
     if (!await source.exists()) {
       if (!mounted) return;
-      snackBar.showResult(message: context.l10n.imageNotFound);
+      snackBar.showResult(
+        tone: SnackTone.error,
+        message: context.l10n.imageNotFound,
+      );
       return;
     }
     final fileName = fig.imagePath.split(RegExp(r'[/\\]')).last;
@@ -733,7 +759,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
           await Gal.requestAccess();
           if (!await Gal.hasAccess()) {
             if (!mounted) return;
-            snackBar.showResult(message: context.l10n.galleryAccessDenied);
+            snackBar.showResult(
+              tone: SnackTone.error,
+              message: context.l10n.galleryAccessDenied,
+            );
             return;
           }
         }
@@ -746,10 +775,13 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       final message = e.type == GalExceptionType.accessDenied
           ? context.l10n.galleryAccessDenied
           : context.l10n.saveFailed(e.type.message);
-      snackBar.showResult(message: message);
+      snackBar.showResult(message: message, tone: SnackTone.error);
     } catch (e) {
       if (!mounted) return;
-      snackBar.showResult(message: context.l10n.saveFailed('$e'));
+      snackBar.showResult(
+        tone: SnackTone.error,
+        message: context.l10n.saveFailed('$e'),
+      );
     }
   }
 
@@ -794,30 +826,33 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── 拖拽指示条 ──
-          GestureDetector(
-            onVerticalDragUpdate: (d) {
-              setState(() {
-                _captionHeight = (_captionHeight - d.delta.dy).clamp(
-                  _kMinCaptionH,
-                  maxH,
-                );
-              });
-            },
-            behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0x50FFFFFF),
-                    borderRadius: BorderRadius.all(Radius.circular(2)),
+          // ── 拖拽指示条（仅移动端）──
+          if (isDesktopOs)
+            const SizedBox(height: 16)
+          else
+            GestureDetector(
+              onVerticalDragUpdate: (d) {
+                setState(() {
+                  _captionHeight = (_captionHeight - d.delta.dy).clamp(
+                    _kMinCaptionH,
+                    maxH,
+                  );
+                });
+              },
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0x50FFFFFF),
+                      borderRadius: BorderRadius.all(Radius.circular(2)),
+                    ),
+                    child: SizedBox(width: 32, height: 4),
                   ),
-                  child: SizedBox(width: 32, height: 4),
                 ),
               ),
             ),
-          ),
           // ── 文本 + 翻译按钮 ──
           SizedBox(
             height: _captionHeight.clamp(_kMinCaptionH, maxH) + bottomPadding,
@@ -1038,7 +1073,10 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
       }
       ref
           .read(snackBarServiceProvider)
-          .showResult(message: '$e'.replaceFirst('Exception: ', ''));
+          .showResult(
+            tone: SnackTone.error,
+            message: '$e'.replaceFirst('Exception: ', ''),
+          );
     }
   }
 }

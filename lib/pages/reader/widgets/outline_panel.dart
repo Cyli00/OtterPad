@@ -10,7 +10,6 @@ import '../../../widgets/tactile_press.dart';
 import '../../../data/models/book/document.dart';
 import '../../../providers/summary_image_provider.dart';
 import '../../../services/figure_extract_service.dart';
-import '../../../services/haptics.dart';
 import '../chat/document_chat_page.dart';
 import 'figure_viewer.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -384,19 +383,19 @@ class _FiguresTab extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               if (imageExists)
-                GestureDetector(
-                  onTap: () {
-                    Haptics.soft();
-                    showFigureViewer(
-                      context,
-                      figures!,
-                      initialIndex: figIndex,
-                      documentId: documentId,
-                      document: document,
-                      onLocateQuote: onLocateQuote,
-                      onOpenChat: onOpenChat,
-                    );
-                  },
+                TactilePress(
+                  baseColor: Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  pressedScale: 0.98,
+                  onTap: () => showFigureViewer(
+                    context,
+                    figures!,
+                    initialIndex: figIndex,
+                    documentId: documentId,
+                    document: document,
+                    onLocateQuote: onLocateQuote,
+                    onOpenChat: onOpenChat,
+                  ),
                   child: Hero(
                     tag: 'figure_${fig.imagePath}',
                     child: ClipRRect(
@@ -427,30 +426,34 @@ class _FiguresTab extends StatelessWidget {
                   ),
                 ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  _ActionLink(
-                    icon: Symbols.article_rounded,
-                    label: context.l10n.viewInDocument,
-                    onTap: () => _navigateToFigure(fig),
-                  ),
-                  if (imageExists)
+              // 链接自带横向留白做反馈底色，整体左移同样距离让文字与标题对齐。
+              Transform.translate(
+                offset: const Offset(-8, 0),
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
                     _ActionLink(
-                      icon: Symbols.open_in_full_rounded,
-                      label: context.l10n.viewOriginalImage,
-                      onTap: () => showFigureViewer(
-                        context,
-                        figures!,
-                        initialIndex: figIndex,
-                        documentId: documentId,
-                        document: document,
-                        onLocateQuote: onLocateQuote,
-                        onOpenChat: onOpenChat,
-                      ),
+                      icon: Symbols.article_rounded,
+                      label: context.l10n.viewInDocument,
+                      onTap: () => _navigateToFigure(fig),
                     ),
-                ],
+                    if (imageExists)
+                      _ActionLink(
+                        icon: Symbols.open_in_full_rounded,
+                        label: context.l10n.viewOriginalImage,
+                        onTap: () => showFigureViewer(
+                          context,
+                          figures!,
+                          initialIndex: figIndex,
+                          documentId: documentId,
+                          document: document,
+                          onLocateQuote: onLocateQuote,
+                          onOpenChat: onOpenChat,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -516,9 +519,11 @@ class _FiguresTab extends StatelessWidget {
         // 内容区：有图显示图，仅 generating 时显示占位框，否则不渲染
         if (hasSummary && imagePath != null) ...[
           const SizedBox(height: 10),
-          GestureDetector(
+          TactilePress(
+            baseColor: Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            pressedScale: 0.98,
             onTap: () {
-              Haptics.soft();
               final entry = FigureManifestEntry(
                 imagePath: imagePath,
                 captionText: 'Graphical Summary',
@@ -749,7 +754,9 @@ class _ActionLink extends StatelessWidget {
     return TactilePress(
       onTap: onTap,
       baseColor: Colors.transparent,
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      borderRadius: BorderRadius.circular(8),
+      pressedScale: 0.94,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
