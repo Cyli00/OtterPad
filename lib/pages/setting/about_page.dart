@@ -199,7 +199,10 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       if (mounted) {
         ref
             .read(snackBarServiceProvider)
-            .showResult(message: context.l10n.updateCheckFailed);
+            .showResult(
+              tone: SnackTone.error,
+              message: context.l10n.updateCheckFailed,
+            );
       }
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);

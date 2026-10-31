@@ -126,8 +126,8 @@ class AutoBackupScheduler {
         _ref
             .read(snackBarServiceProvider)
             .showResult(
-              message:
-                  '${context.l10n.autoBackup}: ${context.l10n.uploadRemoteFailed('$e')}',
+              tone: SnackTone.error,
+              message: context.l10n.autoBackupFailed('$e'),
             );
       }
     } finally {
@@ -148,14 +148,14 @@ class AutoBackupScheduler {
       return;
     }
     final ctx = rootNavigatorKey.currentContext;
-    final title = ctx != null
-        ? (AppLocalizations.of(ctx)?.autoBackup ?? '自动备份')
-        : '自动备份';
+    final l10n = ctx != null ? AppLocalizations.of(ctx) : null;
+    final title = l10n?.autoBackup ?? '自动备份';
+    final status = l10n?.autoBackupRunning ?? '正在自动备份';
     if (snapshot != null && !await _hasChanges(snapshot)) return;
     if (_disposed) return;
     final activity = _ref.read(taskActivityProvider.notifier);
     final progress = ValueNotifier(
-      const ListenableProgress(current: 0, total: 0, status: ''),
+      ListenableProgress(current: 0, total: 0, status: status),
     );
     final taskId = activity.report(progress: progress, title: title);
     try {

@@ -88,7 +88,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
 
     await runTask<void>(
       type: TaskType.addFiles,
-      initialStatus: _l10n?.preparingImport ?? '准备导入文件...',
+      initialStatus: _l10n?.preparingImport ?? '正在准备导入',
       busyMessage: _l10n?.importingFilesBusy ?? '正在导入文件，请稍候',
       cancelledMessage: null, // 取消时用 _buildAddFileMessage 出更完整的摘要
       body: (token, progress) async {
@@ -99,7 +99,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ListenableProgress(
               current: i + 1,
               total: paths.length,
-              status: _l10n?.importingFile(p.basename(paths[i])) ?? '正在导入: ${p.basename(paths[i])}',
+              status: _l10n?.importingFile(p.basename(paths[i])) ?? '正在导入 · ${p.basename(paths[i])}',
             ),
           );
 
@@ -114,6 +114,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       },
       onSuccess: (_) {
         return TaskFinish.text(
+          tone: importedCount > 0 ? null : SnackTone.info,
           _buildAddFileMessage(
             cancelled: false,
             totalFiles: paths.length,
@@ -131,17 +132,31 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   Future<void> addByIdentifier(String identifier) async {
     await runTask<(dynamic, AddByIdentifierResult)>(
       type: TaskType.addByIdentifier,
-      initialStatus: _l10n?.resolvingIdentifier(identifier) ?? '正在解析标识符: $identifier',
+      initialStatus: _l10n?.resolvingIdentifier(identifier) ?? '正在解析标识符 · $identifier',
       busyMessage: _l10n?.resolvingIdentifierBusy ?? '正在解析标识符，请稍候',
-      body: (token, _) async =>
-          await _lifecycle.createByIdentifier(identifier, cancelToken: token),
+      // 元数据解析完进入 PDF 下载阶段，状态文案随之推进。
+      body: (token, progress) => _lifecycle.createByIdentifier(
+        identifier,
+        cancelToken: token,
+        onFetchingPdf: () => progress(
+          ListenableProgress(
+            current: 0,
+            total: 0,
+            status: _l10n?.downloadingPdf ?? '正在下载 PDF',
+          ),
+        ),
+      ),
       onSuccess: (r) {
         final (doc, addResult) = r;
         if (addResult == AddByIdentifierResult.duplicate) {
-          return TaskFinish.text(_l10n?.documentAlreadyExists ?? '该文献已存在于文库中');
+          return TaskFinish.text(
+            _l10n?.documentAlreadyExists ?? '该文献已存在于文库中',
+            tone: SnackTone.info,
+          );
         }
         if (doc.contentHash == null) {
           return TaskFinish(
+            tone: SnackTone.info,
             message: _l10n?.addedDocumentNoPdf(doc.title) ?? '已添加「${doc.title}」，但未获取到关联 PDF',
             duration: const Duration(seconds: 6),
             action: SnackBarAction(
@@ -150,12 +165,12 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ),
           );
         }
-        return TaskFinish.text(_l10n?.addedDocumentTitle(doc.title) ?? '已添加: ${doc.title}');
+        return TaskFinish.text(_l10n?.addedDocumentTitle(doc.title) ?? '已添加「${doc.title}」');
       },
       onError: (e) {
         if (e is IdentifierResolveException) return TaskFinish.text(e.message);
         if (e is DioException) return TaskFinish.text(_l10n?.networkRequestFailedRetry ?? '网络请求失败，请稍后重试');
-        return TaskFinish.text(_l10n?.addFailedError('$e') ?? '添加失败: $e');
+        return TaskFinish.text(_l10n?.addFailedError('$e') ?? '添加失败：$e');
       },
     );
   }
@@ -165,8 +180,8 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   Future<void> rebuildLibrary() async {
     await runTask<RebuildResult?>(
       type: TaskType.rebuild,
-      initialStatus: _l10n?.preparingRebuild ?? '准备重构文库...',
-      busyMessage: _l10n?.rebuildInProgress ?? '文库重构正在进行中',
+      initialStatus: _l10n?.preparingRebuild ?? '正在准备重构文库',
+      busyMessage: _l10n?.rebuildInProgress ?? '正在重构文库，请稍候',
       cancelledMessage: _l10n?.rebuildCancelled ?? '已取消重构文库',
       body: (token, progress) async {
         try {
@@ -178,7 +193,9 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
                 ListenableProgress(
                   current: rp.current ?? 0,
                   total: rp.total ?? 0,
-                  status: '${rp.status} · ${rp.fileName}',
+                  status: rp.fileName.isEmpty
+                      ? rp.status
+                      : '${rp.status} · ${rp.fileName}',
                 ),
               );
             },
@@ -207,7 +224,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
           if (parts.isEmpty) {
             message += _l10n?.rebuildNormal ?? '，文库状态正常';
           } else {
-            message += '：${parts.join('，')}';
+            message += '，${parts.join('，')}';
           }
         }
         return TaskFinish.text(message);
@@ -222,8 +239,8 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   Future<void> syncZotero(String apiKey, {bool fullResync = false}) async {
     await runTask<int>(
       type: TaskType.zoteroSync,
-      initialStatus: _l10n?.fetchingZoteroItems ?? '正在拉取 Zotero 条目...',
-      busyMessage: _l10n?.zoteroSyncInProgress ?? 'Zotero 同步正在进行中',
+      initialStatus: _l10n?.fetchingZoteroItems ?? '正在拉取 Zotero 条目',
+      busyMessage: _l10n?.zoteroSyncInProgress ?? '正在同步 Zotero，请稍候',
       cancelledMessage: _l10n?.zoteroSyncCancelled ?? '已取消 Zotero 同步',
       body: (token, progress) async {
         if (fullResync) await ZoteroSyncStore.clear();
@@ -242,7 +259,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         );
 
         progress(
-          ListenableProgress(current: 0, total: 0, status: _l10n?.importingDocuments ?? '正在导入文献...'),
+          ListenableProgress(current: 0, total: 0, status: _l10n?.importingDocuments ?? '正在导入文献'),
         );
 
         // 跳过已导入的 zoteroKey 与非文献条目，映射出待导入的 Document。
@@ -314,10 +331,10 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
     if (totalFiles == 1 && lastResult?.document != null) {
       final doc = lastResult!.document!;
       if (lastResult.type == AddFileResultType.duplicate) {
-        return _l10n?.existsInLibrary(doc.title) ?? '文库中已存在: ${doc.title}';
+        return _l10n?.existsInLibrary(doc.title) ?? '文库中已存在「${doc.title}」';
       }
       // 元数据异步提取，不在此报告状态
-      return _l10n?.importedFile(doc.title) ?? '已导入: ${doc.title}';
+      return _l10n?.importedFile(doc.title) ?? '已导入「${doc.title}」';
     }
 
     final parts = <String>[];
@@ -327,7 +344,7 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       return cancelled ? _l10n?.importCancelledLabel ?? '已取消导入' : _l10n?.noFilesImported ?? '未导入任何文件';
     }
     final prefix = cancelled ? _l10n?.importCancelledLabel ?? '已取消导入' : _l10n?.importCompleteLabel ?? '导入完成';
-    return '$prefix：${parts.join('，')}';
+    return '$prefix，${parts.join('，')}';
   }
 }
 

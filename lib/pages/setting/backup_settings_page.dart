@@ -743,7 +743,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _showMessage(context.l10n.backupExportedTo(targetFile.path));
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context.l10n.exportBackupFailed(_formatError(e)));
+      _showMessage(
+        context.l10n.exportBackupFailed(_formatError(e)),
+        tone: SnackTone.error,
+      );
     } finally {
       await _deleteTempFile(tempArchivePath);
     }
@@ -777,7 +780,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _showRestoreMessage(mode, mergeResult);
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context.l10n.restoreFailed(_formatError(e)));
+      _showMessage(
+        context.l10n.restoreFailed(_formatError(e)),
+        tone: SnackTone.error,
+      );
     }
   }
 
@@ -793,10 +799,16 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             .backupToRemote(scope: scope);
       });
       if (!mounted) return;
-      _showMessage(context.l10n.remoteBackupUploaded(target ?? ''));
+      _showMessage(
+        context.l10n.remoteBackupUploaded(target ?? ''),
+        tone: SnackTone.success,
+      );
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context.l10n.uploadRemoteFailed(_formatError(e)));
+      _showMessage(
+        context.l10n.uploadRemoteFailed(_formatError(e)),
+        tone: SnackTone.error,
+      );
     }
   }
 
@@ -825,7 +837,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _showRestoreMessage(mode, mergeResult, remote: true);
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context.l10n.remoteRestoreFailed(_formatError(e)));
+      _showMessage(
+        context.l10n.remoteRestoreFailed(_formatError(e)),
+        tone: SnackTone.error,
+      );
     } finally {
       await _deleteTempFile(tempArchivePath);
     }
@@ -1121,8 +1136,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
   }
 
-  void _showMessage(String message) {
-    ref.read(snackBarServiceProvider).showResult(message: message);
+  void _showMessage(String message, {SnackTone tone = SnackTone.info}) {
+    ref.read(snackBarServiceProvider).showResult(message: message, tone: tone);
   }
 
   String _formatError(Object error) {

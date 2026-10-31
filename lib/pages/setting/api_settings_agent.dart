@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/animation_constants.dart';
 import '../../core/elevation.dart';
 import '../../widgets/app_divider.dart';
 import '../../core/l10n.dart';
@@ -113,60 +112,30 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
   }
 
   Future<void> _runAiOnboardingGuide() async {
-    final notifier = ref.read(onboardingProvider.notifier);
     final l10n = context.l10n;
-
-    // ① Expert Model
-    await _scrollToAndSpotlight(
-      key: _expertRoleKey,
-      message: l10n.onboardingExpertHint,
-      actionLabel: l10n.onboardingNext,
-    );
-    if (!mounted) return;
-    notifier.advance(); // → aiFast
-
-    // ② Fast Model
-    await _scrollToAndSpotlight(
-      key: _fastRoleKey,
-      message: l10n.onboardingFastHint,
-      actionLabel: l10n.onboardingNext,
-    );
-    if (!mounted) return;
-    notifier.advance(); // → aiImageGen
-
-    // ③ Image Gen Model
-    await _scrollToAndSpotlight(
-      key: _imageRoleKey,
-      message: l10n.onboardingImageGenHint,
-      actionLabel: l10n.onboardingFinish,
-    );
-    if (!mounted) return;
-    notifier.complete();
-  }
-
-  Future<void> _scrollToAndSpotlight({
-    required GlobalKey key,
-    required String message,
-    required String actionLabel,
-  }) async {
-    final ctx = key.currentContext;
-    if (ctx != null) {
-      await Scrollable.ensureVisible(
-        ctx,
-        duration: kAnim,
-        curve: kAnimCurve,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-      );
-      await Future.delayed(const Duration(milliseconds: 100));
-    }
-    if (!mounted) return;
+    // 专家 → 快速 → 生图三个角色，同一浮层内依次高亮
     await showOnboardingSpotlight(
       context: context,
-      targetKey: key,
-      message: message,
-      actionLabel: actionLabel,
-      borderRadius: 16,
+      steps: [
+        SpotlightStep(
+          targetKey: _expertRoleKey,
+          message: l10n.onboardingExpertHint,
+        ),
+        SpotlightStep(
+          targetKey: _fastRoleKey,
+          message: l10n.onboardingFastHint,
+        ),
+        SpotlightStep(
+          targetKey: _imageRoleKey,
+          message: l10n.onboardingImageGenHint,
+        ),
+      ],
+      nextLabel: l10n.onboardingNext,
+      skipLabel: l10n.onboardingSkip,
+      doneLabel: l10n.onboardingFinish,
     );
+    if (!mounted) return;
+    ref.read(onboardingProvider.notifier).complete();
   }
 
   /// URL 输入框显示值：用户未填时回落到协议默认地址。
@@ -596,7 +565,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _testNotifier.finishTest(modelId, err);
     final snackBar = ref.read(snackBarServiceProvider);
     if (err == null) {
-      snackBar.showResult(message: context.l10n.modelConnected(modelId));
+      snackBar.showResult(
+        tone: SnackTone.success,
+        message: context.l10n.modelConnected(modelId),
+      );
     } else {
       _showTestError(modelId, err);
     }
@@ -606,6 +578,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     ref
         .read(snackBarServiceProvider)
         .showResult(
+          tone: SnackTone.error,
           message: '$modelId: $error',
           duration: const Duration(seconds: 5),
           action: SnackBarAction(

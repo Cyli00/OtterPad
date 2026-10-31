@@ -10,6 +10,12 @@ import '../services/snackbar_service.dart';
 import 'task_types.dart';
 import '../core/app_logger.dart';
 
+String _resolvedFailed(Object error) {
+  final ctx = rootNavigatorKey.currentContext;
+  final l10n = ctx != null ? AppLocalizations.of(ctx) : null;
+  return l10n?.taskFailed('$error') ?? '任务失败：$error';
+}
+
 String _resolvedCancelled(String? message) {
   if (message != null) return message;
   final ctx = rootNavigatorKey.currentContext;
@@ -55,8 +61,7 @@ Future<T?> executeTaskBody<T>({
     }
 
     onCompleted(result);
-    final finish = onSuccess(result);
-    onFinished(finish);
+    onFinished(onSuccess(result)._withTone(SnackTone.success));
     return result;
   } catch (e, st) {
     if (isCancellation(e, token)) {
@@ -64,8 +69,10 @@ Future<T?> executeTaskBody<T>({
       onFinished(TaskFinish.text(_resolvedCancelled(cancelledMessage)));
     } else {
       onFailed(e);
-      final finish = onError?.call(e) ?? TaskFinish(message: '任务失败: $e');
-      onFinished(finish);
+      final finish =
+          onError?.call(e) ??
+          TaskFinish(message: _resolvedFailed(e), tone: SnackTone.error);
+      onFinished(finish._withTone(SnackTone.error));
       if (debugTag != null) {
         log.e('[$debugTag] failed', error: e, stackTrace: st);
       }
@@ -84,6 +91,7 @@ void finishSnackBar({
   if (handle != null) {
     handle.finish(
       message: finish.message,
+      tone: finish.tone ?? SnackTone.info,
       action: finish.action,
       duration: finish.duration,
     );
@@ -92,6 +100,7 @@ void finishSnackBar({
   if (!showResultDirectly || finish.message == null) return;
   snackBar.showResult(
     message: finish.message!,
+    tone: finish.tone ?? SnackTone.info,
     action: finish.action,
     duration: finish.duration ?? const Duration(seconds: 4),
   );
@@ -148,7 +157,7 @@ mixin TaskRunner<S> on StateNotifier<S> {
         final ctx = rootNavigatorKey.currentContext;
         final l10n = ctx != null ? AppLocalizations.of(ctx) : null;
         snackBar.showResult(
-          message: busyMessage ?? l10n?.taskBusy ?? '任务正在进行中',
+          message: busyMessage ?? l10n?.taskBusy ?? '已有任务在进行，请稍候',
         );
       }
       return null;
@@ -204,11 +213,24 @@ class TaskFinish {
   final SnackBarAction? action;
   final Duration? duration;
 
-  const TaskFinish({this.message, this.action, this.duration});
+  /// 结果图标语义；不填时按出口推断：成功 → success，失败 → error，取消 → info。
+  /// 成功出口里的非成功结果（如"已存在"、"未找到 PDF 源"）需显式填写。
+  final SnackTone? tone;
+
+  const TaskFinish({this.message, this.action, this.duration, this.tone});
 
   /// 纯文本结果。
-  const TaskFinish.text(String msg)
+  const TaskFinish.text(String msg, {this.tone})
     : message = msg,
       action = null,
       duration = null;
+
+  TaskFinish _withTone(SnackTone fallback) => tone != null
+      ? this
+      : TaskFinish(
+          message: message,
+          action: action,
+          duration: duration,
+          tone: fallback,
+        );
 }

@@ -324,7 +324,10 @@ class NoFileEntriesPage extends ConsumerWidget {
       snackBar.showResult(message: context.l10n.fileAttached);
     } catch (e) {
       if (!context.mounted) return;
-      snackBar.showResult(message: context.l10n.attachFileFailed('$e'));
+      snackBar.showResult(
+        tone: SnackTone.error,
+        message: context.l10n.attachFileFailed('$e'),
+      );
     }
   }
 

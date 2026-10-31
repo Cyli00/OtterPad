@@ -140,7 +140,10 @@ class ReaderSummaryImageCoordinator {
       if (!context.mounted) return;
       ref
           .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.summaryNotFound);
+          .showResult(
+            tone: SnackTone.error,
+            message: context.l10n.summaryNotFound,
+          );
       return;
     }
     if (!context.mounted) return;
@@ -213,7 +216,10 @@ class ReaderSummaryImageCoordinator {
       if (!context.mounted) return;
       ref
           .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.summaryUploadFailed);
+          .showResult(
+            tone: SnackTone.error,
+            message: context.l10n.summaryUploadFailed,
+          );
     } finally {
       final pending = staged;
       try {

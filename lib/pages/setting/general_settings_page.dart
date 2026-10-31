@@ -179,18 +179,21 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
             title: l10n.generalSystem,
             child: Column(
               children: [
-                _SwitchTile(
-                  title: l10n.generalHapticFeedback,
-                  subtitle: l10n.generalHapticFeedbackDesc,
-                  value: _hapticsEnabled,
-                  onChanged: (v) {
-                    Haptics.soft();
-                    setState(() => _hapticsEnabled = v);
-                    GStorage.setting.put(_kHapticsEnabled, v);
-                    Haptics.setEnabled(v);
-                  },
-                ),
-                _divider(cs),
+                // 桌面无震动马达，不提供震动反馈开关
+                if (!_isDesktop) ...[
+                  _SwitchTile(
+                    title: l10n.generalHapticFeedback,
+                    subtitle: l10n.generalHapticFeedbackDesc,
+                    value: _hapticsEnabled,
+                    onChanged: (v) {
+                      Haptics.soft();
+                      setState(() => _hapticsEnabled = v);
+                      GStorage.setting.put(_kHapticsEnabled, v);
+                      Haptics.setEnabled(v);
+                    },
+                  ),
+                  _divider(cs),
+                ],
                 _SwitchTile(
                   title: l10n.generalCacheAutoCleanup,
                   subtitle: l10n.generalCacheAutoCleanupDesc,
@@ -265,7 +268,10 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
       }
     } catch (_) {
       if (!mounted) return;
-      snackBar.showResult(message: l10n.generalExportLogFailed);
+      snackBar.showResult(
+        tone: SnackTone.error,
+        message: l10n.generalExportLogFailed,
+      );
     }
   }
 

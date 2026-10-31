@@ -5,7 +5,9 @@ import 'proxy_adapter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/l10n.dart';
 import '../data/models/ocr/doc_extract_config.dart';
+import '../router/app_router.dart';
 import 'doc_extract_service.dart';
 import '../core/app_logger.dart';
 
@@ -447,9 +449,11 @@ class BatchExtractService {
     CancelToken? cancelToken,
   }) async {
     final jobUrl = _jobApiUrl;
+    final ctx = rootNavigatorKey.currentContext;
+    final l = ctx != null ? AppLocalizations.of(ctx) : null;
 
     // 1. 提交 Job
-    onProgress?.call('正在提交任务…', 0, 0);
+    onProgress?.call(l?.extractStageSubmitting ?? '正在提交任务', 0, 0);
     final jobId = await _submitJob(
       filePath: filePath,
       jobUrl: jobUrl,
@@ -478,17 +482,21 @@ class BatchExtractService {
 
       switch (jobState) {
         case 'pending':
-          onProgress?.call('排队中…', 0, 0);
+          onProgress?.call(l?.mineruProgressQueued ?? '排队中', 0, 0);
         case 'running':
           final prog = data['extractProgress'] as Map?;
           final extracted = _toInt(prog?['extractedPages']);
           final total = _toInt(prog?['totalPages']);
-          onProgress?.call('正在提取…', extracted, total);
+          onProgress?.call(
+            l?.extractStageExtracting ?? '正在提取',
+            extracted,
+            total,
+          );
         case 'done':
           final resultUrl = data['resultUrl'] as Map?;
           final jsonlUrl = resultUrl?['jsonUrl'] as String?;
           if (jsonlUrl != null) {
-            onProgress?.call('正在下载结果…', 0, 0);
+            onProgress?.call(l?.mineruProgressDownloading ?? '正在下载结果', 0, 0);
             return _parseJsonlResult(jsonlUrl, cancelToken);
           }
           // 回退：仅有 Markdown URL

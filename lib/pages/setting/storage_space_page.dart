@@ -113,7 +113,10 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
       await _refresh();
     } catch (e) {
       if (!mounted) return;
-      ref.read(snackBarServiceProvider).showResult(
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(
+            tone: SnackTone.error,
             message: e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
           );
     } finally {

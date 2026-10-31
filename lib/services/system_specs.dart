@@ -112,7 +112,7 @@ Future<void> openBugReportForm({
   if (await canLaunchUrl(uri)) {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   } else {
-    snackBar.showResult(message: openFailedMessage);
+    snackBar.showResult(tone: SnackTone.error, message: openFailedMessage);
   }
 }
 
