@@ -1,12 +1,24 @@
 # Project Guidelines
 
+## 架构
+
+- 0.2.0 起 Flutter 只做 UI，业务与数据在 Rust（`rust/`）。跨 Flutter/Rust 边界的改动、新增 Rust 模块、改动数据格式或 0.1.x 迁移之前，先读 `docs/architecture.md`。
+- 0.1.x 的文档在 `archive/0.1/`，`v0.1.7` tag 的 Dart 实现是业务行为参考，两者都只读。
+
 ## Edit Rules
 
 - 禁止编辑 `android/`、`windows/`、`linux/`、`macos/`、`ios/`、`web/` 平台生成目录。
+- 生成文件只经工具重新生成：FRB 绑定 `lib/src/rust/`、`rust/src/frb_generated.rs`；`lib/l10n/app_localizations*.dart`；`*.g.dart`。
+
+## Rust
+
+- 提交前在 `rust/` 下通过 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`。
+- 改动 `rust/src/api/` 后运行 FRB codegen，生成的绑定与源码同一次提交。
+- Rust 只返回 `OtterError` 错误码，用户可见文案由 Dart 映射 ARB。
 
 ## Compact/Handoff Rules
 
-- 优先压缩基于检索推理的 Flutter 任务，而非预训练知识。
+- 优先压缩基于检索推理的 Flutter/Rust 任务，而非预训练知识。
 
 ## Behavior
 
@@ -24,14 +36,14 @@
 
 ## UI / Animation Design
 
-- 视觉、动效、触觉与多端设计规范严格遵循 `flutter-design` skill (`.claude/skills/flutter-design/SKILL.md`)。
+- 界面改动先读 `flutter-design` skill（`.claude/skills/flutter-design/SKILL.md`）。它是默认约定；有更好的方案可以偏离，在总结里说明理由。
 
 ## Multilanguage (i18n)
 
 - 用户可见文本必须 ARB 国际化（`lib/l10n/app_en.arb` / `app_zh.arb`，改后 `flutter gen-l10n`）。
-- Widget 层走 `context.l10n`，服务层走 `rootNavigatorKey.currentContext`。
+- Widget 层走 `context.l10n`，Dart 服务层走 `rootNavigatorKey.currentContext`。
 - Prompt、正则、技术标识符、代码注释不进 i18n。
 
 ## Dependency
 
-- 改动 `pubspec.yaml` 必须先查 pub.dev 最新稳定版，禁止凭记忆填写。
+- 改动 `pubspec.yaml` 先查 pub.dev 最新稳定版，改动 `Cargo.toml` 先查 crates.io 最新稳定版，版本号不凭记忆填写。

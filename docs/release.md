@@ -11,6 +11,17 @@
 - `UpdateService` 使用现有 `device_info_plus` 的 Android ABI 列表选择安装包。无法读取 ABI 或无兼容包时，更新入口转向发布页。
 - 根目录 `test/` 是被 Git 忽略的本地回归集；CI 不依赖这些未提交文件。提交扫描及其合成测试位于 `scripts/`，在 CI 中执行。
 
+## Rust 工具链（0.2.0 起，待接入）
+
+Rust 核心随 `flutter build` 由 cargokit 自动编译（架构见 `docs/architecture.md`）。接入时 `checks.yml`、`ci.yml`、`release.yml` 需要同步（ci-buildtest skill 的描述已按接入后的状态写好）：
+
+- 安装 stable Rust 并固定版本；各 job 只装本平台 target：Android `aarch64-linux-android`、`armv7-linux-androideabi`（另需 NDK），Windows `x86_64-pc-windows-msvc`，macOS `aarch64-apple-darwin`。
+- `checks.yml` 增加 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`，并校验 FRB 生成绑定与 `rust/src/api/` 一致（重新生成后 `git diff --exit-code`）。
+- 各平台产物随包携带 PDFium 动态库。
+- 缓存 `~/.cargo` 与 `rust/target`，避免每次全量编译。
+
+接入完成后，把本节改写为实际的版本号与步骤。
+
 ## 本地准备
 
 1. 将版本改为下一个发布版本，递增构建号，补齐 `CHANGELOG.md`。
@@ -46,20 +57,19 @@ CL=-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS \
 
 `CL` 中的宏定义使用 MSVC 同样支持的 `-D` 写法。Git Bash 会把以 `/D` 开头的环境变量值误转为 Windows 路径，导致 CMake 的编译器识别失败并报 `No CMAKE_CXX_COMPILER could be found`；此时并不一定缺少编译器。
 
-Windows 阅读器需要 WebView2 Runtime；Windows 10 设备可能需要先安装 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。便携版仅表示免安装，资料与设置仍保存在系统应用数据目录。
+0.1.x 的 Windows 阅读器依赖 WebView2 Runtime，0.2.0 起不再需要。便携版仅表示免安装，资料与设置仍保存在系统应用数据目录。
 
 macOS 包目前不做代码签名与公证（`CODE_SIGN_IDENTITY` 为 ad-hoc），因此用户首次打开需要手动放行。要消除这一步，需 Apple Developer Program 账号并改为 Developer ID 签名 + 公证，可参照 `ios-testflight` job 的密钥注入方式。
 
 在完成所需授权后，可手动触发 Release 工作流演练。`workflow_dispatch` 只上传 `dist-*` 和 `release-notes` 产物，即使选择 tag 也不会发布。只有推送 `v*` tag 才创建 GitHub Release；任何检查或构建失败都会阻止发布。改动桌面端打包配置后，务必先跑一次 `workflow_dispatch` 演练再打 tag。
 
-## 0.1.6 发包前验收
+## 0.2.0 发包前验收
 
-- 使用正式候选包覆盖安装 `v0.1.5`，确认版本为 `0.1.6`、构建号为 `7`、签名一致。
-- 确认 schema 1 → 2 后文献、标注、收藏、历史和设置仍可使用；保留升级前的完整备份。
-- 在 ARM64 和 ARMv7 设备验证启动、PDF 阅读、中文检索及对应架构的更新包选择。
-- 走通 PDF 导入/下载、解析、正文与图注翻译，以及一次备份恢复。
-- Windows：用安装器安装并确认桌面/开始菜单快捷方式、卸载项正常，同时验证便携版解压即用；确认设置页能保存凭据（走 DPAPI）。
-- macOS：从 DMG 拖入「应用程序」后放行打开，确认沙箱下出站网络可用（AI 与元数据请求）、阅读器本地 HTTP 服务可加载 HTML/图片、导入导出文件对话框可用。
-- 验收通过后，再给同一个提交打 `v0.1.6` 并按仓库确认流程推送。
+- 用正式候选包覆盖安装 `v0.1.7`（含文献、标注、译文、问 AI 会话、收藏、Zotero 映射的真实数据），确认签名一致、迁移完成，逐项对照 `docs/architecture.md` 的迁移表；中途杀进程后重启能续迁。
+- 迁移后 0.1.x 目录仍在，存储设置能手动清理；用 0.1.x 备份压缩包能恢复。
+- 在 ARM64 和 ARMv7 设备、Windows x64、macOS Apple 芯片上验证启动、长 PDF 翻页缩放、重排正文的滚动与分页切换、中文检索、标注。
+- 走通 PDF 导入、解析、全文与题注翻译、问 AI，以及一次备份恢复。
+- Windows：安装器与便携版都能启动，凭据保存正常（DPAPI）。macOS：DMG 安装后放行打开，沙箱内出站网络、文件导入导出可用。
+- 验收通过后，再给同一个提交打 `v0.2.0` 并按仓库确认流程推送。
 
 远端工作流、正式签名和设备覆盖安装需要实际执行后才能记为通过；本地分析及单元测试不能替代这些验收。
