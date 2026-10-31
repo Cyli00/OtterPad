@@ -42,33 +42,21 @@ class AdaptiveScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final showRail = Responsive.showNavigationRail(context);
 
-    // 桌面端侧栏半透明（叠在窗口背景上的轻微着色）；Row 分栏避让，
-    // 禁止改回 Stack 叠层——侧栏会遮挡/拦截主内容左侧（设置分组列表等）。
+    // Row 分栏避让，禁止改回 Stack 叠层——侧栏会遮挡/拦截主内容左侧（设置分组列表等）。
     return Scaffold(
       body: Row(
         children: [
-          if (showRail) ...[
-            AdaptiveNavigationRail(
+          if (showRail)
+            AppNavigationRail(
               selectedIndex: selectedIndex,
               onDestinationSelected: onDestinationSelected,
               destinations: destinations,
               extended: extendedRail,
               leading: railLeading,
               bottomDestinationCount: railBottomDestinationCount,
-              backgroundColor: isDesktopOs
-                  ? Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainer.withAlpha(180)
-                  : null,
               bottomAction: railBottomAction,
               onBottomAction: onRailBottomAction,
             ),
-            VerticalDivider(
-              thickness: 1,
-              width: 1,
-              color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
-            ),
-          ],
           Expanded(key: const ValueKey('adaptive-body'), child: body),
         ],
       ),
@@ -80,6 +68,60 @@ class AdaptiveScaffold extends StatelessWidget {
               onDestinationSelected: onDestinationSelected,
               destinations: destinations,
             ),
+    );
+  }
+}
+
+/// 侧边导航栏 + 右侧分隔线。主外壳与阅读页共用，保证两处外观一致。
+class AppNavigationRail extends StatelessWidget {
+  const AppNavigationRail({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.destinations,
+    this.extended = false,
+    this.leading,
+    this.bottomDestinationCount = 1,
+    this.bottomAction,
+    this.onBottomAction,
+  });
+
+  /// -1 表示没有选中项（如阅读页不属于任何一级目的地）。
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final List<AdaptiveDestination> destinations;
+  final bool extended;
+  final Widget? leading;
+  final int bottomDestinationCount;
+  final AdaptiveDestination? bottomAction;
+  final VoidCallback? onBottomAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AdaptiveNavigationRail(
+          selectedIndex: selectedIndex,
+          onDestinationSelected: onDestinationSelected,
+          destinations: destinations,
+          extended: extended,
+          leading: leading,
+          bottomDestinationCount: bottomDestinationCount,
+          // 桌面端侧栏半透明（叠在窗口背景上的轻微着色）
+          backgroundColor: isDesktopOs
+              ? cs.surfaceContainer.withAlpha(180)
+              : null,
+          bottomAction: bottomAction,
+          onBottomAction: onBottomAction,
+        ),
+        VerticalDivider(
+          thickness: 1,
+          width: 1,
+          color: cs.outlineVariant.withAlpha(80),
+        ),
+      ],
     );
   }
 }

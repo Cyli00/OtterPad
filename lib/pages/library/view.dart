@@ -85,10 +85,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     if (!mounted) return;
     await showOnboardingSpotlight(
       context: context,
-      targetKey: HomeHeader.toolsButtonKey,
-      message: l10n.onboardingToolsHint,
-      actionLabel: l10n.onboardingGotIt,
-      borderRadius: 20,
+      steps: [
+        SpotlightStep(
+          targetKey: HomeHeader.toolsButtonKey,
+          message: l10n.onboardingToolsHint,
+          borderRadius: 20,
+        ),
+      ],
+      doneLabel: l10n.onboardingGotIt,
     );
     if (!mounted) return;
 

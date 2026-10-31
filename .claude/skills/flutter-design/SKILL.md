@@ -47,7 +47,11 @@ description: 创建或调整 OtterPad Flutter 界面的视觉、交互和多端�
 - 设置标题、帮助、重置与滑块：`lib/widgets/setting_controls.dart`。
 - 分隔线：`AppDivider`（`lib/widgets/app_divider.dart`）；桌面卡片悬停：`HoverLift`（`lib/widgets/hover_lift.dart`）。
 - 自定义可点击卡片、列表项：`TactilePress`（`lib/widgets/tactile_press.dart`），显式传入 `baseColor`；父容器已有背景的内嵌项使用透明底色。纯图标按钮保留 `IconButton`。
+- 阅读器工具栏图标按钮：`ReaderIconButton`（`lib/pages/reader/widgets/reader_icon_button.dart`），自带悬停 / 按压弹簧 / 激活底色 / 图标与 spinner 交叉切换和触觉，不再用 `IconButton` 或另加 `Haptics`。
+- 一级导航：目的地用 `appDestinations` / `railLabelToggle`（`lib/widgets/layout/app_destinations.dart`），侧栏用 `AppNavigationRail`（`adaptive_scaffold.dart`）；任何页面要显示应用导航都复用它们，不另写图标和样式。
+- 面板开合与切换：侧栏横向开合用 `SpringReveal`（`lib/widgets/spring_reveal.dart`）；同一区域内互斥面板 / tab 切换用 `FadeThroughBranches`（`lib/widgets/layout/fade_through_branches.dart`）；浮层面板出现与收起用淡入 + 0.92 缩放，与 `showAppDialog` 同一套语言，且必须有退场动画，不用 `if` 直接挂载 / 卸载。
 - 触觉：`Haptics`（`lib/services/haptics.dart`），不直接调用 `HapticFeedback` 或重复触发组件内置反馈。
+- 反馈条：`SnackBarService`（`lib/services/snackbar_service.dart`），失败传 `tone: SnackTone.error`；样式、语义与文案格式见[组件规范](references/components.md#snackbar)。
 - 滑动删除：`SpringDismissible`（`lib/widgets/spring_dismissible.dart`）；列表项调用处提供稳定的 `ValueKey(uniqueId)`，不用索引标识身份。
 - 固定列表单选：`SettingPicker`（`lib/pages/setting/setting_picker.dart`）；少量且标签能完整显示的选项可用 `SegmentedButton`。多选使用 `FilterChip`。
 - 桌面与移动端交互分型使用 `isDesktopOs`；尺寸依据当前窗口和可用空间。
@@ -56,7 +60,7 @@ description: 创建或调整 OtterPad Flutter 界面的视觉、交互和多端�
 
 只阅读与本次修改相关的章节，不默认加载全部参考：
 
-- 组件样式、设置行图标、弹窗按钮、选项控件：[组件规范](references/components.md)。
+- 组件样式、设置行图标、弹窗按钮、选项控件、SnackBar 样式与文案：[组件规范](references/components.md)。
 - 动效选择、手势、触觉或交互组件维护：[交互规范](references/interactions.md)。
 - 桌面窗口、侧栏、阅读器工具栏或主题预览：[桌面与阅读器](references/desktop-reader.md)。
 

@@ -31,6 +31,50 @@
 阅读器实时预览面板和 `SettingPicker` 不加背景模糊；不要从工具面板机械复制 blur。
 自定义 SheetItem 使用透明底色的 `TactilePress`。
 
+## SnackBar
+
+参考 `lib/services/snackbar_service.dart`。所有反馈条经 `SnackBarService`：一次性结果用 `showResult`，后台任务用 `showListenableProgress` 或 `TaskRunner.runTask` 登记进 Task Activity；不直接调用 `ScaffoldMessenger.showSnackBar`。
+
+**结构**：全局只有一个槽位。条只在「空 ↔ 有内容」时进出场；进度推进、进度转结果、任务数变化都在条内交叉淡化并平滑伸缩高度，不整条退场重进。结果优先于进度，按 `duration` 自动收起（带按钮也一样），之后回落到仍在跑的任务；≥2 个任务聚合为「N 个任务进行中」。
+
+| 属性 | 值 |
+|---|---|
+| 形态 | floating；桌面宽 400，移动端左右 16、底部 12 外边距；圆角 12 |
+| 尺寸 | padding `symmetric(h: 16, v: 8)`，内容行最小高 32，单行条高 48 |
+| 底色 | 默认 `inverseSurface`，不改色、不按语义换底色 |
+| 文字 | `bodyMedium` + `onInverseSurface`；进度单行省略，结果最多 3 行 |
+| 计数 | `labelMedium` + `onInverseSurface` 70%，等宽数字，格式 `3 / 10` |
+| 前导位 | 20×20，与文字间距 12；无图标时不留空位 |
+| 强调色 | 仅 `inversePrimary`：进度指示与操作按钮。图标、文字一律 `onInverseSurface` |
+| 进度 | 有总数为确定进度（轨道 `onInverseSurface` 20%），否则 spinner；完成态换对勾 |
+| 操作按钮 | 紧凑 `TextButton`，最多一个；按下后禁用，进度条的「取消」不收起整条 |
+
+**语义（`SnackTone`）只换图标，不换颜色**：
+
+| Tone | 图标 | 用于 |
+|---|---|---|
+| `info`（默认） | 无 | 轻量确认（已复制、已保存）、中性提示、取消 |
+| `success` | `check_circle_rounded` | 耗时操作或后台任务完成 |
+| `error` | `error_rounded` | 失败、文件缺失、权限不足 |
+
+`TaskFinish` 不填 tone 时按出口推断（成功 → success，失败 → error，取消 → info）；成功出口里的非成功结果（已存在、未找到 PDF 源）显式写 tone。
+
+**文案**（ARB 三语同步，代码内中文兜底文案同样遵守）：
+
+| 场景 | 中文格式 | 示例 |
+|---|---|---|
+| 进行中 | `正在{动作}`，有对象时 `正在{动作} · {对象}` | 正在下载 PDF · {title} |
+| 排队 | `等待{动作} · {对象}` | 等待提取 · {title} |
+| 成功 | `已{动作}`，有标题时 `已{动作}「{title}」` | 已添加「{title}」 |
+| 汇总 | `{任务}完成，{摘要}` | Zotero 同步完成，新增 3 篇 |
+| 失败 | `{动作}失败：{原因}` | 下载失败：{error} |
+| 取消 | `已取消{动作}` | 已取消提取 |
+| 忙碌 | `正在{动作}，请稍候` / `已有任务在进行，请稍候` | 正在重构文库，请稍候 |
+
+- 进度文案先写阶段、后写对象，长标题被省略时阶段仍可见；状态推进时按阶段更新（如解析 → 下载 PDF），不留空字符串（为空时回退任务名）。
+- 不加省略号、不以句号结尾；中文用全角「：」「，」「」；英文用 sentence case、半角冒号、标题加英文双引号。
+- 一条只说一件事，需要下一步时用逗号接短句（「…，请重试」），不写多句说明。
+
 ## Card
 
 参考 `lib/pages/library/widgets/document_card.dart`、`lib/pages/library/widgets/doc_list_card.dart`、`lib/pages/shelf/widgets/favorite_card.dart`。

@@ -271,7 +271,7 @@ class MinerUExtractService {
     CancelToken? cancelToken,
   }) async {
     final l = _l10n;
-    onProgress?.call(l?.mineruProgressRequestingUpload ?? '正在申请上传…');
+    onProgress?.call(l?.mineruProgressRequestingUpload ?? '正在申请上传');
     final (batchId, urls) = await _requestUploadUrls(
       token: apiKey,
       state: state,
@@ -279,7 +279,7 @@ class MinerUExtractService {
       cancelToken: cancelToken,
     );
 
-    onProgress?.call(l?.mineruProgressUploading ?? '正在上传…');
+    onProgress?.call(l?.mineruProgressUploading ?? '正在上传');
     await _uploadFile(
       uploadUrl: urls.single,
       filePath: filePath,
@@ -296,11 +296,11 @@ class MinerUExtractService {
       final item = items.first;
       switch (item['state'] as String? ?? '') {
         case 'waiting-file' || 'pending':
-          onProgress?.call(l?.mineruProgressQueued ?? '排队中…');
+          onProgress?.call(l?.mineruProgressQueued ?? '排队中');
         case 'running':
-          onProgress?.call(l?.mineruProgressParsing ?? '正在解析…');
+          onProgress?.call(l?.mineruProgressParsing ?? '正在解析');
         case 'converting':
-          onProgress?.call(l?.mineruProgressConverting ?? '正在转换格式…');
+          onProgress?.call(l?.mineruProgressConverting ?? '正在转换格式');
         case 'done':
           final zipUrl = item['full_zip_url'] as String?;
           if (zipUrl == null) {
@@ -308,7 +308,7 @@ class MinerUExtractService {
               l?.mineruErrMissingResultUrl ?? '任务完成但无结果链接',
             );
           }
-          onProgress?.call(l?.mineruProgressDownloading ?? '正在下载结果…');
+          onProgress?.call(l?.mineruProgressDownloading ?? '正在下载结果');
           return _downloadZip(zipUrl, filePath, cancelToken);
         case 'failed':
           throw MinerUExtractException(

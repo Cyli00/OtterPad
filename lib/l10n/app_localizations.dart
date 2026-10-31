@@ -102,13 +102,13 @@ abstract class AppLocalizations {
   /// No description provided for @sharedFilesImportFailed.
   ///
   /// In en, this message translates to:
-  /// **'Could not import the shared files. Please try again from the library.'**
+  /// **'Could not import the shared files, please try again from the library'**
   String get sharedFilesImportFailed;
 
   /// No description provided for @sharedFilesSkipped.
   ///
   /// In en, this message translates to:
-  /// **'Some shared files were skipped because they are not readable PDF files.'**
+  /// **'Some shared files are not readable PDFs and were skipped'**
   String get sharedFilesSkipped;
 
   /// No description provided for @readerTranslationIncomplete.
@@ -636,7 +636,7 @@ abstract class AppLocalizations {
   /// No description provided for @appFontSaveFailed.
   ///
   /// In en, this message translates to:
-  /// **'Could not save the font selection. Please try again.'**
+  /// **'Could not save the font selection, please try again'**
   String get appFontSaveFailed;
 
   /// No description provided for @paginationMode.
@@ -744,7 +744,7 @@ abstract class AppLocalizations {
   /// No description provided for @translationDone.
   ///
   /// In en, this message translates to:
-  /// **'Translation done'**
+  /// **'Translation complete'**
   String get translationDone;
 
   /// No description provided for @translationCacheUsed.
@@ -882,7 +882,7 @@ abstract class AppLocalizations {
   /// No description provided for @batchExtracting.
   ///
   /// In en, this message translates to:
-  /// **'Batch extracting'**
+  /// **'Extracting in batch'**
   String get batchExtracting;
 
   /// No description provided for @extractionDone.
@@ -1170,7 +1170,7 @@ abstract class AppLocalizations {
   /// No description provided for @reformatDone.
   ///
   /// In en, this message translates to:
-  /// **'Reformat done'**
+  /// **'Reformatted'**
   String get reformatDone;
 
   /// No description provided for @viewPdf.
@@ -2436,7 +2436,7 @@ abstract class AppLocalizations {
   /// No description provided for @taskInProgress.
   ///
   /// In en, this message translates to:
-  /// **'This document already has a task running'**
+  /// **'This document already has a task running, please wait'**
   String get taskInProgress;
 
   /// No description provided for @savingResult.
@@ -2772,7 +2772,7 @@ abstract class AppLocalizations {
   /// No description provided for @generatingAndUploading.
   ///
   /// In en, this message translates to:
-  /// **'Generating and uploading remote backup...'**
+  /// **'Generating and uploading remote backup'**
   String get generatingAndUploading;
 
   /// No description provided for @backupScopeTitle.
@@ -3315,12 +3315,6 @@ abstract class AppLocalizations {
   /// **'Batch extraction accepts at most {max} files at a time'**
   String batchExtractTooManyFiles(int max);
 
-  /// No description provided for @aiFixNotForMinerU.
-  ///
-  /// In en, this message translates to:
-  /// **'Documents extracted by MinerU already include figure captions; AI figure repair is not needed'**
-  String get aiFixNotForMinerU;
-
   /// No description provided for @aspectSquare.
   ///
   /// In en, this message translates to:
@@ -3480,7 +3474,7 @@ abstract class AppLocalizations {
   /// No description provided for @reformatting.
   ///
   /// In en, this message translates to:
-  /// **'Reformatting...'**
+  /// **'Reformatting'**
   String get reformatting;
 
   /// No description provided for @reformatFailed.
@@ -3488,78 +3482,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reformat failed: {error}'**
   String reformatFailed(String error);
-
-  /// No description provided for @aiFixFigures.
-  ///
-  /// In en, this message translates to:
-  /// **'AI repair figures'**
-  String get aiFixFigures;
-
-  /// No description provided for @aiFixFiguresAnalyzing.
-  ///
-  /// In en, this message translates to:
-  /// **'Analyzing layout...'**
-  String get aiFixFiguresAnalyzing;
-
-  /// No description provided for @aiFixFiguresCalling.
-  ///
-  /// In en, this message translates to:
-  /// **'Calling AI model...'**
-  String get aiFixFiguresCalling;
-
-  /// No description provided for @aiFixFiguresApplying.
-  ///
-  /// In en, this message translates to:
-  /// **'Applying repairs...'**
-  String get aiFixFiguresApplying;
-
-  /// No description provided for @aiFixFiguresCropping.
-  ///
-  /// In en, this message translates to:
-  /// **'Cropping figures ({done}/{total})'**
-  String aiFixFiguresCropping(int done, int total);
-
-  /// No description provided for @aiFixFiguresDone.
-  ///
-  /// In en, this message translates to:
-  /// **'Figures repaired. To revert, use \"Reformat\"'**
-  String get aiFixFiguresDone;
-
-  /// No description provided for @aiFixFiguresFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'AI repair failed: {error}'**
-  String aiFixFiguresFailed(String error);
-
-  /// No description provided for @aiFixFiguresCancelled.
-  ///
-  /// In en, this message translates to:
-  /// **'AI repair cancelled'**
-  String get aiFixFiguresCancelled;
-
-  /// No description provided for @aiFixFiguresMissingExtract.
-  ///
-  /// In en, this message translates to:
-  /// **'Please extract the document first, then repair figures.'**
-  String get aiFixFiguresMissingExtract;
-
-  /// No description provided for @aiFixFiguresModelNotSet.
-  ///
-  /// In en, this message translates to:
-  /// **'Please set an expert or fast model first.'**
-  String get aiFixFiguresModelNotSet;
-
-  /// No description provided for @aiFixFiguresInvalidLlmOutput.
-  ///
-  /// In en, this message translates to:
-  /// **'AI output could not be parsed. Please try again.'**
-  String get aiFixFiguresInvalidLlmOutput;
-
-  /// No description provided for @aiFixFiguresFailedGeneric.
-  ///
-  /// In en, this message translates to:
-  /// **'AI repair failed. Please try again.'**
-  String get aiFixFiguresFailedGeneric;
 
   /// No description provided for @addedToFavorite.
   ///
@@ -4038,7 +3960,7 @@ abstract class AppLocalizations {
   /// No description provided for @preparingTranslation.
   ///
   /// In en, this message translates to:
-  /// **'Preparing'**
+  /// **'Preparing translation'**
   String get preparingTranslation;
 
   /// No description provided for @noTranslatableParagraphs.
@@ -4050,19 +3972,19 @@ abstract class AppLocalizations {
   /// No description provided for @waitingExtractTitle.
   ///
   /// In en, this message translates to:
-  /// **'Waiting to extract: {title}'**
+  /// **'Waiting to extract · {title}'**
   String waitingExtractTitle(String title);
 
   /// No description provided for @submittingTaskTitle.
   ///
   /// In en, this message translates to:
-  /// **'Submitting task: {title}'**
+  /// **'Submitting task · {title}'**
   String submittingTaskTitle(String title);
 
   /// No description provided for @extractionCompleteTitle.
   ///
   /// In en, this message translates to:
-  /// **'Extraction complete: {title}'**
+  /// **'Extracted \"{title}\"'**
   String extractionCompleteTitle(String title);
 
   /// No description provided for @networkError.
@@ -4080,31 +4002,31 @@ abstract class AppLocalizations {
   /// No description provided for @waitingSubmitTitle.
   ///
   /// In en, this message translates to:
-  /// **'Waiting to submit: {title}'**
+  /// **'Waiting to submit · {title}'**
   String waitingSubmitTitle(String title);
 
   /// No description provided for @submittedWaitingTitle.
   ///
   /// In en, this message translates to:
-  /// **'Submitted, waiting: {title}'**
+  /// **'Waiting for processing · {title}'**
   String submittedWaitingTitle(String title);
 
   /// No description provided for @extractingTitle.
   ///
   /// In en, this message translates to:
-  /// **'Extracting… · {title}'**
+  /// **'Extracting · {title}'**
   String extractingTitle(String title);
 
   /// No description provided for @waitingSummaryTitle.
   ///
   /// In en, this message translates to:
-  /// **'Waiting to generate summary: {title}'**
+  /// **'Waiting to generate summary · {title}'**
   String waitingSummaryTitle(String title);
 
   /// No description provided for @generatingSummaryTitle.
   ///
   /// In en, this message translates to:
-  /// **'Generating summary: {title}'**
+  /// **'Generating summary · {title}'**
   String generatingSummaryTitle(String title);
 
   /// No description provided for @summaryGenerationFailed.
@@ -4116,19 +4038,19 @@ abstract class AppLocalizations {
   /// No description provided for @waitingDownloadTitle.
   ///
   /// In en, this message translates to:
-  /// **'Waiting to download: {title}'**
+  /// **'Waiting to download · {title}'**
   String waitingDownloadTitle(String title);
 
   /// No description provided for @downloadingTitle.
   ///
   /// In en, this message translates to:
-  /// **'Downloading: {title}'**
+  /// **'Downloading · {title}'**
   String downloadingTitle(String title);
 
   /// No description provided for @downloadSuccessTitle.
   ///
   /// In en, this message translates to:
-  /// **'Download complete: {title}'**
+  /// **'Downloaded \"{title}\"'**
   String downloadSuccessTitle(String title);
 
   /// No description provided for @downloadFailedNoSource.
@@ -4164,13 +4086,13 @@ abstract class AppLocalizations {
   /// No description provided for @downloadCompletePartial.
   ///
   /// In en, this message translates to:
-  /// **'Download complete: {ok} succeeded, {fail} failed'**
+  /// **'Download complete, {ok} succeeded, {fail} failed'**
   String downloadCompletePartial(int ok, int fail);
 
   /// No description provided for @preparingImport.
   ///
   /// In en, this message translates to:
-  /// **'Preparing to import files...'**
+  /// **'Preparing import'**
   String get preparingImport;
 
   /// No description provided for @importingFilesBusy.
@@ -4182,7 +4104,7 @@ abstract class AppLocalizations {
   /// No description provided for @importingFile.
   ///
   /// In en, this message translates to:
-  /// **'Importing: {fileName}'**
+  /// **'Importing · {fileName}'**
   String importingFile(String fileName);
 
   /// No description provided for @documentAlreadyExists.
@@ -4206,7 +4128,7 @@ abstract class AppLocalizations {
   /// No description provided for @addedDocumentTitle.
   ///
   /// In en, this message translates to:
-  /// **'Added: {title}'**
+  /// **'Added \"{title}\"'**
   String addedDocumentTitle(String title);
 
   /// No description provided for @networkRequestFailedRetry.
@@ -4224,7 +4146,7 @@ abstract class AppLocalizations {
   /// No description provided for @resolvingIdentifier.
   ///
   /// In en, this message translates to:
-  /// **'Resolving identifier: {identifier}'**
+  /// **'Resolving identifier · {identifier}'**
   String resolvingIdentifier(String identifier);
 
   /// No description provided for @resolvingIdentifierBusy.
@@ -4236,13 +4158,13 @@ abstract class AppLocalizations {
   /// No description provided for @preparingRebuild.
   ///
   /// In en, this message translates to:
-  /// **'Preparing to rebuild library...'**
+  /// **'Preparing library rebuild'**
   String get preparingRebuild;
 
   /// No description provided for @rebuildInProgress.
   ///
   /// In en, this message translates to:
-  /// **'Library rebuild in progress'**
+  /// **'Rebuilding library, please wait'**
   String get rebuildInProgress;
 
   /// No description provided for @rebuildCancelled.
@@ -4296,13 +4218,13 @@ abstract class AppLocalizations {
   /// No description provided for @fetchingZoteroItems.
   ///
   /// In en, this message translates to:
-  /// **'Fetching Zotero items...'**
+  /// **'Fetching Zotero items'**
   String get fetchingZoteroItems;
 
   /// No description provided for @zoteroSyncInProgress.
   ///
   /// In en, this message translates to:
-  /// **'Zotero sync in progress'**
+  /// **'Syncing Zotero, please wait'**
   String get zoteroSyncInProgress;
 
   /// No description provided for @zoteroSyncCancelled.
@@ -4320,7 +4242,7 @@ abstract class AppLocalizations {
   /// No description provided for @importingDocuments.
   ///
   /// In en, this message translates to:
-  /// **'Importing documents...'**
+  /// **'Importing documents'**
   String get importingDocuments;
 
   /// No description provided for @zoteroSyncCompleteAdded.
@@ -4350,7 +4272,7 @@ abstract class AppLocalizations {
   /// No description provided for @existsInLibrary.
   ///
   /// In en, this message translates to:
-  /// **'Already in library: {title}'**
+  /// **'Already in library: \"{title}\"'**
   String existsInLibrary(String title);
 
   /// No description provided for @importedCountPart.
@@ -4368,7 +4290,7 @@ abstract class AppLocalizations {
   /// No description provided for @importedFile.
   ///
   /// In en, this message translates to:
-  /// **'Imported: {title}'**
+  /// **'Imported \"{title}\"'**
   String importedFile(String title);
 
   /// No description provided for @importCancelledLabel.
@@ -4392,7 +4314,7 @@ abstract class AppLocalizations {
   /// No description provided for @taskBusy.
   ///
   /// In en, this message translates to:
-  /// **'A task is already running'**
+  /// **'A task is already running, please wait'**
   String get taskBusy;
 
   /// No description provided for @promptMissingPlaceholders.
@@ -4692,7 +4614,7 @@ abstract class AppLocalizations {
   /// No description provided for @generalExportLogEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No log file yet — enable logging, reproduce the issue, then export'**
+  /// **'No log file yet. Enable logging, reproduce the issue, then export'**
   String get generalExportLogEmpty;
 
   /// No description provided for @generalExportLogFailed.
@@ -5100,37 +5022,37 @@ abstract class AppLocalizations {
   /// No description provided for @mineruProgressRequestingUpload.
   ///
   /// In en, this message translates to:
-  /// **'Requesting upload URL...'**
+  /// **'Requesting upload'**
   String get mineruProgressRequestingUpload;
 
   /// No description provided for @mineruProgressUploading.
   ///
   /// In en, this message translates to:
-  /// **'Uploading file...'**
+  /// **'Uploading'**
   String get mineruProgressUploading;
 
   /// No description provided for @mineruProgressQueued.
   ///
   /// In en, this message translates to:
-  /// **'Queued...'**
+  /// **'Queued'**
   String get mineruProgressQueued;
 
   /// No description provided for @mineruProgressParsing.
   ///
   /// In en, this message translates to:
-  /// **'Parsing...'**
+  /// **'Parsing'**
   String get mineruProgressParsing;
 
   /// No description provided for @mineruProgressConverting.
   ///
   /// In en, this message translates to:
-  /// **'Converting format...'**
+  /// **'Converting format'**
   String get mineruProgressConverting;
 
   /// No description provided for @mineruProgressDownloading.
   ///
   /// In en, this message translates to:
-  /// **'Downloading result...'**
+  /// **'Downloading result'**
   String get mineruProgressDownloading;
 
   /// No description provided for @mineruErrInvalidParams.
@@ -5605,19 +5527,19 @@ abstract class AppLocalizations {
   /// No description provided for @rebuildScanningFiles.
   ///
   /// In en, this message translates to:
-  /// **'Scanning PDF files…'**
+  /// **'Scanning PDF files'**
   String get rebuildScanningFiles;
 
   /// No description provided for @rebuildCheckingFiles.
   ///
   /// In en, this message translates to:
-  /// **'Checking file integrity…'**
+  /// **'Checking file integrity'**
   String get rebuildCheckingFiles;
 
   /// No description provided for @rebuildExtractingMetadata.
   ///
   /// In en, this message translates to:
-  /// **'Extracting PDF metadata…'**
+  /// **'Extracting PDF metadata'**
   String get rebuildExtractingMetadata;
 
   /// No description provided for @zoteroLocalConnection.
@@ -5653,8 +5575,14 @@ abstract class AppLocalizations {
   /// No description provided for @webSearchNotConfigured.
   ///
   /// In en, this message translates to:
-  /// **'Configure an API key for the selected web search service in AI settings.'**
+  /// **'Configure an API key for the selected web search service in AI settings'**
   String get webSearchNotConfigured;
+
+  /// No description provided for @aiRequestRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'The model declined this request under its safety policy. Try rephrasing or switching to another model.'**
+  String get aiRequestRefused;
 
   /// No description provided for @chatToggleKeyVisibility.
   ///
@@ -5677,13 +5605,13 @@ abstract class AppLocalizations {
   /// No description provided for @chatFastTextOnly.
   ///
   /// In en, this message translates to:
-  /// **'Fast models receive text only. Current and historical figures will be omitted; document text and captions are kept.'**
+  /// **'Fast models receive text only. Figures are omitted; document text and captions are kept'**
   String get chatFastTextOnly;
 
   /// No description provided for @chatModelTextOnly.
   ///
   /// In en, this message translates to:
-  /// **'This model does not support images. Only document text and captions will be sent.'**
+  /// **'This model does not support images. Only document text and captions are sent'**
   String get chatModelTextOnly;
 
   /// No description provided for @chatProcess.
@@ -5767,37 +5695,37 @@ abstract class AppLocalizations {
   /// No description provided for @chatSourceNotFound.
   ///
   /// In en, this message translates to:
-  /// **'The quoted source could not be found. The document may have changed.'**
+  /// **'The quoted source could not be found. The document may have changed'**
   String get chatSourceNotFound;
 
   /// No description provided for @metadataCertificateFailed.
   ///
   /// In en, this message translates to:
-  /// **'Cannot verify the metadata service TLS certificate. Check system trust and proxy settings.'**
+  /// **'Cannot verify the metadata service TLS certificate. Check system trust and proxy settings'**
   String get metadataCertificateFailed;
 
   /// No description provided for @metadataProxyFailed.
   ///
   /// In en, this message translates to:
-  /// **'Proxy connection or authentication failed. Check proxy and network settings.'**
+  /// **'Proxy connection or authentication failed. Check proxy and network settings'**
   String get metadataProxyFailed;
 
   /// No description provided for @metadataRequestTimedOut.
   ///
   /// In en, this message translates to:
-  /// **'Metadata request timed out. Please try again later.'**
+  /// **'Metadata request timed out. Please try again later'**
   String get metadataRequestTimedOut;
 
   /// No description provided for @metadataNotFound.
   ///
   /// In en, this message translates to:
-  /// **'No matching document metadata found.'**
+  /// **'No matching document metadata found'**
   String get metadataNotFound;
 
   /// No description provided for @metadataConnectionFailed.
   ///
   /// In en, this message translates to:
-  /// **'Cannot connect to the metadata service. Check your network.'**
+  /// **'Cannot connect to the metadata service. Check your network'**
   String get metadataConnectionFailed;
 
   /// No description provided for @tableCopyTsv.
@@ -6615,6 +6543,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Keep the original pages and layout. Return to the PDF to check formulas, citations, or context.'**
   String get websiteOriginalPdfBody;
+
+  /// No description provided for @taskFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Task failed: {error}'**
+  String taskFailed(String error);
+
+  /// No description provided for @extractStageSubmitting.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitting task'**
+  String get extractStageSubmitting;
+
+  /// No description provided for @extractStageExtracting.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting'**
+  String get extractStageExtracting;
+
+  /// No description provided for @translatingDocument.
+  ///
+  /// In en, this message translates to:
+  /// **'Translating'**
+  String get translatingDocument;
+
+  /// No description provided for @autoBackupRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Backing up automatically'**
+  String get autoBackupRunning;
+
+  /// No description provided for @autoBackupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto backup failed: {error}'**
+  String autoBackupFailed(String error);
 }
 
 class _AppLocalizationsDelegate

@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:motor/motor.dart';
 
 import '../../../core/animation_constants.dart';
 import '../../../widgets/app_divider.dart';
+import '../../../widgets/layout/fade_through_branches.dart';
+import '../../../widgets/spring_reveal.dart';
 import 'reader_background.dart';
 
 enum ReaderDockPane { outline, notes, askAi }
 
-/// 阅读器右侧互斥停靠栏。关舱只改外层 clip 宽，子树始终按 [sidebarWidth] layout。
-/// 宽度由 [kSpringPanel] 弹簧补间，可中断。
+/// 阅读器右侧互斥停靠栏。开合交给 [SpringReveal]：只改外层裁切宽度，
+/// 子树始终按 [sidebarWidth] 布局。
 ///
 /// 传入 [onSidebarDragUpdate] 后，左缘分隔线变为可拖拽把手：9px 命中域 +
 /// 居中 grabber，拖拽实时调 [sidebarWidth]（范围由 Responsive.clampReaderSidebarWidth 管）
@@ -68,22 +69,24 @@ class _ReaderDockedPaneState extends State<ReaderDockedPane> {
                   child: SafeArea(
                     left: false,
                     right: false,
-                    child: IndexedStack(
-                      index: widget.pane.index,
-                      children: [
-                        for (final pane in ReaderDockPane.values)
-                          if (_mountedPanes.contains(pane))
-                            TickerMode(
-                              enabled: open && pane == widget.pane,
-                              child: switch (pane) {
+                    // 切换面板走 Material fade through（与主导航 tab 同一实现），
+                    // 已挂载的面板常驻以保留状态；停靠栏收起时停掉全部 ticker。
+                    child: TickerMode(
+                      enabled: open,
+                      child: FadeThroughBranches(
+                        currentIndex: widget.pane.index,
+                        children: [
+                          for (final pane in ReaderDockPane.values)
+                            if (_mountedPanes.contains(pane))
+                              switch (pane) {
                                 ReaderDockPane.outline => widget.outline,
                                 ReaderDockPane.notes => widget.notes,
                                 ReaderDockPane.askAi => widget.chat,
-                              },
-                            )
-                          else
-                            const SizedBox.shrink(),
-                      ],
+                              }
+                            else
+                              const SizedBox.shrink(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -94,51 +97,12 @@ class _ReaderDockedPaneState extends State<ReaderDockedPane> {
       );
     }
 
-    final reduceMotion =
-        !widget.animate || MediaQuery.disableAnimationsOf(context);
-    return SingleMotionBuilder(
-      from: reduceMotion ? (open ? 1.0 : 0.0) : 0.0,
-      active: !reduceMotion,
-      onAnimationStatusChanged: (status) {
-        if (status == AnimationStatus.completed ||
-            status == AnimationStatus.dismissed) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && widget.open == open) {
-              widget.onAnimationEnd?.call();
-            }
-          });
-        }
-      },
-      motion: const SpringMotion(kSpringPanel),
-      value: open ? 1.0 : 0.0,
-      builder: (context, t, child) {
-        final targetWidth = open ? sidebarW : 0.0;
-        final width = (sidebarW * t).clamp(0.0, sidebarW);
-        // 弹簧会在容差内停止，吸附不足半个物理像素的尾差，避免残留细缝。
-        final clipWidth =
-            (width - targetWidth).abs() <
-                0.5 / MediaQuery.devicePixelRatioOf(context)
-            ? targetWidth
-            : width;
-        return IgnorePointer(
-          ignoring: !open || clipWidth < 1,
-          child: ExcludeFocus(
-            excluding: !open,
-            child: ExcludeSemantics(
-              excluding: !open,
-              child: SizedBox(width: clipWidth, child: child),
-            ),
-          ),
-        );
-      },
-      child: ClipRect(
-        child: OverflowBox(
-          minWidth: sidebarW,
-          maxWidth: sidebarW,
-          alignment: Alignment.centerLeft,
-          child: RepaintBoundary(child: buildPaneContent()),
-        ),
-      ),
+    return SpringReveal(
+      open: open,
+      animate: widget.animate,
+      animateOnMount: true,
+      onSettled: widget.onAnimationEnd,
+      child: buildPaneContent(),
     );
   }
 }

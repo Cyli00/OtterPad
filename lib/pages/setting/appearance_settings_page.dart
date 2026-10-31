@@ -44,11 +44,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
               backgroundColor: cs.surface,
               scrolledUnderElevation: 0,
             ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ).copyWith(bottom: 40),
+      body: SettingListView(
         children: [
           // ── 主题模式 ──
           Padding(

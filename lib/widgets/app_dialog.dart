@@ -31,6 +31,10 @@ Future<T?> showAppDialog<T>({
         curve: kAnimCurve,
         reverseCurve: kAnimCurveReverse,
       );
+      // 减少动态效果：只保留淡入淡出。
+      if (MediaQuery.disableAnimationsOf(context)) {
+        return FadeTransition(opacity: fadeCurved, child: child);
+      }
       return BackdropFilter(
         filter: ImageFilter.blur(
           sigmaX: 4.0 * fadeCurved.value,

@@ -21,6 +21,7 @@ import '../pages/shelf/cloud_sync_page.dart';
 import '../pages/shelf/no_file_entries_page.dart';
 import '../pages/shelf/reading_history_page.dart';
 import '../pages/shelf/view.dart';
+import '../widgets/layout/fade_through_branches.dart';
 import 'app_routes.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -29,6 +30,7 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 typedef ReaderArgs = ({Document doc, Rect? sourceRect});
 
 /// Android 预测返回：手势进行中走框架 PredictiveBack，否则回落 [fallback]。
+/// 系统开启「减少动态效果」时一律只做淡入淡出。
 Widget _maybePredictiveBack<T>({
   required BuildContext context,
   required Animation<double> animation,
@@ -36,6 +38,9 @@ Widget _maybePredictiveBack<T>({
   required Widget child,
   required Widget Function() fallback,
 }) {
+  if (MediaQuery.disableAnimationsOf(context)) {
+    return FadeTransition(opacity: animation, child: child);
+  }
   if (defaultTargetPlatform == TargetPlatform.android) {
     final route = ModalRoute.of(context);
     if (route is PageRoute<T>) {
@@ -125,7 +130,7 @@ CustomTransitionPage<T> _readerEntry<T>({
         curve: kAnimCurve,
         reverseCurve: kAnimCurveReverse,
       );
-      if (isDesktopOs) {
+      if (isDesktopOs || MediaQuery.disableAnimationsOf(context)) {
         return FadeTransition(opacity: curved, child: child);
       }
       final fullRect = Offset.zero & MediaQuery.sizeOf(context);
@@ -263,10 +268,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // 主导航 Shell（IndexedStack 保持各 Tab 页状态）
-      StatefulShellRoute.indexedStack(
+      // 主导航 Shell（分支常驻保持各 Tab 页状态）
+      StatefulShellRoute(
         builder: (context, state, navigationShell) =>
             MainShell(navigationShell: navigationShell),
+        // tab 切换走 fade through；分支常驻保留状态（同 indexedStack）
+        navigatorContainerBuilder: (context, navigationShell, children) =>
+            FadeThroughBranches(
+              currentIndex: navigationShell.currentIndex,
+              children: children,
+            ),
         branches: [
           // ── Tab 0: 文献库 ──
           StatefulShellBranch(

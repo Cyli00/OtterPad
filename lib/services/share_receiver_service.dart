@@ -55,7 +55,10 @@ class ShareReceiverService {
     if (context == null || !context.mounted) return;
     _container
         .read(snackBarServiceProvider)
-        .showResult(message: context.l10n.sharedFilesImportFailed);
+        .showResult(
+          tone: SnackTone.error,
+          message: context.l10n.sharedFilesImportFailed,
+        );
   }
 
   Future<void> _importFiles(List<String> paths) async {

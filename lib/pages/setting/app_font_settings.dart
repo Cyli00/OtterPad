@@ -44,7 +44,10 @@ class AppFontSettings extends ConsumerWidget {
         if (context.mounted) {
           ref
               .read(snackBarServiceProvider)
-              .showResult(message: l10n.appFontSaveFailed);
+              .showResult(
+                tone: SnackTone.error,
+                message: l10n.appFontSaveFailed,
+              );
         }
       }
     }

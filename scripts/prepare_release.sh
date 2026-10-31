@@ -16,7 +16,8 @@ if [[ -n "$tag" && "$tag" != "v$version" ]]; then
   exit 1
 fi
 
-previous_tag=$(git describe --tags --abbrev=0 HEAD^)
+# 只认 v* 发布 tag，避免把 CI 测试 tag 当成上一个发布版本
+previous_tag=$(git describe --tags --abbrev=0 --match 'v*' HEAD^)
 previous_version=$(git show "${previous_tag}:pubspec.yaml" | sed -n 's/^version:[[:space:]]*//p' | tr -d '\r')
 previous_build=${previous_version##*+}
 if [[ -n "$tag" ]] && { [[ ! "$previous_build" =~ ^[1-9][0-9]*$ ]] || (( build_number <= previous_build )); }; then

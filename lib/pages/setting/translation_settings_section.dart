@@ -16,6 +16,7 @@ import '../../services/prompts.dart';
 import '../../services/translation_skip_sections.dart';
 import '../../services/translation_style.dart';
 import '../../widgets/tactile_press.dart';
+import 'setting_group.dart';
 
 /// 翻译设置区块——嵌入 api_settings_page 的 SettingGroup 内。
 class TranslationSettingsSection extends ConsumerStatefulWidget {
@@ -83,35 +84,6 @@ class _TranslationSettingsSectionState
   /// ARB 文案不再手写占位符名）。
   String _promptDesc(String desc, PromptDef def) =>
       '$desc · ${context.l10n.promptPlaceholdersAvailable(def.placeholdersLabel)}';
-
-  InputDecoration _fieldDeco(
-    ThemeData theme,
-    ColorScheme cs, {
-    required String hint,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-        color: cs.onSurfaceVariant.withAlpha(120),
-      ),
-      filled: true,
-      fillColor: cs.surface,
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: cs.primary, width: 2),
-      ),
-    );
-  }
 
   // ── Build ──────────────────────────────────────────────────────────────
 
@@ -206,9 +178,8 @@ class _TranslationSettingsSectionState
             minLines: 3,
             maxLines: 8,
             style: theme.textTheme.bodyMedium,
-            decoration: _fieldDeco(
-              theme,
-              cs,
+            decoration: settingFieldDecoration(
+              context,
               hint: context.l10n.systemPromptHint,
             ),
             onChanged: (v) => _debounceSaveSystem(v.trim()),
@@ -246,9 +217,8 @@ class _TranslationSettingsSectionState
             minLines: 2,
             maxLines: 6,
             style: theme.textTheme.bodyMedium,
-            decoration: _fieldDeco(
-              theme,
-              cs,
+            decoration: settingFieldDecoration(
+              context,
               hint: 'Translate to {{targetLanguage}}:\n\n{{input}}',
             ).copyWith(errorText: _userPromptError),
             onChanged: (v) => _debounceSaveUser(v.trim()),

@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../core/elevation.dart';
-import '../../../services/haptics.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../utils/markdown_translation_weaver.dart';
 import 'reader_docked_pane.dart';
+import 'reader_icon_button.dart';
 
 enum ReaderSheetType { outline, notes, theme }
 
@@ -76,7 +76,7 @@ class ReaderBottomBar extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildActionRow(context, cs, compact: true),
+                    _buildActionRow(context, compact: true),
                     if (readingProgress != null) ...[
                       SizedBox(
                         height: 24,
@@ -125,15 +125,11 @@ class ReaderBottomBar extends StatelessWidget {
         ),
       ),
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      child: SizedBox(height: 56, child: _buildActionRow(context, cs)),
+      child: SizedBox(height: 56, child: _buildActionRow(context)),
     );
   }
 
-  Widget _buildActionRow(
-    BuildContext context,
-    ColorScheme cs, {
-    bool compact = false,
-  }) {
+  Widget _buildActionRow(BuildContext context, {bool compact = false}) {
     final l10n = context.l10n;
     return Row(
       mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
@@ -142,7 +138,6 @@ class ReaderBottomBar extends StatelessWidget {
           : MainAxisAlignment.spaceEvenly,
       children: [
         _bottomButton(
-          cs,
           icon: Symbols.menu_rounded,
           tooltip: l10n.outline,
           active:
@@ -150,16 +145,14 @@ class ReaderBottomBar extends StatelessWidget {
               activeSheet == ReaderSheetType.outline,
           onTap: onOpenOutline,
         ),
-        _buildTranslationBottomButton(context, cs),
+        _buildTranslationBottomButton(context),
         _bottomButton(
-          cs,
           icon: Symbols.auto_awesome_rounded,
           tooltip: l10n.askAi,
           active: activeDock == ReaderDockPane.askAi,
           onTap: onAskAi,
         ),
         _bottomButton(
-          cs,
           icon: Symbols.stylus_note_rounded,
           tooltip: l10n.notes,
           active:
@@ -169,7 +162,6 @@ class ReaderBottomBar extends StatelessWidget {
         ),
         if (!pdfView || desktop)
           _bottomButton(
-            cs,
             icon: Symbols.palette_rounded,
             tooltip: l10n.appearance,
             active: activeSheet == ReaderSheetType.theme,
@@ -179,23 +171,21 @@ class ReaderBottomBar extends StatelessWidget {
     );
   }
 
-  Widget _buildTranslationBottomButton(BuildContext context, ColorScheme cs) {
+  Widget _buildTranslationBottomButton(BuildContext context) {
     final l10n = context.l10n;
+    // 翻译中仍用同一个按钮，图标与 spinner 交叉切换，不整个替换。
     if (translation.status == DocTranslationStatus.loading) {
-      return const SizedBox(
-        width: 48,
-        height: 48,
-        child: Padding(
-          padding: EdgeInsets.all(14),
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+      return _bottomButton(
+        icon: Symbols.translate_rounded,
+        tooltip: l10n.translate,
+        loading: true,
+        onTap: onTranslate,
       );
     }
 
     if (translation.hasResult) {
       final next = nextTranslationMode ?? _nextMode(translation.mode);
       return _bottomButton(
-        cs,
         icon: _modeIcon(next),
         tooltip: _modeLabel(l10n, next),
         onTap: onCycleTranslationMode,
@@ -203,7 +193,6 @@ class ReaderBottomBar extends StatelessWidget {
     }
 
     return _bottomButton(
-      cs,
       icon: Symbols.translate_rounded,
       tooltip: translation.status == DocTranslationStatus.failed
           ? l10n.retryTranslation
@@ -212,28 +201,20 @@ class ReaderBottomBar extends StatelessWidget {
     );
   }
 
-  static Widget _bottomButton(
-    ColorScheme cs, {
+  static Widget _bottomButton({
     required IconData icon,
     required String tooltip,
     required VoidCallback onTap,
     bool active = false,
+    bool loading = false,
   }) {
-    return SizedBox.square(
-      dimension: 48,
-      child: IconButton(
-        icon: Icon(
-          icon,
-          size: 24,
-          fill: 1,
-          color: active ? cs.primary : cs.onSurfaceVariant,
-        ),
-        tooltip: tooltip,
-        onPressed: () {
-          Haptics.soft();
-          onTap();
-        },
-      ),
+    return ReaderIconButton(
+      icon: icon,
+      iconSize: 24,
+      tooltip: tooltip,
+      active: active,
+      loading: loading,
+      onPressed: onTap,
     );
   }
 

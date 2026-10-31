@@ -1,4 +1,5 @@
 import '../data/models/ai/agent_config.dart';
+import 'model_capability_store.dart';
 
 /// 把跨 provider 统一的 [ThinkingLevel] 翻译成各服务商请求体 fragment。
 ///
@@ -14,17 +15,22 @@ import '../data/models/ai/agent_config.dart';
 class AgentThinkingPayload {
   AgentThinkingPayload._();
 
-  /// OpenAI Responses API：`reasoning.effort` ∈ none/low/medium/high/xhigh。
+  /// OpenAI Responses API：`reasoning.effort` ∈ none/minimal/low/medium/high/xhigh。
   ///
-  /// 合法值随 gpt-5 代际收窄：初代（gpt-5/-mini/-nano）只接受 minimal..high
+  /// 远程能力表给出档位（[spec] 未传时按 modelId 查询）时就近归并到其中；
+  /// 否则按 gpt-5 代际兜底：初代（gpt-5/-mini/-nano）只接受 minimal..high
   /// （发 none/xhigh 会 400）；gpt-5.1 接受 none..high；gpt-5.2+ 才有完整
-  /// none..xhigh。超出该代际能力的档位就近归并。
-  static Map<String, dynamic> forOpenAI(String modelId, ThinkingLevel? level) {
+  /// none..xhigh。
+  static Map<String, dynamic> forOpenAI(
+    String modelId,
+    ThinkingLevel? level, {
+    ThinkingSpec? spec,
+  }) {
     if (level == null) return const {};
     // xAI Responses API（同形复用本线路）：grok-4 系不接受 reasoning.effort
     // （400），grok-3-mini 仅 low/high——统一不发，保留服务端默认深度。
     if (modelId.toLowerCase().startsWith('grok')) return const {};
-    final minor = AgentModelCapability.gpt5Minor(modelId);
+    spec ??= ModelCapabilityStore.instance.thinkingSpec(modelId);
     var effort = switch (level) {
       ThinkingLevel.off => 'none',
       ThinkingLevel.low => 'low',
@@ -32,43 +38,53 @@ class AgentThinkingPayload {
       ThinkingLevel.high => 'high',
       ThinkingLevel.xhigh => 'xhigh',
     };
-    if (minor == 0) {
-      if (effort == 'none') effort = 'minimal';
-      if (effort == 'xhigh') effort = 'high';
-    } else if (minor == 1) {
-      if (effort == 'xhigh') effort = 'high';
+    if (spec != null && spec.levels.isNotEmpty) {
+      effort = spec.nearestLevel(effort);
+    } else {
+      final minor = AgentModelCapability.gpt5Minor(modelId);
+      if (minor == 0) {
+        if (effort == 'none') effort = 'minimal';
+        if (effort == 'xhigh') effort = 'high';
+      } else if (minor == 1) {
+        if (effort == 'xhigh') effort = 'high';
+      }
     }
     return {
       'reasoning': {'effort': effort},
     };
   }
 
-  /// Anthropic Messages：分 adaptive 模型（Opus 4.7+ / Fable）vs 旧模型两条路径。
+  /// Anthropic Messages：分 adaptive 模型 vs 旧模型两条路径。是否 adaptive
+  /// 优先取远程能力表（[spec] 未传时按 modelId 查询），缺失时回退
+  /// [AgentModelCapability.isClaudeAdaptive]。
   ///
   /// **Adaptive**：`thinking.type='adaptive'` + `output_config.effort` 控制力度。
-  /// medium 不带 `output_config`——按 Anthropic 推荐，让 adaptive 自决。
-  /// off 映射到 `effort='low'`（adaptive 不能真正关闭）。
+  /// 每档都显式发 effort：各模型默认档不同（Opus 5.5 / Haiku 5.5 默认 medium，
+  /// 其余默认 high），省略会让同一档在不同模型上含义不同。远程表给出档位时
+  /// 就近归并。off 映射到 `effort='low'`（多数 adaptive 模型不能真正关闭）。
   ///
   /// **旧模型**：`thinking.type='disabled'|'enabled'` + `budget_tokens` 数字。
   /// 注意旧模型要求 `budget_tokens < max_tokens`，调用方需用
   /// [legacyBudgetOf] 校正 max_tokens。
   static Map<String, dynamic> forAnthropic(
     String modelId,
-    ThinkingLevel? level,
-  ) {
+    ThinkingLevel? level, {
+    ThinkingSpec? spec,
+  }) {
     if (level == null) return const {};
+    spec ??= ModelCapabilityStore.instance.thinkingSpec(modelId);
 
-    if (AgentModelCapability.isClaudeAdaptive(modelId)) {
+    if (spec?.adaptive ?? AgentModelCapability.isClaudeAdaptive(modelId)) {
       final effort = switch (level) {
         ThinkingLevel.off => 'low',
         ThinkingLevel.low => 'low',
-        ThinkingLevel.medium => null, // 不带 effort，adaptive 自决
+        ThinkingLevel.medium => 'medium',
         ThinkingLevel.high => 'high',
-        ThinkingLevel.xhigh => 'max',
+        ThinkingLevel.xhigh => 'xhigh',
       };
       return {
         'thinking': {'type': 'adaptive'},
-        if (effort != null) 'output_config': {'effort': effort},
+        'output_config': {'effort': spec?.nearestLevel(effort) ?? effort},
       };
     }
 
@@ -91,6 +107,20 @@ class AgentThinkingPayload {
     ThinkingLevel.high => 16384,
     ThinkingLevel.xhigh => 32000,
   };
+
+  /// 该模型是否接受 temperature / top_p 等采样参数。远程表 `sampling` 优先；
+  /// 缺失时 adaptive 系 Claude 不接受（发送会 400），其余照发。
+  static bool samplingAllowed(
+    AgentApiProvider provider,
+    String modelId, {
+    ThinkingSpec? spec,
+  }) {
+    spec ??= ModelCapabilityStore.instance.thinkingSpec(modelId);
+    final remote = spec?.sampling;
+    if (remote != null) return remote;
+    return !(provider == AgentApiProvider.anthropic &&
+        AgentModelCapability.isClaudeAdaptive(modelId));
+  }
 
   /// Gemini：返回放在 `generationConfig.thinkingConfig` 下的 fragment。
   ///

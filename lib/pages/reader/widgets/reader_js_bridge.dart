@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -210,9 +211,14 @@ class ReaderJsBridge {
   /// 更进一步：让 WebView 的 chromium compositor 停转、Surface 冻结成静态帧。
   /// HC 模式下键盘 insets 动画期间，Flutter compositor 不再每帧同步活跃 Surface，
   /// 是消除「编辑笔记弹键盘卡顿」的关键。必须配对 [resumeRendering]。
-  void pauseRendering() => _controller.pause();
+  /// 仅 Android 实现；其他平台调用会抛 UnimplementedError。
+  void pauseRendering() {
+    if (defaultTargetPlatform == TargetPlatform.android) _controller.pause();
+  }
 
-  void resumeRendering() => _controller.resume();
+  void resumeRendering() {
+    if (defaultTargetPlatform == TargetPlatform.android) _controller.resume();
+  }
 
   /// 截取 WebView 当前可见帧——[WebViewMarkdownReaderState.freeze] 用作占位图，
   /// 在原生 View detach 期间保持画面连续，避免「内容突变成空白」的闪烁。

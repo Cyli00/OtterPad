@@ -7,7 +7,7 @@ import 'dart:io';
 /// `prunedResult.parsing_res_list`，页级 markdown 在 `markdown.text`。
 /// 根既可能是页数组，也可能是带 `layoutParsingResults` 的对象（API 原始
 /// 响应形状）——两种都在此消化，调用方（figure 提取 / markdown 替换 /
-/// AI 排版修复 / 未来的翻译保护 span）不再各自 jsonDecode 直挖。
+/// 未来的翻译保护 span）不再各自 jsonDecode 直挖。
 
 class LayoutTextRegion {
   final int pageIndex;

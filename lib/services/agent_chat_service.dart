@@ -1,8 +1,11 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 
+import '../core/l10n.dart';
 import '../data/models/ai/agent_config.dart';
+import '../router/app_router.dart';
 import 'agent_http.dart';
 import 'agent_activity_tracker.dart';
 import '../data/models/chat/chat_activity.dart';
@@ -18,6 +21,16 @@ class AgentChatException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Claude 安全分类器拒答：HTTP 200 + `stop_reason: "refusal"`、正文为空。
+/// 不转成异常的话用户只看到空白回答。服务层经 `rootNavigatorKey` 取 l10n，
+/// 取不到时（测试 / 启动早期）回落英文。
+AgentChatException refusalException() {
+  final l10n =
+      rootNavigatorKey.currentContext?.l10n ??
+      lookupAppLocalizations(const Locale('en'));
+  return AgentChatException(l10n.aiRequestRefused);
 }
 
 /// 多模态消息中的一张图片（base64 PNG + 展示给模型的文字标签）。
@@ -45,7 +58,7 @@ class AgentChatTurn {
 
 /// Agent 对话接缝：「provider + system/user (+images, +schema) → 文本」的
 /// 唯一出口。各 provider 的请求体形状、headers、结构化输出模式、响应提取
-/// 全部封装在此，调用方（翻译 / 排版修复 / 未来功能）只描述意图。
+/// 全部封装在此，调用方（翻译 / 问 AI / 未来功能）只描述意图。
 ///
 /// 结构化输出降级阶梯：传入 [schema] 时各 provider 先尝试原生 JSON Schema
 /// 约束（OpenAI strict json_schema / Anthropic output_config / Gemini
@@ -490,7 +503,8 @@ class AgentChatService {
         'tools': [
           {'type': 'web_search'},
         ],
-      'temperature': ?temperature,
+      if (AgentThinkingPayload.samplingAllowed(AgentApiProvider.openai, modelId))
+        'temperature': ?temperature,
       ...reasoning,
     };
   }
@@ -541,7 +555,12 @@ class AgentChatService {
       if (stream) 'stream': true,
       if (webSearch || urlContext)
         'tools': _anthropicTools(webSearch, urlContext),
-      'temperature': ?temperature,
+      // adaptive 系 Claude 不接受非默认采样参数（发送会 400）
+      if (AgentThinkingPayload.samplingAllowed(
+        AgentApiProvider.anthropic,
+        modelId,
+      ))
+        'temperature': ?temperature,
       if (outputConfig.isNotEmpty) 'output_config': outputConfig,
       ...thinking,
     };
@@ -576,7 +595,11 @@ class AgentChatService {
       'contents': _geminiContents(history, images, userPrompt),
       if (webSearch || urlContext) 'tools': _geminiTools(webSearch, urlContext),
       'generationConfig': {
-        'temperature': ?temperature,
+        if (AgentThinkingPayload.samplingAllowed(
+          AgentApiProvider.gemini,
+          modelId,
+        ))
+          'temperature': ?temperature,
         if (schema != null) 'responseMimeType': 'application/json',
         if (mode == 'schema') 'responseJsonSchema': schema,
         if (thinkingCfg.isNotEmpty || includeThoughts)
@@ -601,13 +624,17 @@ class AgentChatService {
     Map<String, dynamic>? schema,
     String schemaName = 'response',
   }) {
+    final sampling = AgentThinkingPayload.samplingAllowed(
+      AgentApiProvider.openAICompatible,
+      modelId,
+    );
     final body = <String, dynamic>{
       'model': modelId,
       'messages': messages,
       if (stream) 'stream': true,
-      'temperature': ?temperature,
+      if (sampling) 'temperature': ?temperature,
       if (modelParams.maxTokens != null) 'max_tokens': modelParams.maxTokens,
-      if (modelParams.topP != null) 'top_p': modelParams.topP,
+      if (sampling && modelParams.topP != null) 'top_p': modelParams.topP,
       if (modelParams.frequencyPenalty != null)
         'frequency_penalty': modelParams.frequencyPenalty,
       if (modelParams.presencePenalty != null)
@@ -685,11 +712,18 @@ class AgentChatService {
           'type': 'function',
           'function': {
             'name': 'web_search',
-            'description': '搜索互联网获取实时或最新信息。需要联网才能准确回答时调用。',
+            'description':
+                '搜索互联网，返回最多 5 条结果（标题、URL、正文摘要），不含网页全文。'
+                '用于文献之外、需要实时或较新信息的问题（最新进展、新闻、软件版本等）；'
+                '文献本身能回答的问题不调用。搜索失败或无结果时返回一行说明文字，'
+                '据此如实告知用户。',
             'parameters': {
               'type': 'object',
               'properties': {
-                'query': {'type': 'string', 'description': '搜索关键词'},
+                'query': {
+                  'type': 'string',
+                  'description': '简洁的搜索关键词组合；需要时带上专有名词、年份或英文术语。',
+                },
               },
               'required': ['query'],
             },
@@ -1225,6 +1259,9 @@ class AgentChatService {
             final text = delta!['text'];
             if (text is String && text.isNotEmpty) yield text;
           }
+        } else if (json['type'] == 'message_delta' &&
+            (json['delta'] as Map?)?['stop_reason'] == 'refusal') {
+          throw refusalException();
         }
       } on AgentChatException {
         rethrow;
@@ -1552,6 +1589,7 @@ class AgentChatService {
   }
 
   static String _extractAnthropic(Map<String, dynamic> data) {
+    if (data['stop_reason'] == 'refusal') throw refusalException();
     final content = data['content'] as List<dynamic>?;
     if (content != null) {
       for (final block in content.reversed) {

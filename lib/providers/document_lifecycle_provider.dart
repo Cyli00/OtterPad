@@ -27,8 +27,13 @@ class DocumentLifecycleNotifier {
   Future<(Document, AddByIdentifierResult)> createByIdentifier(
     String identifier, {
     CancelToken? cancelToken,
+    void Function()? onFetchingPdf,
   }) {
-    return _documents.addByIdentifier(identifier, cancelToken: cancelToken);
+    return _documents.addByIdentifier(
+      identifier,
+      cancelToken: cancelToken,
+      onFetchingPdf: onFetchingPdf,
+    );
   }
 
   Future<RebuildResult> rebuildLibrary({

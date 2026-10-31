@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import 'reader_icon_button.dart';
 
 class ReaderTopToolbar extends StatelessWidget {
   final bool showPreview;
@@ -23,7 +24,6 @@ class ReaderTopToolbar extends StatelessWidget {
   final VoidCallback onReprocess;
   final VoidCallback onRetranslate;
   final VoidCallback onOpenSummaryImage;
-  final VoidCallback onAiFixFigures;
   final bool showNavigationToggle;
   final bool navigationVisible;
   final VoidCallback? onToggleNavigation;
@@ -49,7 +49,6 @@ class ReaderTopToolbar extends StatelessWidget {
     required this.onReprocess,
     required this.onRetranslate,
     required this.onOpenSummaryImage,
-    required this.onAiFixFigures,
     this.showNavigationToggle = false,
     this.navigationVisible = true,
     this.onToggleNavigation,
@@ -57,7 +56,6 @@ class ReaderTopToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final l10n = context.l10n;
 
     return Padding(
@@ -66,36 +64,21 @@ class ReaderTopToolbar extends StatelessWidget {
         height: 48,
         child: Row(
           children: [
-            IconButton(
-              icon: Icon(
-                Symbols.chevron_left_rounded,
-                size: 28,
-                fill: 1,
-                color: cs.onSurface,
-              ),
+            ReaderIconButton(
+              icon: Symbols.chevron_left_rounded,
+              iconSize: 28,
               tooltip: l10n.back,
-              onPressed: () {
-                Haptics.soft();
-                onBack();
-              },
+              onPressed: onBack,
             ),
             if (showNavigationToggle && onToggleNavigation != null)
-              IconButton(
-                icon: Icon(
-                  navigationVisible
-                      ? Symbols.left_panel_close_rounded
-                      : Symbols.left_panel_open_rounded,
-                  size: 22,
-                  fill: 1,
-                  color: cs.onSurfaceVariant,
-                ),
+              ReaderIconButton(
+                icon: navigationVisible
+                    ? Symbols.left_panel_close_rounded
+                    : Symbols.left_panel_open_rounded,
                 tooltip: navigationVisible
                     ? l10n.readerHideNavigation
                     : l10n.readerShowNavigation,
-                onPressed: () {
-                  Haptics.soft();
-                  onToggleNavigation!();
-                },
+                onPressed: onToggleNavigation!,
               ),
             Expanded(
               child: Align(
@@ -107,178 +90,49 @@ class ReaderTopToolbar extends StatelessWidget {
                     children: [
                       if ((showPreview && hasResult) ||
                           (!showPreview && fileExists))
-                        IconButton(
-                          icon: Icon(
-                            Symbols.search_rounded,
-                            size: 22,
-                            fill: 1,
-                            color: cs.onSurfaceVariant,
-                          ),
+                        ReaderIconButton(
+                          icon: Symbols.search_rounded,
                           tooltip: l10n.search,
-                          onPressed: () {
-                            Haptics.soft();
-                            onSearch();
-                          },
+                          onPressed: onSearch,
                         ),
                       extractButton,
-                      if (showPreview && hasResult && !extracting)
-                        IconButton(
-                          icon: Icon(
-                            Symbols.auto_fix_high_rounded,
-                            size: 22,
-                            fill: 1,
-                            color: cs.onSurfaceVariant,
-                          ),
-                          tooltip: l10n.aiFixFigures,
-                          onPressed: () {
-                            Haptics.soft();
-                            onAiFixFigures();
-                          },
-                        ),
                       if (showPreview && hasResult && hasMarkdownContent)
-                        IconButton(
-                          icon: Icon(
-                            Symbols.mindfulness_rounded,
-                            size: 22,
-                            fill: 1,
-                            color: cs.onSurfaceVariant,
-                          ),
+                        ReaderIconButton(
+                          icon: Symbols.mindfulness_rounded,
                           tooltip: l10n.generateSummary,
-                          onPressed: () {
-                            Haptics.soft();
-                            onGenerateSummaryImage();
-                          },
+                          onPressed: onGenerateSummaryImage,
                         ),
                       if (!showPreview && fileExists)
-                        IconButton(
-                          icon: Icon(
-                            inFavorite
-                                ? Symbols.bookmark_remove_rounded
-                                : Symbols.bookmark_add_rounded,
-                            size: 22,
-                            fill: 1,
-                            color: cs.onSurfaceVariant,
-                          ),
+                        ReaderIconButton(
+                          icon: inFavorite
+                              ? Symbols.bookmark_remove_rounded
+                              : Symbols.bookmark_add_rounded,
                           tooltip: inFavorite
                               ? l10n.removeFromFavorite
                               : l10n.moveToFavorite,
-                          onPressed: () {
-                            Haptics.soft();
-                            (inFavorite ? onRemoveFavorite : onAddFavorite)();
-                          },
+                          onPressed: inFavorite
+                              ? onRemoveFavorite
+                              : onAddFavorite,
                         ),
                       if (!showPreview && hasResult && !extracting)
-                        IconButton(
-                          icon: Icon(
-                            Symbols.sync_rounded,
-                            size: 22,
-                            fill: 1,
-                            color: cs.onSurfaceVariant,
-                          ),
+                        ReaderIconButton(
+                          icon: Symbols.sync_rounded,
                           tooltip: l10n.reExtract,
-                          onPressed: () {
-                            Haptics.soft();
-                            onExtract();
-                          },
+                          onPressed: onExtract,
                         ),
                       if (!showPreview)
-                        IconButton(
-                          icon: Icon(
-                            Symbols.info_rounded,
-                            size: 22,
-                            fill: 1,
-                            color: cs.onSurfaceVariant,
-                          ),
+                        ReaderIconButton(
+                          icon: Symbols.info_rounded,
                           tooltip: l10n.documentInfo,
-                          onPressed: () {
-                            Haptics.soft();
-                            onShowInfo();
-                          },
+                          onPressed: onShowInfo,
                         )
                       else
-                        PopupMenuButton<String>(
-                          icon: Icon(
-                            Symbols.more_vert_rounded,
-                            size: 22,
-                            fill: 1,
-                            color: cs.onSurfaceVariant,
+                        Builder(
+                          builder: (anchor) => ReaderIconButton(
+                            icon: Symbols.more_vert_rounded,
+                            tooltip: l10n.more,
+                            onPressed: () => _showMoreMenu(anchor),
                           ),
-                          tooltip: l10n.more,
-                          color: cs.surfaceContainerHigh,
-                          elevation: 3,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          position: PopupMenuPosition.under,
-                          onSelected: (value) {
-                            Haptics.soft();
-                            switch (value) {
-                              case 'info':
-                                onShowInfo();
-                              case 'favorite_add':
-                                onAddFavorite();
-                              case 'favorite_remove':
-                                onRemoveFavorite();
-                              case 're_extract':
-                                onExtract();
-                              case 'reprocess':
-                                onReprocess();
-                              case 'retranslate':
-                                onRetranslate();
-                              case 'view_summary_image':
-                                onOpenSummaryImage();
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            if (hasSummaryImage)
-                              _popupItem(
-                                'view_summary_image',
-                                Symbols.image_rounded,
-                                l10n.viewSummary,
-                                cs,
-                              ),
-                            _popupItem(
-                              'info',
-                              Symbols.info_rounded,
-                              l10n.documentInfo,
-                              cs,
-                            ),
-                            if (inFavorite)
-                              _popupItem(
-                                'favorite_remove',
-                                Symbols.bookmark_remove_rounded,
-                                l10n.removeFromFavorite,
-                                cs,
-                              )
-                            else
-                              _popupItem(
-                                'favorite_add',
-                                Symbols.bookmark_add_rounded,
-                                l10n.moveToFavorite,
-                                cs,
-                              ),
-                            if (hasResult && !extracting)
-                              _popupItem(
-                                're_extract',
-                                Symbols.sync_rounded,
-                                l10n.reExtract,
-                                cs,
-                              ),
-                            if (hasResult && !extracting)
-                              _popupItem(
-                                'reprocess',
-                                Symbols.refresh_rounded,
-                                l10n.reformat,
-                                cs,
-                              ),
-                            if (canRetranslate)
-                              _popupItem(
-                                'retranslate',
-                                Symbols.translate_rounded,
-                                l10n.reTranslate,
-                                cs,
-                              ),
-                          ],
                         ),
                       const SizedBox(width: 4),
                     ],
@@ -290,6 +144,78 @@ class ReaderTopToolbar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 更多菜单：锚在按钮正下方，与原 PopupMenuButton(position: under) 一致。
+  Future<void> _showMoreMenu(BuildContext anchor) async {
+    final cs = Theme.of(anchor).colorScheme;
+    final l10n = anchor.l10n;
+    final box = anchor.findRenderObject()! as RenderBox;
+    final overlay = Overlay.of(anchor).context.findRenderObject()! as RenderBox;
+    final rect = box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
+    final value = await showMenu<String>(
+      context: anchor,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(rect.left, rect.bottom, rect.width, 0),
+        Offset.zero & overlay.size,
+      ),
+      color: cs.surfaceContainerHigh,
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      items: [
+        if (hasSummaryImage)
+          _popupItem(
+            'view_summary_image',
+            Symbols.image_rounded,
+            l10n.viewSummary,
+            cs,
+          ),
+        _popupItem('info', Symbols.info_rounded, l10n.documentInfo, cs),
+        if (inFavorite)
+          _popupItem(
+            'favorite_remove',
+            Symbols.bookmark_remove_rounded,
+            l10n.removeFromFavorite,
+            cs,
+          )
+        else
+          _popupItem(
+            'favorite_add',
+            Symbols.bookmark_add_rounded,
+            l10n.moveToFavorite,
+            cs,
+          ),
+        if (hasResult && !extracting)
+          _popupItem('re_extract', Symbols.sync_rounded, l10n.reExtract, cs),
+        if (hasResult && !extracting)
+          _popupItem('reprocess', Symbols.refresh_rounded, l10n.reformat, cs),
+        if (canRetranslate)
+          _popupItem(
+            'retranslate',
+            Symbols.translate_rounded,
+            l10n.reTranslate,
+            cs,
+          ),
+      ],
+    );
+    if (value == null) return;
+    Haptics.soft();
+    switch (value) {
+      case 'info':
+        onShowInfo();
+      case 'favorite_add':
+        onAddFavorite();
+      case 'favorite_remove':
+        onRemoveFavorite();
+      case 're_extract':
+        onExtract();
+      case 'reprocess':
+        onReprocess();
+      case 'retranslate':
+        onRetranslate();
+      case 'view_summary_image':
+        onOpenSummaryImage();
+    }
   }
 
   static PopupMenuItem<String> _popupItem(

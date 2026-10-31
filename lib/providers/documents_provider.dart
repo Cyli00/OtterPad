@@ -300,6 +300,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
   Future<(Document, AddByIdentifierResult)> addByIdentifier(
     String identifier, {
     CancelToken? cancelToken,
+    void Function()? onFetchingPdf,
   }) => StorageActivity.run(() async {
     final resolved = await IdentifierResolver.instance.resolve(
       identifier,
@@ -327,6 +328,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
         final pdfPath = DocPaths.pdf(doc.id);
         String downloadedPath = '';
         if (!DocumentMetadataChecks.isBlank(doc.doi)) {
+          onFetchingPdf?.call();
           downloadedPath = await PdfFetchService.instance.fetchByDoi(
             doi: doc.doi!,
             year: doc.year,
@@ -338,6 +340,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
           );
         }
         if (downloadedPath.isEmpty && parsed.type == IdentifierType.pmid) {
+          onFetchingPdf?.call();
           downloadedPath = await PdfFetchService.instance.fetchByPmid(
             pmid: parsed.value,
             year: doc.year,
@@ -409,10 +412,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     var repairedCount = 0;
 
     onProgress?.call(
-      RebuildProgress(
-        fileName: l10n?.libraryName ?? '',
-        status: l10n?.rebuildScanningFiles ?? '',
-      ),
+      RebuildProgress(fileName: '', status: l10n?.rebuildScanningFiles ?? ''),
     );
 
     // 基线从 DB 读（唯一真值源）：流未 emit 时 state 为空，若以空基线 upsert，
@@ -443,10 +443,7 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
     }
 
     onProgress?.call(
-      RebuildProgress(
-        fileName: l10n?.libraryName ?? '',
-        status: l10n?.rebuildCheckingFiles ?? '',
-      ),
+      RebuildProgress(fileName: '', status: l10n?.rebuildCheckingFiles ?? ''),
     );
 
     final validDocs = <Document>[];
@@ -484,7 +481,8 @@ class DocumentsNotifier extends StreamNotifier<List<Document>> {
           RebuildProgress(
             current: i + 1,
             total: toRepair.length,
-            fileName: p.basename(DocPaths.pdf(doc.id)),
+            // PDF 统一存为同名文件，显示文件名无意义，改显示篇名。
+            fileName: doc.title,
             status: l10n?.rebuildExtractingMetadata ?? '',
           ),
         );

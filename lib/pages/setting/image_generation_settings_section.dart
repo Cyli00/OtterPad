@@ -10,6 +10,7 @@ import '../../providers/image_generation_config_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/prompts.dart';
 import 'setting_picker.dart';
+import 'setting_group.dart';
 
 /// 画幅比例用户场景副标题——帮用户从"数字"映射到"使用场景"。
 /// 含中文的 hint 在 build 内通过 l10n 解析，其余技术描述保持原样。
@@ -55,35 +56,6 @@ class _ImageGenerationSettingsSectionState
     _promptTimer = Timer(const Duration(milliseconds: 600), () {
       ref.read(imageGenerationConfigProvider.notifier).setPrompt(value);
     });
-  }
-
-  InputDecoration _fieldDeco(
-    ThemeData theme,
-    ColorScheme cs, {
-    required String hint,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-        color: cs.onSurfaceVariant.withAlpha(120),
-      ),
-      filled: true,
-      fillColor: cs.surfaceContainerLow,
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.primary, width: 2),
-      ),
-    );
   }
 
   @override
@@ -177,9 +149,8 @@ class _ImageGenerationSettingsSectionState
             minLines: 5,
             maxLines: 12,
             style: theme.textTheme.bodyMedium,
-            decoration: _fieldDeco(
-              theme,
-              cs,
+            decoration: settingFieldDecoration(
+              context,
               hint: context.l10n.summaryPromptFieldHint,
             ),
             onChanged: (v) => _debounceSavePrompt(v.trim()),

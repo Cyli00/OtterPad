@@ -372,12 +372,12 @@ class DocExtractService {
     return (mdPath, processedMarkdown);
   }
 
-  /// 用已裁决的 [figures] manifest 重生成 `.md`（AI 修缮 figure 的落盘入口）。
+  /// 用已裁决的 [figures] manifest 重生成 `.md`。
   ///
   /// 读 `raw.md` → [replaceFigureRegions] 用 [figures] 替换 figure 区域 →
   /// [_cleanPipeline] 清理 + 预处理 → 写 `extract.md`。**不删 figures 目录**、
   /// **不重跑 [FigureExtractService.extractFigures]**——figures 由调用方已
-  /// 裁好写入。回滚靠 [reprocessMarkdown]（重跑启发式覆盖 AI 产物）。
+  /// 裁好写入。回滚靠 [reprocessMarkdown]（重跑启发式覆盖）。
   ///
   /// [jsonContent] 是 extract.json 文本（[_normalizeSectionHeadingLevels] 与
   /// [replaceFigureRegions] 均需）。

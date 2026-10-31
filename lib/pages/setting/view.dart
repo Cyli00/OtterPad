@@ -1,9 +1,12 @@
 import 'dart:math' as math;
 
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:motor/motor.dart';
 
+import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../router/app_routes.dart';
 import '../../utils/desktop.dart';
@@ -17,6 +20,7 @@ import 'backup_settings_page.dart';
 import 'general_settings_page.dart';
 import 'network_settings_page.dart';
 import 'ocr_settings_page.dart';
+import 'setting_group.dart';
 import 'storage_space_page.dart';
 
 enum SettingNavMode { shell, overlay }
@@ -114,6 +118,32 @@ class _SettingPageState extends State<SettingPage> {
       SettingsSection.storage => const StorageSpacePage(embedded: true),
       SettingsSection.about => const AboutPage(embedded: true),
     };
+  }
+
+  /// 宽屏详情：分组标题 + 分组页面。标题左缘跟随 [SettingListView] 的
+  /// 限宽内边距，与分组标题对齐。
+  Widget _buildDetail(ThemeData theme, SettingsSection section) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final side = SettingListView.sidePadding(constraints.maxWidth);
+            return Padding(
+              // 顶边与左侧列表首张卡片对齐；+16 对齐 SettingGroup 标题缩进
+              padding: EdgeInsets.fromLTRB(side + 16, 12, side, 0),
+              child: Text(
+                _sectionTitle(section),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            );
+          },
+        ),
+        Expanded(child: _sectionPage(section)),
+      ],
+    );
   }
 
   void _onShellPop({required bool showMasterDetail}) {
@@ -219,6 +249,7 @@ class _SettingPageState extends State<SettingPage> {
         final showMasterDetail = constraints.maxWidth >= 600;
         final inSection = !showMasterDetail && _selectedSection != null;
         final detailSection = _selectedSection ?? SettingsSection.general;
+        final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
         Widget body;
         if (showMasterDetail) {
@@ -240,51 +271,98 @@ class _SettingPageState extends State<SettingPage> {
                 thickness: 1,
                 color: colorScheme.outlineVariant.withAlpha(80),
               ),
-              Expanded(child: _sectionPage(detailSection)),
+              // 平级分组切换：标题随内容一起 fade through
+              Expanded(
+                child: PageTransitionSwitcher(
+                  duration: reduceMotion ? Duration.zero : kAnimSlow,
+                  transitionBuilder: (child, animation, secondaryAnimation) =>
+                      FadeThroughTransition(
+                        animation: animation,
+                        secondaryAnimation: secondaryAnimation,
+                        fillColor: colorScheme.surface,
+                        child: child,
+                      ),
+                  child: KeyedSubtree(
+                    key: ValueKey(detailSection),
+                    child: _buildDetail(theme, detailSection),
+                  ),
+                ),
+              ),
             ],
           );
-        } else if (inSection) {
-          body = _sectionPage(_selectedSection!);
         } else {
-          body = _buildList(showChevron: true);
+          // 窄屏列表 ↔ 分组：横向 shared axis，返回时反向
+          body = PageTransitionSwitcher(
+            duration: reduceMotion ? Duration.zero : kAnimSlow,
+            reverse: !inSection,
+            transitionBuilder: (child, animation, secondaryAnimation) =>
+                SharedAxisTransition(
+                  animation: animation,
+                  secondaryAnimation: secondaryAnimation,
+                  transitionType: SharedAxisTransitionType.horizontal,
+                  fillColor: colorScheme.surface,
+                  child: child,
+                ),
+            child: inSection
+                ? KeyedSubtree(
+                    key: ValueKey(_selectedSection),
+                    child: _sectionPage(_selectedSection!),
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey('list'),
+                    child: _buildList(showChevron: true),
+                  ),
+          );
         }
+
+        // 宽屏 shell 的分组标题已画在详情顶部，AppBar 只剩返回入口时才保留
+        final showAppBar = !(showMasterDetail && _isShell && showRail);
 
         Widget page = Scaffold(
           backgroundColor: colorScheme.surface,
-          appBar: AppBar(
-            leading: inSection
-                ? IconButton(
-                    icon: const Icon(Symbols.arrow_back_rounded),
-                    tooltip: l10n.back,
-                    onPressed: () => _isShell
-                        ? setState(() => _selectedSection = null)
-                        : context.pop(),
-                  )
-                : (_isShell && !showRail
+          appBar: !showAppBar
+              ? null
+              : AppBar(
+                  leading: inSection
                       ? IconButton(
                           icon: const Icon(Symbols.arrow_back_rounded),
                           tooltip: l10n.back,
-                          onPressed: () => StatefulNavigationShell.maybeOf(
-                            context,
-                          )?.goBranch(0),
+                          onPressed: () => _isShell
+                              ? setState(() => _selectedSection = null)
+                              : context.pop(),
                         )
-                      : null),
-            automaticallyImplyLeading: !_isShell,
-            title: Text(
-              showMasterDetail
-                  ? _sectionTitle(detailSection)
-                  : (inSection
-                        ? _sectionTitle(_selectedSection!)
-                        : l10n.settings),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            centerTitle: false,
-            backgroundColor: colorScheme.surface,
-            scrolledUnderElevation: 0,
-          ),
-          body: body,
+                      : (_isShell && !showRail
+                            ? IconButton(
+                                icon: const Icon(Symbols.arrow_back_rounded),
+                                tooltip: l10n.back,
+                                onPressed: () =>
+                                    StatefulNavigationShell.maybeOf(
+                                      context,
+                                    )?.goBranch(0),
+                              )
+                            : null),
+                  automaticallyImplyLeading: !_isShell,
+                  title: AnimatedSwitcher(
+                    duration: reduceMotion ? Duration.zero : kAnimFast,
+                    layoutBuilder: (current, previous) => Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [...previous, ?current],
+                    ),
+                    child: Text(
+                      inSection
+                          ? _sectionTitle(_selectedSection!)
+                          : l10n.settings,
+                      key: ValueKey(inSection ? _selectedSection : null),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  centerTitle: false,
+                  backgroundColor: colorScheme.surface,
+                  scrolledUnderElevation: 0,
+                ),
+          body: showAppBar ? body : SafeArea(bottom: false, child: body),
         );
 
         if (_isShell) {
@@ -307,16 +385,49 @@ class _SettingPageState extends State<SettingPage> {
 
 // ── 设置项卡片 ──
 
-class _SettingsCard extends StatelessWidget {
-  final List<Widget> children;
+/// 设置分组卡片。选中项的底色是卡片内唯一的滑动指示器：选中项变化时用弹簧
+/// 滑到新位置；选中移到别的卡片时淡出，移入时淡入。
+class _SettingsCard extends StatefulWidget {
+  final List<_SettingsTile> children;
 
   const _SettingsCard({required this.children});
 
   @override
+  State<_SettingsCard> createState() => _SettingsCardState();
+}
+
+class _SettingsCardState extends State<_SettingsCard> {
+  final _stackKey = GlobalKey();
+  final List<GlobalKey> _tileKeys = [];
+
+  /// 最近一次选中项的位置；取消选中后保留，供淡出时停在原处
+  Rect? _indicatorRect;
+
+  int get _selectedIndex => widget.children.indexWhere((t) => t.selected);
+
+  /// 指示器跟随布局：选中项、窗口宽度或文字换行变化后都重新量取
+  void _measure() {
+    if (!mounted || _selectedIndex < 0) return;
+    final stack = _stackKey.currentContext?.findRenderObject();
+    final tile = _tileKeys[_selectedIndex].currentContext?.findRenderObject();
+    if (stack is! RenderBox || tile is! RenderBox || !tile.hasSize) return;
+    final rect = _SettingsTile.margin.deflateRect(
+      tile.localToGlobal(Offset.zero, ancestor: stack) & tile.size,
+    );
+    if (rect != _indicatorRect) setState(() => _indicatorRect = rect);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
+    final children = widget.children;
     if (children.isEmpty) return const SizedBox.shrink();
+
+    while (_tileKeys.length < children.length) {
+      _tileKeys.add(GlobalKey());
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     return Container(
       decoration: BoxDecoration(
@@ -324,12 +435,39 @@ class _SettingsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
+      child: Stack(
+        key: _stackKey,
         children: [
-          for (int i = 0; i < children.length; i++) ...[
-            children[i],
-            if (i < children.length - 1) const AppDivider.tile(),
-          ],
+          if (_indicatorRect != null)
+            MotionBuilder<Rect>(
+              motion: kMotionSpatialFast,
+              converter: MotionConverter.rect,
+              value: _indicatorRect!,
+              active: !reduceMotion,
+              builder: (context, rect, child) =>
+                  Positioned.fromRect(rect: rect, child: child!),
+              child: SingleMotionBuilder(
+                motion: kMotionEffects,
+                value: _selectedIndex >= 0 ? 1 : 0,
+                active: !reduceMotion,
+                builder: (context, opacity, child) =>
+                    Opacity(opacity: opacity.clamp(0.0, 1.0), child: child),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(_SettingsTile.radius),
+                  ),
+                ),
+              ),
+            ),
+          Column(
+            children: [
+              for (int i = 0; i < children.length; i++) ...[
+                KeyedSubtree(key: _tileKeys[i], child: children[i]),
+                if (i < children.length - 1) const AppDivider.tile(),
+              ],
+            ],
+          ),
         ],
       ),
     );
@@ -355,58 +493,76 @@ class _SettingsTile extends StatelessWidget {
     this.showChevron = true,
   });
 
+  /// 点按区与卡片边缘的间隙；选中指示器与点按高亮共用这块区域。
+  /// 圆角与卡片 24 同心（24 - 6）。
+  static const EdgeInsets margin = EdgeInsets.symmetric(
+    horizontal: 6,
+    vertical: 4,
+  );
+  static const double radius = 18;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return TactilePress(
-      onTap: onTap,
-      baseColor: selected ? colorScheme.primaryContainer : Colors.transparent,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: selected
-                  ? colorScheme.surface
-                  : colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+    // 选中底色由 _SettingsCard 的滑动指示器绘制，这里保持透明
+    return Padding(
+      padding: margin,
+      child: TactilePress(
+        onTap: onTap,
+        baseColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(radius),
+        // 加上 margin 后内容位置不变（20 / 16）
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : kAnimFast,
+              curve: kAnimCurve,
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: selected
+                    ? colorScheme.surface
+                    : colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: colorScheme.primary, size: 22),
             ),
-            child: Icon(icon, color: colorScheme.primary, size: 22),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    subtitle!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                    title,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
                     ),
                   ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          if (showChevron)
-            Icon(
-              Symbols.chevron_right_rounded,
-              color: colorScheme.onSurfaceVariant.withAlpha(120),
-            ),
-        ],
+            if (showChevron)
+              Icon(
+                Symbols.chevron_right_rounded,
+                color: colorScheme.onSurfaceVariant.withAlpha(120),
+              ),
+          ],
+        ),
       ),
     );
   }

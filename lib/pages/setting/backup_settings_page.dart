@@ -113,11 +113,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
         child: Stack(
           children: [
-            ListView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ).copyWith(bottom: 40),
+            SettingListView(
               children: [
                 SettingGroup(
                   title: context.l10n.remoteBackup,
@@ -378,33 +374,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   autocorrect: false,
                   enableSuggestions: false,
                   style: theme.textTheme.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: 'Zotero API Key ...',
-                    hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant.withAlpha(120),
-                    ),
-                    filled: true,
-                    fillColor: cs.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: cs.outlineVariant.withAlpha(100),
-                        width: 1,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: cs.primary, width: 2),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    isDense: true,
+                  decoration: settingFieldDecoration(
+                    context,
+                    hint: 'Zotero API Key ...',
                     suffixIcon: IconButton(
                       icon: Icon(
                         _zoteroKeyObscured
@@ -743,7 +715,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _showMessage(context.l10n.backupExportedTo(targetFile.path));
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context.l10n.exportBackupFailed(_formatError(e)));
+      _showMessage(
+        context.l10n.exportBackupFailed(_formatError(e)),
+        tone: SnackTone.error,
+      );
     } finally {
       await _deleteTempFile(tempArchivePath);
     }
@@ -777,7 +752,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _showRestoreMessage(mode, mergeResult);
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context.l10n.restoreFailed(_formatError(e)));
+      _showMessage(
+        context.l10n.restoreFailed(_formatError(e)),
+        tone: SnackTone.error,
+      );
     }
   }
 
@@ -793,10 +771,16 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             .backupToRemote(scope: scope);
       });
       if (!mounted) return;
-      _showMessage(context.l10n.remoteBackupUploaded(target ?? ''));
+      _showMessage(
+        context.l10n.remoteBackupUploaded(target ?? ''),
+        tone: SnackTone.success,
+      );
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context.l10n.uploadRemoteFailed(_formatError(e)));
+      _showMessage(
+        context.l10n.uploadRemoteFailed(_formatError(e)),
+        tone: SnackTone.error,
+      );
     }
   }
 
@@ -825,7 +809,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _showRestoreMessage(mode, mergeResult, remote: true);
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context.l10n.remoteRestoreFailed(_formatError(e)));
+      _showMessage(
+        context.l10n.remoteRestoreFailed(_formatError(e)),
+        tone: SnackTone.error,
+      );
     } finally {
       await _deleteTempFile(tempArchivePath);
     }
@@ -1121,8 +1108,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
   }
 
-  void _showMessage(String message) {
-    ref.read(snackBarServiceProvider).showResult(message: message);
+  void _showMessage(String message, {SnackTone tone = SnackTone.info}) {
+    ref.read(snackBarServiceProvider).showResult(message: message, tone: tone);
   }
 
   String _formatError(Object error) {
@@ -1356,32 +1343,12 @@ class _ConfigField extends StatelessWidget {
         controller: controller,
         obscureText: obscureText,
         style: theme.textTheme.bodyMedium,
-        decoration: InputDecoration(
+        decoration: settingFieldDecoration(
+          context,
           labelText: label,
-          labelStyle: theme.textTheme.bodyMedium?.copyWith(
-            color: cs.onSurfaceVariant,
-          ),
           helperText: helperText,
-          helperStyle: theme.textTheme.bodySmall?.copyWith(
-            color: cs.onSurfaceVariant,
-          ),
           prefixIcon: Icon(icon, size: 20, color: cs.onSurfaceVariant),
           suffixIcon: suffixIcon,
-          filled: true,
-          fillColor: cs.surfaceContainerLow,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: cs.outline),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: cs.primary, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
         ),
       ),
     );

@@ -9,10 +9,10 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get sharedFilesImportFailed => '分享文件导入失败，请从文库重新导入。';
+  String get sharedFilesImportFailed => '分享文件导入失败，请从文库重新导入';
 
   @override
-  String get sharedFilesSkipped => '部分分享文件不是可读取的 PDF，已跳过。';
+  String get sharedFilesSkipped => '部分分享文件不是可读取的 PDF，已跳过';
 
   @override
   String readerTranslationIncomplete(int count) {
@@ -278,7 +278,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appFontLoadFailed => '无法读取系统字体，仍可选择 Sans 或 Serif。';
 
   @override
-  String get appFontSaveFailed => '字体设置未能保存，请重试。';
+  String get appFontSaveFailed => '字体设置未能保存，请重试';
 
   @override
   String get paginationMode => '翻页方式';
@@ -340,7 +340,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get background => '背景';
 
   @override
-  String get translationDone => '翻译完成';
+  String get translationDone => '已完成翻译';
 
   @override
   String get translationCacheUsed => '已加载翻译缓存';
@@ -409,7 +409,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get addByIdentifierTitle => '通过标识符添加条目';
 
   @override
-  String get batchExtracting => '批量提取中';
+  String get batchExtracting => '正在批量提取';
 
   @override
   String get extractionDone => '提取完成';
@@ -500,7 +500,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get entryDeleted => '已删除条目';
 
   @override
-  String get fileAttached => '文件附加成功';
+  String get fileAttached => '已附加文件';
 
   @override
   String get clearHistory => '清空历史';
@@ -559,7 +559,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get alreadyInThisFavorite => '已在收藏夹';
 
   @override
-  String get reformatDone => '重新排版完成';
+  String get reformatDone => '已重新排版';
 
   @override
   String get viewPdf => '查看 PDF';
@@ -1202,7 +1202,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mimoSearchPluginOpenConsole => '打开插件控制台';
 
   @override
-  String get taskInProgress => '该文献已有任务正在进行中';
+  String get taskInProgress => '该文献已有任务在进行，请稍候';
 
   @override
   String get savingResult => '正在保存结果';
@@ -1220,7 +1220,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get requestingImageModel => '正在请求生图模型';
 
   @override
-  String get summaryGenerated => '总结图已生成';
+  String get summaryGenerated => '已生成总结图';
 
   @override
   String get downloadCancelled => '已取消下载';
@@ -1401,7 +1401,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get generatingAndUploading => '正在生成并上传远程备份...';
+  String get generatingAndUploading => '正在生成并上传远程备份';
 
   @override
   String get backupScopeTitle => '备份范围';
@@ -1479,7 +1479,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String remoteBackupUploaded(String target) {
-    return '远程备份已上传到 $target';
+    return '已上传远程备份至 $target';
   }
 
   @override
@@ -1720,9 +1720,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get aiFixNotForMinerU => 'MinerU 提取的文档已自带图表说明，无需 AI 修缮';
-
-  @override
   String get aspectSquare => '方形 · 社交配图';
 
   @override
@@ -1815,52 +1812,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pdfNotFound => 'PDF 文件不存在';
 
   @override
-  String get reformatting => '正在重新排版…';
+  String get reformatting => '正在重新排版';
 
   @override
   String reformatFailed(String error) {
-    return '排版失败: $error';
+    return '重新排版失败：$error';
   }
-
-  @override
-  String get aiFixFigures => 'AI 修缮图表';
-
-  @override
-  String get aiFixFiguresAnalyzing => '正在分析版面...';
-
-  @override
-  String get aiFixFiguresCalling => '正在调用 AI 模型...';
-
-  @override
-  String get aiFixFiguresApplying => '正在应用修缮...';
-
-  @override
-  String aiFixFiguresCropping(int done, int total) {
-    return '正在裁剪图表 ($done/$total)';
-  }
-
-  @override
-  String get aiFixFiguresDone => '图表已修缮。如需回退请用「重新排版」';
-
-  @override
-  String aiFixFiguresFailed(String error) {
-    return 'AI 修缮失败: $error';
-  }
-
-  @override
-  String get aiFixFiguresCancelled => 'AI 修缮已取消';
-
-  @override
-  String get aiFixFiguresMissingExtract => '请先提取文档，再修缮图表';
-
-  @override
-  String get aiFixFiguresModelNotSet => '请先设置专家模型或快速模型';
-
-  @override
-  String get aiFixFiguresInvalidLlmOutput => 'AI 返回内容无法解析，请重试';
-
-  @override
-  String get aiFixFiguresFailedGeneric => 'AI 修缮失败，请重试';
 
   @override
   String addedToFavorite(String name) {
@@ -1907,7 +1864,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String attachFileFailed(String error) {
-    return '附加文件失败: $error';
+    return '附加文件失败：$error';
   }
 
   @override
@@ -2168,79 +2125,79 @@ class AppLocalizationsZh extends AppLocalizations {
   String get targetLanguageChangedRetranslate => '目标语言已变更，请重新翻译';
 
   @override
-  String get preparingTranslation => '准备中';
+  String get preparingTranslation => '正在准备翻译';
 
   @override
   String get noTranslatableParagraphs => '未检测到可翻译段落';
 
   @override
   String waitingExtractTitle(String title) {
-    return '等待提取: $title';
+    return '等待提取 · $title';
   }
 
   @override
   String submittingTaskTitle(String title) {
-    return '正在提交任务: $title';
+    return '正在提交任务 · $title';
   }
 
   @override
   String extractionCompleteTitle(String title) {
-    return '文档提取完成：$title';
+    return '已提取「$title」';
   }
 
   @override
   String networkError(String message) {
-    return '网络错误: $message';
+    return '网络错误：$message';
   }
 
   @override
   String extractionFailedDetail(String error) {
-    return '提取失败: $error';
+    return '提取失败：$error';
   }
 
   @override
   String waitingSubmitTitle(String title) {
-    return '等待提交: $title';
+    return '等待提交 · $title';
   }
 
   @override
   String submittedWaitingTitle(String title) {
-    return '已提交，等待处理: $title';
+    return '等待处理 · $title';
   }
 
   @override
   String extractingTitle(String title) {
-    return '正在提取… · $title';
+    return '正在提取 · $title';
   }
 
   @override
   String waitingSummaryTitle(String title) {
-    return '等待生成总结图: $title';
+    return '等待生成总结图 · $title';
   }
 
   @override
   String generatingSummaryTitle(String title) {
-    return '正在生成总结图: $title';
+    return '正在生成总结图 · $title';
   }
 
   @override
   String summaryGenerationFailed(String error) {
-    return '总结图生成失败: $error';
+    return '生成总结图失败：$error';
   }
 
   @override
   String waitingDownloadTitle(String title) {
-    return '等待下载: $title';
+    return '等待下载 · $title';
   }
 
   @override
   String downloadingTitle(String title) {
-    return '正在下载: $title';
+    return '正在下载 · $title';
   }
 
   @override
   String downloadSuccessTitle(String title) {
-    return '下载成功：$title';
+    return '已下载「$title」';
   }
 
   @override
@@ -2248,7 +2205,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String downloadFailed(String error) {
-    return '下载失败: $error';
+    return '下载失败：$error';
   }
 
   @override
@@ -2266,18 +2223,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String downloadCompletePartial(int ok, int fail) {
-    return '下载完成：成功 $ok 篇，失败 $fail 篇';
+    return '下载完成，成功 $ok 篇，失败 $fail 篇';
   }
 
   @override
-  String get preparingImport => '准备导入文件...';
+  String get preparingImport => '正在准备导入';
 
   @override
   String get importingFilesBusy => '正在导入文件，请稍候';
 
   @override
   String importingFile(String fileName) {
-    return '正在导入: $fileName';
+    return '正在导入 · $fileName';
   }
 
   @override
@@ -2293,7 +2250,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String addedDocumentTitle(String title) {
-    return '已添加: $title';
+    return '已添加「$title」';
   }
 
   @override
@@ -2301,22 +2258,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String addFailedError(String error) {
-    return '添加失败: $error';
+    return '添加失败：$error';
   }
 
   @override
   String resolvingIdentifier(String identifier) {
-    return '正在解析标识符: $identifier';
+    return '正在解析标识符 · $identifier';
   }
 
   @override
   String get resolvingIdentifierBusy => '正在解析标识符，请稍候';
 
   @override
-  String get preparingRebuild => '准备重构文库...';
+  String get preparingRebuild => '正在准备重构文库';
 
   @override
-  String get rebuildInProgress => '文库重构正在进行中';
+  String get rebuildInProgress => '正在重构文库，请稍候';
 
   @override
   String get rebuildCancelled => '已取消重构文库';
@@ -2353,10 +2310,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get rebuildNormal => '，文库状态正常';
 
   @override
-  String get fetchingZoteroItems => '正在拉取 Zotero 条目...';
+  String get fetchingZoteroItems => '正在拉取 Zotero 条目';
 
   @override
-  String get zoteroSyncInProgress => 'Zotero 同步正在进行中';
+  String get zoteroSyncInProgress => '正在同步 Zotero，请稍候';
 
   @override
   String get zoteroSyncCancelled => '已取消 Zotero 同步';
@@ -2365,7 +2322,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fetchingZoteroProgress => '正在拉取 Zotero 条目';
 
   @override
-  String get importingDocuments => '正在导入文献...';
+  String get importingDocuments => '正在导入文献';
 
   @override
   String zoteroSyncCompleteAdded(int count) {
@@ -2385,7 +2342,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String existsInLibrary(String title) {
-    return '文库中已存在: $title';
+    return '文库中已存在「$title」';
   }
 
   @override
@@ -2400,7 +2357,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String importedFile(String title) {
-    return '已导入: $title';
+    return '已导入「$title」';
   }
 
   @override
@@ -2413,7 +2370,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importCompleteLabel => '导入完成';
 
   @override
-  String get taskBusy => '任务正在进行中';
+  String get taskBusy => '已有任务在进行，请稍候';
 
   @override
   String promptMissingPlaceholders(String placeholders) {
@@ -2571,7 +2528,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get generalExportTodayLogDesc => '分享或保存今日日志文件，便于提交缺陷报告';
 
   @override
-  String get generalExportLogEmpty => '尚无日志文件 — 请开启日志记录、复现问题后再导出';
+  String get generalExportLogEmpty => '尚无日志文件，请开启日志记录并复现问题后再导出';
 
   @override
   String get generalExportLogFailed => '导出日志失败';
@@ -2630,7 +2587,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateCheckFailed => '检查更新失败';
 
   @override
-  String get updateDownloading => '下载更新中';
+  String get updateDownloading => '正在下载更新';
 
   @override
   String get updateDownloadFailed => '下载更新失败';
@@ -2780,22 +2737,22 @@ class AppLocalizationsZh extends AppLocalizations {
       '选择本次提取使用的 OCR 接口，沿用该接口的解析设置，不改变默认接口。';
 
   @override
-  String get mineruProgressRequestingUpload => '正在申请上传...';
+  String get mineruProgressRequestingUpload => '正在申请上传';
 
   @override
-  String get mineruProgressUploading => '正在上传...';
+  String get mineruProgressUploading => '正在上传';
 
   @override
-  String get mineruProgressQueued => '排队中...';
+  String get mineruProgressQueued => '排队中';
 
   @override
-  String get mineruProgressParsing => '正在解析...';
+  String get mineruProgressParsing => '正在解析';
 
   @override
-  String get mineruProgressConverting => '正在转换格式...';
+  String get mineruProgressConverting => '正在转换格式';
 
   @override
-  String get mineruProgressDownloading => '正在下载结果...';
+  String get mineruProgressDownloading => '正在下载结果';
 
   @override
   String mineruErrInvalidParams(String msg) {
@@ -3067,13 +3024,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryName => 'OtterPad 文库';
 
   @override
-  String get rebuildScanningFiles => '正在扫描 PDF 文件…';
+  String get rebuildScanningFiles => '正在扫描 PDF 文件';
 
   @override
-  String get rebuildCheckingFiles => '正在检查文件完整性…';
+  String get rebuildCheckingFiles => '正在检查文件完整性';
 
   @override
-  String get rebuildExtractingMetadata => '正在提取 PDF 元数据…';
+  String get rebuildExtractingMetadata => '正在提取 PDF 元数据';
 
   @override
   String get zoteroLocalConnection => '连接本机文库';
@@ -3093,7 +3050,10 @@ class AppLocalizationsZh extends AppLocalizations {
       '优先使用模型原生搜索；模型不支持时使用所选服务。各服务的 API Key 独立保存，切换不会清空。';
 
   @override
-  String get webSearchNotConfigured => '请在 AI 设置中为所选联网搜索服务配置 API Key。';
+  String get webSearchNotConfigured => '请在 AI 设置中为所选联网搜索服务配置 API Key';
+
+  @override
+  String get aiRequestRefused => '模型按安全策略拒绝了这个请求，可换个问法或换用其他模型重试。';
 
   @override
   String get chatToggleKeyVisibility => '显示或隐藏 API Key';
@@ -3105,10 +3065,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatNoModels => '请先在 AI 设置中添加对话模型';
 
   @override
-  String get chatFastTextOnly => '快速模型仅接收文本，本轮及历史中的配图均不会发送；正文和图注仍保留。';
+  String get chatFastTextOnly => '快速模型仅接收文本，本轮及历史配图不会发送，正文和图注仍保留';
 
   @override
-  String get chatModelTextOnly => '当前模型不支持图片，本轮仅发送正文和图注。';
+  String get chatModelTextOnly => '当前模型不支持图片，本轮仅发送正文和图注';
 
   @override
   String get chatProcess => 'ReAct 链';
@@ -3152,22 +3112,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatCollapseQuote => '收起引用';
 
   @override
-  String get chatSourceNotFound => '未找到对应原文，文献内容可能已更新。';
+  String get chatSourceNotFound => '未找到对应原文，文献内容可能已更新';
 
   @override
-  String get metadataCertificateFailed => '无法验证元数据服务的 TLS 证书，请检查系统信任证书和代理配置。';
+  String get metadataCertificateFailed => '无法验证元数据服务的 TLS 证书，请检查系统信任证书和代理配置';
 
   @override
-  String get metadataProxyFailed => '代理连接或认证失败，请检查代理及网络设置。';
+  String get metadataProxyFailed => '代理连接或认证失败，请检查代理及网络设置';
 
   @override
-  String get metadataRequestTimedOut => '元数据请求超时，请稍后重试。';
+  String get metadataRequestTimedOut => '元数据请求超时，请稍后重试';
 
   @override
-  String get metadataNotFound => '未找到对应的文献元数据。';
+  String get metadataNotFound => '未找到对应的文献元数据';
 
   @override
-  String get metadataConnectionFailed => '无法连接元数据服务，请检查网络。';
+  String get metadataConnectionFailed => '无法连接元数据服务，请检查网络';
 
   @override
   String get tableCopyTsv => '复制到电子表格（TSV）';
@@ -3609,11 +3569,39 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get websiteOriginalPdfBody => '保留 PDF 的页码与排版。需要核对公式、引用或上下文时，回到原始页面。';
+
+  @override
+  String taskFailed(String error) {
+    return '任务失败：$error';
+  }
+
+  @override
+  String get extractStageSubmitting => '正在提交任务';
+
+  @override
+  String get extractStageExtracting => '正在提取';
+
+  @override
+  String get translatingDocument => '正在翻译';
+
+  @override
+  String get autoBackupRunning => '正在自动备份';
+
+  @override
+  String autoBackupFailed(String error) {
+    return '自动备份失败：$error';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
 class AppLocalizationsZhHant extends AppLocalizationsZh {
   AppLocalizationsZhHant() : super('zh_Hant');
+
+  @override
+  String get sharedFilesImportFailed => '分享檔案匯入失敗，請從文庫重新匯入';
+
+  @override
+  String get sharedFilesSkipped => '部分分享檔案不是可讀取的 PDF，已略過';
 
   @override
   String readerTranslationIncomplete(int count) {
@@ -3879,7 +3867,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get appFontLoadFailed => '無法讀取系統字體，仍可選擇 Sans 或 Serif。';
 
   @override
-  String get appFontSaveFailed => '字體設定未能儲存，請重試。';
+  String get appFontSaveFailed => '字體設定未能儲存，請重試';
 
   @override
   String get paginationMode => '翻頁方式';
@@ -3941,7 +3929,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get background => '背景';
 
   @override
-  String get translationDone => '翻譯完成';
+  String get translationDone => '已完成翻譯';
 
   @override
   String get translationCacheUsed => '已載入翻譯快取';
@@ -4010,7 +3998,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get addByIdentifierTitle => '透過識別碼新增條目';
 
   @override
-  String get batchExtracting => '批次擷取中';
+  String get batchExtracting => '正在批次擷取';
 
   @override
   String get extractionDone => '擷取完成';
@@ -4101,7 +4089,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get entryDeleted => '已刪除條目';
 
   @override
-  String get fileAttached => '檔案附加成功';
+  String get fileAttached => '已附加檔案';
 
   @override
   String get clearHistory => '清空歷史';
@@ -4160,7 +4148,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get alreadyInThisFavorite => '已在收藏夾';
 
   @override
-  String get reformatDone => '重新排版完成';
+  String get reformatDone => '已重新排版';
 
   @override
   String get viewPdf => '檢視 PDF';
@@ -4803,7 +4791,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get mimoSearchPluginOpenConsole => '開啟外掛控制台';
 
   @override
-  String get taskInProgress => '該文獻已有工作正在進行中';
+  String get taskInProgress => '該文獻已有工作在進行，請稍候';
 
   @override
   String get savingResult => '正在儲存結果';
@@ -4821,7 +4809,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get requestingImageModel => '正在請求生圖模型';
 
   @override
-  String get summaryGenerated => '摘要圖已產生';
+  String get summaryGenerated => '已產生摘要圖';
 
   @override
   String get downloadCancelled => '已取消下載';
@@ -5002,7 +4990,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get generatingAndUploading => '正在產生並上傳遠端備份...';
+  String get generatingAndUploading => '正在產生並上傳遠端備份';
 
   @override
   String get backupScopeTitle => '備份範圍';
@@ -5080,7 +5068,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String remoteBackupUploaded(String target) {
-    return '遠端備份已上傳到 $target';
+    return '已上傳遠端備份至 $target';
   }
 
   @override
@@ -5321,9 +5309,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
-  String get aiFixNotForMinerU => 'MinerU 擷取的文件已自帶圖表說明，無須 AI 修繕';
-
-  @override
   String get aspectSquare => '方形 · 社群配圖';
 
   @override
@@ -5411,52 +5396,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get pdfNotFound => 'PDF 檔案不存在';
 
   @override
-  String get reformatting => '正在重新排版…';
+  String get reformatting => '正在重新排版';
 
   @override
   String reformatFailed(String error) {
-    return '排版失敗: $error';
+    return '重新排版失敗：$error';
   }
-
-  @override
-  String get aiFixFigures => 'AI 修繕圖表';
-
-  @override
-  String get aiFixFiguresAnalyzing => '正在分析版面...';
-
-  @override
-  String get aiFixFiguresCalling => '正在呼叫 AI 模型...';
-
-  @override
-  String get aiFixFiguresApplying => '正在套用修繕...';
-
-  @override
-  String aiFixFiguresCropping(int done, int total) {
-    return '正在裁剪圖表 ($done/$total)';
-  }
-
-  @override
-  String get aiFixFiguresDone => '圖表已修繕。如需復原請用「重新排版」';
-
-  @override
-  String aiFixFiguresFailed(String error) {
-    return 'AI 修繕失敗: $error';
-  }
-
-  @override
-  String get aiFixFiguresCancelled => 'AI 修繕已取消';
-
-  @override
-  String get aiFixFiguresMissingExtract => '請先提取文件，再修繕圖表';
-
-  @override
-  String get aiFixFiguresModelNotSet => '請先設定專家模型或快速模型';
-
-  @override
-  String get aiFixFiguresInvalidLlmOutput => 'AI 回傳內容無法解析，請重試';
-
-  @override
-  String get aiFixFiguresFailedGeneric => 'AI 修繕失敗，請重試';
 
   @override
   String addedToFavorite(String name) {
@@ -5503,7 +5448,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String attachFileFailed(String error) {
-    return '附加檔案失敗: $error';
+    return '附加檔案失敗：$error';
   }
 
   @override
@@ -5764,79 +5709,79 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get targetLanguageChangedRetranslate => '目標語言已變更，請重新翻譯';
 
   @override
-  String get preparingTranslation => '準備中';
+  String get preparingTranslation => '正在準備翻譯';
 
   @override
   String get noTranslatableParagraphs => '未偵測到可翻譯段落';
 
   @override
   String waitingExtractTitle(String title) {
-    return '等待擷取: $title';
+    return '等待擷取 · $title';
   }
 
   @override
   String submittingTaskTitle(String title) {
-    return '正在提交任務: $title';
+    return '正在提交任務 · $title';
   }
 
   @override
   String extractionCompleteTitle(String title) {
-    return '文件擷取完成：$title';
+    return '已擷取「$title」';
   }
 
   @override
   String networkError(String message) {
-    return '網路錯誤: $message';
+    return '網路錯誤：$message';
   }
 
   @override
   String extractionFailedDetail(String error) {
-    return '擷取失敗: $error';
+    return '擷取失敗：$error';
   }
 
   @override
   String waitingSubmitTitle(String title) {
-    return '等待提交: $title';
+    return '等待提交 · $title';
   }
 
   @override
   String submittedWaitingTitle(String title) {
-    return '已提交，等待處理: $title';
+    return '等待處理 · $title';
   }
 
   @override
   String extractingTitle(String title) {
-    return '正在擷取… · $title';
+    return '正在擷取 · $title';
   }
 
   @override
   String waitingSummaryTitle(String title) {
-    return '等待產生摘要圖: $title';
+    return '等待產生摘要圖 · $title';
   }
 
   @override
   String generatingSummaryTitle(String title) {
-    return '正在產生摘要圖: $title';
+    return '正在產生摘要圖 · $title';
   }
 
   @override
   String summaryGenerationFailed(String error) {
-    return '摘要圖產生失敗: $error';
+    return '產生摘要圖失敗：$error';
   }
 
   @override
   String waitingDownloadTitle(String title) {
-    return '等待下載: $title';
+    return '等待下載 · $title';
   }
 
   @override
   String downloadingTitle(String title) {
-    return '正在下載: $title';
+    return '正在下載 · $title';
   }
 
   @override
   String downloadSuccessTitle(String title) {
-    return '下載成功：$title';
+    return '已下載「$title」';
   }
 
   @override
@@ -5844,7 +5789,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String downloadFailed(String error) {
-    return '下載失敗: $error';
+    return '下載失敗：$error';
   }
 
   @override
@@ -5862,18 +5807,18 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String downloadCompletePartial(int ok, int fail) {
-    return '下載完成：成功 $ok 篇，失敗 $fail 篇';
+    return '下載完成，成功 $ok 篇，失敗 $fail 篇';
   }
 
   @override
-  String get preparingImport => '準備匯入檔案...';
+  String get preparingImport => '正在準備匯入';
 
   @override
   String get importingFilesBusy => '正在匯入檔案，請稍候';
 
   @override
   String importingFile(String fileName) {
-    return '正在匯入: $fileName';
+    return '正在匯入 · $fileName';
   }
 
   @override
@@ -5889,7 +5834,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String addedDocumentTitle(String title) {
-    return '已新增: $title';
+    return '已新增「$title」';
   }
 
   @override
@@ -5897,22 +5842,22 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String addFailedError(String error) {
-    return '新增失敗: $error';
+    return '新增失敗：$error';
   }
 
   @override
   String resolvingIdentifier(String identifier) {
-    return '正在解析識別碼: $identifier';
+    return '正在解析識別碼 · $identifier';
   }
 
   @override
   String get resolvingIdentifierBusy => '正在解析識別碼，請稍候';
 
   @override
-  String get preparingRebuild => '準備重構文庫...';
+  String get preparingRebuild => '正在準備重構文庫';
 
   @override
-  String get rebuildInProgress => '文庫重構正在進行中';
+  String get rebuildInProgress => '正在重構文庫，請稍候';
 
   @override
   String get rebuildCancelled => '已取消重構文庫';
@@ -5949,10 +5894,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get rebuildNormal => '，文庫狀態正常';
 
   @override
-  String get fetchingZoteroItems => '正在拉取 Zotero 條目...';
+  String get fetchingZoteroItems => '正在拉取 Zotero 條目';
 
   @override
-  String get zoteroSyncInProgress => 'Zotero 同步正在進行中';
+  String get zoteroSyncInProgress => '正在同步 Zotero，請稍候';
 
   @override
   String get zoteroSyncCancelled => '已取消 Zotero 同步';
@@ -5961,7 +5906,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get fetchingZoteroProgress => '正在拉取 Zotero 條目';
 
   @override
-  String get importingDocuments => '正在匯入文獻...';
+  String get importingDocuments => '正在匯入文獻';
 
   @override
   String zoteroSyncCompleteAdded(int count) {
@@ -5981,7 +5926,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String existsInLibrary(String title) {
-    return '文庫中已存在: $title';
+    return '文庫中已存在「$title」';
   }
 
   @override
@@ -5996,7 +5941,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String importedFile(String title) {
-    return '已匯入: $title';
+    return '已匯入「$title」';
   }
 
   @override
@@ -6009,7 +5954,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get importCompleteLabel => '匯入完成';
 
   @override
-  String get taskBusy => '任務正在進行中';
+  String get taskBusy => '已有工作在進行，請稍候';
 
   @override
   String promptMissingPlaceholders(String placeholders) {
@@ -6167,7 +6112,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get generalExportTodayLogDesc => '分享或儲存今日日誌檔，便於提交缺陷回報';
 
   @override
-  String get generalExportLogEmpty => '尚無日誌檔 — 請開啟日誌記錄、重現問題後再匯出';
+  String get generalExportLogEmpty => '尚無日誌檔，請開啟日誌記錄並重現問題後再匯出';
 
   @override
   String get generalExportLogFailed => '匯出日誌失敗';
@@ -6226,7 +6171,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get updateCheckFailed => '檢查更新失敗';
 
   @override
-  String get updateDownloading => '下載更新中';
+  String get updateDownloading => '正在下載更新';
 
   @override
   String get updateDownloadFailed => '下載更新失敗';
@@ -6376,22 +6321,22 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
       '選擇本次擷取使用的 OCR 服務商，將沿用該服務商的解析設定，不會變更預設服務商。';
 
   @override
-  String get mineruProgressRequestingUpload => '正在申請上傳...';
+  String get mineruProgressRequestingUpload => '正在申請上傳';
 
   @override
-  String get mineruProgressUploading => '正在上傳...';
+  String get mineruProgressUploading => '正在上傳';
 
   @override
-  String get mineruProgressQueued => '排隊中...';
+  String get mineruProgressQueued => '排隊中';
 
   @override
-  String get mineruProgressParsing => '正在解析...';
+  String get mineruProgressParsing => '正在解析';
 
   @override
-  String get mineruProgressConverting => '正在轉換格式...';
+  String get mineruProgressConverting => '正在轉換格式';
 
   @override
-  String get mineruProgressDownloading => '正在下載結果...';
+  String get mineruProgressDownloading => '正在下載結果';
 
   @override
   String mineruErrInvalidParams(String msg) {
@@ -6663,13 +6608,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get libraryName => 'OtterPad 文庫';
 
   @override
-  String get rebuildScanningFiles => '正在掃描 PDF 檔案…';
+  String get rebuildScanningFiles => '正在掃描 PDF 檔案';
 
   @override
-  String get rebuildCheckingFiles => '正在檢查檔案完整性…';
+  String get rebuildCheckingFiles => '正在檢查檔案完整性';
 
   @override
-  String get rebuildExtractingMetadata => '正在擷取 PDF 中繼資料…';
+  String get rebuildExtractingMetadata => '正在擷取 PDF 中繼資料';
 
   @override
   String get webSearchSettingsTitle => '聯網搜尋服務';
@@ -6679,7 +6624,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
       '優先使用模型原生搜尋；模型不支援時使用所選服務。各服務的 API Key 獨立儲存，切換不會清空。';
 
   @override
-  String get webSearchNotConfigured => '请在 AI 设置中为所选聯網搜尋服務配置 API Key。';
+  String get webSearchNotConfigured => '請在 AI 設定中為所選聯網搜尋服務設定 API Key';
+
+  @override
+  String get aiRequestRefused => '模型依安全策略拒絕了這個請求，可換個問法或改用其他模型重試。';
 
   @override
   String get chatToggleKeyVisibility => '顯示或隱藏 API Key';
@@ -6691,10 +6639,10 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get chatNoModels => '請先在 AI 設定中新增對話模型';
 
   @override
-  String get chatFastTextOnly => '快速模型僅接收文字，本輪及歷史中的配圖均不會傳送；正文和圖說仍保留。';
+  String get chatFastTextOnly => '快速模型僅接收文字，本輪及歷史配圖不會傳送，正文和圖說仍保留';
 
   @override
-  String get chatModelTextOnly => '目前模型不支援圖片，本輪僅傳送正文和圖說。';
+  String get chatModelTextOnly => '目前模型不支援圖片，本輪僅傳送正文和圖說';
 
   @override
   String get chatProcess => 'ReAct 鏈';
@@ -6738,7 +6686,22 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get chatCollapseQuote => '收合引用';
 
   @override
-  String get chatSourceNotFound => '找不到對應原文，文獻內容可能已更新。';
+  String get chatSourceNotFound => '找不到對應原文，文獻內容可能已更新';
+
+  @override
+  String get metadataCertificateFailed => '無法驗證中繼資料服務的 TLS 憑證，請檢查系統信任憑證和代理設定';
+
+  @override
+  String get metadataProxyFailed => '代理連線或驗證失敗，請檢查代理及網路設定';
+
+  @override
+  String get metadataRequestTimedOut => '中繼資料請求逾時，請稍後重試';
+
+  @override
+  String get metadataNotFound => '找不到對應的文獻中繼資料';
+
+  @override
+  String get metadataConnectionFailed => '無法連線中繼資料服務，請檢查網路';
 
   @override
   String get tableCopyTsv => '複製到試算表（TSV）';
@@ -6817,4 +6780,26 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get figureShowCaption => '展開圖說';
+
+  @override
+  String taskFailed(String error) {
+    return '工作失敗：$error';
+  }
+
+  @override
+  String get extractStageSubmitting => '正在提交任務';
+
+  @override
+  String get extractStageExtracting => '正在擷取';
+
+  @override
+  String get translatingDocument => '正在翻譯';
+
+  @override
+  String get autoBackupRunning => '正在自動備份';
+
+  @override
+  String autoBackupFailed(String error) {
+    return '自動備份失敗：$error';
+  }
 }

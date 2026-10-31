@@ -34,6 +34,7 @@ class ModelCapabilityStore {
   static const _kVersion = SettingsKeys.modelCapsVersion;
 
   final Map<String, AgentModelCapability> _models = {};
+  final Map<String, ThinkingSpec> _thinking = {};
   String? _version;
   DateTime? _fetchedAt;
   bool _loaded = false;
@@ -67,18 +68,24 @@ class ModelCapabilityStore {
       final fetched = GStorage.setting.get(_kLastFetched) as String?;
       _fetchedAt = fetched == null ? null : DateTime.tryParse(fetched);
     } catch (_) {
-      _models.clear(); // 缓存损坏 → 视为无缓存，回退兜底（全 false）
+      // 缓存损坏 → 视为无缓存，回退兜底（全 false）
+      _models.clear();
+      _thinking.clear();
     }
   }
 
   void _replaceModels(Map<String, dynamic> doc) {
     final models = doc['models'] as Map<String, dynamic>? ?? {};
-    _models
-      ..clear()
-      ..addEntries([
-        for (final e in models.entries)
-          MapEntry(e.key.toLowerCase(), _capFromRemote(e.value)),
-      ]);
+    _models.clear();
+    _thinking.clear();
+    for (final e in models.entries) {
+      final key = e.key.toLowerCase();
+      _models[key] = _capFromRemote(e.value);
+      final thinking = (e.value as Map<String, dynamic>)['thinking'];
+      if (thinking is Map<String, dynamic>) {
+        _thinking[key] = ThinkingSpec.fromJson(thinking);
+      }
+    }
   }
 
   /// 远程表条目 → AgentModelCapability。textInput/textOutput 远程表不显式
@@ -99,14 +106,27 @@ class ModelCapabilityStore {
 
   /// 查询：model id → 能力（远程表命中），未命中返回 null。
   ///
-  /// 入参可为全 id（如 `xiaomi/mimo-v2.5-pro`、
-  /// `openrouter/thinkingmachines/inkling`）或纯 id（`mimo-v2.5-pro`）：内部
-  /// 剥到最后一段 `/` 之后，与远程表 key（纯 model id）对齐再小写比较。否则
-  /// 全 id 查纯 id key 永远 miss，被迫回退兜底（全 false）→ 能力漏标。
+  /// 入参可为全 id（如 `xiaomi/mimo-v2.5-pro`）或第三方服务商加了前后缀的
+  /// 变体（`deepseek-v4.1-flash-fast`）：按 [modelIdCandidates] 由严到宽逐个
+  /// 尝试，命中即停。否则变体 id 永远 miss，被迫回退兜底（全 false）→ 能力漏标。
   AgentModelCapability? lookup(String modelId) {
+    final key = _resolveKey(modelId);
+    return key == null ? null : _models[key];
+  }
+
+  /// 查询：model id → 思考参数规格，与 [lookup] 命中同一条目；该条目无
+  /// `thinking` 字段（上游未提供）时返回 null，调用方回退到识别规则。
+  ThinkingSpec? thinkingSpec(String modelId) {
+    final key = _resolveKey(modelId);
+    return key == null ? null : _thinking[key];
+  }
+
+  String? _resolveKey(String modelId) {
     if (!_loaded) return null;
-    final pureId = modelId.split('/').last.toLowerCase();
-    return _models[pureId];
+    for (final candidate in modelIdCandidates(modelId)) {
+      if (_models.containsKey(candidate)) return candidate;
+    }
+    return null;
   }
 
   /// 生图模型判定：查远程表 imageOutput，未命中（modelcaps 未收录/离线）返回
@@ -177,6 +197,52 @@ class ModelCapabilityStore {
       return false; // 网络失败 → 保留旧缓存
     }
   }
+}
+
+/// 不改变能力的变体后缀词：第三方服务商常在原厂 id 后追加这些段表示加速线路、
+/// 别名或地域。`mini`/`pro`/`flash`/`lite`/`vision`/`nano`/版本号等会改变
+/// 能力的段不在此列，永不剥离（否则 `gpt-5-mini` 会被当成 `gpt-5`）。
+const _variantSuffixes = {
+  'fast',
+  'turbo',
+  'latest',
+  'preview',
+  'exp',
+  'free',
+  'thinking',
+  'us',
+  'eu',
+  'global',
+};
+
+/// 日期戳段（`0731`、`20250929`）。
+final _dateSegment = RegExp(r'^\d{4,8}$');
+
+/// 点号厂商/地域前缀（`us.anthropic.`、`anthropic.`）：纯字母段 + 点。
+/// `gpt-5.1`、`deepseek-v4.1` 的首段含 `-` 或数字，不会被误剥。
+final _dottedVendorPrefix = RegExp(r'^(?:[a-z]+\.)+(?=[a-z])');
+
+/// 远程表查询的候选 id，由严到宽：原纯 id → 去 `:xxx`/`@xxx` 尾巴与点号
+/// 厂商前缀 → 从末尾逐段剥离变体后缀词/日期戳。原 id 永远排第一，表里有
+/// 专门条目的变体（如 `claude-opus-4.8-fast`）不受影响。
+List<String> modelIdCandidates(String modelId) {
+  final out = <String>[];
+  void add(String s) {
+    if (s.isNotEmpty && !out.contains(s)) out.add(s);
+  }
+
+  var id = modelId.trim().toLowerCase().split('/').last;
+  add(id);
+  id = id.split(RegExp('[:@]')).first.replaceFirst(_dottedVendorPrefix, '');
+  add(id);
+  var parts = id.split('-');
+  while (parts.length > 1 &&
+      (_variantSuffixes.contains(parts.last) ||
+          _dateSegment.hasMatch(parts.last))) {
+    parts = parts.sublist(0, parts.length - 1);
+    add(parts.join('-'));
+  }
+  return out;
 }
 
 extension AgentProviderCapabilities on AgentProviderInstance {
