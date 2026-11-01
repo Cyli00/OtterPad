@@ -1,6 +1,6 @@
 # OtterPad 0.2.0 架构
 
-状态：Rust 后端业务逻辑已移植，当前修改等待统一测试；强类型 FRB 边界此前已在独立 Dart 工程验证，尚未接入 Flutter 应用。`v0.1.7` tag 是最后一版 Dart 后端 + WebView 阅读器，也是业务行为的参考实现（`lib/services`、`lib/core/storage`、`lib/data`）；0.1.x 设计文档在 `archive/0.1/`。
+状态：Rust 后端业务逻辑已移植；Flutter 应用已经 FRB 接入，目前只有新阅读器（`lib/pages/reader2/`，实验入口 `lib/main_reader_lab.dart`）读取 Rust 数据，其余页面仍运行旧 Dart 服务。`v0.1.7` tag 是最后一版 Dart 后端 + WebView 阅读器，也是业务行为的参考实现（`lib/services`、`lib/core/storage`、`lib/data`）；0.1.x 设计文档在 `archive/0.1/`。
 
 ## 为什么重写
 
@@ -83,14 +83,14 @@
 
 2026-11-01 核实记录（源码/分发清单核实与运行验收分开记录）：
 
-- **FRB：Rust API 与独立 FFI 已验证，Flutter 应用接入未执行。** crates.io 与 [pub.dev](https://pub.dev/packages/flutter_rust_bridge) 当前稳定版均为 `2.13.0`，Rust 依赖与生成器均固定该版本。其[零拷贝约定](https://github.com/fzyzcjy/flutter_rust_bridge/blob/v2.13.0/website/docs/guides/types/translatable/zero-copy.md)是原生平台异步/Stream 返回 `Vec<u8>` 等类型时自动使用 external typed data，不能泛化为所有调用模式零拷贝。`scripts/generate_rust_bridge.py` 生成 Rust 绑定，把 Dart 产物放入仓库外的独立工程，运行 Freezed、分析器及真实动态库往返；覆盖初始化 Stream、SQLite/FTS、稳定错误码、PDF 位图/字符、OCR HTTP、UTF-16 锚点、会话、备份恢复和恢复后的句柄失效。只允许运行时与本地 Zotero 快照作为 opaque 句柄，业务 DTO 必须生成具体类型，内部凭据字段不会生成访问器。[cargokit app 模板](https://github.com/fzyzcjy/flutter_rust_bridge/tree/v2.13.0/frb_codegen/assets/integration_template/cargokit/app/rust_builder)与应用构建仍待接入；本轮没有向 Flutter 或平台目录写入产物。
-- **PDFium：macOS arm64 已运行，应用打包待接入。** `pdfium-render 0.9.4` 固定 `pdfium_7881` ABI；`rust/pdfium-binaries.json` 锁定 [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries/releases/tag/chromium%2F7881) 的四个发布目标与 Linux 测试宿主归档、SHA-256。`scripts/fetch_pdfium.py` 下载、校验并保留 `LICENSE` 和完整 `licenses/`。实际 PDFium 已验证分块渲染、旋转页字符坐标和缓存上限；真实旧 PDF 的 9 页、57 个正文段落均已对齐到实际字符。Flutter 动态库打包、最低系统版本及 Android/Windows 设备加载仍待实测，平台目录未修改。
+- **FRB：已接入 Flutter 应用，macOS 调试构建已运行。** crates.io 与 [pub.dev](https://pub.dev/packages/flutter_rust_bridge) 当前稳定版均为 `2.13.0`，Rust 依赖与生成器均固定该版本。其[零拷贝约定](https://github.com/fzyzcjy/flutter_rust_bridge/blob/v2.13.0/website/docs/guides/types/translatable/zero-copy.md)是原生平台异步/Stream 返回 `Vec<u8>` 等类型时自动使用 external typed data，不能泛化为所有调用模式零拷贝。应用内由 FRB `integrate` 模板生成的 `rust_builder/`（cargokit）随 `flutter build` 编译 Rust；`flutter_rust_bridge.yaml` 把 Dart 绑定生成到 `lib/src/rust`，关闭内置 build_runner（它带 `--delete-conflicting-outputs`，资产图失效时会删除 drift 生成文件），codegen 后执行 `dart run build_runner build`，并用 `rustfmt --edition 2024` 格式化 `rust/src/frb_generated.rs`。联合类型使用 `freezed ^3.2.5`：4.x 需要 analyzer 14，与锁定的 `drift_dev 2.34.0` 冲突。`scripts/generate_rust_bridge.py` 仍用于仓库外独立工程的 FFI 往返检查。只允许运行时与本地 Zotero 快照作为 opaque 句柄，业务 DTO 必须生成具体类型，内部凭据字段不会生成访问器。macOS 插件需额外链接 `SystemConfiguration`；Android/Windows 构建尚未执行。
+- **PDFium：macOS 应用内已加载，其他平台待实测。** `pdfium-render 0.9.4` 固定 `pdfium_7881` ABI；`rust/pdfium-binaries.json` 锁定 [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries/releases/tag/chromium%2F7881) 的四个发布目标与 Linux 测试宿主归档、SHA-256。应用通过 `rust_builder/hook/build.dart`（Dart native assets）按该清单下载、校验并以 `otter_pdfium` 名称打包；pdfrx 仍捆绑自己的 chromium/7811 `libpdfium`，两者名称不同、互不覆盖。Dart 的 `bundledPdfiumLibrary()` 按平台给出路径注入 `BackendOptions.pdfiumLibrary`；macOS 沙盒应用内已打开真实 PDF，Windows/Linux 路径按 Flutter 打包布局推定、未实测。`scripts/fetch_pdfium.py` 用于 Rust 测试，保留 `LICENSE` 和完整 `licenses/`；应用内的许可展示尚未接入。真实旧 PDF 的 9 页、57 个正文段落均已对齐到实际字符。
 - **FTS5：已实现并通过本机 SQLite 测试。** 采用 `rusqlite 0.41.1` 的 bundled SQLite 和 `jieba-rs 0.11.0`，通过 `rusqlite::ffi` 按 [SQLite FTS5 tokenizer API](https://www.sqlite.org/fts5.html#custom_tokenizers)逐连接注册 `otter_jieba`，不依赖动态加载扩展。索引包含完整词和同位置的搜索子词，查询按完整词分词后逐项引用并用 AND 连接；支持中文词、复合词子词、中英混合和大小写匹配，不接受用户输入的 FTS 运算符。已验证插入/更新/删除的索引同步、重开连接、UTF-8 高亮偏移和无效 UTF-8 写入回滚；已补全拼、首字母和有界多音字索引；索引修订号保存在 `meta`，旧索引在打开连接时重建。Android/Windows 运行验收留待统一安排。
 - **公式性能：未验证。** `flutter_math_fork` 长文档帧耗时依赖 Flutter 阅读器实现，按本轮“前端不动”的范围保留待办；没有用模拟数据的单元测试替代帧耗时实测。
 
 ## 当前后端实现范围
 
-Flutter 继续运行旧 Dart 服务；未修改、删除任何 Flutter 或平台文件。根据用户最新要求，后续不再新增或运行测试，统一验证由用户另行安排；下文已有验证记录仅描述此前执行过的版本，不代表最新代码已完成验收。手写生产 Rust 文件按职责拆分，控制在 500 行以内；FRB 生成文件和配置数据保持工具/原始格式。
+Flutter 除新阅读器外继续运行旧 Dart 服务。手写生产 Rust 文件按职责拆分，控制在 500 行以内；FRB 生成文件和配置数据保持工具/原始格式。
 
 - `storage`：固定 Rust `1.99.1`，bundled SQLite、逐连接 FTS5 中文分词、WAL/FULL/外键。只打开 `<AppSupport>/OtterPad/v2/otter.db`，初始 schema 1、`application_id=OTP2`，拒绝外部、未来版本和非空无版本数据库。元数据、收藏、历史、笔记与设置已具备事务读写；文献检索合并 FTS 与全字段 LIKE，保留 DOI、年份及任意子串召回。
 - `document`/`ocr`：PaddleOCR、MinerU 请求与取消、原始产物的不可变 generation 和最后发布的指针、稳定块 id/语义行内样式/表格、UTF-16 锚点、图表与题注归属。已对真实旧 PaddleOCR 的同一份 9 页 243 块数据运行 v0.1.7 Dart 与 Rust，对齐全部结构字段及 4 张图表的题注、块成员和源字符范围。图表裁剪使用实际 PDF 像素验证，涵盖旋转页与跨页合成；MinerU v2 坐标由实际 PDF 页尺寸重建。OCR 大响应转换运行在阻塞线程池。补齐 Paddle v2 异步提交、轮询与 JSONL/Markdown 结果读取，批量入口最多并行处理 4 篇；单篇失败保留其余结果，成功发布后按提供商记录本地页数用量。
@@ -101,4 +101,4 @@ Flutter 继续运行旧 Dart 服务；未修改、删除任何 Flutter 或平台
 - `sync`：WebDAV 集合与文件操作、S3 SigV4 与流式传输、完整/仅数据备份、覆盖/合并及按库/设置恢复、校验和与崩溃恢复标记。备份使用真实 SQLite 快照，删除误存凭据并清除页内残留，重建 FTS 的 rowid 关联；旧版 v3 ZIP 走同一迁移器。新增打包→上传→快照→保留最近 3 份版本备份的 Rust 编排；`last_backup_snapshot` 写入 v2 指纹格式，旧 Dart v1 指纹触发重新建立基线。自动备份 Stream 在启动 2 分钟后首查、随后每小时读取设置，按周期和文献变更判断是否上传。Zotero 云端按库版本增量导入；本地 API 检查实例与分页版本，保留用户编辑并复制所选 PDF。合并恢复会重映射云端与本地 Zotero 记录，跨账号不会混用云端游标。
 - `runtime`/`credentials`/`logging`：逐数据根限制单个运行时，SQLite 与 PDFium 由专用工作线程持有，恢复/删除与长任务互斥；启动先处理恢复标记、删除操作的恢复记录和旧数据迁移，按原设置执行缓存清理。凭据只在内存注入；文件日志受设置控制，按日保留 7 天，只记录操作名与稳定错误码。`api` 为文献、笔记、PDF、文档/锚点、AI/翻译、会话、OCR、备份和 Zotero 提供独立强类型入口及可取消 Stream。
 - `prompts`/`maintenance`/`update`：提示词默认值、覆盖、必需占位符校验和重置；存储用量分类、按组清理和缓存清理；GitHub release 解析、按设备 ABI 顺序选择 APK、忽略版本及下载进度；启动延迟检查读取自动更新偏好，忽略版本仅抑制自动提示。系统安全存储、字体/设备信息读取、分享接收、安装 Intent、交互反馈留在宿主平台/UI 边界。
-- 待后续统一安排：测试、跨平台运行验收，以及需要修改 Flutter/plugin 配置的 cargokit 接线、Flutter 接线、公式性能和四个平台应用构建。本轮不修改这些前端/平台内容，也不将代码迁移等同于完整应用验收。
+- 待后续：旧页面改接 Rust、移除 pdfrx、公式性能实测，以及 Android/Windows 应用构建与运行验收。
