@@ -738,9 +738,11 @@ class ReaderLayout {
     return first == -1 ? items.length - 1 : first;
   }
 
-  /// 滚动位置 [y] 处的阅读位置：取该处所在行的行首。
-  ReaderLocation locationAtScroll(double y) {
-    if (items.isEmpty) return const ReaderLocation(0, 0);
+  /// 滚动位置 [y] 处的阅读位置（该处所在行的行首），以及该行已滚过视口顶部的比例。
+  ///
+  /// 比例让重排后能回到行内原处：只按行首恢复时，顶部露出半行的视图会被整行拉齐。
+  (ReaderLocation, double) anchorAtScroll(double y) {
+    if (items.isEmpty) return (const ReaderLocation(0, 0), 0);
     var lo = 0;
     var hi = items.length - 1;
     while (lo < hi) {
@@ -753,23 +755,30 @@ class ReaderLayout {
     }
     final item = items[lo];
     final local = y - _tops[lo] - item.gapBefore;
-    if (!item.isText) return ReaderLocation(item.blockIndex, 0);
+    double fraction(double top, double height) =>
+        height <= 0 ? 0 : ((local - top) / height).clamp(0.0, .999);
+    if (!item.isText) {
+      return (ReaderLocation(item.blockIndex, 0), fraction(0, item.height));
+    }
     var line = item.lines.first;
     for (final candidate in item.lines) {
       if (candidate.top <= local + .5) line = candidate;
     }
-    return ReaderLocation(item.blockIndex, item.map!.toText(line.start));
+    return (
+      ReaderLocation(item.blockIndex, item.map!.toText(line.start)),
+      fraction(line.top, line.height),
+    );
   }
 
-  /// 阅读位置对应的滚动偏移（该行行顶）。
-  double scrollOf(ReaderLocation location) {
+  /// 阅读位置对应的滚动偏移：该行行顶，再加上行内已滚过的 [fraction]。
+  double scrollOf(ReaderLocation location, {double fraction = 0}) {
     if (items.isEmpty) return 0;
     final index = itemOf(location);
     final item = items[index];
     final y = _tops[index] + item.gapBefore;
-    if (!item.isText) return y;
-    return y +
-        item.lines[item.lineOf(item.map!.toPainter(location.offset))].top;
+    if (!item.isText) return y + fraction * item.height;
+    final line = item.lines[item.lineOf(item.map!.toPainter(location.offset))];
+    return y + line.top + fraction * line.height;
   }
 
   /// 阅读位置所在页。

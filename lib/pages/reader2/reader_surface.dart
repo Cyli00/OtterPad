@@ -49,6 +49,9 @@ class ReaderSurfaceState extends State<ReaderSurface> {
   ReaderContextMenuHandle? _menu;
   SearchHit? _revealedHit;
   bool _restorePending = false;
+
+  /// 滚动模式下视口顶部那一行已滚过的比例，见 [ReaderLayout.anchorAtScroll]。
+  double _lineFraction = 0;
   DateTime _lastWheelTurn = DateTime(0);
 
   ReaderController get _controller => widget.controller;
@@ -170,10 +173,8 @@ class ReaderSurfaceState extends State<ReaderSurface> {
         final scroll = _scroll;
         if (scroll == null || !scroll.hasClients) return;
         scroll.jumpTo(
-          (_scrollPadding + layout.scrollOf(location)).clamp(
-            0,
-            scroll.position.maxScrollExtent,
-          ),
+          (_scrollPadding + layout.scrollOf(location, fraction: _lineFraction))
+              .clamp(0, scroll.position.maxScrollExtent),
         );
       case ReaderMode.paged:
         final pages = _pages;
@@ -195,7 +196,9 @@ class ReaderSurfaceState extends State<ReaderSurface> {
     switch (mode) {
       case ReaderMode.scroll:
         _scroll = ScrollController(
-          initialScrollOffset: _scrollPadding + layout.scrollOf(location),
+          initialScrollOffset:
+              _scrollPadding +
+              layout.scrollOf(location, fraction: _lineFraction),
         );
       case ReaderMode.paged:
         _pages = PageController(initialPage: layout.pageOf(location));
@@ -504,9 +507,11 @@ class ReaderSurfaceState extends State<ReaderSurface> {
     return NotificationListener<ScrollUpdateNotification>(
       onNotification: (n) {
         if (n.depth == 0) {
-          _controller.location = layout.locationAtScroll(
+          final (location, fraction) = layout.anchorAtScroll(
             n.metrics.pixels - _scrollPadding,
           );
+          _controller.location = location;
+          _lineFraction = fraction;
           final rect = _menu == null ? null : _selectionRect();
           if (rect != null) _menu?.updateVerticalAnchor(rect);
         }
@@ -562,6 +567,7 @@ class ReaderSurfaceState extends State<ReaderSurface> {
         itemCount: layout.pages.length,
         onPageChanged: (p) {
           _controller.location = layout.locationOfPage(p);
+          _lineFraction = 0;
           _closeMenu();
         },
         itemBuilder: (context, p) {
