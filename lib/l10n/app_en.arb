@@ -1362,5 +1362,9 @@
   "translatingDocument": "Translating",
   "autoBackupRunning": "Backing up automatically",
   "autoBackupFailed": "Auto backup failed: {error}",
-  "@autoBackupFailed": { "placeholders": { "error": { "type": "String" } } }
+  "@autoBackupFailed": { "placeholders": { "error": { "type": "String" } } },
+  "migratingData": "Migrating data {done}/{total}",
+  "@migratingData": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "dataStartFailed": "Unable to open app data ({code})",
+  "@dataStartFailed": { "placeholders": { "code": { "type": "String" } } }
 }

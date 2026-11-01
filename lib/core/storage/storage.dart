@@ -10,6 +10,7 @@ import 'package:sqlite3_simple/sqlite3_simple.dart';
 import '../../data/models/collection/favorite.dart' as fav;
 import 'app_database.dart';
 import 'db_convert.dart' show favoriteCompanion;
+import '../../src/rust/api.dart';
 import 'settings_store.dart';
 import 'restore_checkpoint.dart';
 import 'document_file_operations.dart';
@@ -50,6 +51,7 @@ class GStorage {
   // Drift 主存储
   static late AppDatabase _db;
   static late SettingsStore _settings;
+  static Backend? _backend;
   static const _dbFileName = 'otter.db';
   static const _jiebaDictName = 'cpp_jieba';
   static bool _simpleLoaded = false;
@@ -60,7 +62,9 @@ class GStorage {
   static late String _appRootPath;
   static bool _initialized = false;
 
-  static Future<void> init() async {
+  /// [backend] 为 Rust 后端时，设置以它为准（见 [SettingsStore]）。
+  static Future<void> init({Backend? backend}) async {
+    _backend = backend;
     final appSupport = await getApplicationSupportDirectory();
     final appRoot = Directory(p.join(appSupport.path, 'OtterPad'));
     final dbDir = Directory(p.join(appRoot.path, 'db'));
@@ -113,7 +117,7 @@ class GStorage {
     }
 
     // ADR-0002：SettingsStore 私有写穿透缓存（非 StartupCache），启动加载。
-    _settings = SettingsStore(_db);
+    _settings = SettingsStore(_db, backend: _backend);
     await _settings.preload();
     // ADR-0002：ZoteroSyncStore 同步快照订阅 zotero_items + meta 流。
     await ZoteroSnapshot.attach(_db);
@@ -233,8 +237,9 @@ class GStorage {
       debugPrint('OtterPad: FTS5 建表失败（documents_fts），搜索降级为 LIKE: $e');
       await _degradeFts();
     }
-    _settings = SettingsStore(_db);
-    await _settings.preload();
+    // 恢复替换了 drift 库：以其中的 settings 为准。
+    _settings = SettingsStore(_db, backend: _backend);
+    await _settings.adoptMirror();
     await ZoteroSnapshot.attach(_db);
     await _ensureDefaultFavorite();
     await DocumentFileOperations(_db, _libraryDirPath).recover();
@@ -243,10 +248,7 @@ class GStorage {
 
   /// 重新加载 settings 缓存（不重开库）。settingsOnly 覆盖恢复直接写 settings
   /// 表后，SettingsStore 的私有缓存过期，调此重建（ADR-0001 取代 refreshCache）。
-  static Future<void> reloadSettings() async {
-    _settings = SettingsStore(_db);
-    await _settings.preload();
-  }
+  static Future<void> reloadSettings() => _settings.adoptMirror();
 
   /// 测试专用：注入内存 AppDatabase + 预加载 settings，不走扩展/文件系统。
   /// 数据 provider 经 [appDatabaseProvider] 读 GStorage.db（= 注入的库）。

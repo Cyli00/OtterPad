@@ -3591,6 +3591,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String autoBackupFailed(String error) {
     return '自动备份失败：$error';
   }
+
+  @override
+  String migratingData(int done, int total) {
+    return '正在迁移数据 $done/$total';
+  }
+
+  @override
+  String dataStartFailed(String code) {
+    return '无法打开应用数据（$code）';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -6801,5 +6811,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String autoBackupFailed(String error) {
     return '自動備份失敗：$error';
+  }
+
+  @override
+  String migratingData(int done, int total) {
+    return '正在遷移資料 $done/$total';
+  }
+
+  @override
+  String dataStartFailed(String code) {
+    return '無法開啟應用資料（$code）';
   }
 }

@@ -1197,5 +1197,9 @@
   "extractStageExtracting": "正在提取",
   "translatingDocument": "正在翻译",
   "autoBackupRunning": "正在自动备份",
-  "autoBackupFailed": "自动备份失败：{error}"
+  "autoBackupFailed": "自动备份失败：{error}",
+  "migratingData": "正在迁移数据 {done}/{total}",
+  "@migratingData": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "dataStartFailed": "无法打开应用数据（{code}）",
+  "@dataStartFailed": { "placeholders": { "code": { "type": "String" } } }
 }

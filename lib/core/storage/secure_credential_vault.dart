@@ -1,5 +1,8 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/app_logger.dart';
+import '../../src/rust/api.dart';
+import '../../src/rust/credentials.dart';
+import '../../src/rust/error.dart';
 
 /// 凭据安全保险库——所有 API key / secret / 密码的唯一存取接缝。
 ///
@@ -20,12 +23,33 @@ class SecureCredentialVault {
   /// 启动时由 [init] 填充的内存缓存——[read] 的同步数据源。
   static final Map<String, String> _cache = {};
 
+  static Backend? _backend;
+
   /// app 启动时调用：读入全部凭据到内存缓存。
   static Future<void> init() async {
     try {
       _cache.addAll(await _storage.readAll());
     } catch (e) {
       log.d('[SecureCredentialVault] readAll 失败：$e');
+    }
+  }
+
+  /// 把已有凭据注入 Rust 后端，此后的写入与删除同步注入；Rust 只在内存中持有。
+  static Future<void> attach(Backend backend) async {
+    _backend = backend;
+    for (final e in _cache.entries) {
+      await _inject(e.key, e.value);
+    }
+  }
+
+  static Future<void> _inject(String key, String value) async {
+    try {
+      await _backend?.injectCredentials(
+        entries: [CredentialInput(key: key, value: value)],
+      );
+    } on OtterError catch (e) {
+      // Rust 不使用的凭据键会被拒绝，这些键只留在 Dart 侧。
+      if (e.code != ErrorCode.invalidArgument) rethrow;
     }
   }
 
@@ -40,11 +64,13 @@ class SecureCredentialVault {
     }
     _cache[key] = value;
     await _storage.write(key: key, value: value);
+    await _inject(key, value);
   }
 
   /// 删除凭据（内存缓存 + 安全存储）。
   static Future<void> delete(String key) async {
     _cache.remove(key);
     await _storage.delete(key: key);
+    await _inject(key, '');
   }
 }

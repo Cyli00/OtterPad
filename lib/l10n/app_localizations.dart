@@ -6579,6 +6579,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auto backup failed: {error}'**
   String autoBackupFailed(String error);
+
+  /// No description provided for @migratingData.
+  ///
+  /// In en, this message translates to:
+  /// **'Migrating data {done}/{total}'**
+  String migratingData(int done, int total);
+
+  /// No description provided for @dataStartFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open app data ({code})'**
+  String dataStartFailed(String code);
 }
 
 class _AppLocalizationsDelegate

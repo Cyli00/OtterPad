@@ -1156,5 +1156,9 @@
   "metadataProxyFailed": "代理連線或驗證失敗，請檢查代理及網路設定",
   "metadataRequestTimedOut": "中繼資料請求逾時，請稍後重試",
   "metadataNotFound": "找不到對應的文獻中繼資料",
-  "metadataConnectionFailed": "無法連線中繼資料服務，請檢查網路"
+  "metadataConnectionFailed": "無法連線中繼資料服務，請檢查網路",
+  "migratingData": "正在遷移資料 {done}/{total}",
+  "@migratingData": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "dataStartFailed": "無法開啟應用資料（{code}）",
+  "@dataStartFailed": { "placeholders": { "code": { "type": "String" } } }
 }

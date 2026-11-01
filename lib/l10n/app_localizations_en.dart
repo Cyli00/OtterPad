@@ -3745,4 +3745,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String autoBackupFailed(String error) {
     return 'Auto backup failed: $error';
   }
+
+  @override
+  String migratingData(int done, int total) {
+    return 'Migrating data $done/$total';
+  }
+
+  @override
+  String dataStartFailed(String code) {
+    return 'Unable to open app data ($code)';
+  }
 }

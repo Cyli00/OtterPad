@@ -17,14 +17,13 @@ import 'package:path_provider/path_provider.dart';
 
 import 'core/app_theme.dart';
 import 'core/l10n.dart';
-import 'core/pdfium_library.dart';
+import 'core/rust_backend.dart';
 import 'pages/reader2/reader2_page.dart';
 import 'pages/reader2/reader_controller.dart';
 import 'src/rust/api.dart';
 import 'src/rust/api/document.dart';
 import 'src/rust/document.dart';
 import 'src/rust/error.dart';
-import 'src/rust/frb_generated.dart';
 
 const _stress = int.fromEnvironment('READER_LAB_STRESS');
 const _documentId = String.fromEnvironment('READER_LAB_DOC');
@@ -44,7 +43,6 @@ Future<void> main() async {
 }
 
 Future<ReaderDocument?> _openLabDocument() async {
-  await RustLib.init();
   final root = p.join((await getTemporaryDirectory()).path, 'reader_lab');
   final legacy = p.join(
     (await getApplicationSupportDirectory()).path,
@@ -58,14 +56,7 @@ Future<ReaderDocument?> _openLabDocument() async {
     debugPrint('[reader2] copied 0.1.x data from $legacy');
   }
   Backend? backend;
-  await for (final event in initialize(
-    options: BackendOptions(
-      root: root,
-      pdfiumLibrary: bundledPdfiumLibrary(),
-      bitmapCacheBytes: BigInt.from(64 << 20),
-    ),
-    taskId: 'reader-lab-init',
-  )) {
+  await for (final event in RustBackend.start(root)) {
     switch (event) {
       case InitializationEvent_Failed(:final error):
         debugPrint('[reader2] init failed: ${error.code.name} ${error.detail}');

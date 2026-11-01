@@ -5,13 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'core/app_logger.dart';
+import 'core/rust_backend.dart';
 import 'core/storage/secure_credential_vault.dart';
 import 'core/storage/settings_keys.dart';
 import 'core/storage/storage.dart';
+import 'pages/startup/startup_app.dart';
 import 'providers/auto_backup_provider.dart';
 import 'providers/proxy_provider.dart';
 import 'providers/update_check_scheduler.dart';
@@ -23,6 +28,7 @@ import 'services/haptics.dart';
 import 'services/reader_localhost_server.dart';
 import 'services/share_receiver_service.dart';
 import 'services/storage_usage_service.dart';
+import 'src/rust/api.dart';
 
 bool get _isDesktop =>
     !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
@@ -56,12 +62,16 @@ Future<void> main() async {
     });
   }
 
+  // Rust 后端最先打开：设置以它为准，首次启动在此迁移 0.1.x 数据。
+  final backend = await _startBackend();
+  if (backend == null) return;
+
   // 初始化 pdfrx（注册 loadAsset 回调 + 初始化 PDFium 引擎）
   await pdfrxFlutterInitialize();
 
   // 并行初始化
   await Future.wait([
-    GStorage.init(),
+    GStorage.init(backend: backend),
     BackMatterDetector.instance.init(),
     // figure 提取的 caption 正则配置预热——避免 saveResult 路径里隐式首次
     // init() 的加载延迟与“忘记初始化 → 运行时断言”隐患（init 内部幂等）。
@@ -76,6 +86,7 @@ Future<void> main() async {
   // 凭据安全存储：必须在 GStorage.init 之后、任何 provider 读取凭据之前完成——
   // 同步 read() 依赖此处填充的内存缓存。
   await SecureCredentialVault.init();
+  await SecureCredentialVault.attach(backend);
 
   // 应用通用设置中的持久化偏好
   final hapticsOn =
@@ -126,4 +137,39 @@ Future<void> main() async {
       shareReceiver!.checkInitialSharedFiles();
     });
   }
+}
+
+/// 打开 Rust 后端。迁移 0.1.x 数据时显示进度；打开失败时停在错误页并返回 null。
+Future<Backend?> _startBackend() async {
+  final root = p.join(
+    (await getApplicationSupportDirectory()).path,
+    'OtterPad',
+  );
+  final status = ValueNotifier(const StartupStatus());
+  var shown = false;
+  await for (final event in RustBackend.start(root)) {
+    switch (event) {
+      case InitializationEvent_Migration(:final progress):
+        status.value = StartupStatus(
+          done: progress.done.toInt(),
+          total: progress.total.toInt(),
+        );
+        if (!shown) {
+          shown = true;
+          runApp(StartupApp(status));
+        }
+      case InitializationEvent_Failed(:final error):
+        log.e('[Startup] Rust 后端打开失败：${error.code.name} ${error.detail}');
+        status.value = StartupStatus(failure: error.code);
+        runApp(StartupApp(status));
+        return null;
+      case InitializationEvent_Ready(:final migrationError):
+        // 迁移失败不阻塞启动：已完成的文献可用，下次启动从未完成处继续。
+        if (migrationError != null) {
+          log.w('[Startup] 0.1.x 数据迁移未完成：${migrationError.name}');
+        }
+        return RustBackend.instance;
+    }
+  }
+  return null;
 }
