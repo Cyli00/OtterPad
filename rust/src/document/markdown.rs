@@ -1,4 +1,6 @@
 use super::*;
+use regex::{Captures, Regex};
+use std::sync::LazyLock;
 
 pub(super) fn options() -> Options {
     Options::ENABLE_TABLES
@@ -7,11 +9,19 @@ pub(super) fn options() -> Options {
         | Options::ENABLE_TASKLISTS
 }
 
+// pulldown-cmark 不把 `$ x $` 当公式，OCR 结果却常带内侧空格；与 0.1.x 一样先收紧再解析。
+// `$$` 先行匹配并原样保留：显示公式本身允许内侧空格，也避免把两个显示公式之间的正文当成行内公式。
+static INLINE_MATH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\$|\$([^$\n]+)\$").unwrap());
+
 pub fn inline_runs(markdown: &str) -> Vec<InlineRun> {
+    let markdown = INLINE_MATH.replace_all(markdown, |c: &Captures| match c.get(1) {
+        Some(inner) => format!("${}$", inner.as_str().trim()),
+        None => c[0].to_owned(),
+    });
     let mut style = InlineRun::default();
     let mut runs = Vec::new();
     let mut image_depth = 0;
-    for event in Parser::new_ext(markdown, options()) {
+    for event in Parser::new_ext(&markdown, options()) {
         let mut run = style.clone();
         match event {
             Event::Start(Tag::Strong) => {
@@ -120,21 +130,26 @@ pub(super) fn make_block(markdown: &str, kind: BlockKind) -> Block {
     if kind != BlockKind::Code {
         let mut started = false;
         let mut pending_space = false;
-        for run in &mut runs {
+        for i in 0..runs.len() {
             let mut text = String::new();
-            for ch in run.text.chars() {
+            for ch in std::mem::take(&mut runs[i].text).chars() {
                 if ch.is_whitespace() {
                     pending_space = started;
                 } else {
                     if pending_space {
-                        text.push(' ');
+                        // 公式 run 整体绘制为一个控件，前导空格留给前一个 run 才能显示出来。
+                        if runs[i].math.is_some() && text.is_empty() && i > 0 {
+                            runs[i - 1].text.push(' ');
+                        } else {
+                            text.push(' ');
+                        }
                         pending_space = false;
                     }
                     text.push(ch);
                     started = true;
                 }
             }
-            run.text = text;
+            runs[i].text = text;
         }
         runs.retain(|r| !r.text.is_empty());
     }

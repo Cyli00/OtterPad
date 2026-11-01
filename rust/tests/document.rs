@@ -74,6 +74,25 @@ fn blocks_keep_inline_math_styles_table_spans_and_stable_identities() {
 }
 
 #[test]
+fn inline_math_with_inner_spaces_is_trimmed_like_legacy_reader() {
+    let model = DocumentModel::from_markdown(
+        "Loss $ x^2 + y $ falls, $$a$$ keep text $$b$$ and $$ E = mc^2 $$.",
+    );
+    let runs = &model.blocks[0].runs;
+    let math = runs
+        .iter()
+        .filter_map(|r| r.math.as_deref())
+        .collect::<Vec<_>>();
+    assert_eq!(math, ["x^2 + y", "a", "b", " E = mc^2 "]);
+    assert!(
+        runs.iter()
+            .any(|r| r.math.is_none() && r.text.contains("keep text"))
+    );
+    assert_eq!(runs[0].text, "Loss ");
+    assert_eq!(runs[1].text, "$x^2 + y$");
+}
+
+#[test]
 fn legacy_translation_hash_matches_dart_vm_reference_including_surrogates() {
     for (source, expected) in [
         ("", "0_1"),
