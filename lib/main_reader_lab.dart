@@ -17,6 +17,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'core/app_theme.dart';
 import 'core/l10n.dart';
+import 'core/pdfium_library.dart';
 import 'pages/reader2/reader2_page.dart';
 import 'pages/reader2/reader_controller.dart';
 import 'src/rust/api.dart';
@@ -60,6 +61,7 @@ Future<ReaderDocument?> _openLabDocument() async {
   await for (final event in initialize(
     options: BackendOptions(
       root: root,
+      pdfiumLibrary: bundledPdfiumLibrary(),
       bitmapCacheBytes: BigInt.from(64 << 20),
     ),
     taskId: 'reader-lab-init',
@@ -82,6 +84,12 @@ Future<ReaderDocument?> _openLabDocument() async {
       final document = await backend.readerDocument(document: doc.id);
       // 没有 OCR 结果的文献得到空模型。
       if (document.blocks.isEmpty) continue;
+      final pdf = await backend.openPdf(
+        document: doc.id,
+        taskId: 'reader-lab-pdf',
+      );
+      debugPrint('[reader2] pdfium opened ${pdf.pages.length} pages');
+      await backend.closePdf(handle: pdf.handle);
       debugPrint('[reader2] opened ${doc.id} "${doc.title}"');
       return document;
     } on OtterError catch (e) {
