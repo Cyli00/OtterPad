@@ -17,6 +17,28 @@ env:
   FLUTTER_VERSION: '3.44.6'
 
 jobs:
+  rust-checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: rust
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      # rustup reads the pinned version and components from rust-toolchain.toml.
+      - run: rustup show active-toolchain
+      - name: Prepare pinned PDFium for real rendering tests
+        run: |
+          pdfium_library="$(python ../scripts/fetch_pdfium.py --target host --output "$RUNNER_TEMP/otter-pdfium")"
+          echo "PDFIUM_LIBRARY_PATH=$pdfium_library" >> "$GITHUB_ENV"
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+
   checks:
     runs-on: windows-2022
     defaults:
@@ -45,6 +67,17 @@ jobs:
           cache: true
       - run: flutter pub get --enforce-lockfile
       - run: flutter analyze --no-pub --no-fatal-infos
+      - name: Install pinned Rust bridge tools
+        working-directory: rust
+        run: |
+          cargo install flutter_rust_bridge_codegen --version 2.13.0 --locked
+          cargo install cargo-expand --version 1.0.127 --locked
+      - name: Prepare PDFium for native FFI verification
+        run: |
+          pdfium_library="$(python scripts/fetch_pdfium.py --target host --output "$RUNNER_TEMP/otter-pdfium")"
+          echo "PDFIUM_LIBRARY_PATH=$pdfium_library" >> "$GITHUB_ENV"
+      - name: Verify regenerated bridge and real Dart to Rust calls
+        run: python scripts/generate_rust_bridge.py --check-rust --smoke
       - run: python scripts/check_secrets.py --tracked
       - run: python -m unittest discover -s scripts -p "test_*.py"
       - uses: actions/upload-artifact@v6
