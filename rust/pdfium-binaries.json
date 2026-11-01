@@ -1,0 +1,10 @@
+{
+  "release": "chromium/7881",
+  "targets": {
+    "aarch64-linux-android": {"archive": "pdfium-android-arm64.tgz", "sha256": "16d23bb86c4188d59326dc509938f59df3c417ecfdd3d2ca2f160dc5bd49a839", "library": "libpdfium.so"},
+    "armv7-linux-androideabi": {"archive": "pdfium-android-arm.tgz", "sha256": "57f7f5c349a3268f39b1737f830e50e271aa3116417abed2c30d0c0840b1b58b", "library": "libpdfium.so"},
+    "x86_64-pc-windows-msvc": {"archive": "pdfium-win-x64.tgz", "sha256": "73cc0de638ac2095e7445bf56a38200a5b7c7ca0e9f4ba144598f2457377ac08", "library": "pdfium.dll"},
+    "aarch64-apple-darwin": {"archive": "pdfium-mac-arm64.tgz", "sha256": "52e94ca5aa8847934330daf3f8150c190682c5ca93831468794f8b90d4392e40", "library": "libpdfium.dylib"},
+    "x86_64-unknown-linux-gnu": {"archive": "pdfium-linux-x64.tgz", "sha256": "1470e21b8b4a3b4ad7f85684e2da11d94f3b69a86d81dee11b9b6709d927ac1d", "library": "libpdfium.so"}
+  }
+}

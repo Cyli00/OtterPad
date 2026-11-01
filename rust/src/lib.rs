@@ -1,0 +1,21 @@
+pub mod ai;
+pub mod api;
+pub mod credentials;
+pub mod document;
+pub mod error;
+pub mod files;
+mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
+pub mod library;
+pub mod logging;
+pub mod maintenance;
+pub mod migrate;
+pub mod network;
+pub mod ocr;
+pub mod pdf;
+pub mod prompts;
+pub mod runtime;
+pub mod storage;
+pub mod sync;
+pub mod tasks;
+pub mod translate;
+pub mod update;

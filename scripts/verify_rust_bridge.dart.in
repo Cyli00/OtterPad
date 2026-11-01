@@ -1,0 +1,205 @@
+// Runs against generated bindings and a real native library in an isolated project.
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:otter_backend_bridge_check/api.dart';
+import 'package:otter_backend_bridge_check/api/backup.dart';
+import 'package:otter_backend_bridge_check/api/acquisition.dart';
+import 'package:otter_backend_bridge_check/api/ocr.dart';
+import 'package:otter_backend_bridge_check/api/metadata.dart';
+import 'package:otter_backend_bridge_check/api/types.dart';
+import 'package:otter_backend_bridge_check/credentials.dart';
+import 'package:otter_backend_bridge_check/error.dart';
+import 'package:otter_backend_bridge_check/frb_generated.dart';
+import 'package:otter_backend_bridge_check/ocr.dart';
+import 'package:otter_backend_bridge_check/pdf.dart';
+import 'package:otter_backend_bridge_check/storage/models.dart';
+import 'package:otter_backend_bridge_check/sync/archive.dart';
+import 'package:otter_backend_bridge_check/sync/backup.dart';
+
+void require(bool condition, String detail) {
+  if (!condition) throw StateError(detail);
+}
+
+Future<void> expectCode(Future<dynamic> work, ErrorCode code) async {
+  try {
+    await work;
+  } on OtterError catch (error) {
+    require(error.code == code, 'Expected $code, received ${error.code}');
+    return;
+  }
+  throw StateError('Expected typed Rust error $code');
+}
+
+Future<void> main(List<String> args) async {
+  if (args.length != 3) {
+    throw ArgumentError('native library, PDFium library, real PDF fixture required');
+  }
+  await RustLib.init(externalLibrary: ExternalLibrary.open(args[0]));
+  final root = await Directory.systemTemp.createTemp('otter-ffi-');
+  Backend? backend;
+  HttpServer? server;
+  try {
+    final initialization = await initialize(
+      options: BackendOptions(root: root.path, pdfiumLibrary: args[1],
+          bitmapCacheBytes: BigInt.from(1024 * 1024)),
+      taskId: 'initialize',
+    ).toList();
+    backend = initialization.whereType<InitializationEvent_Ready>().single.backend;
+    stdout.writeln('FFI initialization stream closed.');
+    await backend.putSetting(key: 'proxy_mode', value: const JsonData.string(value: 'none'));
+    await expectCode(backend.putSetting(key: 'zotero_api_key',
+        value: const JsonData.string(value: 'must-not-persist')), ErrorCode.invalidArgument);
+    final imported = await backend.importPdf(source: args[2], taskId: 'import',
+        document: Document(id: 'paper', title: '中文检索 FFI paper', authors: ['Author'],
+            keywords: [], addedAt: 1));
+    require(!imported.duplicate, 'Actual PDF was not imported');
+    require((await backend.searchLibrary(query: '中文检索', limit: 10)).single.id == 'paper',
+        'Chinese FTS did not cross FFI correctly');
+    final pdf = await backend.openPdf(document: 'paper', taskId: 'open');
+    require(pdf.pages.length == 2, 'Actual PDF page count');
+    final render = RenderRequest(document: pdf.handle, page: 0, scale: 1,
+        tile: const PixelRect(x: 0, y: 0, width: 32, height: 32), annotations: true);
+    final bitmap = await backend.renderPdfTile(request: render, taskId: 'render');
+    require(bitmap.rgba.length == 32 * 32 * 4, 'RGBA external typed data length');
+    require((await backend.renderPdfTile(request: render, taskId: 'render')).fromCache,
+        'PDF cache did not survive FFI');
+    require((await backend.pdfCharacters(handle: pdf.handle, page: 0, taskId: 'characters')).isNotEmpty,
+        'Actual PDF characters missing');
+
+    // Serve a provider-format HTTP response, while checking the actual uploaded PDF.
+    server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final service = server;
+    final requestWork = () async {
+      final request = await service.first;
+      require(request.uri.path == '/layout-parsing', 'OCR path');
+      require(request.headers.value('authorization') == 'token local-test-token', 'Injected OCR key');
+      final payload = jsonDecode(await utf8.decoder.bind(request).join()) as Map<String, dynamic>;
+      final uploaded = base64Decode(payload['file'] as String);
+      require(base64Encode(uploaded) == base64Encode(await File(args[2]).readAsBytes()),
+          'Uploaded bytes differ from the real PDF');
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({'errorCode': 0, 'result': {'layoutParsingResults': [
+        {'page_size': [600, 400], 'prunedResult': {'parsing_res_list': [
+          {'block_id': 0, 'block_label': 'doc_title', 'block_content': '材料测试文献',
+            'block_bbox': [10, 0, 500, 20]},
+          {'block_id': 1, 'block_label': 'text', 'block_content': '正文 Rust 😀 text',
+            'block_bbox': [1, 2, 300, 40]},
+          {'block_id': 2, 'block_label': 'image', 'block_content': '',
+            'block_bbox': [40, 80, 360, 200]},
+          {'block_id': 3, 'block_label': 'figure_title', 'block_content': 'Figure 1. PDF crop',
+            'block_bbox': [40, 210, 500, 240]},
+          {'block_id': 4, 'block_label': 'text', 'block_content': '张三 李四 主编',
+            'block_bbox': [20, 45, 300, 70]}
+        ]}, 'markdown': {'text': '正文 Rust 😀 text', 'images': {}}}
+      ]}}));
+      await request.response.close();
+    }();
+    await backend.injectCredentials(entries: [
+      const CredentialInput(key: 'doc_extract_api_key', value: 'local-test-token')
+    ]);
+    final extraction = await backend.extractDocument(document: 'paper', taskId: 'ocr',
+        provider: ExtractionProvider.paddle(url: 'http://127.0.0.1:${server.port}',
+            options: const PaddleOptions(markdownIgnoreLabels: [], useChartRecognition: false,
+                useDocOrientationClassify: false, useDocUnwarping: false, useSealRecognition: false,
+                useOcrForImageBlock: false, mergeTables: true, restructurePages: true, layoutNms: true,
+                layoutShapeMode: 'auto', repetitionPenalty: 1, temperature: 0))).toList();
+    await requestWork;
+    stdout.writeln('FFI OCR HTTP and publication completed.');
+    require(extraction.whereType<ExtractionEvent_Published>().single.documentId == 'paper',
+        'Typed OCR completion event');
+    final model = await backend.readerDocument(document: 'paper');
+    require(model.figureAssets.length == 1, 'Actual PDF figure crop missing');
+    final figureBytes = await File('${model.assetDirectory}/figures/${model.figureAssets.single.imagePath}').readAsBytes();
+    require(figureBytes.length > 8 && figureBytes[0] == 137 && figureBytes[1] == 80,
+        'Cropped PNG was not published with the OCR generation');
+    final block = model.blocks.firstWhere((block) => block.text.contains('Rust'));
+    final start = block.text.indexOf('Rust');
+    final anchor = await backend.createAnchor(document: 'paper', block: block.id,
+        start: BigInt.from(start), end: BigInt.from(start + 'Rust 😀'.length));
+    require(anchor.quote == 'Rust 😀', 'UTF-16 anchor with surrogate pair');
+    await backend.putNote(note: const Note(id: 'note', documentId: 'paper', content: 'Rust 😀',
+        note: 'User note', color: 'yellow', createdAt: 2));
+    final conversation = await backend.createConversation(document: 'paper', title: 'Saved conversation');
+    require((await backend.conversation(document: 'paper', id: conversation.id)).title == 'Saved conversation',
+        'Conversation persistence');
+    final repaired = await backend.repairMetadata(options: const MetadataRepairOptions(
+        documentId: 'paper', allowNetwork: false), taskId: 'metadata').toList();
+    final metadata = repaired.whereType<MetadataEvent_Completed>().single.report;
+    require(metadata.document.title == '材料测试文献' && metadata.document.authors.join(',') == '张三,李四',
+        'Rust metadata pipeline did not apply OCR book metadata');
+    require((await backend.searchLibrary(query: '材料', limit: 10)).single.id == 'paper',
+        'Metadata repair did not update FTS');
+
+    stdout.writeln('FFI metadata completed.');
+    final archive = '${root.path}/saved.zip';
+    final backup = await backend.createBackup(path: archive, scope: BackupScope.full,
+        taskId: 'backup').toList();
+    require(backup.whereType<BackupEvent_Created>().single.manifest.formatVersion == 4,
+        'Typed backup completion event');
+    await backend.deleteNote(id: 'note');
+    stdout.writeln('FFI backup completed.');
+    final preparation = await backend.prepareRestore(path: archive, scope: RestoreScope.full,
+        mode: RestoreMode.overwrite, taskId: 'restore-prepare').toList();
+    final preview = preparation.whereType<BackupEvent_Prepared>().single.preview;
+    await backend.commitRestore(id: preview.id, taskId: 'restore-commit').drain<void>();
+    require((await backend.notes(document: 'paper')).single.note == 'User note',
+        'Restore lost user note');
+    await expectCode(backend.pdfCharacters(handle: pdf.handle, page: 0, taskId: 'old-handle'),
+        ErrorCode.notFound);
+    stdout.writeln('FFI restore completed.');
+    final reopened = await backend.openPdf(document: 'paper', taskId: 'reopen');
+    require(reopened.handle > pdf.handle, 'Restore reused an invalid PDF handle');
+    await server.close(force: true);
+    server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final downloadWork = server.take(2).asyncMap((request) async {
+      request.response.headers.contentType = ContentType('application', 'pdf');
+      if (request.uri.path == '/valid.pdf') {
+        request.response.add(await File(args[2]).readAsBytes());
+        request.response.write('\n% Downloaded new revision\n');
+      } else {
+        request.response.write('<html>Publisher login</html>');
+      }
+      await request.response.close();
+    }).drain<void>();
+    final base = 'http://127.0.0.1:${server.port}';
+    stdout.writeln('FFI downloading replacement.');
+    final downloaded = await backend.downloadDocumentPdf(options: PdfDownloadOptions(
+        documentId: 'paper', input: '$base/valid.pdf', replaceExisting: true),
+        taskId: 'download').toList();
+    require(downloaded.whereType<AcquisitionEvent_Completed>().single.report.changed,
+        'Downloaded replacement did not change PDF fingerprint');
+    await expectCode(backend.pdfCharacters(handle: reopened.handle, page: 0, taskId: 'replaced-handle'),
+        ErrorCode.notFound);
+    require((await backend.notes(document: 'paper')).single.note == 'User note',
+        'PDF replacement lost notes');
+    require((await backend.conversation(document: 'paper', id: conversation.id)).title == 'Saved conversation',
+        'PDF replacement lost saved chat');
+    require(!await File('${root.path}/v2/library/paper/ocr-current.json').exists(),
+        'Changed PDF retained old OCR generation');
+    stdout.writeln('FFI replacement completed.');
+    final savedPdf = base64Encode(await File('${root.path}/v2/library/paper/source.pdf').readAsBytes());
+    final failedDownload = await backend.downloadDocumentPdf(options: PdfDownloadOptions(
+        documentId: 'paper', input: '$base/invalid.pdf', replaceExisting: true),
+        taskId: 'invalid-download').toList();
+    require(failedDownload.whereType<AcquisitionEvent_Failed>().single.error.code == ErrorCode.invalidData,
+        'Failed download did not return a typed terminal error event');
+    await downloadWork;
+    require(base64Encode(await File('${root.path}/v2/library/paper/source.pdf').readAsBytes()) == savedPdf,
+        'Failed download changed the existing PDF');
+    require(await backend.deleteDocument(id: 'paper', taskId: 'delete'), 'Document deletion');
+    require((await backend.documents(limit: 10, offset: 0)).isEmpty, 'Deleted document remains');
+    stdout.writeln('Real FFI verified: SQLite/FTS, typed errors, PDF tiles/chars, OCR HTTP/streams, '
+        'UTF-16 anchors, notes/chat, metadata, PDF acquisition/replacement, archive/restore and handle invalidation.');
+  } on OtterError catch (error) {
+    stderr.writeln('Native verification error: ${error.code}: ${error.detail}');
+    rethrow;
+  } finally {
+    await server?.close(force: true);
+    await backend?.close();
+    backend?.dispose();
+    RustLib.dispose();
+    await root.delete(recursive: true);
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "id": "legacy-session",
+  "title": "Old paper question",
+  "createdAt": "2025-08-01T12:00:00.000",
+  "updatedAt": "2025-08-01T12:01:00.000",
+  "messages": [
+    {
+      "id": "user-1",
+      "role": "user",
+      "content": "Explain the result.",
+      "quotedText": "Body 🦦 quote",
+      "quoteAnchor": {
+        "version": 1,
+        "ranges": [
+          {
+            "paragraphId": "p0",
+            "language": "source",
+            "revision": "legacy-hash",
+            "start": 0,
+            "end": 4,
+            "quote": "Body",
+            "prefix": "",
+            "suffix": " quote"
+          }
+        ]
+      },
+      "figureImagePath": "/old/root/figures/f1.png",
+      "urlContext": "Saved URL evidence",
+      "createdAt": "2025-08-01T12:00:00.000"
+    },
+    {
+      "id": "assistant-1",
+      "role": "assistant",
+      "content": "A prior answer.",
+      "activities": [
+        {
+          "id": "thought-1",
+          "kind": "reasoning",
+          "name": "reasoning",
+          "text": "A prior summary.",
+          "status": "completed",
+          "startedAt": "2025-08-01T12:00:01.000",
+          "endedAt": "2025-08-01T12:01:00.000"
+        }
+      ],
+      "modelId": "old-model",
+      "createdAt": "2025-08-01T12:01:00.000"
+    }
+  ]
+}
