@@ -2,3 +2,6 @@ rust_input: crate::api
 rust_root: rust/
 dart_output: lib/src/rust
 web: false
+# 内置 build_runner 带 --delete-conflicting-outputs，资产图失效时会删掉 drift 生成文件；
+# codegen 后改为单独执行 `dart run build_runner build`。
+build_runner: false
