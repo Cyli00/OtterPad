@@ -11,16 +11,43 @@
 - `UpdateService` 使用现有 `device_info_plus` 的 Android ABI 列表选择安装包。无法读取 ABI 或无兼容包时，更新入口转向发布页。
 - 根目录 `test/` 是被 Git 忽略的本地回归集；CI 不依赖这些未提交文件。提交扫描及其合成测试位于 `scripts/`，在 CI 中执行。
 
-## Rust 工具链（0.2.0 起，待接入）
+## Rust 工具链（0.2.0 起）
 
-Rust 核心随 `flutter build` 由 cargokit 自动编译（架构见 `docs/architecture.md`）。接入时 `checks.yml`、`ci.yml`、`release.yml` 需要同步（ci-buildtest skill 的描述已按接入后的状态写好）：
+当前 Rust 后端独立编译。按用户最新安排，本轮后续只做逻辑迁移、格式化、FRB 绑定生成和编译，不再新增或执行测试；下述测试与应用验收交由统一安排，历史通过记录不代表最新修改已完成验证。工具链固定在 `rust/rust-toolchain.toml`：Rust `1.99.1`，组件 `rustfmt`、`clippy`。`rust/Cargo.lock` 随源码保存。
 
-- 安装 stable Rust 并固定版本；各 job 只装本平台 target：Android `aarch64-linux-android`、`armv7-linux-androideabi`（另需 NDK），Windows `x86_64-pc-windows-msvc`，macOS `aarch64-apple-darwin`。
-- `checks.yml` 增加 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`，并校验 FRB 生成绑定与 `rust/src/api/` 一致（重新生成后 `git diff --exit-code`）。
-- 各平台产物随包携带 PDFium 动态库。
-- 缓存 `~/.cargo` 与 `rust/target`，避免每次全量编译。
+`checks.yml` 已增加 Linux、Windows、macOS 三个 runner 的原生 Rust 检查，CI 和 Release 通过共用检查自动引用。各 runner 在 `rust/` 下读取固定工具链，然后执行：
 
-接入完成后，把本节改写为实际的版本号与步骤。
+```bash
+cargo fmt --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+```
+
+测试使用实际 SQLite/FTS5、进程内启动的本地 HTTP 服务和固定版本 PDFium，覆盖数据落盘/约束/迁移续传、OCR 与 AI 协议、流式取消、翻译缓存、会话兼容以及 PDF 渲染与字符几何。每个 CI runner 先通过 `scripts/fetch_pdfium.py --target host` 校验并解压二进制，设置 `PDFIUM_LIBRARY_PATH` 再运行测试。本机 PDFium 的手动准备示例：
+
+```bash
+export PDFIUM_LIBRARY_PATH="$(python3 scripts/fetch_pdfium.py --target host --output /tmp/otter-pdfium)"
+cd rust
+cargo test --locked
+```
+
+新增 CI 配置尚未在远端执行，本机只运行了 macOS arm64 的 Rust 检查；Linux、Windows 和 Android 不能据此认定通过。
+
+FRB 的 Rust API 与生成绑定已加入；Dart 绑定在独立临时工程中验证，未写入应用。Windows 检查 job 增加固定版本 `flutter_rust_bridge_codegen 2.13.0`、`cargo-expand 1.0.127`，执行：
+
+```bash
+python scripts/generate_rust_bridge.py --check-rust --smoke
+```
+
+该命令重建 Rust 绑定并比较差异，在仓库外生成 Dart 类型，运行 Freezed、`dart analyze`，构建真实原生动态库，再由 Dart 走通 SQLite/FTS、错误码、PDFium、OCR HTTP/Stream、锚点/笔记/会话及备份恢复。需要 `PDFIUM_LIBRARY_PATH` 指向已校验的宿主动态库；`--verify` 只做类型与分析器检查。脚本不会修改应用的 `pubspec.yaml`、`lib/` 或平台目录。本机完整 FFI 已运行，新增远端步骤尚未执行。
+
+cargokit 与 Flutter 应用构建尚未接入，应用接入仍需补齐：
+
+- 在构建 job 安装对应 target：Android `aarch64-linux-android`、`armv7-linux-androideabi`（另需 NDK），Windows `x86_64-pc-windows-msvc`，macOS `aarch64-apple-darwin`；配置 Cargo 缓存。
+- 修改 `rust/src/api/` 后运行上述生成器，将 Rust 绑定与源码一起保存；本轮前端排除，Dart 产物只在临时工程保留。
+- 随包携带固定 ABI 的 PDFium 动态库、校验值与许可，实际执行四个目标的 `flutter build`。
+
+因此当前检查通过不代表 0.2.0 Flutter 包已可构建。
 
 ## 本地准备
 
