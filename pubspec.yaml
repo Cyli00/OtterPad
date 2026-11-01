@@ -42,6 +42,12 @@ dependencies:
   # 桌面原生系统字体枚举（不修改平台工程）
   ffi: ^2.2.0
 
+  # Rust 后端（rust/，由 rust_builder 的 cargokit 随 flutter build 编译）
+  flutter_rust_bridge: 2.13.0
+  freezed_annotation: ^3.1.0
+  otter_core:
+    path: rust_builder
+
   # 图片缓存
   cached_network_image: ^3.4.1
 
@@ -123,6 +129,7 @@ dev_dependencies:
 
   # 代码生成
   build_runner: ^2.4.0
+  freezed: ^3.2.5
   json_serializable: ^6.8.0
   drift_dev: 2.34.0  # 钉 <2.34.1+1：之后 require analyzer 13，与本机 flutter_test/test 冲突
 

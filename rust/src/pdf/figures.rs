@@ -57,6 +57,34 @@ struct Raster {
 pub(crate) fn directory(document: &std::path::Path) -> Result<std::path::PathBuf> {
     Ok(crate::document::extraction_directory(document)?.join("figures"))
 }
+/// 清单中的图片路径对应的文件；旧版绝对路径只取 `figures/` 之后的部分，文件不存在时返回 `None`。
+pub(crate) fn asset_file(
+    document: &std::path::Path,
+    raw: &str,
+) -> Result<Option<std::path::PathBuf>> {
+    let figures = directory(document)?;
+    let raw = raw.replace('\\', "/");
+    let relative = if raw.starts_with('/') || raw.contains(':') {
+        raw.rsplit_once("/figures/")
+            .map(|(_, tail)| tail)
+            .unwrap_or_else(|| raw.rsplit('/').next().unwrap_or(""))
+    } else {
+        &raw
+    };
+    crate::sync::archive::safe_relative(relative)?;
+    let path = figures.join(relative);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let root = figures.canonicalize()?;
+    if !root.starts_with(document.canonicalize()?) || !path.canonicalize()?.starts_with(&root) {
+        return Err(OtterError::new(
+            ErrorCode::InvalidData,
+            "figure path outside document",
+        ));
+    }
+    Ok(Some(path))
+}
 pub(crate) fn read_assets(document: &std::path::Path) -> Result<Vec<FigureAsset>> {
     let directory = directory(document)?;
     let manifest = directory.join("figures.json");

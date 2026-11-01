@@ -7108,6 +7108,20 @@ impl SseDecode for Vec<crate::api::document::ReaderFigureBlock> {
     }
 }
 
+impl SseDecode for Vec<crate::api::document::ReaderFigureImage> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::document::ReaderFigureImage>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::pdf::geometry::Rect> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8073,12 +8087,15 @@ impl SseDecode for crate::api::document::ReaderDocument {
         let mut var_figures = <Vec<crate::api::document::ReaderFigure>>::sse_decode(deserializer);
         let mut var_figureAssets =
             <Vec<crate::pdf::figures::FigureAsset>>::sse_decode(deserializer);
+        let mut var_figureImages =
+            <Vec<crate::api::document::ReaderFigureImage>>::sse_decode(deserializer);
         let mut var_assetDirectory = <String>::sse_decode(deserializer);
         return crate::api::document::ReaderDocument {
             version: var_version,
             blocks: var_blocks,
             figures: var_figures,
             figure_assets: var_figureAssets,
+            figure_images: var_figureImages,
             asset_directory: var_assetDirectory,
         };
     }
@@ -8122,6 +8139,22 @@ impl SseDecode for crate::api::document::ReaderFigureBlock {
             label: var_label,
             bbox: var_bbox,
             image: var_image,
+        };
+    }
+}
+
+impl SseDecode for crate::api::document::ReaderFigureImage {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_blockId = <String>::sse_decode(deserializer);
+        let mut var_path = <String>::sse_decode(deserializer);
+        let mut var_widthPx = <u32>::sse_decode(deserializer);
+        let mut var_heightPx = <u32>::sse_decode(deserializer);
+        return crate::api::document::ReaderFigureImage {
+            block_id: var_blockId,
+            path: var_path,
+            width_px: var_widthPx,
+            height_px: var_heightPx,
         };
     }
 }
@@ -11164,6 +11197,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::document::ReaderDocument {
             self.blocks.into_into_dart().into_dart(),
             self.figures.into_into_dart().into_dart(),
             self.figure_assets.into_into_dart().into_dart(),
+            self.figure_images.into_into_dart().into_dart(),
             self.asset_directory.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -11227,6 +11261,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::document::ReaderFigureBlock>
     for crate::api::document::ReaderFigureBlock
 {
     fn into_into_dart(self) -> crate::api::document::ReaderFigureBlock {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::document::ReaderFigureImage {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.block_id.into_into_dart().into_dart(),
+            self.path.into_into_dart().into_dart(),
+            self.width_px.into_into_dart().into_dart(),
+            self.height_px.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::document::ReaderFigureImage
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::document::ReaderFigureImage>
+    for crate::api::document::ReaderFigureImage
+{
+    fn into_into_dart(self) -> crate::api::document::ReaderFigureImage {
         self
     }
 }
@@ -13688,6 +13745,16 @@ impl SseEncode for Vec<crate::api::document::ReaderFigureBlock> {
     }
 }
 
+impl SseEncode for Vec<crate::api::document::ReaderFigureImage> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::document::ReaderFigureImage>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::pdf::geometry::Rect> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14436,6 +14503,7 @@ impl SseEncode for crate::api::document::ReaderDocument {
         <Vec<crate::document::Block>>::sse_encode(self.blocks, serializer);
         <Vec<crate::api::document::ReaderFigure>>::sse_encode(self.figures, serializer);
         <Vec<crate::pdf::figures::FigureAsset>>::sse_encode(self.figure_assets, serializer);
+        <Vec<crate::api::document::ReaderFigureImage>>::sse_encode(self.figure_images, serializer);
         <String>::sse_encode(self.asset_directory, serializer);
     }
 }
@@ -14461,6 +14529,16 @@ impl SseEncode for crate::api::document::ReaderFigureBlock {
         <String>::sse_encode(self.label, serializer);
         <Vec<f64>>::sse_encode(self.bbox, serializer);
         <Option<String>>::sse_encode(self.image, serializer);
+    }
+}
+
+impl SseEncode for crate::api::document::ReaderFigureImage {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.block_id, serializer);
+        <String>::sse_encode(self.path, serializer);
+        <u32>::sse_encode(self.width_px, serializer);
+        <u32>::sse_encode(self.height_px, serializer);
     }
 }
 
@@ -15145,28 +15223,28 @@ mod io {
     flutter_rust_bridge::frb_generated_boilerplate_io!();
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_otter_backend_bridge_check_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBackend(
+    pub extern "C" fn frbgen_otter_pad_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBackend(
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Backend>>::increment_strong_count(ptr as _);
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_otter_backend_bridge_check_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBackend(
+    pub extern "C" fn frbgen_otter_pad_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBackend(
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Backend>>::decrement_strong_count(ptr as _);
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_otter_backend_bridge_check_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLocalZoteroSnapshot(
+    pub extern "C" fn frbgen_otter_pad_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLocalZoteroSnapshot(
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<LocalZoteroSnapshot>>::increment_strong_count(ptr as _);
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_otter_backend_bridge_check_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLocalZoteroSnapshot(
+    pub extern "C" fn frbgen_otter_pad_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLocalZoteroSnapshot(
         ptr: *const std::ffi::c_void,
     ) {
         MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<LocalZoteroSnapshot>>::decrement_strong_count(ptr as _);

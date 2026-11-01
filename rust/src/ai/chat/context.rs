@@ -55,7 +55,6 @@ pub(crate) fn load_figures(
     only: Option<&str>,
     label: Option<&str>,
 ) -> Result<Vec<ImageInput>> {
-    let figures = crate::pdf::figures::directory(directory)?;
     let entries: Vec<(String, Option<String>)> = if let Some(path) = only {
         vec![(path.to_owned(), label.map(str::to_owned))]
     } else {
@@ -66,27 +65,9 @@ pub(crate) fn load_figures(
     };
     let mut images = Vec::new();
     for (raw, label) in entries {
-        let raw = raw.replace('\\', "/");
-        let relative = if raw.starts_with('/') || raw.contains(':') {
-            raw.rsplit_once("/figures/")
-                .map(|(_, tail)| tail)
-                .unwrap_or_else(|| raw.rsplit('/').next().unwrap_or(""))
-        } else {
-            &raw
-        };
-        crate::sync::archive::safe_relative(relative)?;
-        let path = figures.join(relative);
-        if !path.is_file() {
+        let Some(path) = crate::pdf::figures::asset_file(directory, &raw)? else {
             continue;
-        }
-        let root = figures.canonicalize()?;
-        if !root.starts_with(directory.canonicalize()?) || !path.canonicalize()?.starts_with(&root)
-        {
-            return Err(OtterError::new(
-                ErrorCode::InvalidData,
-                "figure path outside document",
-            ));
-        }
+        };
         let mime = match path
             .extension()
             .and_then(|s| s.to_str())
