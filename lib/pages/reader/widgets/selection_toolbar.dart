@@ -517,8 +517,8 @@ class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
   @override
   Offset getPositionForChild(Size size, Size childSize) {
     // 键盘占用屏幕底部 keyboardInset px，可用区域上界 = size.height - keyboardInset。
-    // 笔记面板 autofocus 弹键盘时这里会一帧帧减小，工具栏自动从"选区下方"
-    // 切换到"选区上方"或贴到键盘上沿。
+    // 优先放在选区上方，不遮挡选区下一行；笔记面板展开时整体向上生长，
+    // 上方放不下才放到下方，下方也放不下（键盘弹出）时贴着可用区域。
     final availableHeight = size.height - keyboardInset;
     final cx = selectionRect.center.dx;
     // 窄屏上工具栏可能比 (屏宽 - 16) 还宽，此时 size.width - childSize.width - 8
@@ -527,20 +527,14 @@ class _SelectionMenuDelegate extends SingleChildLayoutDelegate {
     final maxX = math.max(8.0, size.width - childSize.width - 8);
     final clampedX = (cx - childSize.width / 2).clamp(8.0, maxX);
 
-    if (selectionRect.bottom + _gap + childSize.height <= availableHeight) {
-      return Offset(
-        clampedX,
-        math.max(topPadding, selectionRect.bottom + _gap),
-      );
+    final above = selectionRect.top - _gap - childSize.height;
+    if (above >= topPadding) return Offset(clampedX, above);
+    final below = selectionRect.bottom + _gap;
+    if (below + childSize.height <= availableHeight) {
+      return Offset(clampedX, math.max(topPadding, below));
     }
     final upperBound = math.max(topPadding, availableHeight - childSize.height);
-    return Offset(
-      clampedX,
-      (selectionRect.top - _gap - childSize.height).clamp(
-        topPadding,
-        upperBound,
-      ),
-    );
+    return Offset(clampedX, above.clamp(topPadding, upperBound));
   }
 
   @override
