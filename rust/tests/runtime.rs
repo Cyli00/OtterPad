@@ -61,12 +61,8 @@ async fn runtime_recovers_before_opening_storage_and_logs_only_operation_codes()
         .collect::<String>();
     assert!(logs.contains("put_setting InvalidArgument"));
     assert!(!logs.contains(secret));
-    assert_eq!(
-        Runtime::open(config, tasks, token, |_| {})
-            .await
-            .err()
-            .unwrap()
-            .code,
-        ErrorCode::Conflict
-    );
+    // 热重启后 Dart 端再次初始化同一数据根：复用仍存活的运行时，不重复迁移。
+    let (reopened, startup) = Runtime::open(config, tasks, token, |_| {}).await.unwrap();
+    assert!(Arc::ptr_eq(&runtime, &reopened));
+    assert!(startup.migration.is_none());
 }

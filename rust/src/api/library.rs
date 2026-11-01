@@ -1,6 +1,6 @@
 use super::{
     Backend,
-    types::{JsonData, Note},
+    types::{JsonData, JsonEntry, Note},
 };
 use crate::{
     error::{ErrorCode, OtterError, Result},
@@ -137,6 +137,20 @@ impl Backend {
         self.runtime
             .with_storage(&Default::default(), "setting", move |s| {
                 Ok(s.setting(&key)?.map(JsonData::from_value))
+            })
+            .await
+    }
+    /// 全部设置，供 Dart 启动时一次性载入同步读缓存。
+    pub async fn settings(&self) -> Result<Vec<JsonEntry>> {
+        self.runtime
+            .with_storage(&Default::default(), "settings", |s| {
+                Ok(s.settings()?
+                    .into_iter()
+                    .map(|(key, value)| JsonEntry {
+                        key,
+                        value: JsonData::from_value(value),
+                    })
+                    .collect())
             })
             .await
     }

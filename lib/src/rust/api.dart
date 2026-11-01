@@ -367,6 +367,9 @@ abstract class Backend implements RustOpaqueInterface {
 
   Future<JsonData?> setting({required String key});
 
+  /// 全部设置，供 Dart 启动时一次性载入同步读缓存。
+  Future<List<JsonEntry>> settings();
+
   Future<StorageReport> storageReport({required String taskId});
 
   Future<String> summaryPrompt({

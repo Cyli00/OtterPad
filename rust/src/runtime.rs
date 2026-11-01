@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::{Arc, LazyLock, Mutex, mpsc},
+    sync::{Arc, LazyLock, Mutex, Weak, mpsc},
 };
 
 use serde::{Deserialize, Serialize};
@@ -36,6 +36,9 @@ pub struct Startup {
 }
 type Job = Box<dyn FnOnce(&mut State) + Send>;
 static ROOTS: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+/// 已打开的运行时；Flutter 热重启只重建 Dart 端，旧句柄泄漏后运行时仍存活，再次打开同一数据根时复用它。
+static OPEN: LazyLock<Mutex<HashMap<PathBuf, Weak<Runtime>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 struct RootLease(PathBuf);
 impl Drop for RootLease {
     fn drop(&mut self) {
@@ -104,17 +107,43 @@ impl Runtime {
         tasks::check(&token)?;
         tokio::fs::create_dir_all(&config.root).await?;
         config.root = tokio::fs::canonicalize(&config.root).await?;
-        {
+        let reusable = {
             let mut roots = ROOTS
                 .lock()
                 .map_err(|_| OtterError::new(ErrorCode::Conflict, "runtime roots lock"))?;
-            if !roots.insert(config.root.clone()) {
+            if roots.insert(config.root.clone()) {
+                None
+            } else {
+                let open = OPEN
+                    .lock()
+                    .map_err(|_| OtterError::new(ErrorCode::Conflict, "runtime roots lock"))?;
+                Some(
+                    open.get(&config.root)
+                        .and_then(Weak::upgrade)
+                        .ok_or_else(|| {
+                            OtterError::new(ErrorCode::Conflict, "runtime already open for root")
+                        })?,
+                )
+            }
+        };
+        if let Some(runtime) = reusable {
+            let open = runtime
+                .call(&token, "reopen", |state| Ok(state.storage.is_some()))
+                .await?;
+            if !open {
                 return Err(OtterError::new(
                     ErrorCode::Conflict,
                     "runtime already open for root",
                 ));
             }
+            let startup = Startup {
+                directory: runtime.directory.clone(),
+                migration: None,
+                migration_error: None,
+            };
+            return Ok((runtime, startup));
         }
+        let root = config.root.clone();
         let root_lease = RootLease(config.root.clone());
         let directory = config.root.join("v2");
         let (sender, receiver) = mpsc::channel::<Job>();
@@ -169,6 +198,9 @@ impl Runtime {
             backups: tokio::sync::Mutex::new(()),
             directory,
         });
+        OPEN.lock()
+            .map_err(|_| OtterError::new(ErrorCode::Conflict, "runtime roots lock"))?
+            .insert(root, Arc::downgrade(&runtime));
         Ok((runtime, startup))
     }
 

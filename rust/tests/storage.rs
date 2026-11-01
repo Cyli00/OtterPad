@@ -282,3 +282,25 @@ fn lists_metadata_with_stable_pagination_and_rejects_invalid_ids() {
         ErrorCode::InvalidData
     );
 }
+
+#[test]
+fn settings_lists_every_key_with_decoded_values() {
+    let root = tempfile::tempdir().unwrap();
+    let storage = Storage::open(root.path()).unwrap();
+    storage
+        .put_setting("theme_mode", &serde_json::json!("dark"))
+        .unwrap();
+    storage
+        .put_setting("agent_api_models_x", &serde_json::json!(["a", {"b": 1}]))
+        .unwrap();
+    assert_eq!(
+        storage.settings().unwrap(),
+        [
+            (
+                "agent_api_models_x".to_owned(),
+                serde_json::json!(["a", {"b": 1}])
+            ),
+            ("theme_mode".to_owned(), serde_json::json!("dark")),
+        ]
+    );
+}

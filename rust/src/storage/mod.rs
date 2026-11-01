@@ -182,6 +182,20 @@ impl Storage {
             .transpose()
     }
 
+    pub fn settings(&self) -> Result<Vec<(String, Value)>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT settingKey, value FROM settings ORDER BY settingKey")?;
+        let rows = statement.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.map(|row| {
+            let (key, value) = row?;
+            Ok((key, serde_json::from_str(&value)?))
+        })
+        .collect()
+    }
+
     /// Credentials belong to the system vault and must never be passed here.
     pub fn put_setting(&self, key: &str, value: &Value) -> Result<()> {
         if crate::credentials::is_secret_setting(key) {
