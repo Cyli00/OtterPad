@@ -95,3 +95,12 @@ android/app/src/main/jniLibs/
 docs/diagrams/*.visual-check.*
 docs/diagrams/*.delivery.json
 docs/diagrams/*.review.json
+
+# Rust build output and profiling data
+/target/
+**/*.rs.bk
+*.profraw
+*.profdata
+
+# Local session handoff
+/docs/handoff-0.2.0.md
