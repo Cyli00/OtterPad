@@ -3,8 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 
+import '../../src/rust/api/document.dart';
+import '../../src/rust/document.dart';
 import '../reader/widgets/reader_typography.dart';
-import 'document_model.dart';
 import 'widget_measurer.dart';
 
 /// 版式参数。相同参数必然得到相同的测量与分页，[ReaderLayout] 以它为缓存键。
@@ -232,6 +233,7 @@ class LayoutItem {
     this.maths = const [],
     this.indent = 0,
     this.mediaSize,
+    this.image,
   });
 
   final int blockIndex;
@@ -244,8 +246,11 @@ class LayoutItem {
   final List<MathBox> maths;
   final double indent;
 
-  /// 图片占位或公式的显示尺寸。
+  /// 图片或公式的显示尺寸。
   final Size? mediaSize;
+
+  /// 图块的位图；没有可用图片时只显示比例一致的占位。
+  final ReaderFigureImage? image;
 
   bool get isText => kind == ItemKind.text;
 
@@ -329,7 +334,8 @@ class ReaderTypesetter {
         ),
       );
 
-  ReaderLayout layout(DocumentModel model, ReaderLayoutSpec spec) {
+  ReaderLayout layout(ReaderDocument model, ReaderLayoutSpec spec) {
+    final images = {for (final i in model.figureImages) i.blockId: i};
     final items = <LayoutItem>[];
     for (var i = 0; i < model.blocks.length; i++) {
       final block = model.blocks[i];
@@ -337,8 +343,11 @@ class ReaderTypesetter {
       if (block.ownerId != null) continue;
       final gap = items.isEmpty ? 0.0 : spec.gapBefore(block);
       switch (block.kind) {
+        // 无法解析成单元格的表格只有截图，按图块显示。
         case BlockKind.figure:
-          items.add(_figure(model, i, spec, gap));
+        case BlockKind.table
+            when block.table == null && images.containsKey(block.id):
+          items.add(_figure(model, i, spec, gap, images[block.id]));
           if (block.text.isNotEmpty) {
             items.add(_text(block, i, spec, spec.caption, spec.fontSize * .4));
           }
@@ -531,10 +540,11 @@ class ReaderTypesetter {
   }
 
   LayoutItem _figure(
-    DocumentModel model,
+    ReaderDocument model,
     int index,
     ReaderLayoutSpec spec,
     double gap,
+    ReaderFigureImage? image,
   ) {
     final block = model.blocks[index];
     var regions = block.sourceRegions;
@@ -554,7 +564,11 @@ class ReaderTypesetter {
       r = math.max(r ?? region.bbox[2], region.bbox[2]);
       b = math.max(b ?? region.bbox[3], region.bbox[3]);
     }
-    final ratio = l != null && r! > l && b! > t! ? (r - l) / (b - t) : 4 / 3;
+    final ratio = image != null && image.widthPx > 0 && image.heightPx > 0
+        ? image.widthPx / image.heightPx
+        : l != null && r! > l && b! > t!
+        ? (r - l) / (b - t)
+        : 4 / 3;
     var height = spec.width / ratio;
     if (height > spec.pageHeight * .8) height = spec.pageHeight * .8;
     final size = Size(math.min(spec.width, height * ratio), height);
@@ -565,6 +579,7 @@ class ReaderTypesetter {
       height: height,
       lines: [LayoutLine(0, 0, 0, height)],
       mediaSize: size,
+      image: image,
     );
   }
 
@@ -590,7 +605,7 @@ class ReaderTypesetter {
 
   /// 表格 widget；测量与渲染共用，保证高度一致。行列合并暂按普通单元格显示。
   Widget table(Block block, ReaderLayoutSpec spec) {
-    final rows = block.table!;
+    final rows = block.table!.rows;
     final columns = rows.fold(0, (n, row) => math.max(n, row.length));
     final style = spec.body.copyWith(fontSize: spec.fontSize * .88);
     return Table(
@@ -653,7 +668,7 @@ class ReaderLayout {
     }
   }
 
-  final DocumentModel model;
+  final ReaderDocument model;
   final ReaderLayoutSpec spec;
   final List<LayoutItem> items;
   final _tops = <double>[];
@@ -748,6 +763,7 @@ class ReaderLayout {
 
   /// 阅读位置对应的滚动偏移（该行行顶）。
   double scrollOf(ReaderLocation location) {
+    if (items.isEmpty) return 0;
     final index = itemOf(location);
     final item = items[index];
     final y = _tops[index] + item.gapBefore;
@@ -758,6 +774,7 @@ class ReaderLayout {
 
   /// 阅读位置所在页。
   int pageOf(ReaderLocation location) {
+    if (items.isEmpty) return 0;
     final index = itemOf(location);
     final item = items[index];
     final line = item.isText
@@ -773,6 +790,7 @@ class ReaderLayout {
 
   /// 页首的阅读位置。
   ReaderLocation locationOfPage(int page) {
+    if (pages.isEmpty) return const ReaderLocation(0, 0);
     final fragment = pages[page.clamp(0, pages.length - 1)].fragments.first;
     final item = items[fragment.itemIndex];
     if (!item.isText) return ReaderLocation(item.blockIndex, 0);

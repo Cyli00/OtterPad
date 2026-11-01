@@ -1,12 +1,13 @@
-// 新阅读器的独立调试入口：不初始化存储、数据库与后台服务，不读写用户数据。
+// 新阅读器的独立调试入口：Rust 后端以临时目录为数据根，不读写正式数据目录。
 //
 //   flutter run -t lib/main_reader_lab.dart
+//   flutter run -t lib/main_reader_lab.dart --dart-define=READER_LAB_DOC=<docId>
 //   flutter run -t lib/main_reader_lab.dart --dart-define=READER_LAB_STRESS=3000
 //   flutter run --profile -t lib/main_reader_lab.dart --dart-define=READER_LAB_AUTOSCROLL=true
 //
-// 读取应用临时目录下的 reader2_model.json（Rust DocumentModel 的 serde JSON）；
-// 不存在或指定 READER_LAB_STRESS 时生成含大量公式的合成文档。
-import 'dart:convert';
+// 首次运行把 <AppSupport>/OtterPad 下的 0.1.x db/、library/ 复制到 <Temp>/reader_lab，
+// 由后端迁移器导入后打开第一篇（或 READER_LAB_DOC 指定的）可阅读文献；
+// 没有可用文献或指定 READER_LAB_STRESS 时生成含大量公式的合成文档。
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,35 +17,94 @@ import 'package:path_provider/path_provider.dart';
 
 import 'core/app_theme.dart';
 import 'core/l10n.dart';
-import 'pages/reader2/document_model.dart';
 import 'pages/reader2/reader2_page.dart';
 import 'pages/reader2/reader_controller.dart';
+import 'src/rust/api.dart';
+import 'src/rust/api/document.dart';
+import 'src/rust/document.dart';
+import 'src/rust/error.dart';
+import 'src/rust/frb_generated.dart';
 
 const _stress = int.fromEnvironment('READER_LAB_STRESS');
+const _documentId = String.fromEnvironment('READER_LAB_DOC');
 const _autoscrollEnabled = bool.fromEnvironment('READER_LAB_AUTOSCROLL');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final file = File(
-    p.join((await getTemporaryDirectory()).path, 'reader2_model.json'),
-  );
-  final model = _stress == 0 && file.existsSync()
-      ? DocumentModel.fromJson(
-          jsonDecode(await file.readAsString()) as Map<String, dynamic>,
-        )
-      : _synthetic(_stress == 0 ? 400 : _stress);
+  final document = _stress == 0 ? await _openLabDocument() : null;
+  final model = document ?? _synthetic(_stress == 0 ? 400 : _stress);
   debugPrint(
-    '[reader2] ${model.blocks.length} blocks from '
-    '${_stress == 0 && file.existsSync() ? 'file' : 'synthetic'} (${file.path})',
+    '[reader2] ${model.blocks.length} blocks, '
+    '${model.figureImages.length} figure images '
+    'from ${document == null ? 'synthetic' : 'rust'}',
   );
   _FrameStats.start();
   runApp(_LabApp(model));
 }
 
+Future<ReaderDocument?> _openLabDocument() async {
+  await RustLib.init();
+  final root = p.join((await getTemporaryDirectory()).path, 'reader_lab');
+  final legacy = p.join(
+    (await getApplicationSupportDirectory()).path,
+    'OtterPad',
+  );
+  if (!File(p.join(root, 'db', 'otter.db')).existsSync() &&
+      File(p.join(legacy, 'db', 'otter.db')).existsSync()) {
+    for (final name in ['db', 'library']) {
+      await _copyTree(Directory(p.join(legacy, name)), p.join(root, name));
+    }
+    debugPrint('[reader2] copied 0.1.x data from $legacy');
+  }
+  Backend? backend;
+  await for (final event in initialize(
+    options: BackendOptions(
+      root: root,
+      bitmapCacheBytes: BigInt.from(64 << 20),
+    ),
+    taskId: 'reader-lab-init',
+  )) {
+    switch (event) {
+      case InitializationEvent_Failed(:final error):
+        debugPrint('[reader2] init failed: ${error.code.name} ${error.detail}');
+        return null;
+      case InitializationEvent_Migration(:final progress):
+        debugPrint('[reader2] migration ${progress.done}/${progress.total}');
+      case InitializationEvent_Ready(backend: final ready, :final directory):
+        debugPrint('[reader2] backend ready at $directory');
+        backend = ready;
+    }
+  }
+  if (backend == null) return null;
+  for (final doc in await backend.documents(limit: 200, offset: 0)) {
+    if (_documentId.isNotEmpty && doc.id != _documentId) continue;
+    try {
+      final document = await backend.readerDocument(document: doc.id);
+      // 没有 OCR 结果的文献得到空模型。
+      if (document.blocks.isEmpty) continue;
+      debugPrint('[reader2] opened ${doc.id} "${doc.title}"');
+      return document;
+    } on OtterError catch (e) {
+      debugPrint('[reader2] skip ${doc.id}: ${e.code.name} ${e.detail}');
+    }
+  }
+  return null;
+}
+
+Future<void> _copyTree(Directory source, String target) async {
+  if (!source.existsSync()) return;
+  await for (final entity in source.list(recursive: true, followLinks: false)) {
+    if (entity is! File) continue;
+    final path = p.join(target, p.relative(entity.path, from: source.path));
+    await Directory(p.dirname(path)).create(recursive: true);
+    await entity.copy(path);
+  }
+}
+
 class _LabApp extends StatefulWidget {
   const _LabApp(this.model);
 
-  final DocumentModel model;
+  final ReaderDocument model;
 
   @override
   State<_LabApp> createState() => _LabAppState();
@@ -159,7 +219,7 @@ Future<void> _autoscroll(ReaderController controller) async {
 }
 
 /// 合成文档：公式各不相同（避开尺寸缓存）；每段 4 个行内公式，每 8 段一个独立公式，每 30 段一个标题。
-DocumentModel _synthetic(int paragraphs) {
+ReaderDocument _synthetic(int paragraphs) {
   const inline = [
     r'\frac{\partial E}{\partial w_{ij}}',
     r'\sum_{k=1}^{n} x_k^2',
@@ -184,6 +244,7 @@ DocumentModel _synthetic(int paragraphs) {
       id: 'b${blocks.length}',
       kind: kind,
       headingLevel: level,
+      sourceRegions: const [],
       text: text,
       markdown: text,
       revision: '${text.hashCode}',
@@ -194,26 +255,38 @@ DocumentModel _synthetic(int paragraphs) {
   for (var i = 0; i < paragraphs; i++) {
     if (i % 30 == 0) {
       blocks.add(
-        block(BlockKind.heading, [
-          InlineRun(text: 'Section ${i ~/ 30 + 1}'),
-        ], level: 1),
+        block(BlockKind.heading, [_run('Section ${i ~/ 30 + 1}')], level: 1),
       );
     }
     final runs = <InlineRun>[];
     for (var k = 0; k < 4; k++) {
       final tex = '${inline[(i + k) % inline.length]} + c_{$i}';
       runs
-        ..add(InlineRun(text: words.substring(0, 60 + (i * 7 + k * 13) % 110)))
-        ..add(InlineRun(text: '\$$tex\$', math: tex));
+        ..add(_run(words.substring(0, 60 + (i * 7 + k * 13) % 110)))
+        ..add(_run('\$$tex\$', math: tex));
     }
-    runs.add(const InlineRun(text: ' which closes the paragraph.'));
+    runs.add(_run(' which closes the paragraph.'));
     blocks.add(block(BlockKind.paragraph, runs));
     if (i % 8 == 7) {
       final tex = '${display[i % display.length]} + r_{$i}';
-      blocks.add(
-        block(BlockKind.equation, [InlineRun(text: '\$\$$tex\$\$', math: tex)]),
-      );
+      blocks.add(block(BlockKind.equation, [_run('\$\$$tex\$\$', math: tex)]));
     }
   }
-  return DocumentModel(version: 1, blocks: blocks);
+  return ReaderDocument(
+    version: 1,
+    blocks: blocks,
+    figures: const [],
+    figureAssets: const [],
+    figureImages: const [],
+    assetDirectory: '',
+  );
 }
+
+InlineRun _run(String text, {String? math}) => InlineRun(
+  text: text,
+  bold: false,
+  italic: false,
+  code: false,
+  strike: false,
+  math: math,
+);

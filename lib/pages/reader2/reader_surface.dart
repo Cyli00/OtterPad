@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -9,10 +10,11 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../data/models/book/highlight.dart';
 import '../../services/haptics.dart';
+import '../../src/rust/api/document.dart';
+import '../../src/rust/document.dart';
 import '../../utils/desktop.dart';
 import '../reader/widgets/reader_typography.dart';
 import '../reader/widgets/selection_toolbar.dart';
-import 'document_model.dart';
 import 'reader_controller.dart';
 import 'reader_layout.dart';
 
@@ -379,8 +381,8 @@ class ReaderSurfaceState extends State<ReaderSurface> {
       (r) => r.blockId == _controller.model.blocks[location.blockIndex].id,
     );
     _controller.select(
-      ReaderLocation(location.blockIndex, range.start),
-      ReaderLocation(location.blockIndex, range.end),
+      ReaderLocation(location.blockIndex, range.start.toInt()),
+      ReaderLocation(location.blockIndex, range.end.toInt()),
     );
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _showMenu(existing: highlight),
@@ -476,7 +478,7 @@ class ReaderSurfaceState extends State<ReaderSurface> {
           ),
         );
       case ItemKind.figure:
-        return _FigurePlaceholder(size: item.mediaSize!);
+        return _Figure(size: item.mediaSize!, image: item.image);
       case ItemKind.equation:
         return SizedBox(
           height: item.height,
@@ -771,26 +773,39 @@ class _TextItemState extends State<_TextItem> {
   }
 }
 
-/// 图片区占位：位图由 Rust pdf 模块按来源区域裁切渲染，接入前只显示比例正确的占位。
-class _FigurePlaceholder extends StatelessWidget {
-  const _FigurePlaceholder({required this.size});
+/// 图块位图；按显示尺寸解码以限制内存，读取失败或没有图片时显示比例一致的占位。
+class _Figure extends StatelessWidget {
+  const _Figure({required this.size, this.image});
 
   final Size size;
+  final ReaderFigureImage? image;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final placeholder = Container(
+      width: size.width,
+      height: size.height,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(Symbols.image_rounded, color: cs.onSurfaceVariant),
+    );
+    final image = this.image;
     return Align(
       alignment: Alignment.topCenter,
-      child: Container(
-        width: size.width,
-        height: size.height,
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(Symbols.image_rounded, color: cs.onSurfaceVariant),
-      ),
+      child: image == null
+          ? placeholder
+          : Image.file(
+              File(image.path),
+              width: size.width,
+              height: size.height,
+              fit: BoxFit.contain,
+              cacheWidth: (size.width * MediaQuery.devicePixelRatioOf(context))
+                  .ceil(),
+              errorBuilder: (_, _, _) => placeholder,
+            ),
     );
   }
 }

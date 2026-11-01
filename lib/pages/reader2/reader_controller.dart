@@ -2,8 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Color;
 
 import '../../data/models/book/highlight.dart' show kDefaultHighlightColor;
+import '../../src/rust/api/document.dart';
+import '../../src/rust/document.dart';
 import '../../utils/uuid.dart';
-import 'document_model.dart';
 import 'reader_layout.dart';
 
 enum ReaderMode { scroll, paged }
@@ -57,7 +58,7 @@ class ReaderController extends ChangeNotifier {
     _reindex();
   }
 
-  final DocumentModel model;
+  final ReaderDocument model;
 
   ReaderMode _mode = ReaderMode.scroll;
   ReaderMode get mode => _mode;
@@ -151,7 +152,11 @@ class ReaderController extends ChangeNotifier {
       for (final r in h.ranges) {
         final index = _blockIndexById[r.blockId];
         if (index == null) continue;
-        _highlightMarks.putIfAbsent(index, () => []).add((r.start, r.end, h));
+        _highlightMarks.putIfAbsent(index, () => []).add((
+          r.start.toInt(),
+          r.end.toInt(),
+          h,
+        ));
       }
     }
   }
@@ -207,8 +212,8 @@ class ReaderController extends ChangeNotifier {
       blockId: block.id,
       language: 'source',
       revision: block.revision,
-      start: start,
-      end: end,
+      start: BigInt.from(start),
+      end: BigInt.from(end),
       quote: text.substring(start, end),
       prefix: text.substring(start < context ? 0 : start - context, start),
       suffix: text.substring(
