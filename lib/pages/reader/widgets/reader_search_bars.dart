@@ -10,6 +10,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
   final VoidCallback onClear;
   final ValueChanged<String> onChanged;
   final ValueChanged<String> onSubmitted;
+  final String? hintText;
 
   const ReaderPdfSearchBar({
     super.key,
@@ -19,6 +20,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
     required this.onClear,
     required this.onChanged,
     required this.onSubmitted,
+    this.hintText,
   });
 
   @override
@@ -54,7 +56,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
                   textAlignVertical: TextAlignVertical.center,
                   style: TextStyle(color: cs.onSurface, fontSize: 15),
                   decoration: InputDecoration(
-                    hintText: context.l10n.searchPdfContentHint,
+                    hintText: hintText ?? context.l10n.searchPdfContentHint,
                     hintStyle: TextStyle(
                       color: cs.onSurfaceVariant.withAlpha(160),
                       fontSize: 15,
