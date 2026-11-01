@@ -5,7 +5,6 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../reader/widgets/reader_icon_button.dart';
 import '../reader/widgets/reader_search_bars.dart';
-import '../reader/widgets/reader_search_navigator.dart';
 import 'reader_controller.dart';
 import 'reader_surface.dart';
 
@@ -105,6 +104,7 @@ class _Reader2PageState extends State<Reader2Page> {
         onClear: _closeSearch,
         onChanged: _controller.search,
         onSubmitted: (_) => _controller.stepHit(1),
+        trailing: _query.text.trim().isEmpty ? null : _searchResults(context),
       );
     }
     final paged = _controller.mode == ReaderMode.paged;
@@ -155,21 +155,9 @@ class _Reader2PageState extends State<Reader2Page> {
                       autofocus: true,
                       child: Listener(
                         onPointerDown: (_) => _focus.requestFocus(),
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: ReaderSurface(
-                                key: _surface,
-                                controller: _controller,
-                              ),
-                            ),
-                            if (_searching && _query.text.trim().isNotEmpty)
-                              Positioned(
-                                right: 12,
-                                bottom: 16,
-                                child: _resultNavigator(context, cs),
-                              ),
-                          ],
+                        child: ReaderSurface(
+                          key: _surface,
+                          controller: _controller,
                         ),
                       ),
                     ),
@@ -183,26 +171,34 @@ class _Reader2PageState extends State<Reader2Page> {
     );
   }
 
-  Widget _resultNavigator(BuildContext context, ColorScheme cs) {
-    final hits = _controller.hits;
-    if (hits.isNotEmpty) {
-      return ReaderTextResultNavigator(
-        currentIndex: _controller.currentHit,
-        total: hits.length,
-        onPrevious: () => _controller.stepHit(-1),
-        onNext: () => _controller.stepHit(1),
-      );
-    }
-    return Material(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Text(
-          context.l10n.noMatchFound,
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+  /// 命中计数与上下跳转，放在搜索栏内，不遮挡正文；无命中时计数标红、按钮禁用。
+  Widget _searchResults(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final total = _controller.hits.length;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text(
+            '${total == 0 ? 0 : _controller.currentHit + 1}/$total',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: total == 0 ? cs.error : cs.onSurfaceVariant,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
         ),
-      ),
+        IconButton(
+          icon: const Icon(Symbols.keyboard_arrow_up_rounded, size: 22),
+          tooltip: context.l10n.previousResult,
+          onPressed: total == 0 ? null : () => _controller.stepHit(-1),
+        ),
+        IconButton(
+          icon: const Icon(Symbols.keyboard_arrow_down_rounded, size: 22),
+          tooltip: context.l10n.nextResult,
+          onPressed: total == 0 ? null : () => _controller.stepHit(1),
+        ),
+      ],
     );
   }
 }

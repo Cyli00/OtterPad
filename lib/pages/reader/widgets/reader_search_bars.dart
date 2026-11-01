@@ -12,6 +12,9 @@ class ReaderPdfSearchBar extends StatelessWidget {
   final ValueChanged<String> onSubmitted;
   final String? hintText;
 
+  /// 输入框与退出按钮之间的附加控件，例如命中计数与上下跳转。
+  final Widget? trailing;
+
   const ReaderPdfSearchBar({
     super.key,
     required this.controller,
@@ -21,6 +24,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
     required this.onChanged,
     required this.onSubmitted,
     this.hintText,
+    this.trailing,
   });
 
   @override
@@ -95,6 +99,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
                 ),
               ),
             ),
+            ?trailing,
             const SizedBox(width: 4),
             IconButton(
               icon: Icon(
