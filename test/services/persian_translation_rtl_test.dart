@@ -11,6 +11,8 @@ import 'package:otter_pad/providers/translation_config_provider.dart';
 import 'package:otter_pad/services/prompts.dart';
 import 'package:otter_pad/services/translation_bidi.dart';
 
+// Issue #3: Persian output must stay right-aligned without disturbing
+// formulas or tables.
 void main() {
   const palette = ReaderPalette(
     background: Color(0xFFFFFFFF),
