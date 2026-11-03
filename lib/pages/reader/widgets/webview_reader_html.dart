@@ -5,12 +5,13 @@ import 'package:html/dom.dart' as dom;
 import 'package:path/path.dart' as p;
 
 import '../../../providers/reader_settings_provider.dart';
+import '../../../providers/translation_config_provider.dart';
 import '../../../services/translation_style.dart';
 import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
 import 'reader_typography.dart';
 
-const readerAssetVersion = 'reader-figure-layout-8';
+const readerAssetVersion = 'reader-rtl-persian-9';
 
 // ─── Public API ───
 
@@ -112,10 +113,15 @@ $rootVars
 </html>''';
 }
 
-dom.Element _languageCell(String id, String language) => dom.Element.tag('div')
-  ..classes.add('reader-language')
-  ..attributes['data-paragraph-id'] = id
-  ..attributes['data-language'] = language;
+dom.Element _languageCell(String id, String language) {
+  final cell = dom.Element.tag('div')
+    ..classes.add('reader-language')
+    ..attributes['data-paragraph-id'] = id
+    ..attributes['data-language'] = language;
+  // 只给译文单元格设方向。原文保持从左向右，公式和表格在 CSS 里再隔离一次。
+  if (isRtlTargetLanguage(language)) cell.attributes['dir'] = 'rtl';
+  return cell;
+}
 
 void _pairTranslations(dom.Node parent, List<Map<String, dynamic>> entries) {
   final byId = {for (final entry in entries) entry['id']: entry};
@@ -407,7 +413,11 @@ class _LatexInlinePreserve extends md.InlineSyntax {
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
-    parser.addNode(md.Text(match[0]!));
+    // 行内公式单独成从左向右的隔离岛，波斯语/阿拉伯语正文的 dir=rtl 不能重排符号。
+    final el = md.Element.text('span', match[0]!);
+    el.attributes['class'] = 'math-inline';
+    el.attributes['dir'] = 'ltr';
+    parser.addNode(el);
     return true;
   }
 }
@@ -474,6 +484,7 @@ class _LatexBlockPreserve extends md.BlockSyntax {
     final tex = lines.join('\n');
     final el = md.Element.text('div', tex);
     el.attributes['class'] = 'math-display';
+    el.attributes['dir'] = 'ltr';
     return el;
   }
 

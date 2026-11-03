@@ -24,6 +24,7 @@ import '../../../services/haptics.dart';
 import '../../../providers/translation_config_provider.dart';
 import '../../../services/ai_settings_prompt.dart';
 import '../../../services/document_translation_service.dart';
+import '../../../services/translation_bidi.dart';
 import '../../../services/figure_extract_service.dart';
 import '../../../services/markdown_paragraph_extractor.dart';
 import '../../../services/snackbar_service.dart';
@@ -816,6 +817,11 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
     final isTranslated =
         _showTranslation[idx] == true && _translations.containsKey(idx);
     final displayText = isTranslated ? _translations[idx]! : fig.captionText;
+    final captionRtl =
+        isTranslated &&
+        isRtlTargetLanguage(
+          ref.watch(translationConfigProvider).targetLanguage,
+        );
     final maxH = math.max(_kMinCaptionH, MediaQuery.sizeOf(context).height / 4);
 
     return Container(
@@ -865,7 +871,11 @@ class _FigureViewerState extends ConsumerState<FigureViewer>
                     child: SelectionArea(
                       child: SingleChildScrollView(
                         child: Text(
-                          displayText,
+                          captionRtl
+                              ? isolateLtrFragments(displayText)
+                              : displayText,
+                          textDirection: captionRtl ? TextDirection.rtl : null,
+                          textAlign: captionRtl ? TextAlign.right : null,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: Colors.white70, height: 1.6),
                         ),
