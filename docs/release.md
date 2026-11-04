@@ -1,20 +1,20 @@
 # 版本发布
 
-当前分发 Android ARM64/ARMv7 APK、Windows x64 安装器与免安装便携版，以及 macOS（Apple 芯片）DMG；Linux 桌面端尚未提供。发布页采用「更新摘要 → 架构下载表 → 校验文件与完整变更」的顺序，参考 FlClash 的发布格式。
+当前分发 Android ARM64/ARMv7 APK、Windows x64 安装器与免安装便携版，以及 macOS（Apple 芯片）DMG；Linux 桌面端尚未提供。发布页正文固定为「英文安装包 → 英文更新说明 → 中文更新说明」。安装包表只写一次，放在更新说明之前；SHA-256 校验文件、完整变更和历史版本链接写在安装包小节末尾。
 
 ## 代码与工作流
 
-- `pubspec.yaml` 是版本与构建号的唯一来源；`v0.1.6` 对应 `0.1.6+7`。
-- `CHANGELOG.md` 按版本维护新增、优化、修复与升级说明。
+- `pubspec.yaml` 是版本与构建号的唯一来源；`v0.1.7` 对应 `0.1.7+8`。
+- `CHANGELOG.md` 按版本维护新增、优化、修复与升级说明。每个版本先写 `<!-- release:en -->` 再写 `<!-- release:zh -->`，两段都不能空。
 - `.github/workflows/checks.yml` 共用于 CI 和 Release，固定 Flutter 3.44.6。检查在 Windows runner 上运行；Release 的构建矩阵为 Android（Linux runner）、Windows、macOS 三平台并行。
-- `scripts/prepare_release.sh` 校验 tag、构建号及更新说明，生成 `build/release-preview/notes.md`。正式 tag 的构建号必须高于上个可达发布版本。
+- `scripts/prepare_release.sh` 校验 tag、构建号及双语更新说明，把 `.github/release_template.md` 放在说明之前，生成 `build/release-preview/notes.md`。正式 tag 的构建号必须高于上个可达发布版本。Release 工作流把这份说明作为 GitHub Release 正文。
 - `UpdateService` 使用现有 `device_info_plus` 的 Android ABI 列表选择安装包。无法读取 ABI 或无兼容包时，更新入口转向发布页。
 - 根目录 `test/` 是被 Git 忽略的本地回归集；CI 不依赖这些未提交文件。提交扫描及其合成测试位于 `scripts/`，在 CI 中执行。
 
 ## 本地准备
 
 1. 将版本改为下一个发布版本，递增构建号，补齐 `CHANGELOG.md`。
-2. 运行 `bash scripts/prepare_release.sh v0.1.6` 并阅读生成的说明。
+2. 运行 `bash scripts/prepare_release.sh v0.1.7`，确认生成的说明只有一份英文安装包，后面依次是英文和中文更新说明。
 3. 按改动范围运行必要验证；最终 CI 会统一执行静态分析和敏感信息检查。
 4. 核对发布提交包含所有源码、生成的国际化代码及发布资源。tag 无法包含未提交文件。
 

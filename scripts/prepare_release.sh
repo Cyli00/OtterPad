@@ -36,13 +36,62 @@ if [[ -z "${summary//[[:space:]]/}" ]]; then
   exit 1
 fi
 
+# 同一版本内用标记分成英文、中文更新说明。发布正文固定为：
+# 英文安装包 → 英文更新说明 → 中文更新说明。安装包只出现一次。
+notes_dir=$(mktemp -d)
+trap 'rm -rf "$notes_dir"' EXIT
+: > "$notes_dir/en.md"
+: > "$notes_dir/zh.md"
+printf '%s\n' "$summary" | awk -v en="$notes_dir/en.md" -v zh="$notes_dir/zh.md" '
+  function fail(message) {
+    print message > "/dev/stderr"
+    exit 2
+  }
+  /^<!-- release:en -->[[:space:]]*$/ {
+    if (mode != "") fail("<!-- release:en --> 必须写在 <!-- release:zh --> 之前，且只能出现一次。")
+    mode = "en"
+    next
+  }
+  /^<!-- release:zh -->[[:space:]]*$/ {
+    if (mode != "en") fail("<!-- release:zh --> 必须紧接在英文说明之后。")
+    mode = "zh"
+    next
+  }
+  mode == "" {
+    if ($0 !~ /^[[:space:]]*$/) fail("版本说明必须从 <!-- release:en --> 开始。")
+    next
+  }
+  mode == "en" { print > en; next }
+  mode == "zh" { print > zh; next }
+'
+strip_edges() {
+  awk '
+    { lines[NR] = $0 }
+    END {
+      start = 1
+      while (start <= NR && lines[start] ~ /^[[:space:]]*$/) start++
+      end = NR
+      while (end >= start && lines[end] ~ /^[[:space:]]*$/) end--
+      for (i = start; i <= end; i++) print lines[i]
+    }
+  '
+}
+en_notes=$(strip_edges < "$notes_dir/en.md")
+zh_notes=$(strip_edges < "$notes_dir/zh.md")
+if [[ -z "${en_notes//[[:space:]]/}" || -z "${zh_notes//[[:space:]]/}" ]]; then
+  echo "CHANGELOG.md 的 $version 需要同时包含英文和中文更新说明。" >&2
+  exit 1
+fi
+
 mkdir -p "$output_dir"
-printf '%s\n\n' "$summary" > "$output_dir/notes.md"
 repository=${GITHUB_REPOSITORY:-Cyli00/OtterPad}
 sed -e "s|VERSION|$version|g" \
     -e "s|REPOSITORY|$repository|g" \
     -e "s|PREVIOUS_TAG|$previous_tag|g" \
-    .github/release_template.md >> "$output_dir/notes.md"
+    .github/release_template.md > "$output_dir/notes.md"
+{
+  printf '\n## Changes\n\n%s\n\n## 更新内容\n\n%s\n' "$en_notes" "$zh_notes"
+} >> "$output_dir/notes.md"
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   printf 'version=%s\nbuild-number=%s\n' "$version" "$build_number" >> "$GITHUB_OUTPUT"

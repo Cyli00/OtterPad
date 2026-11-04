@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: 校验版本并生成发布说明
+      - name: 校验版本并生成双语发布说明
         id: version
         env:
           # 只有 v* 发布 tag 参与版本校验；CI 用的测试 tag 按无 tag 处理
