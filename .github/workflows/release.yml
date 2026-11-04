@@ -186,7 +186,7 @@ jobs:
           sha256sum ./* > SHA256SUMS
           cat SHA256SUMS
 
-      # notes.md：安装包（英文、中文）在前，随后是英文与中文更新说明。
+      # notes.md：英文安装包在前，随后是英文与中文更新说明。
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:

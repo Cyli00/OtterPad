@@ -1,6 +1,6 @@
 # 更新记录
 
-每个版本用 `<!-- release:en -->` 与 `<!-- release:zh -->` 分成英文、中文两段。`scripts/prepare_release.sh` 会把安装包放在这两段之前，并按英文、中文的顺序写入发布说明。
+每个版本用 `<!-- release:en -->` 与 `<!-- release:zh -->` 分成英文、中文两段。`scripts/prepare_release.sh` 会把英文安装包放在这两段之前。
 
 ## [0.1.7]
 
