@@ -53,10 +53,13 @@ class PrepareReleaseTests(unittest.TestCase):
         self.assertIn("SHA256SUMS", packages)
         self.assertIn(f"compare/", packages)
         en, zh = self.notes.split("## 更新内容", 1)
-        self.assertIn("reduce-motion setting", en)
-        self.assertNotIn("减少动态效果设置", en.split("## Changes", 1)[1])
-        self.assertIn("减少动态效果设置", zh)
-        self.assertNotIn("reduce-motion setting", zh)
+        changes = en.split("## Changes", 1)[1]
+        self.assertIn("Added Persian (فارسی) as a translation target.", changes)
+        self.assertIn("Fixes #3", changes)
+        self.assertNotIn("翻译目标语言新增波斯语", changes)
+        self.assertIn("翻译目标语言新增波斯语（فارسی）", zh)
+        self.assertIn("Fixes #3", zh)
+        self.assertNotIn("as a translation target", zh)
 
 
 if __name__ == "__main__":

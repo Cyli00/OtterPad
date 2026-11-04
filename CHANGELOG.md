@@ -2,6 +2,30 @@
 
 每个版本用 `<!-- release:en -->` 与 `<!-- release:zh -->` 分成英文、中文两段。`scripts/prepare_release.sh` 会把英文安装包放在这两段之前。
 
+## [0.1.8]
+
+<!-- release:en -->
+
+### Added
+
+- Added Persian (فارسی) as a translation target.
+- Reader and PDF translations use a right-to-left layout for Persian and Arabic.
+
+### Fixed
+
+- Formulas, code, and tables stay left to right inside right-to-left translations, so math, code, and table columns are not reordered (Fixes #3).
+
+<!-- release:zh -->
+
+### 新增
+
+- 翻译目标语言新增波斯语（فارسی）。
+- 阅读器与 PDF 译文对波斯语和阿拉伯语使用从右向左排版。
+
+### 修复
+
+- 从右向左的译文里，公式、代码和表格保持从左向右，数学符号、代码片段和表格列不会被重排（Fixes #3）。
+
 ## [0.1.7]
 
 <!-- release:en -->
