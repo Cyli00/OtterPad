@@ -1,4 +1,5 @@
 """校验发布说明生成器的双语结构，不访问网络。"""
+import os
 import re
 import subprocess
 import unittest
@@ -17,19 +18,34 @@ def pubspec_version() -> str:
     return match.group(1)
 
 
+def bash_executable() -> str:
+    # windows-2022 上 PATH 里的 bash 可能是 System32 的 WSL 启动器，直接退出 1。
+    # 发布检查用的是 Git Bash。
+    if os.name == "nt":
+        candidate = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+        if candidate.is_file():
+            return str(candidate)
+    return "bash"
+
+
 class PrepareReleaseTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # 不传 tag：当前版本 tag 已经存在时，构建号校验会拒绝再次预览。
-        subprocess.run(
-            ["bash", "scripts/prepare_release.sh"],
+        cls.version = pubspec_version()
+        # 发布工作流检出的就是这个 tag，构建号和上一个版本比较。
+        result = subprocess.run(
+            [bash_executable(), "scripts/prepare_release.sh", f"v{cls.version}"],
             cwd=ROOT,
-            check=True,
             text=True,
             capture_output=True,
         )
+        if result.returncode != 0:
+            raise AssertionError(
+                f"prepare_release.sh v{cls.version} exited {result.returncode}\n"
+                f"stdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
         cls.notes = NOTES.read_text(encoding="utf-8")
-        cls.version = pubspec_version()
 
     def test_packages_precede_bilingual_changelog(self):
         en_packages = self.notes.index("## Install packages")
