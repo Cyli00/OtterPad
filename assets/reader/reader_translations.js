@@ -35,6 +35,7 @@
       pending.delete(id);
       const previous = entries.get(id);
       if (previous?.html === entry.html && previous?.language === entry.language &&
+          !!previous?.rtl === !!entry.rtl &&
           previous?.showSource === entry.showSource && previous?.showTranslation === entry.showTranslation &&
           previous?.bilingual === entry.bilingual) continue;
       entries.set(id, entry);
@@ -48,6 +49,7 @@
         _renderReaderMath(target);
       }
       target.dataset.language = entry.language;
+      target.dir = entry.rtl ? 'rtl' : 'ltr';
       target.classList.toggle('translated', !!entry.bilingual);
       target.hidden = !hasTarget;
       source.hidden = entry.showSource === false && hasTarget;
