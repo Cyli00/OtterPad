@@ -79,6 +79,9 @@ class TranslationService {
     if (text.contains('%%%%')) {
       systemPrompt = '$systemPrompt\n${Prompts.translationSegmentGuard}';
     }
+    if (isRtlTargetLanguage(targetLang)) {
+      systemPrompt = '$systemPrompt\n${Prompts.translationRtlGuard}';
+    }
     final userPrompt = renderPrompt(translationConfig.userPrompt, {
       'targetLanguage': targetLang,
       'input': protected.masked,
@@ -166,6 +169,9 @@ class TranslationService {
     }
     if (text.contains('%%%%')) {
       systemPrompt = '$systemPrompt\n${Prompts.translationSegmentGuard}';
+    }
+    if (isRtlTargetLanguage(targetLang)) {
+      systemPrompt = '$systemPrompt\n${Prompts.translationRtlGuard}';
     }
     final userPrompt = renderPrompt(translationConfig.userPrompt, {
       'targetLanguage': targetLang,

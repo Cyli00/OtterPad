@@ -15,6 +15,7 @@ import '../../../services/ai_settings_prompt.dart';
 import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
+import '../../../services/translation_bidi.dart';
 import '../../../services/translation_highlight_parser.dart';
 import '../../../services/translation_service.dart';
 import '../../../widgets/tactile_press.dart';
@@ -367,6 +368,10 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
 
     final readerFont = ref.watch(readerSettingsProvider).font;
     final displayText = parsed.text;
+    final rtl = isRtlTargetLanguage(
+      ref.watch(translationConfigProvider).targetLanguage,
+    );
+    String shown(String value) => rtl ? isolateLtrFragments(value) : value;
     final hasFocusedTranslation = parsed.hlStart != null && _hasHighlight;
 
     final List<InlineSpan> spans;
@@ -374,13 +379,14 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
       final s = parsed.hlStart!.clamp(0, displayText.length);
       final e = parsed.hlEnd!.clamp(s, displayText.length);
       spans = [
-        if (s > 0) TextSpan(text: displayText.substring(0, s)),
+        if (s > 0) TextSpan(text: shown(displayText.substring(0, s))),
         WidgetSpan(child: SizedBox.shrink(key: _bodyAnchorKey)),
         TextSpan(
-          text: displayText.substring(s, e),
+          text: shown(displayText.substring(s, e)),
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),
-        if (e < displayText.length) TextSpan(text: displayText.substring(e)),
+        if (e < displayText.length)
+          TextSpan(text: shown(displayText.substring(e))),
         if (!_done)
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
@@ -389,7 +395,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
       ];
     } else {
       spans = [
-        TextSpan(text: displayText),
+        TextSpan(text: shown(displayText)),
         if (!_done)
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
@@ -406,6 +412,8 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         padding: const EdgeInsets.only(right: 8, bottom: 4),
         child: SelectableText.rich(
           TextSpan(children: spans),
+          textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
+          textAlign: rtl ? TextAlign.right : TextAlign.start,
           style: theme.textTheme.bodyLarge?.copyWith(
             color: hasFocusedTranslation
                 ? cs.onSurfaceVariant.withAlpha(72)

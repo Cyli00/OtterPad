@@ -29,6 +29,7 @@ const kTargetLanguages = <String>[
   'Polski',
   'Türkçe',
   'العربية',
+  'فارسی',
   'ภาษาไทย',
   'Tiếng Việt',
   'Bahasa Indonesia',
@@ -40,6 +41,13 @@ const kTargetLanguages = <String>[
   'Ελληνικά',
   'Română',
 ];
+
+/// 从右向左书写的目标语言，名称与 [kTargetLanguages] 一致。
+/// 阅读器只把译文正文设为 RTL；公式和表格另保持从左向右。
+const kRtlTargetLanguages = <String>{'العربية', 'فارسی'};
+
+bool isRtlTargetLanguage(String language) =>
+    kRtlTargetLanguages.contains(language);
 
 // ── Hive 存储 key（prompt 的 key 在 PromptDef.storageKey）──────────────
 

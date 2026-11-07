@@ -1,14 +1,19 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'proxy_adapter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:pdfrx/pdfrx.dart';
 
 import '../core/l10n.dart';
 import '../data/models/ocr/doc_extract_config.dart';
 import '../router/app_router.dart';
 import 'doc_extract_service.dart';
+import 'mineru_page_chunks.dart';
+import 'paddle_page_results.dart';
+import 'pdf_process_lock.dart';
 import '../core/app_logger.dart';
 
 // ─── 数据模型 ─────────────────────────────────────────────────────────────────
@@ -135,12 +140,17 @@ class BatchExtractService {
           receiveTimeout: const Duration(seconds: 300),
           sendTimeout: const Duration(seconds: 120),
         ),
-      );
+      ),
+      pollInterval = const Duration(seconds: 5);
   @visibleForTesting
-  BatchExtractService.forTesting(this._dio);
+  BatchExtractService.forTesting(
+    this._dio, {
+    this.pollInterval = Duration.zero,
+  });
   static final BatchExtractService instance = BatchExtractService._();
 
   final Dio _dio;
+  final Duration pollInterval;
 
   // ─── 代理配置 ──────────────────────────────────────────────────────────────
 
@@ -199,6 +209,7 @@ class BatchExtractService {
     required String token,
     required DocExtractApiState state,
     String? batchId,
+    String? pageRanges,
     CancelToken? cancelToken,
   }) async {
     final formData = FormData.fromMap({
@@ -210,6 +221,8 @@ class BatchExtractService {
       'optionalPayload': jsonEncode(DocExtractService.buildOptions(state)),
       // ignore: use_null_aware_elements
       if (batchId != null) 'batchId': batchId,
+      // ignore: use_null_aware_elements
+      if (pageRanges != null) 'pageRanges': pageRanges,
     });
 
     final Response<Map<String, dynamic>> response;
@@ -299,8 +312,6 @@ class BatchExtractService {
     }
 
     final rawContent = response.data ?? '';
-    final markdownParts = <String>[];
-    final allImages = <String, String>{};
     final allPages = <Map<String, dynamic>>[];
 
     for (final line in rawContent.trim().split('\n')) {
@@ -312,17 +323,11 @@ class BatchExtractService {
         final parsingResults =
             result?['layoutParsingResults'] as List<dynamic>?;
         if (parsingResults == null) continue;
-
         for (final page in parsingResults) {
-          allPages.add(page as Map<String, dynamic>);
-          final mdSection = page['markdown'] as Map<String, dynamic>?;
-          if (mdSection == null) continue;
-          markdownParts.add(mdSection['text'] as String? ?? '');
-          final rawImages = mdSection['images'] as Map<String, dynamic>?;
-          if (rawImages != null) {
-            for (final entry in rawImages.entries) {
-              allImages[entry.key] = entry.value.toString();
-            }
+          if (page is Map<String, dynamic>) {
+            allPages.add(page);
+          } else if (page is Map) {
+            allPages.add(Map<String, dynamic>.from(page));
           }
         }
       } catch (e) {
@@ -330,11 +335,7 @@ class BatchExtractService {
       }
     }
 
-    return DocExtractResult(
-      rawMarkdown: markdownParts.join('\n\n'),
-      images: allImages,
-      jsonContent: jsonEncode(allPages),
-    );
+    return assemblePaddlePages(allPages);
   }
 
   /// 从轮询数据中更新单个 Job 的状态，完成时自动下载并保存结果。
@@ -433,17 +434,37 @@ class BatchExtractService {
 
   // ─── 单文档异步提取 ─────────────────────────────────────────────────────────
 
-  /// 轮询间隔（秒）
-  static const _pollInterval = Duration(seconds: 5);
+  Future<int?> _pdfPageCount(String filePath) async {
+    try {
+      return await PdfProcessLock.instance.run(() async {
+        final doc = await PdfDocument.openFile(filePath);
+        try {
+          return doc.pages.length;
+        } finally {
+          doc.dispose();
+        }
+      });
+    } catch (e) {
+      log.d('[BatchExtract] 页数读取失败: $e');
+      return null;
+    }
+  }
 
-  /// 提交单个文档的异步提取任务，轮询直到完成，返回原始 [DocExtractResult]。
-  ///
-  /// 这是单文档场景的首选入口，与 [extractBatch] 使用相同的 Job API。
-  /// 调用方自行决定是否 [DocExtractService.saveResult]。
-  Future<DocExtractResult> extractSingle({
+  String _rangeError(ExtractPageChunk chunk, String message) {
+    if (chunk.wholeFile) return message;
+    final ctx = rootNavigatorKey.currentContext;
+    final l = ctx != null ? AppLocalizations.of(ctx) : null;
+    final range = chunk.pageRanges ?? chunk.label;
+    return l?.mineruErrChunkFailed(range, message) ??
+        '第 $range 页解析失败: $message';
+  }
+
+  /// 同一 PDF 的多个 pageRanges。未齐的失败段不会被后段结果顶替。
+  Future<DocExtractResult> _extractRanges({
     required String filePath,
     required String token,
     required DocExtractApiState state,
+    required List<ExtractPageChunk> chunks,
     void Function(String status, int extractedPages, int totalPages)?
     onProgress,
     CancelToken? cancelToken,
@@ -451,73 +472,139 @@ class BatchExtractService {
     final jobUrl = _jobApiUrl;
     final ctx = rootNavigatorKey.currentContext;
     final l = ctx != null ? AppLocalizations.of(ctx) : null;
-
-    // 1. 提交 Job
-    onProgress?.call(l?.extractStageSubmitting ?? '正在提交任务', 0, 0);
-    final jobId = await _submitJob(
-      filePath: filePath,
-      jobUrl: jobUrl,
-      token: token,
-      state: state,
-      cancelToken: cancelToken,
+    final totalPages = chunks.fold<int>(
+      0,
+      (sum, chunk) => sum + chunk.pageCount,
     );
+    final batchId = chunks.length == 1
+        ? null
+        : 'nr_${DateTime.now().millisecondsSinceEpoch}';
+    final jobs = <({ExtractPageChunk chunk, String jobId})>[];
+    for (final chunk in chunks) {
+      onProgress?.call(l?.extractStageSubmitting ?? '正在提交任务', 0, totalPages);
+      final jobId = await _submitJob(
+        filePath: filePath,
+        jobUrl: jobUrl,
+        token: token,
+        state: state,
+        batchId: batchId,
+        pageRanges: chunk.pageRanges,
+        cancelToken: cancelToken,
+      );
+      jobs.add((chunk: chunk, jobId: jobId));
+    }
 
-    // 2. 轮询直到完成
-    while (true) {
+    final done = <int, DocExtractResult>{};
+    final failed = <int, String>{};
+    while (done.length + failed.length < jobs.length) {
       if (cancelToken?.isCancelled == true) {
         throw DioException(
           requestOptions: RequestOptions(),
           type: DioExceptionType.cancel,
         );
       }
-
       await Future.any<void>([
-        Future<void>.delayed(_pollInterval),
+        Future<void>.delayed(pollInterval),
         if (cancelToken != null) cancelToken.whenCancel.then((_) {}),
       ]);
       if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
 
-      final data = await _pollOnce(jobId, jobUrl, token, cancelToken);
-      final jobState = data['state'] as String? ?? '';
-
-      switch (jobState) {
-        case 'pending':
-          onProgress?.call(l?.mineruProgressQueued ?? '排队中', 0, 0);
-        case 'running':
-          final prog = data['extractProgress'] as Map?;
-          final extracted = _toInt(prog?['extractedPages']);
-          final total = _toInt(prog?['totalPages']);
-          onProgress?.call(
-            l?.extractStageExtracting ?? '正在提取',
-            extracted,
-            total,
-          );
-        case 'done':
-          final resultUrl = data['resultUrl'] as Map?;
-          final jsonlUrl = resultUrl?['jsonUrl'] as String?;
-          if (jsonlUrl != null) {
-            onProgress?.call(l?.mineruProgressDownloading ?? '正在下载结果', 0, 0);
-            return _parseJsonlResult(jsonlUrl, cancelToken);
-          }
-          // 回退：仅有 Markdown URL
-          final markdownUrl = resultUrl?['markdownUrl'] as String?;
-          if (markdownUrl != null) {
-            final mdResponse = await _dio.get<String>(
-              markdownUrl,
-              options: Options(responseType: ResponseType.plain),
-              cancelToken: cancelToken,
+      for (final job in jobs) {
+        if (done.containsKey(job.chunk.index) ||
+            failed.containsKey(job.chunk.index)) {
+          continue;
+        }
+        final data = await _pollOnce(job.jobId, jobUrl, token, cancelToken);
+        switch (data['state'] as String? ?? '') {
+          case 'pending':
+            onProgress?.call(
+              l?.mineruProgressQueued ?? '排队中',
+              done.length,
+              jobs.length,
             );
-            return DocExtractResult(
-              rawMarkdown: mdResponse.data ?? '',
-              images: {},
+          case 'running':
+            onProgress?.call(
+              l?.extractStageExtracting ?? '正在提取',
+              done.length,
+              jobs.length,
             );
-          }
-          throw const BatchExtractException('任务完成但无结果 URL');
-        case 'failed':
-          final errorMsg = data['errorMsg'] as String? ?? '提取失败';
-          throw BatchExtractException(errorMsg);
+          case 'done':
+            final resultUrl = data['resultUrl'] as Map?;
+            final jsonlUrl = resultUrl?['jsonUrl'] as String?;
+            if (jsonlUrl != null) {
+              onProgress?.call(
+                l?.mineruProgressDownloading ?? '正在下载结果',
+                done.length,
+                jobs.length,
+              );
+              done[job.chunk.index] = await _parseJsonlResult(
+                jsonlUrl,
+                cancelToken,
+              );
+              break;
+            }
+            final markdownUrl = resultUrl?['markdownUrl'] as String?;
+            if (markdownUrl != null && chunks.length == 1) {
+              final mdResponse = await _dio.get<String>(
+                markdownUrl,
+                options: Options(responseType: ResponseType.plain),
+                cancelToken: cancelToken,
+              );
+              done[job.chunk.index] = DocExtractResult(
+                rawMarkdown: mdResponse.data ?? '',
+                images: {},
+              );
+              break;
+            }
+            failed[job.chunk.index] = '任务完成但无结果 URL';
+          case 'failed':
+            failed[job.chunk.index] = data['errorMsg'] as String? ?? '提取失败';
+        }
       }
     }
+
+    if (failed.isNotEmpty) {
+      final index = failed.keys.reduce(math.min);
+      final chunk = chunks.firstWhere((item) => item.index == index);
+      throw BatchExtractException(_rangeError(chunk, failed[index]!));
+    }
+    if (chunks.length == 1) return done[chunks.single.index]!;
+    try {
+      return mergePaddleChunkResults([
+        for (final chunk in chunks) (chunk: chunk, result: done[chunk.index]!),
+      ]);
+    } on FormatException catch (e) {
+      throw BatchExtractException(e.message);
+    }
+  }
+
+  /// 提交单个文档的异步提取任务，轮询直到完成，返回原始 [DocExtractResult]。
+  ///
+  /// 超过单次页数上限时按官方 `pageRanges` 拆开，全部成功后才合并。
+  /// 调用方自行决定是否 [DocExtractService.saveResult]。
+  Future<DocExtractResult> extractSingle({
+    required String filePath,
+    required String token,
+    required DocExtractApiState state,
+    int? pageCount,
+    void Function(String status, int extractedPages, int totalPages)?
+    onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    final pages = pageCount ?? await _pdfPageCount(filePath);
+    final chunks = planPaddlePageChunks(pages);
+    log.d(
+      '[BatchExtract] pages=$pages '
+      'ranges=${chunks.map((c) => c.label).join(',')}',
+    );
+    return _extractRanges(
+      filePath: filePath,
+      token: token,
+      state: state,
+      chunks: chunks,
+      onProgress: onProgress,
+      cancelToken: cancelToken,
+    );
   }
 
   // ─── 批量提取 ──────────────────────────────────────────────────────────────
@@ -530,6 +617,78 @@ class BatchExtractService {
   /// - 429 限流时指数退避，避免请求风暴
   /// - 批量查询失败时自动回退到逐个轮询
   Future<BatchExtractResults> extractBatch({
+    required List<BatchExtractItem> items,
+    required String token,
+    required DocExtractApiState state,
+    void Function(BatchExtractProgress)? onProgress,
+    void Function(BatchJobStatus)? onJobUpdate,
+    CancelToken? cancelToken,
+  }) async {
+    final single = <BatchExtractItem>[];
+    final multi = <({BatchExtractItem item, List<ExtractPageChunk> chunks})>[];
+    for (final item in items) {
+      final pages = await _pdfPageCount(item.filePath);
+      final chunks = planPaddlePageChunks(pages);
+      if (chunks.length > 1) {
+        multi.add((item: item, chunks: chunks));
+      } else {
+        single.add(item);
+      }
+    }
+    final results = <String, String?>{};
+    for (final group in multi) {
+      final status = BatchJobStatus(
+        documentId: group.item.documentId,
+        title: group.item.title,
+      );
+      try {
+        final extracted = await _extractRanges(
+          filePath: group.item.filePath,
+          token: token,
+          state: state,
+          chunks: group.chunks,
+          cancelToken: cancelToken,
+        );
+        if (cancelToken?.isCancelled == true) {
+          status.state = BatchJobState.cancelled;
+          results[group.item.documentId] = null;
+        } else {
+          status.savedPath = await DocExtractService.instance.saveResult(
+            group.item.filePath,
+            extracted,
+            token: null,
+            title: group.item.title,
+          );
+          status.state = BatchJobState.done;
+          results[group.item.documentId] = status.savedPath;
+        }
+      } catch (e) {
+        if (e is DioException && CancelToken.isCancel(e)) {
+          status.state = BatchJobState.cancelled;
+        } else {
+          status.state = BatchJobState.failed;
+          status.error = e.toString();
+        }
+        results[group.item.documentId] = null;
+      }
+      onJobUpdate?.call(status);
+      onProgress?.call(
+        BatchExtractProgress.fromStatuses([status], group.item.title),
+      );
+    }
+    if (single.isEmpty) return results;
+    final rest = await _extractPlainBatch(
+      items: single,
+      token: token,
+      state: state,
+      onProgress: onProgress,
+      onJobUpdate: onJobUpdate,
+      cancelToken: cancelToken,
+    );
+    return {...results, ...rest};
+  }
+
+  Future<BatchExtractResults> _extractPlainBatch({
     required List<BatchExtractItem> items,
     required String token,
     required DocExtractApiState state,

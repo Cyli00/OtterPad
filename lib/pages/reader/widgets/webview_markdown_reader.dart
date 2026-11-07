@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' show md5;
 import 'package:flutter/foundation.dart' show ValueListenable, kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -163,6 +164,10 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   bool _htmlReady = false;
   Future<ReaderHtmlWriteResult>? _htmlWriteFuture;
   int _reloadEpoch = 0;
+  int _readyEpoch = 0;
+
+  /// 返回或销毁已经开始。在途的 HTML / load 回调不能再把平台视图挂回来。
+  bool _released = false;
 
   /// 揭幕控制：纸色幕布盖在 WebView 上方，遮住原生实例创建 → HTML 首帧
   /// paint → 进度恢复的全过程（原生 WebView 在首帧 paint 前刷系统白底，
@@ -186,7 +191,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
       pending = _htmlWriteFuture;
       await pending;
     } while (pending != _htmlWriteFuture);
-    if (!mounted) return;
+    if (!mounted || _released) return;
     setState(() => _htmlReady = true);
     // 兜底：onContentReady 依赖 window.onload，首屏图片异常时可能迟迟不来。
     // 超时强制揭幕——transparentBackground 下未 paint 区域透出底层纸色，
@@ -202,9 +207,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   @override
   void dispose() {
+    _released = true;
+    _reloadEpoch++;
     _revealFallbackTimer?.cancel();
     _scrollbarHideTimer?.cancel();
     _scrollMetrics.dispose();
+    _bridge?.stopLoading();
     InAppWebViewController.disposeKeepAlive(_keepAlive);
     super.dispose();
   }
@@ -271,31 +279,30 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
     // 否则 file:// 重写失效、图片裂成 alt 文本（见 _rootRelativeUrlForPath）。
     final serverRoot = ReaderLocalhostServer.instance.root;
     final revision = widget.contentRevision;
-    return _htmlWriteFuture =
-        ReaderHtmlCache.write(
-          path: path,
-          fingerprint: () => _appVersion().then(
-            (version) =>
-                '${md5.convert(utf8.encode(markdown + jsonEncode(entries)))}|$buster|$version|$revision|incremental-reader-1|$readerAssetVersion',
-          ),
-          allowReuse: !kDebugMode,
-          buildHtml: () => Isolate.run(
-            () => buildReaderHtml(
-              markdownContent: markdown,
-              readerEntries: entries,
-              palette: palette,
-              settings: settings,
-              desktop: desktop,
-              bilingualColumns: bilingualColumns,
-              baseHref: baseHref,
-              serverRoot: serverRoot,
-              translationStyleId: styleId,
-              imageCacheBuster: '$buster-$revision',
-              topInset: inset,
-              bottomInset: bottomInset,
-            ),
-          ),
-        );
+    return _htmlWriteFuture = ReaderHtmlCache.write(
+      path: path,
+      fingerprint: () => _appVersion().then(
+        (version) =>
+            '${md5.convert(utf8.encode(markdown + jsonEncode(entries)))}|$buster|$version|$revision|incremental-reader-1|$readerAssetVersion',
+      ),
+      allowReuse: !kDebugMode,
+      buildHtml: () => Isolate.run(
+        () => buildReaderHtml(
+          markdownContent: markdown,
+          readerEntries: entries,
+          palette: palette,
+          settings: settings,
+          desktop: desktop,
+          bilingualColumns: bilingualColumns,
+          baseHref: baseHref,
+          serverRoot: serverRoot,
+          translationStyleId: styleId,
+          imageCacheBuster: '$buster-$revision',
+          topInset: inset,
+          bottomInset: bottomInset,
+        ),
+      ),
+    );
   }
 
   @override
@@ -351,13 +358,18 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   void _reloadContent() {
     final epoch = ++_reloadEpoch;
-    _writeHtmlFile().then((result) {
+    final readyEpoch = ++_readyEpoch;
+    _writeHtmlFile().then((result) async {
       if (!mounted ||
+          _released ||
           epoch != _reloadEpoch ||
           result == ReaderHtmlWriteResult.superseded) {
         return;
       }
-      final url = _readerUrl(cacheBust: true);
+      // 先结束翻页手势再换文档，避免 touch 流断在正在销毁的页面上。
+      await _bridge?.settleGesture();
+      if (!mounted || _released || epoch != _reloadEpoch) return;
+      final url = _readerUrl(cacheBust: true, epoch: readyEpoch);
       if (url == null) {
         log.d(
           '[WebViewMarkdownReader] localhost server not running or '
@@ -365,7 +377,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
         );
         return;
       }
-      _bridge?.reloadUrl(url);
+      _bridge?.reloadUrl(url, epoch: readyEpoch);
     });
   }
 
@@ -375,10 +387,56 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   ///
   /// [cacheBust]=true 时附加 `?v=<timestamp>` query，强制 WebView 不命中缓存。
   /// 初始加载（initialUrlRequest）不需要 bust——首次加载没有缓存可命中。
-  String? _readerUrl({bool cacheBust = false}) {
+  String? _readerUrl({bool cacheBust = false, int? epoch}) {
     final base = ReaderLocalhostServer.instance.urlForPath(_htmlFilePath);
-    if (base == null || !cacheBust) return base;
-    return '$base?v=${DateTime.now().millisecondsSinceEpoch}';
+    if (base == null) return null;
+    final generation = epoch ?? _readyEpoch;
+    final bust = cacheBust ? '&v=${DateTime.now().millisecondsSinceEpoch}' : '';
+    return '$base?g=$generation$bust';
+  }
+
+  /// 幕布已揭开且平台视图空闲时，返回转场才值得截一帧。
+  /// 加载或翻译进行中截图会把 Android 主线程堵在 WebView 上。
+  bool get canCaptureForTransition =>
+      !_released && _htmlReady && _curtainGone && _bridge != null && !_frozen;
+
+  /// 把原生 WebView 移出树，再让调用方 pop。截图失败也不能留下平台视图。
+  Future<void> releaseForNavigation({bool capture = false}) async {
+    if (_released) return;
+    Uint8List? shot;
+    if (capture && canCaptureForTransition) {
+      try {
+        shot = await _bridge?.takeScreenshot().timeout(
+          const Duration(milliseconds: 160),
+        );
+      } catch (_) {}
+      if (!mounted || _released) return;
+    }
+    if (shot != null) _snapshot = shot;
+    _detachPlatformView();
+    if (!mounted) return;
+    final binding = SchedulerBinding.instance;
+    final frame = binding.endOfFrame;
+    binding.scheduleFrame();
+    try {
+      await frame.timeout(const Duration(milliseconds: 320));
+    } catch (_) {}
+  }
+
+  void _detachPlatformView() {
+    if (_released) return;
+    _released = true;
+    _reloadEpoch++;
+    _revealFallbackTimer?.cancel();
+    _bridge?.stopLoading();
+    _bridge?.pauseRendering();
+    if (!mounted) {
+      _frozen = true;
+      return;
+    }
+    setState(() {
+      _frozen = true;
+    });
   }
 
   // ─── 对外暴露的方法（通过 GlobalKey 调用） ───
@@ -530,6 +588,10 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
   Widget build(BuildContext context) {
     // HTML 还在后台 isolate 生成——先铺纸张底色占位，避免 WebView 加载到
     // 半截文件，也避免占位闪白/闪黑。
+    if (_released) {
+      return _buildFrozenPlaceholder();
+    }
+
     if (!_htmlReady) {
       return _loadingCurtain();
     }
@@ -573,9 +635,12 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
           horizontalScrollBarEnabled: false,
         ),
         onWebViewCreated: (controller) {
-          _bridge = ReaderJsBridge(controller, this)..attachHandlers();
+          final bridge = ReaderJsBridge(controller, this)..attachHandlers();
+          bridge.readyEpoch = _readyEpoch;
+          _bridge = bridge;
         },
         onRenderProcessGone: (controller, detail) async {
+          if (!mounted || _released || _frozen) return;
           await controller.reload();
         },
       ),
@@ -642,6 +707,7 @@ class WebViewMarkdownReaderState extends State<WebViewMarkdownReader>
 
   @override
   void onContentReady() {
+    if (_released || !mounted) return;
     if (_layoutWidth != null) _bridge?.applyViewportWidth(_layoutWidth!);
     // 主题/翻译样式重放：加载期间到达的 ApplyTheme/ApplyTranslationStyle 被
     // bridge 的 !_contentReady 丢弃，而 planUpdates 是新旧 props 差分——丢弃

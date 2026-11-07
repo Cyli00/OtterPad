@@ -300,6 +300,21 @@ body[data-desktop="true"] #content {
 }
 .reader-pair { margin-block: calc(var(--font-size) * var(--block-margin)); }
 .reader-language { min-width: 0; }
+/* 波斯语/阿拉伯语译文靠起始边（右侧）。公式、代码、表格另成从左向右的隔离岛，
+   右对齐的正文不能重排数学符号，也不能把表格列顺序翻过来。 */
+.reader-language[dir="rtl"] { text-align: start; }
+.reader-language[dir="rtl"] :is(
+  table, pre, code, .math-inline, .math-display, .katex, .katex-display
+) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.reader-language[dir="rtl"] blockquote {
+  border-left: 0;
+  padding-left: 0;
+  border-inline-start: var(--bq-side) solid var(--divider);
+  padding-inline-start: var(--bq-pad);
+}
 .reader-language > :first-child { margin-top: 0; }
 .reader-language > :last-child { margin-bottom: 0; }
 .reader-language:not([hidden]) + .reader-language { margin-top: calc(var(--font-size) * var(--block-margin)); }

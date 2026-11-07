@@ -8,6 +8,23 @@ import 'package:flutter_math_fork/flutter_math.dart';
 final _cjkText = RegExp(r'[㐀-鿿]');
 final _inlineFormula = RegExp(r'\$([^$\n]+)\$|\\\(([\s\S]*?)\\\)');
 
+/// RTL 正文里再把 `$$` / `\[…\]` 抽成独立公式图。从左向右的排版保持原正则，
+/// 避免无谓改变已有译文的行宽。
+final _rtlInlineFormula = RegExp(
+  r'\$\$([\s\S]+?)\$\$'
+  r'|\\\[([\s\S]*?)\\\]'
+  r'|\$([^$\n]+)\$'
+  r'|\\\(([\s\S]*?)\\\)',
+);
+
+String? _formulaBody(RegExpMatch match) {
+  for (var i = 1; i <= match.groupCount; i++) {
+    final value = match[i];
+    if (value != null) return value;
+  }
+  return null;
+}
+
 class _Formula {
   final int start;
   final int end;
@@ -52,6 +69,7 @@ class ReaderTypesetText {
     double? preferredFontSize,
     bool centered = false,
     double minFontScale = .7,
+    TextDirection textDirection = TextDirection.ltr,
   }) async {
     final baseSize = style.fontSize ?? 14;
     final cjk = _cjkText.hasMatch(text);
@@ -60,10 +78,15 @@ class ReaderTypesetText {
       height: 1.2,
     );
     final formulas = <_Formula>[];
-    for (final match in _inlineFormula.allMatches(text)) {
+    final formulaPattern = textDirection == TextDirection.rtl
+        ? _rtlInlineFormula
+        : _inlineFormula;
+    for (final match in formulaPattern.allMatches(text)) {
+      final tex = _formulaBody(match);
+      if (tex == null || tex.trim().isEmpty) continue;
       try {
         final rendered = await _renderFormula(
-          match[1] ?? match[2]!,
+          tex.trim(),
           baseSize,
           base.color!,
         );
@@ -125,11 +148,12 @@ class ReaderTypesetText {
           style: base.copyWith(fontSize: fs),
           children: spans,
         ),
-        textDirection: TextDirection.ltr,
+        textDirection: textDirection,
         // 中文夹带不可断开的英文长词时，两端对齐会把汉字间距拉开。
+        // RTL 同样不用两端对齐：右对齐的波斯语若被拉满整行，行内公式会被挤向栏边。
         textAlign: centered
             ? TextAlign.center
-            : heading || cjk
+            : textDirection == TextDirection.rtl || heading || cjk
             ? TextAlign.start
             : TextAlign.justify,
         textScaler: TextScaler.noScaling,
@@ -329,6 +353,7 @@ Future<({ui.Image image, Size size})> _renderFormula(
   final adapter = RenderObjectToWidgetAdapter<RenderBox>(
     container: boundary,
     child: Directionality(
+      // 公式图始终从左向右绘制，段落方向不能把符号镜像。
       textDirection: TextDirection.ltr,
       child: Math.tex(
         tex,

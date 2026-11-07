@@ -18,7 +18,8 @@ function _onInitialRenderDone() {
   if (window._overlayer) window._overlayer.redraw();
   window.dispatchEvent(new Event('scroll'));
   if (window.flutter_inappwebview) {
-    window.flutter_inappwebview.callHandler('onContentReady');
+    const token = new URLSearchParams(location.search).get('g') || '';
+    window.flutter_inappwebview.callHandler('onContentReady', { token: token });
   }
 }
 
@@ -449,10 +450,18 @@ document.addEventListener('pointerdown', (event) => {
   // 被拦下的 selectionchange，否则操作栏要等到第一次拖动手柄才出现。
   clearTimeout(_pointerDownTimer);
   if (event.pointerType === 'mouse') return;
-  _pointerDownTimer = setTimeout(() => {
+  // Android WebView 会吞掉 pointerup。800ms 后解锁选区，但翻页手势还在时
+  // 不能把指针当成已抬起——否则翻译刷新会在滑动中改 DOM，手势状态卡住。
+  const unlockPointer = () => {
+    if (window.readerGestureActive?.()) {
+      _pointerDownTimer = setTimeout(unlockPointer, 200);
+      return;
+    }
     _pointerIsDown = false;
+    window.readerScheduleTranslations?.();
     if (_selectionDirty) _scheduleSelection(120);
-  }, 800);
+  };
+  _pointerDownTimer = setTimeout(unlockPointer, 800);
 });
 
 function _scheduleSelection(delay) {
@@ -1469,6 +1478,21 @@ function _setTouchTakeover(on) {
 
 document.addEventListener('touchend', _onTouchEnd, { passive: true });
 document.addEventListener('touchcancel', _onTouchEnd, { passive: true });
+
+// 翻页动画或跟手滑动期间，译文刷新必须让路。reload 前先收掉残留下的
+// transform，避免新手势接在已销毁的文档上。
+window.readerGestureActive = function () {
+  return _touchDragging || !!_flipRAF;
+};
+window.readerSettleGesture = function () {
+  _pointerIsDown = false;
+  clearTimeout(_pointerDownTimer);
+  _touchDragging = false;
+  _touch = null;
+  _cancelFlipAnim();
+  const content = document.getElementById('content');
+  if (content) content.style.transform = '';
+};
 
 // ─── 整页对齐兜底 ───
 // scrollToBlock / scrollToSearchResult / flashImage 这类 scrollIntoView 滚动源

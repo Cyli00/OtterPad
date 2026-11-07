@@ -1,3 +1,4 @@
+import '../../../providers/translation_config_provider.dart';
 import '../../../services/reader/reader_document_index.dart';
 import '../../../services/markdown_paragraph_extractor.dart';
 import '../../../utils/markdown_translation_weaver.dart';
@@ -72,6 +73,7 @@ class ReaderMarkdownPresentation {
     final key = (sourceKey, translations, mode, language);
     if (_key == key) return _content!;
     _key = key;
+    final rtl = isRtlTargetLanguage(language);
     final entries = <Map<String, dynamic>>[];
     for (final source in _sources) {
       final raw = translations[source.paragraph.hash] ?? '';
@@ -92,6 +94,7 @@ class ReaderMarkdownPresentation {
       if (entry == null ||
           entry['html'] != translated.html ||
           entry['language'] != language ||
+          entry['rtl'] != rtl ||
           entry['showSource'] != showSource ||
           entry['showTranslation'] != showTranslation ||
           entry['bilingual'] != (mode == DocTranslationMode.bilingual)) {
@@ -103,6 +106,7 @@ class ReaderMarkdownPresentation {
           'translatedRevision': translated.revision,
           'html': translated.html,
           'language': language,
+          'rtl': rtl,
           'caption': source.caption,
           'showSource': showSource,
           'showTranslation': showTranslation,

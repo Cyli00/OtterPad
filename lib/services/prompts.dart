@@ -173,4 +173,14 @@ abstract final class Prompts {
       'lines in the same order and count. Never merge or split segments, never '
       'add or remove separators. Use neighbouring segments only for '
       'terminology and tone consistency.';
+
+  // ── 不可定制：从右向左目标语言的公式/表格守卫 ──
+
+  /// 目标语言是波斯语、阿拉伯语等 RTL 语言时追加。正文可以右对齐，
+  /// 公式、代码和 Markdown 表格必须保持原来的从左向右顺序。
+  static const translationRtlGuard =
+      'The target language is written right to left. Translate the prose into '
+      'that language, but keep formulas, math symbols, code, URLs, and Markdown '
+      'tables in their original left-to-right order. Do not mirror or reorder '
+      'them, and do not insert right-to-left marks inside them.';
 }

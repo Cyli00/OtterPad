@@ -3291,6 +3291,12 @@ abstract class AppLocalizations {
   /// **'Per file ≤ {sizeMB}MB / {pages} pages · Batch ≤ {batch} files'**
   String ocrUsageLimitsLine(int sizeMB, int pages, int batch);
 
+  /// No description provided for @ocrUsageLimitsLineChunked.
+  ///
+  /// In en, this message translates to:
+  /// **'Per file ≤ {sizeMB}MB · {pages} pages per request · Batch ≤ {batch} files'**
+  String ocrUsageLimitsLineChunked(int sizeMB, int pages, int batch);
+
   /// No description provided for @extractFileTooLarge.
   ///
   /// In en, this message translates to:
@@ -5174,6 +5180,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Parsing failed'**
   String get mineruErrTaskFailed;
+
+  /// No description provided for @mineruErrChunkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pages {range} failed to parse: {message}'**
+  String mineruErrChunkFailed(String range, String message);
 
   /// No description provided for @mineruErrSaveResultFailed.
   ///

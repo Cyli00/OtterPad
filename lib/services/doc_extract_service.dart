@@ -433,7 +433,7 @@ class DocExtractService {
     final structure = DocumentStructure.parse(jsonContent);
     if (structure.isEmpty) throw const FormatException('unsupported_layout');
     final emitted = <FigureManifestEntry>{};
-    final output = <int, String>{};
+    final output = <String>[];
     final refs = <FigureManifestEntry, List<Map<String, dynamic>>>{};
     final decoded = jsonDecode(jsonContent);
     final assets = decoded is Map && decoded['_paddle_assets'] is Map
@@ -450,7 +450,7 @@ class DocExtractService {
         assets: assets,
         emitted: emitted,
       );
-      output[page.pageIndex] = result.markdown;
+      output.add(result.markdown);
       for (final entry in result.replacements.entries) {
         refs.putIfAbsent(entry.key, () => []).addAll(entry.value);
       }
@@ -464,7 +464,9 @@ class DocExtractService {
         });
       }
     }
-    return structure.pages.map((p) => output[p.pageIndex]!).join('\n\n');
+    // 按页列表顺序拼接。page_index 在分段结果里会从 0 重新开始，
+    // 用它当键会让后一段盖掉前一段。
+    return output.join('\n\n');
   }
 
   static void retainSourceFigures(

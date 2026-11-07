@@ -1,6 +1,68 @@
 # 更新记录
 
+每个版本用 `<!-- release:en -->` 与 `<!-- release:zh -->` 分成英文、中文两段。`scripts/prepare_release.sh` 会把英文安装包放在这两段之前。
+
+## [0.1.9]
+
+<!-- release:en -->
+
+### Fixed
+
+- System back during translation or while a reading file is still loading no longer freezes the reader. Page turns and refresh also finish while a task snackbar is visible.
+- Long PDF extraction keeps earlier pages for MinerU and PaddleOCR. A later page range no longer replaces the text that came before it.
+
+<!-- release:zh -->
+
+### 修复
+
+- 翻译进行中，或阅读文件仍在加载时，按系统返回不再让阅读器卡住。任务提示显示时，翻页和刷新也能完成。
+- 长 PDF 提取会保留 MinerU 与 PaddleOCR 前面的页面。后一段页码不再覆盖前面的正文。
+
+## [0.1.8]
+
+<!-- release:en -->
+
+### Added
+
+- Added Persian (فارسی) as a translation target.
+- Reader and PDF translations use a right-to-left layout for Persian and Arabic.
+
+### Fixed
+
+- Formulas, code, and tables stay left to right inside right-to-left translations, so math, code, and table columns are not reordered (Fixes #3).
+
+<!-- release:zh -->
+
+### 新增
+
+- 翻译目标语言新增波斯语（فارسی）。
+- 阅读器与 PDF 译文对波斯语和阿拉伯语使用从右向左排版。
+
+### 修复
+
+- 从右向左的译文里，公式、代码和表格保持从左向右，数学符号、代码片段和表格列不会被重排（Fixes #3）。
+
 ## [0.1.7]
+
+<!-- release:en -->
+
+### Improved
+
+- Improved motion and transitions for navigation, onboarding, and the reader, and added support for the reduce-motion setting.
+- Unified the settings page layout and field styling, and moved the web search settings.
+- Improved task progress and result notifications, reader controls, and figure display.
+- Updated the macOS app icon and improved the CocoaPods build setup.
+
+### Fixed
+
+- Fixed PDF translation readability, and fonts not following the display settings.
+- Improved Claude model thinking parameters, streaming output length, and refusal handling.
+
+### Other
+
+- Removed paper export and AI figure repair.
+
+<!-- release:zh -->
 
 ### 优化
 
@@ -20,6 +82,27 @@
 
 ## [0.1.6]
 
+<!-- release:en -->
+
+### Added
+
+- The figure gallery can use tables from parse results, and figures can be exported or copied.
+- Desktop builds can discover system fonts, and display settings can choose the app font.
+- The website adds Chinese and English landing pages and a usage guide.
+
+### Improved
+
+- Improved how figures relate to full captions, including cropping and the reader layout.
+- Improved the reader dock, WebView lifecycle, and expand interactions so switching flickers less.
+- Improved the caption-translation preview and navigation hints so explanations are not repeated.
+
+### Fixed
+
+- Fixed interrupted reader tab sessions, translation refresh, and model request URL normalization.
+- Removed the bilingual highlight overlay so PDF and WebView mappings no longer disagree.
+
+<!-- release:zh -->
+
 ### 新增
 
 - 图册支持使用解析结果中的表格数据，并提供图表导出与复制操作。
@@ -38,6 +121,39 @@
 - 移除双语高亮蒙版，避免 PDF 与 WebView 映射不一致。
 
 ## [0.1.5]
+
+<!-- release:en -->
+
+### Added
+
+- The reader supports original, translated, and bilingual PDF reading, plus full-text translation that updates paragraph by paragraph.
+- Added MinerU document parsing. It shares structured text and figure extraction results with PaddleOCR.
+- Desktop builds can import papers and local PDFs from the Zotero client.
+- Added export of Markdown notes, and of BibTeX and RIS citations.
+
+### Improved
+
+- Improved wide-screen navigation, the reader sidebar, window sizing, and desktop interaction.
+- Body text and the figure gallery share a caption-translation cache, and existing translations are restored after re-parsing.
+- Improved DOI, arXiv, and PubMed metadata parsing and PDF retrieval.
+- Backup restore adds integrity checks and rollback after an interruption. A failed import or delete keeps the existing data.
+- AI and OCR settings are managed separately, proxy configuration is unified, and the Chinese and English interface copy is filled in.
+
+### Fixed
+
+- Fixed upgrading old libraries, search-index consistency, and background task conflicts during restore.
+- Fixed parsing and translation continuing to process results after cancellation.
+- Android self-update selects an APK for the ABIs the device supports, so 32-bit devices do not download the arm64 package.
+
+### Upgrade notes
+
+This release ships Android ARM64 and ARMv7 packages, and desktop packages for the first time: a Windows x64 installer and a portable build, plus a macOS (Apple silicon) DMG.
+
+The macOS package is not code-signed or notarized. On first launch, allow it in System Settings → Privacy & Security. A Linux desktop build is not included.
+
+On first launch the database upgrades from schema 1 to 2. Keep a full backup of the previous version before installing over it. The upgraded database is not meant for rolling back to the old version.
+
+<!-- release:zh -->
 
 ### 新增
 

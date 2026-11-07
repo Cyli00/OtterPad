@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -75,6 +76,10 @@ class ReaderJsBridge {
   final ReaderJsBridgeListener _listener;
   bool _contentReady = false;
 
+  /// 当前文档代次。reload 后只接受带相同 `g` 的 onContentReady，
+  /// 避免上一页的 load 回调把译文套进新打开的页面。
+  int readyEpoch = 0;
+
   ReaderJsBridge(this._controller, this._listener);
 
   static String _jsLiteral(String s) => escapeJsLiteral(s);
@@ -83,7 +88,9 @@ class ReaderJsBridge {
   void attachHandlers() {
     _controller.addJavaScriptHandler(
       handlerName: 'onContentReady',
-      callback: (_) {
+      callback: (args) {
+        if (!_acceptsReady(args)) return;
+        if (_contentReady) return;
         _contentReady = true;
         _listener.onContentReady();
       },
@@ -186,9 +193,37 @@ class ReaderJsBridge {
 
   // ─── Dart → JS：内容相关 ───
 
-  void reloadUrl(String url) {
+  bool _acceptsReady(List<dynamic> args) {
+    final token = args.isNotEmpty && args.first is Map
+        ? (args.first as Map)['token']?.toString()
+        : null;
+    // 无 token 只放行首屏（测试夹具和旧缓存）。reload 之后的空回调是上一页。
+    if (token == null || token.isEmpty) return readyEpoch == 0;
+    return token == '$readyEpoch';
+  }
+
+  void reloadUrl(String url, {required int epoch}) {
+    readyEpoch = epoch;
     _contentReady = false;
     _controller.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+  }
+
+  /// 停掉当前导航，让随后的销毁不必等一个还在跑的加载。
+  void stopLoading() {
+    _contentReady = false;
+    try {
+      _controller.stopLoading();
+    } catch (_) {}
+  }
+
+  /// 翻页手势未结束就换文档会把 touch 状态留在已销毁的 DOM 上。
+  Future<void> settleGesture() async {
+    if (!_contentReady) return;
+    try {
+      await _controller
+          .evaluateJavascript(source: 'window.readerSettleGesture?.()')
+          .timeout(const Duration(milliseconds: 200));
+    } catch (_) {}
   }
 
   // ─── 后台资源调度 ───

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -56,6 +57,7 @@ class SnackBarService {
   final _content = ValueNotifier<Widget>(const SizedBox.shrink());
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _bar;
   EdgeInsetsGeometry? _barMargin;
+  bool _renderScheduled = false;
 
   ScaffoldMessengerState? get _messenger => _key.currentState;
 
@@ -90,7 +92,7 @@ class SnackBarService {
       action: action,
       margin: margin,
     );
-    _render();
+    _scheduleRender();
   }
 
   /// 隐藏当前 SnackBar
@@ -138,20 +140,32 @@ class SnackBarService {
   /// 0 个 → 收起；1 个 → 完整进度；≥2 个 → 聚合"N 个任务进行中"。
   void renderActiveTasks(List<ActiveTask> tasks) {
     _tasks = tasks;
-    _render();
+    _scheduleRender();
   }
 
   void _dismissResult(int id) {
     if (_result?.id != id) return;
     _resultTimer?.cancel();
     _result = null;
-    _render();
+    _scheduleRender();
+  }
+
+  /// 进度回调、路由弹出和 SnackBar 自己的关闭回调都会走到这里。
+  /// 同步改 ScaffoldMessenger 会撞上 build / 手势 / 路由卸载，表现为页面卡住。
+  void _scheduleRender() {
+    if (_renderScheduled) return;
+    _renderScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _renderScheduled = false;
+      _render();
+    });
+    SchedulerBinding.instance.scheduleFrame();
   }
 
   /// 依据结果与 [_tasks] 更新单槽：内容原地替换，必要时才让 SnackBar 进出场。
   void _render() {
     final messenger = _messenger;
-    if (messenger == null) return;
+    if (messenger == null || !messenger.mounted) return;
 
     final content = _slotContent();
     if (content == null) {
@@ -244,6 +258,9 @@ class SnackBarService {
         elevation: 6,
         // 收起时机由本服务决定：结果自带计时，进度随任务注销。
         persist: true,
+        // 进度条由任务生命周期管理，不参与页面滑动的手势竞技。
+        // 滑动翻页时把这条拖走会在手势回调里重入 ScaffoldMessenger，阅读器就此不再滚动。
+        dismissDirection: DismissDirection.none,
         content: _SlotContent(_content),
       ),
     );
@@ -254,7 +271,9 @@ class SnackBarService {
       final hadResult = _result != null;
       _resultTimer?.cancel();
       _result = null;
-      if (hadResult && reason == SnackBarClosedReason.swipe) _render();
+      if (hadResult && reason == SnackBarClosedReason.swipe) {
+        _scheduleRender();
+      }
     });
   }
 }

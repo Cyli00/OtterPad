@@ -1743,6 +1743,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String ocrUsageLimitsLineChunked(int sizeMB, int pages, int batch) {
+    return 'Per file ≤ ${sizeMB}MB · $pages pages per request · Batch ≤ $batch files';
+  }
+
+  @override
   String extractFileTooLarge(int maxMB, int count) {
     return '$count file(s) exceed the ${maxMB}MB limit and were skipped';
   }
@@ -2919,6 +2924,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mineruErrTaskFailed => 'Parsing failed';
+
+  @override
+  String mineruErrChunkFailed(String range, String message) {
+    return 'Pages $range failed to parse: $message';
+  }
 
   @override
   String mineruErrSaveResultFailed(String detail) {

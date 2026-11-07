@@ -9,6 +9,7 @@ import 'package:pdfrx_engine/src/pdf_page_proxies.dart';
 
 import '../../../data/models/book/highlight.dart';
 import '../../../data/models/book/reader_anchor.dart';
+import '../../../providers/translation_config_provider.dart';
 import '../../../services/reader/reader_document_index.dart';
 import '../../../services/document_structure.dart';
 import 'reader_layout_geometry.dart';
@@ -448,6 +449,9 @@ class ReaderPdfPage extends PdfPageRenumbered {
               (rect.center.dx - width / 2).abs() < width * .03,
           heading: p.isHeading,
           style: style,
+          textDirection: isRtlTargetLanguage(language)
+              ? TextDirection.rtl
+              : TextDirection.ltr,
         );
         if (!typeset.readable) {
           // 可读字号下放不下：保留原文，不显示难以阅读和拖选的小字。
