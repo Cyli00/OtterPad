@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Color;
 
 import '../../data/models/book/highlight.dart' show kDefaultHighlightColor;
+import '../../providers/document_translation_provider.dart'
+    show DocTranslationMode;
 import '../../src/rust/api/document.dart';
 import '../../src/rust/document.dart';
 import '../../utils/uuid.dart';
@@ -53,12 +55,110 @@ class SearchHit {
 /// 位置一律用 [ReaderLocation]（块序号 + [Block.text] 偏移），与排版无关；
 /// 换模式、改字号或窗口尺寸后由视图按新排版换算回滚动偏移或页码。
 class ReaderController extends ChangeNotifier {
-  ReaderController(this.model, {List<ReaderHighlight> highlights = const []})
-    : _highlights = [...highlights] {
+  ReaderController(
+    this.source, {
+    List<ReaderHighlight> highlights = const [],
+    this.onHighlightSaved,
+    this.onHighlightRemoved,
+  }) : _highlights = [...highlights],
+       _model = source {
     _reindex();
   }
 
-  final ReaderDocument model;
+  /// Rust 的文档模型；[model] 是叠加译文后的展示模型。
+  final ReaderDocument source;
+  ReaderDocument _model;
+  ReaderDocument get model => _model;
+
+  /// 标注新增或修改、删除后调用，由页面写入 Rust。
+  final void Function(ReaderHighlight)? onHighlightSaved;
+  final void Function(String id)? onHighlightRemoved;
+
+  // ── 译文 ──
+
+  Map<String, String> _translations = const {};
+  DocTranslationMode _translationMode = DocTranslationMode.off;
+  String _language = '';
+  bool _rtl = false;
+  bool get rtlTranslations => _rtl;
+
+  /// 按译文键叠加译文：双语时插在原文块之后，只看译文时替换原文块。
+  /// 译文块 id 为原文块 id 加 `#t`，阅读位置按块 id 保持。
+  void setTranslations(
+    Map<String, String> translations,
+    DocTranslationMode mode,
+    String language, {
+    bool rtl = false,
+  }) {
+    if (identical(translations, _translations) &&
+        mode == _translationMode &&
+        language == _language &&
+        rtl == _rtl) {
+      return;
+    }
+    final anchorId = _model.blocks.isEmpty
+        ? null
+        : _model
+              .blocks[location.blockIndex.clamp(0, _model.blocks.length - 1)]
+              .id;
+    _translations = translations;
+    _translationMode = mode;
+    _language = language;
+    _rtl = rtl;
+    _model = _display();
+    _base = null;
+    _extent = null;
+    _reindex();
+    if (anchorId != null) {
+      final base = anchorId.endsWith('#t')
+          ? anchorId.substring(0, anchorId.length - 2)
+          : anchorId;
+      final index =
+          _blockIndexById[anchorId] ??
+          _blockIndexById[base] ??
+          _blockIndexById['$base#t'];
+      location = ReaderLocation(index ?? 0, 0);
+    }
+    if (_query.isNotEmpty) {
+      search(_query);
+    } else {
+      notifyListeners();
+    }
+  }
+
+  ReaderDocument _display() {
+    if (_translationMode == DocTranslationMode.off || _translations.isEmpty) {
+      return source;
+    }
+    final keys = source.translationKeys;
+    final blocks = <Block>[];
+    for (var i = 0; i < source.blocks.length; i++) {
+      final block = source.blocks[i];
+      final key = i < keys.length ? keys[i] : '';
+      final text = key.isEmpty ? null : _translations[key];
+      if (text == null || text.trim().isEmpty) {
+        blocks.add(block);
+        continue;
+      }
+      final translated = translatedBlock(source: block, markdown: text);
+      if (_translationMode == DocTranslationMode.bilingual) blocks.add(block);
+      blocks.add(translated);
+    }
+    return ReaderDocument(
+      version: source.version,
+      blocks: blocks,
+      translationKeys: const [],
+      figures: source.figures,
+      figureAssets: source.figureAssets,
+      figureImages: source.figureImages,
+      assetDirectory: source.assetDirectory,
+    );
+  }
+
+  /// 展示块对应的原文块 id 与锚点语言。
+  (String, String) _anchorTarget(Block block) => block.id.endsWith('#t')
+      ? (block.id.substring(0, block.id.length - 2), _language)
+      : (block.id, 'source');
 
   ReaderMode _mode = ReaderMode.scroll;
   ReaderMode get mode => _mode;
@@ -150,7 +250,9 @@ class ReaderController extends ChangeNotifier {
     _highlightMarks.clear();
     for (final h in _highlights) {
       for (final r in h.ranges) {
-        final index = _blockIndexById[r.blockId];
+        final id = r.language == 'source' ? r.blockId : '${r.blockId}#t';
+        if (r.language != 'source' && r.language != _language) continue;
+        final index = _blockIndexById[id];
         if (index == null) continue;
         _highlightMarks.putIfAbsent(index, () => []).add((
           r.start.toInt(),
@@ -178,6 +280,7 @@ class ReaderController extends ChangeNotifier {
     _base = null;
     _extent = null;
     notifyListeners();
+    onHighlightSaved?.call(highlight);
     return highlight;
   }
 
@@ -187,13 +290,27 @@ class ReaderController extends ChangeNotifier {
     _highlights[i] = highlight;
     _reindex();
     notifyListeners();
+    onHighlightSaved?.call(highlight);
   }
 
   void removeHighlight(String id) {
     _highlights.removeWhere((h) => h.id == id);
     _reindex();
     notifyListeners();
+    onHighlightRemoved?.call(id);
   }
+
+  /// 用存储中的最新标注替换（不触发保存回调）。
+  void replaceHighlights(List<ReaderHighlight> highlights) {
+    _highlights
+      ..clear()
+      ..addAll(highlights);
+    _reindex();
+    notifyListeners();
+  }
+
+  /// 块 id（含译文块）对应的展示序号。
+  int? indexOfBlock(String id) => _blockIndexById[id];
 
   ReaderHighlight? highlightAt(ReaderLocation location) {
     ReaderHighlight? hit;
@@ -205,12 +322,13 @@ class ReaderController extends ChangeNotifier {
     return hit;
   }
 
-  static AnchorRange _anchor(Block block, int start, int end) {
+  AnchorRange _anchor(Block block, int start, int end) {
     const context = 32;
     final text = block.text;
+    final (blockId, language) = _anchorTarget(block);
     return AnchorRange(
-      blockId: block.id,
-      language: 'source',
+      blockId: blockId,
+      language: language,
       revision: block.revision,
       start: BigInt.from(start),
       end: BigInt.from(end),

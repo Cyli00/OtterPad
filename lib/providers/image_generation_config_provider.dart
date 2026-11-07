@@ -25,18 +25,21 @@ const kSummaryAspectRatios = <String>[
 
 const kSummaryFidelityKeys = <String>['auto', 'standard', 'high'];
 
+/// 默认总结图提示词由 Rust 定义（见 [Prompts]）。
+String get kDefaultSummaryImagePrompt => Prompts.summaryImage.defaultText;
+
 class ImageGenerationConfig {
   final String aspectRatio;
   final String fidelity;
   final String prompt;
   final int maxReferenceImages;
 
-  const ImageGenerationConfig({
+  ImageGenerationConfig({
     this.aspectRatio = kDefaultSummaryAspectRatio,
     this.fidelity = kDefaultSummaryFidelity,
-    this.prompt = kDefaultSummaryImagePrompt,
+    String? prompt,
     this.maxReferenceImages = kDefaultSummaryMaxReferenceImages,
-  });
+  }) : prompt = prompt ?? kDefaultSummaryImagePrompt;
 
   bool get isPromptDefault =>
       prompt.trim() == kDefaultSummaryImagePrompt.trim();
@@ -115,14 +118,15 @@ class ImageGenerationConfigNotifier
   }
 
   Future<void> setMaxReferenceImages(int value) async {
-    final normalized =
-        value.clamp(kSummaryReferenceImageMin, kSummaryReferenceImageMax).toInt();
+    final normalized = value
+        .clamp(kSummaryReferenceImageMin, kSummaryReferenceImageMax)
+        .toInt();
     state = state.copyWith(maxReferenceImages: normalized);
     await GStorage.setting.put(_kMaxReferenceImages, normalized);
   }
 
   Future<void> resetAll() async {
-    state = const ImageGenerationConfig();
+    state = ImageGenerationConfig();
     await PromptStore.reset(Prompts.summaryImage);
     final box = GStorage.setting;
     await box.delete(_kAspectRatio);

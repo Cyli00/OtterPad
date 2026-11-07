@@ -5,7 +5,6 @@ import '../../../core/l10n.dart';
 import '../../../core/elevation.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
-import '../../../utils/markdown_translation_weaver.dart';
 import 'reader_docked_pane.dart';
 import 'reader_icon_button.dart';
 

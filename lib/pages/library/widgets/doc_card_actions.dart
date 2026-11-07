@@ -9,11 +9,10 @@ import '../../../data/models/book/document.dart';
 import '../../../providers/doc_extract_api_provider.dart';
 import '../../../providers/document_lifecycle_provider.dart';
 import '../../../providers/favorites_provider.dart';
-import '../../../providers/proxy_provider.dart';
+import '../../../providers/document_task_provider.dart' show BatchExtractItem;
 import '../../../providers/selection_provider.dart';
 import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
-import '../../../services/batch_extract_service.dart';
 import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../utils/desktop.dart';
@@ -348,13 +347,6 @@ class DocCardActions {
           title: d.title,
         ),
     ];
-
-    final proxyState = ref.read(proxyProvider);
-    BatchExtractService.instance.applyProxy(
-      proxyState.mode,
-      proxyState.host,
-      proxyState.port,
-    );
 
     if (exitSelection) {
       ref.read(selectionProvider.notifier).exit();

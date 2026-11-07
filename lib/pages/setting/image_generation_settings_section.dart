@@ -8,7 +8,6 @@ import '../../core/l10n.dart';
 import '../../providers/agent_api_provider.dart';
 import '../../providers/image_generation_config_provider.dart';
 import '../../services/haptics.dart';
-import '../../services/prompts.dart';
 import 'setting_picker.dart';
 import 'setting_group.dart';
 

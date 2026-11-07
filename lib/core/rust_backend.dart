@@ -1,4 +1,8 @@
+import 'package:dio/dio.dart';
+
 import '../src/rust/api.dart';
+import '../src/rust/error.dart';
+import '../utils/uuid.dart';
 import '../src/rust/frb_generated.dart';
 import 'pdfium_library.dart';
 
@@ -29,3 +33,15 @@ abstract final class RustBackend {
     }
   }
 }
+
+/// 新建 Rust 任务 id；[cancel] 取消时转发给 Rust 的同名任务。
+String rustTaskId(String prefix, [CancelToken? cancel]) {
+  final id = '$prefix-${generateUuid()}';
+  cancel?.whenCancel.then((_) => cancelTask(taskId: id));
+  return id;
+}
+
+/// Rust 任务被取消，或 dio 请求被取消。
+bool isCancellation(Object error) =>
+    (error is OtterError && error.code == ErrorCode.cancelled) ||
+    (error is DioException && CancelToken.isCancel(error));

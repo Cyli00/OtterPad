@@ -1,5 +1,3 @@
-import 'reader_anchor.dart';
-
 const kHighlightColors = [
   'FFD54F', // Amber 300
   'AED581', // Light Green 300
@@ -21,7 +19,10 @@ class Highlight {
   /// 同一次跨段落选择产生的多条标记共享同一个 groupId，
   /// 删除时按组联动删除。单段落标记为 null。
   final String? groupId;
-  final ReaderAnchor? anchor;
+
+  /// Rust 锚点 JSON（`{version: 2, ranges: [...], located}`），原样保存，
+  /// 改颜色或笔记时不会丢失迁移来的未定位锚点。
+  final Map<String, dynamic>? anchor;
   final DateTime createdAt;
 
   const Highlight({
@@ -36,13 +37,25 @@ class Highlight {
   });
 
   Highlight withNote(String? note) => Highlight(
-    id: id, documentId: documentId, text: text,
-    note: note, color: color, groupId: groupId, anchor: anchor, createdAt: createdAt,
+    id: id,
+    documentId: documentId,
+    text: text,
+    note: note,
+    color: color,
+    groupId: groupId,
+    anchor: anchor,
+    createdAt: createdAt,
   );
 
   Highlight withColor(String color) => Highlight(
-    id: id, documentId: documentId, text: text,
-    note: note, color: color, groupId: groupId, anchor: anchor, createdAt: createdAt,
+    id: id,
+    documentId: documentId,
+    text: text,
+    note: note,
+    color: color,
+    groupId: groupId,
+    anchor: anchor,
+    createdAt: createdAt,
   );
 
   Map<String, dynamic> toJson() => {
@@ -52,7 +65,7 @@ class Highlight {
     'note': note,
     'color': color,
     'groupId': groupId,
-    if (anchor != null) 'anchor': anchor!.toJson(),
+    if (anchor != null) 'anchor': anchor,
     'createdAt': createdAt.toIso8601String(),
   };
 
@@ -64,7 +77,7 @@ class Highlight {
       note: json['note'] as String?,
       color: json['color'] as String? ?? kDefaultHighlightColor,
       groupId: json['groupId'] as String?,
-      anchor: ReaderAnchor.parse(json['anchor']),
+      anchor: (json['anchor'] as Map?)?.cast<String, dynamic>(),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }

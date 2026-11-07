@@ -18,17 +18,11 @@ dependencies:
   # 声明式路由
   go_router: ^17.1.0
 
-  # 偏好存储
   # 网络
   dio: ^5.9.0
-  dio_http2_adapter: ^2.7.1
   pdfrx: ^2.4.7
 
 
-  # 关系数据库（Drift + sqlite3 v3 Dart Hooks + 中文/拼音 FTS5）
-  drift: ^2.34.2
-  sqlite3: ^3.5.0
-  sqlite3_simple: ^2.2.0
 
   # 凭据安全存储（API key / secret / 密码），后端走各平台 Keystore/Keychain/DPAPI
   flutter_secure_storage: ^10.3.1
@@ -48,8 +42,6 @@ dependencies:
   otter_core:
     path: rust_builder
 
-  # 图片缓存
-  cached_network_image: ^3.4.1
 
   # WebDAV 同步
   webdav_client: ^1.2.2
@@ -57,8 +49,6 @@ dependencies:
   # 分享
   share_plus: ^10.0.0
 
-  # 剪贴板（桌面端图片复制）
-  pasteboard: ^0.5.0
 
   # App 信息
   package_info_plus: ^9.0.1
@@ -69,11 +59,7 @@ dependencies:
   # 国际化
   intl: ^0.20.0
 
-  # JSON 序列化（运行时）
-  json_annotation: ^4.9.0
 
-  # Zip/EPUB 解压
-  archive: ^4.0.2
 
   # SVG
   flutter_svg: ^2.0.14
@@ -92,8 +78,6 @@ dependencies:
   # 应用内触发 APK 安装（自更新）
   open_filex: ^4.7.0
 
-  # XML 解析（arXiv API 响应）
-  xml: ^6.6.0
   flutter_widget_from_html_core: ^0.17.0
   markdown: ^7.3.0
   flutter_math_fork: ^0.7.4
@@ -103,9 +87,6 @@ dependencies:
   # 弹簧物理引擎：按压回弹 / 勾选弹出 / 面板开合（见 lib/core/animation_constants.dart）
   motor: ^1.1.0
 
-  # WebView 阅读器（Markdown 渲染 + 多段落选择 + 标注）
-  flutter_inappwebview: ^6.1.5
-  extended_image: ^10.0.1
 
   # Material Symbols (3000+ icons, drop-in replacement for Icons.*)
   material_symbols_icons: ^4.2928.1
@@ -116,12 +97,10 @@ dependencies:
   # 桌面端主显示器分辨率查询（窗口最小尺寸推导）。window_manager 的传递依赖，
   # 但代码直接 import，故显式声明
   screen_retriever: ^0.2.2
-  gal: ^2.3.2
 
   # 桌面拖入 PDF。^0.7.1 = ≥0.7.1 <0.8.0，不会漂到 0.8.0（后者要求 AGP 9；本仓 AGP 8.11.1 且禁止改 android/）
   desktop_drop: ^0.7.1
 
-  pdfrx_engine: ^0.4.6
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -130,8 +109,6 @@ dev_dependencies:
   # 代码生成
   build_runner: ^2.4.0
   freezed: ^3.2.5
-  json_serializable: ^6.8.0
-  drift_dev: 2.34.0  # 钉 <2.34.1+1：之后 require analyzer 13，与本机 flutter_test/test 冲突
 
 
   # 图标生成
@@ -144,11 +121,4 @@ flutter:
   assets:
     - assets/icons/
     - assets/config/
-    # KaTeX 离线资源（CSS/JS/字体），由 ReaderLocalhostServer 的
-    # /_assets/* 路由从 rootBundle 服务，零网络依赖。
-    - assets/katex/
-    - assets/katex/contrib/
-    - assets/katex/fonts/
-    # 阅读器静态 JS/CSS，同走 /_assets/* 路由（见 webview_reader_html）。
-    - assets/reader/
 

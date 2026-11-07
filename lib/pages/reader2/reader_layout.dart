@@ -19,6 +19,7 @@ class ReaderLayoutSpec {
     required this.linkColor,
     required this.ruleColor,
     this.blockMargin = ReaderTypography.blockMarginScale,
+    this.rtlTranslations = false,
   });
 
   /// 正文列宽与分页模式下每页可用高度（不含页边距）。
@@ -31,6 +32,9 @@ class ReaderLayoutSpec {
   final Color linkColor;
   final Color ruleColor;
   final double blockMargin;
+
+  /// 译文为阿拉伯语、波斯语等从右向左书写的语言时，译文块按 RTL 排版。
+  final bool rtlTranslations;
 
   double get fontSize => body.fontSize!;
 
@@ -98,7 +102,8 @@ class ReaderLayoutSpec {
       other.mutedColor == mutedColor &&
       other.linkColor == linkColor &&
       other.ruleColor == ruleColor &&
-      other.blockMargin == blockMargin;
+      other.blockMargin == blockMargin &&
+      other.rtlTranslations == rtlTranslations;
 
   @override
   int get hashCode => Object.hash(
@@ -109,6 +114,7 @@ class ReaderLayoutSpec {
     linkColor,
     ruleColor,
     blockMargin,
+    rtlTranslations,
   );
 }
 
@@ -234,6 +240,7 @@ class LayoutItem {
     this.indent = 0,
     this.mediaSize,
     this.image,
+    this.direction = TextDirection.ltr,
   });
 
   final int blockIndex;
@@ -251,6 +258,9 @@ class LayoutItem {
 
   /// 图块的位图；没有可用图片时只显示比例一致的占位。
   final ReaderFigureImage? image;
+
+  /// 文本块的书写方向；公式以内嵌组件排版，不受影响。
+  final TextDirection direction;
 
   bool get isText => kind == ItemKind.text;
 
@@ -276,8 +286,8 @@ class PageFragment {
 }
 
 @immutable
-class ReaderPage {
-  const ReaderPage(this.fragments);
+class LayoutPage {
+  const LayoutPage(this.fragments);
 
   final List<PageFragment> fragments;
 }
@@ -347,9 +357,19 @@ class ReaderTypesetter {
         case BlockKind.figure:
         case BlockKind.table
             when block.table == null && images.containsKey(block.id):
-          items.add(_figure(model, i, spec, gap, images[block.id]));
+          // 没有位图的图块（多为无题注的匿名图）不占位，只保留题注，与 0.1.x 一致。
+          final image = images[block.id];
+          if (image != null) items.add(_figure(model, i, spec, gap, image));
           if (block.text.isNotEmpty) {
-            items.add(_text(block, i, spec, spec.caption, spec.fontSize * .4));
+            items.add(
+              _text(
+                block,
+                i,
+                spec,
+                spec.caption,
+                image == null ? gap : spec.fontSize * .4,
+              ),
+            );
           }
         case BlockKind.equation
             when block.runs.length == 1 && block.runs.first.math != null:
@@ -478,9 +498,12 @@ class ReaderTypesetter {
       style: style,
       maths: maths,
     );
+    final direction = spec.rtlTranslations && block.id.endsWith('#t')
+        ? TextDirection.rtl
+        : TextDirection.ltr;
     final painter = TextPainter(
       text: span(block, probe, spec),
-      textDirection: TextDirection.ltr,
+      textDirection: direction,
       textScaler: TextScaler.noScaling,
     );
     try {
@@ -524,6 +547,7 @@ class ReaderTypesetter {
         map: map,
         maths: maths,
         indent: indent,
+        direction: direction,
         lines: List.unmodifiable([
           for (var i = 0; i < starts.length; i++)
             LayoutLine(
@@ -674,18 +698,18 @@ class ReaderLayout {
   final _tops = <double>[];
   final _pageOf = <int, List<(int, int)>>{};
   late final double extent;
-  late final List<ReaderPage> pages;
+  late final List<LayoutPage> pages;
 
   /// 滚动模式下第 [index] 项（含其前间距）的起点。
   double topOf(int index) => _tops[index];
 
-  List<ReaderPage> _paginate() {
-    final pages = <ReaderPage>[];
+  List<LayoutPage> _paginate() {
+    final pages = <LayoutPage>[];
     var fragments = <PageFragment>[];
     var used = 0.0;
     void finish() {
       if (fragments.isEmpty) return;
-      pages.add(ReaderPage(List.unmodifiable(fragments)));
+      pages.add(LayoutPage(List.unmodifiable(fragments)));
       fragments = [];
       used = 0;
     }

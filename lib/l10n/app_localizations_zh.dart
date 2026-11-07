@@ -3611,6 +3611,66 @@ class AppLocalizationsZh extends AppLocalizations {
   String dataStartFailed(String code) {
     return '无法打开应用数据（$code）';
   }
+
+  @override
+  String get otterErrorInvalidArgument => '请求无效，请检查输入后重试';
+
+  @override
+  String get otterErrorInvalidData => '数据已损坏或格式不受支持';
+
+  @override
+  String get otterErrorIo => '无法读写本地文件';
+
+  @override
+  String get otterErrorDatabase => '文库数据库无法更新';
+
+  @override
+  String get otterErrorConflict => '数据已被其他操作修改，请重试';
+
+  @override
+  String get otterErrorUnsupportedDatabase => '该文库由更新版本的 OtterPad 创建';
+
+  @override
+  String get otterErrorCancelled => '已取消';
+
+  @override
+  String get otterErrorNetwork => '网络请求失败，请检查网络后重试';
+
+  @override
+  String get otterErrorAuthentication => '认证失败，请检查 API Key 或账号';
+
+  @override
+  String get otterErrorRateLimited => '请求过于频繁，请稍后重试';
+
+  @override
+  String get otterErrorQuotaExceeded => '服务额度已用完';
+
+  @override
+  String get otterErrorRemote => '服务返回错误';
+
+  @override
+  String get otterErrorNotFound => '未找到';
+
+  @override
+  String get otterErrorUnsupported => '不支持此操作';
+
+  @override
+  String get otterErrorPdf => '无法打开该 PDF';
+
+  @override
+  String get otterErrorLayoutOverflow => '文字超出可用空间';
+
+  @override
+  String get otterErrorRefused => '模型拒绝了该请求';
+
+  @override
+  String get otterErrorIncompleteResponse => '响应不完整，请重试';
+
+  @override
+  String get otterErrorToolLimit => '已达到工具调用次数上限';
+
+  @override
+  String get readerOutlineEmpty => '该文献没有标题';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -6842,4 +6902,64 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String dataStartFailed(String code) {
     return '無法開啟應用資料（$code）';
   }
+
+  @override
+  String get otterErrorInvalidArgument => '請求無效，請檢查輸入後重試';
+
+  @override
+  String get otterErrorInvalidData => '資料已損毀或格式不受支援';
+
+  @override
+  String get otterErrorIo => '無法讀寫本機檔案';
+
+  @override
+  String get otterErrorDatabase => '文庫資料庫無法更新';
+
+  @override
+  String get otterErrorConflict => '資料已被其他操作修改，請重試';
+
+  @override
+  String get otterErrorUnsupportedDatabase => '該文庫由較新版本的 OtterPad 建立';
+
+  @override
+  String get otterErrorCancelled => '已取消';
+
+  @override
+  String get otterErrorNetwork => '網路請求失敗，請檢查網路後重試';
+
+  @override
+  String get otterErrorAuthentication => '認證失敗，請檢查 API Key 或帳號';
+
+  @override
+  String get otterErrorRateLimited => '請求過於頻繁，請稍後重試';
+
+  @override
+  String get otterErrorQuotaExceeded => '服務額度已用完';
+
+  @override
+  String get otterErrorRemote => '服務回傳錯誤';
+
+  @override
+  String get otterErrorNotFound => '未找到';
+
+  @override
+  String get otterErrorUnsupported => '不支援此操作';
+
+  @override
+  String get otterErrorPdf => '無法開啟該 PDF';
+
+  @override
+  String get otterErrorLayoutOverflow => '文字超出可用空間';
+
+  @override
+  String get otterErrorRefused => '模型拒絕了該請求';
+
+  @override
+  String get otterErrorIncompleteResponse => '回應不完整，請重試';
+
+  @override
+  String get otterErrorToolLimit => '已達到工具呼叫次數上限';
+
+  @override
+  String get readerOutlineEmpty => '該文獻沒有標題';
 }

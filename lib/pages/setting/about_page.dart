@@ -49,17 +49,19 @@ class _AboutPageState extends ConsumerState<AboutPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: widget.embedded ? null : AppBar(
-        title: Text(
-          l10n.about,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        scrolledUnderElevation: 0,
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: Text(
+                l10n.about,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              centerTitle: false,
+              backgroundColor: cs.surface,
+              scrolledUnderElevation: 0,
+            ),
       body: SettingListView(
         children: [
           // ── App Icon + Name + Subtitle ──
@@ -185,7 +187,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     if (_checkingUpdate) return;
     setState(() => _checkingUpdate = true);
     try {
-      final info = await UpdateService.instance.checkForUpdate();
+      final info = await UpdateService.checkForUpdate();
       if (!mounted) return;
       if (info.hasUpdate) {
         await presentUpdateDialog(context: context, info: info);
@@ -321,9 +323,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        style: TextButton.styleFrom(
-                          foregroundColor: cs.error,
-                        ),
+                        style: TextButton.styleFrom(foregroundColor: cs.error),
                         onPressed: () => exit(0),
                         child: Text(l10n.aboutDisagree),
                       ),

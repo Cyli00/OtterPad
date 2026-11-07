@@ -13,7 +13,6 @@ import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
-import '../../services/agent_http.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/system_specs.dart';
@@ -220,7 +219,6 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
                     Haptics.soft();
                     setState(() => _http2Enabled = v);
                     GStorage.setting.put(_kHttp2Enabled, v);
-                    AgentHttp.instance.resetInstances();
                   },
                 ),
               ],

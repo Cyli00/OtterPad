@@ -1,161 +1,99 @@
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:dio/dio.dart';
-import 'proxy_adapter.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
+import '../core/app_logger.dart';
+import '../core/rust_backend.dart';
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
-import '../core/app_logger.dart';
+import '../src/rust/api/update.dart';
+import '../src/rust/error.dart';
+import '../src/rust/update.dart';
 
-/// GitHub release 里与设备 ABI 匹配的 APK 资源。
-class ApkAsset {
-  final String downloadUrl;
-  final int size;
-  final String abi;
+export '../src/rust/update.dart' show ApkAsset, UpdateInfo;
 
-  const ApkAsset({
-    required this.downloadUrl,
-    required this.size,
-    required this.abi,
-  });
-}
-
-/// 一次版本检查的结果。
-class UpdateInfo {
-  final String currentVersion;
-  final String remoteVersion;
-  final bool hasUpdate;
-  final String releaseUrl;
-  final List<String> changelogLines;
-  final ApkAsset? apkAsset;
-
-  const UpdateInfo({
-    required this.currentVersion,
-    required this.remoteVersion,
-    required this.hasUpdate,
-    required this.releaseUrl,
-    required this.changelogLines,
-    this.apkAsset,
-  });
-
-  /// 从 GitHub `GET /repos/{owner}/{repo}/releases/latest` 的响应体解析。
-  factory UpdateInfo.fromGithubRelease(
-    Map<String, dynamic> json, {
-    required String currentVersion,
-    List<String> supportedAbis = const [],
-  }) {
-    final tagName = json['tag_name'] as String;
-    final remoteVersion = tagName.startsWith('v')
-        ? tagName.substring(1)
-        : tagName;
-    final releaseUrl = json['html_url'] as String;
-    final body = json['body'] as String? ?? '';
-    final assets = json['assets'] as List<dynamic>? ?? [];
-
-    ApkAsset? apkAsset;
-    // ABI 顺序由设备提供；不能用 Release 附件顺序决定安装哪个架构。
-    for (final abi in supportedAbis) {
-      for (final asset in assets) {
-        final name = asset['name'] as String? ?? '';
-        if (name.endsWith('-$abi.apk')) {
-          apkAsset = ApkAsset(
-            downloadUrl: asset['browser_download_url'] as String,
-            size: asset['size'] as int? ?? 0,
-            abi: abi,
-          );
-          break;
-        }
-      }
-      if (apkAsset != null) break;
-    }
-
-    return UpdateInfo(
-      currentVersion: currentVersion,
-      remoteVersion: remoteVersion,
-      hasUpdate:
-          UpdateService.compareVersions(remoteVersion, currentVersion) > 0,
-      releaseUrl: releaseUrl,
-      changelogLines: UpdateService.extractChangelogLines(body),
-      apkAsset: apkAsset,
-    );
-  }
-}
-
-/// 检查 GitHub 最新 release，并持久化"已忽略的版本号"。
-class UpdateService {
-  UpdateService._();
-  static final UpdateService instance = UpdateService._();
-
-  static const _repoOwner = 'Cyli00';
-  static const _repoName = 'OtterPad';
-  static const _apiUrl =
-      'https://api.github.com/repos/$_repoOwner/$_repoName/releases/latest';
-  static const _kIgnoredVersionKey = SettingsKeys.ignoredUpdateVersion;
-
-  late final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
-      headers: {
-        'User-Agent': 'OtterPad/0.1 (Flutter; mailto:dev@otterpad.app)',
-      },
-    ),
-  );
-
-  /// 更新代理配置，与其它联网服务共用 `ProxyProvider` 总线。
-  /// [mode] 收 `Enum` 便于跨包传 `ProxyMode`（按 name 匹配）。
-  void applyProxy(Enum mode, String host, int port) {
-    _dio.httpClientAdapter = buildProxyAdapter(mode.name, host, port);
-  }
-
-  Future<UpdateInfo> checkForUpdate() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    List<String> supportedAbis = const [];
+/// 检查与下载更新由 Rust 完成；这里提供宿主平台信息与安装 Intent。
+abstract final class UpdateService {
+  /// 当前版本与按优先级排列的设备 ABI（只有 Android 有）。
+  static Future<(String, List<String>)> _platform() async {
+    final version = (await PackageInfo.fromPlatform()).version;
+    var abis = const <String>[];
     if (Platform.isAndroid) {
       try {
-        supportedAbis = (await DeviceInfoPlugin().androidInfo).supportedAbis;
+        abis = (await DeviceInfoPlugin().androidInfo).supportedAbis;
       } catch (e) {
         log.w('[UpdateService] 无法读取设备 ABI，使用发布页更新：$e');
       }
     }
-    final response = await _dio.get<Map<String, dynamic>>(_apiUrl);
-    return UpdateInfo.fromGithubRelease(
-      response.data!,
-      currentVersion: packageInfo.version,
-      supportedAbis: supportedAbis,
+    return (version, abis);
+  }
+
+  static Future<UpdateInfo> checkForUpdate() async {
+    final (version, abis) = await _platform();
+    return RustBackend.instance.checkForUpdate(
+      currentVersion: version,
+      supportedAbis: abis,
+      taskId: rustTaskId('update'),
     );
   }
 
-  /// 逐段比较点分版本号；缺失的段按 0 处理，非数字段按 0 处理。
-  static int compareVersions(String a, String b) {
-    final partsA = a.split('.');
-    final partsB = b.split('.');
-    final length = partsA.length > partsB.length
-        ? partsA.length
-        : partsB.length;
-    for (var i = 0; i < length; i++) {
-      final numA = i < partsA.length ? int.tryParse(partsA[i]) ?? 0 : 0;
-      final numB = i < partsB.length ? int.tryParse(partsB[i]) ?? 0 : 0;
-      if (numA != numB) return numA.compareTo(numB);
-    }
-    return 0;
+  /// 启动后自动检查：受设置开关控制，忽略的版本不提示；无需提示时为 null。
+  static Future<UpdateInfo?> checkAfterStartup() async {
+    final (version, abis) = await _platform();
+    return RustBackend.instance.checkUpdateAfterStartup(
+      currentVersion: version,
+      supportedAbis: abis,
+      taskId: rustTaskId('update-startup'),
+    );
   }
-
-  /// 从 release body 里提取所有 `- ` 开头的行（本项目自己生成的 commit 列表），去掉前缀。
-  static List<String> extractChangelogLines(String body) {
-    return body
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.startsWith('- '))
-        .map((line) => line.substring(2).trim())
-        .toList();
-  }
-
-  static String? getIgnoredVersion() =>
-      GStorage.setting.get(_kIgnoredVersionKey) as String?;
 
   static Future<void> setIgnoredVersion(String version) =>
-      GStorage.setting.put(_kIgnoredVersionKey, version);
+      GStorage.setting.put(SettingsKeys.ignoredUpdateVersion, version);
+
+  /// 下载 APK 到临时目录，返回路径。
+  static Future<String> downloadApk({
+    required ApkAsset asset,
+    required String version,
+    required String taskId,
+    required void Function(int received, int total) onProgress,
+  }) async {
+    final dir = Directory(
+      p.join((await getTemporaryDirectory()).path, 'OtterPad', 'updates'),
+    );
+    await dir.create(recursive: true);
+    final path = p.join(dir.path, 'OtterPad-$version-${asset.abi}.apk');
+    await for (final event in RustBackend.instance.downloadUpdate(
+      asset: asset,
+      path: path,
+      taskId: taskId,
+    )) {
+      switch (event) {
+        case UpdateDownloadEvent_Progress(:final progress):
+          onProgress(
+            progress.transferred.toInt(),
+            progress.total?.toInt() ?? 0,
+          );
+        case UpdateDownloadEvent_Completed(:final path):
+          return path;
+        case UpdateDownloadEvent_Failed(:final error):
+          throw error;
+      }
+    }
+    throw const OtterError(code: ErrorCode.cancelled, detail: 'update stream');
+  }
+
+  /// 通过 `open_filex` 的 FileProvider 生成 content:// URI 并发起安装 Intent。
+  static Future<void> installApk(String filePath) async {
+    final result = await OpenFilex.open(
+      filePath,
+      type: 'application/vnd.android.package-archive',
+    );
+    if (result.type != ResultType.done) {
+      throw StateError(result.message);
+    }
+  }
 }

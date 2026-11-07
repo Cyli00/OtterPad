@@ -555,9 +555,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     _testNotifier.startTest(modelId);
 
     final err = await testAgentModel(
+      l10n: context.l10n,
+      instanceId: fresh.id,
       provider: fresh.protocol,
       baseUrl: fresh.effectiveBaseUrl,
-      apiKey: fresh.apiKey,
       modelId: modelId,
     );
 
@@ -600,7 +601,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     await showAgentModelManageSheet(
       context: context,
       baseUrl: inst.effectiveBaseUrl,
-      apiKey: inst.apiKey,
+      instanceId: inst.id,
       providerType: inst.protocol,
       providerLabel: inst.name,
       addedModels: inst.models,

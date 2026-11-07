@@ -9,7 +9,6 @@ import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/ocr/doc_extract_config.dart';
 import '../../../providers/document_task_provider.dart';
-import '../../../services/batch_extract_service.dart';
 import '../../../utils/desktop.dart';
 import '../../../widgets/app_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -382,7 +381,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: AppShadows.sheet,
+          boxShadow: AppShadows.sheet,
         ),
         child: column,
       ),
@@ -515,6 +514,87 @@ class _JobStatusTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+enum BatchJobState { pending, submitted, running, done, failed, cancelled }
+
+/// 单个 Job 的运行时状态。
+class BatchJobStatus {
+  final String documentId;
+  final String title;
+  BatchJobState state;
+  String? jobId;
+  String? error;
+  int extractedPages;
+  int totalPages;
+  String? savedPath;
+
+  BatchJobStatus({
+    required this.documentId,
+    required this.title,
+    this.state = BatchJobState.pending,
+    this.jobId,
+    this.error,
+    this.extractedPages = 0,
+    this.totalPages = 0,
+    this.savedPath,
+  });
+}
+
+/// 批量提取整体进度快照（不可变，每次回调时生成新实例）。
+class BatchExtractProgress {
+  final int total;
+  final int completed;
+  final int succeeded;
+  final int failed;
+  final String currentTitle;
+  final List<BatchJobStatus> statuses;
+
+  const BatchExtractProgress({
+    required this.total,
+    required this.completed,
+    required this.succeeded,
+    required this.failed,
+    required this.currentTitle,
+    required this.statuses,
+  });
+
+  factory BatchExtractProgress.fromStatuses(
+    List<BatchJobStatus> statuses,
+    String currentTitle,
+  ) {
+    final succeeded = statuses
+        .where((s) => s.state == BatchJobState.done)
+        .length;
+    final failed = statuses
+        .where(
+          (s) =>
+              s.state == BatchJobState.failed ||
+              s.state == BatchJobState.cancelled,
+        )
+        .length;
+    return BatchExtractProgress(
+      total: statuses.length,
+      completed: succeeded + failed,
+      succeeded: succeeded,
+      failed: failed,
+      currentTitle: currentTitle,
+      statuses: statuses
+          .map(
+            (s) => BatchJobStatus(
+              documentId: s.documentId,
+              title: s.title,
+              state: s.state,
+              jobId: s.jobId,
+              error: s.error,
+              extractedPages: s.extractedPages,
+              totalPages: s.totalPages,
+              savedPath: s.savedPath,
+            ),
+          )
+          .toList(),
     );
   }
 }

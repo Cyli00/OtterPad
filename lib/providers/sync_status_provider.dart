@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../services/backup_fingerprint.dart';
-import '../services/backup_remote.dart';
+import '../core/rust_backend.dart';
+import '../src/rust/sync/archive.dart';
+import '../src/rust/sync/status.dart';
+import 'backup_orchestrator.dart';
 import 'backup_provider.dart';
 import 'documents_provider.dart';
 
@@ -19,13 +21,25 @@ class DocSyncInfo {
   const DocSyncInfo(this.state, [this.reason]);
 }
 
-/// 云同步状态的聚合结果——云图标角标与云同步页共用的单一真值源。
-///
-/// 语义：状态 = 「相对上次备份快照是否有变化」（纯本地指纹比对），
-/// 不是远端逐文件对齐。
+/// 上次备份的概要。
+class BackupSnapshotInfo {
+  final DateTime at;
+  final BackupScope scope;
+  final String remote;
+  final String device;
+
+  const BackupSnapshotInfo({
+    required this.at,
+    required this.scope,
+    required this.remote,
+    required this.device,
+  });
+}
+
+/// 云同步状态：Rust 按文献指纹与上次备份快照比对（纯本地计算）。
 class SyncStatusResult {
   final bool remoteConfigured;
-  final BackupSnapshot? snapshot;
+  final BackupSnapshotInfo? snapshot;
   final Map<String, DocSyncInfo> docs;
 
   const SyncStatusResult({
@@ -38,60 +52,51 @@ class SyncStatusResult {
       docs.values.any((d) => d.state != DocSyncState.synced);
 }
 
-/// 备份成功后由 BackupOrchestrator invalidate 重算；文献列表与远端配置
-/// 变化经 watch 自动重算。批注等不经 documentsProvider 的变更在打开
-/// 云同步页时手动 invalidate 兜底。
+/// 备份成功后由 BackupOrchestrator invalidate 重算；文献与远端配置变化经 watch 重算。
 final syncStatusProvider = FutureProvider<SyncStatusResult>((ref) async {
-  final docs = ref.watch(documentsProvider).value ?? const [];
-  final remoteType = ref.watch(backupRemoteTypeProvider);
-  final s3 = ref.watch(backupS3Provider);
-  final webDav = ref.watch(backupWebDavProvider);
-
-  final remoteConfigured = resolveBackupRemote(remoteType, s3, webDav) != null;
-  final snapshot = BackupFingerprintService.loadSnapshot();
-
-  if (snapshot == null) {
-    return SyncStatusResult(
-      remoteConfigured: remoteConfigured,
-      snapshot: null,
-      docs: {
-        for (final doc in docs)
-          doc.id: const DocSyncInfo(DocSyncState.neverBackedUp),
-      },
-    );
-  }
-
-  final current = await BackupFingerprintService.compute(docs);
-  final result = <String, DocSyncInfo>{};
-  for (final entry in current.entries) {
-    final previous = snapshot.docs[entry.key];
-    if (previous == null) {
-      result[entry.key] = const DocSyncInfo(
-        DocSyncState.changed,
-        DocChangeReason.added,
-      );
-    } else if (previous.content != entry.value.content) {
-      result[entry.key] = const DocSyncInfo(
-        DocSyncState.changed,
-        DocChangeReason.content,
-      );
-    } else if (previous.meta != entry.value.meta) {
-      result[entry.key] = const DocSyncInfo(
-        DocSyncState.changed,
-        DocChangeReason.meta,
-      );
-    } else if (previous.files != entry.value.files) {
-      result[entry.key] = const DocSyncInfo(
-        DocSyncState.changed,
-        DocChangeReason.files,
-      );
-    } else {
-      result[entry.key] = const DocSyncInfo(DocSyncState.synced);
-    }
-  }
+  ref.watch(documentsProvider);
+  ref.watch(backupRemoteTypeProvider);
+  ref.watch(backupS3Provider);
+  ref.watch(backupWebDavProvider);
+  final remoteConfigured = ref.read(backupOrchestratorProvider).remote != null;
+  final status = await RustBackend.instance.backupStatus(
+    taskId: rustTaskId('backup-status'),
+  );
+  final at = status.lastBackupAt;
   return SyncStatusResult(
     remoteConfigured: remoteConfigured,
-    snapshot: snapshot,
-    docs: result,
+    snapshot: at == null
+        ? null
+        : BackupSnapshotInfo(
+            at: DateTime.fromMillisecondsSinceEpoch(at),
+            scope: status.lastScope ?? BackupScope.dataOnly,
+            remote: status.lastRemote ?? '',
+            device: status.lastDevice ?? '',
+          ),
+    docs: {
+      for (final d in status.documents)
+        d.documentId: switch (d.state) {
+          BackupState.neverBackedUp => const DocSyncInfo(
+            DocSyncState.neverBackedUp,
+          ),
+          BackupState.unchanged => const DocSyncInfo(DocSyncState.synced),
+          BackupState.added => const DocSyncInfo(
+            DocSyncState.changed,
+            DocChangeReason.added,
+          ),
+          BackupState.contentChanged => const DocSyncInfo(
+            DocSyncState.changed,
+            DocChangeReason.content,
+          ),
+          BackupState.metadataChanged => const DocSyncInfo(
+            DocSyncState.changed,
+            DocChangeReason.meta,
+          ),
+          BackupState.filesChanged => const DocSyncInfo(
+            DocSyncState.changed,
+            DocChangeReason.files,
+          ),
+        },
+    },
   );
 });

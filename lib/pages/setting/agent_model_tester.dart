@@ -1,173 +1,79 @@
-import 'package:dio/dio.dart';
-
+import '../../core/l10n.dart';
+import '../../core/otter_error_text.dart';
+import '../../core/rust_ai.dart';
+import '../../core/rust_backend.dart';
 import '../../data/models/ai/agent_config.dart';
-import '../../services/agent_http.dart';
+import '../../src/rust/ai/types.dart' as rust;
+import '../../src/rust/api/ai.dart';
 
-/// Agent API 的网络端操作合集——连通性检测 + 候选模型拉取。
-///
-/// 纯函数式：不依赖 BuildContext / State / Riverpod，便于独立测试。
+ModelSelection _selection(
+  String instanceId,
+  AgentApiProvider provider,
+  String baseUrl,
+  String modelId, {
+  int? maxTokens,
+}) => modelSelection(
+  AgentApiState(
+    id: instanceId,
+    provider: provider,
+    baseUrl: baseUrl,
+    models: [modelId],
+    modelParams: {
+      modelId: AgentModelParams(
+        maxTokens: maxTokens,
+        thinkingLevel: ThinkingLevel.off,
+      ),
+    },
+  ),
+  modelId,
+)!;
 
-/// 检测单个模型是否可用。
-///
-/// 返回 `null` 表示连接成功；非空字符串是错误消息（可直接展示给用户）。
+/// 用极短请求检测模型可用；成功返回 null，失败返回可读原因。密钥取自已保存的实例。
 Future<String?> testAgentModel({
+  required AppLocalizations l10n,
+  required String instanceId,
   required AgentApiProvider provider,
   required String baseUrl,
-  required String apiKey,
   required String modelId,
 }) async {
-  final dio = AgentHttp.instance.dio(
-    connectTimeout: const Duration(seconds: 15),
-    receiveTimeout: const Duration(seconds: 30),
-  );
-
-  // xAI（Grok）按 host 升格走 OpenAI Responses 同形线路
-  provider = provider.wireProtocol(baseUrl);
   try {
-    switch (provider) {
-      case AgentApiProvider.openai:
-        await dio.post(
-          provider.chatUrl(baseUrl),
-          data: {'model': modelId, 'input': 'hi', 'max_output_tokens': 16},
-          options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
-        );
-      case AgentApiProvider.anthropic:
-        await dio.post(
-          provider.chatUrl(baseUrl),
-          data: {
-            'model': modelId,
-            'max_tokens': 1,
-            'messages': [
-              {'role': 'user', 'content': 'hi'},
-            ],
-          },
-          options: Options(
-            headers: {
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'content-type': 'application/json',
-            },
-          ),
-        );
-      case AgentApiProvider.gemini:
-        await dio.post(
-          provider.chatUrl(baseUrl, modelId: modelId),
-          data: {
-            'contents': [
-              {
-                'parts': [
-                  {'text': 'hi'},
-                ],
-              },
-            ],
-            'generationConfig': {'maxOutputTokens': 1},
-          },
-          options: Options(headers: {'x-goog-api-key': apiKey}),
-        );
-      case AgentApiProvider.openAICompatible:
-        await dio.post(
-          provider.chatUrl(baseUrl),
-          data: {
-            'model': modelId,
-            'messages': [
-              {'role': 'user', 'content': 'hi'},
-            ],
-            'max_tokens': 16,
-          },
-          options: Options(
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-            },
-          ),
-        );
+    await for (final event in RustBackend.instance.generateText(
+      model: _selection(instanceId, provider, baseUrl, modelId, maxTokens: 16),
+      request: GenerationRequest(
+        system: '',
+        messages: [
+          rust.Message(role: rust.Role.user, text: 'hi', images: const []),
+        ],
+        webSearch: false,
+        urlContext: false,
+        showReasoning: false,
+        cachePrefix: false,
+      ),
+      taskId: rustTaskId('model-test'),
+    )) {
+      switch (event) {
+        case GenerationEvent_Completed():
+          return null;
+        case GenerationEvent_Failed(:final error):
+          throw error;
+        default:
+      }
     }
     return null;
-  } on DioException catch (e) {
-    // anthropic 返回 400 常见是"消息格式问题"而非模型不可用——视为连通
-    if (provider == AgentApiProvider.anthropic &&
-        e.response?.statusCode == 400) {
-      return null;
-    }
-    return describeDioError(e);
   } catch (e) {
-    return '$e';
+    return errorText(l10n, e);
   }
 }
 
-/// 把 Dio 异常压成一行可展示的错误消息（API error body 优先，其次状态码）。
-String describeDioError(DioException e) {
-  final body = e.response?.data;
-  if (body is Map<String, dynamic>) {
-    final apiErr = body['error'];
-    if (apiErr is Map) {
-      return apiErr['message'] as String? ?? 'HTTP ${e.response?.statusCode}';
-    }
-    if (apiErr is String) return apiErr;
-    return body['message'] as String? ?? 'HTTP ${e.response?.statusCode}';
-  }
-  return e.response?.statusCode != null
-      ? 'HTTP ${e.response!.statusCode}'
-      : (e.message ?? e.type.name);
-}
-
-/// 从 provider 的 /models 端点拉取可选模型 ID（已排序）。
-///
-/// 失败时抛出异常，由调用方决定如何展示错误。
+/// 服务商的模型列表（按 id 排序）。
 Future<List<String>> fetchAvailableModels({
+  required String instanceId,
   required AgentApiProvider provider,
   required String baseUrl,
-  required String apiKey,
 }) async {
-  final dio = AgentHttp.instance.dio(
-    connectTimeout: const Duration(seconds: 15),
-    receiveTimeout: const Duration(seconds: 30),
+  final models = await RustBackend.instance.models(
+    selection: _selection(instanceId, provider, baseUrl, ''),
+    taskId: rustTaskId('models'),
   );
-
-  switch (provider) {
-    case AgentApiProvider.openai:
-    case AgentApiProvider.openAICompatible:
-      final response = await dio.get<Map<String, dynamic>>(
-        provider.modelsUrl(baseUrl),
-        options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
-      );
-      final data = response.data?['data'] as List<dynamic>?;
-      if (data == null) return const <String>[];
-      return data
-          .map((m) => (m as Map<String, dynamic>)['id'] as String? ?? '')
-          .where((id) => id.isNotEmpty)
-          .toList()
-        ..sort();
-
-    case AgentApiProvider.anthropic:
-      final response = await dio.get<Map<String, dynamic>>(
-        provider.modelsUrl(baseUrl),
-        queryParameters: {'limit': 100},
-        options: Options(
-          headers: {'x-api-key': apiKey, 'anthropic-version': '2023-06-01'},
-        ),
-      );
-      final data = response.data?['data'] as List<dynamic>?;
-      if (data == null) return const <String>[];
-      return data
-          .map((m) => (m as Map<String, dynamic>)['id'] as String? ?? '')
-          .where((id) => id.isNotEmpty)
-          .toList()
-        ..sort();
-
-    case AgentApiProvider.gemini:
-      final response = await dio.get<Map<String, dynamic>>(
-        provider.modelsUrl(baseUrl),
-        options: Options(headers: {'x-goog-api-key': apiKey}),
-      );
-      final list = response.data?['models'] as List<dynamic>? ?? [];
-      return list
-          .map((m) {
-            final name = (m as Map<String, dynamic>)['name'] as String? ?? '';
-            return name.startsWith('models/') ? name.substring(7) : name;
-          })
-          .where((id) => id.isNotEmpty)
-          .toList()
-        ..sort();
-  }
+  return [for (final m in models) m.id]..sort();
 }

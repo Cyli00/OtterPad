@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
-import 'package:path/path.dart' as p;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -17,14 +16,12 @@ import '../../../core/l10n.dart';
 import '../../../core/storage/settings_keys.dart';
 import '../../../core/storage/storage.dart';
 import '../../../data/models/book/document.dart';
-import '../../../data/models/book/reader_anchor.dart';
 import '../../../data/models/chat/chat_session.dart';
 import '../../../data/models/ai/agent_config.dart';
 import '../../../providers/document_chat_provider.dart';
 import '../../../router/app_routes.dart';
 import '../../../services/ai_settings_prompt.dart';
 import '../../../services/builtin_tools.dart';
-import '../../../services/document_chat_service.dart';
 import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../services/web_search_service.dart';
@@ -36,7 +33,6 @@ import 'chat_activity_view.dart';
 import 'chat_figure_attachment.dart';
 import 'chat_model_picker.dart';
 import 'chat_user_quote.dart';
-import '../../../services/figure_extract_service.dart';
 import '../widgets/figure_viewer.dart';
 import '../../../data/models/chat/chat_activity.dart';
 
@@ -49,7 +45,7 @@ class DocumentChatPageArgs {
 
   /// 划词进入时的引用文本；底栏入口为 null。
   final String? initialQuote;
-  final ReaderAnchor? quoteAnchor;
+  final Map<String, dynamic>? quoteAnchor;
 
   /// 从 Figure 查看器进入时附带的单张图片路径；非空时仅向模型发送此图。
   final String? figureImagePath;
@@ -111,7 +107,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   bool _followOutput = true;
   bool _scrollScheduled = false;
   String? _quote;
-  ReaderAnchor? _quoteAnchor;
+  Map<String, dynamic>? _quoteAnchor;
   bool _locatingQuote = false;
   String? _figureImagePath;
   final ChatModelRole _role = ChatModelRole.expert;
@@ -188,42 +184,13 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     });
   }
 
-  Future<void> _openFigure(String imagePath, String caption) async {
-    final all = await FigureExtractService.loadManifest(_documentId) ?? [];
-    if (!mounted) return;
-    final matched = all.where((e) => p.equals(e.imagePath, imagePath));
-    final selected = matched.firstOrNull;
-    final figures = selected != null && selected.isDisplayFigure
-        ? FigureManifestEntry.forDisplay(all)
-        : [
-            selected ??
-                FigureManifestEntry(
-                  imagePath: imagePath,
-                  captionText: caption,
-                  pageIndex: 0,
-                  blockIds: const [],
-                ),
-          ];
-    await showFigureViewer(
-      context,
-      figures,
-      initialIndex: selected == null ? 0 : figures.indexOf(selected),
-      documentId: _documentId,
-      document: widget.args.document,
-      onLocateQuote: widget.args.onLocateQuote,
-      onOpenChat: (args) {
-        if (!mounted) return;
-        setState(() {
-          _quote = args.initialQuote;
-          _figureImagePath = args.figureImagePath;
-          _quoteAnchor = args.quoteAnchor;
-        });
-      },
-    );
-  }
+  Future<void> _openFigure(String imagePath, String caption) =>
+      showFigureViewer(context, [
+        FigureView(path: imagePath, caption: caption),
+      ]);
 
   void _notifyFigurePolicy() {
-    final fast = DocumentChatService.isFastModel(_role, _model);
+    final fast = isFastModel(_role, _model);
     final images = ref
         .read(documentChatProvider(_documentId).notifier)
         .supportsImages(_role, model: _model);
@@ -311,7 +278,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
   /// 插件；无原生搜索且未配置外部搜索 的厂商（DeepSeek 等）提示去
   /// AI 设置配置所选服务的 Key，否则开关静默无效。
   void _maybeShowSearchHint() {
-    final state = DocumentChatService.resolveModelState(_role, _model);
+    final state = resolveModelState(_role, _model);
     // 按线上协议判定：xAI 已升格 Responses 线路、有原生搜索，不提示
     if (state == null ||
         state.provider.wireProtocol(state.effectiveBaseUrl) !=

@@ -1,5 +1,4 @@
 import '../core/storage/storage_activity.dart';
-import '../services/model_capability_store.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
@@ -9,28 +8,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:pdfrx/pdfrx.dart';
 import '../core/l10n.dart';
 import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../services/ai_settings_prompt.dart';
-import '../services/batch_extract_service.dart';
-import '../services/doc_extract_service.dart';
-import '../services/doc_extract_usage_service.dart';
-import '../services/document_structure.dart';
-import '../services/document_summary_image_service.dart';
-import '../services/image_generation_service.dart';
-import '../services/mineru_extract_service.dart';
-import '../services/mineru_result_converter.dart';
-import '../services/pdf_process_lock.dart';
+import '../core/otter_error_text.dart';
+import '../core/rust_backend.dart';
+import '../src/rust/api/ocr.dart';
+import '../src/rust/error.dart';
+import '../src/rust/ocr.dart';
+import '../core/rust_ai.dart';
+import '../src/rust/ai/summary.dart';
 import '../services/snackbar_service.dart';
 import '../utils/doc_paths.dart';
 import 'agent_api_provider.dart';
-import '../data/models/ocr/doc_extract_config.dart';
+import 'doc_extract_api_provider.dart';
 import 'task_activity_provider.dart' show taskActivityProvider;
 import 'document_lifecycle_provider.dart';
 import 'image_generation_config_provider.dart';
-import 'summary_image_provider.dart';
 import 'task_runner.dart';
 import 'translation_config_provider.dart';
 import '../core/app_logger.dart';
@@ -153,12 +148,12 @@ class DocumentTaskNotifier
     }
   }
 
+  /// 提取单篇文献；成功返回 Rust 发布的 generation，取消或失败返回 null。
   Future<String?> extractDocument({
     required String documentId,
-    required String filePath,
     required String title,
     required DocExtractApiState apiState,
-    void Function(String mdPath, String markdownContent)? onSuccess,
+    void Function()? onSuccess,
     bool showProgressSnackBar = true,
     bool showBusySnackBar = true,
     bool showResultSnackBar = true,
@@ -166,8 +161,21 @@ class DocumentTaskNotifier
     if (!await AiSettingsPrompt.ensureExtractConfigured(apiState: apiState)) {
       return null;
     }
+    final file = File(DocPaths.pdf(documentId));
+    final maxBytes = apiState.provider.maxFileSizeMB * 1024 * 1024;
+    if (!file.existsSync() || file.lengthSync() > maxBytes) {
+      _snackBar.showResult(
+        message: !file.existsSync()
+            ? _l10n?.pdfNotFound ?? 'PDF 文件不存在'
+            : _l10n?.extractFileTooLargeSingle(
+                    apiState.provider.maxFileSizeMB,
+                  ) ??
+                  '文件超过 ${apiState.provider.maxFileSizeMB}MB 大小限制',
+      );
+      return null;
+    }
 
-    final result = await _enqueue<String>(
+    return _enqueue<String>(
       key: DocumentTaskKey(
         type: DocumentTaskType.extractDocument,
         documentId: documentId,
@@ -181,149 +189,77 @@ class DocumentTaskNotifier
       showResultSnackBar: showResultSnackBar,
       cancelledMessage: _l10n?.extractionCancelled ?? '已取消提取',
       body: (token, progress) async {
-        final pageCount = await _preflightExtractFile(
-          filePath,
-          apiState.provider,
-        );
-        if (apiState.provider == DocExtractProvider.mineru) {
-          final converted = await _extractViaMinerU(
-            filePath: filePath,
-            title: title,
-            apiState: apiState,
-            pageCount: pageCount,
-            cancelToken: token,
-            progress: progress,
-          );
-          onSuccess?.call(converted.mdPath, converted.processedMarkdown);
-          return converted.mdPath;
+        await for (final event in RustBackend.instance.extractDocument(
+          document: documentId,
+          provider: _extractionProvider(apiState),
+          taskId: rustTaskId('ocr', token),
+        )) {
+          switch (event) {
+            case ExtractionEvent_Progress(progress: final p):
+              progress(_extractionProgress(p, title));
+            case ExtractionEvent_Published(:final generation):
+              _ref.invalidate(extractionUsageProvider);
+              onSuccess?.call();
+              return generation;
+            case ExtractionEvent_Failed(:final error):
+              throw error;
+          }
         }
-
-        final extractResult = await _extractAsync(
-          filePath: filePath,
-          title: title,
-          apiState: apiState,
-          pageCount: pageCount,
-          cancelToken: token,
-          progress: progress,
+        throw const OtterError(
+          code: ErrorCode.cancelled,
+          detail: 'OCR stream ended',
         );
-        if (token.isCancelled) {
-          throw DioException(
-            requestOptions: RequestOptions(path: ''),
-            type: DioExceptionType.cancel,
-          );
-        }
-        progress(
-          ListenableProgress(
-            current: 0,
-            total: 0,
-            status: _l10n?.savingResult ?? '正在保存结果',
-          ),
-        );
-        final savedMdPath = await DocExtractService.instance.saveResult(
-          filePath,
-          extractResult,
-          token: apiState.apiKey,
-          title: title,
-        );
-        await _ref
-            .read(docExtractUsageProvider.notifier)
-            .record(DocExtractProvider.paddle, _paddlePageCount(extractResult));
-        onSuccess?.call(savedMdPath, extractResult.processedMarkdown ?? '');
-        return savedMdPath;
       },
       onSuccess: (_) => TaskFinish(
         message: _l10n?.extractionCompleteTitle(title) ?? '已提取「$title」',
         duration: const Duration(seconds: 6),
       ),
       onError: (e) {
-        if (e is DocExtractException) return TaskFinish.text(e.message);
-        if (e is BatchExtractException) return TaskFinish.text(e.message);
-        if (e is MinerUExtractException) return TaskFinish.text(e.message);
-        if (e is DioException) {
-          return TaskFinish.text(
-            _l10n?.networkError(e.message ?? '') ?? '网络错误：${e.message}',
-          );
-        }
-        return TaskFinish.text(
-          _l10n?.extractionFailedDetail('$e') ?? '提取失败: $e',
-        );
+        final l10n = _l10n;
+        if (l10n == null) return TaskFinish.text('$e');
+        return TaskFinish.text(l10n.extractionFailedDetail(errorText(l10n, e)));
       },
     );
-    return result;
   }
 
+  /// 批量提取：Rust 最多 4 篇并行，单篇失败不影响其余。
+  /// 返回 `documentId → generation`（null 表示未成功）。
   Future<Map<String, String?>> extractBatch({
     required List<BatchExtractItem> items,
     required DocExtractApiState apiState,
   }) async {
-    final cancelToken = CancelToken();
-    return StorageActivity.run(
-      () => _extractBatch(
-        items: items,
-        apiState: apiState,
-        cancelToken: cancelToken,
-      ),
-      cancel: () => cancelToken.cancel(),
-    );
-  }
-
-  Future<Map<String, String?>> _extractBatch({
-    required List<BatchExtractItem> items,
-    required DocExtractApiState apiState,
-    required CancelToken cancelToken,
-  }) async {
+    final none = {for (final item in items) item.documentId: null as String?};
     if (!await AiSettingsPrompt.ensureExtractConfigured(apiState: apiState)) {
-      return {for (final item in items) item.documentId: null};
+      return none;
     }
-
-    final pendingItems = items
+    final pending = items
         .where((item) => !hasActiveDocumentTask(item.documentId))
         .toList();
-    if (pendingItems.isEmpty) {
-      return {for (final item in items) item.documentId: null};
-    }
-
+    if (pending.isEmpty) return none;
     final provider = apiState.provider;
-
-    // 批量文件数上限（统一 ≤20），超限快速失败不进队列
-    if (pendingItems.length > provider.maxBatchFiles) {
+    if (pending.length > provider.maxBatchFiles) {
       _snackBar.showResult(
         message:
             _l10n?.batchExtractTooManyFiles(provider.maxBatchFiles) ??
             '一次最多批量提取 ${provider.maxBatchFiles} 篇',
       );
-      return {for (final item in items) item.documentId: null};
+      return none;
     }
 
-    // 本地只拦文件大小。MinerU 超长 PDF 在服务里按页段拆；Paddle 页数交给服务商。
     final maxBytes = provider.maxFileSizeMB * 1024 * 1024;
     final runnable = <BatchExtractItem>[];
     var oversizedCount = 0;
-    final preflightErrors = <String, String>{};
-    for (final item in pendingItems) {
-      try {
-        final file = File(item.filePath);
-        if (!file.existsSync()) {
-          preflightErrors[item.documentId] = _l10n?.pdfNotFound ?? 'PDF 文件不存在';
-        } else if (file.lengthSync() > maxBytes) {
-          oversizedCount++;
-          preflightErrors[item.documentId] =
-              _l10n?.extractFileTooLargeSingle(provider.maxFileSizeMB) ??
-              '文件超过 ${provider.maxFileSizeMB}MB 大小限制';
-        } else {
-          runnable.add(item);
-        }
-      } on FileSystemException {
-        preflightErrors[item.documentId] = _l10n?.pdfNotFound ?? 'PDF 文件不存在';
+    final cancelToken = CancelToken();
+    for (final item in pending) {
+      final file = File(item.filePath);
+      final missing = !file.existsSync();
+      final oversized = !missing && file.lengthSync() > maxBytes;
+      if (!missing && !oversized) {
+        runnable.add(item);
+        continue;
       }
-    }
-    for (final item in pendingItems.where(
-      (item) => preflightErrors.containsKey(item.documentId),
-    )) {
-      final key = DocumentTaskKey(
-        type: DocumentTaskType.extractDocument,
-        documentId: item.documentId,
-      );
+      if (oversized) oversizedCount++;
+      final key = _extractKey(item.documentId);
       state = {
         ...state,
         key: DocumentTaskInfo(
@@ -331,8 +267,11 @@ class DocumentTaskNotifier
           title: item.title,
           status: DocumentTaskStatus.failed,
           progress: const ListenableProgress(current: 0, total: 0, status: ''),
-          cancelToken: CancelToken(),
-          error: preflightErrors[item.documentId],
+          cancelToken: cancelToken,
+          error: missing
+              ? _l10n?.pdfNotFound ?? 'PDF 文件不存在'
+              : _l10n?.extractFileTooLargeSingle(provider.maxFileSizeMB) ??
+                    '文件超过 ${provider.maxFileSizeMB}MB 大小限制',
         ),
       };
     }
@@ -346,15 +285,11 @@ class DocumentTaskNotifier
             '$oversizedCount 篇超过 ${provider.maxFileSizeMB}MB 限制，已跳过',
       );
     }
-    if (runnable.isEmpty) {
-      return {for (final item in items) item.documentId: null};
-    }
+    if (runnable.isEmpty) return none;
 
+    final titles = {for (final item in runnable) item.documentId: item.title};
     for (final item in runnable) {
-      final key = DocumentTaskKey(
-        type: DocumentTaskType.extractDocument,
-        documentId: item.documentId,
-      );
+      final key = _extractKey(item.documentId);
       state = {
         ...state,
         key: DocumentTaskInfo(
@@ -371,287 +306,116 @@ class DocumentTaskNotifier
       };
     }
 
-    // 提交阶段显示正在提交的篇名；全部提交后服务端轮询期间 currentTitle 为空，
-    // 改显示「批量提取中」，避免 snackbar 只剩计数没有文字。
-    String stage(String? submittingTitle) => submittingTitle != null
-        ? _l10n?.submittingTaskTitle(submittingTitle) ??
-              '正在提交任务 · $submittingTitle'
-        : _l10n?.batchExtracting ?? '正在批量提取';
-
     final activity = _ref.read(taskActivityProvider.notifier);
-    final batchProgress = ValueNotifier<ListenableProgress>(
+    final batchProgress = ValueNotifier(
       ListenableProgress(
         current: 0,
         total: runnable.length,
-        status: stage(runnable.first.title),
+        status: _l10n?.batchExtracting ?? '正在批量提取',
       ),
     );
     final activityId = activity.report(
       progress: batchProgress,
       title: runnable.first.title,
-      onCancel: () => cancelToken.cancel(),
+      onCancel: cancelToken.cancel,
     );
-    void updateProgress(BatchExtractProgress progress) {
-      final pending = progress.statuses.where(
-        (s) => s.state == BatchJobState.pending,
-      );
+    final results = Map.of(none);
+    var settled = 0;
+    void settle(
+      String id,
+      DocumentTaskStatus status, {
+      Object? error,
+      String? generation,
+    }) {
+      final key = _extractKey(id);
+      if (state[key]?.isActive != true) return;
+      _finishTask(key, status, error: error, result: generation);
+      settled++;
       batchProgress.value = ListenableProgress(
-        current: progress.completed,
-        total: progress.total,
-        status: stage(pending.isEmpty ? null : pending.first.title),
+        current: settled,
+        total: runnable.length,
+        status: _l10n?.batchExtracting ?? '正在批量提取',
       );
     }
 
     try {
-      final batchResults = provider == DocExtractProvider.mineru
-          ? await MinerUExtractService.instance.extractBatch(
-              items: runnable,
-              apiKey: apiState.apiKey,
-              state: apiState,
-              cancelToken: cancelToken,
-              onJobUpdate: _onBatchJobUpdate,
-              onProgress: updateProgress,
-            )
-          : await BatchExtractService.instance.extractBatch(
-              items: runnable,
-              token: apiState.apiKey,
-              state: apiState,
-              cancelToken: cancelToken,
-              onJobUpdate: _onBatchJobUpdate,
-              onProgress: updateProgress,
-            );
-      final results = <String, String?>{
-        for (final item in items) item.documentId: null,
-        ...batchResults,
-      };
-      await _recordBatchUsage(provider, runnable, batchResults);
-      for (final item in runnable) {
-        final key = DocumentTaskKey(
-          type: DocumentTaskType.extractDocument,
-          documentId: item.documentId,
-        );
-        if (state[key]?.isActive == true) {
-          _finishTask(
-            key,
-            cancelToken.isCancelled
-                ? DocumentTaskStatus.cancelled
-                : batchResults[item.documentId] != null
-                ? DocumentTaskStatus.completed
-                : DocumentTaskStatus.failed,
-          );
+      await for (final event in RustBackend.instance.extractDocuments(
+        documents: [for (final item in runnable) item.documentId],
+        provider: _extractionProvider(apiState),
+        taskId: rustTaskId('ocr-batch', cancelToken),
+      )) {
+        switch (event) {
+          case ExtractionBatchEvent_Document(:final documentId, event: final e):
+            switch (e) {
+              case ExtractionEvent_Progress(progress: final p):
+                _updateTask(
+                  _extractKey(documentId),
+                  status: DocumentTaskStatus.running,
+                  progress: _extractionProgress(p, titles[documentId] ?? ''),
+                );
+              case ExtractionEvent_Published(:final generation):
+                results[documentId] = generation;
+                settle(
+                  documentId,
+                  DocumentTaskStatus.completed,
+                  generation: generation,
+                );
+              case ExtractionEvent_Failed(:final error):
+                settle(documentId, DocumentTaskStatus.failed, error: error);
+            }
+          case ExtractionBatchEvent_Completed():
+            break;
+          case ExtractionBatchEvent_Failed(:final error):
+            throw error;
         }
       }
-      return results;
     } catch (e) {
-      log.w('[DocumentTask] 批量提取失败', error: e);
+      if (!isCancellation(e)) log.w('[DocumentTask] 批量提取失败', error: e);
       for (final item in runnable) {
-        final key = DocumentTaskKey(
-          type: DocumentTaskType.extractDocument,
-          documentId: item.documentId,
+        settle(
+          item.documentId,
+          cancelToken.isCancelled || isCancellation(e)
+              ? DocumentTaskStatus.cancelled
+              : DocumentTaskStatus.failed,
+          error: e,
         );
-        if (state[key]?.isActive == true) {
-          _finishTask(
-            key,
-            cancelToken.isCancelled
-                ? DocumentTaskStatus.cancelled
-                : DocumentTaskStatus.failed,
-            error: e,
-          );
-        }
       }
-      return {for (final item in items) item.documentId: null};
     } finally {
+      // Rust 不为取消的文献单独发事件。
+      for (final item in runnable) {
+        settle(item.documentId, DocumentTaskStatus.cancelled);
+      }
+      _ref.invalidate(extractionUsageProvider);
       activity.finish(activityId);
       batchProgress.dispose();
     }
+    return results;
   }
 
-  // ─── 提取分派辅助 ──────────────────────────────────────────────────────────
+  DocumentTaskKey _extractKey(String documentId) => DocumentTaskKey(
+    type: DocumentTaskType.extractDocument,
+    documentId: documentId,
+  );
 
-  /// MinerU 单文件提取：申请上传 → 轮询 → 下载 zip → 转化落盘 + 用量记账。
-  Future<MinerUConversionResult> _extractViaMinerU({
-    required String filePath,
-    required String title,
-    required DocExtractApiState apiState,
-    required int? pageCount,
-    required CancelToken cancelToken,
-    required void Function(ListenableProgress) progress,
-  }) async {
-    final zipFile = await MinerUExtractService.instance.extractSingle(
-      filePath: filePath,
-      apiKey: apiState.apiKey,
-      state: apiState,
-      pageCount: pageCount,
-      onProgress: (status) {
-        if (cancelToken.isCancelled) return;
-        progress(
-          ListenableProgress(current: 0, total: 0, status: '$status · $title'),
-        );
-      },
-      cancelToken: cancelToken,
+  ListenableProgress _extractionProgress(Progress p, String title) {
+    final status = switch (p.stage) {
+      OcrStage.requestingUpload || OcrStage.uploading =>
+        _l10n?.submittingTaskTitle(title) ?? '正在提交任务 · $title',
+      OcrStage.queued => _l10n?.submittedWaitingTitle(title) ?? '等待处理 · $title',
+      OcrStage.running => _l10n?.extractingTitle(title) ?? '正在提取 · $title',
+      OcrStage.converting ||
+      OcrStage.downloading ||
+      OcrStage.completed => _l10n?.savingResult ?? '正在保存结果',
+    };
+    return ListenableProgress(
+      current: p.done.toInt(),
+      total: p.total.toInt(),
+      status: status,
     );
-    progress(
-      ListenableProgress(
-        current: 0,
-        total: 0,
-        status: _l10n?.savingResult ?? '正在保存结果',
-      ),
-    );
-    final converted = await MinerUResultConverter.instance.convert(
-      pdfPath: filePath,
-      zipFile: zipFile,
-      title: title,
-      cancelToken: cancelToken,
-    );
-    await _ref
-        .read(docExtractUsageProvider.notifier)
-        .record(DocExtractProvider.mineru, converted.pageCount);
-    return converted;
   }
 
-  /// 单文件提取预检：大小。页数超过单次上限时由各提取服务按页段拆开。
-  /// 返回本地读到的页数；读不到时为 null。
-  Future<int?> _preflightExtractFile(
-    String filePath,
-    DocExtractProvider provider,
-  ) async {
-    final file = File(filePath);
-    if (!file.existsSync()) {
-      throw const DocExtractException('PDF 文件不存在');
-    }
-    final maxBytes = provider.maxFileSizeMB * 1024 * 1024;
-    if (file.lengthSync() > maxBytes) {
-      throw DocExtractException(
-        _l10n?.extractFileTooLargeSingle(provider.maxFileSizeMB) ??
-            '文件超过 ${provider.maxFileSizeMB}MB 大小限制',
-      );
-    }
-    return _pdfPageCount(filePath);
-  }
-
-  /// 本地读取 PDF 页数；读不出来返回 null（不阻塞，交由服务商兜底）。
-  Future<int?> _pdfPageCount(String filePath) async {
-    try {
-      return await PdfProcessLock.instance.run(() async {
-        final doc = await PdfDocument.openFile(filePath);
-        try {
-          return doc.pages.length;
-        } finally {
-          doc.dispose();
-        }
-      });
-    } catch (e) {
-      log.d('[DocumentTask] 预检页数读取失败: $e');
-      return null;
-    }
-  }
-
-  /// PaddleOCR 提取结果的页数（用量记账）。
-  int _paddlePageCount(DocExtractResult result) {
-    final json = result.jsonContent;
-    if (json == null) return 0;
-    return DocumentStructure.parse(json).pages.length;
-  }
-
-  /// 批量提取成功条目的用量记账；页数从落盘 extract.json 读取（两提供商形状
-  /// 均被 DocumentStructure 消化）。
-  Future<void> _recordBatchUsage(
-    DocExtractProvider provider,
-    List<BatchExtractItem> items,
-    BatchExtractResults results,
-  ) async {
-    var totalPages = 0;
-    for (final item in items) {
-      if (results[item.documentId] == null) continue;
-      totalPages += (await DocumentStructure.load(
-        DocPaths.json(item.filePath),
-      )).pages.length;
-    }
-    if (totalPages > 0) {
-      await _ref
-          .read(docExtractUsageProvider.notifier)
-          .record(provider, totalPages);
-    }
-  }
-
-  void _onBatchJobUpdate(BatchJobStatus jobStatus) {
-    final key = DocumentTaskKey(
-      type: DocumentTaskType.extractDocument,
-      documentId: jobStatus.documentId,
-    );
-    final current = state[key];
-    if (current == null || !current.isActive) return;
-
-    switch (jobStatus.state) {
-      case BatchJobState.pending:
-        _updateTask(
-          key,
-          progress: ListenableProgress(
-            current: 0,
-            total: 0,
-            status:
-                _l10n?.waitingSubmitTitle(jobStatus.title) ??
-                '等待提交 · ${jobStatus.title}',
-          ),
-        );
-
-      case BatchJobState.submitted:
-        _updateTask(
-          key,
-          status: DocumentTaskStatus.running,
-          progress: ListenableProgress(
-            current: 0,
-            total: 0,
-            status:
-                _l10n?.submittedWaitingTitle(jobStatus.title) ??
-                '等待处理 · ${jobStatus.title}',
-          ),
-        );
-
-      case BatchJobState.running:
-        _updateTask(
-          key,
-          status: DocumentTaskStatus.running,
-          progress: ListenableProgress(
-            current: jobStatus.extractedPages,
-            total: jobStatus.totalPages,
-            status:
-                _l10n?.extractingTitle(jobStatus.title) ??
-                '正在提取 · ${jobStatus.title}',
-          ),
-        );
-
-      case BatchJobState.done:
-        if (jobStatus.savedPath != null) {
-          _finishTask(
-            key,
-            DocumentTaskStatus.completed,
-            result: jobStatus.savedPath,
-          );
-        } else {
-          _finishTask(
-            key,
-            DocumentTaskStatus.failed,
-            error: jobStatus.error ?? (_l10n?.saveResultFailed ?? '保存结果失败'),
-          );
-        }
-
-      case BatchJobState.failed:
-        _finishTask(
-          key,
-          DocumentTaskStatus.failed,
-          error: jobStatus.error ?? (_l10n?.extractionFailed ?? '提取失败'),
-        );
-
-      case BatchJobState.cancelled:
-        _finishTask(key, DocumentTaskStatus.cancelled);
-    }
-  }
-
-  Future<DocumentSummaryImageResult?> generateSummaryImage({
-    required Document document,
-    required void Function(String imagePath) onSuccess,
-  }) async {
+  /// 用生图模型生成文献总结图；成功返回图片路径。
+  Future<String?> generateSummaryImage({required Document document}) async {
     final imageRole = AgentApiNotifier.globalImageRole;
     if (!await AiSettingsPrompt.ensureImageModelSelected(
       imageRole: imageRole,
@@ -665,13 +429,18 @@ class DocumentTaskNotifier
     )) {
       return null;
     }
-
-    final summaryNotifier = _ref.read(
-      summaryImageProvider(document.id).notifier,
+    final model = modelSelection(
+      agentState,
+      agentState.imageModelId,
+      capability: _ref
+          .read(agentApiProvider)
+          .byId(agentState.id)
+          ?.modelCaps[agentState.imageModelId],
     );
-    summaryNotifier.start();
-
-    final result = await _enqueue<DocumentSummaryImageResult>(
+    if (model == null) return null;
+    final config = _ref.read(imageGenerationConfigProvider);
+    final language = _ref.read(translationConfigProvider).targetLanguage;
+    return _enqueue<String>(
       key: DocumentTaskKey(
         type: DocumentTaskType.generateSummaryImage,
         documentId: document.id,
@@ -685,68 +454,35 @@ class DocumentTaskNotifier
           '正在生成总结图: ${document.title}',
       busyMessage: _l10n?.taskInProgress ?? '该文献已有任务在进行，请稍候',
       showBusySnackBar: false,
-      showProgressSnackBar: false,
+      showProgressSnackBar: true,
       cancelledMessage: _l10n?.summaryCancelled ?? '已取消总结图生成',
       body: (token, progress) async {
-        progress(
-          ListenableProgress(
-            current: 0,
-            total: 0,
-            status: _l10n?.preparingContent ?? '正在整理文献内容',
+        final summary = await RustBackend.instance.generateSummary(
+          document: document.id,
+          model: model,
+          config: SummaryConfig(
+            prompt: config.prompt,
+            aspectRatio: config.aspectRatio,
+            fidelity: config.fidelity,
+            maxReferenceImages: BigInt.from(config.maxReferenceImages),
+            language: language,
           ),
+          taskId: rustTaskId('summary', token),
         );
-        final config = _ref.read(imageGenerationConfigProvider);
-        progress(
-          ListenableProgress(
-            current: 0,
-            total: 0,
-            status: _l10n?.requestingImageModel ?? '正在请求生图模型',
-          ),
-        );
-        final language = _ref.read(translationConfigProvider).targetLanguage;
-        return DocumentSummaryImageService.instance.generate(
-          document: document,
-          agentState: agentState,
-          config: config,
-          language: language,
-          cancelToken: token,
-          // 走完整能力链（手动覆写 > 远程表 > 兜底）：避免手动设为生图但远程表未
-          // 收录的模型在 ImageGenerationService 校验时被拒。
-          capability: _ref
-              .read(agentApiProvider)
-              .byId(agentState.id)
-              ?.capabilityFor(agentState.imageModelId!),
-        );
+        return summary.imagePath;
       },
-      onSuccess: (result) {
-        unawaited(FileImage(File(result.imagePath)).evict());
-        summaryNotifier.generated(result.imagePath);
-        onSuccess(result.imagePath);
+      onSuccess: (path) {
+        unawaited(FileImage(File(path)).evict());
         return TaskFinish.text(_l10n?.summaryGenerated ?? '已生成总结图');
       },
       onError: (e) {
-        summaryNotifier.finishWithoutImage();
-        if (e is DocumentSummaryImageException) {
-          return TaskFinish.text(e.message);
-        }
-        if (e is ImageGenerationException) {
-          return TaskFinish.text(e.message);
-        }
-        if (e is DioException) {
-          return TaskFinish.text(
-            _l10n?.networkError(e.message ?? '') ?? '网络错误：${e.message}',
-          );
-        }
+        final l10n = _l10n;
+        if (l10n == null) return TaskFinish.text('$e');
         return TaskFinish.text(
-          _l10n?.summaryGenerationFailed('$e') ?? '总结图生成失败: $e',
+          l10n.summaryGenerationFailed(errorText(l10n, e)),
         );
       },
     );
-    if (result == null &&
-        _ref.read(summaryImageProvider(document.id)).generating) {
-      summaryNotifier.finishWithoutImage();
-    }
-    return result;
   }
 
   /// 重新从公网拉取 PDF（复用「通过标识符添加」的 DOI 下载链路）。
@@ -1041,34 +777,52 @@ class DocumentTaskNotifier
   }) {
     _updateTask(key, status: status, error: error, result: result);
   }
-
-  Future<DocExtractResult> _extractAsync({
-    required String filePath,
-    required String title,
-    required DocExtractApiState apiState,
-    required int? pageCount,
-    required CancelToken cancelToken,
-    required void Function(ListenableProgress) progress,
-  }) async {
-    return await BatchExtractService.instance.extractSingle(
-      filePath: filePath,
-      token: apiState.apiKey,
-      state: apiState,
-      pageCount: pageCount,
-      onProgress: (status, extracted, total) {
-        if (cancelToken.isCancelled) return;
-        progress(
-          ListenableProgress(
-            current: extracted,
-            total: total,
-            status: '$status · $title',
-          ),
-        );
-      },
-      cancelToken: cancelToken,
-    );
-  }
 }
+
+/// 批量提取的一篇文献。
+class BatchExtractItem {
+  final String documentId;
+  final String filePath;
+  final String title;
+
+  const BatchExtractItem({
+    required this.documentId,
+    required this.filePath,
+    required this.title,
+  });
+}
+
+/// 设置中的提供商与选项转为 Rust 的提取参数；密钥由凭据注入，不随参数传递。
+ExtractionProvider _extractionProvider(DocExtractApiState s) =>
+    switch (s.provider) {
+      DocExtractProvider.paddle => ExtractionProvider.paddleJob(
+        jobUrl: 'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs',
+        options: PaddleOptions(
+          markdownIgnoreLabels: s.markdownIgnoreLabels,
+          useChartRecognition: s.useChartRecognition,
+          useDocOrientationClassify: s.useDocOrientationClassify,
+          useDocUnwarping: s.useDocUnwarping,
+          useSealRecognition: s.useSealRecognition,
+          useOcrForImageBlock: s.useOcrForImageBlock,
+          mergeTables: s.mergeTables,
+          restructurePages: s.restructurePages,
+          layoutNms: s.layoutNms,
+          layoutShapeMode: s.layoutShapeMode,
+          repetitionPenalty: s.repetitionPenalty,
+          temperature: s.temperature,
+        ),
+      ),
+      DocExtractProvider.mineru => ExtractionProvider.mineru(
+        baseUrl: 'https://mineru.net/api/v4',
+        options: MineruOptions(
+          isOcr: s.mineruIsOcr,
+          enableFormula: s.mineruEnableFormula,
+          enableTable: s.mineruEnableTable,
+          language: s.mineruLanguage,
+          extraFormats: s.mineruExtraFormats,
+        ),
+      ),
+    };
 
 class _QueuedDocumentTask<T> {
   final DocumentTaskKey key;

@@ -7,19 +7,20 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/l10n.dart';
-import '../data/models/book/document.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
-import '../services/identifier_resolver.dart';
+import '../core/otter_error_text.dart';
+import '../core/rust_backend.dart';
+import '../core/rust_models.dart';
 import '../services/snackbar_service.dart';
-import '../services/zotero_item_mapper.dart';
-import '../services/zotero_sync_service.dart';
+import '../src/rust/api/zotero.dart';
+import '../src/rust/error.dart';
+import '../src/rust/sync/zotero/store.dart';
 import 'document_lifecycle_provider.dart';
 import 'documents_provider.dart';
 import 'task_runner.dart';
 import 'task_types.dart';
-import 'zotero_sync_provider.dart';
-import 'zotero_local_import_provider.dart';
+import 'zotero_local_errors.dart';
 
 // 对外 re-export：外部只 import 'task_provider.dart' 即可拿到 TaskType/TaskStatus
 export 'task_types.dart' show TaskType, TaskStatus, TaskInfo;
@@ -99,7 +100,9 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ListenableProgress(
               current: i + 1,
               total: paths.length,
-              status: _l10n?.importingFile(p.basename(paths[i])) ?? '正在导入 · ${p.basename(paths[i])}',
+              status:
+                  _l10n?.importingFile(p.basename(paths[i])) ??
+                  '正在导入 · ${p.basename(paths[i])}',
             ),
           );
 
@@ -132,7 +135,8 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
   Future<void> addByIdentifier(String identifier) async {
     await runTask<(dynamic, AddByIdentifierResult)>(
       type: TaskType.addByIdentifier,
-      initialStatus: _l10n?.resolvingIdentifier(identifier) ?? '正在解析标识符 · $identifier',
+      initialStatus:
+          _l10n?.resolvingIdentifier(identifier) ?? '正在解析标识符 · $identifier',
       busyMessage: _l10n?.resolvingIdentifierBusy ?? '正在解析标识符，请稍候',
       // 元数据解析完进入 PDF 下载阶段，状态文案随之推进。
       body: (token, progress) => _lifecycle.createByIdentifier(
@@ -157,7 +161,9 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         if (doc.contentHash == null) {
           return TaskFinish(
             tone: SnackTone.info,
-            message: _l10n?.addedDocumentNoPdf(doc.title) ?? '已添加「${doc.title}」，但未获取到关联 PDF',
+            message:
+                _l10n?.addedDocumentNoPdf(doc.title) ??
+                '已添加「${doc.title}」，但未获取到关联 PDF',
             duration: const Duration(seconds: 6),
             action: SnackBarAction(
               label: _l10n?.goAdd ?? '去添加',
@@ -165,12 +171,17 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ),
           );
         }
-        return TaskFinish.text(_l10n?.addedDocumentTitle(doc.title) ?? '已添加「${doc.title}」');
+        return TaskFinish.text(
+          _l10n?.addedDocumentTitle(doc.title) ?? '已添加「${doc.title}」',
+        );
       },
       onError: (e) {
-        if (e is IdentifierResolveException) return TaskFinish.text(e.message);
-        if (e is DioException) return TaskFinish.text(_l10n?.networkRequestFailedRetry ?? '网络请求失败，请稍后重试');
-        return TaskFinish.text(_l10n?.addFailedError('$e') ?? '添加失败：$e');
+        final l10n = _l10n;
+        if (l10n == null) return TaskFinish.text('$e');
+        if (e is OtterError && e.code == ErrorCode.network) {
+          return TaskFinish.text(l10n.networkRequestFailedRetry);
+        }
+        return TaskFinish.text(l10n.addFailedError(errorText(l10n, e)));
       },
     );
   }
@@ -200,9 +211,8 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
               );
             },
           );
-        } on DioException {
-          // CancelToken 取消时 Dio 会抛异常，取消情况下静默返回 null
-          if (token.isCancelled) return null;
+        } catch (e) {
+          if (token.isCancelled && isCancellation(e)) return null;
           rethrow;
         }
       },
@@ -210,16 +220,35 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
         var message = _l10n?.rebuildComplete ?? '文库重构完成';
         if (result != null) {
           final parts = <String>[];
-          if (result.addedCount > 0) parts.add(_l10n?.rebuildAdded(result.addedCount) ?? '新增 ${result.addedCount} 篇');
-          if (result.removedCount > 0) parts.add(_l10n?.rebuildRemoved(result.removedCount) ?? '清理 ${result.removedCount} 篇');
+          if (result.addedCount > 0) {
+            parts.add(
+              _l10n?.rebuildAdded(result.addedCount) ??
+                  '新增 ${result.addedCount} 篇',
+            );
+          }
+          if (result.removedCount > 0) {
+            parts.add(
+              _l10n?.rebuildRemoved(result.removedCount) ??
+                  '清理 ${result.removedCount} 篇',
+            );
+          }
           if (result.repairedCount > 0) {
-            parts.add(_l10n?.rebuildRepaired(result.repairedCount) ?? '修复元数据 ${result.repairedCount} 篇');
+            parts.add(
+              _l10n?.rebuildRepaired(result.repairedCount) ??
+                  '修复元数据 ${result.repairedCount} 篇',
+            );
           }
           if (result.unresolvedCount > 0) {
-            parts.add(_l10n?.rebuildUnresolved(result.unresolvedCount) ?? '仍有 ${result.unresolvedCount} 篇待补全元数据');
+            parts.add(
+              _l10n?.rebuildUnresolved(result.unresolvedCount) ??
+                  '仍有 ${result.unresolvedCount} 篇待补全元数据',
+            );
           }
           if (result.noFileCount > 0) {
-            parts.add(_l10n?.rebuildNoFile(result.noFileCount) ?? '${result.noFileCount} 个无文件条目');
+            parts.add(
+              _l10n?.rebuildNoFile(result.noFileCount) ??
+                  '${result.noFileCount} 个无文件条目',
+            );
           }
           if (parts.isEmpty) {
             message += _l10n?.rebuildNormal ?? '，文库状态正常';
@@ -243,13 +272,12 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
       busyMessage: _l10n?.zoteroSyncInProgress ?? '正在同步 Zotero，请稍候',
       cancelledMessage: _l10n?.zoteroSyncCancelled ?? '已取消 Zotero 同步',
       body: (token, progress) async {
-        if (fullResync) await ZoteroSyncStore.clear();
-
-        final result = await ZoteroSyncService.instance.fetchTopItems(
-          apiKey: apiKey,
-          sinceVersion: ZoteroSyncStore.libraryVersion,
-          cancelToken: token,
-          onProgress: (fetched, total) => progress(
+        final report = await _zoteroReport(
+          RustBackend.instance.syncZotero(
+            full: fullResync,
+            taskId: rustTaskId('zotero', token),
+          ),
+          (fetched, total) => progress(
             ListenableProgress(
               current: fetched,
               total: total,
@@ -257,69 +285,92 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
             ),
           ),
         );
-
-        progress(
-          ListenableProgress(current: 0, total: 0, status: _l10n?.importingDocuments ?? '正在导入文献'),
-        );
-
-        // 跳过已导入的 zoteroKey 与非文献条目，映射出待导入的 Document。
-        final docs = <Document>[];
-        final keys = <String>[];
-        final versions = <int>[];
-        for (final item in result.items) {
-          final key = item['key'] as String?;
-          if (key == null || ZoteroSyncStore.hasItem(key)) continue;
-          final doc = ZoteroItemMapper.toDocument(item);
-          if (doc == null) continue;
-          docs.add(doc);
-          keys.add(key);
-          versions.add((item['version'] as num?)?.toInt() ?? 0);
-        }
-
-        final before = (_ref.read(documentsProvider).value ?? const [])
-            .map((d) => d.id)
-            .toSet();
-        final imported = await _lifecycle.importDocuments(docs);
-        for (var i = 0; i < imported.length; i++) {
-          await ZoteroSyncStore.recordItem(keys[i], imported[i].id, versions[i]);
-        }
-        await ZoteroSyncStore.setLibraryVersion(result.libraryVersion);
-        return imported.where((d) => !before.contains(d.id)).length;
+        return report.added.toInt();
       },
       onSuccess: (addedCount) => TaskFinish.text(
-        addedCount > 0 ? _l10n?.zoteroSyncCompleteAdded(addedCount) ?? 'Zotero 同步完成，新增 $addedCount 篇' : _l10n?.zoteroSyncCompleteNoNew ?? 'Zotero 同步完成，暂无新增条目',
+        addedCount > 0
+            ? _l10n?.zoteroSyncCompleteAdded(addedCount) ??
+                  'Zotero 同步完成，新增 $addedCount 篇'
+            : _l10n?.zoteroSyncCompleteNoNew ?? 'Zotero 同步完成，暂无新增条目',
       ),
       onError: (e) {
-        if (e is ZoteroSyncException) return TaskFinish.text(_l10n?.zoteroSyncFailed('$e') ?? 'Zotero 同步失败：$e');
-        if (e is DioException) return TaskFinish.text(_l10n?.zoteroSyncNetworkFailed ?? 'Zotero 同步失败：网络请求失败');
-        return TaskFinish.text(_l10n?.zoteroSyncFailed('$e') ?? 'Zotero 同步失败：$e');
+        final l10n = _l10n;
+        if (l10n == null) return TaskFinish.text('$e');
+        if (e is OtterError && e.code == ErrorCode.network) {
+          return TaskFinish.text(l10n.zoteroSyncNetworkFailed);
+        }
+        return TaskFinish.text(l10n.zoteroSyncFailed(errorText(l10n, e)));
       },
     );
   }
 
-  // ── 消息格式化 ──
-
-  Future<ZoteroLocalImportResult?> importLocalZotero({
-    required ZoteroLocalLibrary library,
-    required String source,
-    required List<ZoteroImportCandidate> candidates,
-    required Map<String, String?> attachments,
-  }) => runTask<ZoteroLocalImportResult>(
+  /// 本地 Zotero 导入；[selections] 为条目与所选 PDF 附件。
+  Future<ImportReport?> importLocalZotero({
+    required LocalZoteroSnapshot snapshot,
+    required String? directory,
+    required List<LocalSelection> selections,
+  }) => runTask<ImportReport>(
     type: TaskType.zoteroSync,
     initialStatus: _l10n?.importingDocuments ?? '',
     busyMessage: _l10n?.zoteroSyncInProgress,
     cancelledMessage: _l10n?.zoteroSyncCancelled,
-    body: (token, progress) => _ref.read(zoteroLocalImportProvider).run(
-      library: library, source: source, candidates: candidates,
-      attachments: attachments, cancelToken: token,
-      onProgress: (done, total) => progress(ListenableProgress(
-        current: done, total: total, status: _l10n?.importingDocuments ?? '',
-      )),
+    body: (token, progress) => _zoteroReport(
+      RustBackend.instance.importLocalZotero(
+        snapshot: snapshot,
+        directory: directory,
+        selections: selections,
+        taskId: rustTaskId('zotero-local', token),
+      ),
+      (done, total) => progress(
+        ListenableProgress(
+          current: done,
+          total: total,
+          status: _l10n?.importingDocuments ?? '',
+        ),
+      ),
     ),
-    onSuccess: (r) => TaskFinish(message: _l10n?.zoteroLocalResult(
-      r.added, r.updated, r.copied, r.missing, r.kept, r.failedTitles.length)),
-    onError: (e) => TaskFinish(message: _l10n == null ? null : zoteroLocalErrorMessage(_l10n!, e)),
+    onSuccess: (r) => TaskFinish(
+      message: _l10n?.zoteroLocalResult(
+        r.added.toInt(),
+        r.updated.toInt(),
+        r.copied.toInt(),
+        r.missing.toInt(),
+        r.kept.toInt(),
+        r.failedKeys.length,
+      ),
+    ),
+    onError: (e) => TaskFinish(
+      message: _l10n == null ? null : zoteroLocalErrorMessage(_l10n!, e),
+    ),
   );
+
+  /// 等待 Zotero 导入流结束并刷新文库。
+  Future<ImportReport> _zoteroReport(
+    Stream<ZoteroEvent> events,
+    void Function(int done, int total) onProgress,
+  ) async {
+    try {
+      await for (final event in events) {
+        switch (event) {
+          case ZoteroEvent_Progress(:final progress):
+            onProgress(progress.fetched.toInt(), progress.total?.toInt() ?? 0);
+          case ZoteroEvent_Imported(:final report):
+            return report;
+          case ZoteroEvent_Failed(:final error):
+            throw error;
+          case ZoteroEvent_LocalReady():
+        }
+      }
+      throw const OtterError(
+        code: ErrorCode.cancelled,
+        detail: 'zotero stream ended',
+      );
+    } finally {
+      bumpLibrary(_ref);
+    }
+  }
+
+  // ── 消息格式化 ──
 
   String _buildAddFileMessage({
     required bool cancelled,
@@ -338,12 +389,24 @@ class TaskNotifier extends StateNotifier<Map<TaskType, TaskInfo>>
     }
 
     final parts = <String>[];
-    if (importedCount > 0) parts.add(_l10n?.importedCountPart(importedCount) ?? '导入 $importedCount 篇');
-    if (duplicateCount > 0) parts.add(_l10n?.duplicateCountPart(duplicateCount) ?? '重复 $duplicateCount 篇');
-    if (parts.isEmpty) {
-      return cancelled ? _l10n?.importCancelledLabel ?? '已取消导入' : _l10n?.noFilesImported ?? '未导入任何文件';
+    if (importedCount > 0) {
+      parts.add(
+        _l10n?.importedCountPart(importedCount) ?? '导入 $importedCount 篇',
+      );
     }
-    final prefix = cancelled ? _l10n?.importCancelledLabel ?? '已取消导入' : _l10n?.importCompleteLabel ?? '导入完成';
+    if (duplicateCount > 0) {
+      parts.add(
+        _l10n?.duplicateCountPart(duplicateCount) ?? '重复 $duplicateCount 篇',
+      );
+    }
+    if (parts.isEmpty) {
+      return cancelled
+          ? _l10n?.importCancelledLabel ?? '已取消导入'
+          : _l10n?.noFilesImported ?? '未导入任何文件';
+    }
+    final prefix = cancelled
+        ? _l10n?.importCancelledLabel ?? '已取消导入'
+        : _l10n?.importCompleteLabel ?? '导入完成';
     return '$prefix，${parts.join('，')}';
   }
 }

@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+
+import '../../core/otter_error_text.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/elevation.dart';
@@ -31,7 +32,7 @@ typedef AgentAddModelCallback =
 Future<void> showAgentModelManageSheet({
   required BuildContext context,
   required String baseUrl,
-  required String apiKey,
+  required String instanceId,
   required AgentApiProvider providerType,
   required String providerLabel,
   required List<String> addedModels,
@@ -43,7 +44,7 @@ Future<void> showAgentModelManageSheet({
 }) {
   final content = _ModelManageSheet(
     baseUrl: baseUrl,
-    apiKey: apiKey,
+    instanceId: instanceId,
     providerType: providerType,
     providerLabel: providerLabel,
     addedModels: addedModels,
@@ -67,7 +68,7 @@ Future<void> showAgentModelManageSheet({
 
 class _ModelManageSheet extends StatefulWidget {
   final String baseUrl;
-  final String apiKey;
+  final String instanceId;
   final AgentApiProvider providerType;
   final String providerLabel;
   final List<String> addedModels;
@@ -80,7 +81,7 @@ class _ModelManageSheet extends StatefulWidget {
 
   const _ModelManageSheet({
     required this.baseUrl,
-    required this.apiKey,
+    required this.instanceId,
     required this.providerType,
     required this.providerLabel,
     required this.addedModels,
@@ -128,19 +129,17 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       final list = await fetchAvailableModels(
         provider: widget.providerType,
         baseUrl: widget.baseUrl,
-        apiKey: widget.apiKey,
+        instanceId: widget.instanceId,
       );
       if (mounted) setState(() => _models = list);
-    } on DioException catch (e) {
-      // 透出真实失败原因（401 / 404 无该端点 / 网络错误），便于区分排查
+    } catch (e) {
+      // 透出失败原因（认证、网络等），便于区分排查
       if (mounted) {
         setState(
           () => _error =
-              '${context.l10n.fetchModelsFailed}\n${describeDioError(e)}',
+              '${context.l10n.fetchModelsFailed}\n${errorText(context.l10n, e)}',
         );
       }
-    } catch (_) {
-      if (mounted) setState(() => _error = context.l10n.fetchModelsFailed);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -277,7 +276,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: AppShadows.sheet,
+          boxShadow: AppShadows.sheet,
         ),
         child: column,
       ),

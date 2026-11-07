@@ -6603,6 +6603,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to open app data ({code})'**
   String dataStartFailed(String code);
+
+  /// No description provided for @otterErrorInvalidArgument.
+  ///
+  /// In en, this message translates to:
+  /// **'The request is invalid. Check the input and try again.'**
+  String get otterErrorInvalidArgument;
+
+  /// No description provided for @otterErrorInvalidData.
+  ///
+  /// In en, this message translates to:
+  /// **'The data is damaged or in an unsupported format.'**
+  String get otterErrorInvalidData;
+
+  /// No description provided for @otterErrorIo.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read or write local files.'**
+  String get otterErrorIo;
+
+  /// No description provided for @otterErrorDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'The library database could not be updated.'**
+  String get otterErrorDatabase;
+
+  /// No description provided for @otterErrorConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'The data changed meanwhile. Please try again.'**
+  String get otterErrorConflict;
+
+  /// No description provided for @otterErrorUnsupportedDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'This library was created by a newer version of OtterPad.'**
+  String get otterErrorUnsupportedDatabase;
+
+  /// No description provided for @otterErrorCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get otterErrorCancelled;
+
+  /// No description provided for @otterErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Network request failed. Check the connection and try again.'**
+  String get otterErrorNetwork;
+
+  /// No description provided for @otterErrorAuthentication.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed. Check the API key or account.'**
+  String get otterErrorAuthentication;
+
+  /// No description provided for @otterErrorRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests. Please wait and try again.'**
+  String get otterErrorRateLimited;
+
+  /// No description provided for @otterErrorQuotaExceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'The service quota is used up.'**
+  String get otterErrorQuotaExceeded;
+
+  /// No description provided for @otterErrorRemote.
+  ///
+  /// In en, this message translates to:
+  /// **'The service returned an error.'**
+  String get otterErrorRemote;
+
+  /// No description provided for @otterErrorNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Not found'**
+  String get otterErrorNotFound;
+
+  /// No description provided for @otterErrorUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This operation is not supported.'**
+  String get otterErrorUnsupported;
+
+  /// No description provided for @otterErrorPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'The PDF could not be opened.'**
+  String get otterErrorPdf;
+
+  /// No description provided for @otterErrorLayoutOverflow.
+  ///
+  /// In en, this message translates to:
+  /// **'The text does not fit in the available space.'**
+  String get otterErrorLayoutOverflow;
+
+  /// No description provided for @otterErrorRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'The model refused the request.'**
+  String get otterErrorRefused;
+
+  /// No description provided for @otterErrorIncompleteResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'The response was cut off. Please try again.'**
+  String get otterErrorIncompleteResponse;
+
+  /// No description provided for @otterErrorToolLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'The tool call limit was reached.'**
+  String get otterErrorToolLimit;
+
+  /// No description provided for @readerOutlineEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No headings in this document'**
+  String get readerOutlineEmpty;
 }
 
 class _AppLocalizationsDelegate

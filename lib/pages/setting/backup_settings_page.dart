@@ -12,9 +12,11 @@ import '../../providers/backup_orchestrator.dart';
 import '../../providers/backup_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/zotero_sync_provider.dart';
-import '../../services/backup_merge_service.dart';
-import '../../services/backup_restore_service.dart';
-import '../../services/backup_s3_service.dart';
+import '../../core/otter_error_text.dart';
+import '../../core/rust_backend.dart';
+import '../../src/rust/api/backup.dart';
+import '../../src/rust/sync/archive.dart';
+import '../../src/rust/sync/backup.dart';
 import '../../services/haptics.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/backup_scope_dialog.dart';
@@ -23,7 +25,6 @@ import '../../services/snackbar_service.dart';
 import '../../services/storage_usage_service.dart';
 import '../../utils/debounced_action.dart';
 import '../../core/l10n.dart';
-import '../../core/storage/storage_exception.dart';
 import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
@@ -306,7 +307,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   Widget _buildZoteroGroup(BuildContext context, ZoteroSyncState zotero) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final importedCount = ZoteroSyncStore.importedCount;
+    final importedCount = ref.watch(zoteroImportedCountProvider).value ?? 0;
 
     return SettingGroup(
       title: context.l10n.zoteroSync,
@@ -644,12 +645,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     BackupS3State s3,
     BackupWebDavState webDav,
   ) async {
+    final config = ref.read(backupOrchestratorProvider).remote;
+    if (config == null) return false;
     try {
-      if (remoteType == BackupRemoteType.s3) {
-        await BackupS3Service.instance.ping(s3);
-      } else {
-        await createBackupWebDavClient(webDav).ping();
-      }
+      await RustBackend.instance.checkBackupRemote(
+        config: config,
+        taskId: rustTaskId('backup-ping'),
+      );
       return true;
     } catch (_) {
       return false;
@@ -687,41 +689,35 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
   Future<void> _exportBackupToLocal() async {
     final scope = await showBackupScopeDialog(context);
     if (scope == null || !mounted) return;
-    String? tempArchivePath;
-
+    final targetPath = await FilePicker.platform.saveFile(
+      dialogTitle: context.l10n.saveBackupFile,
+      fileName: _backupFileName(),
+      type: FileType.custom,
+      allowedExtensions: const ['zip'],
+      lockParentWindow: true,
+    );
+    if (targetPath == null || !mounted) return;
     try {
       await _runBusy(context.l10n.generatingLocalBackup, () async {
-        tempArchivePath = await BackupRestoreService.createBackupArchive(
-          scope: scope,
-        );
+        await ref.read(backupOrchestratorProvider).exportTo(targetPath, scope);
       });
-      if (!mounted || tempArchivePath == null) return;
-
-      final targetPath = await FilePicker.platform.saveFile(
-        dialogTitle: context.l10n.saveBackupFile,
-        fileName: BackupRestoreService.buildBackupFileName(),
-        type: FileType.custom,
-        allowedExtensions: const ['zip'],
-        lockParentWindow: true,
-      );
-      if (targetPath == null) return;
-
-      final targetFile = File(targetPath);
-      if (await targetFile.exists()) {
-        await targetFile.delete();
-      }
-      await File(tempArchivePath!).copy(targetFile.path);
       if (!mounted) return;
-      _showMessage(context.l10n.backupExportedTo(targetFile.path));
+      _showMessage(context.l10n.backupExportedTo(targetPath));
     } catch (e) {
       if (!mounted) return;
       _showMessage(
         context.l10n.exportBackupFailed(_formatError(e)),
         tone: SnackTone.error,
       );
-    } finally {
-      await _deleteTempFile(tempArchivePath);
     }
+  }
+
+  /// 与 Rust 远端版本化备份同一命名：`otter_pad_backup_YYYYMMDD_HHMMSS.zip`。
+  static String _backupFileName() {
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return 'otter_pad_backup_${now.year}${two(now.month)}${two(now.day)}'
+        '_${two(now.hour)}${two(now.minute)}${two(now.second)}.zip';
   }
 
   Future<void> _restoreFromLocal() async {
@@ -820,13 +816,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
 
   /// 恢复链（排空任务 → 恢复 → provider 刷新）在 [BackupOrchestrator]；
   /// 页面只负责忙态遮罩与恢复后的页面级状态刷新。
-  Future<MergeResult?> _restoreArchive({
+  Future<RestoreReport?> _restoreArchive({
     required String archivePath,
-    required BackupRestoreScope scope,
+    required RestoreScope scope,
     required String busyText,
     RestoreMode mode = RestoreMode.overwrite,
   }) async {
-    MergeResult? mergeResult;
+    RestoreReport? mergeResult;
     await _runBusy(busyText, () async {
       mergeResult = await ref
           .read(backupOrchestratorProvider)
@@ -842,7 +838,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
 
   void _showRestoreMessage(
     RestoreMode mode,
-    MergeResult? result, {
+    RestoreReport? result, {
     bool remote = false,
   }) {
     final l10n = context.l10n;
@@ -851,22 +847,27 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       _showMessage(l10n.restoreCompleteRefreshed(prefix));
       return;
     }
-    if (!result.hasChanges) {
+    final changed =
+        result.documentsAdded +
+        result.highlightsAdded +
+        result.filesCopied +
+        result.settingsAdded;
+    if (changed == BigInt.zero) {
       _showMessage(l10n.mergeCompleteUpToDate(prefix));
       return;
     }
     final parts = <String>[];
-    if (result.documentsAdded > 0) {
-      parts.add(l10n.mergeDocumentsAdded(result.documentsAdded));
+    if (result.documentsAdded > BigInt.zero) {
+      parts.add(l10n.mergeDocumentsAdded(result.documentsAdded.toInt()));
     }
-    if (result.highlightsAdded > 0) {
-      parts.add(l10n.mergeHighlightsAdded(result.highlightsAdded));
+    if (result.highlightsAdded > BigInt.zero) {
+      parts.add(l10n.mergeHighlightsAdded(result.highlightsAdded.toInt()));
     }
-    if (result.filesCopied > 0) {
-      parts.add(l10n.mergeFilesCopied(result.filesCopied));
+    if (result.filesCopied > BigInt.zero) {
+      parts.add(l10n.mergeFilesCopied(result.filesCopied.toInt()));
     }
-    if (result.settingsAdded > 0) {
-      parts.add(l10n.mergeSettingsAdded(result.settingsAdded));
+    if (result.settingsAdded > BigInt.zero) {
+      parts.add(l10n.mergeSettingsAdded(result.settingsAdded.toInt()));
     }
     _showMessage(l10n.mergeCompleteSummary(prefix, parts.join('、')));
   }
@@ -969,8 +970,8 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
 
   /// provider 级刷新已由 [BackupOrchestrator] 完成；这里只同步本页持有的
   /// 编辑态（Zotero Key 输入框、连通性测试缓存）。
-  void _refreshPageAfterRestore(BackupRestoreScope scope) {
-    if (!scope.restoreSettings || !mounted) return;
+  void _refreshPageAfterRestore(RestoreScope scope) {
+    if (scope == RestoreScope.libraryOnly || !mounted) return;
     _zoteroKeyCtrl.text = ref.read(zoteroSyncProvider).apiKey;
     setState(() {
       _pingFuture = null;
@@ -978,10 +979,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     });
   }
 
-  Future<(BackupRestoreScope, RestoreMode)?> _pickRestoreOptions() {
-    var scope = BackupRestoreScope.full;
+  Future<(RestoreScope, RestoreMode)?> _pickRestoreOptions() {
+    var scope = RestoreScope.full;
     var mode = RestoreMode.merge;
-    return showDialog<(BackupRestoreScope, RestoreMode)>(
+    return showDialog<(RestoreScope, RestoreMode)>(
       context: context,
       builder: (context) {
         final cs = Theme.of(context).colorScheme;
@@ -1032,7 +1033,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                     ),
                     const AppDivider.full(height: 24),
                     Text(context.l10n.restoreScope, style: ts.titleSmall),
-                    RadioGroup<BackupRestoreScope>(
+                    RadioGroup<RestoreScope>(
                       groupValue: scope,
                       onChanged: (value) {
                         if (value == null) return;
@@ -1041,25 +1042,25 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (final s in BackupRestoreScope.values)
-                            RadioListTile<BackupRestoreScope>(
+                          for (final s in RestoreScope.values)
+                            RadioListTile<RestoreScope>(
                               value: s,
                               activeColor: cs.primary,
                               contentPadding: EdgeInsets.zero,
                               title: Text(switch (s) {
-                                BackupRestoreScope.full =>
+                                RestoreScope.full =>
                                   context.l10n.restoreScopeFull,
-                                BackupRestoreScope.libraryOnly =>
+                                RestoreScope.libraryOnly =>
                                   context.l10n.restoreScopeLibrary,
-                                BackupRestoreScope.settingsOnly =>
+                                RestoreScope.settingsOnly =>
                                   context.l10n.restoreScopeSettings,
                               }),
                               subtitle: Text(switch (s) {
-                                BackupRestoreScope.full =>
+                                RestoreScope.full =>
                                   context.l10n.restoreScopeFullDescription,
-                                BackupRestoreScope.libraryOnly =>
+                                RestoreScope.libraryOnly =>
                                   context.l10n.restoreScopeLibraryDescription,
-                                BackupRestoreScope.settingsOnly =>
+                                RestoreScope.settingsOnly =>
                                   context.l10n.restoreScopeSettingsDescription,
                               }),
                             ),
@@ -1112,22 +1113,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     ref.read(snackBarServiceProvider).showResult(message: message, tone: tone);
   }
 
-  String _formatError(Object error) {
-    if (error is StorageException) {
-      return switch (error.reason) {
-        StorageFailure.invalidBackup => context.l10n.backupInvalidData,
-        StorageFailure.unsupportedBackup =>
-          context.l10n.backupUnsupportedVersion,
-        StorageFailure.pendingRestore => context.l10n.backupPendingRestore,
-        StorageFailure.activeTasks => context.l10n.backupActiveTasks,
-        StorageFailure.changedDuringBackup =>
-          context.l10n.backupChangedDuringCreation,
-        StorageFailure.operationInProgress =>
-          context.l10n.backupOperationInProgress,
-      };
-    }
-    return error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
-  }
+  String _formatError(Object error) => errorText(context.l10n, error);
 
   Future<void> _deleteTempFile(String? path) async {
     if (path == null) return;

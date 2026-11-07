@@ -17,7 +17,12 @@ import '../../../services/snackbar_service.dart';
 import '../../../core/l10n.dart';
 import '../../../services/translation_bidi.dart';
 import '../../../services/translation_highlight_parser.dart';
-import '../../../services/translation_service.dart';
+import '../../../core/otter_error_text.dart';
+import '../../../core/rust_ai.dart';
+import '../../../core/rust_backend.dart';
+import '../../../src/rust/api.dart' show cancelTask;
+import '../../../src/rust/api/translate.dart';
+import '../../../src/rust/error.dart';
 import '../../../widgets/tactile_press.dart';
 
 /// 打开一个流式翻译小窗口展示 [sourceText] 的译文。
@@ -75,6 +80,7 @@ class _TranslationPopup extends ConsumerStatefulWidget {
 
 class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
   StreamSubscription<String>? _sub;
+  String? _task;
   String _latest = '';
   Object? _error;
   bool _done = false;
@@ -115,14 +121,14 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
 
   String get _effectiveFullText => widget.fullText ?? widget.sourceText;
 
-  String get _errorText => '$_error'.replaceFirst('Exception: ', '');
+  String get _errorText =>
+      _error == null ? '' : errorText(context.l10n, _error!);
 
   ({String text, int? hlStart, int? hlEnd}) _parseTranslationHighlight() {
     return TranslationHighlightParser.parse(_latest, _hlSegmentIndex);
   }
 
   void _start() {
-    final agentState = ref.read(effectiveAgentApiProvider);
     final config = ref.read(translationConfigProvider);
 
     String textToTranslate = _effectiveFullText;
@@ -136,11 +142,23 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
       _hlSegmentIndex = segmented.hlSegmentIndex;
     }
 
-    final stream = TranslationService.translateStream(
-      text: textToTranslate,
-      agentState: agentState,
-      translationConfig: config,
-    );
+    final model = textModelSelection(ref.read(agentApiProvider));
+    final task = _task = rustTaskId('translate-selection');
+    final stream = model == null
+        ? Stream<String>.error(
+            const OtterError(code: ErrorCode.invalidArgument, detail: 'model'),
+          )
+        : _snapshots(
+            RustBackend.instance.translateSelection(
+              options: TranslateSelection(
+                text: textToTranslate,
+                model: model,
+                config: translationConfig(config),
+                useCache: true,
+              ),
+              taskId: task,
+            ),
+          );
 
     _sub = stream.listen(
       (value) {
@@ -183,8 +201,23 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     );
   }
 
+  /// Rust 每次推送截至当前的完整译文。
+  static Stream<String> _snapshots(Stream<TranslateEvent> events) async* {
+    await for (final event in events) {
+      switch (event) {
+        case TranslateEvent_Snapshot(:final text):
+          yield text;
+        case TranslateEvent_Failed(:final error):
+          throw error;
+        default:
+      }
+    }
+  }
+
   @override
   void dispose() {
+    final task = _task;
+    if (task != null && !_done) cancelTask(taskId: task);
     _sub?.cancel();
     _sourceScrollCtrl.dispose();
     _bodyScrollCtrl.dispose();

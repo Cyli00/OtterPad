@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +9,9 @@ import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../providers/proxy_provider.dart';
 import '../../services/haptics.dart';
-import '../../services/identifier_resolver.dart';
+import '../../core/otter_error_text.dart';
+import '../../core/rust_backend.dart';
+import '../../src/rust/error.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
 
@@ -103,32 +104,23 @@ class _ProxySettingsSectionState extends ConsumerState<_ProxySettingsSection> {
     });
 
     try {
-      final ms = await IdentifierResolver.instance.testConnectivity(url);
+      final ms = await RustBackend.instance.probeUrl(
+        url: url,
+        taskId: rustTaskId('probe'),
+      );
       if (!mounted) return;
       setState(() {
         _testStatus = _TestStatus.success;
         _testResult = context.l10n.connectionOkMs(ms.toString());
       });
-    } on DioException catch (e) {
-      if (!mounted) return;
-      String msg;
-      if (e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.receiveTimeout) {
-        msg = context.l10n.connectionTimeout;
-      } else if (e.type == DioExceptionType.connectionError) {
-        msg = context.l10n.cannotConnectCheckProxy;
-      } else {
-        msg = context.l10n.requestFailed(e.message ?? e.type.name);
-      }
-      setState(() {
-        _testStatus = _TestStatus.failed;
-        _testResult = msg;
-      });
     } catch (e) {
       if (!mounted) return;
+      final l10n = context.l10n;
       setState(() {
         _testStatus = _TestStatus.failed;
-        _testResult = context.l10n.testFailed(e.toString());
+        _testResult = e is OtterError && e.code == ErrorCode.network
+            ? l10n.cannotConnectCheckProxy
+            : l10n.testFailed(errorText(l10n, e));
       });
     }
   }

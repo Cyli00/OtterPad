@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,11 +11,13 @@ import '../core/l10n.dart';
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 import '../router/app_router.dart';
-import '../services/backup_fingerprint.dart';
-import '../services/backup_restore_service.dart';
+import '../core/otter_error_text.dart';
+import '../core/rust_backend.dart';
 import '../services/snackbar_service.dart';
-import 'backup_orchestrator.dart';
-import 'documents_provider.dart';
+import '../src/rust/api.dart' show cancelTask;
+import '../src/rust/api/sync.dart';
+import '../src/rust/sync/archive.dart';
+import 'sync_status_provider.dart';
 import 'task_activity_provider.dart';
 
 enum AutoBackupInterval {
@@ -88,94 +91,86 @@ final autoBackupProvider =
       (ref) => AutoBackupNotifier(),
     );
 
-/// 自动备份调度器。[start] 由 main 初始化链路调用：启动 2 分钟后首查，
-/// 之后每小时 tick 一次（覆盖应用长驻不重启的场景）。
-///
-/// 每次 tick 的闸门：开启了自动备份 → 远端已配置 → 距上次备份超过周期
-/// → 文献指纹相对快照有变化。零变化不上传（不浪费流量也不刷新快照，
-/// 比对本身是本地计算）。失败记录日志并提示，下一个 tick 自然重试。
+/// 自动备份：Rust 按设置中的周期、远端与文献变更自行判断（启动 2 分钟后首查，
+/// 之后每小时）。这里只订阅事件，展示进度与失败提示。
 class AutoBackupScheduler {
   AutoBackupScheduler(this._ref);
 
   final Ref _ref;
-  Timer? _initial;
-  Timer? _periodic;
-  bool _running = false;
-  bool _disposed = false;
+  StreamSubscription<SyncEvent>? _subscription;
+  String? _taskId;
+  int? _activity;
+  ValueNotifier<ListenableProgress>? _progress;
 
   void start() {
-    _initial ??= Timer(const Duration(minutes: 2), _tick);
-    _periodic ??= Timer.periodic(const Duration(hours: 1), (_) => _tick());
+    if (_subscription != null) return;
+    final task = _taskId = rustTaskId('auto-backup');
+    _subscription = RustBackend.instance
+        .watchAutoBackup(device: Platform.localHostname, taskId: task)
+        .listen(_onEvent);
+  }
+
+  void _onEvent(SyncEvent event) {
+    final context = rootNavigatorKey.currentContext;
+    final l10n = context == null ? null : AppLocalizations.of(context);
+    switch (event) {
+      case SyncEvent_Packing() || SyncEvent_Uploading():
+        if (_activity != null) return;
+        final progress = _progress = ValueNotifier(
+          ListenableProgress(
+            current: 0,
+            total: 0,
+            status: l10n?.autoBackupRunning ?? '正在自动备份',
+          ),
+        );
+        _activity = _ref
+            .read(taskActivityProvider.notifier)
+            .report(progress: progress, title: l10n?.autoBackup ?? '自动备份');
+      case SyncEvent_Uploaded():
+        _finish();
+        _ref.invalidate(syncStatusProvider);
+        log.d('[AutoBackup] 完成');
+      case SyncEvent_Skipped():
+        _finish();
+      case SyncEvent_Failed(:final error):
+        _finish();
+        log.w('[AutoBackup] 失败，下次调度重试：${error.code.name} ${error.detail}');
+        if (l10n != null && context != null && context.mounted) {
+          _ref
+              .read(snackBarServiceProvider)
+              .showResult(
+                tone: SnackTone.error,
+                message: l10n.autoBackupFailed(
+                  otterErrorText(l10n, error.code),
+                ),
+              );
+        }
+    }
+  }
+
+  void _finish() {
+    final activity = _activity;
+    if (activity != null) {
+      _ref.read(taskActivityProvider.notifier).finish(activity);
+    }
+    _activity = null;
+    _progress?.dispose();
+    _progress = null;
+  }
+
+  /// 恢复备份时 Rust 会取消其余任务（含本订阅），恢复后重新订阅。
+  void restart() {
+    dispose();
+    _subscription = null;
+    _taskId = null;
+    start();
   }
 
   void dispose() {
-    _disposed = true;
-    _initial?.cancel();
-    _periodic?.cancel();
-  }
-
-  Future<void> _tick() async {
-    if (_running || _disposed) return;
-    _running = true;
-    try {
-      await _runBackup();
-    } catch (e, st) {
-      log.w('[AutoBackup] 失败，下次调度重试', error: e, stackTrace: st);
-      final context = rootNavigatorKey.currentContext;
-      if (!_disposed && context != null && context.mounted) {
-        _ref
-            .read(snackBarServiceProvider)
-            .showResult(
-              tone: SnackTone.error,
-              message: context.l10n.autoBackupFailed('$e'),
-            );
-      }
-    } finally {
-      _running = false;
-    }
-  }
-
-  Future<void> _runBackup() async {
-    final config = _ref.read(autoBackupProvider);
-    final period = config.interval.period;
-    if (period == null) return;
-
-    final orchestrator = _ref.read(backupOrchestratorProvider);
-    if (orchestrator.remote == null) return;
-
-    final snapshot = BackupFingerprintService.loadSnapshot();
-    if (snapshot != null && DateTime.now().difference(snapshot.at) < period) {
-      return;
-    }
-    final ctx = rootNavigatorKey.currentContext;
-    final l10n = ctx != null ? AppLocalizations.of(ctx) : null;
-    final title = l10n?.autoBackup ?? '自动备份';
-    final status = l10n?.autoBackupRunning ?? '正在自动备份';
-    if (snapshot != null && !await _hasChanges(snapshot)) return;
-    if (_disposed) return;
-    final activity = _ref.read(taskActivityProvider.notifier);
-    final progress = ValueNotifier(
-      ListenableProgress(current: 0, total: 0, status: status),
-    );
-    final taskId = activity.report(progress: progress, title: title);
-    try {
-      await orchestrator.backupToRemote(scope: config.scope);
-      log.d('[AutoBackup] 完成（${config.scope.name}）');
-    } finally {
-      activity.finish(taskId);
-      progress.dispose();
-    }
-  }
-
-  Future<bool> _hasChanges(BackupSnapshot snapshot) async {
-    final docs = _ref.read(documentsProvider).value ?? const [];
-    if (docs.length != snapshot.docs.length) return true;
-    final current = await BackupFingerprintService.compute(docs);
-    for (final entry in current.entries) {
-      final previous = snapshot.docs[entry.key];
-      if (previous == null || !previous.sameAs(entry.value)) return true;
-    }
-    return false;
+    final task = _taskId;
+    if (task != null) cancelTask(taskId: task);
+    _subscription?.cancel();
+    _finish();
   }
 }
 

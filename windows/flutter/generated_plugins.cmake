@@ -5,10 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   dynamic_color
-  flutter_inappwebview_windows
   flutter_secure_storage_windows
-  gal
-  pasteboard
   screen_retriever_windows
   share_plus
   url_launcher_windows
@@ -18,7 +15,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
   jni
   otter_core
-  sqlite3_simple
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

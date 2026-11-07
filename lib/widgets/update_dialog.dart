@@ -25,7 +25,7 @@ class UpdateDialog extends StatelessWidget {
   });
 
   bool get _canInstallInApp =>
-      !kIsWeb && Platform.isAndroid && info.apkAsset != null;
+      !kIsWeb && Platform.isAndroid && info.apk != null;
 
   @override
   Widget build(BuildContext context) {
@@ -60,14 +60,14 @@ class UpdateDialog extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
               ),
-              if (info.changelogLines.isNotEmpty) ...[
+              if (info.changelog.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Flexible(
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        for (final line in info.changelogLines)
+                        for (final line in info.changelog)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 4),
                             child: Text(

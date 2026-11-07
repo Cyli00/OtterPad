@@ -1,38 +1,26 @@
-import '../core/storage/storage.dart';
+import '../core/rust_backend.dart';
 import 'prompts.dart';
 
-/// PromptStore —— 可定制 prompt"五件套"（默认值/保存/重置/是否默认/校验）
-/// 的唯一实现，按 [PromptDef.storageKey] 读写 GStorage。
-///
-/// 自身不持有状态、不做 provider：现有的 TranslationConfigNotifier /
-/// ImageGenerationConfigNotifier 是这个 seam 上的状态 adapter，对外
-/// 接口（config state 的 prompt 字段）保持不变。
+/// 提示词的读写：保存、重置与校验都在 Rust，这里同步读取载入后的文本。
 abstract final class PromptStore {
-  /// 解析生效文本：用户覆盖优先，未定制或存量为空白时回退默认——
-  /// "空白即未定制"，用户清空后直接用当前默认文本。
-  static String resolve(PromptDef def) {
-    final stored = GStorage.setting.get(def.storageKey) as String?;
-    if (stored == null || stored.trim().isEmpty) return def.defaultText;
-    return stored;
-  }
+  /// 生效文本：用户覆盖优先，未定制或为空白时为默认值。
+  static String resolve(PromptDef def) => def.definition.text;
 
-  /// 保存用户覆盖。返回缺失的必需占位符——非空表示**已拒绝保存**
-  /// （存储保留旧值，UI 据此渲染错误提示）。trim 后为空视为重置，
-  /// 不落空串。
+  /// 保存用户覆盖。返回缺失的必需占位符——非空表示已拒绝保存；
+  /// 空白文本视为重置。
   static Future<List<String>> set(PromptDef def, String text) async {
-    if (text.trim().isEmpty) {
-      await reset(def);
-      return const [];
-    }
-    final missing = def.missingPlaceholders(text);
+    final missing = text.trim().isEmpty
+        ? const <String>[]
+        : def.missingPlaceholders(text);
     if (missing.isNotEmpty) return missing;
-    await GStorage.setting.put(def.storageKey, text);
+    Prompts.update(
+      await RustBackend.instance.setPrompt(kind: def.kind, text: text),
+    );
     return const [];
   }
 
-  static Future<void> reset(PromptDef def) =>
-      GStorage.setting.delete(def.storageKey);
+  static Future<void> reset(PromptDef def) => set(def, '');
 
   static bool isDefault(PromptDef def) =>
-      resolve(def).trim() == def.defaultText.trim();
+      Prompts.of(def.kind).definition.isDefault;
 }

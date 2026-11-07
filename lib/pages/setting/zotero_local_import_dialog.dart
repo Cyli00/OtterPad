@@ -1,19 +1,24 @@
-import 'package:dio/dio.dart';
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core/l10n.dart';
 import '../../core/animation_constants.dart';
 import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
 import '../../providers/task_provider.dart';
-import '../../providers/zotero_local_import_provider.dart';
+import '../../core/rust_backend.dart';
+import '../../providers/zotero_local_errors.dart';
 import '../../services/haptics.dart';
-import '../../services/zotero_item_mapper.dart';
-import '../../services/zotero_sync_service.dart';
+import '../../src/rust/api.dart' show cancelTask;
+import '../../src/rust/api/zotero.dart';
+import '../../src/rust/sync/zotero/mapper.dart';
+import '../../src/rust/sync/zotero/store.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
@@ -36,10 +41,10 @@ class ZoteroLocalImportDialog extends ConsumerStatefulWidget {
 class _ZoteroLocalImportDialogState
     extends ConsumerState<ZoteroLocalImportDialog> {
   late final TextEditingController _port;
-  CancelToken? _token;
+  String? _fetchTask;
   TaskNotifier? _task;
-  ZoteroLocalLibrary? _library;
-  List<ZoteroImportCandidate> _candidates = [];
+  LocalZoteroSnapshot? _library;
+  List<ImportCandidate> _candidates = [];
   final _selected = <String>{};
   final _attachments = <String, String?>{};
   String? _directory;
@@ -64,7 +69,8 @@ class _ZoteroLocalImportDialogState
 
   @override
   void dispose() {
-    _token?.cancel();
+    final fetch = _fetchTask;
+    if (fetch != null) cancelTask(taskId: fetch);
     if (_importing) _task?.cancelTask(TaskType.zoteroSync);
     _port.dispose();
     super.dispose();
@@ -79,8 +85,8 @@ class _ZoteroLocalImportDialogState
       });
       return;
     }
-    final token = CancelToken();
-    _token = token;
+    final task = rustTaskId('zotero-local-fetch');
+    _fetchTask = task;
     setState(() {
       _loading = true;
       _library = null;
@@ -89,48 +95,53 @@ class _ZoteroLocalImportDialogState
       _total = 0;
     });
     try {
-      final library = await ref
-          .read(zoteroSyncServiceProvider)
-          .fetchLocalLibrary(
-            port: port,
-            cancelToken: token,
-            onProgress: (done, total) {
-              if (mounted && !token.isCancelled) {
-                setState(() {
-                  _fetched = done;
-                  _total = total;
-                });
-              }
-            },
-          );
-      final candidates = ZoteroItemMapper.localCandidates(library.items);
-      await GStorage.setting.put(SettingsKeys.zoteroLocalPort, port);
-      if (!mounted || token.isCancelled) return;
-      setState(() {
-        _library = library;
-        _candidates = candidates;
-        _selected
-          ..clear()
-          ..addAll(candidates.map((c) => c.key));
-        _attachments
-          ..clear()
-          ..addEntries(
-            candidates.map(
-              (c) => MapEntry(
-                c.key,
-                c.attachments.length == 1 ? c.attachments.single.key : null,
-              ),
-            ),
-          );
-      });
+      await for (final event in RustBackend.instance.fetchLocalZotero(
+        port: port,
+        taskId: task,
+      )) {
+        if (!mounted || _fetchTask != task) return;
+        switch (event) {
+          case ZoteroEvent_Progress(:final progress):
+            setState(() {
+              _fetched = progress.fetched.toInt();
+              _total = progress.total?.toInt() ?? 0;
+            });
+          case ZoteroEvent_LocalReady(:final snapshot, :final candidates):
+            await GStorage.setting.put(SettingsKeys.zoteroLocalPort, port);
+            if (!mounted) return;
+            setState(() {
+              _library = snapshot;
+              _candidates = candidates;
+              _selected
+                ..clear()
+                ..addAll(candidates.map((c) => c.key));
+              _attachments
+                ..clear()
+                ..addEntries(
+                  candidates.map(
+                    (c) => MapEntry(
+                      c.key,
+                      c.attachments.length == 1
+                          ? c.attachments.single.key
+                          : null,
+                    ),
+                  ),
+                );
+            });
+          case ZoteroEvent_Failed(:final error):
+            throw error;
+          case ZoteroEvent_Imported():
+        }
+      }
     } catch (e) {
-      if (mounted && !token.isCancelled) {
+      if (mounted && _fetchTask == task && !isCancellation(e)) {
         setState(() {
           _messageIsError = true;
           _message = zoteroLocalErrorMessage(context.l10n, e);
         });
       }
     } finally {
+      if (_fetchTask == task) _fetchTask = null;
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -140,22 +151,21 @@ class _ZoteroLocalImportDialogState
       dialogTitle: context.l10n.zoteroLocalDirectory,
     );
     if (directory == null || !mounted) return;
-    try {
-      await ZoteroLocalImporter.sourceIdentity(_library!, directory);
-      await GStorage.setting.put(SettingsKeys.zoteroLocalDirectory, directory);
-      if (mounted) {
-        setState(() {
-          _directory = directory;
-          _message = null;
-        });
-      }
-    } catch (_) {
+    if (!await File(p.join(directory, 'zotero.sqlite')).exists()) {
       if (mounted) {
         setState(() {
           _messageIsError = true;
           _message = context.l10n.zoteroLocalDirectoryHint;
         });
       }
+      return;
+    }
+    await GStorage.setting.put(SettingsKeys.zoteroLocalDirectory, directory);
+    if (mounted) {
+      setState(() {
+        _directory = directory;
+        _message = null;
+      });
     }
   }
 
@@ -167,36 +177,37 @@ class _ZoteroLocalImportDialogState
       _message = null;
     });
     try {
-      final source = await ZoteroLocalImporter.sourceIdentity(
-        library,
-        _directory,
-      );
-      if (!mounted) return;
       _task = ref.read(taskProvider.notifier);
+      final titles = {for (final c in _candidates) c.key: c.document.title};
       final result = await _task!.importLocalZotero(
-        library: library,
-        source: source,
-        candidates: _candidates
-            .where((c) => _selected.contains(c.key))
-            .toList(),
-        attachments: Map.of(_attachments),
+        snapshot: library,
+        directory: library.hasServerId() ? null : _directory,
+        selections: [
+          for (final c in _candidates)
+            if (_selected.contains(c.key))
+              LocalSelection(
+                itemKey: c.key,
+                attachmentKey: _attachments[c.key],
+              ),
+        ],
       );
       if (!mounted) return;
       final l10n = context.l10n;
+      final failed = [
+        for (final k in result?.failedKeys ?? const <String>[]) titles[k] ?? k,
+      ];
       setState(() {
-        _messageIsError = result != null && result.failedTitles.isNotEmpty;
+        _messageIsError = failed.isNotEmpty;
         _message = result == null
             ? l10n.zoteroLocalStopped
-            : '${l10n.zoteroLocalResult(result.added, result.updated, result.copied, result.missing, result.kept, result.failedTitles.length)}'
-                  '${result.failedTitles.isEmpty ? '' : '\n${result.failedTitles.join('\n')}'}';
+            : '${l10n.zoteroLocalResult(result.added.toInt(), result.updated.toInt(), result.copied.toInt(), result.missing.toInt(), result.kept.toInt(), failed.length)}'
+                  '${failed.isEmpty ? '' : '\n${failed.join('\n')}'}';
       });
     } catch (e) {
       if (mounted) {
         setState(() {
           _messageIsError = true;
-          _message = _library?.serverId == null
-              ? context.l10n.zoteroLocalDirectoryHint
-              : zoteroLocalErrorMessage(context.l10n, e);
+          _message = zoteroLocalErrorMessage(context.l10n, e);
         });
       }
     } finally {
@@ -372,7 +383,8 @@ class _ZoteroLocalImportDialogState
                       TextButton(
                         onPressed: () {
                           Haptics.soft();
-                          _token?.cancel();
+                          final fetch = _fetchTask;
+                          if (fetch != null) cancelTask(taskId: fetch);
                           if (_importing) {
                             _task?.cancelTask(TaskType.zoteroSync);
                           }
@@ -387,7 +399,7 @@ class _ZoteroLocalImportDialogState
                               _busy ||
                                   _library == null ||
                                   _selected.isEmpty ||
-                                  (_library!.serverId == null &&
+                                  (!_library!.hasServerId() &&
                                       _directory == null)
                               ? null
                               : _import,
@@ -495,7 +507,7 @@ class _ZoteroLocalImportDialogState
               ),
             ),
           ],
-          if (_library != null && _library!.serverId == null) ...[
+          if (_library != null && !_library!.hasServerId()) ...[
             const AppDivider.full(),
             const SizedBox(height: 12),
             Text(
@@ -528,7 +540,7 @@ class _ZoteroLocalImportDialogState
     backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(80),
   );
 
-  Widget _candidate(BuildContext context, ZoteroImportCandidate candidate) {
+  Widget _candidate(BuildContext context, ImportCandidate candidate) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;

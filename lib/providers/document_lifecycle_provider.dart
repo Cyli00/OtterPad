@@ -7,9 +7,6 @@ import 'favorites_provider.dart';
 import 'history_provider.dart';
 
 /// 文献生命周期入口：页面和任务编排通过这里表达文献写操作。
-///
-/// `DocumentsNotifier` 只作为文献列表持久化 Adapter 使用；收藏夹、历史、
-/// 高亮和磁盘目录等级联规则集中在这里。
 class DocumentLifecycleNotifier {
   DocumentLifecycleNotifier(this._ref);
 
@@ -43,32 +40,27 @@ class DocumentLifecycleNotifier {
     return _documents.rebuild(onProgress: onProgress, cancelToken: cancelToken);
   }
 
-  /// 批量导入已带元数据的文献（Zotero 同步入口）。
-  Future<List<Document>> importDocuments(List<Document> documents) {
-    return _documents.importDocuments(documents);
-  }
-
   Future<void> attachPdf(String documentId, String sourcePath) {
     return _documents.attachFile(documentId, sourcePath);
   }
 
-  Future<bool> attachMissingPdf(String documentId, String sourcePath, {CancelToken? cancelToken}) =>
-      _documents.attachMissingFile(documentId, sourcePath, cancelToken: cancelToken);
-
-  Future<Document?> mergeSourceMetadata(String id, Document incoming, Document? previous) =>
-      _documents.mergeSourceMetadata(id, incoming, previous);
+  Future<bool> attachMissingPdf(
+    String documentId,
+    String sourcePath, {
+    CancelToken? cancelToken,
+  }) => _documents.attachMissingFile(
+    documentId,
+    sourcePath,
+    cancelToken: cancelToken,
+  );
 
   Future<bool> redownloadPdf(String documentId, {CancelToken? cancelToken}) {
     return _documents.redownloadPdf(documentId, cancelToken: cancelToken);
   }
 
-  Future<void> deleteDocument(String documentId) async {
-    // SQL delete 触发 FK CASCADE（清 highlights/history/favorite_documents/
-    // zotero_items 的 DB 行）+ FTS5 触发器清 documents_fts + FS 清理 +
-    // watch() 流自动刷新各数据 provider；ZoteroSnapshot 经其流自动同步。
-    // 故删除编排塌缩为这一句（ADR-0001 / ADR-0003）。
-    await _documents.delete(documentId);
-  }
+  /// Rust 删除文献时级联清除笔记、历史、收藏关联与 Zotero 映射。
+  Future<void> deleteDocument(String documentId) =>
+      _documents.delete(documentId);
 
   void recordOpen(String documentId) {
     _ref.read(historyProvider.notifier).record(documentId);

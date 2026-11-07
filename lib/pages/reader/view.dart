@@ -1,89 +1,51 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:animations/animations.dart';
-import '../../core/animation_constants.dart';
-import 'package:flutter/gestures.dart';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
-import 'package:path/path.dart' as p;
+import 'package:go_router/go_router.dart' hide Block;
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-import '../../core/storage/settings_keys.dart';
-import '../../core/storage/storage.dart';
+import '../../core/animation_constants.dart';
+import '../../core/l10n.dart';
+import '../../core/otter_error_text.dart';
+import '../../core/rust_backend.dart';
 import '../../data/models/book/document.dart';
-import '../../data/models/collection/favorite.dart';
-import '../../providers/agent_api_provider.dart';
+import '../../data/models/book/highlight.dart';
 import '../../providers/doc_extract_api_provider.dart';
-import '../../widgets/extract_provider_dialog.dart';
-import '../../providers/document_lifecycle_provider.dart';
 import '../../providers/document_task_provider.dart';
 import '../../providers/document_translation_provider.dart';
 import '../../providers/favorites_provider.dart';
+import '../../providers/highlight_provider.dart';
 import '../../providers/history_provider.dart';
-import '../../providers/nav_rail_provider.dart';
 import '../../providers/reader_settings_provider.dart';
-import '../../providers/reader_session_provider.dart';
-import '../../providers/summary_image_provider.dart';
-import '../../providers/task_activity_provider.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../router/app_routes.dart';
-import '../../services/ai_settings_prompt.dart';
-import '../../services/doc_extract_service.dart';
-import '../../services/extraction_artifacts.dart';
-import '../../services/document_summary_image_service.dart';
-import '../../services/figure_extract_service.dart';
-import '../../data/models/book/highlight.dart';
-import '../../data/models/book/reader_anchor.dart';
-import '../../providers/reader_document_index_provider.dart';
-import '../../services/reader/reader_document_index.dart';
-import 'widgets/reader_layout_page.dart';
-import 'coordinators/reader_pdf_interaction.dart';
-import 'coordinators/reader_dock_window.dart';
-import 'widgets/reader_adaptive_layout.dart';
-import 'widgets/reader_pdf_document.dart';
-import '../../providers/highlight_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
+import '../../src/rust/document.dart';
 import '../../utils/desktop.dart';
 import '../../utils/doc_paths.dart';
-import '../../utils/markdown_translation_weaver.dart';
-import '../../utils/responsive.dart';
+import '../../widgets/extract_provider_dialog.dart';
+import '../library/widgets/doc_card_actions.dart';
+import '../reader2/reader_controller.dart';
+import '../reader2/reader_layout.dart';
+import '../reader2/reader_surface.dart';
 import 'chat/document_chat_page.dart';
-import 'coordinators/reader_summary_image_coordinator.dart';
 import 'widgets/figure_viewer.dart';
-import 'widgets/webview_markdown_reader.dart';
-import 'widgets/reader_markdown_content.dart';
-import 'widgets/outline_panel.dart';
+import 'widgets/reader_background.dart';
 import 'widgets/reader_bottom_bar.dart';
 import 'widgets/reader_chat_return_prompt.dart';
-import 'widgets/reader_background.dart';
-import '../../widgets/layout/adaptive_scaffold.dart';
-import '../../widgets/layout/app_destinations.dart';
-import '../../widgets/spring_reveal.dart';
-import 'widgets/reader_docked_pane.dart';
 import 'widgets/reader_document_info_sheet.dart';
-import 'widgets/reader_notes_sheet.dart';
-import 'widgets/reader_outline_sheet.dart';
-import 'widgets/reader_favorite_sheet.dart';
-import 'widgets/reader_pdf_search_controller.dart';
-import 'widgets/reader_search_bars.dart';
-import 'widgets/reader_search_navigator.dart';
-import 'widgets/reader_sheet_host.dart';
-import 'widgets/reader_theme_sheet.dart';
-import 'widgets/reader_desktop_appearance.dart';
 import 'widgets/reader_icon_button.dart';
-import 'widgets/reader_top_toolbar.dart';
-import 'widgets/search_overlay.dart';
-import 'widgets/selection_toolbar.dart';
+import 'widgets/reader_notes_sheet.dart';
+import 'widgets/reader_search_bars.dart';
+import 'widgets/reader_theme_sheet.dart';
 import 'widgets/translation_popup.dart';
-import '../shelf/widgets/create_favorite_dialog.dart';
-import 'package:material_symbols_icons/symbols.dart';
-import '../../core/l10n.dart';
 
+/// 阅读器：解析结果用原生重排正文（Rust 文档模型），也可切换查看原 PDF。
 class ReaderPage extends ConsumerStatefulWidget {
   final Document document;
 
@@ -93,2841 +55,960 @@ class ReaderPage extends ConsumerStatefulWidget {
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
 }
 
-/// 主 build 的 select 返回类型——Dart record 自带 structural ==。
-/// 排除 currentResultIndex（由 [_ResultNavigator] 独立消费），
-/// markdownContent 用 cacheKey 代替（避免大字符串逐字比较），
-/// searchResultCount 只保留 length，error/snapshot 只保留 nullity。
-typedef _MainBuildKey = (
-  bool initialized,
-  bool fileExists,
-  bool showPreview,
-  bool hasMarkdownContent,
-  String? markdownCacheKey,
-  bool toolbarsVisible,
-  bool searchActive,
-  bool isHighlightMode,
-  String? summaryImagePath,
-  String? highlightQuery,
-  int searchResultCount,
-  bool markdownLoading,
-  bool hasMarkdownLoadError,
-  bool hasResult,
-  String? markdownPath,
-);
-
 class _ReaderPageState extends ConsumerState<ReaderPage> {
-  late final ReaderPdfDocumentRef _pdfDocumentRef = ReaderPdfDocumentRef(
-    DocPaths.pdf(widget.document.id),
-    onPagesChanged: () => WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      // 应用自己的选区、锚点与工具栏随页面版本一起失效。
-      _pdfInteraction.clear();
-      if (!_pdfController.isReady || _session.showPreview) return;
-      // 展示层切换（原文/译文/双语）后按源页恢复阅读位置。
-      final restore = _pendingPdfRestoreSourcePage;
-      _pendingPdfRestoreSourcePage = null;
-      if (restore != null) {
-        _pdfController.goToPage(
-          pageNumber: _pdfDocumentRef.slotForSourcePage(restore),
-        );
-      }
-      _pdfSearch.bind(_pdfController);
-      _onPdfSearchChanged();
-    }),
-  );
-  late final _pdfInteraction = ReaderPdfInteraction(
-    controller: _pdfController,
-    enabled: () => mounted && isDesktopOs && !_session.showPreview,
-    index: () => _readerIndex,
-    translations: () =>
-        ref.read(documentTranslationProvider(widget.document.id)).translations,
-    highlights: () =>
-        ref.read(highlightProvider(widget.document.id)).value ?? const [],
-    onSelection: (selection) {
-      final anchor = selection.anchor;
-      if (anchor != null) _readerPositionId = anchor.ranges.first.paragraphId;
-      _showAnchoredSelection(selection.text, selection.rect!, anchor);
-    },
-    onHighlight: _handleHighlightTap,
-    onDismiss: () {
-      _selectionAnchor = null;
-      _dismissSelectionToolbar();
-    },
-    onToggleToolbar: _handleWebViewToggleToolbar,
-  );
-  ReaderAnchor? _selectionAnchor;
-  ReaderDocumentIndex _readerIndex = ReaderDocumentIndex.empty;
-  final _markdownPresentation = ReaderMarkdownPresentation();
-  String? _restoredIndexKey;
-  String? _readerPositionId;
-  final _sheetHostKey = GlobalKey<ReaderSheetHostState>();
-  late final ReaderSessionArgs _sessionArgs;
-  ReaderSheetType? _activeSheet;
-  bool _readerNavigationVisible = true;
-  final _readerNavigationKey = GlobalKey();
-  bool _reprocessing = false;
-  bool _dockHostMounted = false;
-  bool _dockOpen = false;
-  final _dockWindow = ReaderDockWindow();
-  bool _dockExpandsWindow = false;
-  double? _outwardSidebarWidth;
-  int _dockRequest = 0;
-  ReaderDockPane _dockPane = ReaderDockPane.outline;
+  final _surface = GlobalKey<ReaderSurfaceState>();
+  final _query = TextEditingController();
+  final _queryFocus = FocusNode();
+  final _bodyFocus = FocusNode();
+  final _progress = ValueNotifier<double>(0);
+  final _pdf = PdfViewerController();
+  PdfTextSearcher? _pdfSearch;
+  late final HistoryNotifier _history;
 
-  bool _dockAnimating = false;
-  bool _dockWindowChanging = false;
-  double? _lockedReaderWidth;
-  double? _readerViewportWidth;
-  bool _desktopAppearanceOpen = false;
-  int _spreadColumns = 1;
+  ReaderController? _controller;
+  bool _loading = true;
+  Object? _loadError;
+  bool _pdfMode = false;
+  bool _searching = false;
+  bool _toolbars = true;
+  ReaderSheetType? _sheet;
+  DocumentChatPageArgs? _chatReturn;
+  int _quoteEpoch = 0;
 
-  /// 桌面阅读页的左侧应用导航。隐藏时正文可获得完整宽度。
-  bool get _showReaderNavigation =>
-      isDesktopOs &&
-      _readerNavigationVisible &&
-      MediaQuery.sizeOf(context).width >= Responsive.kReaderBodyMin + 73;
-
-  double _readerNavigationWidth(BuildContext context, {bool? visible}) {
-    if (!(visible ?? _showReaderNavigation)) return 0;
-    return 73.0;
-  }
-
-  bool _useReaderDock(BuildContext context) {
-    final availableWidth =
-        MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
-    return availableWidth >= Responsive.kReaderDockMinWidth;
-  }
-
-  void _toggleReaderNavigation() {
-    if (!isDesktopOs || _dockAnimating) return;
-    final nextVisible = !_readerNavigationVisible;
-    if (nextVisible &&
-        _dockOpen &&
-        MediaQuery.sizeOf(context).width -
-                _readerNavigationWidth(context, visible: true) <
-            Responsive.kReaderDockMinWidth) {
-      _dockOpen = false;
-      _sessionNotifier.setDockOpen(false);
-      unawaited(_dockWindow.restore());
-    }
-    final railWidth = _readerNavigationKey.currentContext?.size?.width ?? 0;
-    setState(() {
-      // 与停靠栏同一套正文锁宽：显示时先裁切、停稳后再排版；隐藏时直接按
-      // 最终宽度排版，随导航栏收起逐渐露出，避免 WebView 每帧重排。
-      final viewport = _readerViewportWidth;
-      if (viewport != null && !MediaQuery.disableAnimationsOf(context)) {
-        _dockAnimating = true;
-        _lockedReaderWidth = nextVisible ? viewport : viewport + railWidth;
-      }
-      _readerNavigationVisible = nextVisible;
-    });
-  }
-
-  double? _sidebarWidthOverride;
-
-  /// 用户拖拽得到的停靠栏宽度覆写；null = 跟随窗口自适应（GStorage.setting 持久化）。
-
-  /// 定位原文后暂存的问 AI 返回参数；非空时展示返回引导条。
-  DocumentChatPageArgs? _chatReturnArgs;
-
-  /// 展示层（原文/译文/双语）切换后要恢复的源页号——槽位数量变化会让
-  /// pdfrx 保留的页号指向另一页，必须在页替换完成后按源页重新定位。
-  int? _pendingPdfRestoreSourcePage;
-
-  /// 翻页/拖选过程中推迟 PDF 页替换。滑动中途换页表会让 viewer 停在半页。
-  bool _pdfGestureActive = false;
-  bool _pdfLayerDeferred = false;
-
-  String? _dockChatQuote;
-  ReaderAnchor? _dockChatQuoteAnchor;
-  String? _dockChatFigurePath;
-  int _dockChatQuoteEpoch = 0;
-  DocumentChatPageArgs? _pendingChatReturnArgs;
-
-  static _MainBuildKey _mainBuildSelector(ReaderSessionState s) => (
-    s.initialized,
-    s.fileExists,
-    s.showPreview,
-    s.markdownContent != null,
-    s.markdownCacheKey,
-    s.toolbarsVisible,
-    s.searchActive,
-    s.markdownHighlightMode,
-    s.summaryImagePath,
-    s.highlightQuery,
-    s.searchResultCount,
-    s.markdownLoading,
-    s.markdownLoadError != null,
-    s.hasResult,
-    s.markdownPath,
-  );
-
-  // WebView 阅读器引用（通过 GlobalKey 暴露方法）
-  final _webViewReaderKey = GlobalKey<WebViewMarkdownReaderState>();
-
-  // PDF 控制器（用于滚动滑条）
-  final _pdfController = PdfViewerController();
-  final _pdfSearch = ReaderPdfSearchController();
-
-  // 选择工具栏 Overlay（WebView 选择走 JS 桥接）
-  ReaderContextMenuHandle? _selectionToolbarEntry;
-  String _webViewSelectionText = '';
-  int? _webViewSelectionLineCount;
-
-  // 桌面端工具栏自动隐藏
-
-  // Figure manifest 懒加载：首次点击图片时触发，Future 复用避免重复 IO
-  Future<List<FigureManifestEntry>?>? _figuresFuture;
-
-  final _summaryImageState = ValueNotifier<SummaryImageState>(
-    const SummaryImageState(),
-  );
-
-  // AI 排版修复后通知 OutlinePanel 重新加载 figures manifest
-  final _figuresEpoch = ValueNotifier<int>(0);
-
-  // PDF 进度采集：上一次上报的 pageNumber 缓存，避免每次 controller 通知（包括
-  // 滚动 / zoom / fit）都触发一次 reportProgress——只有 pageNumber 真变了才上报。
-  int? _lastReportedPdfPage;
-
-  double _readingProgress = 0;
-  final _progressDisplay = ValueNotifier<double>(0);
-  int? _markdownAnchorBlock;
+  String get _id => widget.document.id;
+  bool get _fileExists => File(DocPaths.pdf(_id)).existsSync();
+  bool get _hasModel => _controller?.source.blocks.isNotEmpty == true;
 
   @override
   void initState() {
     super.initState();
-    // 重开文档恢复阅读位置：进度/锚点跨会话持久化在 HistoryEntry（事实源），
-    // initState 读入 _readingProgress / _markdownAnchorBlock。会话内 _readingProgress
-    // 由 PDF 翻页 + Markdown 滚动两路实时更新（不经过 history 2s 防抖），切换视图
-    // 时目标侧直接读它——PDF 经 onViewerReady goToPage、Markdown 经 initialScrollProgress
-    // 在 onContentReady 恢复，实现「PDF 当前页 ↔ WebView 位置」粗略比率对应。
-    // 横向翻页优先锚点（比率在字号/窗口尺寸变化后会落错页），纵向按比率。
-    final entry = (ref.read(historyProvider).value ?? const [])
-        .where((e) => e.docId == widget.document.id)
-        .firstOrNull;
-    if (entry != null) {
-      _readingProgress = entry.progress;
-      _progressDisplay.value = entry.progress;
-      _markdownAnchorBlock = entry.anchorBlock;
-    }
-    _sessionArgs = ReaderSessionArgs(
-      documentId: widget.document.id,
-      title: widget.document.title,
-      defaultReadingMode: ref.read(readerSettingsProvider).defaultReadingMode,
-    );
-    _sidebarWidthOverride =
-        GStorage.setting.get(SettingsKeys.readerSidebarWidth) as double?;
-    // 在 initState 中 cache notifier 引用——Riverpod 3.x 禁止在 dispose()
-    // 中通过 ref.read 取 provider（widget 已 unmount-pending）。Notifier 实
-    // 例的生命周期由 provider 管理、独立于 widget，cache 安全。
-    _sessionNotifier = ref.read(readerSessionProvider(_sessionArgs).notifier);
-    _translationNotifier = ref.read(
-      documentTranslationProvider(widget.document.id).notifier,
-    );
-    _highlightNotifier = ref.read(
-      highlightProvider(widget.document.id).notifier,
-    );
-    _snackBarService = ref.read(snackBarServiceProvider);
-    _pdfController.addListener(_onPdfControllerChanged);
-    // searcher / 查询变化即整页 rebuild，与重构前一致。
-    _pdfSearch.addListener(_onPdfSearchChanged);
+    _history = ref.read(historyProvider.notifier);
+    _pdfMode =
+        ref.read(readerSettingsProvider).defaultReadingMode ==
+        DefaultReadingMode.pdf;
+    unawaited(_history.record(_id));
+    unawaited(_load());
   }
 
-  void _onPdfSearchChanged() {
-    if (mounted) setState(() {});
+  @override
+  void dispose() {
+    unawaited(_history.flushProgress());
+    _controller?.dispose();
+    _pdfSearch?.dispose();
+    _query.dispose();
+    _queryFocus.dispose();
+    _bodyFocus.dispose();
+    _progress.dispose();
+    super.dispose();
   }
 
-  /// PDF 控制器变化回调：仅在当前页号变化时上报。pdfrx 的 PdfViewerController
-  /// 是 ChangeNotifier，滚动、zoom、fit 都会通知；筛 pageNumber 防抖。
-  ///
-  /// 同步把页号比率写进 [_readingProgress] 并清空 [_markdownAnchorBlock]——
-  /// 切到 WebView 时直接读这个活字段恢复（不经过 history 2s 防抖，永远新鲜），
-  /// 实现「PDF 当前页 ↔ WebView 位置」的粗略比率对应。anchorBlock 是 Markdown
-  /// 横向翻页的块锚点，PDF 无此概念，清掉避免下次切 WebView 用到陈旧锚点。
-  void _onPdfControllerChanged() {
-    if (_session.showPreview) return;
-    if (!_pdfController.isReady) return;
-    // 双语时同一源页有两个显示槽位，进度与阅读位置一律回到源页语义。
-    final slot = _pdfController.pageNumber;
-    if (slot == null || _pdfController.pages.isEmpty) return;
-    final sourcePage = _pdfDocumentRef.sourcePageForSlot(slot);
-    if (_lastReportedPdfPage == sourcePage) return;
-    _lastReportedPdfPage = sourcePage;
-    if (_readerIndex.byId(_readerPositionId ?? '')?.pageIndex !=
-        sourcePage - 1) {
-      _readerPositionId = _readerIndex.paragraphs
-          .where((p) => p.pageIndex == sourcePage - 1)
-          .firstOrNull
-          ?.id;
-    }
-    final total = _pdfDocumentRef.sourcePageCount;
-    final progress = total <= 0 ? 0.0 : sourcePage / total;
-    _readingProgress = progress;
-    _progressDisplay.value = progress;
-    _markdownAnchorBlock = null;
-    _sessionNotifier.reportProgress(progress);
-  }
+  // ── 数据 ──
 
-  ReaderSessionState get _session =>
-      ref.read(readerSessionProvider(_sessionArgs));
-
-  late final ReaderSessionNotifier _sessionNotifier;
-  late final DocumentTranslationNotifier _translationNotifier;
-  late final HighlightNotifier _highlightNotifier;
-  late final SnackBarService _snackBarService;
-  bool _readerActive = true;
-
-  bool get _canUseReader => mounted && _readerActive;
-
-  ReaderSummaryImageCoordinator get _summaryCoordinator =>
-      ReaderSummaryImageCoordinator(
-        context: context,
-        ref: ref,
-        document: widget.document,
-        summaryImageState: _summaryImageState,
-        sessionNotifier: _sessionNotifier,
-        openOutlineSheet: _openOutlineSheet,
-        onOpenChat: _useReaderDock(context) ? _openChatFromFigure : null,
+  /// 读取 Rust 文档模型；没有解析结果时得到空模型，阅读器停在 PDF。
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final model = await RustBackend.instance.readerDocument(document: _id);
+      final notes = await ref.read(highlightProvider(_id).future);
+      if (!mounted) return;
+      final controller = ReaderController(
+        model,
+        highlights: _readerHighlights(notes),
+        onHighlightSaved: _saveHighlight,
+        onHighlightRemoved: (id) =>
+            ref.read(highlightProvider(_id).notifier).delete(id),
       );
+      _restoreLocation(controller);
+      _controller?.dispose();
+      _controller = controller;
+      _syncTranslations();
+      setState(() {
+        _loading = false;
+        if (model.blocks.isEmpty) _pdfMode = true;
+      });
+      unawaited(_relocateHighlights(controller, notes));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadError = e;
+        _pdfMode = true;
+      });
+    }
+  }
 
-  // ─── 提取逻辑 ───
+  void _restoreLocation(ReaderController controller) {
+    HistoryEntry? entry;
+    for (final h in ref.read(historyProvider).value ?? const <HistoryEntry>[]) {
+      if (h.docId == _id) entry = h;
+    }
+    _progress.value = entry?.progress ?? 0;
+    final block = entry?.anchorBlock;
+    final index = block == null ? null : controller.indexOfBlock(block);
+    if (index != null) controller.location = ReaderLocation(index, 0);
+  }
 
-  Future<void> _onExtractPressed() async {
-    if (_reprocessing) return;
-    final filePath = DocPaths.pdf(widget.document.id);
-    if (widget.document.contentHash == null || !File(filePath).existsSync()) {
+  /// 笔记的 Rust 锚点（`{version: 2, ranges}`）转为阅读器标注；未定位的只留在笔记列表。
+  List<ReaderHighlight> _readerHighlights(List<Highlight> notes) => [
+    for (final n in notes)
+      if (_ranges(n.anchor) case final ranges? when ranges.isNotEmpty)
+        ReaderHighlight(
+          id: n.id,
+          ranges: ranges,
+          color: n.color,
+          note: n.note,
+          createdAt: n.createdAt,
+        ),
+  ];
+
+  static List<AnchorRange>? _ranges(Map<String, dynamic>? anchor) {
+    final raw = anchor?['ranges'];
+    if (raw is! List) return null;
+    return [
+      for (final r in raw)
+        if (r is Map)
+          AnchorRange(
+            blockId: '${r['block_id'] ?? r['paragraphId'] ?? ''}',
+            language: '${r['language'] ?? 'source'}',
+            revision: '${r['revision'] ?? ''}',
+            start: BigInt.from((r['start'] as num?)?.toInt() ?? 0),
+            end: BigInt.from((r['end'] as num?)?.toInt() ?? 0),
+            quote: '${r['quote'] ?? ''}',
+            prefix: '${r['prefix'] ?? ''}',
+            suffix: '${r['suffix'] ?? ''}',
+          ),
+    ];
+  }
+
+  static Map<String, dynamic> _anchorJson(List<AnchorRange> ranges) => {
+    'version': 2,
+    'located': true,
+    'ranges': [
+      for (final r in ranges)
+        {
+          'block_id': r.blockId,
+          'language': r.language,
+          'revision': r.revision,
+          'start': r.start.toInt(),
+          'end': r.end.toInt(),
+          'quote': r.quote,
+          'prefix': r.prefix,
+          'suffix': r.suffix,
+        },
+    ],
+  };
+
+  void _saveHighlight(ReaderHighlight h) {
+    final existing = (ref.read(highlightProvider(_id)).value ?? const [])
+        .where((n) => n.id == h.id)
+        .firstOrNull;
+    unawaited(
+      ref
+          .read(highlightProvider(_id).notifier)
+          .save(
+            Highlight(
+              id: h.id,
+              documentId: _id,
+              text: h.text,
+              note: h.note,
+              color: h.color,
+              groupId: existing?.groupId,
+              anchor: {...?existing?.anchor, ..._anchorJson(h.ranges)},
+              createdAt: h.createdAt,
+            ),
+          ),
+    );
+  }
+
+  /// 文档重新解析后块内容可能变化：按引文与上下文重新定位，成功的写回存储。
+  Future<void> _relocateHighlights(
+    ReaderController controller,
+    List<Highlight> notes,
+  ) async {
+    final blocks = {for (final b in controller.source.blocks) b.id: b};
+    for (final note in notes) {
+      final ranges = _ranges(note.anchor);
+      if (ranges == null || ranges.isEmpty) continue;
+      final stale = ranges.any(
+        (r) =>
+            r.language == 'source' && blocks[r.blockId]?.revision != r.revision,
+      );
+      if (!stale) continue;
+      final relocated = <AnchorRange>[];
+      for (final r in ranges) {
+        final found = r.language == 'source'
+            ? await RustBackend.instance.resolveAnchor(document: _id, anchor: r)
+            : r;
+        if (found == null) break;
+        relocated.add(found);
+      }
+      if (!mounted || !identical(controller, _controller)) return;
+      if (relocated.length != ranges.length) continue;
+      final highlight = ReaderHighlight(
+        id: note.id,
+        ranges: relocated,
+        color: note.color,
+        note: note.note,
+        createdAt: note.createdAt,
+      );
+      if (controller.highlights.any((h) => h.id == note.id)) {
+        controller.updateHighlight(highlight);
+      }
+    }
+  }
+
+  void _syncTranslations() {
+    final controller = _controller;
+    if (controller == null) return;
+    final translation = ref.read(documentTranslationProvider(_id));
+    final language = ref.read(translationConfigProvider).targetLanguage;
+    controller.setTranslations(
+      translation.translations,
+      translation.mode,
+      language,
+      rtl: isRtlTargetLanguage(language),
+    );
+  }
+
+  // ── 动作 ──
+
+  Future<void> _extract() async {
+    if (!_fileExists) {
       ref
           .read(snackBarServiceProvider)
           .showResult(tone: SnackTone.error, message: context.l10n.pdfNotFound);
       return;
     }
-
     final apiState = await showExtractProviderDialog(
       context: context,
       apiState: ref.read(docExtractApiProvider),
     );
     if (!mounted || apiState == null) return;
-
-    ref
+    final generation = await ref
         .read(documentTaskProvider.notifier)
         .extractDocument(
-          documentId: widget.document.id,
-          filePath: filePath,
+          documentId: _id,
           title: widget.document.title,
           apiState: apiState,
         );
+    if (generation != null && mounted) await _load();
   }
 
-  Future<void> _onReprocessPressed() async {
-    if (_reprocessing ||
-        ref
-            .read(documentTaskProvider.notifier)
-            .hasActiveDocumentTask(widget.document.id)) {
-      return;
-    }
-    final filePath = DocPaths.pdf(widget.document.id);
-    if (widget.document.contentHash == null || !File(filePath).existsSync()) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(tone: SnackTone.error, message: context.l10n.pdfNotFound);
-      return;
-    }
-
-    setState(() => _reprocessing = true);
-    try {
-      final sources = await ExtractionArtifacts.availableSources(filePath);
-      if (!mounted) return;
-      final source = sources.length > 1
-          ? await showReprocessSourceDialog(context: context, sources: sources)
-          : sources.firstOrNull;
-      if (!mounted || (sources.length > 1 && source == null)) return;
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.reformatting);
-      final (mdPath, content) = await DocExtractService.instance
-          .reprocessMarkdown(
-            pdfPath: filePath,
-            title: widget.document.title,
-            source: source,
-          );
-      if (!mounted) return;
-
-      // 推迟到下一帧：reprocess 完成那一刻可能还有正在 unmount 的子 Consumer
-      // （工具栏 AnimatedSlide、search bar 等），同步发 state 通知会撞上 defunct
-      // Element 的断言。
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _sessionNotifier.useExtractedMarkdown(
-          markdownPath: mdPath,
-          markdownContent: content,
-        );
-        _figuresFuture = null;
-        ref
-            .read(snackBarServiceProvider)
-            .showResult(
-              tone: SnackTone.success,
-              message: context.l10n.reformatDone,
-            );
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(
-            tone: SnackTone.error,
-            message: context.l10n.reformatFailed('$e'),
-          );
-    } finally {
-      if (mounted) setState(() => _reprocessing = false);
-    }
+  void _toggleMode() {
+    Haptics.soft();
+    _closeSearch();
+    setState(() => _pdfMode = !_pdfMode);
   }
 
-  void _togglePreview() {
-    _pdfInteraction.clear();
-    if (_session.showPreview) {
-      _closeDock();
-    }
-    final enteringMarkdown = _sessionNotifier.togglePreview();
-    if (!enteringMarkdown) _lastReportedPdfPage = null;
-    if (enteringMarkdown) {
-      _pdfSearch.clear();
-    }
-  }
-
-  // ─── 搜索 ───
-
-  Future<void> _openSearch() async {
-    final session = _session;
-    if (session.showPreview) {
-      await _sessionNotifier.openMarkdownSearch();
-      return;
-    }
-
-    if (!_sessionNotifier.openPdfSearch()) return;
+  void _openSearch() {
+    setState(() => _searching = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _pdfSearch.focusForSearch();
+      _queryFocus.requestFocus();
+      _query.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _query.text.length,
+      );
     });
   }
 
   void _closeSearch() {
-    if (_session.showPreview) {
-      _sessionNotifier.closeSearch();
-      return;
+    if (!_searching) return;
+    _query.clear();
+    _controller?.clearSearch();
+    _pdfSearch?.resetTextSearch();
+    setState(() => _searching = false);
+    _bodyFocus.requestFocus();
+  }
+
+  void _onQuery(String query) {
+    if (_pdfMode) {
+      _pdfSearch?.startTextSearch(query.trim(), searchImmediately: true);
+    } else {
+      _controller?.search(query);
     }
-    _clearPdfSearch();
+    setState(() {});
   }
 
-  void _clearPdfSearch() {
-    _pdfSearch.clear();
-    _sessionNotifier.closeSearch();
-  }
-
-  void _onSearchResultTap(int hitIndex, String query) {
-    final count = _session.searchResultCount > 0
-        ? _session.searchResultCount
-        : hitIndex + 1;
-    _sessionNotifier.selectSearchResult(hitIndex, query, count);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _webViewReaderKey.currentState?.scrollToSearchResult(hitIndex);
-    });
-  }
-
-  void _clearHighlight() {
-    _sessionNotifier.clearHighlight();
-  }
-
-  void _goToPrevResult() {
-    final index = _sessionNotifier.goToPreviousSearchResult();
-    if (index != null) {
-      _webViewReaderKey.currentState?.scrollToSearchResult(index);
+  void _stepHit(int delta) {
+    if (_pdfMode) {
+      final searcher = _pdfSearch;
+      if (searcher == null) return;
+      unawaited(
+        delta > 0 ? searcher.goToNextMatch() : searcher.goToPrevMatch(),
+      );
+    } else {
+      _controller?.stepHit(delta);
     }
   }
 
-  void _goToNextResult() {
-    final index = _sessionNotifier.goToNextSearchResult();
-    if (index != null) {
-      _webViewReaderKey.currentState?.scrollToSearchResult(index);
-    }
-  }
-
-  // ─── 底部面板（外观 / 大纲） ───
-
-  void _pauseWebView() => _webViewReaderKey.currentState?.pauseWebView();
-  void _resumeWebView() => _webViewReaderKey.currentState?.resumeWebView();
-
-  Future<void> _openThemeSheet() async {
-    if (isDesktopOs) {
-      setState(() => _desktopAppearanceOpen = !_desktopAppearanceOpen);
-      return;
-    }
-    if (_activeSheet == ReaderSheetType.theme) {
-      _sheetHostKey.currentState!.close();
-      return;
-    }
-    final future = _sheetHostKey.currentState!.show(
-      builder: (_) => const ReaderThemeSheetBody(),
-      barrierAlpha: 0.25,
-      onPause: _pauseWebView,
-      onResume: _resumeWebView,
-    );
-    setState(() => _activeSheet = ReaderSheetType.theme);
-    await future;
-  }
-
-  Future<void> _onNotesEditStart() async {
-    await _webViewReaderKey.currentState?.freeze(capture: false);
-  }
-
-  void _onNotesEditEnd() {
-    _webViewReaderKey.currentState?.unfreeze();
-  }
-
-  void _toggleNotes() {
-    if (_session.markdownContent == null ||
-        (!isDesktopOs && !_session.showPreview)) {
-      return;
-    }
-    if (_useReaderDock(context)) {
-      _toggleDock(ReaderDockPane.notes);
-      return;
-    }
-    unawaited(_openNotesSheet());
-  }
-
-  Future<void> _openNotesSheet() async {
-    if (_activeSheet == ReaderSheetType.notes) {
-      _sheetHostKey.currentState!.close();
-      return;
-    }
-    final future = _sheetHostKey.currentState!.show(
-      builder: (_) => ReaderNotesSheetBody(
-        documentId: widget.document.id,
-        onEditStart: _onNotesEditStart,
-        onEditEnd: _onNotesEditEnd,
-      ),
-    );
-    setState(() => _activeSheet = ReaderSheetType.notes);
-    await future;
-  }
-
-  void _toggleOutline() {
-    if (_session.markdownContent == null ||
-        (!isDesktopOs && !_session.showPreview)) {
-      return;
-    }
-    if (_useReaderDock(context)) {
-      _toggleDock(ReaderDockPane.outline);
-      return;
-    }
-    if (_activeSheet == ReaderSheetType.outline) {
-      _sheetHostKey.currentState!.close();
-      return;
-    }
-    unawaited(_showOutlineBottomSheet());
-  }
-
-  void _openOutlineSheet() {
-    if (_session.markdownContent == null) return;
-    if (_useReaderDock(context)) {
-      _openDock(ReaderDockPane.outline);
-      return;
-    }
-    if (_activeSheet == ReaderSheetType.outline) return;
-    unawaited(_showOutlineBottomSheet());
-  }
-
-  /// 停靠栏分隔线拖拽：向左拖（dx<0）变宽。宽度持久化到 drag end，避免每帧写库。
-  void _onSidebarDragUpdate(DragUpdateDetails d) {
-    if (_dockAnimating) return;
-    final windowW =
-        MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
-    final base = Responsive.clampReaderSidebarWidth(
-      _sidebarWidthOverride ??
-          _outwardSidebarWidth ??
-          Responsive.readerSidebarWidth(windowW),
-      windowW,
-    );
-    final next = Responsive.clampReaderSidebarWidth(base - d.delta.dx, windowW);
-    if (next == base) return;
-    setState(() => _sidebarWidthOverride = next);
-  }
-
-  void _onSidebarDragEnd() {
-    final w = _sidebarWidthOverride;
-    if (w != null) {
-      unawaited(GStorage.setting.put(SettingsKeys.readerSidebarWidth, w));
-    }
-  }
-
-  void _beginDockTransition({required bool opening}) {
-    _dockAnimating = !MediaQuery.disableAnimationsOf(context);
-    // 展开期间只裁切正文，结束后再排版；收起先恢复完整排版，再逐渐显露。
-    _lockedReaderWidth = !_dockAnimating
+  void _onLocation(ReaderLocation location, double progress) {
+    _progress.value = progress;
+    final blocks = _controller?.model.blocks;
+    var id = blocks == null || location.blockIndex >= blocks.length
         ? null
-        : opening
-        ? _readerViewportWidth
-        : MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
+        : blocks[location.blockIndex].id;
+    if (id != null && id.endsWith('#t')) id = id.substring(0, id.length - 2);
+    unawaited(_history.setProgress(_id, progress, anchorBlock: id));
   }
 
-  void _onDockAnimationEnd() {
-    if (!mounted || !_dockAnimating || _dockWindowChanging) return;
-    setState(() {
-      _dockAnimating = false;
-      _lockedReaderWidth = null;
-    });
-  }
-
-  Future<void> _openDock(ReaderDockPane pane) async {
-    if (_session.markdownContent == null ||
-        (!isDesktopOs && !_session.showPreview)) {
-      return;
-    }
-    final request = ++_dockRequest;
-    if (!_dockOpen && isDesktopOs) {
-      final contentWidth =
-          MediaQuery.sizeOf(context).width - _readerNavigationWidth(context);
-      final sidebarWidth = Responsive.clampReaderSidebarWidth(
-        _sidebarWidthOverride ?? Responsive.readerSidebarWidth(contentWidth),
-        contentWidth,
+  Future<void> _translateDocument() async {
+    final notifier = ref.read(documentTranslationProvider(_id).notifier);
+    await notifier.translate();
+    if (!mounted) return;
+    final state = ref.read(documentTranslationProvider(_id));
+    final l10n = context.l10n;
+    final snack = ref.read(snackBarServiceProvider);
+    if (state.status == DocTranslationStatus.failed) {
+      snack.showResult(
+        tone: SnackTone.error,
+        message: translationErrorText(l10n, state.error),
       );
-      // 原生窗口与侧栏不在同一帧变宽，期间维持正文原宽，避免先拉宽再挤回。
-      setState(() {
-        _dockWindowChanging = true;
-        _dockAnimating = true;
-        _lockedReaderWidth ??= _readerViewportWidth;
-      });
-      final expanded = await _dockWindow.expand(sidebarWidth);
-      if (!mounted || request != _dockRequest) return;
-      _dockWindowChanging = false;
-      _dockExpandsWindow = expanded;
-      _outwardSidebarWidth = expanded ? sidebarWidth : null;
-    }
-    if (!mounted || request != _dockRequest) return;
-    setState(() {
-      if (!_dockOpen && !_dockExpandsWindow) {
-        _beginDockTransition(opening: true);
-      }
-      _dockHostMounted = true;
-      _dockPane = pane;
-      _dockOpen = true;
-      _desktopAppearanceOpen = false;
-      if (pane == ReaderDockPane.askAi) {
-        _pendingChatReturnArgs = null;
-        _chatReturnArgs = null;
-      }
-    });
-    _sessionNotifier.setDockOpen(true);
-    _sessionNotifier.revealToolbars();
-    if (_dockExpandsWindow) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (request == _dockRequest) _onDockAnimationEnd();
-      });
+    } else if (state.hasResult) {
+      snack.showResult(message: l10n.translationDone);
     }
   }
 
-  Future<void> _closeDock() async {
-    final request = ++_dockRequest;
-    if (!_dockOpen) {
-      await _dockWindow.restore();
-      if (!mounted || request != _dockRequest) return;
-      _dockWindowChanging = false;
-      _onDockAnimationEnd();
-      return;
-    }
-    setState(() {
-      if (_dockExpandsWindow) {
-        _dockWindowChanging = true;
-        _dockAnimating = true;
-        _lockedReaderWidth ??= _readerViewportWidth;
-      } else {
-        _beginDockTransition(opening: false);
-      }
-      _dockOpen = false;
-      if (_pendingChatReturnArgs != null) {
-        _chatReturnArgs = _pendingChatReturnArgs;
-        _pendingChatReturnArgs = null;
-      }
-    });
-    _sessionNotifier.setDockOpen(false);
-    await _dockWindow.restore();
-    if (!mounted || request != _dockRequest) return;
-    _dockWindowChanging = false;
-    if (_dockExpandsWindow) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (request == _dockRequest) _onDockAnimationEnd();
-      });
-      WidgetsBinding.instance.ensureVisualUpdate();
-    }
-  }
-
-  void _toggleDock(ReaderDockPane pane) {
-    if (_session.markdownContent == null ||
-        (!isDesktopOs && !_session.showPreview)) {
-      return;
-    }
-    if (_dockOpen && _dockPane == pane) {
-      unawaited(_closeDock());
-      return;
-    }
-    if (_dockOpen) {
-      setState(() {
-        _dockPane = pane;
-        if (pane == ReaderDockPane.askAi) {
-          _pendingChatReturnArgs = null;
-          _chatReturnArgs = null;
-        }
-      });
-      return;
-    }
-    unawaited(_openDock(pane));
-  }
-
-  Future<void> _showOutlineBottomSheet() async {
-    final session = _session;
-    if (session.markdownContent == null) return;
-
-    final future = _sheetHostKey.currentState!.show(
-      barrierAlpha: 0.45,
-      builder: (_) => ReaderOutlineSheetBody(
-        markdownContent: session.markdownContent!,
-        documentId: widget.document.id,
-        document: widget.document,
-        onLocateQuote: _locateQuoteInReader,
-        summaryImageState: _summaryImageState,
-        figuresEpoch: _figuresEpoch,
-        onNavigate: (offset) {
-          _sheetHostKey.currentState!.close();
-          _scrollToCharOffset(offset);
-          _tryFlashImageAtOffset(offset);
-        },
-        onUploadSummaryImage: () {
-          _summaryCoordinator.uploadFromGallery();
-        },
-      ),
-    );
-    setState(() => _activeSheet = ReaderSheetType.outline);
-    await future;
-  }
-
-  // ─── 沉浸式 ───
-
-  // _toggleToolbars / _handleMarkdownScrollNotification 已移除，
-  // WebView 内部 JS 检测滚动方向并通过 onScrollDirection 回调。
-
-  bool _handlePdfScrollNotification(ScrollNotification notification) {
-    if (notification is ScrollStartNotification) {
-      _pdfGestureActive = true;
-    } else if (notification is ScrollEndNotification) {
-      _finishPdfGesture();
-    }
-    if (notification is! UserScrollNotification) return false;
-    final session = _session;
-    if (isDesktopOs ||
-        session.showPreview ||
-        !(_sessionNotifier.canReactToReaderScroll)) {
-      return false;
-    }
-
-    _sessionNotifier.handleReaderScrollDirection(notification.direction);
-    return false;
-  }
-
-  void _finishPdfGesture() {
-    _pdfGestureActive = false;
-    if (!_pdfLayerDeferred || !mounted) return;
-    _pdfLayerDeferred = false;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  void _handlePdfPointerSignal(PointerSignalEvent event) {
-    final session = _session;
-    if (isDesktopOs ||
-        session.showPreview ||
-        !(_sessionNotifier.canReactToReaderScroll)) {
-      return;
-    }
-    if (event is! PointerScrollEvent) return;
-
-    if (event.scrollDelta.dy > 0) {
-      _sessionNotifier.handleReaderScrollDirection(ScrollDirection.reverse);
-    } else if (event.scrollDelta.dy < 0) {
-      _sessionNotifier.handleReaderScrollDirection(ScrollDirection.forward);
-    }
-  }
-
-  void _handlePdfPointerMove(PointerMoveEvent event) {
-    final session = _session;
-    if (isDesktopOs ||
-        session.showPreview ||
-        _pdfInteraction.pointerDown ||
-        !(_sessionNotifier.canReactToReaderScroll)) {
-      return;
-    }
-
-    if (event.delta.dy < -1) {
-      _sessionNotifier.handleReaderScrollDirection(ScrollDirection.reverse);
-    } else if (event.delta.dy > 1) {
-      _sessionNotifier.handleReaderScrollDirection(ScrollDirection.forward);
-    }
-  }
-
-  // ─── 段落上下文扩展（翻译用）───
-
-  String? _expandToParagraphContext(String selectedText) {
-    return _session.expandToParagraphContext(selectedText);
-  }
-
-  // ─── 大纲导航 ───
-
-  void _tryFlashImageAtOffset(int charOffset) {
-    final filename = _session.imageFilenameNearOffset(charOffset);
-    if (filename == null) return;
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (mounted) _webViewReaderKey.currentState?.flashImage(filename);
-    });
-  }
-
-  void _scrollToCharOffset(int charOffset) {
-    if (!_session.showPreview) {
-      final paragraph = _readerIndex.paragraphs
-          .where((p) => p.markdownEnd != null && p.markdownEnd! > charOffset)
-          .firstOrNull;
-      if (paragraph != null && _pdfController.isReady) {
-        _pdfController.goToPage(
-          pageNumber: _pdfDocumentRef.slotForSourcePage(
-            paragraph.pageIndex + 1,
-          ),
-        );
-        _readerPositionId = paragraph.id;
-      }
-      return;
-    }
-    final md = _session.markdownContent;
-    if (md == null || md.isEmpty) return;
-    final safeOffset = charOffset.clamp(0, md.length);
-    final figureAnchor = RegExp(
-      r'^<!-- otter-figure:([a-zA-Z0-9_-]+) -->',
-    ).firstMatch(md.substring(safeOffset));
-    if (figureAnchor != null) {
-      _webViewReaderKey.currentState?.scrollToFigure(figureAnchor[1]!);
-      return;
-    }
-    final marker = RegExp(
-      r'<!-- otter-figure:[a-zA-Z0-9_-]+ -->[ \t]*\r?\n(?:[ \t]*\r?\n)*',
-    );
-    final navigationMd = md.replaceAll(marker, '');
-    final navigationOffset = md
-        .substring(0, safeOffset)
-        .replaceAll(marker, '')
-        .length;
-    final breaks = RegExp(r'\n\n+').allMatches(navigationMd);
-    var blockIndex = 0;
-    for (final brk in breaks) {
-      if (brk.start >= navigationOffset) break;
-      blockIndex++;
-    }
-    _webViewReaderKey.currentState?.scrollToBlockIndex(blockIndex);
-  }
-
-  bool _isInAnyFavorite(List<Favorite> favorites) {
-    final documentId = widget.document.id;
-    return favorites.any((fav) => fav.documentIds.contains(documentId));
-  }
-
-  List<Favorite> _favoritesContainingDoc(List<Favorite> favorites) {
-    final documentId = widget.document.id;
-    return favorites
-        .where((fav) => fav.documentIds.contains(documentId))
-        .toList();
-  }
-
-  Future<void> _showFavoritePicker() async {
-    final documentId = widget.document.id;
-
-    final result = await _showFavoritePickerSheet(
-      title: context.l10n.moveToFavorite,
-      favorites: ref.read(favoritesProvider).value ?? const [],
-      documentId: documentId,
-      mode: ReaderFavoritePickerMode.add,
-    );
-    if (!mounted || result == null) return;
-
-    final selected = result.favorites
-        .where((favorite) => !favorite.documentIds.contains(documentId))
-        .toList();
-    if (selected.isEmpty) return;
-
-    for (final favorite in selected) {
-      await ref
-          .read(documentLifecycleProvider)
-          .addToFavorite(favorite.id, documentId);
-    }
-    if (!mounted) return;
-    final message = selected.length == 1
-        ? context.l10n.addedToFavorite(selected.single.name)
-        : context.l10n.addedToFavorites(selected.length);
-    ref.read(snackBarServiceProvider).showResult(message: message);
-  }
-
-  Future<Favorite?> _createFavoriteFromPicker() async {
-    final created = await showCreateFavoriteDialog(context);
-    if (!mounted || created == null) return null;
-
-    return ref
-        .read(favoritesProvider.notifier)
-        .create(emoji: created['emoji']!, name: created['name']!);
-  }
-
-  Future<void> _showFavoriteRemovalPicker() async {
-    final documentId = widget.document.id;
-
-    final favorites = _favoritesContainingDoc(
-      ref.read(favoritesProvider).value ?? const [],
-    );
-    if (favorites.isEmpty) {
-      ref
-          .read(snackBarServiceProvider)
-          .showResult(message: context.l10n.documentNotInFavorite);
-      return;
-    }
-
-    final result = await _showFavoritePickerSheet(
-      title: context.l10n.removeFromFavorite,
-      favorites: favorites,
-      documentId: documentId,
-      mode: ReaderFavoritePickerMode.remove,
-    );
-    if (!mounted) return;
-    final selected = result?.favorites ?? const <Favorite>[];
-    if (selected.isEmpty) return;
-
-    for (final favorite in selected) {
-      await ref
-          .read(documentLifecycleProvider)
-          .removeFromFavorite(favorite.id, documentId);
-    }
-    if (!mounted) return;
-    final message = selected.length == 1
-        ? context.l10n.removedFromFavoriteSingle(selected.single.name)
-        : context.l10n.removedFromFavorites(selected.length);
-    ref.read(snackBarServiceProvider).showResult(message: message);
-  }
-
-  Future<ReaderFavoriteSelectionResult?> _showFavoritePickerSheet({
-    required String title,
-    required List<Favorite> favorites,
-    required String documentId,
-    required ReaderFavoritePickerMode mode,
-  }) {
-    return _sheetHostKey.currentState!.show<ReaderFavoriteSelectionResult>(
-      builder: (_) => ReaderFavoritePickerContent(
-        title: title,
-        favorites: favorites,
-        documentId: documentId,
-        mode: mode,
-        onCreateFavorite: mode == ReaderFavoritePickerMode.add
-            ? _createFavoriteFromPicker
-            : null,
-      ),
-    );
-  }
-
-  void _showDocumentInfo(BuildContext context) {
-    showDocumentInfoDialog(context: context, document: widget.document);
-  }
-
-  // ─── 高亮标记 ───
-
-  void _addHighlight(String text, String color) {
-    final created = _sessionNotifier.addHighlight(
-      text,
-      color,
-      anchor: _selectionAnchor,
-    );
-    if (created != null) {
-      _webViewReaderKey.currentState?.addHighlightFromSelection(
-        created.id,
-        color,
-      );
-    }
-  }
-
-  void _removeHighlight(String highlightId) {
-    _sessionNotifier.removeHighlight(highlightId);
-  }
-
-  String? _selectionParagraphContext(ReaderAnchor? anchor, String selected) {
-    final translations = ref
-        .read(documentTranslationProvider(widget.document.id))
-        .translations;
-    final paragraphs = <String>[];
-    final seen = <String>{};
-    for (final range in anchor?.ranges ?? <ReaderAnchorRange>[]) {
-      if (!seen.add(range.paragraphId)) continue;
-      final paragraph = _readerIndex.byId(range.paragraphId);
-      if (paragraph == null) continue;
-      paragraphs.add(
-        range.language == 'source'
-            ? paragraph.plainText
-            : readerTranslatedText(
-                translations[paragraph.hash] ?? paragraph.text,
-              ),
-      );
-    }
-    final fullText = paragraphs.join('\n\n');
-    return fullText.contains(selected)
-        ? fullText
-        : _expandToParagraphContext(selected);
-  }
-
-  void _showAnchoredSelection(String text, Rect rect, ReaderAnchor? anchor) {
-    _dismissSelectionToolbar();
-    _selectionAnchor = anchor;
-    final existing =
-        (ref.read(highlightProvider(widget.document.id)).value ?? <Highlight>[])
-            .where(
-              (h) => anchor == null
-                  ? h.anchor == null && h.text == text
-                  : h.anchor?.toJson().toString() == anchor.toJson().toString(),
-            )
-            .firstOrNull;
-    Highlight? create(String color) =>
-        _sessionNotifier.addHighlight(text, color, anchor: anchor);
-    _selectionToolbarEntry = showReaderContextMenu(
-      context: context,
-      selectionRect: rect,
-      selectedText: text,
-      existingHighlight: existing,
-      onHighlight: (color) {
-        if (existing == null) {
-          create(color);
-        } else {
-          _updateHighlightColor(existing.id, color);
-        }
-        if (!_session.showPreview && _pdfController.isReady) {
-          _pdfController.textSelectionDelegate.clearTextSelection();
-        }
-      },
-      onCopy: () => Clipboard.setData(ClipboardData(text: text)),
-      onAskAi: () => _openAiChat(quote: text, quoteAnchor: anchor),
-      onTranslate: () {
-        final fullText = _selectionParagraphContext(anchor, text);
-        if (!_session.showPreview && _pdfController.isReady) {
-          _pdfController.textSelectionDelegate.clearTextSelection();
-        }
-        showTranslationPopup(
-          context,
-          sourceText: text,
-          fullText: fullText,
-          onAddNote: (color, note) {
-            final h = existing ?? create(color);
-            if (h != null) _sessionNotifier.updateHighlightNote(h.id, note);
-          },
-        );
-      },
-      onCreateForNote: () => existing ?? create(kDefaultHighlightColor),
-      onNoteChanged: _sessionNotifier.updateHighlightNote,
-      onDelete: existing == null ? null : () => _removeHighlight(existing.id),
-      onDismiss: () => _selectionToolbarEntry = null,
-    );
-  }
-
-  void _updateHighlightColor(String highlightId, String color) {
-    _sessionNotifier.updateHighlightColor(highlightId, color);
-  }
-
-  void _handleHighlightTap(Highlight highlight, Rect rect) {
-    if (!mounted) return;
-    _dismissSelectionToolbar();
-    _webViewReaderKey.currentState?.holdTranslations(true);
-    _selectionToolbarEntry = showReaderContextMenu(
-      context: context,
-      selectionRect: rect,
-      selectedText: highlight.text,
-      existingHighlight: highlight,
-      onHighlight: (color) => _updateHighlightColor(highlight.id, color),
-      onCopy: () {
-        Clipboard.setData(ClipboardData(text: highlight.text));
-        ref
-            .read(snackBarServiceProvider)
-            .showResult(
-              message: context.l10n.copiedToClipboard,
-              duration: const Duration(seconds: 1),
-            );
-      },
-      onAskAi: () => _openAiChat(
-        quote: highlight.text.trim(),
-        quoteAnchor: highlight.anchor,
-      ),
-      onTranslate: () {
-        final fullText = _selectionParagraphContext(
-          highlight.anchor,
-          highlight.text.trim(),
-        );
-        showTranslationPopup(
-          context,
-          sourceText: highlight.text.trim(),
-          fullText: fullText,
-          // 已有高亮：换色 + 译文写入注解
-          onAddNote: (color, note) {
-            _updateHighlightColor(highlight.id, color);
-            _sessionNotifier.updateHighlightNote(highlight.id, note);
-          },
-        );
-      },
-      onNoteChanged: _sessionNotifier.updateHighlightNote,
-      onDelete: () => _removeHighlight(highlight.id),
-      onDismiss: _clearWebViewSelectionToolbarState,
-    );
-  }
-
-  void _handleWebViewSelectionEnd(String text, Rect rect, int lineCount) {
-    if (!mounted) return;
-    _webViewSelectionText = text;
-    final toolbar = _selectionToolbarEntry;
-    if (toolbar != null && _webViewSelectionLineCount != null) {
-      if (_webViewSelectionLineCount != lineCount) {
-        _webViewSelectionLineCount = lineCount;
-        toolbar.updateVerticalAnchor(rect);
-      }
-      return;
-    }
-    _dismissSelectionToolbar();
-    if (text.trim().isEmpty) return;
-    _webViewSelectionText = text;
-    _webViewSelectionLineCount = lineCount;
-    _selectionToolbarEntry = showReaderContextMenu(
-      context: context,
-      selectionRect: rect,
-      selectedText: text,
-      onHighlight: (color) {
-        final selectedText = _webViewSelectionText;
-        if (selectedText.trim().isNotEmpty) {
-          _addHighlight(selectedText, color);
-        }
-      },
-      onCopy: () {
-        Clipboard.setData(ClipboardData(text: _webViewSelectionText));
-        ref
-            .read(snackBarServiceProvider)
-            .showResult(
-              message: context.l10n.copiedToClipboard,
-              duration: const Duration(seconds: 1),
-            );
-      },
-      onAskAi: () => _openAiChat(
-        quote: _webViewSelectionText.trim(),
-        quoteAnchor: _selectionAnchor,
-      ),
-      onTranslate: () {
-        final trimmed = _webViewSelectionText.trim();
-        final fullText = _expandToParagraphContext(trimmed);
-        // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"弹窗显示
-        _webViewReaderKey.currentState?.clearSelection();
-        showTranslationPopup(
-          context,
-          sourceText: trimmed,
-          fullText: fullText,
-          // 按文本恢复路径建高亮（选区已清，精确 Range 不可用）+ 译文作注解
-          onAddNote: (color, note) {
-            final h = _sessionNotifier.addHighlight(
-              trimmed,
-              color,
-              anchor: _selectionAnchor,
-            );
-            if (h != null) {
-              _sessionNotifier.updateHighlightNote(h.id, note);
-            }
-          },
-        );
-      },
-      onCreateForNote: () {
-        return _sessionNotifier.addHighlight(
-          _webViewSelectionText,
-          kDefaultHighlightColor,
-          anchor: _selectionAnchor,
-        );
-      },
-      onNoteChanged: _sessionNotifier.updateHighlightNote,
-      onDismiss: _clearWebViewSelectionToolbarState,
-    );
-  }
-
-  void _handleWebViewSelectionCleared() {
-    if (!mounted) return;
-    _dismissSelectionToolbar();
-  }
-
-  void _handleWebViewScrollDirection(ScrollDirection direction) {
-    if (!mounted || isDesktopOs) return;
-    if (!_sessionNotifier.canReactToReaderScroll) return;
-    // 横向翻页模式下不让滚动方向驱动工具栏隐藏——翻页时工具栏会频繁
-    // 闪烁。横向模式的工具栏 toggle 改由 JS 中央点击触发（onToggleToolbar）。
-    final mode = ref.read(readerSettingsProvider).paginationMode;
-    if (mode == ReaderPaginationMode.horizontal) return;
-    _sessionNotifier.handleReaderScrollDirection(direction);
-  }
-
-  void _handleWebViewToggleToolbar() {
-    if (!mounted) return;
-    if (_desktopAppearanceOpen) setState(() => _desktopAppearanceOpen = false);
-    _sessionNotifier.toggleToolbars(allowDockOpen: isDesktopOs);
-  }
-
-  /// 打开问 AI。[quote] 是划词引用；底栏入口不带引用。
-  void _openAiChat({
+  void _openChat({
     String? quote,
-    String? figureImagePath,
-    ReaderAnchor? quoteAnchor,
+    String? figurePath,
+    List<AnchorRange>? anchor,
   }) {
-    // 清掉 WebView 选区：原生选择手柄在系统窗口层、会"穿透"新路由显示
-    _webViewReaderKey.currentState?.clearSelection();
-    _chatReturnArgs = null;
-    _pendingChatReturnArgs = null;
-    _dockChatQuote = quote?.trim();
-    _dockChatQuoteAnchor = quoteAnchor;
-    if (_dockChatQuote?.isEmpty ?? false) _dockChatQuote = null;
-    _dockChatFigurePath = figureImagePath;
-    _dockChatQuoteEpoch++;
-    if (_useReaderDock(context) &&
-        _session.markdownContent != null &&
-        (isDesktopOs || _session.showPreview)) {
-      _openDock(ReaderDockPane.askAi);
-      return;
-    }
-    if (mounted) setState(() {});
+    Haptics.soft();
     context.push(
       AppRoutes.readerChat,
       extra: DocumentChatPageArgs(
         document: widget.document,
         initialQuote: quote,
-        quoteAnchor: quoteAnchor,
-        figureImagePath: figureImagePath,
-        onLocateQuote: _locateQuoteInReader,
-        quoteEpoch: _dockChatQuoteEpoch,
+        quoteAnchor: anchor == null ? null : _anchorJson(anchor),
+        figureImagePath: figurePath,
+        onLocateQuote: _locateQuote,
+        quoteEpoch: ++_quoteEpoch,
       ),
     );
   }
 
-  void _onDockChatQuoteConsumed() {
-    _dockChatQuote = null;
-    _dockChatQuoteAnchor = null;
-    _dockChatFigurePath = null;
-  }
-
-  void _openChatFromFigure(DocumentChatPageArgs args) {
-    _openAiChat(
-      quote: args.initialQuote,
-      quoteAnchor: args.quoteAnchor,
-      figureImagePath: args.figureImagePath,
-    );
-  }
-
-  void _toggleAskAi() {
-    if (_session.markdownContent == null) return;
-    if (_useReaderDock(context) && _session.hasResult) {
-      if (!(_dockOpen && _dockPane == ReaderDockPane.askAi)) {
-        _chatReturnArgs = null;
-        _webViewReaderKey.currentState?.clearSelection();
-      }
-      _toggleDock(ReaderDockPane.askAi);
-      return;
-    }
-    _openAiChat();
-  }
-
-  Future<bool> _locateQuoteInReader(
-    String quote,
-    DocumentChatPageArgs returnArgs,
-  ) async {
-    if (quote.trim().isEmpty && returnArgs.figureImagePath == null) {
-      return false;
-    }
-    final paragraph = _readerIndex.paragraphForQuote(
-      quote,
-      anchor: returnArgs.quoteAnchor,
-      translations: ref
-          .read(documentTranslationProvider(widget.document.id))
-          .translations,
-    );
-    bool found;
-    if (_session.showPreview) {
-      found =
-          await _webViewReaderKey.currentState?.locateQuote(
-            quote,
-            anchor: returnArgs.quoteAnchor,
-            figureName: returnArgs.figureImagePath == null
-                ? null
-                : p.basename(returnArgs.figureImagePath!),
-          ) ??
-          false;
-    } else {
-      found = await _locatePdfQuote(paragraph, returnArgs);
-    }
-    if (!mounted || !found) return false;
-    if (paragraph != null) _readerPositionId = paragraph.id;
-    final resumeArgs = DocumentChatPageArgs(
-      document: widget.document,
-      preserveSession: true,
-      onLocateQuote: _locateQuoteInReader,
-    );
-    if (_dockOpen && _dockPane == ReaderDockPane.askAi) {
-      _pendingChatReturnArgs = resumeArgs;
-    } else {
-      setState(() => _chatReturnArgs = resumeArgs);
-    }
-    return true;
-  }
-
-  Future<bool> _locatePdfQuote(
-    ReaderParagraph? paragraph,
-    DocumentChatPageArgs args,
-  ) async {
-    if (!_pdfController.isReady) return false;
-    if (paragraph != null) {
-      var pageIndex = paragraph.pageIndex;
-      final range = args.quoteAnchor?.ranges.firstOrNull;
-      if (range?.language == 'source') {
-        var offset = 0;
-        for (final region in paragraph.regions) {
-          offset += region.sourceLength;
-          if (range!.start < offset) {
-            pageIndex = region.pageIndex;
-            break;
-          }
-        }
-      }
-      final slot = _pdfDocumentRef.slotForSourcePage(pageIndex + 1);
-      final page = _pdfController.pages.elementAtOrNull(slot - 1);
-      if (page is! ReaderPdfPage) return false;
-      final layout = await page.layout;
-      if (!mounted || !_pdfController.isReady) return false;
-      final blocks = layout.blocks.where(
-        (block) => block.paragraph.id == paragraph.id,
-      );
-      if (blocks.isEmpty) return false;
-      final box = blocks.first.rect;
-      final target = _pdfController.calcRectForRectInsidePage(
-        pageNumber: slot,
-        rect: readerRectToPdf(box, page),
-      );
-      await _pdfController.goTo(
-        _pdfController.calcMatrixFor(target.center),
-        duration: kAnim,
-      );
-      return true;
-    }
-    if (args.figureImagePath != null) {
-      final figures =
-          await FigureExtractService.loadManifest(widget.document.id) ?? [];
-      if (!mounted || !_pdfController.isReady) return false;
-      final figure = figures
-          .where((f) => p.equals(f.imagePath, args.figureImagePath!))
-          .firstOrNull;
-      if (figure == null) return false;
-      await _pdfController.goToPage(
-        pageNumber: _pdfDocumentRef.slotForSourcePage(figure.pageIndex + 1),
-        duration: kAnim,
+  /// 问 AI 的「定位原文」：在正文中找到引文并滚到该处，显示返回问 AI 的入口。
+  bool _locateQuote(String quote, DocumentChatPageArgs args) {
+    final controller = _controller;
+    if (controller == null || !_hasModel) return false;
+    String normalize(String s) => s.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final needle = normalize(quote);
+    if (needle.isEmpty) return false;
+    final probe = needle.length > 40 ? needle.substring(0, 40) : needle;
+    final blocks = controller.model.blocks;
+    for (var i = 0; i < blocks.length; i++) {
+      if (!normalize(blocks[i].text).contains(probe)) continue;
+      setState(() {
+        _pdfMode = false;
+        _chatReturn = DocumentChatPageArgs(
+          document: args.document,
+          onLocateQuote: _locateQuote,
+          preserveSession: true,
+        );
+      });
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _surface.currentState?.reveal(ReaderLocation(i, 0)),
       );
       return true;
     }
     return false;
   }
 
-  void _returnToChat() {
-    final args = _chatReturnArgs;
-    if (args == null) return;
+  void _showTranslation(String text, Rect anchor) {
+    final controller = _controller;
+    unawaited(
+      showTranslationPopup(
+        context,
+        sourceText: text,
+        onAddNote: controller == null || !controller.hasSelection
+            ? null
+            : (color, note) {
+                final created = controller.highlightSelection(color);
+                if (created != null) {
+                  controller.updateHighlight(created.copyWith(note: note));
+                }
+              },
+      ),
+    );
+  }
+
+  void _openFigure(Block block) {
+    final model = _controller?.source;
+    if (model == null) return;
+    final translation = ref.read(documentTranslationProvider(_id));
+    final keys = {
+      for (var i = 0; i < model.blocks.length; i++)
+        model.blocks[i].id: model.translationKeys.elementAtOrNull(i) ?? '',
+    };
+    final views = <FigureView>[];
+    var initial = 0;
+    for (final image in model.figureImages) {
+      final b = model.blocks.where((x) => x.id == image.blockId).firstOrNull;
+      if (b == null) continue;
+      if (b.id == block.id) initial = views.length;
+      views.add(
+        FigureView(
+          path: image.path,
+          caption: b.text,
+          translation: translation.translations[keys[b.id]],
+        ),
+      );
+    }
+    unawaited(
+      showFigureViewer(
+        context,
+        views,
+        initialIndex: initial,
+        onAskAi: (f) => _openChat(quote: f.caption, figurePath: f.path),
+      ),
+    );
+  }
+
+  Future<void> _generateSummary() async {
+    final path = await ref
+        .read(documentTaskProvider.notifier)
+        .generateSummaryImage(document: widget.document);
+    if (path != null && mounted) _showSummary();
+  }
+
+  void _showSummary() {
+    unawaited(
+      showFigureViewer(context, [
+        FigureView(path: DocPaths.summaryImage(_id), caption: ''),
+      ]),
+    );
+  }
+
+  Future<void> _openSheet(ReaderSheetType type) async {
     Haptics.soft();
-    setState(() {
-      _chatReturnArgs = null;
-      _pendingChatReturnArgs = null;
-    });
-    _webViewReaderKey.currentState?.clearSelection();
-    if (_useReaderDock(context) &&
-        _session.markdownContent != null &&
-        (isDesktopOs || _session.showPreview)) {
-      _openDock(ReaderDockPane.askAi);
+    setState(() => _sheet = type);
+    final cs = Theme.of(context).colorScheme;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: type != ReaderSheetType.notes,
+      backgroundColor: cs.surfaceContainerLow,
+      constraints: const BoxConstraints(maxWidth: 640),
+      builder: (context) => switch (type) {
+        ReaderSheetType.outline => _OutlineSheet(
+          controller: _controller,
+          onSelect: (index) {
+            Navigator.pop(context);
+            setState(() => _pdfMode = false);
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _surface.currentState?.reveal(ReaderLocation(index, 0)),
+            );
+          },
+        ),
+        ReaderSheetType.notes => FractionallySizedBox(
+          heightFactor: 0.7,
+          child: ReaderNotesSheetBody(documentId: _id),
+        ),
+        ReaderSheetType.theme => const ReaderThemeSheetBody(),
+      },
+    );
+    if (mounted) setState(() => _sheet = null);
+  }
+
+  Future<void> _toggleFavorite(bool inFavorite) async {
+    if (!inFavorite) {
+      await DocCardActions.addToFavorite(context, ref, {_id});
       return;
     }
-    context.push(AppRoutes.readerChat, extra: args);
-  }
-
-  double _chatReturnPromptBottom(ReaderSessionState session) {
-    final padding = MediaQuery.paddingOf(context).bottom;
-    const barHeight = 56.0;
-    final barVisible =
-        session.showPreview &&
-        session.hasResult &&
-        session.markdownContent != null &&
-        session.toolbarsVisible;
-    return (barVisible ? barHeight + padding : padding) + 16;
-  }
-
-  // ─── 选择/标记工具栏 ───
-
-  void _dismissSelectionToolbar() {
-    _selectionToolbarEntry?.remove();
-    _clearWebViewSelectionToolbarState();
-  }
-
-  void _clearWebViewSelectionToolbarState() {
-    _webViewReaderKey.currentState?.holdTranslations(false);
-    _selectionToolbarEntry = null;
-    _webViewSelectionText = '';
-    _webViewSelectionLineCount = null;
-  }
-
-  // 旧原生选择基础设施已移除，由 WebView 选择处理替代
-
-  @override
-  void deactivate() {
-    _readerActive = false;
-    _translationNotifier.invalidateRestore();
-    _translationNotifier.cancel(updateState: false);
-    super.deactivate();
-  }
-
-  @override
-  void activate() {
-    super.activate();
-    _readerActive = true;
-  }
-
-  @override
-  void dispose() {
-    ++_dockRequest;
-    unawaited(_dockWindow.restore());
-    _readerActive = false;
-    _translationNotifier.invalidateRestore();
-    _translationNotifier.cancel(updateState: false);
-    _pdfController.removeListener(_onPdfControllerChanged);
-    // 强制把防抖窗口里的最后一次进度落盘；fire-and-forget——dispose 同步路径
-    // 不能 await，但 HistoryNotifier 内部用 await _save()，下一帧前会完成。
-    unawaited(_sessionNotifier.flushProgress());
-    _sessionNotifier.setDockOpen(false);
-    _pdfInteraction.dispose();
-    _progressDisplay.dispose();
-    _pdfDocumentRef.disposeLayout();
-    _pdfSearch.dispose();
-    _summaryImageState.dispose();
-    _figuresEpoch.dispose();
-    _selectionToolbarEntry?.remove();
-    super.dispose();
-  }
-
-  // ─── UI ───
-
-  /// 统一退出入口。
-  ///
-  /// 加载、翻译或 SnackBar 任务进行时不截 WebView：截图和销毁会一起等
-  /// 平台线程，系统返回就停在半路，后续返回也被 [_popping] 吃掉。
-  /// 空闲时仍截一帧，让反向转场对着普通图片而不是原生视图。
-  bool _popping = false;
-  bool get _viewerWorkInFlight =>
-      _session.markdownLoading ||
-      _translationNotifier.currentState.status ==
-          DocTranslationStatus.loading ||
-      ref.read(taskActivityProvider).isNotEmpty;
-
-  Future<void> _handleBack() async {
-    if (_popping) return;
-    _popping = true;
-    final reader = _webViewReaderKey.currentState;
-    try {
-      if (reader != null) {
-        final busy = _viewerWorkInFlight;
-        await reader.releaseForNavigation(
-          capture: !busy && reader.canCaptureForTransition,
-        );
+    final favorites = ref.read(favoritesProvider.notifier);
+    for (final f in ref.read(favoritesProvider).value ?? const []) {
+      if (f.documentIds.contains(_id)) {
+        await favorites.removeDocument(f.id, _id);
       }
-      if (_dockOpen) await _closeDock();
-      if (!mounted) return;
-      _sessionNotifier.setDockOpen(false);
-      // 退出前作废恢复回调。已写入的译文保留，取消不会清掉文档状态。
-      _translationNotifier.invalidateRestore();
-      _translationNotifier.cancel(updateState: false);
-      if (!mounted) return;
-      context.pop();
-    } catch (_) {
-      if (mounted) _popping = false;
+    }
+    if (mounted) {
+      ref
+          .read(snackBarServiceProvider)
+          .showResult(message: context.l10n.removeFromFavorite);
     }
   }
 
-  Future<void> _dismissReaderOverlay() async {
-    if (_desktopAppearanceOpen) {
-      setState(() => _desktopAppearanceOpen = false);
-      return;
-    }
-    final sheetHost = _sheetHostKey.currentState;
-    if (_session.sheetOpen || sheetHost?.isOpen == true) {
-      sheetHost?.close();
-      return;
-    }
-    if (_dockOpen) {
-      _closeDock();
-      return;
-    }
-    if (_session.searchActive) {
-      _closeSearch();
-      return;
-    }
-    await _handleBack();
-  }
+  // ── 构建 ──
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final useDock = _useReaderDock(context);
-    if (_dockAnimating &&
-        !_dockWindowChanging &&
-        (!useDock || MediaQuery.disableAnimationsOf(context))) {
-      _dockAnimating = false;
-      _lockedReaderWidth = null;
-    }
-    if (!useDock && _dockOpen) {
-      _dockOpen = false;
-      unawaited(_dockWindow.restore());
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _sessionNotifier.setDockOpen(false);
-      });
-    }
+  /// 笔记面板删改后同步到正文；正文自身的写入已在控制器里。
+  void _syncHighlights(List<Highlight>? notes) {
+    final controller = _controller;
+    if (notes == null || controller == null) return;
+    final byId = {for (final n in notes) n.id: n};
+    final changed = controller.highlights.any((h) {
+      final n = byId[h.id];
+      return n == null || n.note != h.note || n.color != h.color;
+    });
+    if (changed) controller.replaceHighlights(_readerHighlights(notes));
   }
 
   @override
   Widget build(BuildContext context) {
-    final initialSession = _session;
-    if (isDesktopOs &&
-        initialSession.initialized &&
-        initialSession.hasResult &&
-        initialSession.markdownContent == null &&
-        !initialSession.markdownLoading &&
-        initialSession.markdownLoadError == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_canUseReader) unawaited(_sessionNotifier.ensureMarkdownReady());
-      });
-    }
-    final indexSession = ref.watch(
-      readerSessionProvider(_sessionArgs).select(
-        (s) => (
-          markdownContent: s.markdownContent,
-          contentRevision: s.contentRevision,
-        ),
+    ref.listen(documentTranslationProvider(_id), (_, _) => _syncTranslations());
+    ref.listen(
+      translationConfigProvider.select((c) => c.targetLanguage),
+      (_, _) => _syncTranslations(),
+    );
+    ref.listen(
+      highlightProvider(_id),
+      (_, next) => _syncHighlights(next.value),
+    );
+
+    final settings = ref.watch(readerSettingsProvider);
+    final theme = buildReaderThemeData(Theme.of(context), settings.theme);
+    final cs = theme.colorScheme;
+    final palette = resolveReaderPalette(settings.theme, cs);
+    final translation = ref.watch(documentTranslationProvider(_id));
+    final extracting = ref.watch(
+      documentTaskProvider.select(
+        (tasks) =>
+            tasks[DocumentTaskKey(
+                  type: DocumentTaskType.extractDocument,
+                  documentId: _id,
+                )]
+                ?.isActive ==
+            true,
       ),
     );
-    final indexAsync = ref.watch(
-      readerDocumentIndexProvider((
-        documentId: widget.document.id,
-        markdown: indexSession.markdownContent ?? '',
-        revision: indexSession.contentRevision,
-      )),
+    final inFavorite = (ref.watch(favoritesProvider).value ?? const []).any(
+      (f) => f.documentIds.contains(_id),
     );
-    _readerIndex = indexAsync.value ?? ReaderDocumentIndex.empty;
-    final language = ref.watch(
-      translationConfigProvider.select((c) => c.targetLanguage),
-    );
-    final restoreKey =
-        '${indexSession.contentRevision}|${indexSession.markdownContent.hashCode}|$language';
-    if (indexAsync.hasValue && _restoredIndexKey != restoreKey) {
-      _restoredIndexKey = restoreKey;
-      final index = _readerIndex;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_canUseReader || _restoredIndexKey != restoreKey) return;
-        unawaited(
-          _translationNotifier
-              .restoreAfterCurrent(indexSession.markdownContent ?? '', index)
-              .then((_) async {
-                if (!_canUseReader || _restoredIndexKey != restoreKey) return;
-                final translations =
-                    _translationNotifier.currentState.translations;
-                await _highlightNotifier.restoreAnchors(
-                  index,
-                  translations,
-                  language,
-                );
-              }),
-        );
-      });
-    }
-    ref.listen(navRailExtendedProvider, (_, _) {
-      if (_dockOpen && !_useReaderDock(context)) _closeDock();
-    });
-    ref.listen(
-      readerSessionProvider(_sessionArgs).select((s) => s.contentRevision),
-      (_, next) {
-        _figuresFuture = null;
-        _translationNotifier.cancel();
-      },
-    );
+    final showBottom = _hasModel && !_pdfMode;
 
-    final readerSettings = ref.watch(readerSettingsProvider);
-    final theme = buildReaderThemeData(Theme.of(context), readerSettings.theme);
-    final cs = theme.colorScheme;
-    // select 排除 currentResultIndex（由独立的 _ResultNavigator 消费）,
-    // 避免搜索导航时整页 rebuild。markdownContent 用 cacheKey 代替全文比较，
-    // searchResultCount 只比较 length，error/snapshot 只比较 nullity。
-    ref.watch(readerSessionProvider(_sessionArgs).select(_mainBuildSelector));
-    // ref.read 获取完整 state 用于数据访问——select 已覆盖所有 rebuild 场景，
-    // currentResultIndex 变化时 select 不触发、read 返回的值不被消费，安全。
-    final session = ref.read(readerSessionProvider(_sessionArgs));
-    final extractTaskKey = DocumentTaskKey(
-      type: DocumentTaskType.extractDocument,
-      documentId: widget.document.id,
-    );
-    final extracting =
-        ref.watch(
-          documentTaskProvider.select(
-            (tasks) => tasks[extractTaskKey]?.isActive == true,
-          ),
-        ) ||
-        _reprocessing;
-    _syncInitialSummaryImage(session);
-
-    // 异步初始化完成前显示骨架加载状态
-    if (!session.initialized) {
-      final showReaderNavigation = _showReaderNavigation;
-      final railExtended =
-          ref.watch(navRailExtendedProvider) ??
-          Responsive.showExtendedRail(context);
-      return Theme(
-        data: theme,
+    return Theme(
+      data: theme,
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+              _openSearch,
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+              _openSearch,
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            if (_searching) {
+              _closeSearch();
+            } else {
+              _controller?.clearSelection();
+            }
+          },
+        },
         child: Scaffold(
-          backgroundColor: cs.surface,
+          backgroundColor: _pdfMode ? cs.surface : palette.background,
+          resizeToAvoidBottomInset: false,
           body: SafeArea(
+            bottom: false,
             child: Column(
               children: [
+                AnimatedSize(
+                  duration: kAnim,
+                  curve: kAnimCurve,
+                  child: _toolbars || _searching
+                      ? ColoredBox(
+                          color: cs.surface,
+                          child: _toolbar(context, inFavorite, extracting),
+                        )
+                      : const SizedBox(width: double.infinity),
+                ),
                 Expanded(
-                  child: Row(
+                  child: Stack(
                     children: [
-                      if (isDesktopOs)
-                        _buildReaderNavigationRail(
-                          railExtended,
-                          visible: showReaderNavigation,
-                        ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            _buildToolbar(cs, session),
-                            Expanded(
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: cs.primary.withAlpha(120),
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      Positioned.fill(
+                        child: _body(context, palette, settings, extracting),
                       ),
+                      if (_chatReturn case final args?)
+                        Positioned(
+                          right: 16,
+                          bottom: 16,
+                          child: ReaderChatReturnPrompt(
+                            onCancel: () => setState(() => _chatReturn = null),
+                            onReturn: () {
+                              setState(() => _chatReturn = null);
+                              context.push(AppRoutes.readerChat, extra: args);
+                            },
+                          ),
+                        ),
                     ],
                   ),
                 ),
+                if (showBottom)
+                  AnimatedSize(
+                    duration: kAnim,
+                    curve: kAnimCurve,
+                    child: _toolbars
+                        ? SafeArea(
+                            top: false,
+                            child: ReaderBottomBar(
+                              readerSettings: settings,
+                              translation: translation,
+                              activeSheet: _sheet,
+                              desktop: isDesktopOs,
+                              readingProgress: _progress,
+                              onOpenOutline: () =>
+                                  _openSheet(ReaderSheetType.outline),
+                              onTranslate: _translateDocument,
+                              onCycleTranslationMode: () => ref
+                                  .read(
+                                    documentTranslationProvider(_id).notifier,
+                                  )
+                                  .cycleMode(),
+                              onAskAi: () => _openChat(),
+                              onOpenNotes: () =>
+                                  _openSheet(ReaderSheetType.notes),
+                              onOpenTheme: () =>
+                                  _openSheet(ReaderSheetType.theme),
+                            ),
+                          )
+                        : const SizedBox(width: double.infinity),
+                  ),
               ],
             ),
           ),
         ),
-      );
-    }
-
-    final fileExists = session.fileExists;
-
-    final contentBg = (session.showPreview && session.hasResult)
-        ? resolveReaderPalette(readerSettings.theme, cs).background
-        : cs.surface;
-
-    final isMarkdownHighlightMode = session.markdownHighlightMode;
-    final pdfMatchCount = _pdfSearch.searcher?.matches.length ?? 0;
-    final showPdfNavigator = !session.showPreview && _pdfSearch.hasQuery;
-
-    final railExtended =
-        ref.watch(navRailExtendedProvider) ??
-        Responsive.showExtendedRail(context);
-    final showReaderNavigation = _showReaderNavigation;
-    final useDock = _useReaderDock(context);
-    final markdown = session.markdownContent;
-    final windowW = MediaQuery.sizeOf(context).width;
-    final readerContentW = windowW - _readerNavigationWidth(context);
-    final sidebarW = Responsive.clampReaderSidebarWidth(
-      _sidebarWidthOverride ??
-          _outwardSidebarWidth ??
-          Responsive.readerSidebarWidth(readerContentW),
-      readerContentW,
-    );
-
-    return Theme(
-      data: theme,
-      child: PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) unawaited(_dismissReaderOverlay());
-        },
-        child: Scaffold(
-          backgroundColor: cs.surface,
-          // 键盘弹出时不缩放 body：阅读器搜索框锚在顶部工具栏，笔记/编辑走独立
-          // sheet/dialog，正文从不需要为底部键盘让位。设 false 切断 WebView 平台
-          // 视图随 viewInsets 每帧 resize（MIUI 的 adjustResize 会逐帧推 inset）。
-          resizeToAvoidBottomInset: false,
-          body: SafeArea(
-            top: false,
-            bottom: false,
-            child: Listener(
-              child: Row(
-                children: [
-                  if (isDesktopOs)
-                    _buildReaderNavigationRail(
-                      railExtended,
-                      visible: showReaderNavigation,
-                    ),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Stack(
-                            children: [
-                              // ── 主内容层：占满全屏，工具栏 overlay 在上下方 ──
-                              // 停靠栏开合期间只锁正文宽度（避免 WebView 每帧重排）；
-                              // 工具栏、底栏等 overlay 跟随实时宽度，随栏边平滑移动。
-                              Positioned.fill(
-                                child: _buildStableReaderViewport(
-                                  AnimatedContainer(
-                                    duration: kAnim,
-                                    curve: Curves.easeInOut,
-                                    color: contentBg,
-                                    child: fileExists
-                                        ? _buildReadingArea(
-                                            readerSettings,
-                                            (columns) => _buildBody(
-                                              theme,
-                                              cs,
-                                              readerSettings,
-                                              session,
-                                              columns: columns,
-                                            ),
-                                          )
-                                        : _buildFileNotFound(theme, cs),
-                                  ),
-                                ),
-                              ),
-                              // ── 顶部工具栏（沉浸式时向上滑出） ──
-                              // ClipRect 必须包在 AnimatedSlide 外：AnimatedSlide 内部 transform
-                              // 只动 paint 位移不动 layout box，Stack 的 clipBehavior 按 layout
-                              // 边界剪不到。少了 ClipRect 时工具栏向上滑出的部分会透过透明状态栏显示。
-                              Positioned(
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                child: ClipRect(
-                                  child: AnimatedSlide(
-                                    duration: kAnim,
-                                    curve: kAnimCurve,
-                                    offset: session.toolbarsVisible
-                                        ? Offset.zero
-                                        : const Offset(0, -1),
-                                    child: Container(
-                                      color: cs.surface,
-                                      padding: EdgeInsets.only(
-                                        top: MediaQuery.of(context).padding.top,
-                                      ),
-                                      child: isMarkdownHighlightMode
-                                          ? _buildHighlightSearchBar(session)
-                                          : (session.searchActive &&
-                                                    !session.showPreview
-                                                ? _buildPdfSearchBar()
-                                                : _buildToolbar(
-                                                    cs,
-                                                    session,
-                                                    extracting: extracting,
-                                                  )),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // ── 内嵌 sheet 宿主（z-order 低于底栏 → 底栏始终可见） ──
-                              Positioned.fill(
-                                child: ReaderSheetHost(
-                                  key: _sheetHostKey,
-                                  onSheetOpen: () =>
-                                      _sessionNotifier.setSheetOpen(true),
-                                  onSheetClose: () {
-                                    _sessionNotifier.setSheetOpen(false);
-                                    setState(() => _activeSheet = null);
-                                  },
-                                ),
-                              ),
-                              // ── 阅读工具栏：桌面端 PDF 与 Markdown 共用 ──
-                              // 同样的 ClipRect 防御：避免向下滑出后透过透明导航栏区域显示。
-                              if ((session.showPreview || isDesktopOs) &&
-                                  session.hasResult &&
-                                  session.markdownContent != null)
-                                Positioned(
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: ClipRect(
-                                    child: AnimatedSlide(
-                                      duration: kAnim,
-                                      curve: kAnimCurve,
-                                      offset: session.toolbarsVisible
-                                          ? Offset.zero
-                                          : const Offset(0, 1),
-                                      child: _buildBottomBar(readerSettings),
-                                    ),
-                                  ),
-                                ),
-                              if (isDesktopOs)
-                                Positioned(
-                                  top: 64,
-                                  bottom: 88,
-                                  left: 16,
-                                  right: 16,
-                                  child: Align(
-                                    alignment: Alignment.bottomRight,
-                                    // 与对话框同一套语言：淡入 + 由右下角 0.92 放大；
-                                    // 关闭时反向收回，不再瞬间消失。
-                                    child: AnimatedSwitcher(
-                                      duration:
-                                          MediaQuery.disableAnimationsOf(
-                                            context,
-                                          )
-                                          ? Duration.zero
-                                          : kAnim,
-                                      reverseDuration: kAnimFast,
-                                      switchInCurve: kAnimCurve,
-                                      switchOutCurve: kAnimCurveReverse,
-                                      transitionBuilder: (child, animation) =>
-                                          FadeTransition(
-                                            opacity: animation,
-                                            child: ScaleTransition(
-                                              alignment: Alignment.bottomRight,
-                                              scale: Tween(
-                                                begin: 0.92,
-                                                end: 1.0,
-                                              ).animate(animation),
-                                              child: child,
-                                            ),
-                                          ),
-                                      child: _desktopAppearanceOpen
-                                          ? ConstrainedBox(
-                                              key: const ValueKey('appearance'),
-                                              constraints: const BoxConstraints(
-                                                maxWidth: 360,
-                                                maxHeight: 640,
-                                              ),
-                                              child: ReaderDesktopAppearance(
-                                                pdfView: !session.showPreview,
-                                                onClose: () => setState(
-                                                  () => _desktopAppearanceOpen =
-                                                      false,
-                                                ),
-                                              ),
-                                            )
-                                          : const SizedBox.shrink(),
-                                    ),
-                                  ),
-                                ),
-                              // ── 定位原文后返回问 AI 引导条 ──
-                              if (_chatReturnArgs != null)
-                                AnimatedPositioned(
-                                  duration: kAnim,
-                                  curve: kAnimCurve,
-                                  right: 16,
-                                  bottom: _chatReturnPromptBottom(session),
-                                  child: ReaderChatReturnPrompt(
-                                    onCancel: () {
-                                      Haptics.soft();
-                                      setState(() => _chatReturnArgs = null);
-                                    },
-                                    onReturn: _returnToChat,
-                                  ),
-                                ),
-                              // ── 浮动搜索结果导航器 ──
-                              if (isMarkdownHighlightMode &&
-                                  session.searchResultCount > 0)
-                                Positioned(
-                                  right: 16,
-                                  bottom: 32,
-                                  child: _ResultNavigator(
-                                    sessionArgs: _sessionArgs,
-                                    onPrevious: _goToPrevResult,
-                                    onNext: _goToNextResult,
-                                  ),
-                                ),
-                              if (showPdfNavigator)
-                                Positioned(
-                                  right: 16,
-                                  bottom: 32,
-                                  child: _buildPdfResultNavigator(
-                                    pdfMatchCount,
-                                  ),
-                                ),
-                              // ── 搜索遮罩层 ──
-                              if (session.searchActive && session.showPreview)
-                                Positioned.fill(
-                                  child: SearchOverlay(
-                                    readerSettings: readerSettings,
-                                    onSearch:
-                                        (
-                                          String query, {
-                                          bool caseSensitive = false,
-                                          bool wholeWord = false,
-                                        }) async {
-                                          final results =
-                                              await _webViewReaderKey
-                                                  .currentState
-                                                  ?.searchContent(
-                                                    query,
-                                                    caseSensitive:
-                                                        caseSensitive,
-                                                    wholeWord: wholeWord,
-                                                  ) ??
-                                              const [];
-                                          if (mounted) {
-                                            _sessionNotifier
-                                                .updateSearchResults(
-                                                  results.length,
-                                                );
-                                          }
-                                          return results;
-                                        },
-                                    onResultTap: _onSearchResultTap,
-                                    onDismiss: _closeSearch,
-                                    initialQuery: session.highlightQuery,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        if (useDock && _dockHostMounted)
-                          ReaderDockedPane(
-                            sidebarWidth: sidebarW,
-                            open: _dockOpen,
-                            animate: !_dockExpandsWindow,
-                            pane: _dockPane,
-                            onAnimationEnd: _onDockAnimationEnd,
-                            onSidebarDragUpdate: _onSidebarDragUpdate,
-                            onSidebarDragEnd: _onSidebarDragEnd,
-                            outline: OutlinePanel(
-                              key: ValueKey(markdown.hashCode),
-                              markdownContent: markdown ?? '',
-                              documentId: widget.document.id,
-                              document: widget.document,
-                              onLocateQuote: _locateQuoteInReader,
-                              onOpenChat: _openChatFromFigure,
-                              summaryImageState: _summaryImageState,
-                              figuresEpoch: _figuresEpoch,
-                              onNavigate: (offset) {
-                                _scrollToCharOffset(offset);
-                                _tryFlashImageAtOffset(offset);
-                              },
-                              onUploadSummaryImage: () {
-                                _summaryCoordinator.uploadFromGallery();
-                              },
-                            ),
-                            notes: ReaderNotesPanel(
-                              documentId: widget.document.id,
-                              showGrabber: false,
-                              onEditStart: _onNotesEditStart,
-                              onEditEnd: _onNotesEditEnd,
-                            ),
-                            chat: DocumentChatPage(
-                              embedded: true,
-                              paneWidth: sidebarW,
-                              onClose: _closeDock,
-                              onQuoteConsumed: _onDockChatQuoteConsumed,
-                              args: DocumentChatPageArgs(
-                                document: widget.document,
-                                initialQuote: _dockChatQuote,
-                                quoteAnchor: _dockChatQuoteAnchor,
-                                figureImagePath: _dockChatFigurePath,
-                                onLocateQuote: _locateQuoteInReader,
-                                quoteEpoch: _dockChatQuoteEpoch,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
 
-  Widget _buildStableReaderViewport(Widget child) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (!_dockAnimating) _readerViewportWidth = constraints.maxWidth;
-        final width = _lockedReaderWidth ?? constraints.maxWidth;
-        return ClipRect(
-          child: OverflowBox(
-            alignment: Alignment.topLeft,
-            minWidth: width,
-            maxWidth: width,
-            child: SizedBox(
-              width: width,
-              child: RepaintBoundary(child: child),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildReadingArea(
-    ReaderSettingsState settings,
-    Widget Function(int columns) buildContent,
-  ) {
-    if (!isDesktopOs) return buildContent(1);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final horizontal = settings.desktopHorizontalMargin.clamp(
-          0.0,
-          constraints.maxWidth / 4,
-        );
-        final vertical = settings.desktopVerticalMargin.clamp(
-          0.0,
-          constraints.maxHeight / 6,
-        );
-        final display = View.of(context).display;
-        final columns = readerSpreadColumns(
-          availableWidth: constraints.maxWidth - horizontal * 2,
-          screenWidth: display.size.width / display.devicePixelRatio,
-          fontSize: _session.showPreview ? settings.fontSize : 16,
-          previousColumns: _spreadColumns,
-        );
-        if (_spreadColumns != columns) {
-          _spreadColumns = columns;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _pdfController.isReady) _pdfController.invalidate();
-          });
-        }
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _handleWebViewToggleToolbar,
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                vertical,
-                horizontal,
-                vertical,
-              ),
-              child: buildContent(columns),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildReaderNavigationRail(bool extended, {required bool visible}) {
+  Widget _toolbar(BuildContext context, bool inFavorite, bool extracting) {
     final l10n = context.l10n;
-    return SpringReveal(
-      open: visible,
-      // 内容贴右缘：收起时整条随右边线滑出，展开时滑入。
-      alignment: Alignment.centerRight,
-      onSettled: _onDockAnimationEnd,
-      child: AppNavigationRail(
-        key: _readerNavigationKey,
-        selectedIndex: -1,
-        onDestinationSelected: (index) async {
-          final route = switch (index) {
-            0 => AppRoutes.library,
-            1 => AppRoutes.shelf,
-            _ => AppRoutes.settings,
-          };
-          if (_dockOpen) await _closeDock();
-          if (!mounted) return;
-          context.go(route);
-        },
-        destinations: appDestinations(l10n),
-        extended: extended,
-        bottomDestinationCount: 0,
-        // 底部槽位与主外壳一致：切换标签展示模式；隐藏整条导航走工具栏按钮
-        bottomAction: railLabelToggle(l10n, extended: extended),
-        onBottomAction: () =>
-            ref.read(navRailExtendedProvider.notifier).setExtended(!extended),
-      ),
-    );
-  }
-
-  void _syncInitialSummaryImage(ReaderSessionState session) {
-    final imagePath = session.summaryImagePath;
-    final current = _summaryImageState.value;
-    if (imagePath == null || current.imagePath != null || current.generating) {
-      return;
-    }
-    _summaryImageState.value = SummaryImageState(imagePath: imagePath);
-  }
-
-  /// 顶部工具栏：返回 / 搜索 / PDF↔MD 切换 / 重新提取 / 信息
-  ///
-  /// 大纲、外观（颜色/背景）、字体面板 3 个按钮已挪到 [_buildBottomBar]。
-  Widget _buildToolbar(
-    ColorScheme cs,
-    ReaderSessionState session, {
-    bool extracting = false,
-  }) {
-    final favorites = ref.watch(favoritesProvider).value ?? const [];
-    final inFavorite = _isInAnyFavorite(favorites);
-    final translation = ref.watch(
-      documentTranslationProvider(widget.document.id),
-    );
-    final summaryImagePath = DocumentSummaryImageService.imagePathFor(
-      widget.document.id,
-    );
-
-    return ReaderTopToolbar(
-      showPreview: session.showPreview,
-      hasResult: session.hasResult,
-      hasMarkdownContent: session.markdownContent != null,
-      fileExists: session.fileExists,
-      inFavorite: inFavorite,
-      extracting: extracting,
-      canRetranslate: translation.hasResult && session.markdownContent != null,
-      hasSummaryImage: File(summaryImagePath).existsSync(),
-      extractButton: _buildExtractButton(session, extracting),
-      onBack: _handleBack,
-      onSearch: _openSearch,
-      onGenerateSummaryImage: _handleGenerateSummaryImage,
-      onAddFavorite: _showFavoritePicker,
-      onRemoveFavorite: _showFavoriteRemovalPicker,
-      onExtract: _onExtractPressed,
-      onShowInfo: () => _showDocumentInfo(context),
-      onReprocess: _onReprocessPressed,
-      onRetranslate: _handleRetranslate,
-      onOpenSummaryImage: () => _summaryCoordinator.openSummaryImage(),
-      showNavigationToggle:
-          isDesktopOs &&
-          MediaQuery.sizeOf(context).width >= Responsive.kReaderBodyMin + 73,
-      navigationVisible: _showReaderNavigation,
-      onToggleNavigation: _toggleReaderNavigation,
-    );
-  }
-
-  Widget _buildPdfSearchBar() {
-    return ReaderPdfSearchBar(
-      controller: _pdfSearch.textController,
-      focusNode: _pdfSearch.focusNode,
-      onBack: _handleBack,
-      onClear: _clearPdfSearch,
-      onSubmitted: (value) => _pdfSearch.search(value, searchImmediately: true),
-      onChanged: (value) => _pdfSearch.search(value),
-    );
-  }
-
-  Widget _buildHighlightSearchBar(ReaderSessionState session) {
-    return ReaderHighlightSearchBar(
-      query: session.highlightQuery ?? '',
-      onBack: _handleBack,
-      onOpenSearch: _openSearch,
-      onClear: _clearHighlight,
-    );
-  }
-
-  Widget _buildPdfResultNavigator(int total) {
-    return ReaderPdfResultNavigator(
-      currentIndex: _pdfSearch.searcher?.currentIndex ?? -1,
-      total: total,
-      progress: _pdfSearch.searcher?.searchProgress,
-      searching: _pdfSearch.searcher?.isSearching ?? false,
-      onPrevious: _pdfSearch.goToPrev,
-      onNext: _pdfSearch.goToNext,
-    );
-  }
-
-  // _buildResultNavigator 已提取为独立的 [_ResultNavigator] ConsumerWidget，
-  // 只 watch (currentResultIndex, searchResultCount.length)，搜索导航不再触发整页 rebuild。
-
-  /// 底部工具栏：大纲 / 翻译 / 问 AI / 笔记 / 外观面板
-  ///
-  /// 仅在 Markdown 模式显示。工具栏背景用 surface 的半透明色，视觉上浮在
-  /// 阅读内容之上；沉浸式状态切换由 [AnimatedSlide] 在 build 里处理。
-  Widget _buildBottomBar(ReaderSettingsState readerSettings) {
-    final translation = ref.watch(
-      documentTranslationProvider(widget.document.id),
-    );
-
-    return ReaderBottomBar(
-      pdfView: !_session.showPreview,
-      readerSettings: readerSettings,
-      translation: translation,
-      activeSheet: _desktopAppearanceOpen
-          ? ReaderSheetType.theme
-          : _activeSheet,
-      activeDock: _dockOpen ? _dockPane : null,
-      onOpenOutline: _toggleOutline,
-      onTranslate: _handleTranslate,
-      onCycleTranslationMode: _handleCycleTranslationMode,
-      onAskAi: _toggleAskAi,
-      onOpenNotes: _toggleNotes,
-      onOpenTheme: _openThemeSheet,
-      desktop: isDesktopOs,
-      readingProgress: _progressDisplay,
-      nextTranslationMode: readerNextTranslationMode(
-        translation.mode,
-        // HTML 始终支持上下双语；PDF 只在宽屏提供同页双语。
-        bilingualCapable: _session.showPreview || _spreadColumns == 2,
-      ),
-    );
-  }
-
-  /// 启动全文翻译：show 一个长驻 SnackBar 订阅 provider 的进度 ValueListenable，
-  /// 翻译结束（成功/失败/取消）后 finish 关闭。
-  Future<void> _handleTranslate() async {
-    if (!_canUseReader) return;
-    final markdown = _session.markdownContent;
-    if (markdown == null || markdown.isEmpty) return;
-
-    // **必须**在触发翻译前检查 AI 配置：否则配置缺失时 provider 内 AiSettingsPrompt
-    // 弹的错误 SnackBar 会被进度 SnackBar 覆盖，用户感受到的是"点了毫无反应"。
-    // Provider 内的同一检查保留作 defense in depth。
-    if (!await _ensureAgentConfigured()) return;
-    if (!mounted || !_readerActive) return;
-
-    final notifier = _translationNotifier;
-
-    // 进度 SnackBar 由 notifier 自己 report 到 Task Activity（见
-    // DocumentTranslationNotifier.translate）；这里只负责翻完后的结果文案。
-    final fullyCached = await notifier.translate(markdown);
-    if (!mounted || !_readerActive) return;
-
-    final state = notifier.currentState;
-    if (state.status == DocTranslationStatus.done) {
-      _snackBarService.showResult(
-        message: fullyCached
-            ? context.l10n.translationCacheUsed
-            : context.l10n.translationDone,
-        margin: const EdgeInsets.fromLTRB(16, 12, 16, 72),
-      );
-    } else {
-      await _reportTranslationFailure(state);
-    }
-  }
-
-  /// 三态循环：双语 → 原文 → 译文 → 双语。
-  void _handleCycleTranslationMode() {
-    if (!_canUseReader) return;
-    if (!_session.showPreview) {
-      // 翻译模式切换会重建 PDF 文字层，旧选区与锚点随之失效。
-      _pdfInteraction.clear();
-      final current = _translationNotifier.currentState;
-      // 宽屏三态（双语 → 译文 → 原文）；窄屏不提供双语，原文 ↔ 译文两态。
-      _translationNotifier.setMode(
-        readerNextTranslationMode(
-          current.mode,
-          bilingualCapable: _spreadColumns == 2,
-        ),
-      );
-      return;
-    }
-    _translationNotifier.cycleMode();
-  }
-
-  /// "更多"菜单里的"重新翻译"——清空缓存重新发起。
-  Future<void> _handleRetranslate() async {
-    if (!_canUseReader) return;
-    final markdown = _session.markdownContent;
-    if (markdown == null || markdown.isEmpty) return;
-
-    // 同 _handleTranslate：必须在触发翻译前检查配置。
-    if (!await _ensureAgentConfigured()) return;
-    if (!mounted || !_readerActive) return;
-
-    final notifier = _translationNotifier;
-
-    // 进度由 notifier 自报 Task Activity；retranslate 内部复用 translate()。
-    await notifier.retranslate(markdown);
-    if (!mounted || !_readerActive) return;
-
-    final state = notifier.currentState;
-    if (state.status == DocTranslationStatus.done) {
-      _snackBarService.showResult(
-        tone: SnackTone.success,
-        message: context.l10n.translationDone,
-      );
-    } else {
-      await _reportTranslationFailure(state);
-    }
-  }
-
-  Future<void> _handleGenerateSummaryImage({bool openOutline = true}) async {
-    await _summaryCoordinator.generate(openOutline: openOutline);
-  }
-
-  /// 翻译相关动作的"前置配置守卫"——必须在显示进度 SnackBar 之前调用。
-  Future<bool> _ensureAgentConfigured() {
-    if (!_canUseReader) return Future.value(false);
-    return AiSettingsPrompt.ensureTextModelConfigured(
-      context: context,
-      agentState: ref.read(effectiveAgentApiProvider),
-    );
-  }
-
-  /// 翻译失败时把 state.error 暴露给用户——provider 内 catch 后只更新 state，
-  /// 注释明说"交给 UI 层"。优先用 [AiSettingsPrompt.showForConfigError] 识别
-  /// "AI 设置"相关错误并附加"前往设置"按钮；其它错误走通用 SnackBar。
-  /// 取消（status=idle）和无 error 的情况静默——用户已知道自己点了取消。
-  Future<void> _reportTranslationFailure(DocumentTranslationState state) async {
-    final error = state.error;
-    if (!mounted ||
-        !_readerActive ||
-        state.status != DocTranslationStatus.failed ||
-        error == null) {
-      return;
-    }
-
-    final handled = await AiSettingsPrompt.showForConfigError(
-      context: context,
-      error: error,
-    );
-    if (!mounted || !_readerActive) return;
-    if (!handled) {
-      _snackBarService.showResult(
-        tone: SnackTone.error,
-        message: context.l10n.translationFailed(error.toString()),
+    if (_searching) {
+      final total = _pdfMode
+          ? _pdfSearch?.matches.length ?? 0
+          : _controller?.hits.length ?? 0;
+      final current = _pdfMode
+          ? (_pdfSearch?.currentIndex ?? -1)
+          : (_controller?.currentHit ?? -1);
+      return ReaderPdfSearchBar(
+        controller: _query,
+        focusNode: _queryFocus,
+        hintText: l10n.searchContent,
+        onBack: _closeSearch,
+        onClear: _closeSearch,
+        onChanged: _onQuery,
+        onSubmitted: (_) => _stepHit(1),
+        trailing: _query.text.trim().isEmpty
+            ? null
+            : _SearchCount(
+                current: current,
+                total: total,
+                onPrevious: () => _stepHit(-1),
+                onNext: () => _stepHit(1),
+              ),
       );
     }
-  }
-
-  Widget _buildExtractButton(ReaderSessionState session, bool extracting) {
-    // 同一个按钮在「提取 → 提取中 → PDF/结果切换」间换图标，切换带缩放淡入。
-    final l10n = context.l10n;
-    final hasResult = session.hasResult && !extracting;
-    return ReaderIconButton(
-      icon: !hasResult
-          ? Symbols.document_scanner_rounded
-          : session.showPreview
-          ? Symbols.picture_as_pdf_rounded
-          : Symbols.article_rounded,
-      tooltip: !hasResult
-          ? l10n.documentExtract
-          : session.showPreview
-          ? l10n.viewPdf
-          : l10n.viewExtractResult,
-      loading: extracting,
-      onPressed: hasResult ? _togglePreview : _onExtractPressed,
-    );
-  }
-
-  Widget _buildBody(
-    ThemeData theme,
-    ColorScheme cs,
-    ReaderSettingsState readerSettings,
-    ReaderSessionState session, {
-    int columns = 1,
-  }) {
-    final showMarkdown = session.showPreview && session.hasResult;
-    final translation = ref.watch(
-      documentTranslationProvider(widget.document.id),
-    );
-    final highlights =
-        ref.watch(highlightProvider(widget.document.id)).value ?? <Highlight>[];
-
-    if (isDesktopOs && !showMarkdown) {
-      final layer =
-          translation.mode == DocTranslationMode.off ||
-              translation.translations.isEmpty
-          ? ReaderPdfLayerMode.source
-          : readerEffectiveTranslationMode(
-                  translation.mode,
-                  bilingualCapable: _spreadColumns == 2,
-                ) ==
-                DocTranslationMode.bilingual
-          ? ReaderPdfLayerMode.bilingual
-          : ReaderPdfLayerMode.translated;
-      // 展示层切换会重排槽位：先记住当前源页，替换完成后按源页恢复。
-      if (layer != _pdfDocumentRef.layer && _pdfController.isReady) {
-        final slot = _pdfController.pageNumber;
-        if (slot != null) {
-          _pendingPdfRestoreSourcePage = _pdfDocumentRef.sourcePageForSlot(
-            slot,
-          );
-        }
-      }
-      final language = ref.watch(translationConfigProvider).targetLanguage;
-      final gestureActive =
-          _pdfGestureActive || (isDesktopOs && _pdfInteraction.pointerDown);
-      if (gestureActive) {
-        // 滑动过程中不换页表。语言订阅仍保留，松手后的那一帧用最新译文刷新。
-        _pdfLayerDeferred = true;
-      } else {
-        _pdfLayerDeferred = false;
-        _pdfDocumentRef.configure(
-          _readerIndex,
-          translation.translations,
-          language,
-          theme.textTheme.bodyMedium!.copyWith(color: Colors.black),
-          layer,
-        );
-      }
-    }
-
-    return NotificationListener<ScrollNotification>(
-      onNotification: _handlePdfScrollNotification,
-      child: Listener(
-        onPointerDown: isDesktopOs
-            ? (event) {
-                _pdfGestureActive = true;
-                _pdfInteraction.onPointerDown(event);
-              }
-            : null,
-        onPointerUp: isDesktopOs
-            ? (event) {
-                _pdfInteraction.onPointerUp(event);
-                _finishPdfGesture();
-              }
-            : null,
-        onPointerCancel: isDesktopOs
-            ? (event) {
-                _pdfInteraction.onPointerCancel(event);
-                _finishPdfGesture();
-              }
-            : null,
-        onPointerSignal: _handlePdfPointerSignal,
-        onPointerMove: isDesktopOs
-            ? _pdfInteraction.onPointerMove
-            : _handlePdfPointerMove,
-        child: PageTransitionSwitcher(
-          duration: kAnimSlow,
-          reverse: !showMarkdown,
-          transitionBuilder: (child, animation, secondaryAnimation) {
-            return SharedAxisTransition(
-              animation: animation,
-              secondaryAnimation: secondaryAnimation,
-              transitionType: SharedAxisTransitionType.horizontal,
-              fillColor: Colors.transparent,
-              child: child,
-            );
-          },
-          child: showMarkdown
-              ? KeyedSubtree(
-                  key: const ValueKey('markdown'),
-                  child: _buildMarkdownPreview(
-                    theme,
-                    readerSettings,
-                    session,
-                    columns: columns,
-                  ),
-                )
-              : KeyedSubtree(
-                  key: const ValueKey('pdf'),
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top,
-                      bottom: MediaQuery.of(context).padding.bottom,
-                    ),
-                    child: PdfViewer(
-                      isDesktopOs
-                          ? _pdfDocumentRef
-                          : PdfDocumentRefFile(
-                              DocPaths.pdf(widget.document.id),
-                            ),
-                      controller: _pdfController,
-                      params: PdfViewerParams(
-                        layoutPages: columns == 2 ? readerFacingPages : null,
-                        sizeDelegateProvider: isDesktopOs
-                            ? const PdfViewerSizeDelegateProviderLegacy(
-                                calculateInitialZoom: readerPdfInitialZoom,
-                              )
-                            : null,
-
-                        onKey: isDesktopOs
-                            ? (params, key, isRealKeyPress) {
-                                if (key == LogicalKeyboardKey.keyC &&
-                                    (HardwareKeyboard
-                                            .instance
-                                            .isControlPressed ||
-                                        HardwareKeyboard
-                                            .instance
-                                            .isMetaPressed)) {
-                                  if (isRealKeyPress) {
-                                    unawaited(_pdfInteraction.copy());
-                                  }
-                                  return true;
-                                }
-                                return null;
-                              }
-                            : null,
-                        onGeneralTap: isDesktopOs
-                            ? (context, controller, details) =>
-                                  _pdfInteraction.onGeneralTap(details)
-                            : null,
-                        textSelectionParams: isDesktopOs
-                            ? PdfTextSelectionParams(
-                                enableSelectionHandles: false,
-                                showContextMenuAutomatically: false,
-                                onTextSelectionChange:
-                                    _pdfInteraction.onSelectionChanged,
-                              )
-                            : null,
-                        buildContextMenu: isDesktopOs
-                            ? (context, params) {
-                                WidgetsBinding.instance.addPostFrameCallback(
-                                  (_) => _pdfInteraction.refresh(
-                                    showToolbar: true,
-                                  ),
-                                );
-                                return const SizedBox.shrink();
-                              }
-                            : null,
-                        pageOverlaysBuilder: !isDesktopOs
-                            ? null
-                            : (context, rect, page) => [
-                                if (page is ReaderPdfPage)
-                                  Positioned.fill(
-                                    child: ReaderLayoutPage(
-                                      page: page,
-                                      size: rect.size,
-                                      highlights: highlights,
-                                      selection: _pdfInteraction.ranges,
-                                      searcher: _pdfSearch.searcher,
-                                    ),
-                                  ),
-                              ],
-                        backgroundColor: Colors.transparent,
-                        // 触摸 fling 惯性摩擦（pdfrx 默认 0.0000135）：调小让一次
-                        // 手势滑得更远，连续滚动下不必反复 fling 才能翻一页。真机实测微调。
-                        interactionEndFrictionCoefficient: 5e-6,
-                        matchTextColor: cs.primaryContainer.withAlpha(150),
-                        activeMatchTextColor: cs.primary.withAlpha(72),
-                        // PDF 初始页 = 按比率反算的恢复页（_readingProgress 来自
-                        // Markdown 滚动或上次 PDF 翻页）。让 pdfrx 自己从恢复页起步，
-                        // 避免在 onViewerReady 里 goToPage 与内部初始 _goToPage 竞争
-                        // 造成「先跳第 1 页再动画到恢复页」的闪烁。修掉「PDF 打开
-                        // 永远停在第 1 页」+ 实现 Markdown→PDF 位置对应。
-                        calculateInitialPageNumber: (document, controller) {
-                          final total = document.pages.length;
-                          final paragraph = _readerIndex.byId(
-                            _readerPositionId ?? '',
-                          );
-                          if (paragraph != null && total > 0) {
-                            return _pdfDocumentRef
-                                .slotForSourcePage(paragraph.pageIndex + 1)
-                                .clamp(1, total);
-                          }
-                          final sourceCount = _pdfDocumentRef.sourcePageCount;
-                          if (_readingProgress > 0 && sourceCount > 0) {
-                            final sourcePage = (_readingProgress * sourceCount)
-                                .round()
-                                .clamp(1, sourceCount);
-                            return _pdfDocumentRef
-                                .slotForSourcePage(sourcePage)
-                                .clamp(1, total);
-                          }
-                          return 1;
-                        },
-                        onViewerReady: (document, controller) =>
-                            _pdfSearch.bind(controller),
-                        pagePaintCallbacks: _pdfSearch.searcher == null
-                            ? null
-                            : [_pdfSearch.searcher!.pageTextMatchPaintCallback],
-                        viewerOverlayBuilder: (context, size, handleLinkTap) =>
-                            [
-                              PdfViewerScrollThumb(
-                                controller: _pdfController,
-                                orientation: ScrollbarOrientation.right,
-                                thumbSize: const Size(8, 48),
-                                margin: 2,
-                                thumbBuilder:
-                                    (
-                                      context,
-                                      thumbSize,
-                                      pageNumber,
-                                      controller,
-                                    ) {
-                                      return _PdfScrollThumb(size: thumbSize);
-                                    },
-                              ),
-                            ],
-                      ),
-                    ),
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMarkdownPreview(
-    ThemeData theme,
-    ReaderSettingsState settings,
-    ReaderSessionState session, {
-    int columns = 1,
-  }) {
-    if (session.markdownLoadError != null) {
-      return Center(
-        child: Text(
-          context.l10n.loadFailed,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.error,
-          ),
-        ),
-      );
-    }
-
-    if (session.markdownContent == null) {
-      // 与 WebViewMarkdownReader 的揭幕幕布同款 spinner——内容加载 → HTML
-      // 生成 → WebView 首帧的整个过程视觉连续，不再多段跳变。
-      final palette = resolveReaderPalette(settings.theme, theme.colorScheme);
-      return ColoredBox(
-        color: palette.background,
-        child: Center(
-          child: CircularProgressIndicator(
-            color: palette.secondaryText,
-            strokeWidth: 2,
-          ),
-        ),
-      );
-    }
-
-    // 系统安全区（状态栏 / 小白条）由下方 return 的外层 Padding 用**实时**
-    // MediaQuery.padding 内缩 WebView 控件负责——滚动视口本身不再覆盖系统栏，
-    // 纵向滚到任意位置正文都不会侵占状态栏/小白条，且不依赖会被缓存过期的
-    // CSS --top-inset/--bottom-inset 值。
-    // 这里的 topInset/bottomInset 只让出工具栏自身高度（顶 48 / 底 56），使首/末
-    // 屏正文不被半透明工具栏压住；正文仍可滚到工具栏背后保持沉浸感。
-    final topPad = isDesktopOs ? 0.0 : 48.0;
-    final bottomPad = isDesktopOs ? 0.0 : 56.0;
-
-    // 仅正文或索引变化才重建 HTML；译文与模式变化按段落同步到 WebView。
-    final translation = ref.watch(
-      documentTranslationProvider(widget.document.id),
-    );
-    final displayStyle = ref.watch(
-      translationConfigProvider.select((c) => c.displayStyle),
-    );
-    final markdownContent = session.markdownContent!;
-    final content = _markdownPresentation.resolve(
-      markdown: markdownContent,
-      index: _readerIndex,
-      translations: translation.translations,
-      mode: translation.mode,
-      language: ref.watch(translationConfigProvider).targetLanguage,
-    );
-
-    final cs = theme.colorScheme;
-    final palette = resolveReaderPalette(settings.theme, cs);
-    final highlights =
-        ref.watch(highlightProvider(widget.document.id)).value ?? const [];
-    final documentDir = DocPaths.docDir(widget.document.id);
-
-    // 用实时安全区把 WebView 控件整体内缩——滚动区不覆盖状态栏/小白条。
-    // 控件外缘之外由底层 contentBg（Positioned.fill）铺阅读背景色，系统栏
-    // 区域始终落在干净的纸张底色上。
-    final safe = MediaQuery.of(context).padding;
-    return Padding(
-      padding: EdgeInsets.only(top: safe.top, bottom: safe.bottom),
-      child: WebViewMarkdownReader(
-        key: _webViewReaderKey,
-        bilingualColumns: isDesktopOs && columns == 2,
-        markdownData: content.markdown,
-        contentRevision: Object.hash(session.contentRevision, _readerIndex),
-        readerEntries: content.entries,
-        onSelectionAnchor: (anchor) => _selectionAnchor = anchor,
-        settings: settings,
-        palette: palette,
-        highlights: highlights,
-        documentDir: documentDir,
-        translationStyleId: displayStyle.id,
-        initialScrollProgress: _readingProgress,
-        initialAnchorBlock: _markdownAnchorBlock,
-        initialParagraphId: _readerPositionId,
-        onReadingParagraphChanged: (id) {
-          if (id != null) _readerPositionId = id;
-        },
-        topInset: topPad,
-        bottomInset: bottomPad,
-        highlightQuery: session.highlightQuery,
-        onSelectionEnd: _handleWebViewSelectionEnd,
-        onSelectionCleared: _handleWebViewSelectionCleared,
-        onHighlightClick: _handleHighlightTap,
-        onImageClick: _handleMarkdownImageTap,
-        onScrollDirection: _handleWebViewScrollDirection,
-        onScrollProgress: (p, anchor) {
-          if (!mounted) return;
-          _readingProgress = p;
-          _progressDisplay.value = p;
-          _markdownAnchorBlock = anchor;
-          _sessionNotifier.reportProgress(p, anchorBlock: anchor);
-        },
-        onToggleToolbar: _handleWebViewToggleToolbar,
-      ),
-    );
-  }
-
-  /// 点击 markdown 中的图片 → 加载 figure manifest 后跳转 FigureViewer。
-  ///
-  /// 匹配策略：从 url 提取 basename（`Figure_N.png`）与 manifest entry
-  /// 的 `imagePath` basename 比对，和 outline_panel 保持一致。
-  ///
-  /// 范围分流：先在**全量 manifest** 按 basename 定位正文实际点击的条目。
-  /// 匿名图默认不进正文；旧稿若仍残留，命中后以 singleton 打开，不混入
-  /// 有标题画廊。可展示条目对全量 manifest 调
-  /// [FigureManifestEntry.forDisplay]，在过滤后的列表里重定位 index。
-  Future<void> _handleMarkdownImageTap(String url) async {
-    final documentId = widget.document.id;
-
-    // figure 路径在 _injectImageAttrs 里被附了 `?v=<cacheBuster>`，
-    // 必须用 Uri 解析剥离 query 后再取末段，否则 `Figure_1.png?v=123`
-    // 与 manifest 的 basename `Figure_1.png` 无法匹配。
-    String fileName;
-    try {
-      if (url.startsWith('file://')) {
-        fileName = p.basename(Uri.parse(url).toFilePath());
-      } else {
-        final segs = Uri.parse(url).pathSegments;
-        fileName = segs.isNotEmpty ? segs.last : '';
-      }
-    } catch (_) {
-      final noQuery = url.split('?').first;
-      fileName = noQuery.split(RegExp(r'[/\\]')).last;
-    }
-    if (fileName.isEmpty) return;
-
-    _figuresFuture ??= FigureExtractService.loadManifest(documentId);
-    final figures = await _figuresFuture;
-    if (!mounted) return;
-    if (figures == null || figures.isEmpty) return;
-
-    FigureManifestEntry? selected;
-    for (final e in figures) {
-      if (p.basename(e.imagePath) == fileName) {
-        selected = e;
-        break;
-      }
-    }
-    if (selected == null) return;
-
-    final List<FigureManifestEntry> viewerFigures;
-    final int initialIndex;
-    if (!selected.isDisplayFigure) {
-      // 匿名正文 visual（visual-only / 无 caption legacy）：单图打开，
-      // 无画廊页码，也不与有标题图表同画廊。
-      viewerFigures = [selected];
-      initialIndex = 0;
-    } else {
-      viewerFigures = FigureManifestEntry.forDisplay(figures);
-      final filteredIndex = viewerFigures.indexWhere(
-        (e) => p.basename(e.imagePath) == fileName,
-      );
-      if (filteredIndex < 0) return; // forDisplay 保留 isDisplayFigure，理论不可达
-      initialIndex = filteredIndex;
-    }
-
-    await showFigureViewer(
-      context,
-      viewerFigures,
-      initialIndex: initialIndex,
-      documentId: documentId,
-      document: widget.document,
-      onLocateQuote: _locateQuoteInReader,
-      onOpenChat: _useReaderDock(context) ? _openChatFromFigure : null,
-    );
-  }
-
-  // _wrapWithSelection 已移除，由 WebView 内部选择处理替代
-
-  Widget _buildFileNotFound(ThemeData theme, ColorScheme cs) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final translation = ref.read(documentTranslationProvider(_id));
+    final controller = _controller;
+    return SizedBox(
+      height: 48,
+      child: Row(
         children: [
-          Icon(Symbols.error_rounded, size: 48, color: cs.error),
-          const SizedBox(height: 16),
-          Text(
-            context.l10n.pdfFileNotFoundTitle,
-            style: theme.textTheme.titleMedium,
+          ReaderIconButton(
+            icon: Symbols.arrow_back_rounded,
+            tooltip: l10n.back,
+            onPressed: () => Navigator.of(context).maybePop(),
           ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          Expanded(
             child: Text(
-              DocPaths.pdf(widget.document.id),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
+              widget.document.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
             ),
           ),
+          ReaderIconButton(
+            icon: Symbols.search_rounded,
+            tooltip: l10n.searchContent,
+            onPressed: _loading ? null : _openSearch,
+          ),
+          if (!_pdfMode && _hasModel && controller != null)
+            ReaderIconButton(
+              icon: controller.mode == ReaderMode.paged
+                  ? Symbols.view_day_rounded
+                  : Symbols.auto_stories_rounded,
+              tooltip: controller.mode == ReaderMode.paged
+                  ? l10n.verticalPagination
+                  : l10n.horizontalPagination,
+              onPressed: () => setState(() {
+                controller.clearSelection();
+                controller.mode = controller.mode == ReaderMode.scroll
+                    ? ReaderMode.paged
+                    : ReaderMode.scroll;
+              }),
+            ),
+          ReaderIconButton(
+            icon: !_hasModel
+                ? Symbols.document_scanner_rounded
+                : _pdfMode
+                ? Symbols.article_rounded
+                : Symbols.picture_as_pdf_rounded,
+            tooltip: !_hasModel
+                ? l10n.documentExtract
+                : _pdfMode
+                ? l10n.viewExtractResult
+                : l10n.viewPdf,
+            loading: extracting,
+            onPressed: extracting || _loading
+                ? null
+                : (_hasModel ? _toggleMode : (_fileExists ? _extract : null)),
+          ),
+          ReaderIconButton(
+            icon: inFavorite
+                ? Symbols.star_rounded
+                : Symbols.star_outline_rounded,
+            active: inFavorite,
+            tooltip: inFavorite ? l10n.removeFromFavorite : l10n.addToFavorite,
+            onPressed: () => _toggleFavorite(inFavorite),
+          ),
+          PopupMenuButton<String>(
+            tooltip: l10n.more,
+            icon: const Icon(Symbols.more_vert_rounded),
+            onSelected: (value) {
+              switch (value) {
+                case 'info':
+                  showDocumentInfoDialog(
+                    context: context,
+                    document: widget.document,
+                  );
+                case 'extract':
+                  _extract();
+                case 'retranslate':
+                  ref
+                      .read(documentTranslationProvider(_id).notifier)
+                      .retranslate();
+                case 'summary':
+                  _generateSummary();
+                case 'viewSummary':
+                  _showSummary();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(value: 'info', child: Text(l10n.documentInfo)),
+              if (_hasModel && _fileExists && !extracting)
+                PopupMenuItem(value: 'extract', child: Text(l10n.reExtract)),
+              if (translation.hasResult)
+                PopupMenuItem(
+                  value: 'retranslate',
+                  child: Text(l10n.reTranslate),
+                ),
+              if (_hasModel)
+                PopupMenuItem(
+                  value: 'summary',
+                  child: Text(l10n.generateSummary),
+                ),
+              if (File(DocPaths.summaryImage(_id)).existsSync())
+                PopupMenuItem(
+                  value: 'viewSummary',
+                  child: Text(l10n.viewSummary),
+                ),
+            ],
+          ),
+          const SizedBox(width: 4),
         ],
       ),
     );
   }
-}
 
-// ─── PDF 滚动条（模拟 Material 系统滚动条外观） ───
+  Widget _body(
+    BuildContext context,
+    ReaderPalette palette,
+    ReaderSettingsState settings,
+    bool extracting,
+  ) {
+    final theme = Theme.of(context);
+    if (_loading) {
+      return Center(
+        child: CircularProgressIndicator(
+          color: palette.secondaryText,
+          strokeWidth: 2,
+        ),
+      );
+    }
+    if (_pdfMode) {
+      if (!_fileExists) return _message(context, context.l10n.pdfNotFound);
+      final searcher = _pdfSearch;
+      return PdfViewer.file(
+        DocPaths.pdf(_id),
+        controller: _pdf,
+        params: PdfViewerParams(
+          backgroundColor: Colors.transparent,
+          matchTextColor: theme.colorScheme.primaryContainer.withAlpha(150),
+          activeMatchTextColor: theme.colorScheme.primary.withAlpha(72),
+          calculateInitialPageNumber: (document, _) {
+            final total = document.pages.length;
+            return total == 0
+                ? 1
+                : (_progress.value * total).round().clamp(1, total);
+          },
+          onViewerReady: (document, controller) {
+            _pdfSearch?.dispose();
+            _pdfSearch = PdfTextSearcher(controller)
+              ..addListener(() {
+                if (mounted) setState(() {});
+              });
+            setState(() {});
+          },
+          onPageChanged: (page) {
+            final total = _pdf.isReady ? _pdf.pageCount : 0;
+            if (page == null || total == 0) return;
+            final progress = total <= 1 ? 1.0 : (page - 1) / (total - 1);
+            _progress.value = progress;
+            unawaited(_history.setProgress(_id, progress));
+          },
+          pagePaintCallbacks: searcher == null
+              ? null
+              : [searcher.pageTextMatchPaintCallback],
+        ),
+      );
+    }
+    final controller = _controller;
+    if (controller == null || !_hasModel) {
+      return _message(
+        context,
+        _loadError == null
+            ? context.l10n.extractResultEmpty
+            : errorText(context.l10n, _loadError!),
+        action: _fileExists && !extracting
+            ? FilledButton.tonalIcon(
+                onPressed: _extract,
+                icon: const Icon(Symbols.document_scanner_rounded),
+                label: Text(context.l10n.documentExtract),
+              )
+            : null,
+      );
+    }
+    return Focus(
+      focusNode: _bodyFocus,
+      autofocus: true,
+      child: ReaderSurface(
+        key: _surface,
+        controller: controller,
+        fontSize: settings.fontSize,
+        textStyle: TextStyle(
+          color: palette.text,
+          fontFamily: settings.font.fontFamily,
+          fontFamilyFallback: settings.font.fontFamilyFallback,
+        ),
+        onTranslate: _showTranslation,
+        onAskAi: (text) => _openChat(quote: text),
+        onFigureTap: _openFigure,
+        onTapBlank: () => setState(() => _toolbars = !_toolbars),
+        onLocationChanged: _onLocation,
+      ),
+    );
+  }
 
-class _PdfScrollThumb extends StatefulWidget {
-  final Size size;
-  const _PdfScrollThumb({required this.size});
-
-  @override
-  State<_PdfScrollThumb> createState() => _PdfScrollThumbState();
-}
-
-class _PdfScrollThumbState extends State<_PdfScrollThumb> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    // 与 Material Scrollbar 一致：默认半透明，悬停时加深
-    final color = _hovered
-        ? cs.onSurface.withAlpha(128)
-        : cs.onSurface.withAlpha(66);
-    final width = _hovered ? widget.size.width + 4 : widget.size.width;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: kAnimFast,
-        width: width,
-        height: widget.size.height,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(width / 2),
+  Widget _message(BuildContext context, String text, {Widget? action}) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (action != null) ...[const SizedBox(height: 16), action],
+          ],
         ),
       ),
     );
   }
 }
 
-/// 独立 rebuild 的搜索结果导航器——只 watch currentResultIndex 和 searchResultCount.length，
-/// 搜索导航（上/下箭头）不再触发 [_ReaderPageState] 的主 build。
-class _ResultNavigator extends ConsumerWidget {
-  final ReaderSessionArgs sessionArgs;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
-
-  const _ResultNavigator({
-    required this.sessionArgs,
+class _SearchCount extends StatelessWidget {
+  const _SearchCount({
+    required this.current,
+    required this.total,
     required this.onPrevious,
     required this.onNext,
   });
 
+  final int current;
+  final int total;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final (currentIndex, total) = ref.watch(
-      readerSessionProvider(
-        sessionArgs,
-      ).select((s) => (s.currentResultIndex, s.searchResultCount)),
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text(
+            '${total == 0 ? 0 : current + 1}/$total',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: total == 0 ? cs.error : cs.onSurfaceVariant,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Symbols.keyboard_arrow_up_rounded, size: 22),
+          tooltip: context.l10n.previousResult,
+          onPressed: total == 0 ? null : onPrevious,
+        ),
+        IconButton(
+          icon: const Icon(Symbols.keyboard_arrow_down_rounded, size: 22),
+          tooltip: context.l10n.nextResult,
+          onPressed: total == 0 ? null : onNext,
+        ),
+      ],
     );
-    return ReaderTextResultNavigator(
-      currentIndex: currentIndex,
-      total: total,
-      onPrevious: onPrevious,
-      onNext: onNext,
+  }
+}
+
+/// 目录：正文中的标题，点击跳到对应位置。
+class _OutlineSheet extends StatelessWidget {
+  const _OutlineSheet({required this.controller, required this.onSelect});
+
+  final ReaderController? controller;
+  final void Function(int blockIndex) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final blocks = controller?.model.blocks ?? const <Block>[];
+    final entries = [
+      for (var i = 0; i < blocks.length; i++)
+        if (blocks[i].kind == BlockKind.heading &&
+            blocks[i].text.trim().isNotEmpty)
+          (i, blocks[i]),
+    ];
+    if (entries.isEmpty) {
+      return SizedBox(
+        height: 160,
+        child: Center(child: Text(context.l10n.readerOutlineEmpty)),
+      );
+    }
+    return FractionallySizedBox(
+      heightFactor: 0.7,
+      child: ListView.builder(
+        itemCount: entries.length,
+        itemBuilder: (context, i) {
+          final (index, block) = entries[i];
+          final level = (block.headingLevel ?? 1).clamp(1, 4);
+          return ListTile(
+            contentPadding: EdgeInsets.only(left: 16.0 * level, right: 16),
+            title: Text(
+              block.text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: level == 1
+                  ? theme.textTheme.titleSmall
+                  : theme.textTheme.bodyMedium,
+            ),
+            onTap: () => onSelect(index),
+          );
+        },
+      ),
     );
   }
 }

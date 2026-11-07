@@ -7,7 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/agent_api_provider.dart';
-import '../../../services/document_chat_service.dart';
+import '../../../providers/document_chat_provider.dart';
 import '../../../services/model_capability_store.dart';
 import '../../../utils/desktop.dart';
 import '../../../widgets/ai_brand_icon.dart';

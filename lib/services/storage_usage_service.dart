@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../core/storage/storage.dart';
+import '../core/rust_backend.dart';
+import '../src/rust/maintenance.dart';
 
 enum StorageGroupKey { papers, chat, cache, logs, database }
 
@@ -48,168 +49,62 @@ class StorageReport {
 class StorageUsageService {
   StorageUsageService._();
 
-  static const _imageExts = {
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.webp',
-    '.svg',
-  };
-
-  static bool _isImage(String name) =>
-      _imageExts.contains(p.extension(name).toLowerCase());
-
+  /// Rust 统计数据目录；缩略图与临时文件在 Flutter 缓存目录，计入缓存组。
   static Future<StorageReport> computeReport() async {
-    final filesC = _Counter();
-    final imagesC = _Counter();
-    final dbC = _Counter();
-    final chatC = _Counter();
-    final cacheC = _Counter();
-    final logsC = _Counter();
-
-    final libraryDir = Directory(GStorage.libraryDirPath);
-    if (await libraryDir.exists()) {
-      await for (final entity in libraryDir.list(
-        recursive: true,
-        followLinks: false,
-      )) {
-        if (entity is! File) continue;
-        int bytes = 0;
-        try {
-          bytes = await entity.length();
-        } catch (_) {}
-
-        final rel = p.relative(entity.path, from: libraryDir.path);
-        final parts = p.split(rel);
-        if (parts.length < 2) continue;
-
-        final fileName = parts.last;
-        final subPath = parts.sublist(1).join('/');
-
-        if (subPath.startsWith('chats/')) {
-          chatC.add(bytes);
-        } else if (subPath.startsWith('figures/')) {
-          imagesC.add(bytes);
-        } else if (subPath.startsWith('summary/') && _isImage(fileName)) {
-          imagesC.add(bytes);
-        } else if (fileName == '.reader.html') {
-          cacheC.add(bytes);
-        } else {
-          filesC.add(bytes);
-        }
-      }
+    final rust = await RustBackend.instance.storageReport(
+      taskId: rustTaskId('storage-report'),
+    );
+    final counters = {
+      for (final key in StorageGroupKey.values) key: _Counter(),
+    };
+    for (final usage in rust.groups) {
+      final counter = counters[_key(usage.group)]!;
+      counter.bytes += usage.bytes.toInt();
+      counter.fileCount += usage.files.toInt();
     }
-
-    final dbDir = Directory(GStorage.dbDirPath);
-    if (await dbDir.exists()) {
-      await for (final entity in dbDir.list(followLinks: false)) {
-        if (entity is! File) continue;
-        final name = p.basename(entity.path).toLowerCase();
-        // Drift SQLite 文件（otter.db / -wal / -shm）——含文献行 + 非文献数据
-        // （settings/favorites/meta）+ schema，计入 database 类。jieba 字典目录
-        // 与遗留 Hive 文件不计入。
-        if (name != 'otter.db' && !name.startsWith('otter.db-')) continue;
-        int bytes = 0;
-        try {
-          bytes = await entity.length();
-        } catch (_) {}
-        dbC.add(bytes);
-      }
-    }
-
-    await _countDir(await _thumbDir(), cacheC);
-    await _countDir(await _tempDir(), cacheC);
-    await _countDir(Directory(GStorage.logsDirPath), logsC);
-
-    // papers 只含 library 文献文件（source.pdf / extract / figures）；
-    // db 文件（otter.db）含文献行 + 非文献数据（settings/favorites/meta）
-    // + schema，单独归 database 类——清除文献后 papers 归零，db 骨架单独可见。
-    final papersBytes = filesC.bytes + imagesC.bytes;
-    final papersFiles = filesC.fileCount + imagesC.fileCount;
-
+    await _countDir(await _thumbDir(), counters[StorageGroupKey.cache]!);
+    await _countDir(await _tempDir(), counters[StorageGroupKey.cache]!);
     final groups = [
-      StorageGroupInfo(
-        key: StorageGroupKey.papers,
-        bytes: papersBytes,
-        fileCount: papersFiles,
-        subcategories: [
-          StorageSubInfo(
-            id: 'files',
-            bytes: filesC.bytes,
-            fileCount: filesC.fileCount,
-          ),
-          StorageSubInfo(
-            id: 'images',
-            bytes: imagesC.bytes,
-            fileCount: imagesC.fileCount,
-          ),
-        ],
-      ),
-      StorageGroupInfo(
-        key: StorageGroupKey.chat,
-        bytes: chatC.bytes,
-        fileCount: chatC.fileCount,
-      ),
-      StorageGroupInfo(
-        key: StorageGroupKey.cache,
-        bytes: cacheC.bytes,
-        fileCount: cacheC.fileCount,
-      ),
-      StorageGroupInfo(
-        key: StorageGroupKey.logs,
-        bytes: logsC.bytes,
-        fileCount: logsC.fileCount,
-      ),
-      StorageGroupInfo(
-        key: StorageGroupKey.database,
-        bytes: dbC.bytes,
-        fileCount: dbC.fileCount,
-      ),
+      for (final key in StorageGroupKey.values)
+        StorageGroupInfo(
+          key: key,
+          bytes: counters[key]!.bytes,
+          fileCount: counters[key]!.fileCount,
+        ),
     ];
-
-    final totalBytes = groups.fold(0, (sum, g) => sum + g.bytes);
-    final totalFiles = groups.fold(0, (sum, g) => sum + g.fileCount);
-
     return StorageReport(
-      totalBytes: totalBytes,
-      totalFiles: totalFiles,
+      totalBytes: groups.fold(0, (sum, g) => sum + g.bytes),
+      totalFiles: groups.fold(0, (sum, g) => sum + g.fileCount),
       groups: groups,
     );
   }
 
+  static StorageGroupKey _key(StorageGroup group) => switch (group) {
+    StorageGroup.papers => StorageGroupKey.papers,
+    StorageGroup.chat => StorageGroupKey.chat,
+    StorageGroup.cache || StorageGroup.recovery => StorageGroupKey.cache,
+    StorageGroup.logs => StorageGroupKey.logs,
+    StorageGroup.database => StorageGroupKey.database,
+  };
+
   static Future<void> clearGroups(Set<StorageGroupKey> keys) async {
-    for (final key in keys) {
-      switch (key) {
-        case StorageGroupKey.papers:
-          await _clearLibraryMatching(
-            (sub, name) => !sub.startsWith('chats/') && name != '.reader.html',
-          );
-          // 删 documents：外键 CASCADE 自动清 highlights/history/
-          // favorite_documents/zotero_items 关联行。favorites 收藏夹分组保留
-          // （用户自定义容器，清理文献不清分组结构）。走 AppDatabase.clearAllDocuments
-          // ——直接 DELETE 会触发 documents_ad 维护 FTS 索引，documents/fts 历史不一致
-          // 时同步失败报 SQL logic error；clearAllDocuments 摘除同步触发器后清空，
-          // 清理不依赖触发器是否健壮。
-          await GStorage.db.clearAllDocuments();
-          // SQLite DELETE 不释放磁盘空间，VACUUM 收缩 otter.db 文件
-          // （clearAllDocuments 事务结束后在事务外执行）。
-          await GStorage.db.customStatement('VACUUM');
-        case StorageGroupKey.chat:
-          await _clearLibraryMatching(
-            (sub, name) => sub.startsWith('chats/'),
-          );
-        case StorageGroupKey.cache:
-          await _deleteContents(await _thumbDir());
-          await _deleteContents(await _tempDir());
-          await _clearLibraryMatching((sub, name) => name == '.reader.html');
-        case StorageGroupKey.logs:
-          await _deleteContents(Directory(GStorage.logsDirPath));
-        case StorageGroupKey.database:
-          // db 文件含非文献数据（settings/favorites/meta），不能删文件。
-          // 文献数据通过 papers 清除（删 documents + VACUUM）；此处仅 VACUUM 回收空闲页。
-          await GStorage.db.customStatement('VACUUM');
-      }
+    await RustBackend.instance.clearStorage(
+      groups: [
+        for (final key in keys)
+          switch (key) {
+            StorageGroupKey.papers => StorageGroup.papers,
+            StorageGroupKey.chat => StorageGroup.chat,
+            StorageGroupKey.cache => StorageGroup.cache,
+            StorageGroupKey.logs => StorageGroup.logs,
+            StorageGroupKey.database => StorageGroup.database,
+          },
+        if (keys.contains(StorageGroupKey.cache)) StorageGroup.recovery,
+      ],
+      taskId: rustTaskId('storage-clear'),
+    );
+    if (keys.contains(StorageGroupKey.cache)) {
+      await _deleteContents(await _thumbDir());
+      await _deleteContents(await _tempDir());
     }
   }
 
@@ -240,29 +135,6 @@ class StorageUsageService {
   static Future<Directory> _tempDir() async {
     final tempDir = await getTemporaryDirectory();
     return Directory(p.join(tempDir.path, 'OtterPad'));
-  }
-
-  static Future<void> _clearLibraryMatching(
-    bool Function(String subPath, String fileName) predicate,
-  ) async {
-    final libraryDir = Directory(GStorage.libraryDirPath);
-    if (!await libraryDir.exists()) return;
-    await for (final entity in libraryDir.list(
-      recursive: true,
-      followLinks: false,
-    )) {
-      if (entity is! File) continue;
-      final rel = p.relative(entity.path, from: libraryDir.path);
-      final parts = p.split(rel);
-      if (parts.length < 2) continue;
-      final fileName = parts.last;
-      final subPath = parts.sublist(1).join('/');
-      if (predicate(subPath, fileName)) {
-        try {
-          await entity.delete();
-        } catch (_) {}
-      }
-    }
   }
 
   static Future<void> _deleteContents(Directory dir) async {

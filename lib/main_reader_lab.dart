@@ -274,6 +274,7 @@ ReaderDocument _synthetic(int paragraphs) {
   return ReaderDocument(
     version: 1,
     blocks: blocks,
+    translationKeys: [for (final _ in blocks) ''],
     figures: const [],
     figureAssets: const [],
     figureImages: const [],

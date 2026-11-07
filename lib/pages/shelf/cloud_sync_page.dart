@@ -11,10 +11,11 @@ import '../../providers/backup_orchestrator.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/sync_status_provider.dart';
 import '../../router/app_routes.dart';
-import '../../services/backup_restore_service.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../widgets/backup_scope_dialog.dart';
+import '../../src/rust/sync/archive.dart';
+import '../../src/rust/sync/remote.dart';
 
 /// 云同步状态页：摘要卡（远端目标 / 上次备份 / 立即备份）+ 按同步状态
 /// 分组的文献列表。状态数据全部来自 [syncStatusProvider]；本页只读 +
@@ -232,11 +233,11 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
               Expanded(
                 child: Text(
                   snapshot?.remote ??
-                      ref
-                          .read(backupOrchestratorProvider)
-                          .remote
-                          ?.targetLabel ??
-                      '',
+                      switch (ref.read(backupOrchestratorProvider).remote) {
+                        RemoteConfig_Webdav(:final serverUrl) => serverUrl,
+                        RemoteConfig_S3(:final bucket) => bucket,
+                        null => '',
+                      },
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -356,8 +357,7 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
             child: Column(
               children: [
                 for (var i = 0; i < docs.length; i++) ...[
-                  if (i > 0)
-                    const AppDivider(),
+                  if (i > 0) const AppDivider(),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,

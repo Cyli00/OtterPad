@@ -1,6 +1,6 @@
 # OtterPad 0.2.0 架构
 
-状态：Rust 后端业务逻辑已移植；Flutter 应用已经 FRB 接入，目前只有新阅读器（`lib/pages/reader2/`，实验入口 `lib/main_reader_lab.dart`）读取 Rust 数据，其余页面仍运行旧 Dart 服务。`v0.1.7` tag 是最后一版 Dart 后端 + WebView 阅读器，也是业务行为的参考实现（`lib/services`、`lib/core/storage`、`lib/data`）；0.1.x 设计文档在 `archive/0.1/`。
+状态：Flutter 已全部改接 Rust 后端：文献库、导入、OCR、阅读器（原生重排正文 + pdfrx 查看 PDF）、全文/选区翻译、问 AI、笔记、备份恢复、Zotero、存储管理与更新均调用 `rust/src/api/`；drift、WebView 阅读器与 Dart 业务服务已删除。`v0.1.7` tag 是最后一版 Dart 后端 + WebView 阅读器，也是业务行为的参考实现；0.1.x 设计文档在 `archive/0.1/`。
 
 ## 为什么重写
 
@@ -90,7 +90,7 @@
 
 ## 当前后端实现范围
 
-Flutter 除新阅读器外继续运行旧 Dart 服务。手写生产 Rust 文件按职责拆分，控制在 500 行以内；FRB 生成文件和配置数据保持工具/原始格式。
+手写生产 Rust 文件按职责拆分，控制在 500 行以内；FRB 生成文件和配置数据保持工具/原始格式。
 
 - `storage`：固定 Rust `1.99.1`，bundled SQLite、逐连接 FTS5 中文分词、WAL/FULL/外键。只打开 `<AppSupport>/OtterPad/v2/otter.db`，初始 schema 1、`application_id=OTP2`，拒绝外部、未来版本和非空无版本数据库。元数据、收藏、历史、笔记与设置已具备事务读写；文献检索合并 FTS 与全字段 LIKE，保留 DOI、年份及任意子串召回。
 - `document`/`ocr`：PaddleOCR、MinerU 请求与取消、原始产物的不可变 generation 和最后发布的指针、稳定块 id/语义行内样式/表格、UTF-16 锚点、图表与题注归属。已对真实旧 PaddleOCR 的同一份 9 页 243 块数据运行 v0.1.7 Dart 与 Rust，对齐全部结构字段及 4 张图表的题注、块成员和源字符范围。图表裁剪使用实际 PDF 像素验证，涵盖旋转页与跨页合成；MinerU v2 坐标由实际 PDF 页尺寸重建。OCR 大响应转换运行在阻塞线程池。补齐 Paddle v2 异步提交、轮询与 JSONL/Markdown 结果读取，批量入口最多并行处理 4 篇；单篇失败保留其余结果，成功发布后按提供商记录本地页数用量。
@@ -101,4 +101,7 @@ Flutter 除新阅读器外继续运行旧 Dart 服务。手写生产 Rust 文件
 - `sync`：WebDAV 集合与文件操作、S3 SigV4 与流式传输、完整/仅数据备份、覆盖/合并及按库/设置恢复、校验和与崩溃恢复标记。备份使用真实 SQLite 快照，删除误存凭据并清除页内残留，重建 FTS 的 rowid 关联；旧版 v3 ZIP 走同一迁移器。新增打包→上传→快照→保留最近 3 份版本备份的 Rust 编排；`last_backup_snapshot` 写入 v2 指纹格式，旧 Dart v1 指纹触发重新建立基线。自动备份 Stream 在启动 2 分钟后首查、随后每小时读取设置，按周期和文献变更判断是否上传。Zotero 云端按库版本增量导入；本地 API 检查实例与分页版本，保留用户编辑并复制所选 PDF。合并恢复会重映射云端与本地 Zotero 记录，跨账号不会混用云端游标。
 - `runtime`/`credentials`/`logging`：逐数据根限制单个运行时，SQLite 与 PDFium 由专用工作线程持有，恢复/删除与长任务互斥；启动先处理恢复标记、删除操作的恢复记录和旧数据迁移，按原设置执行缓存清理。凭据只在内存注入；文件日志受设置控制，按日保留 7 天，只记录操作名与稳定错误码。`api` 为文献、笔记、PDF、文档/锚点、AI/翻译、会话、OCR、备份和 Zotero 提供独立强类型入口及可取消 Stream。
 - `prompts`/`maintenance`/`update`：提示词默认值、覆盖、必需占位符校验和重置；存储用量分类、按组清理和缓存清理；GitHub release 解析、按设备 ABI 顺序选择 APK、忽略版本及下载进度；启动延迟检查读取自动更新偏好，忽略版本仅抑制自动提示。系统安全存储、字体/设备信息读取、分享接收、安装 Intent、交互反馈留在宿主平台/UI 边界。
-- 待后续：旧页面改接 Rust、移除 pdfrx、公式性能实测，以及 Android/Windows 应用构建与运行验收。
+- 长 PDF：PaddleOCR 超过 1000 页、MinerU 超过 200 页时按页段提交，全部完成后按页序合并（`ocr/chunks.rs`）；Paddle 页序以列表为准，同名图片改名，任一页段失败不发布。
+- 全文翻译以文档模型的块为单位，译文键为 `revision(block.markdown.trim())`，与迁移的 0.1.x 译文一致；`ReaderDocument.translation_keys` 与 `blocks` 一一对应，阅读器按键叠加译文（RTL 目标语言的译文块按 RTL 排版）。
+- Flutter 只保留界面与宿主能力：系统安全存储、文件选择、分享、APK 安装 Intent、PDF 缩略图与 pdfrx 查看。
+- 待后续：PDF 视图改用 Rust 分块渲染并在 PDF 页面上叠加译文与标注（0.1.x 有，当前只在重排正文中显示），之后移除 pdfrx；重新解析（不重新 OCR）入口；公式性能实测；Android/Windows 应用构建与运行验收。

@@ -1,11 +1,15 @@
 // ignore: depend_on_referenced_packages
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+
+import '../core/rust_backend.dart';
 
 import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
 import '../data/models/ocr/doc_extract_config.dart';
+
 export '../data/models/ocr/doc_extract_config.dart';
 
 class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
@@ -192,3 +196,11 @@ final docExtractApiProvider =
     StateNotifierProvider<DocExtractApiNotifier, DocExtractApiState>(
       (ref) => DocExtractApiNotifier(),
     );
+
+/// 今日各提供商已提取的页数（Rust 本地记账，按日归零）。
+final extractionUsageProvider = FutureProvider<({int paddle, int mineru})>((
+  ref,
+) async {
+  final usage = await RustBackend.instance.extractionUsage();
+  return (paddle: usage.paddle.toInt(), mineru: usage.mineru.toInt());
+});

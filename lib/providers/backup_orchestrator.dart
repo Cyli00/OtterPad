@@ -1,24 +1,25 @@
-import '../core/storage/storage_activity.dart';
 import 'dart:io';
-import '../core/app_logger.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../services/backup_fingerprint.dart';
-import '../services/backup_merge_service.dart';
-import '../services/backup_remote.dart';
-import '../services/backup_restore_service.dart';
+import '../core/rust_backend.dart';
+import '../core/rust_models.dart';
+import '../core/storage/storage.dart';
+import '../services/prompts.dart';
+import '../src/rust/api/backup.dart';
+import '../src/rust/api/remote.dart';
+import '../src/rust/api/sync.dart';
+import '../src/rust/error.dart';
+import '../src/rust/sync/archive.dart';
+import '../src/rust/sync/backup.dart';
+import '../src/rust/sync/remote.dart';
 import 'agent_api_provider.dart';
-import 'doc_extract_api_provider.dart';
 import 'auto_backup_provider.dart';
 import 'backup_provider.dart';
-import '../core/storage/app_database_provider.dart';
-import '../core/storage/storage_exception.dart';
-import 'documents_provider.dart';
+import 'doc_extract_api_provider.dart';
 import 'document_task_provider.dart';
-import '../services/doc_extract_usage_service.dart';
 import 'proxy_provider.dart';
 import 'reader_settings_provider.dart';
 import 'sync_status_provider.dart';
@@ -26,167 +27,202 @@ import 'task_activity_provider.dart';
 import 'theme_provider.dart';
 import 'zotero_sync_provider.dart';
 
-/// 备份编排——「打包 → 上传 → 清理」「下载 → 排空任务 → 恢复 → 刷新」
-/// 两条链的唯一实现。设置页与自动备份任务都只调这里，不再各自拼接
-/// BackupRestoreService / BackupRemote 与恢复后的 provider 刷新。
+/// 备份编排：打包、上传、下载与恢复都在 Rust；这里组装远端配置、接收进度并在
+/// 恢复后刷新界面状态。设置页与自动备份都只调这里。
 class BackupOrchestrator {
   BackupOrchestrator(this._ref);
 
   final Ref _ref;
 
-  /// 当前配置解析出的远端 adapter；未配置返回 null。
-  BackupRemote? get remote => resolveBackupRemote(
-    _ref.read(backupRemoteTypeProvider),
-    _ref.read(backupS3Provider),
-    _ref.read(backupWebDavProvider),
+  /// 当前配置的远端；未配置返回 null。密钥由凭据注入 Rust。
+  RemoteConfig? get remote {
+    switch (_ref.read(backupRemoteTypeProvider)) {
+      case BackupRemoteType.webdav:
+        final w = _ref.read(backupWebDavProvider);
+        if (!w.isConfigured) return null;
+        return RemoteConfig.webdav(
+          serverUrl: w.serverUrl.trim(),
+          username: w.username.trim(),
+          remoteDir: BackupWebDavState.normalizeRemoteDir(w.remoteDir),
+          fileName: w.fileName.trim().isEmpty
+              ? BackupWebDavState.defaultFileName
+              : w.fileName.trim(),
+        );
+      case BackupRemoteType.s3:
+        final s = _ref.read(backupS3Provider);
+        if (!s.isConfigured) return null;
+        return RemoteConfig.s3(
+          endpoint: s.endpoint.trim(),
+          region: s.region.trim(),
+          bucket: s.bucket.trim(),
+          objectKey: s.objectKey.trim(),
+          pathStyle: s.usePathStyle,
+          accessKey: s.accessKeyId.trim(),
+        );
+    }
+  }
+
+  static String get _device => Platform.localHostname;
+
+  /// 本地导出：打包到 [path]。
+  Future<void> exportTo(String path, BackupScope scope) => _backupEvents(
+    RustBackend.instance.createBackup(
+      path: path,
+      scope: scope,
+      deviceName: _device,
+      taskId: rustTaskId('backup'),
+    ),
   );
 
-  /// 远端保留的版本化备份份数（时间戳文件名），超出按最旧删除。
-  static const kKeepRemoteBackups = 3;
-
-  /// 时间戳备份文件名（与 buildBackupFileName 的输出对应），按字符串
-  /// 排序即按时间排序。
-  static final _versionedNamePattern = RegExp(
-    r'^otter_pad_backup_\d{8}_\d{6}\.zip$',
-  );
-
-  /// 打包并上传到远端（时间戳文件名，保留最近 [kKeepRemoteBackups] 份），
-  /// 成功后落备份指纹快照。返回目标描述用于提示。临时 zip 无论成败都清理。
+  /// 打包并上传（Rust 保留最近 3 份版本化备份），返回上传的文件名。
   Future<String> backupToRemote({required BackupScope scope}) async {
-    final target = remote;
-    if (target == null) {
-      throw StateError('远端备份未配置');
+    final config = remote;
+    if (config == null) {
+      throw const OtterError(code: ErrorCode.invalidArgument, detail: 'remote');
     }
-    final docs = _ref.read(documentsProvider).value ?? const [];
-    String? tempArchivePath;
     try {
-      // 指纹在打包前算（flush 后、打包中内容稳定），快照在上传成功后落。
-      final fingerprints = await BackupFingerprintService.compute(docs);
-      tempArchivePath = await BackupRestoreService.createBackupArchive(
+      await for (final event in RustBackend.instance.backupToRemote(
+        config: config,
         scope: scope,
-        manifestExtra: {
-          'device': Platform.localHostname,
-          'documentCount': docs.length,
-        },
-      );
-      final remoteName = BackupRestoreService.buildBackupFileName();
-      await target.upload(tempArchivePath, remoteName);
-      await _pruneOldBackups(target);
-      await BackupFingerprintService.saveSnapshot(
-        BackupSnapshot(
-          at: DateTime.now(),
-          scope: scope,
-          remote: target.targetLabel,
-          device: Platform.localHostname,
-          docs: fingerprints,
-        ),
-      );
-      _ref.invalidate(syncStatusProvider);
-      return target.targetLabel;
-    } finally {
-      await _deleteTempFile(tempArchivePath);
-    }
-  }
-
-  /// 清理超出保留份数的旧版本备份。尽力而为：清理失败不影响本次备份
-  /// 成功（下次备份会再试）。固定文件名的旧式备份不在清理范围。
-  Future<void> _pruneOldBackups(BackupRemote target) async {
-    try {
-      final versioned =
-          (await target.list())
-              .where((e) => _versionedNamePattern.hasMatch(e.name))
-              .toList()
-            ..sort((a, b) => b.name.compareTo(a.name));
-      for (final entry in versioned.skip(kKeepRemoteBackups)) {
-        await target.delete(entry.name);
+        device: _device,
+        onlyIfDue: false,
+        taskId: rustTaskId('backup-remote'),
+      )) {
+        switch (event) {
+          case SyncEvent_Uploaded(:final name):
+            return name;
+          case SyncEvent_Failed(:final error):
+            throw error;
+          default:
+        }
       }
-    } catch (e, st) {
-      log.w('[Backup] 旧备份清理失败', error: e, stackTrace: st);
+      throw const OtterError(
+        code: ErrorCode.cancelled,
+        detail: 'backup stream',
+      );
+    } finally {
+      _ref.invalidate(syncStatusProvider);
     }
   }
 
-  /// 从远端下载备份到临时文件，返回 zip 路径。优先取最新的时间戳版本，
-  /// 远端没有（或不支持列目录）时回退到配置中的固定文件名（兼容旧备份）。
-  /// 调用方恢复完成后负责删除（恢复与下载分属两个用户可见阶段）。
+  /// 下载最新的远端备份到临时文件，返回路径；调用方恢复后删除。
+  /// 优先取时间戳命名的最新版本，没有时用配置中的固定文件名（兼容旧备份）。
   Future<String> downloadBackupToTemp() async {
-    final target = remote;
-    if (target == null) {
-      throw StateError('远端备份未配置');
+    final config = remote;
+    if (config == null) {
+      throw const OtterError(code: ErrorCode.invalidArgument, detail: 'remote');
     }
-    String remoteName = target.fixedName;
+    var name = switch (config) {
+      RemoteConfig_Webdav(:final fileName) => fileName,
+      RemoteConfig_S3(:final objectKey) => p.posix.basename(objectKey),
+    };
     try {
-      final versioned =
-          (await target.list())
-              .where((e) => _versionedNamePattern.hasMatch(e.name))
-              .toList()
-            ..sort((a, b) => b.name.compareTo(a.name));
-      if (versioned.isNotEmpty) remoteName = versioned.first.name;
+      final versioned = (await RustBackend.instance.remoteBackups(
+        config: config,
+        taskId: rustTaskId('backup-list'),
+      )).map((e) => e.name).where(_versioned.hasMatch).toList()..sort();
+      if (versioned.isNotEmpty) name = versioned.last;
     } catch (_) {}
-
-    final tempDir = await getTemporaryDirectory();
-    final archivePath = p.join(
-      tempDir.path,
-      'OtterPad',
-      'restore',
-      BackupRestoreService.buildBackupFileName(),
+    final directory = Directory(
+      p.join((await getTemporaryDirectory()).path, 'OtterPad', 'restore'),
     );
-    await Directory(p.dirname(archivePath)).create(recursive: true);
-    await target.download(remoteName, archivePath);
-    return archivePath;
+    await directory.create(recursive: true);
+    final path = p.join(directory.path, name);
+    await for (final event in RustBackend.instance.transferBackup(
+      config: config,
+      name: name,
+      path: path,
+      direction: TransferDirection.download,
+      taskId: rustTaskId('backup-download'),
+    )) {
+      switch (event) {
+        case RemoteTransferEvent_Completed():
+          return path;
+        case RemoteTransferEvent_Failed(:final error):
+          throw error;
+        default:
+      }
+    }
+    throw const OtterError(
+      code: ErrorCode.cancelled,
+      detail: 'download stream',
+    );
   }
 
-  /// 从本地 zip 恢复：排空在飞任务 → 执行恢复 → 刷新受影响 provider。
-  /// merge 模式返回合并统计，overwrite 返回 null。
-  Future<MergeResult?> restoreFromArchive({
+  static final _versioned = RegExp(r'^otter_pad_backup_\d{8}_\d{6}\.zip$');
+
+  /// 从本地 zip 恢复：Rust 先校验并在副本上准备，确认后替换；提交时 Rust
+  /// 取消其余任务。返回合并统计。
+  Future<RestoreReport> restoreFromArchive({
     required String archivePath,
-    required BackupRestoreScope scope,
+    required RestoreScope scope,
     required RestoreMode mode,
-  }) => StorageActivity.restore(() async {
-    try {
-      return await BackupRestoreService.restoreBackupArchive(
-        archivePath: archivePath,
+  }) async {
+    _cancelActiveTasks();
+    RestorePreview? preview;
+    await _backupEvents(
+      RustBackend.instance.prepareRestore(
+        path: archivePath,
         scope: scope,
         mode: mode,
+        taskId: rustTaskId('restore-prepare'),
+      ),
+      onPrepared: (p) => preview = p,
+    );
+    final prepared = preview;
+    if (prepared == null) {
+      throw const OtterError(code: ErrorCode.invalidData, detail: 'restore');
+    }
+    RestoreReport? report;
+    try {
+      await _backupEvents(
+        RustBackend.instance.commitRestore(
+          id: prepared.id,
+          taskId: rustTaskId('restore-commit'),
+        ),
+        onRestored: (r) => report = r,
       );
     } finally {
-      // 失败回滚也会换连接，旧订阅必须一起重建。
-      _refreshAfterRestore(scope);
+      await _refreshAfterRestore(scope);
     }
-  }, drain: _drainActiveTasks);
+    return report ?? prepared.report;
+  }
 
-  /// 恢复会 close Drift 连接（overwrite）或整批读写 DB（merge）——
-  /// 先取消所有 Active Task 并等活集合清空，避免在飞任务（翻译写盘、
-  /// 提取 saveResult 等）撞上 close 窗口炸出 "database has been closed"。
-  /// 取消是协作式的，已在飞的网络请求要跑完才退出，超时则停止恢复。
-  Future<void> _drainActiveTasks() async {
-    final notifier = _ref.read(taskActivityProvider.notifier);
-    notifier.cancelAll();
+  void _cancelActiveTasks() {
+    _ref.read(taskActivityProvider.notifier).cancelAll();
     final documentTasks = _ref.read(documentTaskProvider.notifier);
     for (final task in _ref.read(documentTaskProvider).values.toList()) {
       if (task.isActive) documentTasks.cancelTask(task.key);
     }
-    bool hasActiveTasks() =>
-        _ref.read(taskActivityProvider).isNotEmpty ||
-        _ref.read(documentTaskProvider).values.any((task) => task.isActive);
-    final deadline = DateTime.now().add(const Duration(seconds: 15));
-    while (hasActiveTasks() && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-    if (hasActiveTasks()) {
-      throw const StorageException(StorageFailure.activeTasks);
+  }
+
+  Future<void> _backupEvents(
+    Stream<BackupEvent> events, {
+    void Function(RestorePreview)? onPrepared,
+    void Function(RestoreReport)? onRestored,
+  }) async {
+    await for (final event in events) {
+      switch (event) {
+        case BackupEvent_Prepared(:final preview):
+          onPrepared?.call(preview);
+        case BackupEvent_Restored(:final report):
+          onRestored?.call(report);
+        case BackupEvent_Failed(:final error):
+          throw error;
+        default:
+      }
     }
   }
 
-  /// 恢复后刷新受影响的 provider。设置类 notifier 从重开的 Drift 缓存
-  /// 重新加载；文献类数据 provider 经 [appDatabaseProvider] 失效自动重建
-  /// 并重订阅新库（ADR-0001）。
-  void _refreshAfterRestore(BackupRestoreScope scope) {
-    if (scope.restoreSettings) {
+  /// 恢复后从 Rust 重新载入设置与文献数据。
+  Future<void> _refreshAfterRestore(RestoreScope scope) async {
+    if (scope != RestoreScope.libraryOnly) {
+      await GStorage.reloadSettings();
+      await Prompts.load();
       _ref.read(themeProvider.notifier).reload();
       _ref.read(proxyProvider.notifier).reload();
       _ref.read(agentApiProvider.notifier).reload();
       _ref.read(docExtractApiProvider.notifier).reload();
-      _ref.read(docExtractUsageProvider.notifier).reload();
       _ref.read(readerSettingsProvider.notifier).reload();
       _ref.read(backupRemoteTypeProvider.notifier).reload();
       _ref.read(backupS3Provider.notifier).reload();
@@ -194,21 +230,10 @@ class BackupOrchestrator {
       _ref.read(autoBackupProvider.notifier).reload();
       _ref.read(zoteroSyncProvider.notifier).reload();
     }
-
-    if (scope.restoreLibrary) {
-      // invalidate 数据库 provider → 所有 watch() 它的数据 provider（含
-      // highlightProvider(docId) family 全部实例）重建并重订阅新库。
-      _ref.invalidate(appDatabaseProvider);
-    }
+    _ref.invalidate(extractionUsageProvider);
+    _ref.read(autoBackupSchedulerProvider).restart();
+    bumpLibrary(_ref);
     _ref.invalidate(syncStatusProvider);
-  }
-
-  Future<void> _deleteTempFile(String? path) async {
-    if (path == null) return;
-    final file = File(path);
-    if (await file.exists()) {
-      await file.delete();
-    }
   }
 }
 

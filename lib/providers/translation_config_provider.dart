@@ -58,6 +58,11 @@ const _kIgnoreSections = SettingsKeys.translationIgnoreSections;
 
 // ── 数据模型 ───────────────────────────────────────────────────────────
 
+/// 默认提示词由 Rust 定义（见 [Prompts]）。
+String get kDefaultTranslationSystemPrompt =>
+    Prompts.translationSystem.defaultText;
+String get kDefaultTranslationUserPrompt => Prompts.translationUser.defaultText;
+
 class TranslationConfig {
   final String systemPrompt;
   final String userPrompt;
@@ -71,14 +76,15 @@ class TranslationConfig {
   /// 未列入的已知区域合并为单个段落送入 LLM。
   final List<String> ignoreSections;
 
-  const TranslationConfig({
-    this.systemPrompt = kDefaultTranslationSystemPrompt,
-    this.userPrompt = kDefaultTranslationUserPrompt,
+  TranslationConfig({
+    String? systemPrompt,
+    String? userPrompt,
     this.targetLanguage = kDefaultTargetLanguage,
     this.temperature,
     this.displayStyleId = kDefaultTranslationStyleId,
     this.ignoreSections = kDefaultTranslationIgnoreSections,
-  });
+  }) : systemPrompt = systemPrompt ?? kDefaultTranslationSystemPrompt,
+       userPrompt = userPrompt ?? kDefaultTranslationUserPrompt;
 
   bool get isSystemPromptDefault =>
       systemPrompt.trim() == kDefaultTranslationSystemPrompt.trim();
@@ -191,7 +197,7 @@ class TranslationConfigNotifier extends StateNotifier<TranslationConfig> {
   }
 
   Future<void> resetAll() async {
-    state = const TranslationConfig();
+    state = TranslationConfig();
     await PromptStore.reset(Prompts.translationSystem);
     await PromptStore.reset(Prompts.translationUser);
     final box = GStorage.setting;

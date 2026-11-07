@@ -1,19 +1,59 @@
-import '../services/model_capability_store.dart';
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
-import '../data/models/chat/chat_session.dart';
-import '../data/models/book/reader_anchor.dart';
-import '../data/models/chat/chat_activity.dart';
 import '../core/app_logger.dart';
-import '../services/document_chat_service.dart';
+import '../core/l10n.dart';
+import '../core/otter_error_text.dart';
+import '../core/rust_ai.dart';
+import '../core/rust_backend.dart';
+import '../core/storage/json_data.dart';
+import '../data/models/chat/chat_activity.dart';
+import '../data/models/chat/chat_session.dart';
+import '../router/app_router.dart';
+import '../services/prompts.dart';
+import '../services/web_search_service.dart';
+import '../src/rust/ai/search.dart';
+import '../src/rust/ai/types.dart' as rust;
+import '../src/rust/api.dart' show cancelTask;
+import '../src/rust/api/ai.dart';
+import '../src/rust/api/chat.dart';
+import '../src/rust/error.dart';
+import '../src/rust/prompts.dart';
+import '../services/model_capability_store.dart';
 import 'agent_api_provider.dart';
 
-/// 每文献问 AI 状态。[activeSessionId] 为 null 表示「新会话草稿」——
-/// 首次发送时才落地创建会话文件，避免空会话垃圾。
+enum ChatModelRole { expert, fast }
+
+typedef ChatModelSelection = ({String id, String modelId});
+
+/// 角色对应的服务商实例（专家、快速角色可能属于不同实例）。
+AgentApiState? resolveRoleState(ChatModelRole role) {
+  final r = role == ChatModelRole.expert
+      ? AgentApiNotifier.globalDefaultRole
+      : AgentApiNotifier.globalFastRole;
+  if (r.id == null || r.modelId == null) return null;
+  return AgentApiNotifier.loadInstance(r.id!);
+}
+
+String? modelIdFor(AgentApiState state, ChatModelRole role) =>
+    role == ChatModelRole.expert ? state.defaultModelId : state.fastModelId;
+
+AgentApiState? resolveModelState(
+  ChatModelRole role,
+  ChatModelSelection? model,
+) => model == null
+    ? resolveRoleState(role)
+    : AgentApiNotifier.loadInstance(model.id);
+
+bool isFastModel(ChatModelRole role, ChatModelSelection? model) {
+  if (model == null) return role == ChatModelRole.fast;
+  final fast = AgentApiNotifier.globalFastRole;
+  return fast.id == model.id && fast.modelId == model.modelId;
+}
+
+/// 每文献问 AI 状态。[activeSessionId] 为 null 表示新会话草稿，首次发送时才创建。
 class DocumentChatState {
   final bool loaded;
 
@@ -22,11 +62,11 @@ class DocumentChatState {
   final String? activeSessionId;
   final bool sending;
 
-  /// 流式回答的实时累积文本；非流式中 / 未开始为 null。
+  /// 流式回答的实时累积文本；未在流式回答时为 null。
   final String? streamingText;
   final List<ChatActivity> activities;
 
-  /// 最近一次发送失败的可读文案；进入下一次发送时清空。
+  /// 最近一次发送失败的可读文案；下一次发送时清空。
   final String? error;
 
   const DocumentChatState({
@@ -72,12 +112,16 @@ class DocumentChatState {
 
 const _sentinel = Object();
 
-/// 问 AI 状态机——会话 CRUD 与发送编排。IO 与请求全部委托
-/// [DocumentChatService]，自己只持状态 + CancelToken。
+/// 问 AI：会话存取与提问都在 Rust；这里持有界面状态，并补记过程活动、
+/// 中断时已流出的回答与会话标题。
 class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
   final Ref ref;
   final String documentId;
-  CancelToken? _cancelToken;
+  String? _task;
+  bool _cancelled = false;
+
+  /// Rust 会话原文，保留修订号与未知字段，修改时在其上更新。
+  final _conversations = <String, Conversation>{};
 
   DocumentChatNotifier(this.ref, this.documentId)
     : super(const DocumentChatState()) {
@@ -86,22 +130,33 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
 
   Future<void> _init() async {
     try {
-      final sessions = await DocumentChatService.listSessions(documentId);
+      final list = await RustBackend.instance.conversations(
+        document: documentId,
+      );
       if (!mounted) return;
-      state = state.copyWith(loaded: true, sessions: sessions);
+      for (final c in list.sessions) {
+        _conversations[c.id] = c;
+      }
+      state = state.copyWith(loaded: true, sessions: _sorted());
     } catch (e, st) {
       _reportError(e, st);
       if (mounted) state = state.copyWith(loaded: true);
     }
   }
 
+  List<ChatSession> _sorted() =>
+      [for (final c in _conversations.values) _session(c)]
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
   void _reportError(Object error, StackTrace stackTrace) {
     log.w('[DocumentChat] $documentId', error: error, stackTrace: stackTrace);
     if (!mounted) return;
+    final ctx = rootNavigatorKey.currentContext;
+    final l10n = ctx == null ? null : AppLocalizations.of(ctx);
     state = state.copyWith(
       sending: false,
       streamingText: null,
-      error: '$error'.replaceFirst('Exception: ', ''),
+      error: l10n == null ? '$error' : errorText(l10n, error),
     );
   }
 
@@ -111,7 +166,6 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     super.dispose();
   }
 
-  /// 切到新会话草稿（不立即建文件）。
   void startNewSession() =>
       state = state.copyWith(activeSessionId: null, error: null);
 
@@ -119,29 +173,37 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
       state = state.copyWith(activeSessionId: sessionId, error: null);
 
   Future<void> deleteSession(String sessionId) async {
-    await DocumentChatService.deleteSession(documentId, sessionId);
+    await RustBackend.instance.deleteConversation(
+      document: documentId,
+      id: sessionId,
+    );
+    _conversations.remove(sessionId);
     if (!mounted) return;
     state = state.copyWith(
-      sessions: [
-        for (final s in state.sessions)
-          if (s.id != sessionId) s,
-      ],
+      sessions: _sorted(),
       activeSessionId: state.activeSessionId == sessionId
           ? null
           : state.activeSessionId,
     );
   }
 
-  /// 发送一轮提问。用户消息先落盘（断网/失败不丢提问）；[streaming] 开时
-  /// 回答增量经 [DocumentChatState.streamingText] 实时呈现（用户中断时已
-  /// 流出的部分也作为回答保留），关时一次性整体呈现；完成后整体落盘。
+  Future<Conversation> _save(Conversation c) async {
+    final saved = await RustBackend.instance.saveConversation(
+      document: documentId,
+      session: c,
+    );
+    _conversations[saved.id] = saved;
+    return saved;
+  }
+
+  /// 发送一轮提问。用户消息由 Rust 先落盘；中断时已流出的部分作为回答保留。
   Future<void> send({
     required String text,
     required ChatModelRole role,
     ChatModelSelection? model,
     String? quotedText,
     String? figureImagePath,
-    ReaderAnchor? quoteAnchor,
+    Map<String, dynamic>? quoteAnchor,
     ThinkingLevel? thinkingOverride,
     bool webSearch = false,
     bool streaming = true,
@@ -149,167 +211,231 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     if (state.sending) return;
     final question = text.trim();
     if (question.isEmpty) return;
+    final selection = _selection(role, model, thinkingOverride);
+    if (selection == null) {
+      _reportError(
+        const OtterError(code: ErrorCode.invalidArgument, detail: 'model'),
+        StackTrace.current,
+      );
+      return;
+    }
 
-    var session =
-        state.activeSession ?? ChatSession.create(title: _titleFrom(question));
-    final history = List<ChatMessage>.from(session.messages);
-    var userMsg = ChatMessage.user(
-      content: question,
-      quoteAnchor: quoteAnchor,
-      quotedText: quotedText,
-      figureImagePath: figureImagePath,
-    );
-    session = session.append(userMsg);
-    _upsert(session, sending: true);
-    final cancelToken = _cancelToken = CancelToken();
-    // 流式增量 80ms 节流刷入 state——每个 token 都重建 Markdown 会拖垮 UI。
-    final streamBuf = StringBuffer();
+    _cancelled = false;
+    state = state.copyWith(sending: true, error: null, activities: const []);
+    var conversation = _conversations[state.activeSessionId];
+    final firstTurn = conversation == null || conversation.messages.isEmpty;
+    try {
+      conversation ??= await RustBackend.instance.createConversation(
+        document: documentId,
+        title: _titleFrom(question),
+      );
+      _conversations[conversation.id] = conversation;
+      final message = ConversationMessage(
+        id: ChatMessage.newId(),
+        role: rust.Role.user,
+        content: question,
+        quotedText: (quotedText?.trim().isEmpty ?? true) ? null : quotedText,
+        quoteAnchor: quoteAnchor == null ? null : toJsonData(quoteAnchor),
+        figureImagePath: figureImagePath,
+        activities: const [],
+        modelId: null,
+        urlContext: null,
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        extra: const [],
+      );
+      _conversations[conversation.id] = _withMessages(conversation, [
+        ...conversation.messages,
+        message,
+      ]);
+      if (!mounted) return;
+      state = state.copyWith(
+        sessions: _sorted(),
+        activeSessionId: conversation.id,
+      );
+      if (firstTurn) {
+        unawaited(_generateTitle(conversation.id, question, quotedText));
+      }
+      await _ask(
+        conversation.id,
+        message,
+        selection,
+        role,
+        model,
+        webSearch,
+        streaming,
+      );
+    } catch (e, st) {
+      if (!mounted) return;
+      if (isCancellation(e)) {
+        state = state.copyWith(sending: false, streamingText: null);
+        return;
+      }
+      _reportError(e, st);
+    }
+  }
+
+  Future<void> _ask(
+    String sessionId,
+    ConversationMessage message,
+    ModelSelection selection,
+    ChatModelRole role,
+    ChatModelSelection? model,
+    bool webSearch,
+    bool streaming,
+  ) async {
+    final text = StringBuffer();
     final activities = <String, ChatActivity>{};
-    Timer? flushTimer;
-    void scheduleFlush() {
-      flushTimer ??= Timer(const Duration(milliseconds: 80), () {
-        flushTimer = null;
-        if (!mounted || cancelToken.isCancelled) return;
+    Timer? flush;
+    void schedule() {
+      flush ??= Timer(const Duration(milliseconds: 80), () {
+        flush = null;
+        if (!mounted) return;
         state = state.copyWith(
-          streamingText: streamBuf.toString(),
+          streamingText: text.toString(),
           activities: activities.values.toList(),
         );
       });
     }
 
-    void pushActivity(ChatActivity activity) {
-      activities[activity.id] = activity;
-      scheduleFlush();
+    void finishReasoning() {
+      final reasoning = activities['reasoning'];
+      if (reasoning?.status == ChatActivityStatus.running) {
+        activities['reasoning'] = reasoning!.update(
+          status: ChatActivityStatus.completed,
+        );
+      }
     }
 
-    void pushDelta(String delta) {
-      streamBuf.write(delta);
-      scheduleFlush();
-    }
-
-    Future<void> persistAnswer(String content) async {
-      // 从 state 取最新版本再追加——标题生成可能已并发更新过同一会话。
-      session = (_sessionById(session.id) ?? session).append(
-        ChatMessage.assistant(
-          content: content,
-          modelId: model?.modelId ?? _modelIdOf(role),
-          activities: activities.values.toList(),
-        ),
-      );
-      _upsert(session, sending: true);
-      await DocumentChatService.saveSession(documentId, session);
-      if (mounted) state = state.copyWith(sending: false);
-    }
-
+    final task = rustTaskId('chat');
+    _task = task;
+    final systemPrompt = await RustBackend.instance.prompt(
+      kind: PromptKind.chatSystem,
+    );
+    final searchProvider = webSearch && WebSearchService.isConfigured
+        ? switch (WebSearchService.provider) {
+            WebSearchProvider.tavily => SearchProvider.tavily,
+            WebSearchProvider.exa => SearchProvider.exa,
+            WebSearchProvider.brave => SearchProvider.brave,
+          }
+        : null;
     try {
-      await DocumentChatService.saveSession(documentId, session);
-      if (!mounted) return;
-      if (cancelToken.isCancelled) throw cancelToken.cancelError!;
-      if (history.isEmpty) {
-        unawaited(
-          _generateTitle(session.id, question, quotedText).catchError((
-            Object e,
-            StackTrace st,
-          ) {
-            log.w(
-              '[DocumentChat] 标题生成失败：$documentId',
-              error: e,
-              stackTrace: st,
-            );
-          }),
+      await for (final event in RustBackend.instance.askDocument(
+        options: AskDocument(
+          documentId: documentId,
+          sessionId: sessionId,
+          message: message,
+          model: selection,
+          systemPrompt: systemPrompt.text,
+          fast: isFastModel(role, model),
+          webSearch: webSearch,
+          stream: streaming,
+          searchProvider: searchProvider,
+        ),
+        taskId: task,
+      )) {
+        switch (event) {
+          case ConversationEvent_Delta(
+            event: rust.ChatEvent_TextDelta(text: final t),
+          ):
+            finishReasoning();
+            text.write(t);
+            schedule();
+          case ConversationEvent_Delta(
+            event: rust.ChatEvent_ReasoningDelta(text: final t),
+          ):
+            final current =
+                activities['reasoning'] ??
+                ChatActivity(
+                  id: 'reasoning',
+                  kind: ChatActivityKind.reasoning,
+                  startedAt: DateTime.now(),
+                );
+            activities['reasoning'] = current.update(text: current.text + t);
+            schedule();
+          case ConversationEvent_Delta(event: rust.ChatEvent_Tool(:final name)):
+            final id = 'tool-${activities.length}';
+            activities[id] = ChatActivity(
+              id: id,
+              kind: ChatActivityKind.tool,
+              name: name,
+              startedAt: DateTime.now(),
+            ).update(status: ChatActivityStatus.completed);
+            schedule();
+          case ConversationEvent_Saved(:final conversation):
+            flush?.cancel();
+            finishReasoning();
+            var saved = conversation;
+            if (activities.isNotEmpty && saved.messages.isNotEmpty) {
+              final last = saved.messages.last;
+              saved = await _save(
+                _withMessages(saved, [
+                  ...saved.messages.take(saved.messages.length - 1),
+                  _withActivities(last, activities.values),
+                ]),
+              );
+            }
+            _conversations[saved.id] = saved;
+            if (mounted) {
+              state = state.copyWith(
+                sessions: _sorted(),
+                sending: false,
+                streamingText: null,
+                activities: const [],
+              );
+            }
+          case ConversationEvent_Failed(:final error):
+            throw error;
+          default:
+        }
+      }
+    } catch (e) {
+      flush?.cancel();
+      if (!_cancelled || !isCancellation(e)) rethrow;
+      // 用户中断：保留已流出的回答与过程。
+      final partial = text.toString().trim();
+      for (final entry in activities.entries.toList()) {
+        if (entry.value.status == ChatActivityStatus.running) {
+          activities[entry.key] = entry.value.update(
+            status: ChatActivityStatus.cancelled,
+          );
+        }
+      }
+      if (partial.isNotEmpty || activities.isNotEmpty) {
+        final latest = await RustBackend.instance.conversation(
+          document: documentId,
+          id: sessionId,
+        );
+        await _save(
+          _withMessages(latest, [
+            ...latest.messages,
+            ConversationMessage(
+              id: ChatMessage.newId(),
+              role: rust.Role.assistant,
+              content: partial,
+              activities: [
+                for (final a in activities.values) toJsonData(a.toJson()),
+              ],
+              modelId: selection.config.model,
+              createdAt: DateTime.now().toUtc().toIso8601String(),
+              extra: const [],
+            ),
+          ]),
         );
       }
-      // 客户端 URL 回退抓取（无链接 / 模型原生支持 URL 工具时为 null）。
-      // 完成后挂回已落盘的 user 消息，历史重放据此与当轮保持一致。
-      final urlContext = await DocumentChatService.buildUrlContextFallback(
-        role: role,
-        model: model,
-        question: question,
-        cancelToken: cancelToken,
-        onActivity: pushActivity,
-      );
-      if (!mounted) return;
-      if (cancelToken.isCancelled) throw cancelToken.cancelError!;
-      if (urlContext != null) {
-        userMsg = userMsg.withUrlContext(urlContext);
-        final latest = _sessionById(session.id) ?? session;
-        session = latest.copyWith(
-          messages: [
-            for (final m in latest.messages) m.id == userMsg.id ? userMsg : m,
-          ],
+      if (mounted) {
+        state = state.copyWith(
+          sessions: _sorted(),
+          sending: false,
+          streamingText: null,
+          activities: const [],
         );
-        _replaceSession(session);
-        await DocumentChatService.saveSession(documentId, session);
       }
-      final answer = await DocumentChatService.ask(
-        documentId: documentId,
-        role: role,
-        model: model,
-        history: history,
-        question: question,
-        quotedText: quotedText,
-        figureImagePath: figureImagePath,
-        urlContext: urlContext,
-        supportsImages: supportsImages(role, model: model),
-        supportsReasoning: _capabilityFor(role, model).reasoning,
-        thinkingOverride: thinkingOverride,
-        webSearch: webSearch,
-        onDelta: streaming ? pushDelta : null,
-        onActivity: pushActivity,
-        cancelToken: cancelToken,
-      );
-      flushTimer?.cancel();
-      if (!mounted) return;
-      await persistAnswer(answer);
-    } catch (e, st) {
-      flushTimer?.cancel();
-      if (!mounted) return;
-      if (cancelToken.isCancelled) {
-        // 用户中断：已流出的部分作为回答保留，不白等也不丢
-        final partial = streamBuf.toString().trim();
-        for (final step in activities.values.toList()) {
-          if (step.status == ChatActivityStatus.running) {
-            activities[step.id] = step.update(
-              status: ChatActivityStatus.cancelled,
-            );
-          }
-        }
-        if (partial.isEmpty && activities.isEmpty) {
-          state = state.copyWith(sending: false, streamingText: null);
-        } else {
-          try {
-            await persistAnswer(partial);
-          } catch (saveError, saveStack) {
-            _reportError(saveError, saveStack);
-          }
-        }
-        return;
-      }
-      for (final step in activities.values.toList()) {
-        if (step.status == ChatActivityStatus.running) {
-          activities[step.id] = step.update(status: ChatActivityStatus.failed);
-        }
-      }
-      if (streamBuf.isNotEmpty || activities.isNotEmpty) {
-        try {
-          await persistAnswer(streamBuf.toString());
-        } catch (saveError, saveStack) {
-          _reportError(saveError, saveStack);
-          return;
-        }
-      }
-      _reportError(e, st);
     } finally {
-      flushTimer?.cancel();
-      if (identical(_cancelToken, cancelToken)) _cancelToken = null;
+      if (_task == task) _task = null;
     }
   }
 
-  /// 截断当前会话到 [keepCount] 条消息，然后以 [text] 重新发送。
-  ///
-  /// 编辑用户消息：`keepCount` = 被编辑消息的 index（丢弃该消息及之后的所有内容）。
-  /// 重试 AI 回答：`keepCount` = 该回答前 user 消息的 index（替换原提问和回答），
-  ///   text 填上一条 user 消息的原文。
+  /// 截断当前会话到 [keepCount] 条消息后以 [text] 重新发送。
   Future<void> resendFrom({
     required int keepCount,
     required String text,
@@ -317,90 +443,77 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     ChatModelSelection? model,
     String? quotedText,
     String? figureImagePath,
-    ReaderAnchor? quoteAnchor,
+    Map<String, dynamic>? quoteAnchor,
     ThinkingLevel? thinkingOverride,
     bool webSearch = false,
     bool streaming = true,
   }) async {
-    final session = state.activeSession;
-    if (session == null || state.sending) return;
-    final truncated = session.copyWith(
-      messages: session.messages.sublist(0, keepCount),
-    );
-    state = state.copyWith(sending: true, error: null);
+    final conversation = _conversations[state.activeSessionId];
+    if (conversation == null || state.sending) return;
     try {
-      await DocumentChatService.saveSession(documentId, truncated);
+      await _save(
+        _withMessages(
+          conversation,
+          conversation.messages.sublist(0, keepCount),
+        ),
+      );
     } catch (e, st) {
       _reportError(e, st);
       return;
     }
     if (!mounted) return;
-    _upsert(truncated, sending: false);
+    state = state.copyWith(sessions: _sorted());
     await send(
-      quoteAnchor: quoteAnchor,
       text: text,
       role: role,
       model: model,
       quotedText: quotedText,
       figureImagePath: figureImagePath,
+      quoteAnchor: quoteAnchor,
       thinkingOverride: thinkingOverride,
       webSearch: webSearch,
       streaming: streaming,
     );
   }
 
-  /// 从指定消息处分叉：创建新会话，包含 [upToIndex]（含）之前的所有消息。
+  /// 从指定消息分叉出新会话，包含 [upToIndex]（含）之前的消息。
   Future<void> forkFromMessage(int upToIndex) async {
-    final session = state.activeSession;
-    if (session == null) return;
-    final forked = ChatSession(
-      id: ChatMessage.newId(),
-      title: session.title,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      messages: session.messages.sublist(0, upToIndex + 1),
-    );
+    final source = _conversations[state.activeSessionId];
+    if (source == null) return;
     try {
-      await DocumentChatService.saveSession(documentId, forked);
+      final created = await RustBackend.instance.createConversation(
+        document: documentId,
+        title: source.title,
+      );
+      final forked = await _save(
+        _withMessages(created, source.messages.sublist(0, upToIndex + 1)),
+      );
+      if (!mounted) return;
+      state = state.copyWith(sessions: _sorted(), activeSessionId: forked.id);
     } catch (e, st) {
       _reportError(e, st);
-      return;
     }
-    if (!mounted) return;
-    state = state.copyWith(
-      sessions: [forked, ...state.sessions],
-      activeSessionId: forked.id,
-    );
   }
 
-  /// 中断当前流式回答——状态收尾（含已流出部分的落盘）由 [send] 的
-  /// cancel 分支统一处理。
-  void cancel() => _cancelToken?.cancel();
-
-  String _modelIdOf(ChatModelRole role) {
-    final roleState = DocumentChatService.resolveRoleState(role);
-    return roleState == null
-        ? ''
-        : (DocumentChatService.modelIdFor(roleState, role) ?? '');
+  void cancel() {
+    final task = _task;
+    if (task == null) return;
+    _cancelled = true;
+    cancelTask(taskId: task);
   }
 
-  /// 图片输入能力判定：优先读实例上（含用户在设置里手动覆盖的）能力标记，
-  /// 实例不可达时回退 id 推断——两条路都在 AgentModelCapability 接缝内。
-  /// public：供 page 发图时判定是否需自动转专家模型。
+  /// 图片输入：快速模型不发图；其余按实例（含手动覆写）的能力判定。
   bool supportsImages(ChatModelRole role, {ChatModelSelection? model}) =>
-      !DocumentChatService.isFastModel(role, model) &&
-      _capabilityFor(role, model).imageInput;
+      !isFastModel(role, model) && _capabilityFor(role, model).imageInput;
 
   AgentModelCapability _capabilityFor(
     ChatModelRole role,
     ChatModelSelection? model,
   ) {
-    final roleState = DocumentChatService.resolveModelState(role, model);
+    final roleState = resolveModelState(role, model);
     final modelId =
         model?.modelId ??
-        (roleState == null
-            ? null
-            : DocumentChatService.modelIdFor(roleState, role));
+        (roleState == null ? null : modelIdFor(roleState, role));
     if (roleState == null || modelId == null) {
       return const AgentModelCapability();
     }
@@ -411,59 +524,95 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
         const AgentModelCapability();
   }
 
-  ChatSession? _sessionById(String id) {
-    for (final s in state.sessions) {
-      if (s.id == id) return s;
+  ModelSelection? _selection(
+    ChatModelRole role,
+    ChatModelSelection? model,
+    ThinkingLevel? thinkingOverride,
+  ) {
+    final roleState = resolveModelState(role, model);
+    final modelId =
+        model?.modelId ??
+        (roleState == null ? null : modelIdFor(roleState, role));
+    if (roleState == null ||
+        modelId == null ||
+        !roleState.models.contains(modelId)) {
+      return null;
     }
-    return null;
-  }
-
-  /// 原位替换会话（不动 activeSessionId / sending）——标题异步更新用。
-  void _replaceSession(ChatSession session) {
-    state = state.copyWith(
-      sessions: [
-        for (final s in state.sessions) s.id == session.id ? session : s,
-      ],
+    final params = roleState.paramsFor(modelId);
+    final state = thinkingOverride == null
+        ? roleState
+        : roleState.copyWith(
+            modelParams: {
+              ...roleState.modelParams,
+              modelId: params.copyWith(thinkingLevel: thinkingOverride),
+            },
+          );
+    return modelSelection(
+      state,
+      modelId,
+      capability: ref
+          .read(agentApiProvider)
+          .byId(roleState.id)
+          ?.modelCaps[modelId],
     );
   }
 
-  /// 首轮发出后用快速模型异步生成会话标题。与回答的落盘竞写同一文件——
-  /// 双方先从 state 取最新版本再改字段，服务层按调用顺序串行写入同一文件。
+  /// 首轮发出后用快速模型生成会话标题，失败时保留截断的提问。
   Future<void> _generateTitle(
     String sessionId,
     String question,
     String? quotedText,
   ) async {
-    final title = await DocumentChatService.summarizeTitle(
-      question: question,
-      quotedText: quotedText,
-    );
-    if (!mounted || title == null) return;
-    final current = _sessionById(sessionId);
-    if (current == null) return; // 会话已被删除
-    final updated = current.copyWith(title: title);
-    _replaceSession(updated);
+    final selection = _selection(ChatModelRole.fast, null, ThinkingLevel.off);
+    if (selection == null) return;
+    var input = quotedText == null || quotedText.trim().isEmpty
+        ? question
+        : '$quotedText\n\n$question';
+    if (input.length > 1000) input = input.substring(0, 1000);
     try {
-      await DocumentChatService.saveSession(documentId, updated);
+      String? title;
+      await for (final event in RustBackend.instance.generateText(
+        model: selection,
+        request: GenerationRequest(
+          system: Prompts.chatTitleSystem,
+          messages: [
+            rust.Message(role: rust.Role.user, text: input, images: const []),
+          ],
+          webSearch: false,
+          urlContext: false,
+          showReasoning: false,
+          cachePrefix: false,
+        ),
+        taskId: rustTaskId('chat-title'),
+      )) {
+        switch (event) {
+          case GenerationEvent_Completed(:final response):
+            title = response.text.trim();
+          case GenerationEvent_Failed(:final error):
+            throw error;
+          default:
+        }
+      }
+      if (title == null || title.isEmpty || !mounted) return;
+      final latest = await RustBackend.instance.conversation(
+        document: documentId,
+        id: sessionId,
+      );
+      await _save(
+        Conversation(
+          id: latest.id,
+          title: title,
+          createdAt: latest.createdAt,
+          updatedAt: latest.updatedAt,
+          messages: latest.messages,
+          revision: latest.revision,
+          extra: latest.extra,
+        ),
+      );
+      if (mounted) state = state.copyWith(sessions: _sorted());
     } catch (e, st) {
-      log.w('[DocumentChat] 标题保存失败：$documentId', error: e, stackTrace: st);
+      log.w('[DocumentChat] 标题生成失败：$documentId', error: e, stackTrace: st);
     }
-  }
-
-  /// 把会话写回列表头部（updatedAt 降序）并设为活动会话。
-  void _upsert(ChatSession session, {required bool sending}) {
-    state = state.copyWith(
-      sessions: [
-        session,
-        for (final s in state.sessions)
-          if (s.id != session.id) s,
-      ],
-      activeSessionId: session.id,
-      sending: sending,
-      streamingText: null,
-      activities: const [],
-      error: null,
-    );
   }
 
   static String _titleFrom(String question) {
@@ -471,6 +620,64 @@ class DocumentChatNotifier extends StateNotifier<DocumentChatState> {
     return line.length <= 24 ? line : '${line.substring(0, 24)}…';
   }
 }
+
+Conversation _withMessages(
+  Conversation c,
+  List<ConversationMessage> messages,
+) => Conversation(
+  id: c.id,
+  title: c.title,
+  createdAt: c.createdAt,
+  updatedAt: c.updatedAt,
+  messages: messages,
+  revision: c.revision,
+  extra: c.extra,
+);
+
+ConversationMessage _withActivities(
+  ConversationMessage m,
+  Iterable<ChatActivity> activities,
+) => ConversationMessage(
+  id: m.id,
+  role: m.role,
+  content: m.content,
+  quotedText: m.quotedText,
+  quoteAnchor: m.quoteAnchor,
+  figureImagePath: m.figureImagePath,
+  activities: [for (final a in activities) toJsonData(a.toJson())],
+  urlContext: m.urlContext,
+  modelId: m.modelId,
+  createdAt: m.createdAt,
+  extra: m.extra,
+);
+
+ChatSession _session(Conversation c) => ChatSession(
+  id: c.id,
+  title: c.title,
+  createdAt: DateTime.tryParse(c.createdAt)?.toLocal() ?? DateTime.now(),
+  updatedAt: DateTime.tryParse(c.updatedAt)?.toLocal() ?? DateTime.now(),
+  messages: [
+    for (final m in c.messages)
+      ChatMessage(
+        id: m.id,
+        role: m.role == rust.Role.user ? 'user' : 'assistant',
+        content: m.content,
+        quotedText: m.quotedText,
+        quoteAnchor: m.quoteAnchor == null
+            ? null
+            : (fromJsonData(m.quoteAnchor!) as Map?)?.cast<String, dynamic>(),
+        figureImagePath: m.figureImagePath,
+        activities: [
+          for (final a in m.activities)
+            if (fromJsonData(a) case final Map<String, dynamic> json)
+              ChatActivity.fromJson(json),
+        ],
+        urlContext: m.urlContext,
+        modelId: m.modelId,
+        createdAt: DateTime.tryParse(m.createdAt)?.toLocal() ?? DateTime.now(),
+      ),
+  ],
+);
 
 final documentChatProvider =
     StateNotifierProvider.family<

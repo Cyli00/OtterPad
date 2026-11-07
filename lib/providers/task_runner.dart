@@ -1,5 +1,7 @@
 import '../core/storage/storage_activity.dart';
 import 'package:dio/dio.dart';
+
+import '../core/rust_backend.dart' show isCancellation;
 import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
@@ -64,7 +66,7 @@ Future<T?> executeTaskBody<T>({
     onFinished(onSuccess(result)._withTone(SnackTone.success));
     return result;
   } catch (e, st) {
-    if (isCancellation(e, token)) {
+    if (token.isCancelled || isCancellation(e)) {
       onCancelled();
       onFinished(TaskFinish.text(_resolvedCancelled(cancelledMessage)));
     } else {
@@ -104,12 +106,6 @@ void finishSnackBar({
     action: finish.action,
     duration: finish.duration ?? const Duration(seconds: 4),
   );
-}
-
-/// 判断异常是否为取消操作。
-bool isCancellation(Object e, CancelToken token) {
-  if (token.isCancelled) return true;
-  return e is DioException && e.type == DioExceptionType.cancel;
 }
 
 /// 后台任务通用骨架 mixin。

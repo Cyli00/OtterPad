@@ -3,19 +3,6 @@ import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
-import '../services/agent_http.dart';
-import '../services/backup_s3_service.dart';
-import '../services/batch_extract_service.dart';
-import '../services/doc_extract_service.dart';
-import '../services/download/pdf_fetch_service.dart';
-import '../services/identifier_resolver.dart';
-import '../services/metadata_search_service.dart';
-import '../services/mineru_extract_service.dart';
-import '../services/tavily_search_service.dart';
-import '../services/update_download_service.dart';
-import '../services/update_service.dart';
-import '../services/url_context_service.dart';
-import '../services/zotero_sync_service.dart';
 
 enum ProxyMode { custom, system, none }
 
@@ -65,7 +52,6 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
   Future<void> setMode(ProxyMode mode) async {
     state = state.copyWith(mode: mode);
     await GStorage.setting.put(_modeKey, mode.name);
-    _applyToResolver();
   }
 
   Future<void> setAddress(String host, int port) async {
@@ -74,43 +60,10 @@ class ProxyNotifier extends StateNotifier<ProxyState> {
       GStorage.setting.put(_hostKey, host),
       GStorage.setting.put(_portKey, port),
     ]);
-    _applyToResolver();
   }
-
-  void _applyToResolver() {
-    AgentHttp.instance.applyProxy(state.mode, state.host, state.port);
-    BackupS3Service.instance.applyProxy(state.mode, state.host, state.port);
-    IdentifierResolver.instance.applyProxy(state.mode, state.host, state.port);
-    PdfFetchService.instance.applyProxy(state.mode, state.host, state.port);
-    DocExtractService.instance.applyProxy(state.mode, state.host, state.port);
-    BatchExtractService.instance.applyProxy(state.mode, state.host, state.port);
-    MinerUExtractService.instance.applyProxy(
-      state.mode,
-      state.host,
-      state.port,
-    );
-    ZoteroSyncService.instance.applyProxy(state.mode, state.host, state.port);
-    MetadataSearchService.instance.applyProxy(
-      state.mode,
-      state.host,
-      state.port,
-    );
-    UrlContextService.instance.applyProxy(state.mode, state.host, state.port);
-    TavilySearchService.instance.applyProxy(state.mode, state.host, state.port);
-    UpdateService.instance.applyProxy(state.mode, state.host, state.port);
-    UpdateDownloadService.instance.applyProxy(
-      state.mode,
-      state.host,
-      state.port,
-    );
-  }
-
-  /// 启动时调用，将已保存的配置应用到 Dio
-  void applyInitial() => _applyToResolver();
 
   void reload() {
     state = _load();
-    _applyToResolver();
   }
 }
 

@@ -25,11 +25,36 @@ class ReaderSurface extends StatefulWidget {
     required this.controller,
     this.fontSize = 17,
     this.maxColumnWidth = 720,
+    this.onTranslate,
+    this.onAskAi,
+    this.onFigureTap,
+    this.onTapBlank,
+    this.onLocationChanged,
+    this.textStyle,
   });
 
   final ReaderController controller;
+
+  /// 叠加在正文样式上的字体与颜色（阅读器主题）。
+  final TextStyle? textStyle;
   final double fontSize;
   final double maxColumnWidth;
+
+  /// 选区菜单的「翻译」：选中文字与选区外接矩形（全局坐标）。
+  final void Function(String text, Rect anchor)? onTranslate;
+
+  /// 选区菜单的「问 AI」。
+  final void Function(String text)? onAskAi;
+
+  /// 点击图块。
+  final void Function(Block block)? onFigureTap;
+
+  /// 点击没有标注的正文或空白处，供页面切换工具栏。
+  final VoidCallback? onTapBlank;
+
+  /// 阅读位置变化：位置与 0–1 的进度。
+  final void Function(ReaderLocation location, double progress)?
+  onLocationChanged;
 
   @override
   State<ReaderSurface> createState() => ReaderSurfaceState();
@@ -105,12 +130,14 @@ class ReaderSurfaceState extends State<ReaderSurface> {
       120.0,
       math.min(widget.maxColumnWidth, constraints.maxWidth - horizontal * 2),
     );
-    final body = (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
-      fontSize: MediaQuery.textScalerOf(context).scale(widget.fontSize),
-      height: ReaderTypography.bodyHeight,
-      letterSpacing: 0,
-      color: cs.onSurface,
-    );
+    final body = (theme.textTheme.bodyLarge ?? const TextStyle())
+        .copyWith(
+          fontSize: MediaQuery.textScalerOf(context).scale(widget.fontSize),
+          height: ReaderTypography.bodyHeight,
+          letterSpacing: 0,
+          color: cs.onSurface,
+        )
+        .merge(widget.textStyle);
     return ReaderLayoutSpec(
       width: width.floorToDouble(),
       pageHeight: math.max(
@@ -121,12 +148,17 @@ class ReaderSurfaceState extends State<ReaderSurface> {
       mutedColor: cs.onSurfaceVariant,
       linkColor: cs.primary,
       ruleColor: cs.outlineVariant,
+      rtlTranslations: _controller.rtlTranslations,
     );
   }
 
   ReaderLayout _layoutFor(ReaderLayoutSpec spec) {
     final current = _layout;
-    if (current != null && current.spec == spec) return current;
+    if (current != null &&
+        current.spec == spec &&
+        identical(current.model, _controller.model)) {
+      return current;
+    }
     final watch = Stopwatch()..start();
     final layout = _typesetter.layout(_controller.model, spec);
     if (kDebugMode || kProfileMode) {
@@ -348,9 +380,15 @@ class ReaderSurfaceState extends State<ReaderSurface> {
         Clipboard.setData(ClipboardData(text: text));
         controller.clearSelection();
       },
-      // 翻译与问 AI 等 Rust 的 ai/translate 接入后再连接。
-      onTranslate: () {},
-      onAskAi: () {},
+      onTranslate: () {
+        final text = existing?.text ?? controller.selectedText;
+        widget.onTranslate?.call(text, rect);
+      },
+      onAskAi: () {
+        final text = existing?.text ?? controller.selectedText;
+        controller.clearSelection();
+        widget.onAskAi?.call(text);
+      },
       onCreateForNote: () {
         final created =
             existing ?? controller.highlightSelection(kDefaultHighlightColor);
@@ -377,9 +415,13 @@ class ReaderSurfaceState extends State<ReaderSurface> {
       return;
     }
     final location = _locate(details.globalPosition);
-    if (location == null) return;
-    final highlight = _controller.highlightAt(location);
-    if (highlight == null) return;
+    final highlight = location == null
+        ? null
+        : _controller.highlightAt(location);
+    if (location == null || highlight == null) {
+      widget.onTapBlank?.call();
+      return;
+    }
     final range = highlight.ranges.firstWhere(
       (r) => r.blockId == _controller.model.blocks[location.blockIndex].id,
     );
@@ -481,7 +523,13 @@ class ReaderSurfaceState extends State<ReaderSurface> {
           ),
         );
       case ItemKind.figure:
-        return _Figure(size: item.mediaSize!, image: item.image);
+        final figure = _Figure(size: item.mediaSize!, image: item.image);
+        final onTap = widget.onFigureTap;
+        if (onTap == null) return figure;
+        return MouseRegion(
+          cursor: SystemMouseCursors.zoomIn,
+          child: GestureDetector(onTap: () => onTap(block), child: figure),
+        );
       case ItemKind.equation:
         return SizedBox(
           height: item.height,
@@ -512,6 +560,11 @@ class ReaderSurfaceState extends State<ReaderSurface> {
           );
           _controller.location = location;
           _lineFraction = fraction;
+          final max = n.metrics.maxScrollExtent;
+          widget.onLocationChanged?.call(
+            location,
+            max <= 0 ? 1 : (n.metrics.pixels / max).clamp(0.0, 1.0),
+          );
           final rect = _menu == null ? null : _selectionRect();
           if (rect != null) _menu?.updateVerticalAnchor(rect);
         }
@@ -569,6 +622,11 @@ class ReaderSurfaceState extends State<ReaderSurface> {
           _controller.location = layout.locationOfPage(p);
           _lineFraction = 0;
           _closeMenu();
+          final last = layout.pages.length - 1;
+          widget.onLocationChanged?.call(
+            _controller.location,
+            last <= 0 ? 1 : p / last,
+          );
         },
         itemBuilder: (context, p) {
           final page = layout.pages[p];
@@ -761,6 +819,7 @@ class _TextItemState extends State<_TextItem> {
     final text = RichText(
       key: widget.paragraphKey,
       textScaler: TextScaler.noScaling,
+      textDirection: widget.item.direction,
       text: span,
     );
     if (widget.item.indent == 0) return text;

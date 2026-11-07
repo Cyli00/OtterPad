@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/l10n.dart';
 import '../../providers/doc_extract_api_provider.dart';
 import '../../providers/onboarding_provider.dart';
-import '../../services/doc_extract_usage_service.dart';
 import '../../services/haptics.dart';
 import '../../services/mineru_parse_options.dart';
 import '../../services/snackbar_service.dart';
@@ -335,7 +334,8 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     ColorScheme cs,
     DocExtractProvider provider,
   ) {
-    final usage = ref.watch(docExtractUsageProvider);
+    final usage =
+        ref.watch(extractionUsageProvider).value ?? (paddle: 0, mineru: 0);
     final used = switch (provider) {
       DocExtractProvider.paddle => usage.paddle,
       DocExtractProvider.mineru => usage.mineru,

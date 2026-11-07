@@ -3,7 +3,6 @@
 library;
 
 import 'chat_activity.dart';
-import '../book/reader_anchor.dart';
 
 /// 会话中的一条消息。
 class ChatMessage {
@@ -15,7 +14,9 @@ class ChatMessage {
 
   /// 用户划词引用的原文片段（仅 user 消息可有）。
   final String? quotedText;
-  final ReaderAnchor? quoteAnchor;
+
+  /// 引文在阅读器中的锚点（Rust 锚点 JSON），用于「定位原文」。
+  final Map<String, dynamic>? quoteAnchor;
   final String? figureImagePath;
   final List<ChatActivity> activities;
 
@@ -46,7 +47,7 @@ class ChatMessage {
   factory ChatMessage.user({
     required String content,
     String? quotedText,
-    ReaderAnchor? quoteAnchor,
+    Map<String, dynamic>? quoteAnchor,
     String? figureImagePath,
   }) => ChatMessage(
     id: newId(),
@@ -90,7 +91,7 @@ class ChatMessage {
     'role': role,
     'content': content,
     if (quotedText != null) 'quotedText': quotedText,
-    if (quoteAnchor != null) 'quoteAnchor': quoteAnchor!.toJson(),
+    if (quoteAnchor != null) 'quoteAnchor': quoteAnchor,
     if (figureImagePath != null) 'figureImagePath': figureImagePath,
     if (activities.isNotEmpty)
       'activities': [for (final a in activities) a.toJson()],
@@ -104,7 +105,7 @@ class ChatMessage {
     role: json['role'] as String,
     content: json['content'] as String? ?? '',
     quotedText: json['quotedText'] as String?,
-    quoteAnchor: ReaderAnchor.parse(json['quoteAnchor']),
+    quoteAnchor: (json['quoteAnchor'] as Map?)?.cast<String, dynamic>(),
     figureImagePath: json['figureImagePath'] as String?,
     activities: [
       for (final a in json['activities'] as List? ?? const [])

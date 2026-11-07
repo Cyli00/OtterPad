@@ -3765,4 +3765,73 @@ class AppLocalizationsEn extends AppLocalizations {
   String dataStartFailed(String code) {
     return 'Unable to open app data ($code)';
   }
+
+  @override
+  String get otterErrorInvalidArgument =>
+      'The request is invalid. Check the input and try again.';
+
+  @override
+  String get otterErrorInvalidData =>
+      'The data is damaged or in an unsupported format.';
+
+  @override
+  String get otterErrorIo => 'Could not read or write local files.';
+
+  @override
+  String get otterErrorDatabase => 'The library database could not be updated.';
+
+  @override
+  String get otterErrorConflict =>
+      'The data changed meanwhile. Please try again.';
+
+  @override
+  String get otterErrorUnsupportedDatabase =>
+      'This library was created by a newer version of OtterPad.';
+
+  @override
+  String get otterErrorCancelled => 'Cancelled';
+
+  @override
+  String get otterErrorNetwork =>
+      'Network request failed. Check the connection and try again.';
+
+  @override
+  String get otterErrorAuthentication =>
+      'Authentication failed. Check the API key or account.';
+
+  @override
+  String get otterErrorRateLimited =>
+      'Too many requests. Please wait and try again.';
+
+  @override
+  String get otterErrorQuotaExceeded => 'The service quota is used up.';
+
+  @override
+  String get otterErrorRemote => 'The service returned an error.';
+
+  @override
+  String get otterErrorNotFound => 'Not found';
+
+  @override
+  String get otterErrorUnsupported => 'This operation is not supported.';
+
+  @override
+  String get otterErrorPdf => 'The PDF could not be opened.';
+
+  @override
+  String get otterErrorLayoutOverflow =>
+      'The text does not fit in the available space.';
+
+  @override
+  String get otterErrorRefused => 'The model refused the request.';
+
+  @override
+  String get otterErrorIncompleteResponse =>
+      'The response was cut off. Please try again.';
+
+  @override
+  String get otterErrorToolLimit => 'The tool call limit was reached.';
+
+  @override
+  String get readerOutlineEmpty => 'No headings in this document';
 }

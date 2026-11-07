@@ -1,12 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
-import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
-import 'agent_http.dart';
+import '../core/rust_backend.dart';
 import '../data/models/ai/agent_config.dart';
 
 /// 模型能力规则集订阅（geosite 模式）：远程 jsdelivr CDN 拉取
@@ -16,22 +14,13 @@ import '../data/models/ai/agent_config.dart';
 /// 优先级链在 `AgentProviderInstance.capabilityFor` 内：用户手动覆写 > 本
 /// 远程表 > 兜底（全 false）。本 Store 只负责远程表的拉取/缓存/查询，不参与优先级。
 ///
-/// 缓存文件落 `GStorage.dbDirPath`（app 数据目录，非文献库）；ETag/时间/
-/// 版本/间隔走 `GStorage.setting`（SettingsStore 唯一入口）。HTTP 复用
-/// `AgentHttp`（接入代理总线）。
+/// 拉取与缓存由 Rust 完成（`refresh_model_capabilities`，缓存在 v2 数据目录），
+/// 这里只读取缓存供界面同步查询。
 class ModelCapabilityStore {
   ModelCapabilityStore._();
   static final ModelCapabilityStore instance = ModelCapabilityStore._();
 
-  static const _remoteUrl =
-      'https://cdn.jsdelivr.net/gh/Cyli00/modelcaps@main/model_capabilities.json';
   static const _cacheFileName = 'model_caps_cache.json';
-
-  // ── settings keys ──
-  static const _kLastFetched = SettingsKeys.modelCapsLastFetchedAt;
-  static const _kEtag = SettingsKeys.modelCapsEtag;
-  static const _kLastModified = SettingsKeys.modelCapsLastModified;
-  static const _kVersion = SettingsKeys.modelCapsVersion;
 
   final Map<String, AgentModelCapability> _models = {};
   final Map<String, ThinkingSpec> _thinking = {};
@@ -58,15 +47,20 @@ class ModelCapabilityStore {
     }
   }
 
+  /// 读取 Rust 能力表缓存（`{fetched_at, etag, last_modified, data}`）。
   Future<void> _loadCache() async {
-    final file = File(p.join(GStorage.dbDirPath, _cacheFileName));
+    final file = File(p.join(GStorage.dataDirPath, _cacheFileName));
     if (!await file.exists()) return;
     try {
-      final doc = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final cache =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final doc = cache['data'] as Map<String, dynamic>? ?? const {};
       _replaceModels(doc);
       _version = doc['version'] as String?;
-      final fetched = GStorage.setting.get(_kLastFetched) as String?;
-      _fetchedAt = fetched == null ? null : DateTime.tryParse(fetched);
+      final fetched = (cache['fetched_at'] as num?)?.toInt() ?? 0;
+      _fetchedAt = fetched == 0
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(fetched * 1000);
     } catch (_) {
       // 缓存损坏 → 视为无缓存，回退兜底（全 false）
       _models.clear();
@@ -154,47 +148,17 @@ class ModelCapabilityStore {
     await _fetch();
   }
 
+  /// 由 Rust 按 ETag 拉取并写入缓存，再重新载入；失败保留旧缓存。
   Future<bool> _fetch() async {
-    final dio = AgentHttp.instance.dio(
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 60),
-    );
-    final headers = <String, dynamic>{};
-    final etag = GStorage.setting.get(_kEtag) as String?;
-    if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
-    final lastMod = GStorage.setting.get(_kLastModified) as String?;
-    if (lastMod != null && lastMod.isNotEmpty) {
-      headers['If-Modified-Since'] = lastMod;
-    }
     try {
-      final resp = await dio.get<dynamic>(
-        _remoteUrl,
-        options: Options(headers: headers),
+      final changed = await RustBackend.instance.refreshModelCapabilities(
+        force: false,
+        taskId: rustTaskId('model-caps'),
       );
-      if (resp.statusCode == 304) return false;
-      final doc = resp.data is Map
-          ? resp.data as Map<String, dynamic>
-          : jsonDecode(resp.data as String) as Map<String, dynamic>;
-      _replaceModels(doc);
-      _version = doc['version'] as String?;
-      _fetchedAt = DateTime.now();
-      // 落盘缓存
-      final file = File(p.join(GStorage.dbDirPath, _cacheFileName));
-      await file.writeAsString(jsonEncode(doc));
-      // 元数据存 settings（响应头优先，回退旧值）
-      final respHeaders = resp.headers.map;
-      final newEtag = respHeaders['etag']?.first ?? etag;
-      final newLastMod = respHeaders['last-modified']?.first ?? lastMod;
-      await Future.wait([
-        if (newEtag != null) GStorage.setting.put(_kEtag, newEtag),
-        if (newLastMod != null)
-          GStorage.setting.put(_kLastModified, newLastMod),
-        GStorage.setting.put(_kLastFetched, _fetchedAt!.toIso8601String()),
-        if (_version != null) GStorage.setting.put(_kVersion, _version!),
-      ]);
-      return true;
+      await _loadCache();
+      return changed;
     } catch (_) {
-      return false; // 网络失败 → 保留旧缓存
+      return false;
     }
   }
 }
