@@ -70,12 +70,12 @@ class PrepareReleaseTests(unittest.TestCase):
         self.assertIn(f"compare/", packages)
         en, zh = self.notes.split("## 更新内容", 1)
         changes = en.split("## Changes", 1)[1]
-        self.assertIn("Added Persian (فارسی) as a translation target.", changes)
-        self.assertIn("Fixes #3", changes)
-        self.assertNotIn("翻译目标语言新增波斯语", changes)
-        self.assertIn("翻译目标语言新增波斯语（فارسی）", zh)
-        self.assertIn("Fixes #3", zh)
-        self.assertNotIn("as a translation target", zh)
+        self.assertIn("no longer freezes the reader", changes)
+        self.assertIn("MinerU and PaddleOCR", changes)
+        self.assertNotIn("不再让阅读器卡住", changes)
+        self.assertIn("不再让阅读器卡住", zh)
+        self.assertIn("MinerU 与 PaddleOCR", zh)
+        self.assertNotIn("no longer freezes the reader", zh)
 
 
 if __name__ == "__main__":

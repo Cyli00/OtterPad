@@ -2,6 +2,22 @@
 
 每个版本用 `<!-- release:en -->` 与 `<!-- release:zh -->` 分成英文、中文两段。`scripts/prepare_release.sh` 会把英文安装包放在这两段之前。
 
+## [0.1.9]
+
+<!-- release:en -->
+
+### Fixed
+
+- System back during translation or while a reading file is still loading no longer freezes the reader. Page turns and refresh also finish while a task snackbar is visible.
+- Long PDF extraction keeps earlier pages for MinerU and PaddleOCR. A later page range no longer replaces the text that came before it.
+
+<!-- release:zh -->
+
+### 修复
+
+- 翻译进行中，或阅读文件仍在加载时，按系统返回不再让阅读器卡住。任务提示显示时，翻页和刷新也能完成。
+- 长 PDF 提取会保留 MinerU 与 PaddleOCR 前面的页面。后一段页码不再覆盖前面的正文。
+
 ## [0.1.8]
 
 <!-- release:en -->
