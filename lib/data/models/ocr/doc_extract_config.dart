@@ -34,7 +34,7 @@ extension DocExtractProviderExt on DocExtractProvider {
   /// 单文件大小上限（MB）
   int get maxFileSizeMB => 200;
 
-  /// 单文件页数上限
+  /// 单次请求页数上限。MinerU 更长的 PDF 按这个上限用 page_ranges 拆开再合并。
   int get maxPagesPerFile => switch (this) {
     DocExtractProvider.paddle => 1000,
     DocExtractProvider.mineru => 200,

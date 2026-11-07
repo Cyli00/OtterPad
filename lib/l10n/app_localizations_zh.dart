@@ -1700,6 +1700,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String ocrUsageLimitsLineChunked(int sizeMB, int pages, int batch) {
+    return '单文件 ≤ ${sizeMB}MB · 每次请求 $pages 页 · 批量 ≤ $batch 个文件';
+  }
+
+  @override
   String extractFileTooLarge(int maxMB, int count) {
     return '$count 个文件超过 ${maxMB}MB 大小限制，已跳过';
   }
@@ -2827,6 +2832,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mineruErrTaskFailed => '解析失败';
+
+  @override
+  String mineruErrChunkFailed(String range, String message) {
+    return '第 $range 页解析失败：$message';
+  }
 
   @override
   String mineruErrSaveResultFailed(String detail) {
@@ -5289,6 +5299,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   }
 
   @override
+  String ocrUsageLimitsLineChunked(int sizeMB, int pages, int batch) {
+    return '單檔 ≤ ${sizeMB}MB · 每次請求 $pages 頁 · 批次 ≤ $batch 個檔案';
+  }
+
+  @override
   String extractFileTooLarge(int maxMB, int count) {
     return '$count 個檔案超過 ${maxMB}MB 大小限制，已跳過';
   }
@@ -6411,6 +6426,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get mineruErrTaskFailed => '解析失敗';
+
+  @override
+  String mineruErrChunkFailed(String range, String message) {
+    return '第 $range 頁解析失敗：$message';
+  }
 
   @override
   String mineruErrSaveResultFailed(String detail) {

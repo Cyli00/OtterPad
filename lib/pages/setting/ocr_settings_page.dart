@@ -416,11 +416,17 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             ),
             const SizedBox(height: 10),
             Text(
-              context.l10n.ocrUsageLimitsLine(
-                provider.maxFileSizeMB,
-                provider.maxPagesPerFile,
-                provider.maxBatchFiles,
-              ),
+              provider == DocExtractProvider.mineru
+                  ? context.l10n.ocrUsageLimitsLineChunked(
+                      provider.maxFileSizeMB,
+                      provider.maxPagesPerFile,
+                      provider.maxBatchFiles,
+                    )
+                  : context.l10n.ocrUsageLimitsLine(
+                      provider.maxFileSizeMB,
+                      provider.maxPagesPerFile,
+                      provider.maxBatchFiles,
+                    ),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
               ),

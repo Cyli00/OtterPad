@@ -181,12 +181,16 @@ class DocumentTaskNotifier
       showResultSnackBar: showResultSnackBar,
       cancelledMessage: _l10n?.extractionCancelled ?? '已取消提取',
       body: (token, progress) async {
-        await _preflightExtractFile(filePath, apiState.provider);
+        final pageCount = await _preflightExtractFile(
+          filePath,
+          apiState.provider,
+        );
         if (apiState.provider == DocExtractProvider.mineru) {
           final converted = await _extractViaMinerU(
             filePath: filePath,
             title: title,
             apiState: apiState,
+            pageCount: pageCount,
             cancelToken: token,
             progress: progress,
           );
@@ -290,7 +294,7 @@ class DocumentTaskNotifier
       return {for (final item in items) item.documentId: null};
     }
 
-    // 本地大小预检；页数由服务商错误码兜底（避免批量前逐份加载 PDF）
+    // 本地只拦文件大小。MinerU 超长 PDF 在服务里按页段拆；Paddle 页数交给服务商。
     final maxBytes = provider.maxFileSizeMB * 1024 * 1024;
     final runnable = <BatchExtractItem>[];
     var oversizedCount = 0;
@@ -468,6 +472,7 @@ class DocumentTaskNotifier
     required String filePath,
     required String title,
     required DocExtractApiState apiState,
+    required int? pageCount,
     required CancelToken cancelToken,
     required void Function(ListenableProgress) progress,
   }) async {
@@ -475,6 +480,7 @@ class DocumentTaskNotifier
       filePath: filePath,
       apiKey: apiState.apiKey,
       state: apiState,
+      pageCount: pageCount,
       onProgress: (status) {
         if (cancelToken.isCancelled) return;
         progress(
@@ -502,8 +508,10 @@ class DocumentTaskNotifier
     return converted;
   }
 
-  /// 单文件提取预检：大小 + 页数（本地硬校验，与服务商限制一致）。
-  Future<void> _preflightExtractFile(
+  /// 单文件提取预检：大小，以及不能按页段拆开的提供商的页数。
+  /// MinerU 单次 200 页，更长的文件由 [MinerUExtractService] 用 page_ranges 拆。
+  /// 返回本地读到的页数；读不到时为 null。
+  Future<int?> _preflightExtractFile(
     String filePath,
     DocExtractProvider provider,
   ) async {
@@ -519,12 +527,15 @@ class DocumentTaskNotifier
       );
     }
     final pages = await _pdfPageCount(filePath);
-    if (pages != null && pages > provider.maxPagesPerFile) {
+    if (provider != DocExtractProvider.mineru &&
+        pages != null &&
+        pages > provider.maxPagesPerFile) {
       throw DocExtractException(
         _l10n?.extractTooManyPages(provider.maxPagesPerFile) ??
             '页数超过单文件 ${provider.maxPagesPerFile} 页限制',
       );
     }
+    return pages;
   }
 
   /// 本地读取 PDF 页数；读不出来返回 null（不阻塞，交由服务商兜底）。
