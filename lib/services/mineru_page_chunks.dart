@@ -70,6 +70,14 @@ List<MinerUPageChunk> planMinerUPageChunks(
   return chunks;
 }
 
+/// MinerU 与 PaddleOCR 共用的页段计划。两个服务商都按「每段从 0 重新编号」返回。
+typedef ExtractPageChunk = MinerUPageChunk;
+
+List<ExtractPageChunk> planExtractPageChunks(
+  int? pageCount, {
+  int maxPages = 200,
+}) => planMinerUPageChunks(pageCount, maxPages: maxPages);
+
 /// 按页码顺序拼接各分片 ZIP。
 ///
 /// 不能按文件名覆盖：每段都有 `full.md` / `images/`，后写的一段会抹掉前一段。

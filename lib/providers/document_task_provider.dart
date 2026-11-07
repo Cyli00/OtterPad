@@ -202,6 +202,7 @@ class DocumentTaskNotifier
           filePath: filePath,
           title: title,
           apiState: apiState,
+          pageCount: pageCount,
           cancelToken: token,
           progress: progress,
         );
@@ -508,8 +509,7 @@ class DocumentTaskNotifier
     return converted;
   }
 
-  /// 单文件提取预检：大小，以及不能按页段拆开的提供商的页数。
-  /// MinerU 单次 200 页，更长的文件由 [MinerUExtractService] 用 page_ranges 拆。
+  /// 单文件提取预检：大小。页数超过单次上限时由各提取服务按页段拆开。
   /// 返回本地读到的页数；读不到时为 null。
   Future<int?> _preflightExtractFile(
     String filePath,
@@ -526,16 +526,7 @@ class DocumentTaskNotifier
             '文件超过 ${provider.maxFileSizeMB}MB 大小限制',
       );
     }
-    final pages = await _pdfPageCount(filePath);
-    if (provider != DocExtractProvider.mineru &&
-        pages != null &&
-        pages > provider.maxPagesPerFile) {
-      throw DocExtractException(
-        _l10n?.extractTooManyPages(provider.maxPagesPerFile) ??
-            '页数超过单文件 ${provider.maxPagesPerFile} 页限制',
-      );
-    }
-    return pages;
+    return _pdfPageCount(filePath);
   }
 
   /// 本地读取 PDF 页数；读不出来返回 null（不阻塞，交由服务商兜底）。
@@ -1055,6 +1046,7 @@ class DocumentTaskNotifier
     required String filePath,
     required String title,
     required DocExtractApiState apiState,
+    required int? pageCount,
     required CancelToken cancelToken,
     required void Function(ListenableProgress) progress,
   }) async {
@@ -1062,6 +1054,7 @@ class DocumentTaskNotifier
       filePath: filePath,
       token: apiState.apiKey,
       state: apiState,
+      pageCount: pageCount,
       onProgress: (status, extracted, total) {
         if (cancelToken.isCancelled) return;
         progress(
