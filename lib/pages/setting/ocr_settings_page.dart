@@ -416,7 +416,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             ),
             const SizedBox(height: 10),
             Text(
-              context.l10n.ocrUsageLimitsLine(
+              context.l10n.ocrUsageLimitsLineChunked(
                 provider.maxFileSizeMB,
                 provider.maxPagesPerFile,
                 provider.maxBatchFiles,
