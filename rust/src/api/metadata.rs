@@ -43,6 +43,12 @@ pub(super) fn resolved(target: &mut Document, value: Document) {
         target.keywords = value.keywords;
     }
 }
+/// 有 PDF 但元数据缺失或可疑（未拆分的「标题_作者」、作者混入非人名），需要修复。
+#[flutter_rust_bridge::frb(sync)]
+pub fn metadata_needs_repair(document: Document) -> bool {
+    metadata::needs_repair(&document)
+}
+
 impl Backend {
     pub async fn resolve_identifier(&self, input: String, task_id: String) -> Result<Document> {
         let task = self.runtime.tasks.begin(task_id)?;

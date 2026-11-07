@@ -15,6 +15,16 @@ use std::path::PathBuf;
 pub struct LocalZoteroSnapshot {
     library: LocalLibrary,
 }
+impl LocalZoteroSnapshot {
+    /// 本地 API 报告了实例 id 时，可不选数据目录直接导入。
+    #[frb(sync)]
+    pub fn has_server_id(&self) -> bool {
+        self.library
+            .server_id
+            .as_deref()
+            .is_some_and(|id| !id.is_empty())
+    }
+}
 #[frb(non_opaque)]
 pub enum ZoteroEvent {
     Failed {
@@ -32,6 +42,19 @@ pub enum ZoteroEvent {
     },
 }
 impl Backend {
+    /// 已从 Zotero 云端导入、仍在文库中的条目数。
+    pub async fn zotero_imported_count(&self) -> Result<u64> {
+        self.runtime
+            .with_storage(&Default::default(), "zotero_imported_count", |s| {
+                let count: i64 = s.connection.query_row(
+                    "SELECT COUNT(*) FROM zotero_items WHERE docId IS NOT NULL",
+                    [],
+                    |r| r.get(0),
+                )?;
+                Ok(count as u64)
+            })
+            .await
+    }
     pub async fn sync_zotero(
         &self,
         full: bool,

@@ -12,6 +12,10 @@ part 'metadata.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `closed`, `resolved`
 
+/// 有 PDF 但元数据缺失或可疑（未拆分的「标题_作者」、作者混入非人名），需要修复。
+bool metadataNeedsRepair({required Document document}) => RustLib.instance.api
+    .crateApiMetadataMetadataNeedsRepair(document: document);
+
 @freezed
 sealed class MetadataEvent with _$MetadataEvent {
   const MetadataEvent._();

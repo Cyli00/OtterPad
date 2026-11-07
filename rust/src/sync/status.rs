@@ -24,9 +24,15 @@ pub struct BackupSnapshot {
     pub device: Option<String>,
     pub documents: Vec<DocumentFingerprint>,
 }
+/// 文献相对上次备份快照的状态；变化时给出最显著的原因（内容 > 元数据 > 附属文件）。
 pub enum BackupState {
+    /// 还没有任何备份快照。
     NeverBackedUp,
-    Changed,
+    /// 上次备份之后新增的文献。
+    Added,
+    ContentChanged,
+    MetadataChanged,
+    FilesChanged,
     Unchanged,
 }
 pub struct DocumentBackupState {
@@ -35,6 +41,10 @@ pub struct DocumentBackupState {
 }
 pub struct BackupStatus {
     pub last_backup_at: Option<i64>,
+    pub last_scope: Option<BackupScope>,
+    /// 上次备份的远端描述与设备名。
+    pub last_remote: Option<String>,
+    pub last_device: Option<String>,
     pub changed: bool,
     pub documents: Vec<DocumentBackupState>,
 }
@@ -140,18 +150,28 @@ pub fn status(storage: &Storage, token: &CancellationToken) -> Result<BackupStat
     let documents = current
         .into_iter()
         .map(|fingerprint| {
-            let state = match previous
-                .as_ref()
-                .and_then(|s| s.documents.iter().find(|d| d.id == fingerprint.id))
-            {
+            let state = match &previous {
                 None => {
                     changed = true;
                     BackupState::NeverBackedUp
                 }
-                Some(old) if old == &fingerprint => BackupState::Unchanged,
-                Some(_) => {
-                    changed = true;
-                    BackupState::Changed
+                Some(snapshot) => {
+                    match snapshot.documents.iter().find(|d| d.id == fingerprint.id) {
+                        Some(old) if old == &fingerprint => BackupState::Unchanged,
+                        found => {
+                            changed = true;
+                            match found {
+                                None => BackupState::Added,
+                                Some(old) if old.content != fingerprint.content => {
+                                    BackupState::ContentChanged
+                                }
+                                Some(old) if old.metadata != fingerprint.metadata => {
+                                    BackupState::MetadataChanged
+                                }
+                                Some(_) => BackupState::FilesChanged,
+                            }
+                        }
+                    }
                 }
             };
             DocumentBackupState {
@@ -161,7 +181,10 @@ pub fn status(storage: &Storage, token: &CancellationToken) -> Result<BackupStat
         })
         .collect();
     Ok(BackupStatus {
-        last_backup_at: previous.map(|s| s.at),
+        last_backup_at: previous.as_ref().map(|s| s.at),
+        last_scope: previous.as_ref().map(|s| s.scope),
+        last_remote: previous.as_ref().map(|s| s.remote.clone()),
+        last_device: previous.and_then(|s| s.device),
         changed,
         documents,
     })

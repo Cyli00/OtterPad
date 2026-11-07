@@ -100,10 +100,10 @@ impl Backend {
             let paragraphs = self
                 .runtime
                 .call(&task.token, "translation_paragraphs", move |state| {
-                    let directory = directory(state.storage()?, &document_id)?;
-                    let markdown = crate::ai::chat::read_markdown(&directory)?;
-                    Ok(paragraph::extract(
-                        &markdown,
+                    // 翻译单位与阅读器的块一致，译文按块的键保存。
+                    let model = crate::document::load(&directory(state.storage()?, &document_id)?)?;
+                    Ok(paragraph::blocks(
+                        &model,
                         &options.ignored_sections.into_iter().collect(),
                     ))
                 })

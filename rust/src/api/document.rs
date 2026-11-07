@@ -31,6 +31,8 @@ pub struct ReaderFigureImage {
 pub struct ReaderDocument {
     pub version: u32,
     pub blocks: Vec<Block>,
+    /// 与 `blocks` 一一对应的译文键；空串表示该块不翻译。
+    pub translation_keys: Vec<String>,
     pub figures: Vec<ReaderFigure>,
     pub figure_assets: Vec<crate::pdf::figures::FigureAsset>,
     pub figure_images: Vec<ReaderFigureImage>,
@@ -80,6 +82,12 @@ pub(crate) fn directory(storage: &crate::storage::Storage, id: &str) -> Result<s
     }
     library::document_directory(storage, id)
 }
+/// 译文展示块，见 [`document::translated_block`]。
+#[flutter_rust_bridge::frb(sync)]
+pub fn translated_block(source: Block, markdown: String) -> Block {
+    document::translated_block(&source, &markdown)
+}
+
 impl Backend {
     pub async fn reader_document(&self, document: String) -> Result<ReaderDocument> {
         self.runtime
@@ -89,6 +97,11 @@ impl Backend {
                 let figure_assets = crate::pdf::figures::read_assets(&directory)?;
                 Ok(ReaderDocument {
                     version: model.version,
+                    translation_keys: model
+                        .blocks
+                        .iter()
+                        .map(|b| crate::translate::paragraph::block_key(b).unwrap_or_default())
+                        .collect(),
                     figure_images: figure_images(&directory, &model.blocks, &figure_assets)?,
                     blocks: model.blocks,
                     figure_assets,

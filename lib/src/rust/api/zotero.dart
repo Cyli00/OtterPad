@@ -16,7 +16,10 @@ part 'zotero.freezed.dart';
 // These functions are ignored because they are not marked as `pub`: `closed`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<LocalZoteroSnapshot>>
-abstract class LocalZoteroSnapshot implements RustOpaqueInterface {}
+abstract class LocalZoteroSnapshot implements RustOpaqueInterface {
+  /// 本地 API 报告了实例 id 时，可不选数据目录直接导入。
+  bool hasServerId();
+}
 
 @freezed
 sealed class ZoteroEvent with _$ZoteroEvent {

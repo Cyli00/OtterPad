@@ -7,6 +7,24 @@ use crate::{
 };
 
 impl Backend {
+    /// 按当前代理设置对 [url] 发 HEAD 请求，返回往返毫秒数（网络设置页的连通性测试）。
+    pub async fn probe_url(&self, url: String, task_id: String) -> Result<u64> {
+        let task = self.runtime.tasks.begin(task_id)?;
+        let (proxy, http2) = self
+            .runtime
+            .call(&task.token, "network_settings", |state| {
+                super::network_settings(state.storage()?)
+            })
+            .await?;
+        let started = std::time::Instant::now();
+        crate::network::send(
+            crate::network::client(proxy.as_deref(), http2)?.head(url),
+            &task.token,
+        )
+        .await?;
+        Ok(started.elapsed().as_millis() as u64)
+    }
+
     pub async fn prompt(&self, kind: PromptKind) -> Result<PromptDefinition> {
         self.runtime
             .with_storage(&Default::default(), "prompt", move |storage| {

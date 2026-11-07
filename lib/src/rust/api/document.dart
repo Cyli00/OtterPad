@@ -13,9 +13,19 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `directory`, `figure_images`
 
+/// 译文展示块，见 [`document::translated_block`]。
+Block translatedBlock({required Block source, required String markdown}) =>
+    RustLib.instance.api.crateApiDocumentTranslatedBlock(
+      source: source,
+      markdown: markdown,
+    );
+
 class ReaderDocument {
   final int version;
   final List<Block> blocks;
+
+  /// 与 `blocks` 一一对应的译文键；空串表示该块不翻译。
+  final List<String> translationKeys;
   final List<ReaderFigure> figures;
   final List<FigureAsset> figureAssets;
   final List<ReaderFigureImage> figureImages;
@@ -24,6 +34,7 @@ class ReaderDocument {
   const ReaderDocument({
     required this.version,
     required this.blocks,
+    required this.translationKeys,
     required this.figures,
     required this.figureAssets,
     required this.figureImages,
@@ -34,6 +45,7 @@ class ReaderDocument {
   int get hashCode =>
       version.hashCode ^
       blocks.hashCode ^
+      translationKeys.hashCode ^
       figures.hashCode ^
       figureAssets.hashCode ^
       figureImages.hashCode ^
@@ -46,6 +58,7 @@ class ReaderDocument {
           runtimeType == other.runtimeType &&
           version == other.version &&
           blocks == other.blocks &&
+          translationKeys == other.translationKeys &&
           figures == other.figures &&
           figureAssets == other.figureAssets &&
           figureImages == other.figureImages &&

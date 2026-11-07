@@ -257,3 +257,36 @@ async fn right_to_left_targets_add_the_formula_and_table_guard() {
     }
     assert_eq!(handle.await.unwrap().len(), 2);
 }
+
+#[test]
+fn block_units_follow_the_reader_blocks_and_skip_ignored_back_matter() {
+    let markdown = "# Title\n\nBody $x$.\n\n$$E=mc^2$$\n\n## References\n\nOne citation.\n\n## Acknowledgments\n\nThank you.";
+    let model = otter_core::document::DocumentModel::from_markdown(markdown);
+    let sources = |ignored: &[&str]| {
+        paragraph::blocks(
+            &model,
+            &ignored
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<HashSet<_>>(),
+        )
+        .into_iter()
+        .map(|p| {
+            assert_eq!(p.hash, revision(p.source.trim()));
+            p.source
+        })
+        .collect::<Vec<_>>()
+    };
+    let all = sources(&[]);
+    assert!(all.contains(&"Body $x$.".to_string()));
+    assert!(all.contains(&"One citation.".to_string()));
+    assert!(!all.iter().any(|s| s.contains("$$")));
+    let skipped = sources(&["references"]);
+    assert!(!skipped.contains(&"One citation.".to_string()));
+    assert!(skipped.contains(&"Thank you.".to_string()));
+    for block in &model.blocks {
+        if let Some(key) = paragraph::block_key(block) {
+            assert_eq!(key, revision(block.markdown.trim()));
+        }
+    }
+}

@@ -300,6 +300,9 @@ abstract class Backend implements RustOpaqueInterface {
     required String taskId,
   });
 
+  /// 按当前代理设置对 [url] 发 HEAD 请求，返回往返毫秒数（网络设置页的连通性测试）。
+  Future<BigInt> probeUrl({required String url, required String taskId});
+
   Future<PromptDefinition> prompt({required PromptKind kind});
 
   Future<void> putDocument({required Document document});
@@ -406,6 +409,9 @@ abstract class Backend implements RustOpaqueInterface {
   /// The host starts this stream with its app lifecycle and cancels its task
   /// on shutdown. Due/change decisions and hourly scheduling stay in Rust.
   Stream<SyncEvent> watchAutoBackup({String? device, required String taskId});
+
+  /// 已从 Zotero 云端导入、仍在文库中的条目数。
+  Future<BigInt> zoteroImportedCount();
 }
 
 class BackendOptions {

@@ -4,24 +4,49 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'archive.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-enum BackupState { neverBackedUp, changed, unchanged }
+/// 文献相对上次备份快照的状态；变化时给出最显著的原因（内容 > 元数据 > 附属文件）。
+enum BackupState {
+  /// 还没有任何备份快照。
+  neverBackedUp,
+
+  /// 上次备份之后新增的文献。
+  added,
+  contentChanged,
+  metadataChanged,
+  filesChanged,
+  unchanged,
+}
 
 class BackupStatus {
   final PlatformInt64? lastBackupAt;
+  final BackupScope? lastScope;
+
+  /// 上次备份的远端描述与设备名。
+  final String? lastRemote;
+  final String? lastDevice;
   final bool changed;
   final List<DocumentBackupState> documents;
 
   const BackupStatus({
     this.lastBackupAt,
+    this.lastScope,
+    this.lastRemote,
+    this.lastDevice,
     required this.changed,
     required this.documents,
   });
 
   @override
   int get hashCode =>
-      lastBackupAt.hashCode ^ changed.hashCode ^ documents.hashCode;
+      lastBackupAt.hashCode ^
+      lastScope.hashCode ^
+      lastRemote.hashCode ^
+      lastDevice.hashCode ^
+      changed.hashCode ^
+      documents.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -29,6 +54,9 @@ class BackupStatus {
       other is BackupStatus &&
           runtimeType == other.runtimeType &&
           lastBackupAt == other.lastBackupAt &&
+          lastScope == other.lastScope &&
+          lastRemote == other.lastRemote &&
+          lastDevice == other.lastDevice &&
           changed == other.changed &&
           documents == other.documents;
 }

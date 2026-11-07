@@ -15,7 +15,7 @@ fn legacy(root: &Path) -> Connection {
     fs::create_dir_all(root.join("db")).unwrap();
     let source = Connection::open(root.join("db/otter.db")).unwrap();
     source
-        .execute_batch(include_str!("../../lib/core/storage/tables.drift"))
+        .execute_batch(include_str!("fixtures/legacy_0_1_schema.drift"))
         .unwrap();
     source.pragma_update(None, "user_version", 2).unwrap();
     source

@@ -429,5 +429,16 @@ fn find_quote(text: &str, range: &AnchorRange) -> Option<(usize, usize)> {
 }
 
 mod markdown;
+/// 译文的展示块：与原文块同类、同页，行内公式与样式按正文规则解析。
+/// id 为原文块 id 加 `#t`，不归属任何图表。
+pub fn translated_block(source: &Block, markdown: &str) -> Block {
+    let mut block = make_block(markdown, source.kind.clone());
+    block.id = format!("{}#t", source.id);
+    block.heading_level = source.heading_level;
+    block.page_index = source.page_index;
+    block.source_block_id = source.source_block_id.clone();
+    block
+}
+
 use markdown::*;
 pub use markdown::{inline_runs, plain_text};

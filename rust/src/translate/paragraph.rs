@@ -5,7 +5,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::document::revision;
+use crate::document::{Block, BlockKind, DocumentModel, revision};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Paragraph {
@@ -180,4 +180,75 @@ fn paragraph(markdown: &str, range: Range<usize>) -> Paragraph {
         start_utf16: markdown[..range.start].encode_utf16().count(),
         end_utf16: markdown[..range.end].encode_utf16().count(),
     }
+}
+
+/// 块级译文键：`revision(markdown.trim())`，与阅读器和 0.1.x 迁移的译文一致。
+/// 公式、代码、图内块与只有图片的块不翻译，返回 `None`。
+pub fn block_key(block: &Block) -> Option<String> {
+    let text = block.markdown.trim();
+    let translatable = block.owner_id.is_none()
+        && !matches!(block.kind, BlockKind::Equation | BlockKind::Code)
+        && !text.is_empty()
+        && !text.contains("$$")
+        && !Regex::new(r"^!\[[^\]]*\]\([^)]*\)[ \t]*$")
+            .unwrap()
+            .is_match(text);
+    translatable.then(|| revision(text))
+}
+
+/// 全文翻译的单位：文档模型中每个可翻译块一段。尾部章节（参考文献等）按
+/// [`sections`] 规则识别，`ignored` 中的章节整段跳过。
+pub fn blocks(model: &DocumentModel, ignored: &HashSet<String>) -> Vec<Paragraph> {
+    // 以块拼出 Markdown（标题补回 `#`），复用章节识别规则。
+    let mut markdown = String::new();
+    let mut spans = Vec::new();
+    for block in &model.blocks {
+        let Some(hash) = block_key(block) else {
+            continue;
+        };
+        if !markdown.is_empty() {
+            markdown.push_str("\n\n");
+        }
+        let start = markdown.len();
+        if block.kind == BlockKind::Heading {
+            markdown.push_str(&"#".repeat(block.heading_level.unwrap_or(2).into()));
+            markdown.push(' ');
+            markdown.push_str(block.markdown.trim().trim_start_matches('#').trim_start());
+        } else {
+            markdown.push_str(block.markdown.trim());
+        }
+        spans.push((
+            start..markdown.len(),
+            hash,
+            block.markdown.trim().to_owned(),
+        ));
+    }
+    let skipped: Vec<_> = sections(&markdown)
+        .into_iter()
+        .filter(|s| ignored.contains(&s.id))
+        .map(|s| s.content)
+        .collect();
+    let mut utf16 = 0;
+    let mut last = 0;
+    let mut result = Vec::new();
+    for (range, hash, source) in spans {
+        utf16 += markdown[last..range.start].encode_utf16().count();
+        let length = markdown[range.clone()].encode_utf16().count();
+        last = range.end;
+        let start = utf16;
+        utf16 += length;
+        if skipped
+            .iter()
+            .any(|r| range.start < r.end && range.end > r.start)
+        {
+            continue;
+        }
+        result.push(Paragraph {
+            hash,
+            source,
+            start_utf16: start,
+            end_utf16: utf16,
+        });
+    }
+    result
 }

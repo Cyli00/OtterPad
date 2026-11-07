@@ -442,7 +442,7 @@ fn legacy_v3_backup_uses_real_old_schema_and_migrates_without_editing_archive() 
     let legacy_path = root.path().join("legacy.db");
     let legacy = rusqlite::Connection::open(&legacy_path).unwrap();
     legacy
-        .execute_batch(include_str!("../../lib/core/storage/tables.drift"))
+        .execute_batch(include_str!("fixtures/legacy_0_1_schema.drift"))
         .unwrap();
     legacy.pragma_update(None, "user_version", 2).unwrap();
     legacy.execute_batch("PRAGMA foreign_keys=OFF;INSERT INTO documents VALUES ('old','旧文献','[]',NULL,NULL,NULL,'[]',NULL,1);INSERT INTO highlights VALUES ('note','old','quoted phrase','旧笔记','yellow',NULL,NULL,2);INSERT INTO highlights VALUES ('orphan','missing','orphan note',NULL,'yellow',NULL,NULL,2);INSERT INTO settings VALUES ('translation_config_temperature','0.3');").unwrap();
