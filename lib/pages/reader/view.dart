@@ -28,6 +28,7 @@ import '../../providers/nav_rail_provider.dart';
 import '../../providers/reader_settings_provider.dart';
 import '../../providers/reader_session_provider.dart';
 import '../../providers/summary_image_provider.dart';
+import '../../providers/task_activity_provider.dart';
 import '../../providers/translation_config_provider.dart';
 import '../../router/app_routes.dart';
 import '../../services/ai_settings_prompt.dart';
@@ -232,6 +233,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// 展示层（原文/译文/双语）切换后要恢复的源页号——槽位数量变化会让
   /// pdfrx 保留的页号指向另一页，必须在页替换完成后按源页重新定位。
   int? _pendingPdfRestoreSourcePage;
+
+  /// 翻页/拖选过程中推迟 PDF 页替换。滑动中途换页表会让 viewer 停在半页。
+  bool _pdfGestureActive = false;
+  bool _pdfLayerDeferred = false;
 
   String? _dockChatQuote;
   ReaderAnchor? _dockChatQuoteAnchor;
@@ -811,7 +816,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // _toggleToolbars / _handleMarkdownScrollNotification 已移除，
   // WebView 内部 JS 检测滚动方向并通过 onScrollDirection 回调。
 
-  bool _handlePdfScrollNotification(UserScrollNotification notification) {
+  bool _handlePdfScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _pdfGestureActive = true;
+    } else if (notification is ScrollEndNotification) {
+      _finishPdfGesture();
+    }
+    if (notification is! UserScrollNotification) return false;
     final session = _session;
     if (isDesktopOs ||
         session.showPreview ||
@@ -821,6 +832,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     _sessionNotifier.handleReaderScrollDirection(notification.direction);
     return false;
+  }
+
+  void _finishPdfGesture() {
+    _pdfGestureActive = false;
+    if (!_pdfLayerDeferred || !mounted) return;
+    _pdfLayerDeferred = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _handlePdfPointerSignal(PointerSignalEvent event) {
@@ -1501,26 +1521,40 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // ─── UI ───
 
-  /// 统一退出入口：先把 WebView 冻结成截图再 pop。
+  /// 统一退出入口。
   ///
-  /// 平台视图不参与 Flutter 合成——反向转场的 fade/scale 对原生 WebView
-  /// 不生效（表现为硬切 + 掉帧）。截图占位后，转场对着普通 Image 动画。
-  /// PDF 模式 / WebView 未挂载时 currentState 为 null，直接 pop。
+  /// 加载、翻译或 SnackBar 任务进行时不截 WebView：截图和销毁会一起等
+  /// 平台线程，系统返回就停在半路，后续返回也被 [_popping] 吃掉。
+  /// 空闲时仍截一帧，让反向转场对着普通图片而不是原生视图。
   bool _popping = false;
+  bool get _viewerWorkInFlight =>
+      _session.markdownLoading ||
+      _translationNotifier.currentState.status ==
+          DocTranslationStatus.loading ||
+      ref.read(taskActivityProvider).isNotEmpty;
+
   Future<void> _handleBack() async {
     if (_popping) return;
     _popping = true;
-    if (_dockOpen) await _closeDock();
-    if (!mounted) return;
-    _sessionNotifier.setDockOpen(false);
     final reader = _webViewReaderKey.currentState;
-    if (reader != null) {
-      // 冻结只为转场好看，失败也必须照常返回，否则 _popping 卡死、返回键失效。
-      try {
-        await reader.freeze(capture: true);
-      } catch (_) {}
+    try {
+      if (reader != null) {
+        final busy = _viewerWorkInFlight;
+        await reader.releaseForNavigation(
+          capture: !busy && reader.canCaptureForTransition,
+        );
+      }
+      if (_dockOpen) await _closeDock();
+      if (!mounted) return;
+      _sessionNotifier.setDockOpen(false);
+      // 退出前作废恢复回调。已写入的译文保留，取消不会清掉文档状态。
+      _translationNotifier.invalidateRestore();
+      _translationNotifier.cancel(updateState: false);
+      if (!mounted) return;
+      context.pop();
+    } catch (_) {
+      if (mounted) _popping = false;
     }
-    if (mounted) context.pop();
   }
 
   Future<void> _dismissReaderOverlay() async {
@@ -2420,21 +2454,45 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           );
         }
       }
-      _pdfDocumentRef.configure(
-        _readerIndex,
-        translation.translations,
-        ref.watch(translationConfigProvider).targetLanguage,
-        theme.textTheme.bodyMedium!.copyWith(color: Colors.black),
-        layer,
-      );
+      final language = ref.watch(translationConfigProvider).targetLanguage;
+      final gestureActive =
+          _pdfGestureActive || (isDesktopOs && _pdfInteraction.pointerDown);
+      if (gestureActive) {
+        // 滑动过程中不换页表。语言订阅仍保留，松手后的那一帧用最新译文刷新。
+        _pdfLayerDeferred = true;
+      } else {
+        _pdfLayerDeferred = false;
+        _pdfDocumentRef.configure(
+          _readerIndex,
+          translation.translations,
+          language,
+          theme.textTheme.bodyMedium!.copyWith(color: Colors.black),
+          layer,
+        );
+      }
     }
 
-    return NotificationListener<UserScrollNotification>(
+    return NotificationListener<ScrollNotification>(
       onNotification: _handlePdfScrollNotification,
       child: Listener(
-        onPointerDown: isDesktopOs ? _pdfInteraction.onPointerDown : null,
-        onPointerUp: isDesktopOs ? _pdfInteraction.onPointerUp : null,
-        onPointerCancel: isDesktopOs ? _pdfInteraction.onPointerCancel : null,
+        onPointerDown: isDesktopOs
+            ? (event) {
+                _pdfGestureActive = true;
+                _pdfInteraction.onPointerDown(event);
+              }
+            : null,
+        onPointerUp: isDesktopOs
+            ? (event) {
+                _pdfInteraction.onPointerUp(event);
+                _finishPdfGesture();
+              }
+            : null,
+        onPointerCancel: isDesktopOs
+            ? (event) {
+                _pdfInteraction.onPointerCancel(event);
+                _finishPdfGesture();
+              }
+            : null,
         onPointerSignal: _handlePdfPointerSignal,
         onPointerMove: isDesktopOs
             ? _pdfInteraction.onPointerMove

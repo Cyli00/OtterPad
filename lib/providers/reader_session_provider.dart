@@ -314,7 +314,10 @@ class ReaderSessionNotifier extends StateNotifier<ReaderSessionState> {
     }
 
     try {
-      final content = await _loadFuture!;
+      final pending = _loadFuture;
+      if (pending == null) return;
+      final content = await pending;
+      // 刷新或重新打开已经推进了代次时，这次读到的正文不能覆盖新页面。
       if (!mounted || epoch != _loadEpoch || state.markdownPath != mdPath) {
         return;
       }

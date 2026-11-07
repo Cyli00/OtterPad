@@ -36,6 +36,9 @@ class _Controller extends PlatformInAppWebViewController {
 
   @override
   Future<void> resume() async {}
+
+  @override
+  Future<void> stopLoading() async {}
   @override
   Future<void> disposeKeepAlive(InAppWebViewKeepAlive keepAlive) async {}
   @override
@@ -174,4 +177,68 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('加载未完成时返回不等待截图，也不再挂上平台视图', (tester) async {
+    final key = GlobalKey<WebViewMarkdownReaderState>();
+    await tester.pumpWidget(_reader(key, temp.path));
+    final release = key.currentState!.releaseForNavigation(capture: true);
+    await tester.pump();
+    await release;
+    expect(key.currentState!.canCaptureForTransition, isFalse);
+    expect(find.byType(InAppWebView), findsNothing);
+
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(find.byType(InAppWebView), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('截图卡住时返回仍会卸下平台视图', (tester) async {
+    final key = GlobalKey<WebViewMarkdownReaderState>();
+    await tester.pumpWidget(_reader(key, temp.path));
+    for (var i = 0; i < 100 && platform.controller.mounts == 0; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(platform.controller.mounts, 1);
+    platform.controller.handlers['onContentReady']!([]);
+    await tester.pumpAndSettle();
+    final pending = Completer<Uint8List?>();
+    platform.controller.screenshot = () => pending.future;
+    final release = key.currentState!.releaseForNavigation(capture: true);
+    await tester.pump(const Duration(milliseconds: 200));
+    await release;
+    expect(find.byType(InAppWebView), findsNothing);
+    pending.complete(Uint8List(0));
+    await tester.pump();
+    expect(find.byType(InAppWebView), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Widget _reader(GlobalKey<WebViewMarkdownReaderState> key, String dir) {
+  return MaterialApp(
+    home: WebViewMarkdownReader(
+      key: key,
+      markdownData: '本地测试正文',
+      documentDir: dir,
+      settings: const ReaderSettingsState(),
+      palette: const ReaderPalette(
+        background: Colors.white,
+        text: Colors.black,
+        secondaryText: Colors.grey,
+        link: Colors.blue,
+        divider: Colors.grey,
+        codeBlock: Colors.white,
+      ),
+    ),
+  );
 }
