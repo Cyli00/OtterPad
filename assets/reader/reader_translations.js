@@ -13,7 +13,13 @@
 
   function flush() {
     scheduled = false;
-    if (_pointerIsDown || held || _readerSearchActive) return;
+    if (held || _readerSearchActive) return;
+    // 手指还在翻页时改 DOM 会打断 touch 流，_touchDragging 再也收不回来。
+    // 这里只延期，不丢更新；松手或解锁后由 pointerup / readerScheduleTranslations 继续。
+    if (_pointerIsDown || window.readerGestureActive?.()) {
+      schedule();
+      return;
+    }
     pairs ||= new Map(Array.from(document.querySelectorAll('[data-reader-pair]'), p => [p.dataset.readerPair, p]));
     const selection = window.getSelection();
     const selected = selection?.rangeCount && !selection.isCollapsed ? selection.getRangeAt(0) : null;
@@ -29,10 +35,20 @@
     const anchor = selected || caretElement?.closest('[data-reader-pair]') || block;
     const before = anchor?.getBoundingClientRect();
     let changed = false;
+    let truncated = false;
+    const started = performance.now();
+    let processed = 0;
     for (const [id, entry] of pending) {
+      // 一批译文可能上百段。单帧同步排公式会卡住 WebView，系统返回再去
+      // 截图或销毁平台视图时主线程就会一直等。
+      if (processed >= 4 || (processed > 0 && performance.now() - started > 8)) {
+        truncated = true;
+        break;
+      }
       const pair = pairs.get(id);
       if (pair && selected?.intersectsNode(pair)) continue;
       pending.delete(id);
+      processed++;
       const previous = entries.get(id);
       if (previous?.html === entry.html && previous?.language === entry.language &&
           !!previous?.rtl === !!entry.rtl &&
@@ -57,16 +73,18 @@
       changed = true;
     }
     window.readerEntries = Array.from(entries.values());
-    if (!changed) return;
-    window.readerInvalidateBindings?.();
-    // 一批写入后只测量一次；选区或视口文字仍使用原节点，保持其屏幕位置。
-    const after = anchor?.getBoundingClientRect();
-    if (before && after) {
-      if (_isHorizontal()) content.scrollLeft += after.left - before.left;
-      else window.scrollBy(0, after.top - before.top);
+    if (changed) {
+      window.readerInvalidateBindings?.();
+      // 一批写入后只测量一次；选区或视口文字仍使用原节点，保持其屏幕位置。
+      const after = anchor?.getBoundingClientRect();
+      if (before && after) {
+        if (_isHorizontal()) content.scrollLeft += after.left - before.left;
+        else window.scrollBy(0, after.top - before.top);
+      }
+      window._overlayer?.redraw();
+      _reportScrollMetrics();
     }
-    window._overlayer?.redraw();
-    _reportScrollMetrics();
+    if (truncated) schedule();
   }
 
   window.applyReaderTranslations = payload => {

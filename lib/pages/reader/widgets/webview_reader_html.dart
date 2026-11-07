@@ -11,7 +11,7 @@ import '../../../utils/markdown_preprocessor.dart';
 import 'reader_background.dart';
 import 'reader_typography.dart';
 
-const readerAssetVersion = 'reader-rtl-persian-9';
+const readerAssetVersion = 'reader-navigation-interrupt-10';
 
 // ─── Public API ───
 

@@ -48,9 +48,18 @@ class ReaderHtmlCache {
         return ReaderHtmlWriteResult.superseded;
       }
       final content = await buildHtml();
+      // 生成期间可能已有更新的正文登记。过期任务不能再改文件，也不能
+      // 向调用方报告 written——否则阅读器会把旧 HTML 载入新打开的页面。
+      if (!identical(_pending[path], task)) {
+        return ReaderHtmlWriteResult.superseded;
+      }
       final staged = File('$path.pending');
       await staged.parent.create(recursive: true);
       await staged.writeAsString(content, flush: true);
+      if (!identical(_pending[path], task)) {
+        if (await staged.exists()) await staged.delete();
+        return ReaderHtmlWriteResult.superseded;
+      }
       if (await marker.exists()) await marker.delete();
       await staged.rename(path);
       await marker.writeAsString(expected, flush: true);
