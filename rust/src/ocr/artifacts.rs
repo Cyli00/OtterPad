@@ -1,54 +1,11 @@
 use super::*;
 
 pub fn mineru_package(bytes: &[u8], page_sizes: &[Vec<f64>]) -> Result<OcrOutput> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
-        .map_err(|_| OtterError::new(ErrorCode::InvalidData, "invalid MinerU ZIP"))?;
     let mut markdown = None;
     let mut layout = None;
     let mut v2 = None;
     let mut assets = BTreeMap::new();
-    let mut total = 0u64;
-    if archive.len() > 100_000 {
-        return Err(OtterError::new(
-            ErrorCode::InvalidData,
-            "OCR ZIP entry limit",
-        ));
-    }
-    let mut names = std::collections::HashSet::new();
-    for index in 0..archive.len() {
-        let file = archive
-            .by_index(index)
-            .map_err(|_| OtterError::new(ErrorCode::InvalidData, "invalid ZIP entry"))?;
-        let name = file
-            .name()
-            .map_err(|_| OtterError::new(ErrorCode::InvalidData, "invalid ZIP name"))?
-            .into_owned();
-        safe_relative(name.trim_end_matches('/'))?;
-        if !names.insert(name.to_lowercase()) {
-            return Err(OtterError::new(
-                ErrorCode::InvalidData,
-                "duplicate OCR ZIP entry",
-            ));
-        }
-        if file.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000) {
-            return Err(OtterError::new(ErrorCode::InvalidData, "ZIP symlink"));
-        }
-        total = total
-            .checked_add(file.size())
-            .filter(|t| *t <= 1024 * 1024 * 1024)
-            .ok_or_else(|| OtterError::new(ErrorCode::InvalidData, "OCR ZIP too large"))?;
-        if file.is_dir() {
-            continue;
-        }
-        let mut content = Vec::new();
-        let declared = file.size();
-        file.take(declared + 1).read_to_end(&mut content)?;
-        if content.len() as u64 != declared {
-            return Err(OtterError::new(
-                ErrorCode::InvalidData,
-                "OCR ZIP entry size mismatch",
-            ));
-        }
+    for (name, content) in super::chunks::read_zip(bytes)? {
         match name.as_str() {
             "full.md" => {
                 markdown = Some(String::from_utf8(content).map_err(|_| {
@@ -65,7 +22,7 @@ pub fn mineru_package(bytes: &[u8], page_sizes: &[Vec<f64>]) -> Result<OcrOutput
                 }
             }
             n if n.starts_with("images/") => {
-                assets.insert(n.to_owned(), content);
+                assets.insert(name, content);
             }
             _ => {}
         }

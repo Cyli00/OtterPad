@@ -144,6 +144,7 @@ async fn paddle_job_uploads_real_pdf_polls_and_downloads_ordered_jsonl_without_l
             &format!("{base}/jobs"),
             "local-job-key",
             &PaddleOptions::default(),
+            None,
             &CancellationToken::new(),
             |progress| events.push(progress),
         )
@@ -196,6 +197,7 @@ async fn paddle_job_returns_quota_error_and_cancellation_stops_polling() {
                 &base,
                 "local-key",
                 &PaddleOptions::default(),
+                None,
                 &CancellationToken::new(),
                 |_| {}
             )
@@ -225,6 +227,7 @@ async fn paddle_job_returns_quota_error_and_cancellation_stops_polling() {
             &base,
             "local-key",
             &PaddleOptions::default(),
+            None,
             &token,
             |progress| {
                 if matches!(progress.stage, ocr::OcrStage::Running) {
@@ -257,21 +260,22 @@ async fn mineru_uploads_without_auth_to_signed_url_polls_by_data_id_and_publishe
     ]).await;
     let mut client = OcrClient::new(network::client(None, false).unwrap());
     client.poll_interval = Duration::from_millis(1);
-    let outputs = client
-        .mineru(
+    let output = client
+        .mineru_document(
             &base,
             "local-secret",
-            &[("document".into(), pdf.clone())],
+            "document",
+            &pdf,
+            None,
             &MineruOptions::default(),
             &CancellationToken::new(),
             |_| {},
         )
         .await
         .unwrap();
-    assert_eq!(outputs.len(), 1);
-    assert_eq!(outputs[0].0, "document");
-    assert_eq!(outputs[0].1.model.blocks[0].text, "Recognized body");
-    assert_eq!(outputs[0].1.assets["images/figure.png"], b"image payload");
+    assert_eq!(output.model.blocks[0].text, "Recognized body");
+    assert_eq!(output.assets["images/figure.png"], b"image payload");
+
     let requests = requests.await.unwrap();
     assert!(requests[1].head.starts_with("PUT /signed-upload "));
     assert!(
@@ -293,7 +297,7 @@ async fn mineru_uploads_without_auth_to_signed_url_polls_by_data_id_and_publishe
             .starts_with("GET /extract-results/batch/batch ")
     );
     let published = root.path().join("published");
-    let generation = ocr::publish(&published, &outputs[0].1, &CancellationToken::new()).unwrap();
+    let generation = ocr::publish(&published, &output, &CancellationToken::new()).unwrap();
     let pointer = std::fs::read(published.join("ocr-current.json")).unwrap();
     assert_eq!(
         std::fs::read(
@@ -308,9 +312,7 @@ async fn mineru_uploads_without_auth_to_signed_url_polls_by_data_id_and_publishe
     let cancel = CancellationToken::new();
     cancel.cancel();
     assert_eq!(
-        ocr::publish(&published, &outputs[0].1, &cancel)
-            .unwrap_err()
-            .code,
+        ocr::publish(&published, &output, &cancel).unwrap_err().code,
         ErrorCode::Cancelled
     );
     assert_eq!(
@@ -345,4 +347,189 @@ async fn cancellation_drops_a_live_http_request() {
     };
     assert_eq!(error.code, ErrorCode::Cancelled);
     server.await.unwrap();
+}
+
+fn paddle_page(text: &str, image: Option<(&str, &str)>) -> Value {
+    let images = image.map_or(json!({}), |(name, url)| json!({ name: url }));
+    json!({"page_index":0,"page_size":[600,800],"prunedResult":{"parsing_res_list":[{"block_id":0,"block_label":"text","block_content":text,"block_bbox":[1,2,300,40]}]},"markdown":{"text":text,"images":images}})
+}
+
+#[tokio::test]
+async fn paddle_job_splits_long_pdf_into_page_ranges_and_keeps_every_range() {
+    let root = tempdir().unwrap();
+    let pdf = root.path().join("source.pdf");
+    tokio::fs::write(&pdf, include_bytes!("fixtures/two_pages.pdf"))
+        .await
+        .unwrap();
+    // 两个页段都从 page_index 0 起编号，且用了同名不同 URL 的图片。
+    let (base, requests) = server(|base| {
+        let line = |text: &str, url: String| {
+            json!({"result":{"layoutParsingResults":[paddle_page(&format!("{text} <img src=\"imgs/a.jpg\">"), Some(("imgs/a.jpg", &url)))]}}).to_string().into_bytes()
+        };
+        vec![
+            json!({"code":0,"data":{"jobId":"first"}}).to_string().into_bytes(),
+            json!({"code":0,"data":{"jobId":"second"}}).to_string().into_bytes(),
+            json!({"code":0,"data":{"state":"done","resultUrl":{"jsonUrl":format!("{base}/first.jsonl")}}}).to_string().into_bytes(),
+            line("Head", format!("{base}/head.jpg")),
+            json!({"code":0,"data":{"state":"done","resultUrl":{"jsonUrl":format!("{base}/second.jsonl")}}}).to_string().into_bytes(),
+            line("Tail", format!("{base}/tail.jpg")),
+            b"head image".to_vec(),
+            b"tail image".to_vec(),
+        ]
+    })
+    .await;
+    let mut client = OcrClient::new(network::client(Some(""), false).unwrap());
+    client.poll_interval = Duration::from_millis(1);
+    let output = client
+        .paddle_job(
+            &pdf,
+            &format!("{base}/jobs"),
+            "key",
+            &PaddleOptions::default(),
+            Some(1500),
+            &CancellationToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+    let pages: Vec<_> = output
+        .structure
+        .pages
+        .iter()
+        .map(|p| p.page_index)
+        .collect();
+    assert_eq!(pages, [0, 1]);
+    assert!(output.raw_markdown.starts_with("Head"));
+    assert!(
+        output
+            .raw_markdown
+            .contains("Tail <img src=\"p1_imgs/a.jpg\">")
+    );
+    assert_eq!(output.assets["imgs/a.jpg"], b"head image");
+    assert_eq!(output.assets["p1_imgs/a.jpg"], b"tail image");
+    let requests = requests.await.unwrap();
+    let first = String::from_utf8_lossy(&requests[0].body);
+    let second = String::from_utf8_lossy(&requests[1].body);
+    assert!(first.contains("1-1000") && second.contains("1001-1500"));
+    assert!(first.contains("name=\"batchId\"\r\n\r\nnr_"));
+}
+
+#[test]
+fn page_plan_splits_only_above_the_provider_limit() {
+    use ocr::chunks::{PageChunk, plan};
+    assert_eq!(
+        plan(Some(200), 200),
+        [PageChunk {
+            index: 0,
+            start: 1,
+            end: 200,
+            whole: true
+        }]
+    );
+    assert_eq!(plan(None, 200)[0].ranges(), None);
+    let ranges: Vec<_> = plan(Some(720), 200)
+        .iter()
+        .map(|c| c.ranges().unwrap())
+        .collect();
+    assert_eq!(ranges, ["1-200", "201-400", "401-600", "601-720"]);
+}
+
+#[test]
+fn paddle_structure_uses_list_order_when_page_index_restarts() {
+    let raw = json!({"layoutParsingResults":[paddle_page("A", None), paddle_page("B", None)]});
+    let structure = otter_core::document::structure::Structure::from_value(&raw).unwrap();
+    let pages: Vec<_> = structure.pages.iter().map(|p| p.page_index).collect();
+    assert_eq!(pages, [0, 1]);
+}
+
+fn mineru_range(text: &str, image: &[u8], page_idx: u64) -> Vec<u8> {
+    let layout = json!({"_backend":"vlm","pdf_info":[{"page_idx":page_idx,"page_size":[600,800],"para_blocks":[{"type":"text","bbox":[10,10,200,40],"lines":[{"bbox":[10,10,200,40],"spans":[{"type":"text","content":text}]}]},{"type":"image","bbox":[10,50,200,200],"blocks":[{"type":"image_body","bbox":[10,50,200,200],"lines":[{"bbox":[10,50,200,200],"spans":[{"type":"image","image_path":"fig.jpg"}]}]}]}],"discarded_blocks":[]}]}).to_string();
+    let markdown = format!("{text}\n\n![](images/fig.jpg)");
+    zip(&[
+        ("full.md", markdown.as_bytes()),
+        ("layout.json", layout.as_bytes()),
+        ("images/fig.jpg", image),
+    ])
+}
+
+#[test]
+fn mineru_ranges_merge_in_page_order_with_global_indices_and_distinct_images() {
+    use ocr::chunks::plan;
+    let chunks = plan(Some(250), 200);
+    // 交给合并的顺序与页段顺序相反，每段的 page_idx 都从 0 起。
+    let merged = ocr::chunks::merge_mineru_zips(vec![
+        (chunks[1], mineru_range("Tail", b"tail", 0)),
+        (chunks[0], mineru_range("Head", b"head", 0)),
+    ])
+    .unwrap();
+    let output = ocr::mineru_package(&merged, &[]).unwrap();
+    assert!(output.raw_markdown.starts_with("Head"));
+    assert!(
+        output
+            .raw_markdown
+            .contains("Tail\n\n![](images/c1_fig.jpg)")
+    );
+    let pages: Vec<_> = output
+        .structure
+        .pages
+        .iter()
+        .map(|p| p.page_index)
+        .collect();
+    assert_eq!(pages, [0, 200]);
+    assert_eq!(output.assets["images/fig.jpg"], b"head");
+    assert_eq!(output.assets["images/c1_fig.jpg"], b"tail");
+    let paths: Vec<_> = output.raw["pdf_info"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p.to_string().contains("c1_fig.jpg"))
+        .collect();
+    assert_eq!(paths, [false, true]);
+}
+
+#[test]
+fn mineru_merge_refuses_a_range_without_markdown() {
+    let chunks = ocr::chunks::plan(Some(250), 200);
+    let error = ocr::chunks::merge_mineru_zips(vec![
+        (chunks[0], mineru_range("Head", b"head", 0)),
+        (chunks[1], zip(&[("images/x.jpg", b"x")])),
+    ])
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidData);
+}
+
+#[tokio::test]
+async fn mineru_document_uploads_each_page_range_and_waits_for_all() {
+    let root = tempdir().unwrap();
+    let pdf = root.path().join("source.pdf");
+    tokio::fs::write(&pdf, b"%PDF-1.7\nlong").await.unwrap();
+    let (base, requests) = server(|base| vec![
+        json!({"code":0,"data":{"batch_id":"b","file_urls":[format!("{base}/u0"),format!("{base}/u1")]}}).to_string().into_bytes(),
+        vec![], vec![],
+        json!({"code":0,"data":{"extract_result":[{"data_id":"doc_c1","state":"done","full_zip_url":format!("{base}/z1")},{"data_id":"doc_c0","state":"running"}]}}).to_string().into_bytes(),
+        mineru_range("Tail", b"tail", 0),
+        json!({"code":0,"data":{"extract_result":[{"data_id":"doc_c0","state":"done","full_zip_url":format!("{base}/z0")}]}}).to_string().into_bytes(),
+        mineru_range("Head", b"head", 0),
+    ]).await;
+    let mut client = OcrClient::new(network::client(None, false).unwrap());
+    client.poll_interval = Duration::from_millis(1);
+    let output = client
+        .mineru_document(
+            &base,
+            "k",
+            "doc",
+            &pdf,
+            Some(250),
+            &MineruOptions::default(),
+            &CancellationToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+    assert!(output.raw_markdown.starts_with("Head"));
+    let requests = requests.await.unwrap();
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert_eq!(body["files"][0]["page_ranges"], "1-200");
+    assert_eq!(body["files"][1]["page_ranges"], "201-250");
+    assert_eq!(body["files"][1]["data_id"], "doc_c1");
 }

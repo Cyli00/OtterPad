@@ -152,6 +152,9 @@ impl Structure {
         if pages.first().is_some_and(Value::is_array) {
             return Self::from_mineru_v2(pages, &[]);
         }
+        // Paddle 分段结果的 page_index 会从 0 重新开始，页序以列表为准；
+        // 0.1.x 保存的 MinerU 结构已写成全局页号，沿用原值。
+        let mineru = root["_source"] == "mineru";
         let mut structure = Self {
             pages: pages
                 .iter()
@@ -166,7 +169,11 @@ impl Structure {
                     let transformed = pre["angle"].as_f64().unwrap_or(0.0) != 0.0
                         || pre["model_settings"]["use_doc_unwarping"] == true;
                     Ok(StructurePage {
-                        page_index: raw["page_index"].as_i64().unwrap_or(i as i64),
+                        page_index: if mineru {
+                            raw["page_index"].as_i64().unwrap_or(i as i64)
+                        } else {
+                            i as i64
+                        },
                         page_size: if transformed {
                             None
                         } else {
@@ -205,7 +212,7 @@ impl Structure {
                 })
                 .collect::<Result<_>>()?,
         };
-        if root["_source"] == "mineru" {
+        if mineru {
             structure.mineru_regions();
         } else {
             structure.paddle_regions();

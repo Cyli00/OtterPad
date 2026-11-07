@@ -234,3 +234,26 @@ async fn missing_protected_content_is_rejected_and_never_written_to_cache() {
     assert!(!root.path().join("cache/translation").exists());
     handle.await.unwrap();
 }
+
+#[tokio::test]
+async fn right_to_left_targets_add_the_formula_and_table_guard() {
+    let (base, handle) = server(2, |index, request| {
+        let body: Value = serde_json::from_slice(&request.body).unwrap();
+        let system = body["messages"][0]["content"].as_str().unwrap();
+        assert_eq!(system.contains("right to left"), index == 0);
+        Reply::json(json!({"choices":[{"message":{"content":"ترجمه"},"finish_reason":"stop"}]}))
+    })
+    .await;
+    let root = tempdir().unwrap();
+    let translator = Translator::new(AiClient::new(None, false).unwrap(), root.path().into());
+    let model = model(base);
+    let token = CancellationToken::new();
+    for language in ["فارسی", "English"] {
+        let config = TranslationConfig::new(language.into());
+        translator
+            .selection("Text", &model, "key", &config, false, &token)
+            .await
+            .unwrap();
+    }
+    assert_eq!(handle.await.unwrap().len(), 2);
+}

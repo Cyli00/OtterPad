@@ -29,6 +29,9 @@ use protected::Protected;
 pub const SYSTEM_PROMPT: &str = "You are a professional {{targetLanguage}} native translator who needs to fluently translate text into {{targetLanguage}}.\n\n## Translation Rules\n1. Output only the translated content, without explanations or additional content.\n2. Preserve the original structure exactly: the same number of paragraphs, and the same Markdown formatting (headings, lists, emphasis, LaTeX).\n3. Keep content that should not be translated as-is: code, formulas, URLs, technical identifiers.\n4. Translate names and terminology into their established {{targetLanguage}} rendering when one exists; otherwise keep the original.";
 pub const USER_PROMPT: &str = "Translate to {{targetLanguage}}:\n\n{{input}}";
 const PLACEHOLDER_GUARD: &str = "The input contains placeholders like [[m0]], [[m1]] that stand for protected content (formulas or code). Keep every placeholder exactly as-is at its corresponding position in the translation. Never translate, alter, merge, or drop a placeholder.";
+/// 从右向左书写的目标语言，名称与设置里的目标语言一致。
+const RTL_LANGUAGES: [&str; 2] = ["العربية", "فارسی"];
+const RTL_GUARD: &str = "The target language is written right to left. Translate the prose into that language, but keep formulas, math symbols, code, URLs, and Markdown tables in their original left-to-right order. Do not mirror or reorder them, and do not insert right-to-left marks inside them.";
 const SEGMENT_GUARD: &str = "The input is divided into independent segments by lines containing only \"%%%%\". Translate every segment in place and reproduce the separator lines in the same order and count. Never merge or split segments, never add or remove separators. Use neighbouring segments only for terminology and tone consistency.";
 const TTL: u64 = 7 * 86400;
 static PERMITS: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(8)));
@@ -102,6 +105,10 @@ impl Translator {
         let mut system = config
             .system_prompt
             .replace("{{targetLanguage}}", &config.language);
+        if RTL_LANGUAGES.contains(&config.language.trim()) {
+            system.push('\n');
+            system.push_str(RTL_GUARD);
+        }
         if !protected.is_empty() {
             system.push('\n');
             system.push_str(PLACEHOLDER_GUARD);

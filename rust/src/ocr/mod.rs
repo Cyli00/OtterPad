@@ -1,3 +1,4 @@
+pub mod chunks;
 pub mod paddle_job;
 pub mod usage;
 
@@ -123,7 +124,7 @@ impl Default for MineruOptions {
     }
 }
 impl MineruOptions {
-    pub fn payload(&self, files: &[(String, String)]) -> Result<Value> {
+    pub fn payload(&self, files: &[MineruPart]) -> Result<Value> {
         if files.is_empty()
             || files.len() > 20
             || ![
@@ -156,7 +157,11 @@ impl MineruOptions {
             ));
         }
         Ok(
-            json!({"enable_formula":self.enable_formula,"enable_table":self.enable_table,"language":self.language,"model_version":"vlm","extra_formats":self.extra_formats,"files":files.iter().map(|(name,id)|json!({"name":name,"data_id":id,"is_ocr":self.is_ocr})).collect::<Vec<_>>()}),
+            json!({"enable_formula":self.enable_formula,"enable_table":self.enable_table,"language":self.language,"model_version":"vlm","extra_formats":self.extra_formats,"files":files.iter().map(|part|{
+                let mut file=json!({"name":part.name(),"data_id":part.data_id,"is_ocr":self.is_ocr});
+                if let Some(ranges)=&part.page_ranges {file["page_ranges"]=json!(ranges);}
+                file
+            }).collect::<Vec<_>>()}),
         )
     }
 }
@@ -274,31 +279,68 @@ impl OcrClient {
         Ok(())
     }
 
-    /// One batch request supports 1..20 files, associates every result by data_id.
+    /// 解析一篇 PDF。超过 200 页时按 `page_ranges` 拆成多段，全部完成后按页序
+    /// 合并；任一页段失败即返回错误，不发布部分结果。
+    #[allow(clippy::too_many_arguments)]
+    pub async fn mineru_document(
+        &self,
+        base: &str,
+        key: &str,
+        document: &str,
+        path: &Path,
+        page_count: Option<usize>,
+        options: &MineruOptions,
+        token: &CancellationToken,
+        mut progress: impl FnMut(Progress),
+    ) -> Result<OcrOutput> {
+        let plan = chunks::plan(page_count, chunks::MINERU_MAX_PAGES);
+        let parts: Vec<_> = plan
+            .iter()
+            .map(|chunk| MineruPart {
+                data_id: chunks::data_id(document, chunk, plan.len()),
+                path: path.to_owned(),
+                page_ranges: chunk.ranges(),
+            })
+            .collect();
+        let mut zips = BTreeMap::new();
+        // 单批最多 20 个文件；超长文档的页段分批提交。
+        for group in parts.chunks(20) {
+            zips.extend(
+                self.mineru(base, key, group, options, token, &mut progress)
+                    .await?,
+            );
+        }
+        let ranges = plan
+            .iter()
+            .zip(&parts)
+            .map(|(chunk, part)| {
+                zips.remove(&part.data_id)
+                    .map(|bytes| (*chunk, bytes))
+                    .ok_or_else(|| OtterError::new(ErrorCode::InvalidData, "MinerU range missing"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        tasks::blocking(token, move || {
+            if ranges.len() == 1 {
+                return mineru_package(&ranges[0].1, &[]);
+            }
+            mineru_package(&chunks::merge_mineru_zips(ranges)?, &[])
+        })
+        .await
+    }
+
+    /// 一次批量请求提交 1..20 个文件，按 `data_id` 收齐结果包；任一文件失败即报错。
     pub async fn mineru(
         &self,
         base: &str,
         key: &str,
-        files: &[(String, std::path::PathBuf)],
+        files: &[MineruPart],
         options: &MineruOptions,
         token: &CancellationToken,
         mut progress: impl FnMut(Progress),
-    ) -> Result<Vec<(String, OcrOutput)>> {
-        let input: Vec<_> = files
-            .iter()
-            .map(|(id, path)| {
-                (
-                    path.file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned(),
-                    id.clone(),
-                )
-            })
-            .collect();
-        let payload = options.payload(&input)?;
-        for (_, path) in files {
-            let size = tokio::fs::metadata(path).await?.len();
+    ) -> Result<BTreeMap<String, Vec<u8>>> {
+        let payload = options.payload(files)?;
+        for part in files {
+            let size = tokio::fs::metadata(&part.path).await?.len();
             if size == 0 || size > 200 * 1024 * 1024 {
                 return Err(OtterError::new(
                     ErrorCode::InvalidArgument,
@@ -328,11 +370,12 @@ impl OcrClient {
             .as_array()
             .filter(|u| u.len() == files.len())
             .ok_or_else(|| OtterError::new(ErrorCode::InvalidData, "missing MinerU upload URLs"))?;
-        for (index, (_, path)) in files.iter().enumerate() {
+        for (index, part) in files.iter().enumerate() {
             let url = urls[index]
                 .as_str()
                 .ok_or_else(|| OtterError::new(ErrorCode::InvalidData, "invalid upload URL"))?;
-            let bytes = cancellable(token, async { Ok(tokio::fs::read(path).await?) }).await?;
+            let bytes =
+                cancellable(token, async { Ok(tokio::fs::read(&part.path).await?) }).await?;
             validate_pdf(&bytes)?;
             network::send(self.download_client.put(url).body(bytes), token).await?;
             progress(Progress {
@@ -365,7 +408,7 @@ impl OcrClient {
             for item in results {
                 let Some(id) = item["data_id"]
                     .as_str()
-                    .filter(|id| files.iter().any(|(i, _)| i == id))
+                    .filter(|id| files.iter().any(|part| part.data_id == *id))
                 else {
                     continue;
                 };
@@ -389,9 +432,7 @@ impl OcrClient {
                         )
                         .await?;
                         tasks::check(token)?;
-                        let result =
-                            tasks::blocking(token, move || mineru_package(&bytes, &[])).await?;
-                        outputs.insert(id.to_owned(), result);
+                        outputs.insert(id.to_owned(), bytes);
                         OcrStage::Completed
                     }
                     Some("failed") => {
@@ -411,14 +452,31 @@ impl OcrClient {
                 });
             }
         }
-        Ok(files
-            .iter()
-            .filter_map(|(id, _)| outputs.remove(id).map(|o| (id.clone(), o)))
-            .collect())
+        Ok(outputs)
     }
 }
 
-fn paddle_output(raw: Value) -> Result<OcrOutput> {
+/// MinerU 批量请求里的一个文件；长 PDF 的每个页段各占一项，上传同一份文件。
+#[derive(Debug, Clone)]
+pub struct MineruPart {
+    pub data_id: String,
+    pub path: std::path::PathBuf,
+    pub page_ranges: Option<String>,
+}
+impl MineruPart {
+    fn name(&self) -> String {
+        self.path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+
+fn paddle_output(mut raw: Value) -> Result<OcrOutput> {
+    if let Some(pages) = raw["layoutParsingResults"].as_array_mut() {
+        chunks::assemble_paddle_pages(pages);
+    }
     let structure = Structure::from_value(&raw)?;
     if structure.pages.is_empty() {
         return Err(OtterError::new(ErrorCode::InvalidData, "empty OCR result"));

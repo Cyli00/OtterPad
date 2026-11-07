@@ -165,13 +165,20 @@ async fn extract_one(
     .await?;
     let input_id = document.clone();
     let token = task_token.clone();
-    let (pdf, expected, proxy, http2) = backend
+    let (pdf, expected, proxy, http2, pages) = backend
         .runtime
         .call(&task_token, "prepare_ocr", move |state| {
             let pdf = directory(state.storage()?, &input_id)?.join("source.pdf");
             let hash = archive::hash_file(&pdf, &token)?;
             let (proxy, http2) = network_settings(state.storage()?)?;
-            Ok((pdf, hash, proxy, http2))
+            // 页数决定长 PDF 是否按页段提交；读不出时整份提交，由服务商判定。
+            let pages = state.pdf().ok().and_then(|pdf_state| {
+                let info = pdf_state.open(&pdf, None, &token).ok()?;
+                let count = info.pages.len();
+                let _ = pdf_state.close(info.handle);
+                Some(count)
+            });
+            Ok((pdf, hash, proxy, http2, pages))
         })
         .await?;
     let client = OcrClient::with_clients(
@@ -186,6 +193,7 @@ async fn extract_one(
                     &job_url,
                     &backend.runtime.credentials.get("doc_extract_api_key")?,
                     &options,
+                    pages,
                     &task_token,
                     |progress| {
                         if emit(ExtractionEvent::Progress { progress }).is_err() {
@@ -215,14 +223,16 @@ async fn extract_one(
                 .await?
         }
         ExtractionProvider::Mineru { base_url, options } => {
-            let mut outputs = client
-                .mineru(
+            client
+                .mineru_document(
                     &base_url,
                     &backend
                         .runtime
                         .credentials
                         .get("doc_extract_api_key_mineru")?,
-                    &[(document.clone(), pdf.clone())],
+                    &document,
+                    &pdf,
+                    pages,
                     &options,
                     &task_token,
                     |progress| {
@@ -231,13 +241,7 @@ async fn extract_one(
                         }
                     },
                 )
-                .await?;
-            outputs
-                .pop()
-                .ok_or_else(|| {
-                    OtterError::new(ErrorCode::InvalidData, "MinerU returned no document")
-                })?
-                .1
+                .await?
         }
     };
     let token = task_token.clone();
