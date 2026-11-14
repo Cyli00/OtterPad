@@ -26,6 +26,7 @@ import '../../providers/translation_config_provider.dart';
 import '../../router/app_routes.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
+import '../../src/rust/api/document.dart';
 import '../../src/rust/document.dart';
 import '../../utils/desktop.dart';
 import '../../utils/doc_paths.dart';
@@ -37,6 +38,7 @@ import '../reader2/reader_layout.dart';
 import '../reader2/reader_surface.dart';
 import 'chat/document_chat_page.dart';
 import 'pdf/pdf_controller.dart';
+import 'pdf/pdf_translation.dart';
 import 'pdf/pdf_view.dart';
 import 'widgets/figure_viewer.dart';
 import 'widgets/outline_panel.dart';
@@ -70,6 +72,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _bodyFocus = FocusNode();
   final _progress = ValueNotifier<double>(0);
   final _pdfSearch = PdfViewController();
+
+  // PDF 译文叠加：按译文表与文档身份缓存。
+  Map<String, String>? _overlayTranslations;
+  ReaderDocument? _overlayDocument;
+  Map<int, List<PdfTextOverlay>> _pdfOverlays = const {};
+  final _parsedTranslations = <String, List<InlineRun>>{};
   late final HistoryNotifier _history;
 
   ReaderController? _controller;
@@ -516,6 +524,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
+  // ── PDF 译文 ──
+
+  /// PDF 只有原文/译文两态；双语在 PDF 上投影为译文，不改写保存的模式。
+  DocTranslationMode _nextPdfTranslationMode(DocumentTranslationState t) =>
+      t.mode == DocTranslationMode.off
+      ? DocTranslationMode.translated
+      : DocTranslationMode.off;
+
+  Map<int, List<PdfTextOverlay>> _pdfTranslationOverlays() {
+    final translation = ref.read(documentTranslationProvider(_id));
+    final document = _controller?.source;
+    if (document == null ||
+        translation.mode == DocTranslationMode.off ||
+        translation.translations.isEmpty) {
+      return const {};
+    }
+    if (!identical(translation.translations, _overlayTranslations) ||
+        !identical(document, _overlayDocument)) {
+      _overlayTranslations = translation.translations;
+      _overlayDocument = document;
+      _pdfOverlays = pdfTranslationOverlays(
+        document,
+        translation.translations,
+        _parsedTranslations,
+      );
+    }
+    return _pdfOverlays;
+  }
+
   // ── 面板：宽屏停靠在右侧，窄屏从底部弹出；外观在桌面端是浮层 ──
 
   bool get _useDock =>
@@ -713,7 +750,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final inFavorite = (ref.watch(favoritesProvider).value ?? const []).any(
       (f) => f.documentIds.contains(_id),
     );
-    final showBottom = _hasModel && !_pdfMode;
+    final showBottom = _hasModel;
     final useDock = _useDock;
     final windowWidth = MediaQuery.sizeOf(context).width;
     final sidebarWidth = Responsive.clampReaderSidebarWidth(
@@ -858,16 +895,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                         ? _dockPane
                                         : null,
                                     desktop: isDesktopOs,
+                                    pdfView: _pdfMode,
+                                    nextTranslationMode: _pdfMode
+                                        ? _nextPdfTranslationMode(translation)
+                                        : null,
                                     readingProgress: _progress,
                                     onOpenOutline: _toggleOutline,
                                     onTranslate: _translateDocument,
-                                    onCycleTranslationMode: () => ref
-                                        .read(
-                                          documentTranslationProvider(
-                                            _id,
-                                          ).notifier,
-                                        )
-                                        .cycleMode(),
+                                    onCycleTranslationMode: () {
+                                      final notifier = ref.read(
+                                        documentTranslationProvider(
+                                          _id,
+                                        ).notifier,
+                                      );
+                                      if (_pdfMode) {
+                                        notifier.setMode(
+                                          _nextPdfTranslationMode(translation),
+                                        );
+                                      } else {
+                                        notifier.cycleMode();
+                                      }
+                                    },
                                     onAskAi: _toggleAskAi,
                                     onOpenNotes: _toggleNotes,
                                     onOpenTheme: _toggleAppearance,
@@ -1086,6 +1134,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         },
         errorBuilder: (context, error) =>
             _message(context, errorText(context.l10n, error)),
+        pageLayer: (page, info) {
+          final overlays = _pdfTranslationOverlays()[page];
+          if (overlays == null) return null;
+          return PdfTranslationLayer(
+            pageWidth: info.width,
+            pageHeight: info.height,
+            overlays: overlays,
+            rtl: isRtlTargetLanguage(
+              ref.read(translationConfigProvider).targetLanguage,
+            ),
+          );
+        },
       );
     }
     final controller = _controller;

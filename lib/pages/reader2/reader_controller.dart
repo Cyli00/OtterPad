@@ -153,6 +153,7 @@ class ReaderController extends ChangeNotifier {
       figureImages: source.figureImages,
       assetDirectory: source.assetDirectory,
       references: source.references,
+      blockRegions: const [],
     );
   }
 

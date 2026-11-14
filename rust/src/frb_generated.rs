@@ -7287,6 +7287,20 @@ impl SseDecode for Vec<crate::pdf::geometry::LayoutRegion> {
     }
 }
 
+impl SseDecode for Vec<Vec<crate::document::regions::PageRegion>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<Vec<crate::document::regions::PageRegion>>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<Vec<crate::document::table::TableCell>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7370,6 +7384,20 @@ impl SseDecode for Vec<crate::pdf::PageInfo> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::pdf::PageInfo>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::document::regions::PageRegion> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::document::regions::PageRegion>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -8279,6 +8307,26 @@ impl SseDecode for crate::pdf::PageInfo {
     }
 }
 
+impl SseDecode for crate::document::regions::PageRegion {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_page = <u32>::sse_decode(deserializer);
+        let mut var_left = <f64>::sse_decode(deserializer);
+        let mut var_top = <f64>::sse_decode(deserializer);
+        let mut var_right = <f64>::sse_decode(deserializer);
+        let mut var_bottom = <f64>::sse_decode(deserializer);
+        let mut var_sourceLength = <u64>::sse_decode(deserializer);
+        return crate::document::regions::PageRegion {
+            page: var_page,
+            left: var_left,
+            top: var_top,
+            right: var_right,
+            bottom: var_bottom,
+            source_length: var_sourceLength,
+        };
+    }
+}
+
 impl SseDecode for crate::sync::zotero::mapper::PdfAttachment {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8479,6 +8527,8 @@ impl SseDecode for crate::api::document::ReaderDocument {
         let mut var_assetDirectory = <String>::sse_decode(deserializer);
         let mut var_references =
             <Vec<crate::document::references::Reference>>::sse_decode(deserializer);
+        let mut var_blockRegions =
+            <Vec<Vec<crate::document::regions::PageRegion>>>::sse_decode(deserializer);
         return crate::api::document::ReaderDocument {
             version: var_version,
             blocks: var_blocks,
@@ -8488,6 +8538,7 @@ impl SseDecode for crate::api::document::ReaderDocument {
             figure_images: var_figureImages,
             asset_directory: var_assetDirectory,
             references: var_references,
+            block_regions: var_blockRegions,
         };
     }
 }
@@ -11379,6 +11430,31 @@ impl flutter_rust_bridge::IntoIntoDart<crate::pdf::PageInfo> for crate::pdf::Pag
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::document::regions::PageRegion {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.page.into_into_dart().into_dart(),
+            self.left.into_into_dart().into_dart(),
+            self.top.into_into_dart().into_dart(),
+            self.right.into_into_dart().into_dart(),
+            self.bottom.into_into_dart().into_dart(),
+            self.source_length.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::document::regions::PageRegion
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::document::regions::PageRegion>
+    for crate::document::regions::PageRegion
+{
+    fn into_into_dart(self) -> crate::document::regions::PageRegion {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::sync::zotero::mapper::PdfAttachment {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -11627,6 +11703,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::document::ReaderDocument {
             self.figure_images.into_into_dart().into_dart(),
             self.asset_directory.into_into_dart().into_dart(),
             self.references.into_into_dart().into_dart(),
+            self.block_regions.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -14062,6 +14139,16 @@ impl SseEncode for Vec<crate::pdf::geometry::LayoutRegion> {
     }
 }
 
+impl SseEncode for Vec<Vec<crate::document::regions::PageRegion>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <Vec<crate::document::regions::PageRegion>>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<Vec<crate::document::table::TableCell>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14128,6 +14215,16 @@ impl SseEncode for Vec<crate::pdf::PageInfo> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::pdf::PageInfo>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::document::regions::PageRegion> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::document::regions::PageRegion>::sse_encode(item, serializer);
         }
     }
 }
@@ -14830,6 +14927,18 @@ impl SseEncode for crate::pdf::PageInfo {
     }
 }
 
+impl SseEncode for crate::document::regions::PageRegion {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.page, serializer);
+        <f64>::sse_encode(self.left, serializer);
+        <f64>::sse_encode(self.top, serializer);
+        <f64>::sse_encode(self.right, serializer);
+        <f64>::sse_encode(self.bottom, serializer);
+        <u64>::sse_encode(self.source_length, serializer);
+    }
+}
+
 impl SseEncode for crate::sync::zotero::mapper::PdfAttachment {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14984,6 +15093,10 @@ impl SseEncode for crate::api::document::ReaderDocument {
         <Vec<crate::api::document::ReaderFigureImage>>::sse_encode(self.figure_images, serializer);
         <String>::sse_encode(self.asset_directory, serializer);
         <Vec<crate::document::references::Reference>>::sse_encode(self.references, serializer);
+        <Vec<Vec<crate::document::regions::PageRegion>>>::sse_encode(
+            self.block_regions,
+            serializer,
+        );
     }
 }
 

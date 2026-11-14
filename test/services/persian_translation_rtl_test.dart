@@ -66,6 +66,7 @@ void main() {
       figureImages: const [],
       assetDirectory: '',
       references: const [],
+      blockRegions: const [],
     );
     final typesetter = ReaderTypesetter();
     addTearDown(typesetter.dispose);

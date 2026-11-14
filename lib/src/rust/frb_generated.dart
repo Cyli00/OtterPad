@@ -29,6 +29,7 @@ import 'dart:convert';
 import 'document.dart';
 import 'document/figures.dart';
 import 'document/references.dart';
+import 'document/regions.dart';
 import 'document/structure.dart';
 import 'document/table.dart';
 import 'error.dart';
@@ -6016,6 +6017,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<List<PageRegion>> dco_decode_list_list_page_region(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_list_page_region).toList();
+  }
+
+  @protected
   List<List<TableCell>> dco_decode_list_list_table_cell(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_list_table_cell).toList();
@@ -6055,6 +6062,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<PageInfo> dco_decode_list_page_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_page_info).toList();
+  }
+
+  @protected
+  List<PageRegion> dco_decode_list_page_region(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_page_region).toList();
   }
 
   @protected
@@ -6615,6 +6628,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PageRegion dco_decode_page_region(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return PageRegion(
+      page: dco_decode_u_32(arr[0]),
+      left: dco_decode_f_64(arr[1]),
+      top: dco_decode_f_64(arr[2]),
+      right: dco_decode_f_64(arr[3]),
+      bottom: dco_decode_f_64(arr[4]),
+      sourceLength: dco_decode_u_64(arr[5]),
+    );
+  }
+
+  @protected
   PdfAttachment dco_decode_pdf_attachment(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -6755,8 +6784,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReaderDocument dco_decode_reader_document(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return ReaderDocument(
       version: dco_decode_u_32(arr[0]),
       blocks: dco_decode_list_block(arr[1]),
@@ -6766,6 +6795,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       figureImages: dco_decode_list_reader_figure_image(arr[5]),
       assetDirectory: dco_decode_String(arr[6]),
       references: dco_decode_list_reference(arr[7]),
+      blockRegions: dco_decode_list_list_page_region(arr[8]),
     );
   }
 
@@ -9373,6 +9403,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<List<PageRegion>> sse_decode_list_list_page_region(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <List<PageRegion>>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_list_page_region(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<List<TableCell>> sse_decode_list_list_table_cell(
     SseDeserializer deserializer,
   ) {
@@ -9458,6 +9502,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <PageInfo>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_page_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<PageRegion> sse_decode_list_page_region(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <PageRegion>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_page_region(deserializer));
     }
     return ans_;
   }
@@ -10325,6 +10381,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PageRegion sse_decode_page_region(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_page = sse_decode_u_32(deserializer);
+    var var_left = sse_decode_f_64(deserializer);
+    var var_top = sse_decode_f_64(deserializer);
+    var var_right = sse_decode_f_64(deserializer);
+    var var_bottom = sse_decode_f_64(deserializer);
+    var var_sourceLength = sse_decode_u_64(deserializer);
+    return PageRegion(
+      page: var_page,
+      left: var_left,
+      top: var_top,
+      right: var_right,
+      bottom: var_bottom,
+      sourceLength: var_sourceLength,
+    );
+  }
+
+  @protected
   PdfAttachment sse_decode_pdf_attachment(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_key = sse_decode_String(deserializer);
@@ -10482,6 +10557,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_figureImages = sse_decode_list_reader_figure_image(deserializer);
     var var_assetDirectory = sse_decode_String(deserializer);
     var var_references = sse_decode_list_reference(deserializer);
+    var var_blockRegions = sse_decode_list_list_page_region(deserializer);
     return ReaderDocument(
       version: var_version,
       blocks: var_blocks,
@@ -10491,6 +10567,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       figureImages: var_figureImages,
       assetDirectory: var_assetDirectory,
       references: var_references,
+      blockRegions: var_blockRegions,
     );
   }
 
@@ -13101,6 +13178,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_list_page_region(
+    List<List<PageRegion>> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_list_page_region(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_list_table_cell(
     List<List<TableCell>> self,
     SseSerializer serializer,
@@ -13175,6 +13264,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_page_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_page_region(
+    List<PageRegion> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_page_region(item, serializer);
     }
   }
 
@@ -13937,6 +14038,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_page_region(PageRegion self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.page, serializer);
+    sse_encode_f_64(self.left, serializer);
+    sse_encode_f_64(self.top, serializer);
+    sse_encode_f_64(self.right, serializer);
+    sse_encode_f_64(self.bottom, serializer);
+    sse_encode_u_64(self.sourceLength, serializer);
+  }
+
+  @protected
   void sse_encode_pdf_attachment(PdfAttachment self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.key, serializer);
@@ -14059,6 +14171,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_reader_figure_image(self.figureImages, serializer);
     sse_encode_String(self.assetDirectory, serializer);
     sse_encode_list_reference(self.references, serializer);
+    sse_encode_list_list_page_region(self.blockRegions, serializer);
   }
 
   @protected

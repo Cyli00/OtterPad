@@ -1,5 +1,6 @@
 pub mod figures;
 pub mod references;
+pub mod regions;
 pub mod structure;
 pub(crate) mod table;
 pub use table::{Table, TableCell};

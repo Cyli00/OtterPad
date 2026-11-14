@@ -39,6 +39,8 @@ pub struct ReaderDocument {
     pub asset_directory: String,
     /// 参考文献条目（大纲的参考文献页）。
     pub references: Vec<crate::document::references::Reference>,
+    /// 与 `blocks` 一一对应的 PDF 页面区域（页面比例坐标），供 PDF 视图叠加译文。
+    pub block_regions: Vec<Vec<crate::document::regions::PageRegion>>,
 }
 /// 新清单按 `segment_ids` 对应图块；0.1.x 清单没有图块 id，按视觉区域的页码与 OCR 块 id 对应。
 fn figure_images(
@@ -106,6 +108,10 @@ impl Backend {
                         .collect(),
                     figure_images: figure_images(&directory, &model.blocks, &figure_assets)?,
                     references: document::references::references(&model.blocks),
+                    block_regions: document::regions::page_regions(
+                        document::regions::load_structure(&directory)?.as_ref(),
+                        &model.blocks,
+                    ),
                     blocks: model.blocks,
                     figure_assets,
                     asset_directory: document::extraction_directory(&directory)?

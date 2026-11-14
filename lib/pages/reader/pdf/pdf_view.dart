@@ -36,6 +36,7 @@ class RustPdfView extends StatefulWidget {
     required this.selectionColor,
     required this.onCopy,
     required this.errorBuilder,
+    this.pageLayer,
   });
 
   final String documentId;
@@ -51,6 +52,9 @@ class RustPdfView extends StatefulWidget {
   final Color selectionColor;
   final void Function(String text) onCopy;
   final Widget Function(BuildContext context, Object error) errorBuilder;
+
+  /// 叠在页面上的图层（如译文），不接收指针事件；返回 null 表示该页没有。
+  final Widget? Function(int page, PageInfo info)? pageLayer;
 
   @override
   State<RustPdfView> createState() => _RustPdfViewState();
@@ -496,6 +500,30 @@ class _RustPdfViewState extends State<RustPdfView> {
     );
   }
 
+  Widget _pageItem(DocumentInfo info, int index) {
+    final page = info.pages[index];
+    final size = Size(_pageWidth, _pageHeight(page));
+    final view = PdfPageView(
+      key: ValueKey(index),
+      handle: info.handle,
+      page: page,
+      size: size,
+      visible: _visibleOf(index),
+      overlays: _overlays(index),
+    );
+    final layer = widget.pageLayer?.call(index, page);
+    if (layer == null) return view;
+    return SizedBox.fromSize(
+      size: size,
+      child: Stack(
+        children: [
+          view,
+          Positioned.fill(child: IgnorePointer(child: layer)),
+        ],
+      ),
+    );
+  }
+
   Widget _scrollArea(DocumentInfo info, Size viewport, bool pinching) =>
       Scrollbar(
         controller: _vertical,
@@ -519,14 +547,7 @@ class _RustPdfViewState extends State<RustPdfView> {
                 behavior: HitTestBehavior.opaque,
                 child: Align(
                   alignment: Alignment.topCenter,
-                  child: PdfPageView(
-                    key: ValueKey(index),
-                    handle: info.handle,
-                    page: info.pages[index],
-                    size: Size(_pageWidth, _pageHeight(info.pages[index])),
-                    visible: _visibleOf(index),
-                    overlays: _overlays(index),
-                  ),
+                  child: _pageItem(info, index),
                 ),
               ),
             ),

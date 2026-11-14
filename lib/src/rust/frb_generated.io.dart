@@ -30,6 +30,7 @@ import 'dart:ffi' as ffi;
 import 'document.dart';
 import 'document/figures.dart';
 import 'document/references.dart';
+import 'document/regions.dart';
 import 'document/structure.dart';
 import 'document/table.dart';
 import 'error.dart';
@@ -614,6 +615,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LayoutRegion> dco_decode_list_layout_region(dynamic raw);
 
   @protected
+  List<List<PageRegion>> dco_decode_list_list_page_region(dynamic raw);
+
+  @protected
   List<List<TableCell>> dco_decode_list_list_table_cell(dynamic raw);
 
   @protected
@@ -633,6 +637,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<PageInfo> dco_decode_list_page_info(dynamic raw);
+
+  @protected
+  List<PageRegion> dco_decode_list_page_region(dynamic raw);
 
   @protected
   List<PdfAttachment> dco_decode_list_pdf_attachment(dynamic raw);
@@ -828,6 +835,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageInfo dco_decode_page_info(dynamic raw);
+
+  @protected
+  PageRegion dco_decode_page_region(dynamic raw);
 
   @protected
   PdfAttachment dco_decode_pdf_attachment(dynamic raw);
@@ -1660,6 +1670,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<List<PageRegion>> sse_decode_list_list_page_region(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<List<TableCell>> sse_decode_list_list_table_cell(
     SseDeserializer deserializer,
   );
@@ -1685,6 +1700,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<PageInfo> sse_decode_list_page_info(SseDeserializer deserializer);
+
+  @protected
+  List<PageRegion> sse_decode_list_page_region(SseDeserializer deserializer);
 
   @protected
   List<PdfAttachment> sse_decode_list_pdf_attachment(
@@ -1924,6 +1942,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageInfo sse_decode_page_info(SseDeserializer deserializer);
+
+  @protected
+  PageRegion sse_decode_page_region(SseDeserializer deserializer);
 
   @protected
   PdfAttachment sse_decode_pdf_attachment(SseDeserializer deserializer);
@@ -2946,6 +2967,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_list_page_region(
+    List<List<PageRegion>> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_list_table_cell(
     List<List<TableCell>> self,
     SseSerializer serializer,
@@ -2977,6 +3004,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_page_info(List<PageInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_page_region(
+    List<PageRegion> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_pdf_attachment(
@@ -3304,6 +3337,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_page_info(PageInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_page_region(PageRegion self, SseSerializer serializer);
 
   @protected
   void sse_encode_pdf_attachment(PdfAttachment self, SseSerializer serializer);

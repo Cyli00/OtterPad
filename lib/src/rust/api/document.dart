@@ -6,6 +6,7 @@
 import '../document.dart';
 import '../document/figures.dart';
 import '../document/references.dart';
+import '../document/regions.dart';
 import '../document/structure.dart';
 import '../document/table.dart';
 import '../frb_generated.dart';
@@ -35,6 +36,9 @@ class ReaderDocument {
   /// 参考文献条目（大纲的参考文献页）。
   final List<Reference> references;
 
+  /// 与 `blocks` 一一对应的 PDF 页面区域（页面比例坐标），供 PDF 视图叠加译文。
+  final List<List<PageRegion>> blockRegions;
+
   const ReaderDocument({
     required this.version,
     required this.blocks,
@@ -44,6 +48,7 @@ class ReaderDocument {
     required this.figureImages,
     required this.assetDirectory,
     required this.references,
+    required this.blockRegions,
   });
 
   @override
@@ -55,7 +60,8 @@ class ReaderDocument {
       figureAssets.hashCode ^
       figureImages.hashCode ^
       assetDirectory.hashCode ^
-      references.hashCode;
+      references.hashCode ^
+      blockRegions.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -69,7 +75,8 @@ class ReaderDocument {
           figureAssets == other.figureAssets &&
           figureImages == other.figureImages &&
           assetDirectory == other.assetDirectory &&
-          references == other.references;
+          references == other.references &&
+          blockRegions == other.blockRegions;
 }
 
 class ReaderFigure {

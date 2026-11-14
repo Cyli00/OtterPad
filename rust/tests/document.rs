@@ -136,3 +136,34 @@ fn references_without_numbers_keep_citation_like_paragraphs() {
     assert_eq!(references[0].number, 1);
     assert!(!references[0].numbered);
 }
+
+#[test]
+fn block_regions_are_page_fractions_and_skip_pages_without_size() {
+    let structure: otter_core::document::structure::Structure =
+        serde_json::from_value(serde_json::json!({"pages": [
+            {"page_index": 0, "markdown": "", "images": {}, "page_size": [1000.0, 2000.0],
+             "blocks": [{"block_id": "1", "block_label": "text",
+                         "block_bbox": [100.0, 200.0, 600.0, 400.0],
+                         "block_content": "A paragraph that will be translated."}]},
+            {"page_index": 1, "markdown": "", "images": {}, "page_size": null,
+             "blocks": [{"block_id": "2", "block_label": "text",
+                         "block_bbox": [1.0, 2.0, 3.0, 4.0],
+                         "block_content": "No page size on this page."}]}
+        ]}))
+        .unwrap();
+    let model = DocumentModel::from_structure(&structure);
+    let regions = otter_core::document::regions::page_regions(Some(&structure), &model.blocks);
+    assert_eq!(regions.len(), model.blocks.len());
+    let first = &regions[0][0];
+    assert_eq!(first.page, 0);
+    assert_eq!(
+        (first.left, first.top, first.right, first.bottom),
+        (0.1, 0.1, 0.6, 0.2)
+    );
+    assert!(regions[1].is_empty());
+    assert!(
+        otter_core::document::regions::page_regions(None, &model.blocks)
+            .iter()
+            .all(Vec::is_empty)
+    );
+}
