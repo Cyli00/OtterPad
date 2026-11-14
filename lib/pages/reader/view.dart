@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart' hide Block;
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:pdfrx/pdfrx.dart';
 
 import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
@@ -37,6 +36,8 @@ import '../reader2/reader_controller.dart';
 import '../reader2/reader_layout.dart';
 import '../reader2/reader_surface.dart';
 import 'chat/document_chat_page.dart';
+import 'pdf/pdf_controller.dart';
+import 'pdf/pdf_view.dart';
 import 'widgets/figure_viewer.dart';
 import 'widgets/outline_panel.dart';
 import 'widgets/reader_background.dart';
@@ -68,8 +69,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final _queryFocus = FocusNode();
   final _bodyFocus = FocusNode();
   final _progress = ValueNotifier<double>(0);
-  final _pdf = PdfViewerController();
-  PdfTextSearcher? _pdfSearch;
+  final _pdfSearch = PdfViewController();
   late final HistoryNotifier _history;
 
   ReaderController? _controller;
@@ -118,7 +118,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void dispose() {
     unawaited(_history.flushProgress());
     _controller?.dispose();
-    _pdfSearch?.dispose();
+    _pdfSearch.dispose();
     _query.dispose();
     _queryFocus.dispose();
     _bodyFocus.dispose();
@@ -342,14 +342,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!_searching) return;
     _query.clear();
     _controller?.clearSearch();
-    _pdfSearch?.resetTextSearch();
+    _pdfSearch.clearSearch();
     setState(() => _searching = false);
     _bodyFocus.requestFocus();
   }
 
   void _onQuery(String query) {
     if (_pdfMode) {
-      _pdfSearch?.startTextSearch(query.trim(), searchImmediately: true);
+      _pdfSearch.search(query);
     } else {
       _controller?.search(query);
     }
@@ -358,11 +358,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _stepHit(int delta) {
     if (_pdfMode) {
-      final searcher = _pdfSearch;
-      if (searcher == null) return;
-      unawaited(
-        delta > 0 ? searcher.goToNextMatch() : searcher.goToPrevMatch(),
-      );
+      _pdfSearch.step(delta);
     } else {
       _controller?.stepHit(delta);
     }
@@ -917,10 +913,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final l10n = context.l10n;
     if (_searching) {
       final total = _pdfMode
-          ? _pdfSearch?.matches.length ?? 0
+          ? _pdfSearch.matches.length
           : _controller?.hits.length ?? 0;
       final current = _pdfMode
-          ? (_pdfSearch?.currentIndex ?? -1)
+          ? _pdfSearch.currentIndex
           : (_controller?.currentHit ?? -1);
       return ReaderPdfSearchBar(
         controller: _query,
@@ -1069,39 +1065,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     if (_pdfMode) {
       if (!_fileExists) return _message(context, context.l10n.pdfNotFound);
-      final searcher = _pdfSearch;
-      return PdfViewer.file(
-        DocPaths.pdf(_id),
-        controller: _pdf,
-        params: PdfViewerParams(
-          backgroundColor: Colors.transparent,
-          matchTextColor: theme.colorScheme.primaryContainer.withAlpha(150),
-          activeMatchTextColor: theme.colorScheme.primary.withAlpha(72),
-          calculateInitialPageNumber: (document, _) {
-            final total = document.pages.length;
-            return total == 0
-                ? 1
-                : (_progress.value * total).round().clamp(1, total);
-          },
-          onViewerReady: (document, controller) {
-            _pdfSearch?.dispose();
-            _pdfSearch = PdfTextSearcher(controller)
-              ..addListener(() {
-                if (mounted) setState(() {});
-              });
-            setState(() {});
-          },
-          onPageChanged: (page) {
-            final total = _pdf.isReady ? _pdf.pageCount : 0;
-            if (page == null || total == 0) return;
-            final progress = total <= 1 ? 1.0 : (page - 1) / (total - 1);
-            _progress.value = progress;
-            unawaited(_history.setProgress(_id, progress));
-          },
-          pagePaintCallbacks: searcher == null
-              ? null
-              : [searcher.pageTextMatchPaintCallback],
-        ),
+      return RustPdfView(
+        documentId: _id,
+        controller: _pdfSearch,
+        initialProgress: _progress.value,
+        matchColor: theme.colorScheme.primaryContainer.withAlpha(150),
+        activeMatchColor: theme.colorScheme.primary.withAlpha(72),
+        onPageChanged: (page, total) {
+          final progress = total <= 1 ? 1.0 : (page - 1) / (total - 1);
+          _progress.value = progress;
+          unawaited(_history.setProgress(_id, progress));
+        },
+        errorBuilder: (context, error) =>
+            _message(context, errorText(context.l10n, error)),
       );
     }
     final controller = _controller;

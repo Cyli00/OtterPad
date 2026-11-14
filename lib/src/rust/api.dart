@@ -364,6 +364,14 @@ abstract class Backend implements RustOpaqueInterface {
     required String taskId,
   });
 
+  /// 单页搜索（不区分大小写）。Dart 逐页调用，字符不跨 FFI，渲染请求可插在页与页之间。
+  Future<List<SearchHit>> searchPdfPage({
+    required BigInt handle,
+    required int page,
+    required String query,
+    required String taskId,
+  });
+
   Future<PromptDefinition> setPrompt({
     required PromptKind kind,
     required String text,

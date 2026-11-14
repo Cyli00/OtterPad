@@ -116,4 +116,25 @@ impl Backend {
             })
             .await
     }
+    /// 单页搜索（不区分大小写）。Dart 逐页调用，字符不跨 FFI，渲染请求可插在页与页之间。
+    pub async fn search_pdf_page(
+        &self,
+        handle: u64,
+        page: u32,
+        query: String,
+        task_id: String,
+    ) -> Result<Vec<crate::pdf::geometry::SearchHit>> {
+        let task = self.runtime.tasks.begin(task_id)?;
+        let _lease = cancellable(&task.token, async {
+            Ok(self.runtime.operations.read().await)
+        })
+        .await?;
+        let token = task.token.clone();
+        self.runtime
+            .call(&task.token, "search_pdf_page", move |state| {
+                let chars = state.pdf()?.characters(handle, page, &token)?;
+                Ok(crate::pdf::geometry::search(&chars, &query, false))
+            })
+            .await
+    }
 }
