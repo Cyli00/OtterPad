@@ -10,7 +10,7 @@ use std::{
 
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex as AsyncMutex, Semaphore};
+use tokio::sync::Mutex as AsyncMutex;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -34,7 +34,6 @@ const RTL_LANGUAGES: [&str; 2] = ["العربية", "فارسی"];
 const RTL_GUARD: &str = "The target language is written right to left. Translate the prose into that language, but keep formulas, math symbols, code, URLs, and Markdown tables in their original left-to-right order. Do not mirror or reorder them, and do not insert right-to-left marks inside them.";
 const SEGMENT_GUARD: &str = "The input is divided into independent segments by lines containing only \"%%%%\". Translate every segment in place and reproduce the separator lines in the same order and count. Never merge or split segments, never add or remove separators. Use neighbouring segments only for terminology and tone consistency.";
 const TTL: u64 = 7 * 86400;
-static PERMITS: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(8)));
 type FileLocks = Mutex<HashMap<PathBuf, Weak<AsyncMutex<()>>>>;
 static FILE_LOCKS: LazyLock<FileLocks> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -399,3 +398,4 @@ fn retryable(error: &OtterError) -> bool {
 }
 
 mod document;
+mod limiter;

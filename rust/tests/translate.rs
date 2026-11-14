@@ -290,3 +290,75 @@ fn block_units_follow_the_reader_blocks_and_skip_ignored_back_matter() {
         }
     }
 }
+
+#[tokio::test]
+async fn document_translation_backs_off_when_provider_limits_concurrency() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use tokio::{io::AsyncWriteExt, net::TcpListener};
+    // 服务端同时最多处理 4 个请求，超出返回 429。
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let active = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let limited = Arc::new(AtomicUsize::new(0));
+    let server = {
+        let (active, peak, limited) = (active.clone(), peak.clone(), limited.clone());
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let (active, peak, limited) = (active.clone(), peak.clone(), limited.clone());
+                tokio::spawn(async move {
+                    let _ = support::read(&mut socket).await;
+                    let now = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak.fetch_max(now, Ordering::SeqCst);
+                    let (status, body) = if now > 4 {
+                        limited.fetch_add(1, Ordering::SeqCst);
+                        (
+                            "429 Too Many Requests",
+                            r#"{"error":{"type":"rate_limit_error"}}"#.to_owned(),
+                        )
+                    } else {
+                        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+                        ("200 OK", json!({"choices":[{"message":{"content":"译文"},"finish_reason":"stop"}]}).to_string())
+                    };
+                    active.fetch_sub(1, Ordering::SeqCst);
+                    let reply = format!(
+                        "HTTP/1.1 {status}\r\ncontent-type: application/json\r\nretry-after: 1\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    let _ = socket.write_all(reply.as_bytes()).await;
+                });
+            }
+        })
+    };
+    let root = tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join("library/paper")).unwrap();
+    let translator = Translator::new(AiClient::new(None, false).unwrap(), root.path().into());
+    let markdown = (0..40)
+        .map(|i| format!("Paragraph number {i}."))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let paragraphs = paragraph::extract(&markdown, &HashSet::new());
+    assert_eq!(paragraphs.len(), 40);
+    let report = translator
+        .document(
+            "paper",
+            &paragraphs,
+            &model(base),
+            "key",
+            &TranslationConfig::new("zh".into()),
+            false,
+            &CancellationToken::new(),
+            |_| Ok(()),
+        )
+        .await
+        .unwrap();
+    server.abort();
+    assert!(report.failures.is_empty(), "{:?}", report.failures.len());
+    assert_eq!(report.completed, 40);
+    assert!(peak.load(Ordering::SeqCst) > 4);
+    assert!(limited.load(Ordering::SeqCst) > 0);
+}

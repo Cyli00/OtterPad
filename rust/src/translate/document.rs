@@ -1,7 +1,7 @@
 use super::*;
 
 impl Translator {
-    /// Each paragraph is independent; all documents share eight live request permits.
+    /// 各段独立请求，并发由按端点共享的 [`limiter`] 自适应控制；持续限流时停止整批并保存已完成段落。
     #[allow(clippy::too_many_arguments)]
     pub async fn document(
         &self,
@@ -59,37 +59,43 @@ impl Translator {
             total: report.total,
         })?;
         let child = token.child_token();
+        let limiter = limiter::Limiter::for_endpoint(model);
         let mut futures = FuturesUnordered::new();
         for (hash, (source, count)) in pending {
             let child = &child;
+            let limiter = &limiter;
             futures.push(async move {
                 let result = async {
-                    let permit = cancellable(child, async {
-                        PERMITS.acquire().await.map_err(|_| {
-                            OtterError::new(ErrorCode::Cancelled, "translation queue closed")
-                        })
-                    })
-                    .await?;
-                    let result = async {
-                        for attempt in 0..=2 {
-                            let result = self
-                                .selection(&source, model, key, config, false, child)
-                                .await;
-                            if result.as_ref().is_err_and(retryable) && attempt < 2 {
+                    let (mut failures, mut limited) = (0, 0);
+                    loop {
+                        let permit =
+                            cancellable(child, async { Ok(limiter.acquire().await) }).await?;
+                        let result = self
+                            .selection(&source, model, key, config, false, child)
+                            .await;
+                        match &result {
+                            Ok(_) => permit.succeeded(),
+                            // 限流的等待由 limiter 统一暂停，这里只限制单段重试次数。
+                            Err(error) if error.code == ErrorCode::RateLimited => {
+                                if !permit.rate_limited() && limited < 10 {
+                                    limited += 1;
+                                    continue;
+                                }
+                            }
+                            Err(error) if retryable(error) && failures < 2 => {
+                                drop(permit);
                                 cancellable(child, async {
-                                    tokio::time::sleep(Duration::from_secs(1 << attempt)).await;
+                                    tokio::time::sleep(Duration::from_secs(1 << failures)).await;
                                     Ok(())
                                 })
                                 .await?;
-                            } else {
-                                return result;
+                                failures += 1;
+                                continue;
                             }
+                            Err(_) => {}
                         }
-                        unreachable!()
+                        return result;
                     }
-                    .await;
-                    drop(permit);
-                    result
                 }
                 .await;
                 (hash, count, result)
@@ -117,6 +123,7 @@ impl Translator {
                             error.code,
                             ErrorCode::Authentication
                                 | ErrorCode::QuotaExceeded
+                                | ErrorCode::RateLimited
                                 | ErrorCode::Cancelled
                         ) =>
                     {
