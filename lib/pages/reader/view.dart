@@ -477,7 +477,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  void _openFigure(Block block) {
+  void _openFigure(Block block, FigureHeroSource heroSource) {
     final model = _controller?.source;
     if (model == null) return;
     final translation = ref.read(documentTranslationProvider(_id));
@@ -504,6 +504,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         context,
         views,
         initialIndex: initial,
+        heroSource: heroSource,
         onAskAi: (f) => _openChat(quote: f.caption, figurePath: f.path),
       ),
     );
@@ -520,7 +521,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     unawaited(
       showFigureViewer(context, [
         FigureView(path: DocPaths.summaryImage(_id), caption: ''),
-      ]),
+      ], heroSource: FigureHeroSource.outline),
     );
   }
 
@@ -650,7 +651,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         summaryPath: DocPaths.summaryImage(_id),
         generatingSummary: generating,
         onNavigate: _revealBlock,
-        onOpenFigure: _openFigure,
+        onOpenFigure: (b) => _openFigure(b, FigureHeroSource.outline),
         onGenerateSummary: _hasModel ? _generateSummary : null,
         onOpenSummary: _showSummary,
       );
@@ -1181,7 +1182,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ),
         onTranslate: _showTranslation,
         onAskAi: (text) => _openChat(quote: text),
-        onFigureTap: _openFigure,
+        onFigureTap: (b) => _openFigure(b, FigureHeroSource.reader),
         onTapBlank: () => setState(() => _toolbars = !_toolbars),
         onLocationChanged: _onLocation,
       ),

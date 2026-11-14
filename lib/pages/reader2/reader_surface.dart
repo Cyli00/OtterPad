@@ -14,6 +14,7 @@ import '../../services/haptics.dart';
 import '../../src/rust/api/document.dart';
 import '../../src/rust/document.dart';
 import '../../utils/desktop.dart';
+import '../reader/widgets/figure_viewer.dart';
 import '../reader/widgets/reader_typography.dart';
 import '../reader/widgets/selection_toolbar.dart';
 import 'reader_controller.dart';
@@ -895,14 +896,18 @@ class _Figure extends StatelessWidget {
       alignment: Alignment.topCenter,
       child: image == null
           ? placeholder
-          : Image.file(
-              File(image.path),
-              width: size.width,
-              height: size.height,
-              fit: BoxFit.contain,
-              cacheWidth: (size.width * MediaQuery.devicePixelRatioOf(context))
-                  .ceil(),
-              errorBuilder: (_, _, _) => placeholder,
+          : Hero(
+              tag: figureHeroTag(FigureHeroSource.reader, image.path),
+              child: Image.file(
+                File(image.path),
+                width: size.width,
+                height: size.height,
+                fit: BoxFit.contain,
+                cacheWidth:
+                    (size.width * MediaQuery.devicePixelRatioOf(context))
+                        .ceil(),
+                errorBuilder: (_, _, _) => placeholder,
+              ),
             ),
     );
   }

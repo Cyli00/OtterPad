@@ -13,6 +13,7 @@ import '../../../src/rust/api/document.dart';
 import '../../../src/rust/document.dart';
 import '../../../src/rust/document/references.dart';
 import '../../../widgets/tactile_press.dart';
+import 'figure_viewer.dart';
 
 /// 大纲：图表（含总结图）与参考文献两页。sheet / 停靠栏外壳负责圆角与背景。
 class OutlinePanel extends StatefulWidget {
@@ -221,11 +222,17 @@ class _FiguresTabState extends State<_FiguresTab> {
             onTap: widget.onOpenSummary,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.file(
-                File(widget.summaryPath),
-                fit: BoxFit.contain,
-                width: double.infinity,
-                cacheWidth: 600,
+              child: Hero(
+                tag: figureHeroTag(
+                  FigureHeroSource.outline,
+                  widget.summaryPath,
+                ),
+                child: Image.file(
+                  File(widget.summaryPath),
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  cacheWidth: 600,
+                ),
               ),
             ),
           ),
@@ -291,12 +298,15 @@ class _FigureEntry extends StatelessWidget {
             onTap: onOpen,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.file(
-                File(path),
-                fit: BoxFit.contain,
-                width: double.infinity,
-                cacheWidth: 600,
-                gaplessPlayback: true,
+              child: Hero(
+                tag: figureHeroTag(FigureHeroSource.outline, path),
+                child: Image.file(
+                  File(path),
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  cacheWidth: 600,
+                  gaplessPlayback: true,
+                ),
               ),
             ),
           )
