@@ -1,6 +1,6 @@
 # OtterPad 0.2.0 架构
 
-状态：Flutter 已全部改接 Rust 后端：文献库、导入、OCR、阅读器（原生重排正文 + pdfrx 查看 PDF）、全文/选区翻译、问 AI、笔记、备份恢复、Zotero、存储管理与更新均调用 `rust/src/api/`；drift、WebView 阅读器与 Dart 业务服务已删除。`v0.1.7` tag 是最后一版 Dart 后端 + WebView 阅读器，也是业务行为的参考实现；0.1.x 设计文档在 `archive/0.1/`。
+状态：Flutter 已全部改接 Rust 后端：文献库、导入、OCR、阅读器（原生重排正文 + Rust 分块渲染的 PDF 视图）、全文/选区翻译、问 AI、笔记、备份恢复、Zotero、存储管理与更新均调用 `rust/src/api/`；drift、WebView 阅读器、pdfrx 与 Dart 业务服务已删除。`v0.1.7` tag 是最后一版 Dart 后端 + WebView 阅读器，也是业务行为的参考实现；0.1.x 设计文档在 `archive/0.1/`。
 
 ## 为什么重写
 
@@ -46,7 +46,7 @@
 
 **锚点**：`(blockId, language, utf16 start/end)` 加上原文引文 `quote/prefix/suffix`。块 id 失配时按引文重新定位，失败保留为未定位标注。
 
-**PDF**：Rust 按缩放级别渲染分块位图，内存有上限的 LRU 缓存；译文、标注、选区的几何也由 Rust 计算，Flutter 只负责绘制。去掉 pdfrx。
+**PDF**：Rust 按缩放级别渲染分块位图（单块上限 16MB），内存有上限的 LRU 缓存；Flutter（`lib/pages/reader/pdf/`）按页宽排版、纵向滚动，Ctrl/⌘+滚轮与捏合缩放，渲染倍率按 1/4 倍频取整，每页只请求可见区域的 512px 分块。全文搜索逐页调用 Rust `search_pdf_page`，字符不跨 FFI。文字选择的命中与选区矩形在 Dart 用缓存的单页字符计算（Rust 的 `hit_test_pdf`/`pdf_selection_rectangles` 每次都要传整页字符，不适合拖动时逐帧调用）。封面缩略图同样由 Rust 渲染首页。PDF 页面上的译文与标注叠加尚未实现，目前只在重排正文中显示。
 
 **图表资产**：OCR 的 `ocr-current.json` 只指向完整 generation；身份摘要包含原始结果、结构、文档模型及资产字节，图片变化也会生成新目录。每个 generation 内的 `figures/figures.json` 使用 `algorithm_version=5`，保留旧清单的 `figures`、`img`、`figure_title`、`caption_refs` 字段，并记录 `segment_ids`、`visual_regions` 与 PNG 尺寸。PDFium 在 3 倍缩放下按视觉块并集分带裁剪；连续页的同一图表保留各页来源映射并合成预览。旧版清单与 `generation_*/` 相对图片路径继续可读；问 AI、摘要图和阅读模型均读取当前 generation。
 
@@ -83,10 +83,10 @@
 
 2026-11-01 核实记录（源码/分发清单核实与运行验收分开记录）：
 
-- **FRB：已接入 Flutter 应用，macOS 调试构建已运行。** crates.io 与 [pub.dev](https://pub.dev/packages/flutter_rust_bridge) 当前稳定版均为 `2.13.0`，Rust 依赖与生成器均固定该版本。其[零拷贝约定](https://github.com/fzyzcjy/flutter_rust_bridge/blob/v2.13.0/website/docs/guides/types/translatable/zero-copy.md)是原生平台异步/Stream 返回 `Vec<u8>` 等类型时自动使用 external typed data，不能泛化为所有调用模式零拷贝。应用内由 FRB `integrate` 模板生成的 `rust_builder/`（cargokit）随 `flutter build` 编译 Rust；`flutter_rust_bridge.yaml` 把 Dart 绑定生成到 `lib/src/rust`，关闭内置 build_runner（它带 `--delete-conflicting-outputs`，资产图失效时会删除 drift 生成文件），codegen 后执行 `dart run build_runner build`，并用 `rustfmt --edition 2024` 格式化 `rust/src/frb_generated.rs`。联合类型使用 `freezed ^3.2.5`：4.x 需要 analyzer 14，与锁定的 `drift_dev 2.34.0` 冲突。`scripts/generate_rust_bridge.py` 仍用于仓库外独立工程的 FFI 往返检查。只允许运行时与本地 Zotero 快照作为 opaque 句柄，业务 DTO 必须生成具体类型，内部凭据字段不会生成访问器。macOS 插件需额外链接 `SystemConfiguration`；Android/Windows 构建尚未执行。
-- **PDFium：macOS 应用内已加载，其他平台待实测。** `pdfium-render 0.9.4` 固定 `pdfium_7881` ABI；`rust/pdfium-binaries.json` 锁定 [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries/releases/tag/chromium%2F7881) 的四个发布目标与 Linux 测试宿主归档、SHA-256。应用通过 `rust_builder/hook/build.dart`（Dart native assets）按该清单下载、校验并以 `otter_pdfium` 名称打包；pdfrx 仍捆绑自己的 chromium/7811 `libpdfium`，两者名称不同、互不覆盖。Dart 的 `bundledPdfiumLibrary()` 按平台给出路径注入 `BackendOptions.pdfiumLibrary`；macOS 沙盒应用内已打开真实 PDF，Windows/Linux 路径按 Flutter 打包布局推定、未实测。`scripts/fetch_pdfium.py` 用于 Rust 测试，保留 `LICENSE` 和完整 `licenses/`；应用内的许可展示尚未接入。真实旧 PDF 的 9 页、57 个正文段落均已对齐到实际字符。
+- **FRB：已接入 Flutter 应用，macOS 调试构建已运行。** crates.io 与 [pub.dev](https://pub.dev/packages/flutter_rust_bridge) 当前稳定版均为 `2.13.0`，Rust 依赖与生成器均固定该版本。其[零拷贝约定](https://github.com/fzyzcjy/flutter_rust_bridge/blob/v2.13.0/website/docs/guides/types/translatable/zero-copy.md)是原生平台异步/Stream 返回 `Vec<u8>` 等类型时自动使用 external typed data，不能泛化为所有调用模式零拷贝；`Bitmap` 这类结构体里的字节走 SSE 逐字节编码，macOS 调试构建实测 7.8MB 约 219ms、1MB 约 36ms。应用内由 FRB `integrate` 模板生成的 `rust_builder/`（cargokit）随 `flutter build` 编译 Rust；`flutter_rust_bridge.yaml` 把 Dart 绑定生成到 `lib/src/rust`，关闭内置 build_runner（它带 `--delete-conflicting-outputs`，资产图失效时会删除其他生成文件），codegen 后执行 `dart run build_runner build`，并用 `rustfmt --edition 2024` 格式化 `rust/src/frb_generated.rs`。联合类型使用 `freezed ^3.2.5`。`scripts/generate_rust_bridge.py` 仍用于仓库外独立工程的 FFI 往返检查。只允许运行时与本地 Zotero 快照作为 opaque 句柄，业务 DTO 必须生成具体类型，内部凭据字段不会生成访问器。macOS 插件需额外链接 `SystemConfiguration`；Android/Windows 构建尚未执行。
+- **PDFium：macOS 应用内已加载，其他平台待实测。** `pdfium-render 0.9.4` 固定 `pdfium_7881` ABI；`rust/pdfium-binaries.json` 锁定 [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries/releases/tag/chromium%2F7881) 的四个发布目标与 Linux 测试宿主归档、SHA-256。应用通过 `rust_builder/hook/build.dart`（Dart native assets）按该清单下载、校验并以 `otter_pdfium` 名称打包。Dart 的 `bundledPdfiumLibrary()` 按平台给出路径注入 `BackendOptions.pdfiumLibrary`；macOS 沙盒应用内已打开真实 PDF，Windows/Linux 路径按 Flutter 打包布局推定、未实测。`scripts/fetch_pdfium.py` 用于 Rust 测试，保留 `LICENSE` 和完整 `licenses/`；应用内的许可展示尚未接入。真实旧 PDF 的 9 页、57 个正文段落均已对齐到实际字符。
 - **FTS5：已实现并通过本机 SQLite 测试。** 采用 `rusqlite 0.41.1` 的 bundled SQLite 和 `jieba-rs 0.11.0`，通过 `rusqlite::ffi` 按 [SQLite FTS5 tokenizer API](https://www.sqlite.org/fts5.html#custom_tokenizers)逐连接注册 `otter_jieba`，不依赖动态加载扩展。索引包含完整词和同位置的搜索子词，查询按完整词分词后逐项引用并用 AND 连接；支持中文词、复合词子词、中英混合和大小写匹配，不接受用户输入的 FTS 运算符。已验证插入/更新/删除的索引同步、重开连接、UTF-8 高亮偏移和无效 UTF-8 写入回滚；已补全拼、首字母和有界多音字索引；索引修订号保存在 `meta`，旧索引在打开连接时重建。Android/Windows 运行验收留待统一安排。
-- **公式性能：未验证。** `flutter_math_fork` 长文档帧耗时依赖 Flutter 阅读器实现，按本轮“前端不动”的范围保留待办；没有用模拟数据的单元测试替代帧耗时实测。
+- **公式性能：未验证。** `flutter_math_fork` 长文档帧耗时依赖 Flutter 阅读器实现，待真实长文档实测；没有用模拟数据的单元测试替代帧耗时实测。
 
 ## 当前后端实现范围
 
@@ -103,5 +103,5 @@
 - `prompts`/`maintenance`/`update`：提示词默认值、覆盖、必需占位符校验和重置；存储用量分类、按组清理和缓存清理；GitHub release 解析、按设备 ABI 顺序选择 APK、忽略版本及下载进度；启动延迟检查读取自动更新偏好，忽略版本仅抑制自动提示。系统安全存储、字体/设备信息读取、分享接收、安装 Intent、交互反馈留在宿主平台/UI 边界。
 - 长 PDF：PaddleOCR 超过 1000 页、MinerU 超过 200 页时按页段提交，全部完成后按页序合并（`ocr/chunks.rs`）；Paddle 页序以列表为准，同名图片改名，任一页段失败不发布。
 - 全文翻译以文档模型的块为单位，译文键为 `revision(block.markdown.trim())`，与迁移的 0.1.x 译文一致；`ReaderDocument.translation_keys` 与 `blocks` 一一对应，阅读器按键叠加译文（RTL 目标语言的译文块按 RTL 排版）。
-- Flutter 只保留界面与宿主能力：系统安全存储、文件选择、分享、APK 安装 Intent、PDF 缩略图与 pdfrx 查看。
-- 待后续：PDF 视图改用 Rust 分块渲染并在 PDF 页面上叠加译文与标注（0.1.x 有，当前只在重排正文中显示），之后移除 pdfrx；重新解析（不重新 OCR）入口；公式性能实测；Android/Windows 应用构建与运行验收。
+- Flutter 只保留界面与宿主能力：系统安全存储、文件选择、分享、APK 安装 Intent；PDF 视图与缩略图只负责显示 Rust 渲染的位图。
+- 待后续：PDF 页面上叠加译文与标注（0.1.x 有，当前只在重排正文中显示）；重新解析（不重新 OCR）入口；PDFium 许可文本接入许可页；公式性能实测；Android/Windows 应用构建与运行验收。
