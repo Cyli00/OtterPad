@@ -1,15 +1,18 @@
 import '../core/storage/storage_activity.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:pdfrx/pdfrx.dart';
 
 import 'pdf_process_lock.dart';
 import '../core/app_logger.dart';
+import '../core/rust_backend.dart';
+import '../src/rust/pdf.dart';
+import '../utils/pdf_bitmap.dart';
 
 /// PDF 缩略图服务：首次渲染 PDF 首页为 PNG 存入磁盘，后续直接返回文件路径。
 ///
@@ -56,10 +59,14 @@ class PdfThumbnailService {
     // 调用方等待超时不代表原生渲染已结束，必须等真实任务结束后才能移除去重记录。
     final task = _cachingTasks.putIfAbsent(
       filePath,
-      () => _renderAndSave(
-        filePath,
-        cachePath,
-      ).whenComplete(() => _cachingTasks.remove(filePath)),
+      () =>
+          _renderAndSave(
+            filePath,
+            cachePath,
+          ).whenComplete(() {
+            // 必须是块体：箭头函数会把 remove 返回的这个 Future 交给 whenComplete，自己等自己。
+            _cachingTasks.remove(filePath);
+          }),
     );
     return task.timeout(
       _renderTimeout,
@@ -73,45 +80,43 @@ class PdfThumbnailService {
   /// 通过全局锁串行渲染 PDF 首页（带超时保护）
   Future<String?> _renderAndSave(String filePath, String cachePath) async {
     return PdfProcessLock.instance.run(() async {
-      PdfDocument? document;
-      PdfImage? rendered;
+      // 文献 PDF 固定为 library/<docId>/source.pdf，由 Rust 按文献 id 打开。
+      final documentId = p.basename(p.dirname(filePath));
+      final backend = RustBackend.instance;
+      DocumentInfo? document;
       ui.Image? image;
       try {
-        document = await PdfDocument.openFile(
-          filePath,
-          passwordProvider: () => '',
+        document = await backend.openPdf(
+          document: documentId,
+          taskId: rustTaskId('pdf-thumbnail'),
         );
         if (document.pages.isEmpty) return null;
-
         final page = document.pages.first;
 
-        // 2.5 倍分辨率保证高分屏清晰，但增加最大限制防止崩溃
-        const scale = 2.5;
-        double renderWidth = page.width * scale;
-        double renderHeight = page.height * scale;
-
-        const double maxDimension = 3000.0;
-        if (renderWidth > maxDimension || renderHeight > maxDimension) {
-          final aspect = page.width / page.height;
-          if (renderWidth > renderHeight) {
-            renderWidth = maxDimension;
-            renderHeight = maxDimension / aspect;
-          } else {
-            renderHeight = maxDimension;
-            renderWidth = maxDimension * aspect;
-          }
-        }
-
-        rendered = await page.render(
-          fullWidth: renderWidth,
-          fullHeight: renderHeight,
+        // 2.5 倍保证高分屏清晰；长边不超过 3000，且单块不超过 Rust 的 16MB 上限。
+        final scale = [
+          2.5,
+          3000 / math.max(page.width, page.height),
+          math.sqrt(4000000 / (page.width * page.height)),
+        ].reduce(math.min);
+        final quantized = (scale * 64).floor() / 64;
+        final bitmap = await backend.renderPdfTile(
+          request: RenderRequest(
+            document: document.handle,
+            page: 0,
+            scale: quantized,
+            tile: PixelRect(
+              x: 0,
+              y: 0,
+              width: (page.width * quantized).floor(),
+              height: (page.height * quantized).floor(),
+            ),
+            annotations: true,
+          ),
+          taskId: rustTaskId('pdf-thumbnail'),
         );
-
-        if (rendered == null) return null;
-
-        image = await rendered.createImage();
+        image = await decodePdfBitmap(bitmap);
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-
         if (byteData == null) return null;
 
         await File(cachePath).writeAsBytes(byteData.buffer.asUint8List());
@@ -122,8 +127,9 @@ class PdfThumbnailService {
         return null;
       } finally {
         image?.dispose();
-        rendered?.dispose();
-        await document?.dispose();
+        if (document != null) {
+          await backend.closePdf(handle: document.handle);
+        }
       }
     });
   }

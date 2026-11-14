@@ -1,6 +1,7 @@
 // 把 rust/pdfium-binaries.json 锁定的 PDFium 打进应用，供 Rust 的 pdfium-render 按路径加载。
 //
-// 资产名用 otter_pdfium 而不是 pdfium：pdfrx 也会打包另一个版本的 libpdfium，同名会互相覆盖。
+// 资产名用 otter_pdfium 而不是 pdfium：避免与其他插件打包的 libpdfium 同名覆盖；
+// `bundledPdfiumLibrary()` 按这个名字找库。
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';

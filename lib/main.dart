@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:pdfrx/pdfrx.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
@@ -63,9 +62,6 @@ Future<void> main() async {
   // Rust 后端最先打开：设置以它为准，首次启动在此迁移 0.1.x 数据。
   final backend = await _startBackend();
   if (backend == null) return;
-
-  // 初始化 pdfrx（注册 loadAsset 回调 + 初始化 PDFium 引擎）
-  await pdfrxFlutterInitialize();
 
   await GStorage.init(backend);
   await Prompts.load();

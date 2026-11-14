@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -11,6 +10,7 @@ import '../../../core/rust_backend.dart';
 import '../../../src/rust/api.dart';
 import '../../../src/rust/pdf.dart';
 import '../../../src/rust/pdf/geometry.dart' as geo;
+import '../../../utils/pdf_bitmap.dart';
 
 /// 分块边长（渲染像素）。
 const _tile = 512;
@@ -159,7 +159,7 @@ class _PdfPageViewState extends State<PdfPageView> {
         )
         .then((bitmap) async {
           if (_pending[key] != id) return;
-          final image = await _decode(bitmap);
+          final image = await decodePdfBitmap(bitmap);
           if (!mounted || _pending[key] != id) {
             image.dispose();
             return;
@@ -189,22 +189,6 @@ class _PdfPageViewState extends State<PdfPageView> {
       return drop;
     });
     if (removed) setState(() {});
-  }
-
-  static Future<ui.Image> _decode(Bitmap bitmap) async {
-    final buffer = await ui.ImmutableBuffer.fromUint8List(bitmap.rgba);
-    final descriptor = ui.ImageDescriptor.raw(
-      buffer,
-      width: bitmap.tile.width,
-      height: bitmap.tile.height,
-      pixelFormat: ui.PixelFormat.rgba8888,
-    );
-    final codec = await descriptor.instantiateCodec();
-    final frame = await codec.getNextFrame();
-    codec.dispose();
-    descriptor.dispose();
-    buffer.dispose();
-    return frame.image;
   }
 
   @override
