@@ -46,7 +46,7 @@
 
 **锚点**：`(blockId, language, utf16 start/end)` 加上原文引文 `quote/prefix/suffix`。块 id 失配时按引文重新定位，失败保留为未定位标注。
 
-**PDF**：Rust 按缩放级别渲染分块位图（单块上限 16MB），内存有上限的 LRU 缓存；Flutter（`lib/pages/reader/pdf/`）按页宽排版、纵向滚动，Ctrl/⌘+滚轮与捏合缩放，渲染倍率按 1/4 倍频取整，每页只请求可见区域的 512px 分块。全文搜索逐页调用 Rust `search_pdf_page`，字符不跨 FFI。文字选择的命中与选区矩形在 Dart 用缓存的单页字符计算（Rust 的 `hit_test_pdf`/`pdf_selection_rectangles` 每次都要传整页字符，不适合拖动时逐帧调用）。封面缩略图同样由 Rust 渲染首页。PDF 页面上的译文与标注叠加尚未实现，目前只在重排正文中显示。
+**PDF**：Rust 按缩放级别渲染分块位图（单块上限 16MB），内存有上限的 LRU 缓存；Flutter（`lib/pages/reader/pdf/`）按页宽排版、纵向滚动，Ctrl/⌘+滚轮与捏合缩放，渲染倍率按 1/4 倍频取整，每页只请求可见区域的 512px 分块。全文搜索逐页调用 Rust `search_pdf_page`，字符不跨 FFI。文字选择的命中与选区矩形在 Dart 用缓存的单页字符计算（Rust 的 `hit_test_pdf`/`pdf_selection_rectangles` 每次都要传整页字符，不适合拖动时逐帧调用）。封面缩略图同样由 Rust 渲染首页。全文译文可叠加在 PDF 页面上：`ReaderDocument.block_regions` 把块的 OCR 区域按 `structure.json` 的 `page_size` 换算成页面比例坐标，Flutter 在原位铺白底并按 PDF 点排版译文（含行内公式），整体随缩放变换；跨栏/跨页的块按各区域原文长度切分译文。PDF 只有原文/译文两态，双语投影为译文。图表题注没有可信文字框，保留原文；标注只在重排正文中显示。
 
 **图表资产**：OCR 的 `ocr-current.json` 只指向完整 generation；身份摘要包含原始结果、结构、文档模型及资产字节，图片变化也会生成新目录。每个 generation 内的 `figures/figures.json` 使用 `algorithm_version=5`，保留旧清单的 `figures`、`img`、`figure_title`、`caption_refs` 字段，并记录 `segment_ids`、`visual_regions` 与 PNG 尺寸。PDFium 在 3 倍缩放下按视觉块并集分带裁剪；连续页的同一图表保留各页来源映射并合成预览。旧版清单与 `generation_*/` 相对图片路径继续可读；问 AI、摘要图和阅读模型均读取当前 generation。
 
@@ -104,4 +104,4 @@
 - 长 PDF：PaddleOCR 超过 1000 页、MinerU 超过 200 页时按页段提交，全部完成后按页序合并（`ocr/chunks.rs`）；Paddle 页序以列表为准，同名图片改名，任一页段失败不发布。
 - 全文翻译以文档模型的块为单位，译文键为 `revision(block.markdown.trim())`，与迁移的 0.1.x 译文一致；`ReaderDocument.translation_keys` 与 `blocks` 一一对应，阅读器按键叠加译文（RTL 目标语言的译文块按 RTL 排版）。
 - Flutter 只保留界面与宿主能力：系统安全存储、文件选择、分享、APK 安装 Intent；PDF 视图与缩略图只负责显示 Rust 渲染的位图。
-- 待后续：PDF 页面上叠加译文与标注（0.1.x 有，当前只在重排正文中显示）；重新解析（不重新 OCR）入口；PDFium 许可文本接入许可页；公式性能实测；Android/Windows 应用构建与运行验收。
+- 待后续：PDF 页面上的标注、题注译文与宽屏左右双语（0.1.x 有）；重新解析（不重新 OCR）入口；PDFium 许可文本接入许可页；公式性能实测；Android/Windows 应用构建与运行验收。
