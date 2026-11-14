@@ -1,5 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/app_logger.dart';
+import 'storage.dart';
 import '../../src/rust/api.dart';
 import '../../src/rust/credentials.dart';
 import '../../src/rust/error.dart';
@@ -18,19 +19,49 @@ import '../../src/rust/error.dart';
 class SecureCredentialVault {
   SecureCredentialVault._();
 
-  static const _storage = FlutterSecureStorage();
+  // macOS 应用是 ad-hoc 签名、没有 keychain-access-groups，数据保护钥匙串会报
+  // -34018；改用登录钥匙串，沙箱应用无需额外权限即可读写。
+  static const _storage = FlutterSecureStorage(
+    mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+  );
 
   /// 启动时由 [init] 填充的内存缓存——[read] 的同步数据源。
   static final Map<String, String> _cache = {};
 
   static Backend? _backend;
 
+  /// 已存凭据的键名（不含值）。登录钥匙串不支持批量读取，启动时据此逐个读。
+  static const _indexKey = 'credential_keys';
+
+  static Set<String> get _index =>
+      {...?(GStorage.setting.get(_indexKey) as List?)?.cast<String>()};
+
   /// app 启动时调用：读入全部凭据到内存缓存。
   static Future<void> init() async {
     try {
       _cache.addAll(await _storage.readAll());
+      return;
     } catch (e) {
-      log.d('[SecureCredentialVault] readAll 失败：$e');
+      log.d('[SecureCredentialVault] readAll 失败，改为按键读取：$e');
+    }
+    for (final key in _index) {
+      try {
+        final value = await _storage.read(key: key);
+        if (value != null && value.isNotEmpty) _cache[key] = value;
+      } catch (e) {
+        log.e('[SecureCredentialVault] 读取凭据失败：$key', error: e);
+      }
+    }
+  }
+
+  /// 设置被备份恢复覆盖后，按内存中的凭据重写键名索引。
+  static Future<void> rewriteIndex() =>
+      GStorage.setting.put(_indexKey, _cache.keys.toList()..sort());
+
+  static Future<void> _track(String key, {required bool present}) async {
+    final index = _index;
+    if (present ? index.add(key) : index.remove(key)) {
+      await GStorage.setting.put(_indexKey, index.toList()..sort());
     }
   }
 
@@ -63,14 +94,16 @@ class SecureCredentialVault {
       return;
     }
     _cache[key] = value;
-    await _storage.write(key: key, value: value);
     await _inject(key, value);
+    await _storage.write(key: key, value: value);
+    await _track(key, present: true);
   }
 
   /// 删除凭据（内存缓存 + 安全存储）。
   static Future<void> delete(String key) async {
     _cache.remove(key);
-    await _storage.delete(key: key);
     await _inject(key, '');
+    await _storage.delete(key: key);
+    await _track(key, present: false);
   }
 }
