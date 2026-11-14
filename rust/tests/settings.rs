@@ -139,6 +139,7 @@ fn backup_fingerprints_track_metadata_chats_translations_deletions_and_due_rules
         &root.path().join("actual.zip"),
         BackupScope::Full,
         None,
+        None,
         &token,
         |_| {},
     )

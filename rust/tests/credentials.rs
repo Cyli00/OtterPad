@@ -122,3 +122,88 @@ fn credentials_persist_privately_and_survive_a_corrupt_file() {
     assert!(root.path().join("credentials.json.invalid").is_file());
     assert!(!path.exists());
 }
+
+#[test]
+fn backup_credentials_roundtrip_only_with_the_password() {
+    use otter_core::{
+        credentials::{BACKUP_PASSWORD_KEY, unseal},
+        sync::{
+            archive::{self, BackupScope},
+            backup::{self, RestoreMode, RestoreScope},
+        },
+    };
+    use tokio_util::sync::CancellationToken;
+
+    let root = tempdir().unwrap();
+    let credentials = Credentials::default();
+    assert!(credentials.backup_snapshot().unwrap().is_none());
+    credentials
+        .inject(vec![
+            CredentialInput {
+                key: BACKUP_PASSWORD_KEY.into(),
+                value: "correct horse".into(),
+            },
+            CredentialInput {
+                key: "zotero_api_key".into(),
+                value: "zotero-secret".into(),
+            },
+        ])
+        .unwrap();
+    let sealed = credentials
+        .backup_snapshot()
+        .unwrap()
+        .unwrap()
+        .seal()
+        .unwrap();
+    assert!(!String::from_utf8_lossy(&sealed).contains("zotero-secret"));
+
+    let restored = unseal(&sealed, "correct horse").unwrap();
+    assert!(
+        restored
+            .iter()
+            .any(|e| e.key == "zotero_api_key" && e.value == "zotero-secret")
+    );
+    assert_eq!(
+        unseal(&sealed, "wrong").err().unwrap().code,
+        ErrorCode::Authentication
+    );
+    let mut tampered: serde_json::Value = serde_json::from_slice(&sealed).unwrap();
+    tampered["ciphertext"] = json!("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    assert_eq!(
+        unseal(&serde_json::to_vec(&tampered).unwrap(), "correct horse")
+            .err()
+            .unwrap()
+            .code,
+        ErrorCode::Authentication
+    );
+
+    let storage = Storage::open(root.path().join("live")).unwrap();
+    let token = CancellationToken::new();
+    let path = root.path().join("backup.zip");
+    archive::create(
+        &storage,
+        &path,
+        BackupScope::Full,
+        None,
+        Some(&sealed),
+        &token,
+        |_| {},
+    )
+    .unwrap();
+    for (scope, expected) in [
+        (RestoreScope::Full, Some(sealed.clone())),
+        (RestoreScope::SettingsOnly, Some(sealed.clone())),
+        (RestoreScope::LibraryOnly, None),
+    ] {
+        let prepared = backup::prepare(
+            &storage,
+            &path,
+            scope,
+            RestoreMode::Overwrite,
+            &token,
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(prepared.credentials, expected);
+    }
+}

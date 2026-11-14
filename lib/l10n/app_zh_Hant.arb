@@ -1184,5 +1184,17 @@
   "otterErrorToolLimit": "已達到工具呼叫次數上限",
   "outlineFigures": "圖表",
   "outlineReferences": "參考文獻",
-  "graphicalSummary": "總結圖"
+  "graphicalSummary": "總結圖",
+  "backupCredentials": "備份金鑰",
+  "backupCredentialsOn": "已開啟，以你設定的密碼加密",
+  "backupCredentialsOff": "備份不含 API Key 與密碼",
+  "backupCredentialsMessage": "備份將附帶 API Key 與密碼，並以此密碼加密。還原時需要輸入它，忘記後無法找回。",
+  "confirmPassword": "確認密碼",
+  "passwordMismatch": "兩次輸入的密碼不一致",
+  "passwordTooShort": "至少 {count} 個字元",
+  "turnOff": "關閉",
+  "restoreCredentialsTitle": "還原金鑰",
+  "restoreCredentialsMessage": "此備份包含加密的 API Key 與密碼，輸入備份時設定的密碼即可一併還原。",
+  "wrongPassword": "密碼不正確",
+  "skip": "略過"
 }

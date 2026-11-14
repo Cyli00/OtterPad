@@ -81,6 +81,7 @@ fn create_archive(storage: &Storage, path: &Path, scope: BackupScope) {
         path,
         scope,
         None,
+        None,
         &CancellationToken::new(),
         |_| {},
     )

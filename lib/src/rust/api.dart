@@ -129,8 +129,11 @@ abstract class Backend implements RustOpaqueInterface {
 
   Future<bool> closePdf({required BigInt handle});
 
+  /// [credential_password] 为 Some 且备份含凭据时，先解密校验：口令错误返回
+  /// `Authentication`，预览保留可重试，数据不变；成功则恢复后合并写入凭据。
   Stream<BackupEvent> commitRestore({
     required String id,
+    String? credentialPassword,
     required String taskId,
   });
 

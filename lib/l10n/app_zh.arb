@@ -1225,5 +1225,17 @@
   "otterErrorToolLimit": "已达到工具调用次数上限",
   "outlineFigures": "图表",
   "outlineReferences": "参考文献",
-  "graphicalSummary": "总结图"
+  "graphicalSummary": "总结图",
+  "backupCredentials": "备份密钥",
+  "backupCredentialsOn": "已开启，用你设置的密码加密",
+  "backupCredentialsOff": "备份不含 API Key 和密码",
+  "backupCredentialsMessage": "备份将附带 API Key 和密码，并用此密码加密。恢复时需要输入它，忘记后无法找回。",
+  "confirmPassword": "确认密码",
+  "passwordMismatch": "两次输入的密码不一致",
+  "passwordTooShort": "至少 {count} 个字符",
+  "turnOff": "关闭",
+  "restoreCredentialsTitle": "恢复密钥",
+  "restoreCredentialsMessage": "此备份包含加密的 API Key 和密码，输入备份时设置的密码即可一并恢复。",
+  "wrongPassword": "密码不正确",
+  "skip": "跳过"
 }

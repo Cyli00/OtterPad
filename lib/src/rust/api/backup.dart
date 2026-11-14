@@ -87,14 +87,22 @@ class RestorePreview {
   final BackupManifest manifest;
   final RestoreReport report;
 
+  /// 备份包含加密凭据，且本次恢复范围包含设置；提交时可附带口令一并恢复。
+  final bool hasCredentials;
+
   const RestorePreview({
     required this.id,
     required this.manifest,
     required this.report,
+    required this.hasCredentials,
   });
 
   @override
-  int get hashCode => id.hashCode ^ manifest.hashCode ^ report.hashCode;
+  int get hashCode =>
+      id.hashCode ^
+      manifest.hashCode ^
+      report.hashCode ^
+      hasCredentials.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -103,7 +111,8 @@ class RestorePreview {
           runtimeType == other.runtimeType &&
           id == other.id &&
           manifest == other.manifest &&
-          report == other.report;
+          report == other.report &&
+          hasCredentials == other.hasCredentials;
 }
 
 class RestoreReport {

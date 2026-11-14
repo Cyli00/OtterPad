@@ -1392,5 +1392,22 @@
   "otterErrorToolLimit": "The tool call limit was reached.",
   "outlineFigures": "Figures",
   "outlineReferences": "References",
-  "graphicalSummary": "Graphical Summary"
+  "graphicalSummary": "Graphical Summary",
+  "backupCredentials": "Back up credentials",
+  "backupCredentialsOn": "Included, encrypted with your password",
+  "backupCredentialsOff": "API keys and passwords are not included",
+  "backupCredentialsMessage": "Backups will include API keys and passwords, encrypted with this password. You need it to restore them, and it cannot be recovered if forgotten.",
+  "confirmPassword": "Confirm password",
+  "passwordMismatch": "Passwords do not match",
+  "passwordTooShort": "Use at least {count} characters",
+  "@passwordTooShort": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "turnOff": "Turn off",
+  "restoreCredentialsTitle": "Restore credentials",
+  "restoreCredentialsMessage": "This backup includes encrypted API keys and passwords. Enter the password set when backing up to restore them as well.",
+  "wrongPassword": "Incorrect password",
+  "skip": "Skip"
 }

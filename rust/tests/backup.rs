@@ -64,6 +64,7 @@ fn real_sqlite_snapshot_and_file_checksums_roundtrip_full_and_data_only_archives
             &path,
             scope,
             Some("Test device".into()),
+            None,
             &token,
             |_| {},
         )
@@ -121,6 +122,7 @@ fn mutation_during_backup_fails_without_overwriting_previous_archive() {
         &target,
         BackupScope::Full,
         None,
+        None,
         &token,
         |progress| {
             if matches!(progress.stage, BackupStage::Pack) && !changed {
@@ -163,7 +165,16 @@ fn archive_rejects_path_traversal_and_checksum_tampering_before_restore() {
     populate(&storage);
     let good = root.path().join("good.zip");
     let token = CancellationToken::new();
-    archive::create(&storage, &good, BackupScope::Full, None, &token, |_| {}).unwrap();
+    archive::create(
+        &storage,
+        &good,
+        BackupScope::Full,
+        None,
+        None,
+        &token,
+        |_| {},
+    )
+    .unwrap();
     let mut original = ZipArchive::new(fs::File::open(good).unwrap()).unwrap();
     let tampered = root.path().join("tampered.zip");
     let mut writer = ZipWriter::new(fs::File::create(&tampered).unwrap());
@@ -217,7 +228,16 @@ fn snapshot_erases_credential_bytes_and_keeps_search_after_rowid_gaps() {
     drop(connection);
     let token = CancellationToken::new();
     let archive = root.path().join("snapshot.zip");
-    archive::create(&storage, &archive, BackupScope::Full, None, &token, |_| {}).unwrap();
+    archive::create(
+        &storage,
+        &archive,
+        BackupScope::Full,
+        None,
+        None,
+        &token,
+        |_| {},
+    )
+    .unwrap();
     let extracted = archive::extract(&archive, root.path(), &token, |_| {}).unwrap();
     let database = extracted.directory().join("db/otter.db");
     assert!(

@@ -3677,6 +3677,46 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get graphicalSummary => '总结图';
+
+  @override
+  String get backupCredentials => '备份密钥';
+
+  @override
+  String get backupCredentialsOn => '已开启，用你设置的密码加密';
+
+  @override
+  String get backupCredentialsOff => '备份不含 API Key 和密码';
+
+  @override
+  String get backupCredentialsMessage =>
+      '备份将附带 API Key 和密码，并用此密码加密。恢复时需要输入它，忘记后无法找回。';
+
+  @override
+  String get confirmPassword => '确认密码';
+
+  @override
+  String get passwordMismatch => '两次输入的密码不一致';
+
+  @override
+  String passwordTooShort(int count) {
+    return '至少 $count 个字符';
+  }
+
+  @override
+  String get turnOff => '关闭';
+
+  @override
+  String get restoreCredentialsTitle => '恢复密钥';
+
+  @override
+  String get restoreCredentialsMessage =>
+      '此备份包含加密的 API Key 和密码，输入备份时设置的密码即可一并恢复。';
+
+  @override
+  String get wrongPassword => '密码不正确';
+
+  @override
+  String get skip => '跳过';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -6974,4 +7014,44 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get graphicalSummary => '總結圖';
+
+  @override
+  String get backupCredentials => '備份金鑰';
+
+  @override
+  String get backupCredentialsOn => '已開啟，以你設定的密碼加密';
+
+  @override
+  String get backupCredentialsOff => '備份不含 API Key 與密碼';
+
+  @override
+  String get backupCredentialsMessage =>
+      '備份將附帶 API Key 與密碼，並以此密碼加密。還原時需要輸入它，忘記後無法找回。';
+
+  @override
+  String get confirmPassword => '確認密碼';
+
+  @override
+  String get passwordMismatch => '兩次輸入的密碼不一致';
+
+  @override
+  String passwordTooShort(int count) {
+    return '至少 $count 個字元';
+  }
+
+  @override
+  String get turnOff => '關閉';
+
+  @override
+  String get restoreCredentialsTitle => '還原金鑰';
+
+  @override
+  String get restoreCredentialsMessage =>
+      '此備份包含加密的 API Key 與密碼，輸入備份時設定的密碼即可一併還原。';
+
+  @override
+  String get wrongPassword => '密碼不正確';
+
+  @override
+  String get skip => '略過';
 }

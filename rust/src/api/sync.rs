@@ -126,6 +126,7 @@ impl Backend {
             let due_config = config.clone();
             let preparation_sink = sink.clone();
             let remote_id = status::remote_identity(&config)?;
+            let secrets = self.runtime.credentials.backup_snapshot()?;
             let prepared = self
                 .runtime
                 .call(&task.token, "prepare_remote_backup", move |state| {
@@ -146,15 +147,23 @@ impl Backend {
                         documents,
                     };
                     let path = stage.path.join("backup.zip");
-                    let manifest =
-                        archive::create(storage, &path, scope, device, &token, |progress| {
+                    let sealed = secrets.map(|s| s.seal()).transpose()?;
+                    let manifest = archive::create(
+                        storage,
+                        &path,
+                        scope,
+                        device,
+                        sealed.as_deref(),
+                        &token,
+                        |progress| {
                             if preparation_sink
                                 .add(SyncEvent::Packing { progress })
                                 .is_err()
                             {
                                 token.cancel();
                             }
-                        })?;
+                        },
+                    )?;
                     let name = format!(
                         "otter_pad_backup_{}{:02}{:02}_{:02}{:02}{:02}.zip",
                         now.year(),

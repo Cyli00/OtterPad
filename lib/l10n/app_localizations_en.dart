@@ -3840,4 +3840,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get graphicalSummary => 'Graphical Summary';
+
+  @override
+  String get backupCredentials => 'Back up credentials';
+
+  @override
+  String get backupCredentialsOn => 'Included, encrypted with your password';
+
+  @override
+  String get backupCredentialsOff => 'API keys and passwords are not included';
+
+  @override
+  String get backupCredentialsMessage =>
+      'Backups will include API keys and passwords, encrypted with this password. You need it to restore them, and it cannot be recovered if forgotten.';
+
+  @override
+  String get confirmPassword => 'Confirm password';
+
+  @override
+  String get passwordMismatch => 'Passwords do not match';
+
+  @override
+  String passwordTooShort(int count) {
+    return 'Use at least $count characters';
+  }
+
+  @override
+  String get turnOff => 'Turn off';
+
+  @override
+  String get restoreCredentialsTitle => 'Restore credentials';
+
+  @override
+  String get restoreCredentialsMessage =>
+      'This backup includes encrypted API keys and passwords. Enter the password set when backing up to restore them as well.';
+
+  @override
+  String get wrongPassword => 'Incorrect password';
+
+  @override
+  String get skip => 'Skip';
 }

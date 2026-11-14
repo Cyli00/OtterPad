@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/rust_backend.dart';
 import '../core/rust_models.dart';
+import '../core/storage/credential_vault.dart';
 import '../core/storage/storage.dart';
 import '../services/prompts.dart';
 import '../src/rust/api/backup.dart';
@@ -153,10 +154,14 @@ class BackupOrchestrator {
 
   /// 从本地 zip 恢复：Rust 先校验并在副本上准备，确认后替换；提交时 Rust
   /// 取消其余任务。返回合并统计。
+  ///
+  /// 备份含加密密钥时调用 [credentialPassword] 取口令（返回 null 表示跳过密钥）；
+  /// 口令错误时 Rust 不改动数据并保留预览，以 `wrongPassword: true` 再问一次。
   Future<RestoreReport> restoreFromArchive({
     required String archivePath,
     required RestoreScope scope,
     required RestoreMode mode,
+    Future<String?> Function({required bool wrongPassword})? credentialPassword,
   }) async {
     _cancelActiveTasks();
     RestorePreview? preview;
@@ -173,15 +178,27 @@ class BackupOrchestrator {
     if (prepared == null) {
       throw const OtterError(code: ErrorCode.invalidData, detail: 'restore');
     }
+    var password = prepared.hasCredentials && credentialPassword != null
+        ? await credentialPassword(wrongPassword: false)
+        : null;
     RestoreReport? report;
     try {
-      await _backupEvents(
-        RustBackend.instance.commitRestore(
-          id: prepared.id,
-          taskId: rustTaskId('restore-commit'),
-        ),
-        onRestored: (r) => report = r,
-      );
+      while (true) {
+        try {
+          await _backupEvents(
+            RustBackend.instance.commitRestore(
+              id: prepared.id,
+              credentialPassword: password,
+              taskId: rustTaskId('restore-commit'),
+            ),
+            onRestored: (r) => report = r,
+          );
+          break;
+        } on OtterError catch (e) {
+          if (e.code != ErrorCode.authentication || password == null) rethrow;
+          password = await credentialPassword!(wrongPassword: true);
+        }
+      }
     } finally {
       await _refreshAfterRestore(scope);
     }
@@ -217,6 +234,7 @@ class BackupOrchestrator {
   /// 恢复后从 Rust 重新载入设置与文献数据。
   Future<void> _refreshAfterRestore(RestoreScope scope) async {
     if (scope != RestoreScope.libraryOnly) {
+      await CredentialVault.open(RustBackend.instance);
       await GStorage.reloadSettings();
       await Prompts.load();
       _ref.read(themeProvider.notifier).reload();

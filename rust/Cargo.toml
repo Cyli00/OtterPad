@@ -37,6 +37,8 @@ tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync", "
 tokio-util = { version = "0.7.20", features = ["io"] }
 futures-util = "0.3.34"
 base64 = "0.23.1"
+# 已随 rustls 编入；备份凭据加密复用它的 PBKDF2、AES-256-GCM 与系统随机数。
+aws-lc-rs = { version = "1.19.0", default-features = false, features = ["aws-lc-sys", "alloc"] }
 zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]

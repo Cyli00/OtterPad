@@ -59,6 +59,8 @@ pub struct PreparedRestore {
     files: BTreeMap<String, String>,
     pub manifest: Manifest,
     pub report: MergeReport,
+    /// 备份包里加密的凭据；恢复范围不含设置时为 None。
+    pub credentials: Option<Vec<u8>>,
 }
 
 /// Preparation never changes the live database or library. Publish only after releasing PDF/log handles.
@@ -84,6 +86,12 @@ pub fn prepare(
     )?;
     let extracted = archive::extract(archive_path, &root, token, &mut progress)?;
     let manifest = extracted.manifest.clone();
+    let sealed = extracted.directory().join(archive::CREDENTIALS);
+    let credentials = if scope.settings() && sealed.is_file() {
+        Some(fs::read(sealed)?)
+    } else {
+        None
+    };
     let source_stage = Stage::new(&root, "restore-source")?;
     let mut skipped_orphans = 0;
     if manifest.format_version == 3 {
@@ -238,6 +246,7 @@ pub fn prepare(
         files: baseline,
         manifest,
         report,
+        credentials,
     })
 }
 

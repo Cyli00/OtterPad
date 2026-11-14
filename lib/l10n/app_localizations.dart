@@ -6735,6 +6735,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Graphical Summary'**
   String get graphicalSummary;
+
+  /// No description provided for @backupCredentials.
+  ///
+  /// In en, this message translates to:
+  /// **'Back up credentials'**
+  String get backupCredentials;
+
+  /// No description provided for @backupCredentialsOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Included, encrypted with your password'**
+  String get backupCredentialsOn;
+
+  /// No description provided for @backupCredentialsOff.
+  ///
+  /// In en, this message translates to:
+  /// **'API keys and passwords are not included'**
+  String get backupCredentialsOff;
+
+  /// No description provided for @backupCredentialsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Backups will include API keys and passwords, encrypted with this password. You need it to restore them, and it cannot be recovered if forgotten.'**
+  String get backupCredentialsMessage;
+
+  /// No description provided for @confirmPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get confirmPassword;
+
+  /// No description provided for @passwordMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match'**
+  String get passwordMismatch;
+
+  /// No description provided for @passwordTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Use at least {count} characters'**
+  String passwordTooShort(int count);
+
+  /// No description provided for @turnOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get turnOff;
+
+  /// No description provided for @restoreCredentialsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore credentials'**
+  String get restoreCredentialsTitle;
+
+  /// No description provided for @restoreCredentialsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This backup includes encrypted API keys and passwords. Enter the password set when backing up to restore them as well.'**
+  String get restoreCredentialsMessage;
+
+  /// No description provided for @wrongPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect password'**
+  String get wrongPassword;
+
+  /// No description provided for @skip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get skip;
 }
 
 class _AppLocalizationsDelegate

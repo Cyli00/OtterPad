@@ -34,6 +34,8 @@ pub struct RestorePreview {
     pub id: String,
     pub manifest: BackupManifest,
     pub report: RestoreReport,
+    /// 备份包含加密凭据，且本次恢复范围包含设置；提交时可附带口令一并恢复。
+    pub has_credentials: bool,
 }
 pub enum BackupEvent {
     Failed { error: OtterError },
@@ -86,13 +88,16 @@ impl Backend {
         let result: Result<()> = async move {
             let task = self.runtime.tasks.begin(task_id)?;
             let token = task.token.clone();
+            let secrets = self.runtime.credentials.backup_snapshot()?;
             self.runtime
                 .with_storage(&task.token, "create_backup", move |storage| {
+                    let sealed = secrets.map(|s| s.seal()).transpose()?;
                     let manifest = archive::create(
                         storage,
                         &PathBuf::from(path),
                         scope,
                         device_name,
+                        sealed.as_deref(),
                         &token,
                         |progress| {
                             if sink.add(BackupEvent::Progress { progress }).is_err() {
@@ -149,6 +154,7 @@ impl Backend {
                         id: id.clone(),
                         manifest: prepared.manifest.clone().into(),
                         report: prepared.report.clone().into(),
+                        has_credentials: prepared.credentials.is_some(),
                     };
                     // Only one pending preview is retained; it owns a complete replacement directory.
                     state.restores.clear();
@@ -173,9 +179,12 @@ impl Backend {
             })
             .await
     }
+    /// [credential_password] 为 Some 且备份含凭据时，先解密校验：口令错误返回
+    /// `Authentication`，预览保留可重试，数据不变；成功则恢复后合并写入凭据。
     pub async fn commit_restore(
         &self,
         id: String,
+        credential_password: Option<String>,
         task_id: String,
         sink: StreamSink<BackupEvent>,
     ) -> Result<()> {
@@ -189,8 +198,24 @@ impl Backend {
             })
             .await?;
             let token = task.token.clone();
-            self.runtime
+            let restored_sink = sink.clone();
+            let (report, credentials) = self
+                .runtime
                 .call(&task.token, "commit_restore", move |state| {
+                    let sealed = state
+                        .restores
+                        .get(&id)
+                        .ok_or_else(|| {
+                            OtterError::new(ErrorCode::NotFound, "restore preview missing")
+                        })?
+                        .credentials
+                        .clone();
+                    let credentials = match (sealed, credential_password) {
+                        (Some(sealed), Some(password)) => {
+                            crate::credentials::unseal(&sealed, &password)?
+                        }
+                        _ => vec![],
+                    };
                     let prepared = state.restores.remove(&id).ok_or_else(|| {
                         OtterError::new(ErrorCode::NotFound, "restore preview missing")
                     })?;
@@ -198,12 +223,17 @@ impl Backend {
                     let report = prepared.commit(&mut state.storage, &token, |progress| {
                         let _ = sink.add(BackupEvent::Progress { progress });
                     })?;
-                    sink.add(BackupEvent::Restored {
-                        report: report.into(),
-                    })
-                    .map_err(stream_closed)
+                    Ok((report, credentials))
                 })
-                .await
+                .await?;
+            if !credentials.is_empty() {
+                self.runtime.credentials.inject(credentials)?;
+            }
+            restored_sink
+                .add(BackupEvent::Restored {
+                    report: report.into(),
+                })
+                .map_err(stream_closed)
         }
         .await;
         if let Err(error) = result {

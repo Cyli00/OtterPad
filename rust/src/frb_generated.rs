@@ -976,6 +976,7 @@ fn wire__crate__api__Backend_commit_restore_impl(
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Backend>,
             >>::sse_decode(&mut deserializer);
             let api_id = <String>::sse_decode(&mut deserializer);
+            let api_credential_password = <Option<String>>::sse_decode(&mut deserializer);
             let api_task_id = <String>::sse_decode(&mut deserializer);
             let api_sink = <StreamSink<
                 crate::api::backup::BackupEvent,
@@ -1005,6 +1006,7 @@ fn wire__crate__api__Backend_commit_restore_impl(
                         let output_ok = crate::api::Backend::commit_restore(
                             &*api_that_guard,
                             api_id,
+                            api_credential_password,
                             api_task_id,
                             api_sink,
                         )
@@ -8797,10 +8799,12 @@ impl SseDecode for crate::api::backup::RestorePreview {
         let mut var_id = <String>::sse_decode(deserializer);
         let mut var_manifest = <crate::api::backup::BackupManifest>::sse_decode(deserializer);
         let mut var_report = <crate::api::backup::RestoreReport>::sse_decode(deserializer);
+        let mut var_hasCredentials = <bool>::sse_decode(deserializer);
         return crate::api::backup::RestorePreview {
             id: var_id,
             manifest: var_manifest,
             report: var_report,
+            has_credentials: var_hasCredentials,
         };
     }
 }
@@ -12031,6 +12035,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::backup::RestorePreview {
             self.id.into_into_dart().into_dart(),
             self.manifest.into_into_dart().into_dart(),
             self.report.into_into_dart().into_dart(),
+            self.has_credentials.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15307,6 +15312,7 @@ impl SseEncode for crate::api::backup::RestorePreview {
         <String>::sse_encode(self.id, serializer);
         <crate::api::backup::BackupManifest>::sse_encode(self.manifest, serializer);
         <crate::api::backup::RestoreReport>::sse_encode(self.report, serializer);
+        <bool>::sse_encode(self.has_credentials, serializer);
     }
 }
 

@@ -206,6 +206,7 @@ abstract class RustLibApi extends BaseApi {
   Stream<BackupEvent> crateApiBackendCommitRestore({
     required Backend that,
     required String id,
+    String? credentialPassword,
     required String taskId,
   });
 
@@ -1282,6 +1283,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Stream<BackupEvent> crateApiBackendCommitRestore({
     required Backend that,
     required String id,
+    String? credentialPassword,
     required String taskId,
   }) {
     final sink = RustStreamSink<BackupEvent>();
@@ -1295,6 +1297,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
               serializer,
             );
             sse_encode_String(id, serializer);
+            sse_encode_opt_String(credentialPassword, serializer);
             sse_encode_String(taskId, serializer);
             sse_encode_StreamSink_backup_event_Sse(sink, serializer);
             pdeCallFfi(
@@ -1309,7 +1312,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             decodeErrorData: sse_decode_otter_error,
           ),
           constMeta: kCrateApiBackendCommitRestoreConstMeta,
-          argValues: [that, id, taskId, sink],
+          argValues: [that, id, credentialPassword, taskId, sink],
           apiImpl: this,
         ),
       ),
@@ -1320,7 +1323,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiBackendCommitRestoreConstMeta =>
       const TaskConstMeta(
         debugName: "Backend_commit_restore",
-        argNames: ["that", "id", "taskId", "sink"],
+        argNames: ["that", "id", "credentialPassword", "taskId", "sink"],
       );
 
   @override
@@ -6992,12 +6995,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RestorePreview dco_decode_restore_preview(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return RestorePreview(
       id: dco_decode_String(arr[0]),
       manifest: dco_decode_backup_manifest(arr[1]),
       report: dco_decode_restore_report(arr[2]),
+      hasCredentials: dco_decode_bool(arr[3]),
     );
   }
 
@@ -10798,10 +10802,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_id = sse_decode_String(deserializer);
     var var_manifest = sse_decode_backup_manifest(deserializer);
     var var_report = sse_decode_restore_report(deserializer);
+    var var_hasCredentials = sse_decode_bool(deserializer);
     return RestorePreview(
       id: var_id,
       manifest: var_manifest,
       report: var_report,
+      hasCredentials: var_hasCredentials,
     );
   }
 
@@ -14350,6 +14356,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.id, serializer);
     sse_encode_backup_manifest(self.manifest, serializer);
     sse_encode_restore_report(self.report, serializer);
+    sse_encode_bool(self.hasCredentials, serializer);
   }
 
   @protected
@@ -14930,12 +14937,16 @@ class BackendImpl extends RustOpaque implements Backend {
   Future<bool> closePdf({required BigInt handle}) =>
       RustLib.instance.api.crateApiBackendClosePdf(that: this, handle: handle);
 
+  /// [credential_password] 为 Some 且备份含凭据时，先解密校验：口令错误返回
+  /// `Authentication`，预览保留可重试，数据不变；成功则恢复后合并写入凭据。
   Stream<BackupEvent> commitRestore({
     required String id,
+    String? credentialPassword,
     required String taskId,
   }) => RustLib.instance.api.crateApiBackendCommitRestore(
     that: this,
     id: id,
+    credentialPassword: credentialPassword,
     taskId: taskId,
   );
 

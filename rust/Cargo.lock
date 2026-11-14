@@ -1557,6 +1557,7 @@ dependencies = [
 name = "otter_core"
 version = "0.2.0"
 dependencies = [
+ "aws-lc-rs",
  "base64",
  "flutter_rust_bridge",
  "futures-util",

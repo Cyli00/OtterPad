@@ -22,6 +22,8 @@ use crate::{
 const ROOT: &str = "otter_pad_backup";
 const MAX_FILES: usize = 100_000;
 const MAX_BYTES: u64 = 64 * 1024 * 1024 * 1024;
+pub(crate) const CREDENTIALS: &str = "credentials.enc";
+const MAX_CREDENTIALS: u64 = 1024 * 1024;
 const MAX_MANIFEST: u64 = 64 * 1024 * 1024;
 static STAGE_IDS: AtomicU64 = AtomicU64::new(0);
 
@@ -127,6 +129,7 @@ pub fn create(
     path: &Path,
     scope: BackupScope,
     device_name: Option<String>,
+    credentials: Option<&[u8]>,
     token: &CancellationToken,
     mut progress: impl FnMut(BackupProgress),
 ) -> Result<Manifest> {
@@ -163,7 +166,7 @@ pub fn create(
         device_name,
     };
     let manifest_bytes = serde_json::to_vec(&manifest)?;
-    if files.len() + 2 > MAX_FILES || manifest_bytes.len() as u64 > MAX_MANIFEST {
+    if files.len() + 3 > MAX_FILES || manifest_bytes.len() as u64 > MAX_MANIFEST {
         return Err(OtterError::new(
             ErrorCode::InvalidData,
             "backup entry/manifest limit",
@@ -178,6 +181,12 @@ pub fn create(
     zip.start_file(format!("{ROOT}/manifest.json"), options)
         .map_err(zip_error)?;
     zip.write_all(&manifest_bytes)?;
+    // 已加密的凭据（见 `credentials::BackupSecrets`）；GCM 标签保证完整性，不进清单校验和。
+    if let Some(credentials) = credentials {
+        zip.start_file(format!("{ROOT}/{CREDENTIALS}"), options)
+            .map_err(zip_error)?;
+        zip.write_all(credentials)?;
+    }
     zip.start_file(format!("{ROOT}/db/otter.db"), options)
         .map_err(zip_error)?;
     copy_stream(&mut File::open(&database)?, &mut zip, token)?;
@@ -277,10 +286,17 @@ pub fn extract(
             continue;
         }
         let allowed = relative == "manifest.json"
+            || relative == CREDENTIALS
             || relative == "db/otter.db"
             || relative.starts_with("library/");
         if !allowed {
             continue;
+        }
+        if relative == CREDENTIALS && entry.size() > MAX_CREDENTIALS {
+            return Err(OtterError::new(
+                ErrorCode::InvalidData,
+                "backup credentials size limit",
+            ));
         }
         if relative == "manifest.json" && entry.size() > MAX_MANIFEST {
             return Err(OtterError::new(

@@ -14,6 +14,7 @@ import '../../providers/task_provider.dart';
 import '../../providers/zotero_sync_provider.dart';
 import '../../core/otter_error_text.dart';
 import '../../core/rust_backend.dart';
+import '../../core/storage/credential_vault.dart';
 import '../../src/rust/api/backup.dart';
 import '../../src/rust/sync/archive.dart';
 import '../../src/rust/sync/backup.dart';
@@ -27,6 +28,7 @@ import '../../utils/debounced_action.dart';
 import '../../core/l10n.dart';
 import '../../router/app_routes.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'backup_credentials_dialogs.dart';
 import 'setting_group.dart';
 import 'zotero_local_import_dialog.dart';
 import '../../utils/desktop.dart';
@@ -230,6 +232,16 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                         subtitle: context.l10n.selectLocalZipRestore,
                         enabled: !_busy,
                         onTap: _restoreFromLocal,
+                      ),
+                      _buildDivider(context),
+                      _ActionTile(
+                        icon: Symbols.key_rounded,
+                        title: context.l10n.backupCredentials,
+                        subtitle: _credentialsBackedUp
+                            ? context.l10n.backupCredentialsOn
+                            : context.l10n.backupCredentialsOff,
+                        enabled: !_busy,
+                        onTap: _editBackupCredentials,
                       ),
                     ],
                   ),
@@ -814,6 +826,26 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     }
   }
 
+  static const _credentialPasswordKey = 'backup_credentials_password';
+
+  bool get _credentialsBackedUp =>
+      CredentialVault.read(_credentialPasswordKey).isNotEmpty;
+
+  Future<void> _editBackupCredentials() async {
+    final password = await showBackupCredentialsDialog(
+      context,
+      enabled: _credentialsBackedUp,
+    );
+    if (password == null || !mounted) return;
+    try {
+      await CredentialVault.write(_credentialPasswordKey, password);
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage(_formatError(e), tone: SnackTone.error);
+    }
+  }
+
   /// 恢复链（排空任务 → 恢复 → provider 刷新）在 [BackupOrchestrator]；
   /// 页面只负责忙态遮罩与恢复后的页面级状态刷新。
   Future<RestoreReport?> _restoreArchive({
@@ -830,6 +862,11 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             archivePath: archivePath,
             scope: scope,
             mode: mode,
+            credentialPassword: ({required wrongPassword}) =>
+                showRestoreCredentialsDialog(
+                  context,
+                  wrongPassword: wrongPassword,
+                ),
           );
       _refreshPageAfterRestore(scope);
     });

@@ -54,7 +54,7 @@
 
 - 根目录 `<AppSupport>/OtterPad/v2/`：`otter.db`、`library/<docId>/`（`source.pdf`、OCR 原始结果、派生产物）、`logs/`。与 0.1.x 的 `<AppSupport>/OtterPad/{db,library,logs}` 并列，迁移期间互不覆盖。
 - 设置存在 SQLite 的 settings 表；只有界面临时状态留在 Dart。
-- 密钥（API Key、WebDAV/S3/Zotero 凭据）由 Rust 存在数据根的 `credentials.json`（与 `v2/` 并列，Unix 上 0600，明文），不使用系统钥匙串，也不写入数据库、日志或备份包；恢复备份替换 `v2/` 时不受影响。Dart 的 `CredentialVault` 启动时读入内存供同步读取，写入先交给 Rust 落盘。0.1.x 存在系统安全存储中的密钥不迁移，需要重新填写。保护程度与应用数据目录相同：能读取该目录的本机程序也能读取凭据。
+- 密钥（API Key、WebDAV/S3/Zotero 凭据）由 Rust 存在数据根的 `credentials.json`（与 `v2/` 并列，Unix 上 0600，明文），不使用系统钥匙串，也不写入数据库或日志；恢复备份替换 `v2/` 时不受影响。用户在备份设置里设置口令（本身存为凭据 `backup_credentials_password`）后，手动、自动和远端备份都附带 `credentials.enc`：PBKDF2-HMAC-SHA256 60 万次派生密钥、AES-256-GCM 加密（`aws-lc-rs`，已随 rustls 编入）；未设口令时备份不含凭据。恢复范围包含设置时，提交恢复可附带口令：Rust 先解密校验，口令错误返回 `Authentication` 且不改动数据、保留预览供重试，成功后把凭据合并写入。旧版本解包时忽略该条目。Dart 的 `CredentialVault` 启动时读入内存供同步读取，写入先交给 Rust 落盘。0.1.x 存在系统安全存储中的密钥不迁移，需要重新填写。保护程度与应用数据目录相同：能读取该目录的本机程序也能读取凭据。
 
 ## 0.1.x 数据迁移
 
