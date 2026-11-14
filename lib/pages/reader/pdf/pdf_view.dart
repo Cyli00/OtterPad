@@ -5,19 +5,25 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:material_symbols_icons/symbols.dart';
+
+import '../../../core/animation_constants.dart';
 import '../../../core/app_logger.dart';
+import '../../../core/l10n.dart';
 import '../../../core/rust_backend.dart';
 import '../../../src/rust/pdf.dart';
 import '../../../src/rust/pdf/geometry.dart' as geo;
 import 'pdf_controller.dart';
 import 'pdf_page.dart';
+import 'pdf_selection.dart';
 
 const _padding = 8.0;
 const _minZoom = 1.0;
 const _maxZoom = 6.0;
 
 /// 基于 Rust 分块渲染的 PDF 视图：纵向连续滚动，按窗口宽度适配，
-/// Ctrl/⌘+滚轮、触控板与双指捏合缩放，放大后可横向滚动。
+/// Ctrl/⌘+滚轮、触控板与双指捏合缩放，放大后可横向滚动；
+/// 鼠标拖选或长按拖选文字，Ctrl/⌘+C 或浮动按钮复制。
 class RustPdfView extends StatefulWidget {
   const RustPdfView({
     super.key,
@@ -27,6 +33,8 @@ class RustPdfView extends StatefulWidget {
     required this.onPageChanged,
     required this.matchColor,
     required this.activeMatchColor,
+    required this.selectionColor,
+    required this.onCopy,
     required this.errorBuilder,
   });
 
@@ -40,6 +48,8 @@ class RustPdfView extends StatefulWidget {
   final void Function(int page, int total) onPageChanged;
   final Color matchColor;
   final Color activeMatchColor;
+  final Color selectionColor;
+  final void Function(String text) onCopy;
   final Widget Function(BuildContext context, Object error) errorBuilder;
 
   @override
@@ -69,6 +79,13 @@ class _RustPdfViewState extends State<RustPdfView> {
   double _pinchZoom = 1;
   double _panZoomBase = 1;
 
+  PdfTextSelection? _selection;
+  bool _selecting = false;
+
+  /// 复制按钮位置（视图坐标）；选择结束后出现，滚动时收起。
+  Offset? _copyAnchor;
+  final _focus = FocusNode();
+
   @override
   void initState() {
     super.initState();
@@ -86,7 +103,10 @@ class _RustPdfViewState extends State<RustPdfView> {
         return;
       }
       widget.controller.attach(info.handle, info.pages.length, _reveal);
-      setState(() => _info = info);
+      setState(() {
+        _info = info;
+        _selection = PdfTextSelection(info.handle);
+      });
     } catch (e) {
       log.e('[PdfView] 打开 PDF 失败', error: e);
       if (mounted) setState(() => _error = e);
@@ -103,6 +123,7 @@ class _RustPdfViewState extends State<RustPdfView> {
     }
     _vertical.dispose();
     _horizontal.dispose();
+    _focus.dispose();
     for (final notifier in _visible.values) {
       notifier.dispose();
     }
@@ -167,6 +188,7 @@ class _RustPdfViewState extends State<RustPdfView> {
   }
 
   void _onScroll() {
+    if (_copyAnchor != null && !_selecting) setState(() => _copyAnchor = null);
     for (final entry in _visible.entries) {
       entry.value.value = _visibleRect(entry.key);
     }
@@ -176,6 +198,10 @@ class _RustPdfViewState extends State<RustPdfView> {
     if (page != _page) {
       _page = page;
       widget.onPageChanged(page + 1, info.pages.length);
+      // 预读当前页与下一页的字符，第一次按下就能命中文字。
+      for (final p in [page, page + 1]) {
+        if (p < info.pages.length) _selection?.characters(p, () {});
+      }
     }
   }
 
@@ -279,11 +305,115 @@ class _RustPdfViewState extends State<RustPdfView> {
     }
   }
 
+  // ── 文字选择 ──
+
+  PdfTextPosition? _positionAt(Offset global, {double? tolerance}) {
+    final info = _info;
+    final selection = _selection;
+    if (info == null || selection == null || _offsets.isEmpty) return null;
+    final local = _local(global);
+    final x =
+        local.dx +
+        (_horizontal.hasClients ? _horizontal.offset : 0) -
+        _padding * _zoom;
+    final y = local.dy + _vertical.offset;
+    final page = _pageAt(y);
+    final perPoint = _pageWidth / info.pages[page].width;
+    final chars = selection.characters(page, () {
+      if (mounted) setState(() {});
+    });
+    if (chars == null) return null;
+    final index = PdfTextSelection.hitTest(
+      chars,
+      Offset(x / perPoint, (y - _offsets[page]) / perPoint),
+      tolerance: tolerance,
+    );
+    return index == null ? null : (page: page, index: index);
+  }
+
+  void _selectStart(Offset global) {
+    final position = _positionAt(global, tolerance: 12);
+    setState(() {
+      _copyAnchor = null;
+      if (position == null) {
+        _selection?.clear();
+        _selecting = false;
+      } else {
+        _selection!.start(position);
+        _selecting = true;
+      }
+    });
+    _focus.requestFocus();
+  }
+
+  void _selectUpdate(Offset global) {
+    if (!_selecting) return;
+    final position = _positionAt(global);
+    if (position != null) setState(() => _selection!.extend(position));
+  }
+
+  void _selectEnd(Offset global) {
+    if (!_selecting) return;
+    setState(() {
+      _selecting = false;
+      _copyAnchor = _local(global);
+    });
+  }
+
+  void _clearSelection() {
+    if (_selection?.isEmpty ?? true) return;
+    setState(() {
+      _selection!.clear();
+      _copyAnchor = null;
+    });
+  }
+
+  Future<void> _copy() async {
+    final text = await _selection?.text() ?? '';
+    if (text.trim().isEmpty || !mounted) return;
+    widget.onCopy(text);
+    _clearSelection();
+  }
+
+  Widget _copyButton() {
+    final anchor = _copyAnchor;
+    final visible = anchor != null && !(_selection?.isEmpty ?? true);
+    return Positioned(
+      left: ((anchor?.dx ?? 0) - 48).clamp(
+        8,
+        math.max(8, _viewport.width - 120),
+      ),
+      top: ((anchor?.dy ?? 0) + 12).clamp(
+        8,
+        math.max(8, _viewport.height - 48),
+      ),
+      child: AnimatedSwitcher(
+        duration: kAnimFast,
+        switchInCurve: kAnimCurve,
+        switchOutCurve: kAnimCurveReverse,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.92, end: 1.0).animate(animation),
+            child: child,
+          ),
+        ),
+        child: visible
+            ? FilledButton.tonalIcon(
+                key: ValueKey(anchor),
+                onPressed: _copy,
+                icon: const Icon(Symbols.content_copy_rounded, size: 18),
+                label: Text(context.l10n.copy),
+              )
+            : const SizedBox.shrink(),
+      ),
+    );
+  }
+
   // ── 构建 ──
 
   List<({List<geo.Rect> rects, Color color})> _overlays(int page) {
     final controller = widget.controller;
-    if (controller.matches.isEmpty) return const [];
     final overlays = <({List<geo.Rect> rects, Color color})>[];
     for (var i = 0; i < controller.matches.length; i++) {
       final match = controller.matches[i];
@@ -294,6 +424,10 @@ class _RustPdfViewState extends State<RustPdfView> {
             ? widget.activeMatchColor
             : widget.matchColor,
       ));
+    }
+    final selected = _selection?.rects(page) ?? const [];
+    if (selected.isNotEmpty) {
+      overlays.add((rects: selected, color: widget.selectionColor));
     }
     return overlays;
   }
@@ -326,41 +460,34 @@ class _RustPdfViewState extends State<RustPdfView> {
               _setZoom(_panZoomBase * event.scale, event.localPosition);
             }
           },
-          child: Scrollbar(
-            controller: _vertical,
-            notificationPredicate: (n) => n.depth == 1,
-            child: SingleChildScrollView(
-              controller: _horizontal,
-              scrollDirection: Axis.horizontal,
-              physics: pinching ? const NeverScrollableScrollPhysics() : null,
-              child: SizedBox(
-                width: viewport.width * _zoom,
-                height: viewport.height,
-                child: ListView.builder(
-                  controller: _vertical,
-                  physics: pinching
-                      ? const NeverScrollableScrollPhysics()
-                      : null,
-                  padding: EdgeInsets.only(top: _padding * _zoom),
-                  itemCount: info.pages.length,
-                  itemExtentBuilder: (index, _) =>
-                      _offsets[index + 1] - _offsets[index],
-                  itemBuilder: (context, index) => Listener(
-                    onPointerSignal: _onPointerSignal,
-                    behavior: HitTestBehavior.opaque,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: PdfPageView(
-                        key: ValueKey(index),
-                        handle: info.handle,
-                        page: info.pages[index],
-                        size: Size(_pageWidth, _pageHeight(info.pages[index])),
-                        visible: _visibleOf(index),
-                        overlays: _overlays(index),
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.keyC, meta: true): _copy,
+              const SingleActivator(LogicalKeyboardKey.keyC, control: true):
+                  _copy,
+            },
+            child: Focus(
+              focusNode: _focus,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      supportedDevices: const {PointerDeviceKind.mouse},
+                      onPanStart: (d) => _selectStart(d.globalPosition),
+                      onPanUpdate: (d) => _selectUpdate(d.globalPosition),
+                      onPanEnd: (d) => _selectEnd(d.globalPosition),
+                      child: GestureDetector(
+                        onTap: _clearSelection,
+                        onLongPressStart: (d) => _selectStart(d.globalPosition),
+                        onLongPressMoveUpdate: (d) =>
+                            _selectUpdate(d.globalPosition),
+                        onLongPressEnd: (d) => _selectEnd(d.globalPosition),
+                        child: _scrollArea(info, viewport, pinching),
                       ),
                     ),
                   ),
-                ),
+                  _copyButton(),
+                ],
               ),
             ),
           ),
@@ -368,4 +495,42 @@ class _RustPdfViewState extends State<RustPdfView> {
       },
     );
   }
+
+  Widget _scrollArea(DocumentInfo info, Size viewport, bool pinching) =>
+      Scrollbar(
+        controller: _vertical,
+        notificationPredicate: (n) => n.depth == 1,
+        child: SingleChildScrollView(
+          controller: _horizontal,
+          scrollDirection: Axis.horizontal,
+          physics: pinching ? const NeverScrollableScrollPhysics() : null,
+          child: SizedBox(
+            width: viewport.width * _zoom,
+            height: viewport.height,
+            child: ListView.builder(
+              controller: _vertical,
+              physics: pinching ? const NeverScrollableScrollPhysics() : null,
+              padding: EdgeInsets.only(top: _padding * _zoom),
+              itemCount: info.pages.length,
+              itemExtentBuilder: (index, _) =>
+                  _offsets[index + 1] - _offsets[index],
+              itemBuilder: (context, index) => Listener(
+                onPointerSignal: _onPointerSignal,
+                behavior: HitTestBehavior.opaque,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: PdfPageView(
+                    key: ValueKey(index),
+                    handle: info.handle,
+                    page: info.pages[index],
+                    size: Size(_pageWidth, _pageHeight(info.pages[index])),
+                    visible: _visibleOf(index),
+                    overlays: _overlays(index),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }

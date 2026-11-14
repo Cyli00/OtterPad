@@ -1071,6 +1071,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         initialProgress: _progress.value,
         matchColor: theme.colorScheme.primaryContainer.withAlpha(150),
         activeMatchColor: theme.colorScheme.primary.withAlpha(72),
+        selectionColor: theme.colorScheme.primary.withAlpha(56),
+        onCopy: (text) {
+          Haptics.soft();
+          Clipboard.setData(ClipboardData(text: text));
+          ref
+              .read(snackBarServiceProvider)
+              .showResult(message: context.l10n.copiedToClipboard);
+        },
         onPageChanged: (page, total) {
           final progress = total <= 1 ? 1.0 : (page - 1) / (total - 1);
           _progress.value = progress;
