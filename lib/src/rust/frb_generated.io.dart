@@ -29,6 +29,7 @@ import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'document.dart';
 import 'document/figures.dart';
+import 'document/references.dart';
 import 'document/structure.dart';
 import 'document/table.dart';
 import 'error.dart';
@@ -661,6 +662,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Rect> dco_decode_list_rect(dynamic raw);
 
   @protected
+  List<Reference> dco_decode_list_reference(dynamic raw);
+
+  @protected
   List<RemoteEntry> dco_decode_list_remote_entry(dynamic raw);
 
   @protected
@@ -872,6 +876,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Rect dco_decode_rect(dynamic raw);
+
+  @protected
+  Reference dco_decode_reference(dynamic raw);
 
   @protected
   RemoteConfig dco_decode_remote_config(dynamic raw);
@@ -1717,6 +1724,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Rect> sse_decode_list_rect(SseDeserializer deserializer);
 
   @protected
+  List<Reference> sse_decode_list_reference(SseDeserializer deserializer);
+
+  @protected
   List<RemoteEntry> sse_decode_list_remote_entry(SseDeserializer deserializer);
 
   @protected
@@ -1970,6 +1980,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Rect sse_decode_rect(SseDeserializer deserializer);
+
+  @protected
+  Reference sse_decode_reference(SseDeserializer deserializer);
 
   @protected
   RemoteConfig sse_decode_remote_config(SseDeserializer deserializer);
@@ -3014,6 +3027,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_rect(List<Rect> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_reference(
+    List<Reference> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_remote_entry(
     List<RemoteEntry> self,
     SseSerializer serializer,
@@ -3354,6 +3373,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_rect(Rect self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_reference(Reference self, SseSerializer serializer);
 
   @protected
   void sse_encode_remote_config(RemoteConfig self, SseSerializer serializer);

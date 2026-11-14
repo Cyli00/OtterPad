@@ -3670,7 +3670,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get otterErrorToolLimit => '已达到工具调用次数上限';
 
   @override
-  String get readerOutlineEmpty => '该文献没有标题';
+  String get outlineFigures => '图表';
+
+  @override
+  String get outlineReferences => '参考文献';
+
+  @override
+  String get graphicalSummary => '总结图';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -6961,5 +6967,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get otterErrorToolLimit => '已達到工具呼叫次數上限';
 
   @override
-  String get readerOutlineEmpty => '該文獻沒有標題';
+  String get outlineFigures => '圖表';
+
+  @override
+  String get outlineReferences => '參考文獻';
+
+  @override
+  String get graphicalSummary => '總結圖';
 }

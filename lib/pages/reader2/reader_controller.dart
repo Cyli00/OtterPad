@@ -152,6 +152,7 @@ class ReaderController extends ChangeNotifier {
       figureAssets: source.figureAssets,
       figureImages: source.figureImages,
       assetDirectory: source.assetDirectory,
+      references: source.references,
     );
   }
 

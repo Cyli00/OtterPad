@@ -5,6 +5,7 @@
 
 import '../document.dart';
 import '../document/figures.dart';
+import '../document/references.dart';
 import '../document/structure.dart';
 import '../document/table.dart';
 import '../frb_generated.dart';
@@ -31,6 +32,9 @@ class ReaderDocument {
   final List<ReaderFigureImage> figureImages;
   final String assetDirectory;
 
+  /// 参考文献条目（大纲的参考文献页）。
+  final List<Reference> references;
+
   const ReaderDocument({
     required this.version,
     required this.blocks,
@@ -39,6 +43,7 @@ class ReaderDocument {
     required this.figureAssets,
     required this.figureImages,
     required this.assetDirectory,
+    required this.references,
   });
 
   @override
@@ -49,7 +54,8 @@ class ReaderDocument {
       figures.hashCode ^
       figureAssets.hashCode ^
       figureImages.hashCode ^
-      assetDirectory.hashCode;
+      assetDirectory.hashCode ^
+      references.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -62,7 +68,8 @@ class ReaderDocument {
           figures == other.figures &&
           figureAssets == other.figureAssets &&
           figureImages == other.figureImages &&
-          assetDirectory == other.assetDirectory;
+          assetDirectory == other.assetDirectory &&
+          references == other.references;
 }
 
 class ReaderFigure {

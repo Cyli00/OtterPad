@@ -8,6 +8,9 @@ import '../../src/rust/document.dart';
 import '../reader/widgets/reader_typography.dart';
 import 'widget_measurer.dart';
 
+/// 译文块由 `ReaderController` 生成，id 为原文块 id 加 `#t`。
+bool isTranslationBlock(Block block) => block.id.endsWith('#t');
+
 /// 版式参数。相同参数必然得到相同的测量与分页，[ReaderLayout] 以它为缓存键。
 @immutable
 class ReaderLayoutSpec {
@@ -20,6 +23,7 @@ class ReaderLayoutSpec {
     required this.ruleColor,
     this.blockMargin = ReaderTypography.blockMarginScale,
     this.rtlTranslations = false,
+    this.translationStyle = 'themed',
   });
 
   /// 正文列宽与分页模式下每页可用高度（不含页边距）。
@@ -35,6 +39,39 @@ class ReaderLayoutSpec {
 
   /// 译文为阿拉伯语、波斯语等从右向左书写的语言时，译文块按 RTL 排版。
   final bool rtlTranslations;
+
+  /// 译文显示样式 id（见 `kTranslationStyles`），与 0.1.x reader.css 的
+  /// `data-translation-style` 一一对应。
+  final String translationStyle;
+
+  /// 译文块在 [style] 上叠加的样式。
+  TextStyle translated(TextStyle style) {
+    final text = body.color ?? style.color ?? const Color(0xFF000000);
+    return switch (translationStyle) {
+      'bold' => style.copyWith(color: text, fontWeight: FontWeight.w700),
+      'italic' => style.copyWith(color: text, fontStyle: FontStyle.italic),
+      'weakened' => style.copyWith(
+        color: text.withValues(alpha: ReaderTypography.trWeakAlpha),
+      ),
+      'dashed' => style.copyWith(
+        color: linkColor,
+        decoration: TextDecoration.underline,
+        decorationStyle: TextDecorationStyle.dashed,
+        decorationColor: linkColor.withValues(
+          alpha: ReaderTypography.trDecoAlpha,
+        ),
+      ),
+      'highlight' => style.copyWith(
+        color: linkColor.withValues(alpha: ReaderTypography.trHlTextAlpha),
+        backgroundColor: linkColor.withValues(
+          alpha: ReaderTypography.trHlBgAlpha,
+        ),
+      ),
+      'blur' => style.copyWith(color: text),
+      'quote' => style.copyWith(color: mutedColor),
+      _ => style.copyWith(color: linkColor),
+    };
+  }
 
   double get fontSize => body.fontSize!;
 
@@ -103,7 +140,8 @@ class ReaderLayoutSpec {
       other.linkColor == linkColor &&
       other.ruleColor == ruleColor &&
       other.blockMargin == blockMargin &&
-      other.rtlTranslations == rtlTranslations;
+      other.rtlTranslations == rtlTranslations &&
+      other.translationStyle == translationStyle;
 
   @override
   int get hashCode => Object.hash(
@@ -115,6 +153,7 @@ class ReaderLayoutSpec {
     ruleColor,
     blockMargin,
     rtlTranslations,
+    translationStyle,
   );
 }
 
@@ -241,6 +280,7 @@ class LayoutItem {
     this.mediaSize,
     this.image,
     this.direction = TextDirection.ltr,
+    this.ruleColor,
   });
 
   final int blockIndex;
@@ -261,6 +301,9 @@ class LayoutItem {
 
   /// 文本块的书写方向；公式以内嵌组件排版，不受影响。
   final TextDirection direction;
+
+  /// 左侧竖线颜色（缩进块）；为空时用版式的分隔线颜色。
+  final Color? ruleColor;
 
   bool get isText => kind == ItemKind.text;
 
@@ -484,6 +527,16 @@ class ReaderTypesetter {
     double gap, {
     double indent = 0,
   }) {
+    Color? rule;
+    if (isTranslationBlock(block)) {
+      style = spec.translated(style);
+      if (spec.translationStyle == 'quote' && indent == 0) {
+        indent =
+            ReaderTypography.blockquotePadLeft +
+            ReaderTypography.blockquoteSideWidth;
+        rule = spec.mutedColor;
+      }
+    }
     final maths = [
       for (final run in block.runs)
         if (run.math != null)
@@ -498,7 +551,7 @@ class ReaderTypesetter {
       style: style,
       maths: maths,
     );
-    final direction = spec.rtlTranslations && block.id.endsWith('#t')
+    final direction = spec.rtlTranslations && isTranslationBlock(block)
         ? TextDirection.rtl
         : TextDirection.ltr;
     final painter = TextPainter(
@@ -548,6 +601,7 @@ class ReaderTypesetter {
         maths: maths,
         indent: indent,
         direction: direction,
+        ruleColor: rule,
         lines: List.unmodifiable([
           for (var i = 0; i < starts.length; i++)
             LayoutLine(

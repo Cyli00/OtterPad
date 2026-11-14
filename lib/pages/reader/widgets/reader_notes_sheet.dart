@@ -9,6 +9,7 @@ import '../../../data/models/book/highlight.dart';
 import '../../../providers/highlight_provider.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/tactile_press.dart';
+import 'reader_sheet_host.dart';
 
 /// 笔记面板 body（含 [DraggableScrollableSheet] 包装），
 /// 由 [ReaderSheetHost] 弹出。
@@ -29,26 +30,19 @@ class ReaderNotesSheetBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 1.0,
-      minChildSize: 0.3,
-      maxChildSize: 1.0,
-      expand: false,
-      builder: (context, scrollController) => ColoredBox(
-        color: Theme.of(context).colorScheme.surface,
-        child: ReaderNotesPanel(
-          documentId: documentId,
-          showGrabber: true,
-          scrollController: scrollController,
-          onEditStart: onEditStart,
-          onEditEnd: onEditEnd,
-        ),
+    return ReaderSheetFrame(
+      fill: true,
+      child: ReaderNotesPanel(
+        documentId: documentId,
+        topPadding: 4,
+        onEditStart: onEditStart,
+        onEditEnd: onEditEnd,
       ),
     );
   }
 }
 
-/// 笔记面板内容。sheet 传 [showGrabber] true；停靠栏传 false。
+/// 笔记面板内容，sheet 与停靠栏共用。
 ///
 /// 改造为 StatefulWidget 是为**键盘弹出期间的性能**：原 ConsumerWidget 在
 /// viewInsets 每帧变化时整树 build，ListView 和所有 _HighlightTile 全部重建。
@@ -57,7 +51,6 @@ class ReaderNotesSheetBody extends StatelessWidget {
 /// header（标题计数）仍随 sheet rebuild 而更新——计数变化时父级 watch 触发。
 class ReaderNotesPanel extends StatefulWidget {
   final String documentId;
-  final bool showGrabber;
   final ScrollController? scrollController;
   final Future<void> Function()? onEditStart;
   final VoidCallback? onEditEnd;
@@ -65,11 +58,14 @@ class ReaderNotesPanel extends StatefulWidget {
   const ReaderNotesPanel({
     super.key,
     required this.documentId,
-    required this.showGrabber,
     this.scrollController,
     this.onEditStart,
     this.onEditEnd,
+    this.topPadding = 16,
   });
+
+  /// 不显示拖拽条时标题上方的留白；sheet 外壳已有拖拽条时取小值。
+  final double topPadding;
 
   @override
   State<ReaderNotesPanel> createState() => _ReaderNotesPanelState();
@@ -95,35 +91,11 @@ class _ReaderNotesPanelState extends State<ReaderNotesPanel> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        if (widget.showGrabber)
-          const _Grabber()
-        else
-          const SizedBox(height: 16),
+        SizedBox(height: widget.topPadding),
         _Header(documentId: widget.documentId),
         const SizedBox(height: 12),
         Expanded(child: _listSubtree),
       ],
-    );
-  }
-}
-
-/// 顶部小条——纯静态，const 化避免 rebuild。
-class _Grabber extends StatelessWidget {
-  const _Grabber();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Container(
-        width: 32,
-        height: 4,
-        decoration: BoxDecoration(
-          color: cs.onSurfaceVariant.withAlpha(80),
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
     );
   }
 }

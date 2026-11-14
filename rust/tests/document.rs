@@ -105,3 +105,34 @@ fn legacy_translation_hash_matches_dart_vm_reference_including_surrogates() {
         assert_eq!(legacy_hash(source), expected);
     }
 }
+
+#[test]
+fn references_follow_numbered_items_and_stop_at_next_section() {
+    let model = DocumentModel::from_markdown(
+        "# Intro\n\nBody text.\n\n## 7. References\n\n1. LeCun, Y. Deep learning. Nature (2015).\n\n[2] Hinton, G. Reducing dimensionality. Science 2006.\n\n## Appendix\n\n3. Not a reference.\n",
+    );
+    let references = otter_core::document::references::references(&model.blocks);
+    assert_eq!(
+        references
+            .iter()
+            .map(|r| (r.number, r.numbered))
+            .collect::<Vec<_>>(),
+        [(1, true), (2, true)]
+    );
+    assert_eq!(
+        references[0].text,
+        "LeCun, Y. Deep learning. Nature (2015)."
+    );
+    assert!(model.blocks.iter().any(|b| b.id == references[1].block_id));
+}
+
+#[test]
+fn references_without_numbers_keep_citation_like_paragraphs() {
+    let model = DocumentModel::from_markdown(
+        "## References\n\nBengio, Y., Courville, A. Representation learning (2013).\n\nshort\n\nThis paragraph has no year or link at all in it.\n",
+    );
+    let references = otter_core::document::references::references(&model.blocks);
+    assert_eq!(references.len(), 1);
+    assert_eq!(references[0].number, 1);
+    assert!(!references[0].numbered);
+}

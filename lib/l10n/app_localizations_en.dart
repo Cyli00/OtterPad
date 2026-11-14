@@ -3833,5 +3833,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get otterErrorToolLimit => 'The tool call limit was reached.';
 
   @override
-  String get readerOutlineEmpty => 'No headings in this document';
+  String get outlineFigures => 'Figures';
+
+  @override
+  String get outlineReferences => 'References';
+
+  @override
+  String get graphicalSummary => 'Graphical Summary';
 }

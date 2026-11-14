@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
-import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../providers/reader_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
@@ -52,128 +51,97 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
     final translationCfg = ref.watch(translationConfigProvider);
     final currentStyle = resolveTranslationStyle(translationCfg.displayStyleId);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        boxShadow: AppShadows.sheet,
-      ),
-      padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
-      // 六个 section 高度必然超出 9/16 屏幕上限——包一层 ScrollView，
-      // 允许内部滚动而不是报 RenderFlex overflow。
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _grabber(cs),
-            const SizedBox(height: 4),
+    // 外壳（圆角、拖拽条）由 ReaderSheetFrame 提供；内容超出上限时内部滚动。
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + bottomInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── 颜色（主题色） ──
+          _sectionLabel(theme, cs, Symbols.palette_rounded, l10n.color),
+          const SizedBox(height: 12),
+          _SeedColorRow(
+            selected: themeState.useDynamicColor ? null : themeState.seedColor,
+            isDynamic: themeState.useDynamicColor,
+            onDynamic: () =>
+                ref.read(themeProvider.notifier).setUseDynamicColor(true),
+            onSelect: (c) => ref.read(themeProvider.notifier).setSeedColor(c),
+          ),
 
-            // ── 颜色（主题色） ──
-            _sectionLabel(theme, cs, Symbols.palette_rounded, l10n.color),
-            const SizedBox(height: 12),
-            _SeedColorRow(
-              selected: themeState.useDynamicColor
-                  ? null
-                  : themeState.seedColor,
-              isDynamic: themeState.useDynamicColor,
-              onDynamic: () =>
-                  ref.read(themeProvider.notifier).setUseDynamicColor(true),
-              onSelect: (c) => ref.read(themeProvider.notifier).setSeedColor(c),
-            ),
+          const SizedBox(height: 20),
 
-            const SizedBox(height: 20),
+          // ── 背景 ──
+          _sectionLabel(theme, cs, Symbols.wallpaper_rounded, l10n.background),
+          const SizedBox(height: 12),
+          _BackgroundRow(
+            current: settings.theme,
+            onChanged: (t) {
+              ref.read(readerSettingsProvider.notifier).setTheme(t);
+            },
+          ),
 
-            // ── 背景 ──
-            _sectionLabel(
-              theme,
-              cs,
-              Symbols.wallpaper_rounded,
-              l10n.background,
-            ),
-            const SizedBox(height: 12),
-            _BackgroundRow(
-              current: settings.theme,
-              onChanged: (t) {
-                ref.read(readerSettingsProvider.notifier).setTheme(t);
-              },
-            ),
+          const SizedBox(height: 20),
 
-            const SizedBox(height: 20),
+          // ── 字号 ──
+          _sectionLabel(
+            theme,
+            cs,
+            Symbols.format_size_rounded,
+            l10n.fontSize,
+            trailing: '${_localFontSize.round()}px',
+          ),
+          const SizedBox(height: 8),
+          Slider(
+            value: _localFontSize,
+            min: ReaderSettingsState.minFontSize,
+            max: ReaderSettingsState.maxFontSize,
+            onChanged: (v) => setState(() => _localFontSize = v),
+            onChangeEnd: notifier.setFontSize,
+          ),
 
-            // ── 字号 ──
-            _sectionLabel(
-              theme,
-              cs,
-              Symbols.format_size_rounded,
-              l10n.fontSize,
-              trailing: '${_localFontSize.round()}px',
-            ),
-            const SizedBox(height: 8),
-            Slider(
-              value: _localFontSize,
-              min: ReaderSettingsState.minFontSize,
-              max: ReaderSettingsState.maxFontSize,
-              onChanged: (v) => setState(() => _localFontSize = v),
-              onChangeEnd: notifier.setFontSize,
-            ),
+          const SizedBox(height: 16),
 
-            const SizedBox(height: 16),
+          // ── 字体族 ──
+          _sectionLabel(
+            theme,
+            cs,
+            Symbols.text_fields_rounded,
+            l10n.fontFamily,
+            trailing: settings.font.localizedLabel(context.l10n),
+          ),
+          const SizedBox(height: 12),
+          _FontFamilyRow(current: settings.font, onChanged: notifier.setFont),
 
-            // ── 字体族 ──
-            _sectionLabel(
-              theme,
-              cs,
-              Symbols.text_fields_rounded,
-              l10n.fontFamily,
-              trailing: settings.font.localizedLabel(context.l10n),
-            ),
-            const SizedBox(height: 12),
-            _FontFamilyRow(current: settings.font, onChanged: notifier.setFont),
+          const SizedBox(height: 16),
 
-            const SizedBox(height: 16),
+          // ── 翻页方式 ──
+          _sectionLabel(
+            theme,
+            cs,
+            Symbols.menu_book_rounded,
+            l10n.paginationMode,
+            trailing: settings.paginationMode.localizedLabel(context.l10n),
+          ),
+          const SizedBox(height: 12),
+          _PaginationModeRow(
+            current: settings.paginationMode,
+            onChanged: notifier.setPaginationMode,
+          ),
 
-            // ── 翻页方式 ──
-            _sectionLabel(
-              theme,
-              cs,
-              Symbols.menu_book_rounded,
-              l10n.paginationMode,
-              trailing: settings.paginationMode.localizedLabel(context.l10n),
-            ),
-            const SizedBox(height: 12),
-            _PaginationModeRow(
-              current: settings.paginationMode,
-              onChanged: notifier.setPaginationMode,
-            ),
+          const SizedBox(height: 20),
 
-            const SizedBox(height: 20),
-
-            // ── 译文样式 ──
-            _sectionLabel(
-              theme,
-              cs,
-              Symbols.translate_rounded,
-              l10n.translationStyle,
-              trailing: translationStyleLabel(context.l10n, currentStyle.id),
-            ),
-            const SizedBox(height: 12),
-            _TranslationStyleRow(currentId: translationCfg.displayStyleId),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _grabber(ColorScheme cs) {
-    return Center(
-      child: Container(
-        width: 32,
-        height: 4,
-        decoration: BoxDecoration(
-          color: cs.onSurfaceVariant.withAlpha(80),
-          borderRadius: BorderRadius.circular(2),
-        ),
+          // ── 译文样式 ──
+          _sectionLabel(
+            theme,
+            cs,
+            Symbols.translate_rounded,
+            l10n.translationStyle,
+            trailing: translationStyleLabel(context.l10n, currentStyle.id),
+          ),
+          const SizedBox(height: 12),
+          _TranslationStyleRow(currentId: translationCfg.displayStyleId),
+        ],
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -31,12 +32,16 @@ class ReaderSurface extends StatefulWidget {
     this.onTapBlank,
     this.onLocationChanged,
     this.textStyle,
+    this.translationStyle = 'themed',
   });
 
   final ReaderController controller;
 
   /// 叠加在正文样式上的字体与颜色（阅读器主题）。
   final TextStyle? textStyle;
+
+  /// 译文显示样式 id；`blur` 时译文模糊，点击切换显示。
+  final String translationStyle;
   final double fontSize;
   final double maxColumnWidth;
 
@@ -68,6 +73,9 @@ class ReaderSurfaceState extends State<ReaderSurface> {
   final _typesetter = ReaderTypesetter();
   final _targets = <_HitWindowState>{};
   ReaderLayout? _layout;
+
+  /// 模糊样式下已点开的译文块 id；换样式时清空。
+  final _revealed = <String>{};
   ReaderMode? _builtMode;
   ScrollController? _scroll;
   PageController? _pages;
@@ -93,6 +101,9 @@ class ReaderSurfaceState extends State<ReaderSurface> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onControllerChanged);
       widget.controller.addListener(_onControllerChanged);
+    }
+    if (oldWidget.translationStyle != widget.translationStyle) {
+      _revealed.clear();
     }
   }
 
@@ -149,6 +160,7 @@ class ReaderSurfaceState extends State<ReaderSurface> {
       linkColor: cs.primary,
       ruleColor: cs.outlineVariant,
       rtlTranslations: _controller.rtlTranslations,
+      translationStyle: widget.translationStyle,
     );
   }
 
@@ -415,6 +427,15 @@ class ReaderSurfaceState extends State<ReaderSurface> {
       return;
     }
     final location = _locate(details.globalPosition);
+    if (location != null && widget.translationStyle == 'blur') {
+      final block = _controller.model.blocks[location.blockIndex];
+      if (isTranslationBlock(block)) {
+        setState(() {
+          if (!_revealed.remove(block.id)) _revealed.add(block.id);
+        });
+        return;
+      }
+    }
     final highlight = location == null
         ? null
         : _controller.highlightAt(location);
@@ -520,6 +541,10 @@ class ReaderSurfaceState extends State<ReaderSurface> {
             spec: spec,
             typesetter: _typesetter,
             marks: _marks(item.blockIndex),
+            blurred:
+                widget.translationStyle == 'blur' &&
+                isTranslationBlock(block) &&
+                !_revealed.contains(block.id),
           ),
         );
       case ItemKind.figure:
@@ -782,9 +807,11 @@ class _TextItem extends StatefulWidget {
     required this.spec,
     required this.typesetter,
     required this.marks,
+    this.blurred = false,
   });
 
   final GlobalKey paragraphKey;
+  final bool blurred;
   final Block block;
   final LayoutItem item;
   final ReaderLayoutSpec spec;
@@ -816,11 +843,17 @@ class _TextItemState extends State<_TextItem> {
       widget.spec,
       marks: widget.marks,
     );
-    final text = RichText(
+    Widget text = RichText(
       key: widget.paragraphKey,
       textScaler: TextScaler.noScaling,
       textDirection: widget.item.direction,
       text: span,
+    );
+    // 始终包一层滤镜，切换模糊时不改变树结构，段落 GlobalKey 不必重新挂载。
+    text = ImageFiltered(
+      enabled: widget.blurred,
+      imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: text,
     );
     if (widget.item.indent == 0) return text;
     return Container(
@@ -828,7 +861,7 @@ class _TextItemState extends State<_TextItem> {
       decoration: BoxDecoration(
         border: Border(
           left: BorderSide(
-            color: widget.spec.ruleColor,
+            color: widget.item.ruleColor ?? widget.spec.ruleColor,
             width: ReaderTypography.blockquoteSideWidth,
           ),
         ),

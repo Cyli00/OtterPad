@@ -28,6 +28,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'document.dart';
 import 'document/figures.dart';
+import 'document/references.dart';
 import 'document/structure.dart';
 import 'document/table.dart';
 import 'error.dart';
@@ -6059,6 +6060,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<Reference> dco_decode_list_reference(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_reference).toList();
+  }
+
+  @protected
   List<RemoteEntry> dco_decode_list_remote_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_remote_entry).toList();
@@ -6696,8 +6703,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReaderDocument dco_decode_reader_document(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return ReaderDocument(
       version: dco_decode_u_32(arr[0]),
       blocks: dco_decode_list_block(arr[1]),
@@ -6706,6 +6713,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       figureAssets: dco_decode_list_figure_asset(arr[4]),
       figureImages: dco_decode_list_reader_figure_image(arr[5]),
       assetDirectory: dco_decode_String(arr[6]),
+      references: dco_decode_list_reference(arr[7]),
     );
   }
 
@@ -6766,6 +6774,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       top: dco_decode_f_32(arr[1]),
       right: dco_decode_f_32(arr[2]),
       bottom: dco_decode_f_32(arr[3]),
+    );
+  }
+
+  @protected
+  Reference dco_decode_reference(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return Reference(
+      number: dco_decode_u_32(arr[0]),
+      text: dco_decode_String(arr[1]),
+      blockId: dco_decode_String(arr[2]),
+      numbered: dco_decode_bool(arr[3]),
     );
   }
 
@@ -9497,6 +9519,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<Reference> sse_decode_list_reference(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <Reference>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_reference(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<RemoteEntry> sse_decode_list_remote_entry(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -10395,6 +10429,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_figureAssets = sse_decode_list_figure_asset(deserializer);
     var var_figureImages = sse_decode_list_reader_figure_image(deserializer);
     var var_assetDirectory = sse_decode_String(deserializer);
+    var var_references = sse_decode_list_reference(deserializer);
     return ReaderDocument(
       version: var_version,
       blocks: var_blocks,
@@ -10403,6 +10438,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       figureAssets: var_figureAssets,
       figureImages: var_figureImages,
       assetDirectory: var_assetDirectory,
+      references: var_references,
     );
   }
 
@@ -10475,6 +10511,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       top: var_top,
       right: var_right,
       bottom: var_bottom,
+    );
+  }
+
+  @protected
+  Reference sse_decode_reference(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_number = sse_decode_u_32(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    var var_blockId = sse_decode_String(deserializer);
+    var var_numbered = sse_decode_bool(deserializer);
+    return Reference(
+      number: var_number,
+      text: var_text,
+      blockId: var_blockId,
+      numbered: var_numbered,
     );
   }
 
@@ -13174,6 +13225,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_reference(
+    List<Reference> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_reference(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_remote_entry(
     List<RemoteEntry> self,
     SseSerializer serializer,
@@ -13943,6 +14006,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_figure_asset(self.figureAssets, serializer);
     sse_encode_list_reader_figure_image(self.figureImages, serializer);
     sse_encode_String(self.assetDirectory, serializer);
+    sse_encode_list_reference(self.references, serializer);
   }
 
   @protected
@@ -13989,6 +14053,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_32(self.top, serializer);
     sse_encode_f_32(self.right, serializer);
     sse_encode_f_32(self.bottom, serializer);
+  }
+
+  @protected
+  void sse_encode_reference(Reference self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.number, serializer);
+    sse_encode_String(self.text, serializer);
+    sse_encode_String(self.blockId, serializer);
+    sse_encode_bool(self.numbered, serializer);
   }
 
   @protected

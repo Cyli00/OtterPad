@@ -12,6 +12,8 @@ import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../core/otter_error_text.dart';
 import '../../core/rust_backend.dart';
+import '../../core/storage/settings_keys.dart';
+import '../../core/storage/storage.dart';
 import '../../data/models/book/document.dart';
 import '../../data/models/book/highlight.dart';
 import '../../providers/doc_extract_api_provider.dart';
@@ -28,6 +30,7 @@ import '../../services/snackbar_service.dart';
 import '../../src/rust/document.dart';
 import '../../utils/desktop.dart';
 import '../../utils/doc_paths.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/extract_provider_dialog.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../reader2/reader_controller.dart';
@@ -35,13 +38,17 @@ import '../reader2/reader_layout.dart';
 import '../reader2/reader_surface.dart';
 import 'chat/document_chat_page.dart';
 import 'widgets/figure_viewer.dart';
+import 'widgets/outline_panel.dart';
 import 'widgets/reader_background.dart';
 import 'widgets/reader_bottom_bar.dart';
 import 'widgets/reader_chat_return_prompt.dart';
+import 'widgets/reader_desktop_appearance.dart';
+import 'widgets/reader_docked_pane.dart';
 import 'widgets/reader_document_info_sheet.dart';
 import 'widgets/reader_icon_button.dart';
 import 'widgets/reader_notes_sheet.dart';
 import 'widgets/reader_search_bars.dart';
+import 'widgets/reader_sheet_host.dart';
 import 'widgets/reader_theme_sheet.dart';
 import 'widgets/translation_popup.dart';
 
@@ -71,9 +78,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _pdfMode = false;
   bool _searching = false;
   bool _toolbars = true;
+  final _sheetHost = GlobalKey<ReaderSheetHostState>();
   ReaderSheetType? _sheet;
   DocumentChatPageArgs? _chatReturn;
   int _quoteEpoch = 0;
+
+  // 宽屏右侧停靠栏：大纲、笔记、问 AI 三选一；首次打开后才挂载。
+  bool _dockMounted = false;
+  bool _dockOpen = false;
+  ReaderDockPane _dockPane = ReaderDockPane.outline;
+
+  /// 用户拖拽得到的停靠栏宽度；null 时随窗口自适应。
+  double? _sidebarWidth;
+  String? _dockQuote;
+  Map<String, dynamic>? _dockQuoteAnchor;
+  String? _dockFigurePath;
+
+  /// 桌面端外观设置浮层（窄屏用底部面板）。
+  bool _appearanceOpen = false;
 
   String get _id => widget.document.id;
   bool get _fileExists => File(DocPaths.pdf(_id)).existsSync();
@@ -83,6 +105,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void initState() {
     super.initState();
     _history = ref.read(historyProvider.notifier);
+    _sidebarWidth =
+        GStorage.setting.get(SettingsKeys.readerSidebarWidth) as double?;
     _pdfMode =
         ref.read(readerSettingsProvider).defaultReadingMode ==
         DefaultReadingMode.pdf;
@@ -377,6 +401,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     List<AnchorRange>? anchor,
   }) {
     Haptics.soft();
+    if (_useDock) {
+      setState(() {
+        _dockQuote = quote;
+        _dockQuoteAnchor = anchor == null ? null : _anchorJson(anchor);
+        _dockFigurePath = figurePath;
+        _quoteEpoch++;
+        _chatReturn = null;
+        _showDock(ReaderDockPane.askAi);
+      });
+      return;
+    }
     context.push(
       AppRoutes.readerChat,
       extra: DocumentChatPageArgs(
@@ -401,13 +436,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final blocks = controller.model.blocks;
     for (var i = 0; i < blocks.length; i++) {
       if (!normalize(blocks[i].text).contains(probe)) continue;
+      final docked = _dockOpen && _dockPane == ReaderDockPane.askAi;
       setState(() {
         _pdfMode = false;
-        _chatReturn = DocumentChatPageArgs(
-          document: args.document,
-          onLocateQuote: _locateQuote,
-          preserveSession: true,
-        );
+        if (!docked) {
+          _chatReturn = DocumentChatPageArgs(
+            document: args.document,
+            onLocateQuote: _locateQuote,
+            preserveSession: true,
+          );
+        }
       });
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _surface.currentState?.reveal(ReaderLocation(i, 0)),
@@ -482,35 +520,138 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  Future<void> _openSheet(ReaderSheetType type) async {
+  // ── 面板：宽屏停靠在右侧，窄屏从底部弹出；外观在桌面端是浮层 ──
+
+  bool get _useDock =>
+      MediaQuery.sizeOf(context).width >= Responsive.kReaderDockMinWidth;
+
+  void _showDock(ReaderDockPane pane) {
+    _dockMounted = true;
+    _dockPane = pane;
+    _dockOpen = true;
+    _appearanceOpen = false;
+  }
+
+  void _toggleDock(ReaderDockPane pane) {
     Haptics.soft();
-    setState(() => _sheet = type);
-    final cs = Theme.of(context).colorScheme;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: type != ReaderSheetType.notes,
-      backgroundColor: cs.surfaceContainerLow,
-      constraints: const BoxConstraints(maxWidth: 640),
-      builder: (context) => switch (type) {
-        ReaderSheetType.outline => _OutlineSheet(
-          controller: _controller,
-          onSelect: (index) {
-            Navigator.pop(context);
-            setState(() => _pdfMode = false);
-            WidgetsBinding.instance.addPostFrameCallback(
-              (_) => _surface.currentState?.reveal(ReaderLocation(index, 0)),
-            );
-          },
+    setState(() {
+      if (_dockOpen && _dockPane == pane) {
+        _dockOpen = false;
+      } else {
+        _showDock(pane);
+      }
+    });
+  }
+
+  void _closeDock() => setState(() => _dockOpen = false);
+
+  void _toggleOutline() => _useDock
+      ? _toggleDock(ReaderDockPane.outline)
+      : _toggleSheet(ReaderSheetType.outline);
+
+  void _toggleNotes() => _useDock
+      ? _toggleDock(ReaderDockPane.notes)
+      : _toggleSheet(ReaderSheetType.notes);
+
+  void _toggleAskAi() {
+    if (_useDock) {
+      _toggleDock(ReaderDockPane.askAi);
+    } else {
+      _openChat();
+    }
+  }
+
+  void _toggleAppearance() {
+    if (isDesktopOs) {
+      Haptics.soft();
+      setState(() => _appearanceOpen = !_appearanceOpen);
+    } else {
+      _toggleSheet(ReaderSheetType.theme);
+    }
+  }
+
+  Future<void> _toggleSheet(ReaderSheetType type) async {
+    final host = _sheetHost.currentState;
+    if (host == null) return;
+    if (_sheet == type) {
+      host.close();
+      return;
+    }
+    Haptics.soft();
+    final future = host.show<void>(
+      bottomBarHeight: 0,
+      barrierAlpha: type == ReaderSheetType.theme ? 0.25 : 0.32,
+      builder: (_) => switch (type) {
+        ReaderSheetType.outline => ReaderSheetFrame(
+          fill: true,
+          child: _outline(),
         ),
-        ReaderSheetType.notes => FractionallySizedBox(
-          heightFactor: 0.7,
-          child: ReaderNotesSheetBody(documentId: _id),
+        ReaderSheetType.notes => ReaderNotesSheetBody(documentId: _id),
+        ReaderSheetType.theme => const ReaderSheetFrame(
+          child: ReaderThemeSheetBody(),
         ),
-        ReaderSheetType.theme => const ReaderThemeSheetBody(),
       },
     );
-    if (mounted) setState(() => _sheet = null);
+    setState(() => _sheet = type);
+    await future;
+  }
+
+  /// 大纲内容；sheet 与停靠栏共用。总结图生成状态在此订阅，sheet 内也能刷新。
+  Widget _outline() => Consumer(
+    builder: (context, ref, _) {
+      final generating = ref.watch(
+        documentTaskProvider.select(
+          (tasks) =>
+              tasks[DocumentTaskKey(
+                    type: DocumentTaskType.generateSummaryImage,
+                    documentId: _id,
+                  )]
+                  ?.isActive ==
+              true,
+        ),
+      );
+      final controller = _controller;
+      if (controller == null) return const SizedBox.shrink();
+      return OutlinePanel(
+        model: controller.source,
+        summaryPath: DocPaths.summaryImage(_id),
+        generatingSummary: generating,
+        onNavigate: _revealBlock,
+        onOpenFigure: _openFigure,
+        onGenerateSummary: _hasModel ? _generateSummary : null,
+        onOpenSummary: _showSummary,
+      );
+    },
+  );
+
+  void _revealBlock(String blockId) {
+    final index = _controller?.indexOfBlock(blockId);
+    if (index == null) return;
+    if (_sheet != null) _sheetHost.currentState?.close();
+    setState(() => _pdfMode = false);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _surface.currentState?.reveal(ReaderLocation(index, 0)),
+    );
+  }
+
+  void _onSidebarDrag(DragUpdateDetails details) {
+    final width = MediaQuery.sizeOf(context).width;
+    final current = Responsive.clampReaderSidebarWidth(
+      _sidebarWidth ?? Responsive.readerSidebarWidth(width),
+      width,
+    );
+    final next = Responsive.clampReaderSidebarWidth(
+      current - details.delta.dx,
+      width,
+    );
+    if (next != current) setState(() => _sidebarWidth = next);
+  }
+
+  void _onSidebarDragEnd() {
+    final width = _sidebarWidth;
+    if (width != null) {
+      unawaited(GStorage.setting.put(SettingsKeys.readerSidebarWidth, width));
+    }
   }
 
   Future<void> _toggleFavorite(bool inFavorite) async {
@@ -577,6 +718,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       (f) => f.documentIds.contains(_id),
     );
     final showBottom = _hasModel && !_pdfMode;
+    final useDock = _useDock;
+    final windowWidth = MediaQuery.sizeOf(context).width;
+    final sidebarWidth = Responsive.clampReaderSidebarWidth(
+      _sidebarWidth ?? Responsive.readerSidebarWidth(windowWidth),
+      windowWidth,
+    );
 
     return Theme(
       data: theme,
@@ -599,68 +746,164 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           resizeToAvoidBottomInset: false,
           body: SafeArea(
             bottom: false,
-            child: Column(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AnimatedSize(
-                  duration: kAnim,
-                  curve: kAnimCurve,
-                  child: _toolbars || _searching
-                      ? ColoredBox(
-                          color: cs.surface,
-                          child: _toolbar(context, inFavorite, extracting),
-                        )
-                      : const SizedBox(width: double.infinity),
-                ),
                 Expanded(
-                  child: Stack(
+                  child: Column(
                     children: [
-                      Positioned.fill(
-                        child: _body(context, palette, settings, extracting),
+                      AnimatedSize(
+                        duration: kAnim,
+                        curve: kAnimCurve,
+                        child: _toolbars || _searching
+                            ? ColoredBox(
+                                color: cs.surface,
+                                child: _toolbar(
+                                  context,
+                                  inFavorite,
+                                  extracting,
+                                ),
+                              )
+                            : const SizedBox(width: double.infinity),
                       ),
-                      if (_chatReturn case final args?)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: ReaderChatReturnPrompt(
-                            onCancel: () => setState(() => _chatReturn = null),
-                            onReturn: () {
-                              setState(() => _chatReturn = null);
-                              context.push(AppRoutes.readerChat, extra: args);
-                            },
-                          ),
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: _body(
+                                context,
+                                palette,
+                                settings,
+                                extracting,
+                              ),
+                            ),
+                            if (_chatReturn case final args?)
+                              Positioned(
+                                right: 16,
+                                bottom: 16,
+                                child: ReaderChatReturnPrompt(
+                                  onCancel: () =>
+                                      setState(() => _chatReturn = null),
+                                  onReturn: () {
+                                    setState(() => _chatReturn = null);
+                                    context.push(
+                                      AppRoutes.readerChat,
+                                      extra: args,
+                                    );
+                                  },
+                                ),
+                              ),
+                            Positioned.fill(
+                              child: ReaderSheetHost(
+                                key: _sheetHost,
+                                onSheetClose: () {
+                                  if (mounted) setState(() => _sheet = null);
+                                },
+                              ),
+                            ),
+                            Positioned(
+                              top: 16,
+                              right: 16,
+                              bottom: 16,
+                              width: 360,
+                              child: Align(
+                                alignment: Alignment.bottomRight,
+                                child: AnimatedSwitcher(
+                                  duration: kAnim,
+                                  reverseDuration: kAnimFast,
+                                  switchInCurve: kAnimCurve,
+                                  switchOutCurve: kAnimCurveReverse,
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                        opacity: animation,
+                                        child: ScaleTransition(
+                                          alignment: Alignment.bottomRight,
+                                          scale: Tween(
+                                            begin: 0.92,
+                                            end: 1.0,
+                                          ).animate(animation),
+                                          child: child,
+                                        ),
+                                      ),
+                                  child: _appearanceOpen
+                                      ? ConstrainedBox(
+                                          key: const ValueKey('appearance'),
+                                          constraints: const BoxConstraints(
+                                            maxHeight: 640,
+                                          ),
+                                          child: ReaderDesktopAppearance(
+                                            pdfView: _pdfMode,
+                                            onClose: () => setState(
+                                              () => _appearanceOpen = false,
+                                            ),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (showBottom)
+                        AnimatedSize(
+                          duration: kAnim,
+                          curve: kAnimCurve,
+                          child: _toolbars
+                              ? SafeArea(
+                                  top: false,
+                                  child: ReaderBottomBar(
+                                    readerSettings: settings,
+                                    translation: translation,
+                                    activeSheet: _appearanceOpen
+                                        ? ReaderSheetType.theme
+                                        : _sheet,
+                                    activeDock: useDock && _dockOpen
+                                        ? _dockPane
+                                        : null,
+                                    desktop: isDesktopOs,
+                                    readingProgress: _progress,
+                                    onOpenOutline: _toggleOutline,
+                                    onTranslate: _translateDocument,
+                                    onCycleTranslationMode: () => ref
+                                        .read(
+                                          documentTranslationProvider(
+                                            _id,
+                                          ).notifier,
+                                        )
+                                        .cycleMode(),
+                                    onAskAi: _toggleAskAi,
+                                    onOpenNotes: _toggleNotes,
+                                    onOpenTheme: _toggleAppearance,
+                                  ),
+                                )
+                              : const SizedBox(width: double.infinity),
                         ),
                     ],
                   ),
                 ),
-                if (showBottom)
-                  AnimatedSize(
-                    duration: kAnim,
-                    curve: kAnimCurve,
-                    child: _toolbars
-                        ? SafeArea(
-                            top: false,
-                            child: ReaderBottomBar(
-                              readerSettings: settings,
-                              translation: translation,
-                              activeSheet: _sheet,
-                              desktop: isDesktopOs,
-                              readingProgress: _progress,
-                              onOpenOutline: () =>
-                                  _openSheet(ReaderSheetType.outline),
-                              onTranslate: _translateDocument,
-                              onCycleTranslationMode: () => ref
-                                  .read(
-                                    documentTranslationProvider(_id).notifier,
-                                  )
-                                  .cycleMode(),
-                              onAskAi: () => _openChat(),
-                              onOpenNotes: () =>
-                                  _openSheet(ReaderSheetType.notes),
-                              onOpenTheme: () =>
-                                  _openSheet(ReaderSheetType.theme),
-                            ),
-                          )
-                        : const SizedBox(width: double.infinity),
+                if (useDock && _dockMounted)
+                  ReaderDockedPane(
+                    sidebarWidth: sidebarWidth,
+                    open: _dockOpen,
+                    pane: _dockPane,
+                    onSidebarDragUpdate: _onSidebarDrag,
+                    onSidebarDragEnd: _onSidebarDragEnd,
+                    outline: _outline(),
+                    notes: ReaderNotesPanel(documentId: _id),
+                    chat: DocumentChatPage(
+                      embedded: true,
+                      paneWidth: sidebarWidth,
+                      onClose: _closeDock,
+                      args: DocumentChatPageArgs(
+                        document: widget.document,
+                        initialQuote: _dockQuote,
+                        quoteAnchor: _dockQuoteAnchor,
+                        figureImagePath: _dockFigurePath,
+                        onLocateQuote: _locateQuote,
+                        quoteEpoch: _quoteEpoch,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -889,6 +1132,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           fontFamily: settings.font.fontFamily,
           fontFamilyFallback: settings.font.fontFamilyFallback,
         ),
+        translationStyle: ref.watch(
+          translationConfigProvider.select((c) => c.displayStyleId),
+        ),
         onTranslate: _showTranslation,
         onAskAi: (text) => _openChat(quote: text),
         onFigureTap: _openFigure,
@@ -961,54 +1207,6 @@ class _SearchCount extends StatelessWidget {
           onPressed: total == 0 ? null : onNext,
         ),
       ],
-    );
-  }
-}
-
-/// 目录：正文中的标题，点击跳到对应位置。
-class _OutlineSheet extends StatelessWidget {
-  const _OutlineSheet({required this.controller, required this.onSelect});
-
-  final ReaderController? controller;
-  final void Function(int blockIndex) onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final blocks = controller?.model.blocks ?? const <Block>[];
-    final entries = [
-      for (var i = 0; i < blocks.length; i++)
-        if (blocks[i].kind == BlockKind.heading &&
-            blocks[i].text.trim().isNotEmpty)
-          (i, blocks[i]),
-    ];
-    if (entries.isEmpty) {
-      return SizedBox(
-        height: 160,
-        child: Center(child: Text(context.l10n.readerOutlineEmpty)),
-      );
-    }
-    return FractionallySizedBox(
-      heightFactor: 0.7,
-      child: ListView.builder(
-        itemCount: entries.length,
-        itemBuilder: (context, i) {
-          final (index, block) = entries[i];
-          final level = (block.headingLevel ?? 1).clamp(1, 4);
-          return ListTile(
-            contentPadding: EdgeInsets.only(left: 16.0 * level, right: 16),
-            title: Text(
-              block.text,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: level == 1
-                  ? theme.textTheme.titleSmall
-                  : theme.textTheme.bodyMedium,
-            ),
-            onTap: () => onSelect(index),
-          );
-        },
-      ),
     );
   }
 }

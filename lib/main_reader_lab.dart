@@ -279,6 +279,7 @@ ReaderDocument _synthetic(int paragraphs) {
     figureAssets: const [],
     figureImages: const [],
     assetDirectory: '',
+    references: const [],
   );
 }
 

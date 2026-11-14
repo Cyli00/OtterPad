@@ -24,6 +24,7 @@ import 'api/zotero.dart';
 import 'credentials.dart';
 import 'document.dart';
 import 'document/figures.dart';
+import 'document/references.dart';
 import 'document/structure.dart';
 import 'document/table.dart';
 import 'error.dart';

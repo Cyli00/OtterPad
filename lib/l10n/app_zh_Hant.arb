@@ -1182,5 +1182,7 @@
   "otterErrorRefused": "模型拒絕了該請求",
   "otterErrorIncompleteResponse": "回應不完整，請重試",
   "otterErrorToolLimit": "已達到工具呼叫次數上限",
-  "readerOutlineEmpty": "該文獻沒有標題"
+  "outlineFigures": "圖表",
+  "outlineReferences": "參考文獻",
+  "graphicalSummary": "總結圖"
 }

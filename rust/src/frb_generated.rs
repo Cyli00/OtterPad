@@ -7427,6 +7427,20 @@ impl SseDecode for Vec<crate::pdf::geometry::Rect> {
     }
 }
 
+impl SseDecode for Vec<crate::document::references::Reference> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::document::references::Reference>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::sync::remote::RemoteEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8397,6 +8411,8 @@ impl SseDecode for crate::api::document::ReaderDocument {
         let mut var_figureImages =
             <Vec<crate::api::document::ReaderFigureImage>>::sse_decode(deserializer);
         let mut var_assetDirectory = <String>::sse_decode(deserializer);
+        let mut var_references =
+            <Vec<crate::document::references::Reference>>::sse_decode(deserializer);
         return crate::api::document::ReaderDocument {
             version: var_version,
             blocks: var_blocks,
@@ -8405,6 +8421,7 @@ impl SseDecode for crate::api::document::ReaderDocument {
             figure_assets: var_figureAssets,
             figure_images: var_figureImages,
             asset_directory: var_assetDirectory,
+            references: var_references,
         };
     }
 }
@@ -8479,6 +8496,22 @@ impl SseDecode for crate::pdf::geometry::Rect {
             top: var_top,
             right: var_right,
             bottom: var_bottom,
+        };
+    }
+}
+
+impl SseDecode for crate::document::references::Reference {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_number = <u32>::sse_decode(deserializer);
+        let mut var_text = <String>::sse_decode(deserializer);
+        let mut var_blockId = <String>::sse_decode(deserializer);
+        let mut var_numbered = <bool>::sse_decode(deserializer);
+        return crate::document::references::Reference {
+            number: var_number,
+            text: var_text,
+            block_id: var_blockId,
+            numbered: var_numbered,
         };
     }
 }
@@ -11526,6 +11559,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::document::ReaderDocument {
             self.figure_assets.into_into_dart().into_dart(),
             self.figure_images.into_into_dart().into_dart(),
             self.asset_directory.into_into_dart().into_dart(),
+            self.references.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -11629,6 +11663,29 @@ impl flutter_rust_bridge::IntoDart for crate::pdf::geometry::Rect {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::pdf::geometry::Rect {}
 impl flutter_rust_bridge::IntoIntoDart<crate::pdf::geometry::Rect> for crate::pdf::geometry::Rect {
     fn into_into_dart(self) -> crate::pdf::geometry::Rect {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::document::references::Reference {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.number.into_into_dart().into_dart(),
+            self.text.into_into_dart().into_dart(),
+            self.block_id.into_into_dart().into_dart(),
+            self.numbered.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::document::references::Reference
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::document::references::Reference>
+    for crate::document::references::Reference
+{
+    fn into_into_dart(self) -> crate::document::references::Reference {
         self
     }
 }
@@ -14098,6 +14155,16 @@ impl SseEncode for Vec<crate::pdf::geometry::Rect> {
     }
 }
 
+impl SseEncode for Vec<crate::document::references::Reference> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::document::references::Reference>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::sync::remote::RemoteEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14849,6 +14916,7 @@ impl SseEncode for crate::api::document::ReaderDocument {
         <Vec<crate::pdf::figures::FigureAsset>>::sse_encode(self.figure_assets, serializer);
         <Vec<crate::api::document::ReaderFigureImage>>::sse_encode(self.figure_images, serializer);
         <String>::sse_encode(self.asset_directory, serializer);
+        <Vec<crate::document::references::Reference>>::sse_encode(self.references, serializer);
     }
 }
 
@@ -14893,6 +14961,16 @@ impl SseEncode for crate::pdf::geometry::Rect {
         <f32>::sse_encode(self.top, serializer);
         <f32>::sse_encode(self.right, serializer);
         <f32>::sse_encode(self.bottom, serializer);
+    }
+}
+
+impl SseEncode for crate::document::references::Reference {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.number, serializer);
+        <String>::sse_encode(self.text, serializer);
+        <String>::sse_encode(self.block_id, serializer);
+        <bool>::sse_encode(self.numbered, serializer);
     }
 }
 

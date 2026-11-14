@@ -1390,5 +1390,7 @@
   "otterErrorRefused": "The model refused the request.",
   "otterErrorIncompleteResponse": "The response was cut off. Please try again.",
   "otterErrorToolLimit": "The tool call limit was reached.",
-  "readerOutlineEmpty": "No headings in this document"
+  "outlineFigures": "Figures",
+  "outlineReferences": "References",
+  "graphicalSummary": "Graphical Summary"
 }

@@ -37,6 +37,8 @@ pub struct ReaderDocument {
     pub figure_assets: Vec<crate::pdf::figures::FigureAsset>,
     pub figure_images: Vec<ReaderFigureImage>,
     pub asset_directory: String,
+    /// 参考文献条目（大纲的参考文献页）。
+    pub references: Vec<crate::document::references::Reference>,
 }
 /// 新清单按 `segment_ids` 对应图块；0.1.x 清单没有图块 id，按视觉区域的页码与 OCR 块 id 对应。
 fn figure_images(
@@ -103,6 +105,7 @@ impl Backend {
                         .map(|b| crate::translate::paragraph::block_key(b).unwrap_or_default())
                         .collect(),
                     figure_images: figure_images(&directory, &model.blocks, &figure_assets)?,
+                    references: document::references::references(&model.blocks),
                     blocks: model.blocks,
                     figure_assets,
                     asset_directory: document::extraction_directory(&directory)?
