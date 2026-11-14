@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/rust_backend.dart';
 import '../core/rust_models.dart';
-import '../core/storage/secure_credential_vault.dart';
 import '../core/storage/storage.dart';
 import '../services/prompts.dart';
 import '../src/rust/api/backup.dart';
@@ -219,7 +218,6 @@ class BackupOrchestrator {
   Future<void> _refreshAfterRestore(RestoreScope scope) async {
     if (scope != RestoreScope.libraryOnly) {
       await GStorage.reloadSettings();
-      await SecureCredentialVault.rewriteIndex();
       await Prompts.load();
       _ref.read(themeProvider.notifier).reload();
       _ref.read(proxyProvider.notifier).reload();

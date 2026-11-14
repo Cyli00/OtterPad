@@ -25,6 +25,15 @@ pub fn component(value: &str) -> Result<&str> {
 
 /// Writes beside the destination, fsyncs, then atomically replaces it.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
+    write_replacing(path, bytes, false)
+}
+
+/// 同 [`atomic_write`]，但 Unix 上临时文件一创建就只有属主可读写（0600），凭据不会短暂以 0644 落盘。
+pub fn atomic_write_private(path: &Path, bytes: &[u8]) -> Result<()> {
+    write_replacing(path, bytes, true)
+}
+
+fn write_replacing(path: &Path, bytes: &[u8], private: bool) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| OtterError::new(ErrorCode::InvalidArgument, "missing parent directory"))?;
@@ -36,10 +45,15 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     ));
     let mut created = false;
     let result = (|| {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)?;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        if private {
+            std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        }
+        #[cfg(not(unix))]
+        let _ = private;
+        let mut file = options.open(&temporary)?;
         created = true;
         file.write_all(bytes)?;
         file.sync_all()?;

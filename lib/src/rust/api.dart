@@ -160,6 +160,9 @@ abstract class Backend implements RustOpaqueInterface {
     required String title,
   });
 
+  /// 已存凭据（启动时由 Dart 读入，供设置页回显）。
+  Future<List<CredentialInput>> credentials();
+
   Future<void> deleteConversation({
     required String document,
     required String id,

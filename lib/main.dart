@@ -12,7 +12,7 @@ import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'core/app_logger.dart';
 import 'core/rust_backend.dart';
-import 'core/storage/secure_credential_vault.dart';
+import 'core/storage/credential_vault.dart';
 import 'core/storage/settings_keys.dart';
 import 'core/storage/storage.dart';
 import 'pages/startup/startup_app.dart';
@@ -72,10 +72,8 @@ Future<void> main() async {
 
   await ensureDefaultFavorite(backend);
 
-  // 凭据安全存储：必须在 GStorage.init 之后、任何 provider 读取凭据之前完成——
-  // 同步 read() 依赖此处填充的内存缓存。
-  await SecureCredentialVault.init();
-  await SecureCredentialVault.attach(backend);
+  // 凭据：必须在任何 provider 读取凭据之前完成——同步 read() 依赖此处填充的内存缓存。
+  await CredentialVault.open(backend);
 
   // 应用通用设置中的持久化偏好
   final hapticsOn =

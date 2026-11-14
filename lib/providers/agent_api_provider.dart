@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_riverpod/legacy.dart';
 
-import '../core/storage/secure_credential_vault.dart';
+import '../core/storage/credential_vault.dart';
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
@@ -269,7 +269,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
     final box = GStorage.setting;
     var baseUrl = box.get(_baseUrlKey(id), defaultValue: '') as String;
     if (baseUrl.isEmpty) baseUrl = defaultBaseUrl;
-    final apiKey = SecureCredentialVault.read(_apiKeyKey(id));
+    final apiKey = CredentialVault.read(_apiKeyKey(id));
     final models =
         (box.get(_modelsKey(id)) as List?)?.cast<String>().toList() ??
         <String>[];
@@ -355,7 +355,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
       await box.put(_baseUrlKey(id), baseUrl);
     }
     if (apiKey != null && apiKey.isNotEmpty) {
-      await SecureCredentialVault.write(_apiKeyKey(id), apiKey);
+      await CredentialVault.write(_apiKeyKey(id), apiKey);
     }
     await box.put(_idsKey, [..._loadIds(), id]);
     state = _load();
@@ -371,7 +371,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
     await box.delete(_nameKey(id));
     await box.delete(_protocolKey(id));
     await box.delete(_baseUrlKey(id));
-    await SecureCredentialVault.delete(_apiKeyKey(id));
+    await CredentialVault.delete(_apiKeyKey(id));
     await box.delete(_modelsKey(id));
     await box.delete(_modelParamsKey(id));
     await box.delete(_modelCapsKey(id));
@@ -408,7 +408,7 @@ class AgentApiNotifier extends StateNotifier<AgentProvidersState> {
   }
 
   Future<void> setApiKey(String id, String key) async {
-    await SecureCredentialVault.write(_apiKeyKey(id), key);
+    await CredentialVault.write(_apiKeyKey(id), key);
     state = _load();
   }
 

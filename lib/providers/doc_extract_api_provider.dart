@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/rust_backend.dart';
 
-import '../core/storage/secure_credential_vault.dart';
+import '../core/storage/credential_vault.dart';
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
@@ -26,8 +26,8 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     final provider = DocExtractProviderExt.fromName(
       box.get('$_prefix${SettingsKeys.docExtractProviderField}') as String?,
     );
-    final paddleApiKey = SecureCredentialVault.read(_paddleApiKeyKey);
-    final mineruApiKey = SecureCredentialVault.read(_mineruApiKeyKey);
+    final paddleApiKey = CredentialVault.read(_paddleApiKeyKey);
+    final mineruApiKey = CredentialVault.read(_mineruApiKeyKey);
     final useChartRecognition =
         box.get('${_prefix}useChartRecognition', defaultValue: false) as bool;
     final useDocOrientationClassify =
@@ -105,10 +105,10 @@ class DocExtractApiNotifier extends StateNotifier<DocExtractApiState> {
     switch (provider) {
       case DocExtractProvider.paddle:
         state = state.copyWith(paddleApiKey: key);
-        await SecureCredentialVault.write(_paddleApiKeyKey, key);
+        await CredentialVault.write(_paddleApiKeyKey, key);
       case DocExtractProvider.mineru:
         state = state.copyWith(mineruApiKey: key);
-        await SecureCredentialVault.write(_mineruApiKeyKey, key);
+        await CredentialVault.write(_mineruApiKeyKey, key);
     }
   }
 

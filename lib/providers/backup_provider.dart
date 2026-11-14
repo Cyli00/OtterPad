@@ -2,7 +2,7 @@
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 
-import '../core/storage/secure_credential_vault.dart';
+import '../core/storage/credential_vault.dart';
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
@@ -176,7 +176,7 @@ class BackupWebDavNotifier extends StateNotifier<BackupWebDavState> {
     return BackupWebDavState(
       serverUrl: box.get(_serverUrlKey, defaultValue: '') as String,
       username: box.get(_usernameKey, defaultValue: '') as String,
-      password: SecureCredentialVault.read(_passwordKey),
+      password: CredentialVault.read(_passwordKey),
       remoteDir:
           box.get(
                 _remoteDirKey,
@@ -200,7 +200,7 @@ class BackupWebDavNotifier extends StateNotifier<BackupWebDavState> {
     await Future.wait([
       GStorage.setting.put(_serverUrlKey, normalized.serverUrl.trim()),
       GStorage.setting.put(_usernameKey, normalized.username.trim()),
-      SecureCredentialVault.write(_passwordKey, normalized.password),
+      CredentialVault.write(_passwordKey, normalized.password),
       GStorage.setting.put(_remoteDirKey, normalized.remoteDir),
       GStorage.setting.put(_fileNameKey, normalized.fileName),
     ]);
@@ -233,7 +233,7 @@ class BackupS3Notifier extends StateNotifier<BackupS3State> {
               as String,
       bucket: box.get(_bucketKey, defaultValue: '') as String,
       accessKeyId: box.get(_accessKeyIdKey, defaultValue: '') as String,
-      secretAccessKey: SecureCredentialVault.read(_secretAccessKeyKey),
+      secretAccessKey: CredentialVault.read(_secretAccessKeyKey),
       objectKey:
           box.get(_objectKeyKey, defaultValue: BackupS3State.defaultObjectKey)
               as String,
@@ -257,7 +257,7 @@ class BackupS3Notifier extends StateNotifier<BackupS3State> {
       GStorage.setting.put(_regionKey, normalized.region),
       GStorage.setting.put(_bucketKey, normalized.bucket),
       GStorage.setting.put(_accessKeyIdKey, normalized.accessKeyId),
-      SecureCredentialVault.write(
+      CredentialVault.write(
         _secretAccessKeyKey,
         normalized.secretAccessKey,
       ),

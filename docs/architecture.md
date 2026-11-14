@@ -12,7 +12,7 @@
 
 | 层 | 职责 |
 | --- | --- |
-| Flutter（`lib/`） | 只做 UI：页面、Riverpod 状态、重排正文的测量/分页/绘制、公式（`flutter_math_fork`）、PDF 位图与叠加层显示、读取系统安全存储中的密钥并注入 Rust |
+| Flutter（`lib/`） | 只做 UI：页面、Riverpod 状态、重排正文的测量/分页/绘制、公式（`flutter_math_fork`）、PDF 位图与叠加层显示 |
 | Rust（`rust/`，crate `otter_core`） | 全部业务与数据：持久化、文献库、OCR 接入、文档模型、PDF、AI、翻译、搜索、备份同步、Zotero、0.1.x 迁移 |
 
 阅读器整体重写；文献库、设置、聊天等页面保留现有 UI，数据源改接 Rust。
@@ -54,7 +54,7 @@
 
 - 根目录 `<AppSupport>/OtterPad/v2/`：`otter.db`、`library/<docId>/`（`source.pdf`、OCR 原始结果、派生产物）、`logs/`。与 0.1.x 的 `<AppSupport>/OtterPad/{db,library,logs}` 并列，迁移期间互不覆盖。
 - 设置存在 SQLite 的 settings 表；只有界面临时状态留在 Dart。
-- 密钥（API Key、WebDAV/S3/Zotero 凭据）继续存系统安全存储（`flutter_secure_storage`），沿用 0.1.x `SecureCredentialVault` 的键名，因此无需迁移。启动和修改时由 Dart 交给 Rust，Rust 只在内存中持有，不写入数据库、日志或备份明文。
+- 密钥（API Key、WebDAV/S3/Zotero 凭据）由 Rust 存在数据根的 `credentials.json`（与 `v2/` 并列，Unix 上 0600，明文），不使用系统钥匙串，也不写入数据库、日志或备份包；恢复备份替换 `v2/` 时不受影响。Dart 的 `CredentialVault` 启动时读入内存供同步读取，写入先交给 Rust 落盘。0.1.x 存在系统安全存储中的密钥不迁移，需要重新填写。保护程度与应用数据目录相同：能读取该目录的本机程序也能读取凭据。
 
 ## 0.1.x 数据迁移
 
@@ -99,9 +99,9 @@
 - `migrate`：只读旧 SQLite/复制旧资产，逐文档事务与迁移标记、取消续迁、稳定 hash 重映射译文、尽力定位旧笔记且保留未定位原始锚点。真实旧目录的副本已迁移两篇文献并验证取消续迁；该真实样本无笔记或翻译行，这些路径由实际旧 schema 的数据夹具覆盖。旧库与原始文件未修改。
 - `ai`/`translate`：Responses、Anthropic、Gemini、OpenAI 兼容协议，多模态、思考参数、SSE、结构化输出降级、原生/外部搜索工具、URL 上下文、图片协议、模型列表与条件更新能力缓存；按语言保存全文译文，跨文档共享 8 个并发请求，取消后保存完成段落。实际本地 HTTP 测试覆盖协议往返、断流、重试、网络取消和 API Key 不跟随重定向；未调用付费模型。聊天文件保留旧会话锚点与活动，使用文件内容修订号拒绝过期覆盖。
 - `sync`：WebDAV 集合与文件操作、S3 SigV4 与流式传输、完整/仅数据备份、覆盖/合并及按库/设置恢复、校验和与崩溃恢复标记。备份使用真实 SQLite 快照，删除误存凭据并清除页内残留，重建 FTS 的 rowid 关联；旧版 v3 ZIP 走同一迁移器。新增打包→上传→快照→保留最近 3 份版本备份的 Rust 编排；`last_backup_snapshot` 写入 v2 指纹格式，旧 Dart v1 指纹触发重新建立基线。自动备份 Stream 在启动 2 分钟后首查、随后每小时读取设置，按周期和文献变更判断是否上传。Zotero 云端按库版本增量导入；本地 API 检查实例与分页版本，保留用户编辑并复制所选 PDF。合并恢复会重映射云端与本地 Zotero 记录，跨账号不会混用云端游标。
-- `runtime`/`credentials`/`logging`：逐数据根限制单个运行时，SQLite 与 PDFium 由专用工作线程持有，恢复/删除与长任务互斥；启动先处理恢复标记、删除操作的恢复记录和旧数据迁移，按原设置执行缓存清理。凭据只在内存注入；文件日志受设置控制，按日保留 7 天，只记录操作名与稳定错误码。`api` 为文献、笔记、PDF、文档/锚点、AI/翻译、会话、OCR、备份和 Zotero 提供独立强类型入口及可取消 Stream。
-- `prompts`/`maintenance`/`update`：提示词默认值、覆盖、必需占位符校验和重置；存储用量分类、按组清理和缓存清理；GitHub release 解析、按设备 ABI 顺序选择 APK、忽略版本及下载进度；启动延迟检查读取自动更新偏好，忽略版本仅抑制自动提示。系统安全存储、字体/设备信息读取、分享接收、安装 Intent、交互反馈留在宿主平台/UI 边界。
+- `runtime`/`credentials`/`logging`：逐数据根限制单个运行时，SQLite 与 PDFium 由专用工作线程持有，恢复/删除与长任务互斥；启动先处理恢复标记、删除操作的恢复记录和旧数据迁移，按原设置执行缓存清理。凭据由 `credentials.json` 载入并在修改时原子写回（损坏的文件改名为 `.invalid` 保留，以空凭据启动）；文件日志受设置控制，按日保留 7 天，只记录操作名与稳定错误码。`api` 为文献、笔记、PDF、文档/锚点、AI/翻译、会话、OCR、备份和 Zotero 提供独立强类型入口及可取消 Stream。
+- `prompts`/`maintenance`/`update`：提示词默认值、覆盖、必需占位符校验和重置；存储用量分类、按组清理和缓存清理；GitHub release 解析、按设备 ABI 顺序选择 APK、忽略版本及下载进度；启动延迟检查读取自动更新偏好，忽略版本仅抑制自动提示。字体/设备信息读取、分享接收、安装 Intent、交互反馈留在宿主平台/UI 边界。
 - 长 PDF：PaddleOCR 超过 1000 页、MinerU 超过 200 页时按页段提交，全部完成后按页序合并（`ocr/chunks.rs`）；Paddle 页序以列表为准，同名图片改名，任一页段失败不发布。
 - 全文翻译以文档模型的块为单位，译文键为 `revision(block.markdown.trim())`，与迁移的 0.1.x 译文一致；`ReaderDocument.translation_keys` 与 `blocks` 一一对应，阅读器按键叠加译文（RTL 目标语言的译文块按 RTL 排版）。
-- Flutter 只保留界面与宿主能力：系统安全存储、文件选择、分享、APK 安装 Intent；PDF 视图与缩略图只负责显示 Rust 渲染的位图。
+- Flutter 只保留界面与宿主能力：文件选择、分享、APK 安装 Intent；PDF 视图与缩略图只负责显示 Rust 渲染的位图。
 - 待后续：PDF 页面上的标注、题注译文与宽屏左右双语（0.1.x 有）；重新解析（不重新 OCR）入口；PDFium 许可文本接入许可页；公式性能实测；Android/Windows 应用构建与运行验收。

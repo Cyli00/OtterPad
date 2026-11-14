@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-/// Values enter from the system vault and remain in memory. Never derive Debug/Serialize here.
+/// 凭据键值。只在注入和读取接口里出现；不要派生 Debug，避免值进日志。
 class CredentialInput {
   final String key;
   final String value;

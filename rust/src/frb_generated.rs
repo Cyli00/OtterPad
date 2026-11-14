@@ -41,7 +41,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1051790695;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -250705159;
 
 // Section: executor
 
@@ -1332,6 +1332,55 @@ fn wire__crate__api__Backend_create_conversation_impl(
                     })()
                     .await,
                 )
+            }
+        },
+    )
+}
+fn wire__crate__api__Backend_credentials_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "Backend_credentials",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Backend>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::error::OtterError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::Backend::credentials(&*api_that_guard)?;
+                    std::result::Result::Ok(output_ok)
+                })())
             }
         },
     )
@@ -9485,93 +9534,94 @@ fn pde_ffi_dispatcher_primary_impl(
         19 => wire__crate__api__Backend_create_anchor_impl(port, ptr, rust_vec_len, data_len),
         20 => wire__crate__api__Backend_create_backup_impl(port, ptr, rust_vec_len, data_len),
         21 => wire__crate__api__Backend_create_conversation_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__Backend_delete_conversation_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__Backend_delete_document_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__Backend_delete_favorite_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__Backend_delete_note_impl(port, ptr, rust_vec_len, data_len),
-        26 => {
+        22 => wire__crate__api__Backend_credentials_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__Backend_delete_conversation_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__Backend_delete_document_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__Backend_delete_favorite_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__Backend_delete_note_impl(port, ptr, rust_vec_len, data_len),
+        27 => {
             wire__crate__api__Backend_delete_remote_backup_impl(port, ptr, rust_vec_len, data_len)
         }
-        27 => wire__crate__api__Backend_delete_setting_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__Backend_discard_restore_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__Backend_document_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__Backend_documents_impl(port, ptr, rust_vec_len, data_len),
-        31 => {
+        28 => wire__crate__api__Backend_delete_setting_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__Backend_discard_restore_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__Backend_document_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__Backend_documents_impl(port, ptr, rust_vec_len, data_len),
+        32 => {
             wire__crate__api__Backend_download_document_pdf_impl(port, ptr, rust_vec_len, data_len)
         }
-        32 => wire__crate__api__Backend_download_update_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__Backend_extract_document_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__Backend_extract_documents_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__Backend_extraction_usage_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__Backend_favorite_document_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__Backend_favorites_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__Backend_fetch_local_zotero_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__Backend_generate_image_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__Backend_generate_summary_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__Backend_generate_text_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__Backend_history_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__Backend_import_identifier_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__Backend_import_local_pdf_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__Backend_import_local_zotero_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__Backend_import_pdf_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__Backend_inject_credentials_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__Backend_log_files_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__Backend_models_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__Backend_notes_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__Backend_open_pdf_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__Backend_pdf_characters_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__Backend_prepare_restore_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__Backend_probe_url_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__Backend_prompt_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__Backend_put_document_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__Backend_put_favorite_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__Backend_put_note_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__Backend_put_setting_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__Backend_reader_document_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__Backend_record_history_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__Backend_refresh_model_capabilities_impl(
+        33 => wire__crate__api__Backend_download_update_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__Backend_extract_document_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__Backend_extract_documents_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__Backend_extraction_usage_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__Backend_favorite_document_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__Backend_favorites_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__Backend_fetch_local_zotero_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__Backend_generate_image_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__Backend_generate_summary_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__Backend_generate_text_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__Backend_history_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__Backend_import_identifier_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__Backend_import_local_pdf_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__Backend_import_local_zotero_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__Backend_import_pdf_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__Backend_inject_credentials_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__Backend_log_files_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__Backend_models_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__Backend_notes_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__Backend_open_pdf_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__Backend_pdf_characters_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__Backend_prepare_restore_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__Backend_probe_url_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__Backend_prompt_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__Backend_put_document_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__Backend_put_favorite_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__Backend_put_note_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__Backend_put_setting_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__Backend_reader_document_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__Backend_record_history_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__Backend_refresh_model_capabilities_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__Backend_remote_backups_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__Backend_render_pdf_tile_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__Backend_repair_metadata_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__Backend_resolve_anchor_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__Backend_resolve_identifier_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__Backend_save_conversation_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__Backend_search_library_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__Backend_search_metadata_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__Backend_search_pdf_page_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__Backend_set_prompt_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__Backend_setting_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__Backend_settings_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__Backend_storage_report_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__Backend_summary_prompt_impl(port, ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__Backend_sync_zotero_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__Backend_transfer_backup_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__Backend_translate_document_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__Backend_translate_selection_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__Backend_translations_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__Backend_watch_auto_backup_impl(port, ptr, rust_vec_len, data_len),
-        83 => {
+        64 => wire__crate__api__Backend_remote_backups_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__Backend_render_pdf_tile_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__Backend_repair_metadata_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__Backend_resolve_anchor_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__Backend_resolve_identifier_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__Backend_save_conversation_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__Backend_search_library_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__Backend_search_metadata_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__Backend_search_pdf_page_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__Backend_set_prompt_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__Backend_setting_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__Backend_settings_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__Backend_storage_report_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__Backend_summary_prompt_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__Backend_sync_zotero_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__Backend_transfer_backup_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__crate__api__Backend_translate_document_impl(port, ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__Backend_translate_selection_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__Backend_translations_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__Backend_watch_auto_backup_impl(port, ptr, rust_vec_len, data_len),
+        84 => {
             wire__crate__api__Backend_zotero_imported_count_impl(port, ptr, rust_vec_len, data_len)
         }
-        85 => wire__crate__api__pdf__align_pdf_text_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__pdf__hit_test_pdf_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__pdf__layout_pdf_translation_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__pdf__layout_shaped_pdf_translation_impl(
+        86 => wire__crate__api__pdf__align_pdf_text_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__pdf__hit_test_pdf_impl(port, ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__pdf__layout_pdf_translation_impl(port, ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__pdf__layout_shaped_pdf_translation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => {
+        93 => {
             wire__crate__api__pdf__pdf_selection_rectangles_impl(port, ptr, rust_vec_len, data_len)
         }
-        93 => wire__crate__api__pdf__search_pdf_text_impl(port, ptr, rust_vec_len, data_len),
+        94 => wire__crate__api__pdf__search_pdf_text_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -9584,14 +9634,14 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        84 => wire__crate__api__zotero__LocalZoteroSnapshot_has_server_id_impl(
+        85 => wire__crate__api__zotero__LocalZoteroSnapshot_has_server_id_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        86 => wire__crate__api__cancel_task_impl(ptr, rust_vec_len, data_len),
-        91 => wire__crate__api__metadata__metadata_needs_repair_impl(ptr, rust_vec_len, data_len),
-        94 => wire__crate__api__document__translated_block_impl(ptr, rust_vec_len, data_len),
+        87 => wire__crate__api__cancel_task_impl(ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__metadata__metadata_needs_repair_impl(ptr, rust_vec_len, data_len),
+        95 => wire__crate__api__document__translated_block_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

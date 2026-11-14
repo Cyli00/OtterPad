@@ -169,6 +169,10 @@ impl Backend {
     pub fn inject_credentials(&self, entries: Vec<CredentialInput>) -> Result<()> {
         self.runtime.credentials.inject(entries)
     }
+    /// 已存凭据（启动时由 Dart 读入，供设置页回显）。
+    pub fn credentials(&self) -> Result<Vec<CredentialInput>> {
+        self.runtime.credentials.entries()
+    }
     pub fn clear_credentials(&self) -> Result<()> {
         self.runtime.credentials.clear()
     }

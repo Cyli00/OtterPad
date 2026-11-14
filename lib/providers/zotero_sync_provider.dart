@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/rust_backend.dart';
 import '../core/rust_models.dart';
-import '../core/storage/secure_credential_vault.dart';
+import '../core/storage/credential_vault.dart';
 
 /// Zotero 同步凭据。当前单向导入只需 API Key（userID 由 Key 自动反查）。
 class ZoteroSyncState {
@@ -26,13 +26,13 @@ class ZoteroSyncNotifier extends StateNotifier<ZoteroSyncState> {
   ZoteroSyncNotifier() : super(_load());
 
   static ZoteroSyncState _load() {
-    return ZoteroSyncState(apiKey: SecureCredentialVault.read(_apiKeyKey));
+    return ZoteroSyncState(apiKey: CredentialVault.read(_apiKeyKey));
   }
 
   Future<void> setApiKey(String apiKey) async {
     final trimmed = apiKey.trim();
     state = state.copyWith(apiKey: trimmed);
-    await SecureCredentialVault.write(_apiKeyKey, trimmed);
+    await CredentialVault.write(_apiKeyKey, trimmed);
   }
 
   void reload() {

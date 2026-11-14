@@ -4,7 +4,7 @@
 /// 引用本表（直接用 `SettingsKeys.foo`，或本地常量 `const _kFoo = SettingsKeys.foo;`
 /// 转引）。这样改名只改本表一处，所有引用同步；重复定义会导致改名时静默 desync。
 ///
-/// 仅收 `GStorage.setting` 键。凭据（API key / 密码）走 [SecureCredentialVault]，
+/// 仅收 `GStorage.setting` 键。凭据（API key / 密码）走 [CredentialVault]，
 /// 其键不在本表；per-prompt 键由 `PromptDef.storageKey` 自带（数据驱动，不在本表）。
 class SettingsKeys {
   SettingsKeys._();

@@ -23,9 +23,6 @@ dependencies:
 
 
 
-  # 凭据安全存储（API key / secret / 密码），后端走各平台 Keystore/Keychain/DPAPI
-  flutter_secure_storage: ^10.3.1
-
   # Material You 动态取色
   dynamic_color: ^1.7.0
 

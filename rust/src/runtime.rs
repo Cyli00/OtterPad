@@ -192,7 +192,7 @@ impl Runtime {
         })??;
         let runtime = Arc::new(Self {
             sender,
-            credentials: Credentials::default(),
+            credentials: Credentials::open(root.join("credentials.json"))?,
             tasks,
             operations: RwLock::new(()),
             backups: tokio::sync::Mutex::new(()),

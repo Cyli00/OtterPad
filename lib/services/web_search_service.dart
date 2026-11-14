@@ -1,4 +1,4 @@
-import '../core/storage/secure_credential_vault.dart';
+import '../core/storage/credential_vault.dart';
 import '../core/storage/settings_keys.dart';
 import '../core/storage/storage.dart';
 
@@ -21,10 +21,10 @@ class WebSearchService {
       : '${provider.name}_search_api_key';
 
   static String keyFor(WebSearchProvider provider) =>
-      SecureCredentialVault.read(_vaultKey(provider));
+      CredentialVault.read(_vaultKey(provider));
 
   static Future<void> setKey(WebSearchProvider provider, String key) =>
-      SecureCredentialVault.write(_vaultKey(provider), key.trim());
+      CredentialVault.write(_vaultKey(provider), key.trim());
 
   static bool get isConfigured => keyFor(provider).isNotEmpty;
 }
