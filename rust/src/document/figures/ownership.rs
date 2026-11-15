@@ -1,14 +1,18 @@
 use super::*;
 
-pub(super) fn blocked(visuals: &[Visual], caption: &Caption, pages: &[StructurePage]) -> bool {
+/// `figure` 是整个候选图的范围，其中的图内短文字不算阻挡。
+pub(super) fn blocked(
+    visuals: &[Visual],
+    figure: Box_,
+    caption: &Caption,
+    pages: &[StructurePage],
+) -> bool {
     let Some(cap) = caption.box_ else {
         return true;
     };
     let page = &pages[caption.page];
-    let regions = sight_regions(
-        Box_::union(visuals.iter().map(|v| &pages[v.page].blocks[v.block])),
-        cap,
-    );
+    let visual = Box_::union(visuals.iter().map(|v| &pages[v.page].blocks[v.block]));
+    let regions = sight_regions(visual, cap);
     page.blocks.iter().enumerate().any(|(i, b)| {
         if caption.block == Some(i)
             || caption.continuations.contains(&i)
@@ -21,6 +25,9 @@ pub(super) fn blocked(visuals: &[Visual], caption: &Caption, pages: &[StructureP
             return false;
         }
         let box_ = Box_::of(b);
+        if inner_label(b, figure) {
+            return false;
+        }
         if visuals.iter().any(|v| {
             let vb = Box_::of(&pages[v.page].blocks[v.block]);
             vb.contains(box_)
@@ -32,6 +39,14 @@ pub(super) fn blocked(visuals: &[Visual], caption: &Caption, pages: &[StructureP
         }
         regions.iter().any(|r| r.overlaps(box_))
     })
+}
+
+/// OCR 从图中单独切出的短文字（坐标轴、图例、面板标注）完全落在视觉块范围内时属于图本身。
+fn inner_label(b: &LayoutBlock, region: Box_) -> bool {
+    b.block_label == "text"
+        && b.block_content.encode_utf16().count() <= 80
+        && !main_caption(&b.block_content)
+        && region.contains(Box_::of(b))
 }
 
 /// 视觉块与题注之间可能出现阻挡物的区域。两者上下（或左右）排列时，只取两者本身和
@@ -127,6 +142,7 @@ pub(super) fn clusters(
                             && stable(b)
                             && b.raw_bbox.len() == 4
                             && region.overlaps(Box_::of(b))
+                            && !inner_label(b, region)
                             && !proposed
                                 .iter()
                                 .any(|v| Box_::of(&page.blocks[v.block]).contains(Box_::of(b)))
@@ -203,7 +219,7 @@ pub(super) fn cross_owners(
                             <= Box_::union(&cp.blocks).diagonal() * 0.15
                             && Columns::detect(cp).same(Box_::of(&cp.blocks[v.block]), b)
                     })
-                    && !blocked(&[*v], caption, pages)
+                    && !blocked(&[*v], Box_::of(&cp.blocks[v.block]), caption, pages)
             }) {
                 continue;
             }

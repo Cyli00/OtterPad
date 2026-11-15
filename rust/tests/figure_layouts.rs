@@ -735,3 +735,47 @@ fn body_text_between_figure_and_side_caption_still_blocks() {
     ])]);
     assert_eq!(pairs(raw), vec![]);
 }
+/// 子图之间夹着 OCR 单独切出的坐标轴文字。
+#[test]
+fn panel_grid_with_axis_labels_between_panels_belongs_to_one_caption() {
+    let mut blocks = vec![
+        image("a", [70.0, 120.0, 320.0, 315.0]),
+        image("b", [330.0, 120.0, 580.0, 315.0]),
+        block("ax1", "text", "Time (s)", [150.0, 318.0, 250.0, 334.0]),
+        block("ax2", "text", "Time (s)", [410.0, 318.0, 510.0, 334.0]),
+        image("c", [70.0, 340.0, 320.0, 530.0]),
+        image("d", [330.0, 340.0, 580.0, 530.0]),
+        caption("cap", "Figure 1. Four panels.", [70.0, 550.0, 580.0, 620.0]),
+    ];
+    blocks.extend(columns("", 640.0));
+    blocks.extend((0..4).map(|i| {
+        let t = 120.0 + i as f64 * 120.0;
+        text(&format!("rtop{i}"), [600.0, t, 1110.0, t + 110.0])
+    }));
+    assert_eq!(
+        pairs(json!([page(blocks)])),
+        vec![pair("cap", &["a", "b", "c", "d"])]
+    );
+}
+
+/// 守卫：两张图之间隔着小节标题时不合并成一张图。
+#[test]
+fn section_heading_between_images_keeps_them_apart() {
+    let raw = json!([page(vec![
+        image("img1", [100.0, 100.0, 1100.0, 400.0]),
+        block(
+            "h",
+            "paragraph_title",
+            "3 Results",
+            [100.0, 420.0, 400.0, 450.0]
+        ),
+        image("img2", [100.0, 470.0, 1100.0, 800.0]),
+        caption(
+            "cap",
+            "Figure 2. Lower figure.",
+            [100.0, 820.0, 1100.0, 870.0]
+        ),
+        block("body", "text", BODY, [100.0, 900.0, 1100.0, 1200.0]),
+    ])]);
+    assert_eq!(pairs(raw), vec![pair("cap", &["img2"])]);
+}

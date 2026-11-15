@@ -247,6 +247,7 @@ pub fn find_figures(structure: &Structure) -> Vec<FigureSegment> {
             if !seen.insert(key) {
                 continue;
             }
+            let figure = Box_::union(candidate.iter().map(|v| &pages[v.page].blocks[v.block]));
             let mut score = 0.0;
             let mut valid = true;
             for v in &candidate {
@@ -277,7 +278,7 @@ pub fn find_figures(structure: &Structure) -> Vec<FigureSegment> {
                     let distance = Box_::of(b).gap(cap_box);
                     if distance > diagonal * 0.5
                         || !Columns::detect(page).same(Box_::of(b), cap_box)
-                        || blocked(&[*v], c, &pages)
+                        || blocked(&[*v], figure, c, &pages)
                     {
                         valid = false;
                         break;
@@ -312,7 +313,7 @@ pub fn find_figures(structure: &Structure) -> Vec<FigureSegment> {
                 && !(candidate.len() > 1
                     && candidate.iter().all(|v| v.page == c.page)
                     && c.box_.is_some()
-                    && blocked(&candidate, c, &pages))
+                    && blocked(&candidate, figure, c, &pages))
             {
                 choices.push((score, candidate));
             }
