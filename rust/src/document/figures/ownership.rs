@@ -5,13 +5,10 @@ pub(super) fn blocked(visuals: &[Visual], caption: &Caption, pages: &[StructureP
         return true;
     };
     let page = &pages[caption.page];
-    let mut region = Box_::union(visuals.iter().map(|v| &pages[v.page].blocks[v.block]));
-    region = Box_ {
-        l: region.l.min(cap.l),
-        t: region.t.min(cap.t),
-        r: region.r.max(cap.r),
-        b: region.b.max(cap.b),
-    };
+    let regions = sight_regions(
+        Box_::union(visuals.iter().map(|v| &pages[v.page].blocks[v.block])),
+        cap,
+    );
     page.blocks.iter().enumerate().any(|(i, b)| {
         if caption.block == Some(i)
             || caption.continuations.contains(&i)
@@ -33,8 +30,45 @@ pub(super) fn blocked(visuals: &[Visual], caption: &Caption, pages: &[StructureP
         }) {
             return false;
         }
-        region.overlaps(box_)
+        regions.iter().any(|r| r.overlaps(box_))
     })
+}
+
+/// 视觉块与题注之间可能出现阻挡物的区域。两者上下排列且横向重叠时，只取两者本身和
+/// 夹在中间、横向限于较窄一方的通道：通栏图配半栏题注（或反之）时，与较窄一方并排的
+/// 另一栏内容不在两者之间。其他排列沿用两者的外接框。
+fn sight_regions(visual: Box_, cap: Box_) -> Vec<Box_> {
+    let hull = Box_ {
+        l: visual.l.min(cap.l),
+        t: visual.t.min(cap.t),
+        r: visual.r.max(cap.r),
+        b: visual.b.max(cap.b),
+    };
+    let x_overlap = visual.r.min(cap.r) - visual.l.max(cap.l);
+    let y_overlap = visual.b.min(cap.b) - visual.t.max(cap.t);
+    if x_overlap <= 0.0 || y_overlap > 12.0 {
+        return vec![hull];
+    }
+    let (upper, lower) = if visual.t + visual.b <= cap.t + cap.b {
+        (visual, cap)
+    } else {
+        (cap, visual)
+    };
+    let narrow = if visual.r - visual.l <= cap.r - cap.l {
+        visual
+    } else {
+        cap
+    };
+    let mut regions = vec![visual, cap];
+    if lower.t > upper.b {
+        regions.push(Box_ {
+            l: narrow.l,
+            t: upper.b,
+            r: narrow.r,
+            b: lower.t,
+        });
+    }
+    regions
 }
 
 pub(super) fn clusters(

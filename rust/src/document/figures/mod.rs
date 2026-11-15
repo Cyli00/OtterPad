@@ -303,6 +303,11 @@ pub fn find_figures(structure: &Structure) -> Vec<FigureSegment> {
                     score -= 0.35;
                 }
             }
+            // 版面模型未标为题注的块（如以“Figure 2 shows”开头的正文）证据较弱，
+            // 与题注块等距竞争时让位，单独存在时仍可配对。
+            if cap.is_some_and(|b| !is_caption(&b.block_label)) {
+                score -= 0.35;
+            }
             if valid
                 && !(candidate.len() > 1
                     && candidate.iter().all(|v| v.page == c.page)
