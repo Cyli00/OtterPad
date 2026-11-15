@@ -34,6 +34,7 @@ class ReaderSurface extends StatefulWidget {
     this.onTapBlank,
     this.onLocationChanged,
     this.textStyle,
+    this.codeBackground,
     this.translationStyle = 'themed',
   });
 
@@ -41,6 +42,9 @@ class ReaderSurface extends StatefulWidget {
 
   /// 叠加在正文样式上的字体与颜色（阅读器主题）。
   final TextStyle? textStyle;
+
+  /// 代码底色（阅读器主题）；为空时用 `surfaceContainerHigh`。
+  final Color? codeBackground;
 
   /// 译文显示样式 id；`blur` 时译文模糊，点击切换显示。
   final String translationStyle;
@@ -173,6 +177,7 @@ class ReaderSurfaceState extends State<ReaderSurface> {
       mutedColor: cs.onSurfaceVariant,
       linkColor: cs.primary,
       ruleColor: cs.outlineVariant,
+      codeBackground: widget.codeBackground ?? cs.surfaceContainerHigh,
       rtlTranslations: _controller.rtlTranslations,
       translationStyle: widget.translationStyle,
     );
@@ -604,7 +609,7 @@ class ReaderSurfaceState extends State<ReaderSurface> {
               child: _typesetter.mathWidget(
                 block.runs.first.math!,
                 display: true,
-                style: spec.body,
+                style: item.style!,
               ),
             ),
           ),
@@ -895,6 +900,18 @@ class _TextItemState extends State<_TextItem> {
       imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
       child: text,
     );
+    if (widget.item.code) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: widget.spec.codeBackground,
+          borderRadius: BorderRadius.circular(ReaderTypography.codeBlockRadius),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(ReaderTypography.codeBlockPadding),
+          child: text,
+        ),
+      );
+    }
     if (widget.item.indent == 0) return text;
     return Container(
       padding: EdgeInsets.only(left: ReaderTypography.blockquotePadLeft),

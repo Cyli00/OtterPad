@@ -1253,6 +1253,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           fontFamily: settings.font.fontFamily,
           fontFamilyFallback: settings.font.fontFamilyFallback,
         ),
+        codeBackground: palette.codeBlock,
         translationStyle: ref.watch(
           translationConfigProvider.select((c) => c.displayStyleId),
         ),

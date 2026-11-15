@@ -44,6 +44,13 @@ abstract final class ReaderTypography {
   ];
   static const double codeScale = 0.88;
 
+  /// 代码块内边距与圆角，与 0.1.x reader.css 的 `pre` 一致。
+  static const double codeBlockPadding = 12;
+  static const double codeBlockRadius = 8;
+
+  /// 独立公式相对正文的字号，与 0.1.x `.katex-display > .katex` 一致。
+  static const double displayMathScale = 1.1;
+
   // ── 图注 ──
   static const double captionScale = 0.85;
 

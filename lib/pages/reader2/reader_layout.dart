@@ -21,6 +21,7 @@ class ReaderLayoutSpec {
     required this.mutedColor,
     required this.linkColor,
     required this.ruleColor,
+    this.codeBackground = const Color(0x14808080),
     this.blockMargin = ReaderTypography.blockMarginScale,
     this.rtlTranslations = false,
     this.translationStyle = 'themed',
@@ -35,6 +36,9 @@ class ReaderLayoutSpec {
   final Color mutedColor;
   final Color linkColor;
   final Color ruleColor;
+
+  /// 代码块与行内代码的底色（阅读主题的 `codeBlock`）。
+  final Color codeBackground;
   final double blockMargin;
 
   /// 译文为阿拉伯语、波斯语等从右向左书写的语言时，译文块按 RTL 排版。
@@ -139,6 +143,7 @@ class ReaderLayoutSpec {
       other.mutedColor == mutedColor &&
       other.linkColor == linkColor &&
       other.ruleColor == ruleColor &&
+      other.codeBackground == codeBackground &&
       other.blockMargin == blockMargin &&
       other.rtlTranslations == rtlTranslations &&
       other.translationStyle == translationStyle;
@@ -151,6 +156,7 @@ class ReaderLayoutSpec {
     mutedColor,
     linkColor,
     ruleColor,
+    codeBackground,
     blockMargin,
     rtlTranslations,
     translationStyle,
@@ -281,6 +287,7 @@ class LayoutItem {
     this.image,
     this.direction = TextDirection.ltr,
     this.ruleColor,
+    this.code = false,
   });
 
   final int blockIndex;
@@ -304,6 +311,9 @@ class LayoutItem {
 
   /// 左侧竖线颜色（缩进块）；为空时用版式的分隔线颜色。
   final Color? ruleColor;
+
+  /// 代码块：带底色与 [ReaderTypography.codeBlockPadding] 内边距。
+  final bool code;
 
   bool get isText => kind == ItemKind.text;
 
@@ -424,7 +434,7 @@ class ReaderTypesetter {
             _text(block, i, spec, spec.heading(block.headingLevel ?? 1), gap),
           );
         case BlockKind.code:
-          items.add(_text(block, i, spec, spec.code, gap));
+          items.add(_text(block, i, spec, spec.code, gap, code: true));
         case BlockKind.quote:
           items.add(
             _text(
@@ -462,8 +472,14 @@ class ReaderTypesetter {
       var style = base;
       if (run.bold) style = style.copyWith(fontWeight: FontWeight.w700);
       if (run.italic) style = style.copyWith(fontStyle: FontStyle.italic);
+      // 保留粗体、斜体与译文颜色，只换等宽字体并加底色。
       if (run.code) {
-        style = spec.code.copyWith(fontSize: base.fontSize! * .92);
+        style = style.copyWith(
+          fontFamily: ReaderTypography.codeFontFamily,
+          fontFamilyFallback: ReaderTypography.codeFontFallback,
+          fontSize: base.fontSize! * .92,
+          backgroundColor: spec.codeBackground,
+        );
       }
       if (run.strike) {
         style = style.copyWith(decoration: TextDecoration.lineThrough);
@@ -526,7 +542,9 @@ class ReaderTypesetter {
     TextStyle style,
     double gap, {
     double indent = 0,
+    bool code = false,
   }) {
+    final pad = code ? ReaderTypography.codeBlockPadding : 0.0;
     Color? rule;
     if (isTranslationBlock(block)) {
       style = spec.translated(style);
@@ -569,7 +587,7 @@ class ReaderTypesetter {
             baselineOffset: m.box.baseline,
           ),
       ]);
-      painter.layout(maxWidth: spec.width - indent);
+      painter.layout(maxWidth: spec.width - indent - pad * 2);
       final map = InlineMap(block.runs);
       final metrics = painter.computeLineMetrics();
       final starts = <int>[];
@@ -595,20 +613,24 @@ class ReaderTypesetter {
         blockIndex: index,
         kind: ItemKind.text,
         gapBefore: gap,
-        height: painter.height,
+        height: painter.height + pad * 2,
         style: style,
         map: map,
         maths: maths,
         indent: indent,
         direction: direction,
         ruleColor: rule,
+        code: code,
+        // 代码块的上下内边距并入首行与末行，分页切开时只有完整的首尾带边距。
         lines: List.unmodifiable([
           for (var i = 0; i < starts.length; i++)
             LayoutLine(
               starts[i],
               i + 1 < starts.length ? starts[i + 1] : map.painterLength,
-              tops[i],
-              i + 1 < starts.length ? tops[i + 1] : painter.height,
+              i == 0 ? 0 : tops[i] + pad,
+              i + 1 < starts.length
+                  ? tops[i + 1] + pad
+                  : painter.height + pad * 2,
             ),
         ]),
       );
@@ -667,7 +689,10 @@ class ReaderTypesetter {
     ReaderLayoutSpec spec,
     double gap,
   ) {
-    final box = _measureMath(block.runs.first.math!, true, spec.body);
+    final style = spec.body.copyWith(
+      fontSize: spec.fontSize * ReaderTypography.displayMathScale,
+    );
+    final box = _measureMath(block.runs.first.math!, true, style);
     final pad = spec.fontSize * .3;
     final height = box.size.height + pad * 2;
     return LayoutItem._(
@@ -676,7 +701,7 @@ class ReaderTypesetter {
       gapBefore: gap,
       height: height,
       lines: [LayoutLine(0, 0, 0, height)],
-      style: spec.body,
+      style: style,
       mediaSize: box.size,
     );
   }
