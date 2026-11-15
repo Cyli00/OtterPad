@@ -5428,18 +5428,6 @@ abstract class AppLocalizations {
   /// **'Read with continuous scrolling. On wide screens, bilingual text pairs paragraphs side by side; bilingual PDFs pair the same page. Layout adapts in narrow windows.'**
   String get readerAutoLayoutHint;
 
-  /// No description provided for @readerContinuousReading.
-  ///
-  /// In en, this message translates to:
-  /// **'Continuous reading'**
-  String get readerContinuousReading;
-
-  /// No description provided for @readerContinuousReadingHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Continuous vertical reading. Bilingual paragraphs switch between side-by-side and stacked layouts as the window changes.'**
-  String get readerContinuousReadingHint;
-
   /// No description provided for @restoreModeOverwrite.
   ///
   /// In en, this message translates to:

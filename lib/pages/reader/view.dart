@@ -152,7 +152,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onHighlightSaved: _saveHighlight,
         onHighlightRemoved: (id) =>
             ref.read(highlightProvider(_id).notifier).delete(id),
-      );
+      )..mode = _readerMode(ref.read(readerSettingsProvider).paginationMode);
       _restoreLocation(controller);
       _controller?.dispose();
       _controller = controller;
@@ -720,6 +720,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (changed) controller.replaceHighlights(_readerHighlights(notes));
   }
 
+  static ReaderMode _readerMode(ReaderPaginationMode mode) => switch (mode) {
+    ReaderPaginationMode.vertical => ReaderMode.scroll,
+    ReaderPaginationMode.horizontal => ReaderMode.paged,
+  };
+
   @override
   Widget build(BuildContext context) {
     ref.listen(documentTranslationProvider(_id), (_, _) => _syncTranslations());
@@ -731,6 +736,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       highlightProvider(_id),
       (_, next) => _syncHighlights(next.value),
     );
+    ref.listen(readerSettingsProvider.select((s) => s.paginationMode), (
+      _,
+      mode,
+    ) {
+      final controller = _controller;
+      if (controller == null) return;
+      controller
+        ..clearSelection()
+        ..mode = _readerMode(mode);
+    });
 
     final settings = ref.watch(readerSettingsProvider);
     final theme = buildReaderThemeData(Theme.of(context), settings.theme);
@@ -986,7 +1001,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
     final translation = ref.read(documentTranslationProvider(_id));
-    final controller = _controller;
     return SizedBox(
       height: 48,
       child: Row(
@@ -1009,21 +1023,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             tooltip: l10n.searchContent,
             onPressed: _loading ? null : _openSearch,
           ),
-          if (!_pdfMode && _hasModel && controller != null)
-            ReaderIconButton(
-              icon: controller.mode == ReaderMode.paged
-                  ? Symbols.view_day_rounded
-                  : Symbols.auto_stories_rounded,
-              tooltip: controller.mode == ReaderMode.paged
-                  ? l10n.verticalPagination
-                  : l10n.horizontalPagination,
-              onPressed: () => setState(() {
-                controller.clearSelection();
-                controller.mode = controller.mode == ReaderMode.scroll
-                    ? ReaderMode.paged
-                    : ReaderMode.scroll;
-              }),
-            ),
           ReaderIconButton(
             icon: !_hasModel
                 ? Symbols.document_scanner_rounded

@@ -1054,8 +1054,6 @@
   "readerFontSizeHint": "調整流式閱讀內文的字級。",
   "readerMarginHint": "調整閱讀區域的留白，PDF 與流式檢視共用此設定。",
   "readerAutoLayoutHint": "連續上下捲動。寬螢幕雙語按段落左原文、右譯文對照，PDF 雙語並排顯示同一頁；窄視窗自動調整。",
-  "readerContinuousReading": "連續閱讀",
-  "readerContinuousReadingHint": "正文連續上下捲動，雙語對照隨視窗寬度自動切換左右或上下版面。",
   "restoreModeOverwrite": "覆寫還原",
   "restoreModeOverwriteDescription": "清除本機資料後以備份取代",
   "restoreModeMerge": "合併還原",

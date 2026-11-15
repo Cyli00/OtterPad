@@ -3080,13 +3080,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Read with continuous scrolling. On wide screens, bilingual text pairs paragraphs side by side; bilingual PDFs pair the same page. Layout adapts in narrow windows.';
 
   @override
-  String get readerContinuousReading => 'Continuous reading';
-
-  @override
-  String get readerContinuousReadingHint =>
-      'Continuous vertical reading. Bilingual paragraphs switch between side-by-side and stacked layouts as the window changes.';
-
-  @override
   String get restoreModeOverwrite => 'Overwrite';
 
   @override

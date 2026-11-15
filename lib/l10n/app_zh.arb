@@ -981,8 +981,6 @@
   "readerFontSizeHint": "调整流式阅读正文的字号。",
   "readerMarginHint": "调整阅读区域的留白，PDF 与流式查看共享此设置。",
   "readerAutoLayoutHint": "连续上下滚动。宽屏双语按段落左原文、右译文对照，PDF 双语并排显示同一页；窄窗自动调整。",
-  "readerContinuousReading": "连续阅读",
-  "readerContinuousReadingHint": "正文连续上下滚动，双语对照随窗口宽度自动切换左右或上下布局。",
   "restoreModeOverwrite": "覆盖恢复",
   "restoreModeOverwriteDescription": "清除本地数据后用备份替换",
   "restoreModeMerge": "合并恢复",

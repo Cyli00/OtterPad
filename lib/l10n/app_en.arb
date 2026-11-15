@@ -1146,8 +1146,6 @@
   "readerFontSizeHint": "Adjust the text size in the flowing reader.",
   "readerMarginHint": "Adjust the reading area margins. Shared between PDF and flowing views.",
   "readerAutoLayoutHint": "Read with continuous scrolling. On wide screens, bilingual text pairs paragraphs side by side; bilingual PDFs pair the same page. Layout adapts in narrow windows.",
-  "readerContinuousReading": "Continuous reading",
-  "readerContinuousReadingHint": "Continuous vertical reading. Bilingual paragraphs switch between side-by-side and stacked layouts as the window changes.",
   "restoreModeOverwrite": "Overwrite",
   "restoreModeOverwriteDescription": "Replace local data with the backup",
   "restoreModeMerge": "Merge",

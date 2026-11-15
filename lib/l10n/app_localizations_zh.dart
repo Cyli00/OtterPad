@@ -2975,12 +2975,6 @@ class AppLocalizationsZh extends AppLocalizations {
       '连续上下滚动。宽屏双语按段落左原文、右译文对照，PDF 双语并排显示同一页；窄窗自动调整。';
 
   @override
-  String get readerContinuousReading => '连续阅读';
-
-  @override
-  String get readerContinuousReadingHint => '正文连续上下滚动，双语对照随窗口宽度自动切换左右或上下布局。';
-
-  @override
   String get restoreModeOverwrite => '覆盖恢复';
 
   @override
@@ -6683,12 +6677,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String get readerAutoLayoutHint =>
       '連續上下捲動。寬螢幕雙語按段落左原文、右譯文對照，PDF 雙語並排顯示同一頁；窄視窗自動調整。';
-
-  @override
-  String get readerContinuousReading => '連續閱讀';
-
-  @override
-  String get readerContinuousReadingHint => '正文連續上下捲動，雙語對照隨視窗寬度自動切換左右或上下版面。';
 
   @override
   String get restoreModeOverwrite => '覆寫還原';

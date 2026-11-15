@@ -175,12 +175,15 @@ class ReaderDesktopAppearance extends ConsumerWidget {
                         children: [
                           _field(
                             context,
-                            l10n.readerContinuousReading,
-                            Text(
-                              l10n.readerContinuousReadingHint,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant,
-                              ),
+                            l10n.paginationMode,
+                            _choices(
+                              context,
+                              value: settings.paginationMode,
+                              choices: {
+                                for (final mode in ReaderPaginationMode.values)
+                                  mode: mode.localizedLabel(l10n),
+                              },
+                              onChanged: notifier.setPaginationMode,
                             ),
                           ),
                           const AppDivider(),
