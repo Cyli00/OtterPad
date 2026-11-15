@@ -1388,6 +1388,8 @@
   "otterErrorRefused": "The model refused the request.",
   "otterErrorIncompleteResponse": "The response was cut off. Please try again.",
   "otterErrorToolLimit": "The tool call limit was reached.",
+  "outlineContents": "Contents",
+  "outlineContentsEmpty": "No section headings found",
   "outlineFigures": "Figures",
   "outlineReferences": "References",
   "graphicalSummary": "Graphical Summary",

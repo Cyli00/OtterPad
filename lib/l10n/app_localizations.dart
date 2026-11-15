@@ -6706,6 +6706,18 @@ abstract class AppLocalizations {
   /// **'The tool call limit was reached.'**
   String get otterErrorToolLimit;
 
+  /// No description provided for @outlineContents.
+  ///
+  /// In en, this message translates to:
+  /// **'Contents'**
+  String get outlineContents;
+
+  /// No description provided for @outlineContentsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No section headings found'**
+  String get outlineContentsEmpty;
+
   /// No description provided for @outlineFigures.
   ///
   /// In en, this message translates to:

@@ -3826,6 +3826,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get otterErrorToolLimit => 'The tool call limit was reached.';
 
   @override
+  String get outlineContents => 'Contents';
+
+  @override
+  String get outlineContentsEmpty => 'No section headings found';
+
+  @override
   String get outlineFigures => 'Figures';
 
   @override

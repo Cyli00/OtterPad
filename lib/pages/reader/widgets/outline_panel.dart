@@ -15,7 +15,7 @@ import '../../../src/rust/document/references.dart';
 import '../../../widgets/tactile_press.dart';
 import 'figure_viewer.dart';
 
-/// 大纲：图表（含总结图）与参考文献两页。sheet / 停靠栏外壳负责圆角与背景。
+/// 大纲：目录、图表（含总结图）与参考文献三页。sheet / 停靠栏外壳负责圆角与背景。
 class OutlinePanel extends StatefulWidget {
   const OutlinePanel({
     super.key,
@@ -43,7 +43,7 @@ class OutlinePanel extends StatefulWidget {
 
 class _OutlinePanelState extends State<OutlinePanel>
     with SingleTickerProviderStateMixin {
-  late final _tabs = TabController(length: 2, vsync: this);
+  late final _tabs = TabController(length: 3, vsync: this);
 
   @override
   void dispose() {
@@ -60,6 +60,7 @@ class _OutlinePanelState extends State<OutlinePanel>
         TabBar(
           controller: _tabs,
           tabs: [
+            Tab(text: context.l10n.outlineContents),
             Tab(text: context.l10n.outlineFigures),
             Tab(text: context.l10n.outlineReferences),
           ],
@@ -78,6 +79,7 @@ class _OutlinePanelState extends State<OutlinePanel>
           child: TabBarView(
             controller: _tabs,
             children: [
+              _ContentsTab(model: widget.model, onNavigate: widget.onNavigate),
               _FiguresTab(
                 model: widget.model,
                 summaryPath: widget.summaryPath,
@@ -92,6 +94,79 @@ class _OutlinePanelState extends State<OutlinePanel>
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── 目录 ───
+
+class _ContentsTab extends StatelessWidget {
+  const _ContentsTab({required this.model, required this.onNavigate});
+
+  final ReaderDocument model;
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final headings = [
+      for (final block in model.blocks)
+        if (block.kind == BlockKind.heading &&
+            block.ownerId == null &&
+            block.text.trim().isNotEmpty)
+          block,
+    ];
+    if (headings.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Symbols.toc_rounded,
+              size: 48,
+              color: cs.onSurfaceVariant.withAlpha(80),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.l10n.outlineContentsEmpty,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    // 以文中最浅的标题层级为第一级缩进。
+    final top = headings
+        .map((b) => b.headingLevel ?? 1)
+        .reduce((a, b) => a < b ? a : b);
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      itemCount: headings.length,
+      itemBuilder: (context, index) {
+        final block = headings[index];
+        final depth = (block.headingLevel ?? 1) - top;
+        return TactilePress(
+          baseColor: Colors.transparent,
+          onTap: () => onNavigate(block.id),
+          borderRadius: BorderRadius.circular(8),
+          padding: EdgeInsets.fromLTRB(8 + depth * 16.0, 10, 8, 10),
+          child: Text(
+            block.text.trim(),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: depth == 0
+                ? theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  )
+                : theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+          ),
+        );
+      },
     );
   }
 }

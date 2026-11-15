@@ -3664,6 +3664,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get otterErrorToolLimit => '已达到工具调用次数上限';
 
   @override
+  String get outlineContents => '目录';
+
+  @override
+  String get outlineContentsEmpty => '未识别到章节标题';
+
+  @override
   String get outlineFigures => '图表';
 
   @override
@@ -6993,6 +6999,12 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get otterErrorToolLimit => '已達到工具呼叫次數上限';
+
+  @override
+  String get outlineContents => '目錄';
+
+  @override
+  String get outlineContentsEmpty => '未識別到章節標題';
 
   @override
   String get outlineFigures => '圖表';
