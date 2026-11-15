@@ -1,4 +1,5 @@
 pub mod figures;
+mod headings;
 pub mod references;
 pub mod regions;
 pub mod structure;
@@ -39,7 +40,10 @@ pub(crate) fn load(directory: &std::path::Path) -> Result<DocumentModel> {
     let directory = extraction_directory(directory)?;
     let path = directory.join("document.json");
     let model: DocumentModel = if path.is_file() {
-        serde_json::from_slice(&std::fs::read(path)?)?
+        // 已保存的模型按当前算法重算标题层级，旧文献无需重新 OCR。
+        let mut model: DocumentModel = serde_json::from_slice(&std::fs::read(path)?)?;
+        headings::assign(&mut model.blocks);
+        model
     } else {
         DocumentModel::from_markdown(&crate::ai::chat::read_markdown(&directory)?)
     };
@@ -227,6 +231,7 @@ impl DocumentModel {
                 model.blocks.push(block);
             }
         }
+        headings::assign(&mut model.blocks);
         model
     }
 
