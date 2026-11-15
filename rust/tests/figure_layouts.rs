@@ -779,3 +779,36 @@ fn section_heading_between_images_keeps_them_apart() {
     ])]);
     assert_eq!(pairs(raw), vec![pair("cap", &["img2"])]);
 }
+
+/// 表格从页尾续到下一页顶部，续表没有题注：跨页表格合并由 OCR 的 `merge_tables` 选项负责
+/// （设置页“跨页表格合并”），本地不按版面猜测，避免违背用户关闭该选项的选择。
+#[test]
+fn uncaptioned_table_at_next_page_top_is_left_to_provider_table_merging() {
+    let raw = json!([
+        page(vec![
+            block("body0", "text", BODY, [100.0, 100.0, 1100.0, 650.0]),
+            block(
+                "cap",
+                "table_title",
+                "Table 1. Results of every run.",
+                [100.0, 700.0, 1100.0, 750.0],
+            ),
+            block(
+                "tab0",
+                "table",
+                "<table></table>",
+                [100.0, 770.0, 1100.0, 1480.0]
+            ),
+        ]),
+        page(vec![
+            block(
+                "tab1",
+                "table",
+                "<table></table>",
+                [100.0, 100.0, 1100.0, 700.0]
+            ),
+            block("body1", "text", BODY, [100.0, 740.0, 1100.0, 1000.0]),
+        ]),
+    ]);
+    assert_eq!(pairs(raw), vec![(0, "cap".into(), 0, vec!["tab0".into()])]);
+}
