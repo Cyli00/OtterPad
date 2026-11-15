@@ -13,22 +13,28 @@ import '../../../widgets/tactile_press.dart';
 class ReaderContextMenuHandle {
   final OverlayEntry _entry;
   final VoidCallback? _onDismiss;
+
+  /// Overlay 的全局原点；桌面窗口标题栏下方的 Overlay 不从 (0,0) 开始。
+  final Offset _origin;
   Rect _selectionRect;
   bool _removed = false;
 
   ReaderContextMenuHandle._({
     required this._entry,
-    required this._selectionRect,
+    required this._origin,
+    required Rect selectionRect,
     this._onDismiss,
-  });
+  }) : _selectionRect = selectionRect.shift(-_origin);
 
+  /// [selectionRect] 为全局坐标。
   void updateVerticalAnchor(Rect selectionRect) {
     if (_removed) return;
+    final rect = selectionRect.shift(-_origin);
     _selectionRect = Rect.fromLTRB(
       _selectionRect.left,
-      selectionRect.top,
+      rect.top,
       _selectionRect.right,
-      selectionRect.bottom,
+      rect.bottom,
     );
     _entry.markNeedsBuild();
   }
@@ -41,7 +47,7 @@ class ReaderContextMenuHandle {
   }
 }
 
-/// 在选区附近显示阅读上下文菜单 Overlay（含可展开的笔记面板）。
+/// 在选区附近显示阅读上下文菜单 Overlay（含可展开的笔记面板）；[selectionRect] 为全局坐标。
 ReaderContextMenuHandle showReaderContextMenu({
   required BuildContext context,
   required Rect selectionRect,
@@ -93,12 +99,15 @@ ReaderContextMenuHandle showReaderContextMenu({
       );
     },
   );
+  final overlay = Overlay.of(context);
+  final box = overlay.context.findRenderObject()! as RenderBox;
   handle = ReaderContextMenuHandle._(
     entry: entry,
+    origin: box.localToGlobal(Offset.zero),
     selectionRect: selectionRect,
     onDismiss: onDismiss,
   );
-  Overlay.of(context).insert(entry);
+  overlay.insert(entry);
   return handle;
 }
 
