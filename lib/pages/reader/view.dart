@@ -31,6 +31,7 @@ import '../../src/rust/document.dart';
 import '../../utils/desktop.dart';
 import '../../utils/doc_paths.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/app_context_menu.dart';
 import '../../widgets/extract_provider_dialog.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../reader2/reader_controller.dart';
@@ -1001,99 +1002,181 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
     final translation = ref.read(documentTranslationProvider(_id));
-    return SizedBox(
-      height: 48,
-      child: Row(
-        children: [
-          ReaderIconButton(
-            icon: Symbols.arrow_back_rounded,
-            tooltip: l10n.back,
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-          Expanded(
-            child: Text(
-              widget.document.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ),
-          ReaderIconButton(
-            icon: Symbols.search_rounded,
-            tooltip: l10n.searchContent,
-            onPressed: _loading ? null : _openSearch,
-          ),
-          ReaderIconButton(
-            icon: !_hasModel
-                ? Symbols.document_scanner_rounded
-                : _pdfMode
-                ? Symbols.article_rounded
-                : Symbols.picture_as_pdf_rounded,
-            tooltip: !_hasModel
-                ? l10n.documentExtract
-                : _pdfMode
-                ? l10n.viewExtractResult
-                : l10n.viewPdf,
-            loading: extracting,
-            onPressed: extracting || _loading
-                ? null
-                : (_hasModel ? _toggleMode : (_fileExists ? _extract : null)),
-          ),
-          ReaderIconButton(
-            icon: inFavorite
-                ? Symbols.star_rounded
-                : Symbols.star_outline_rounded,
-            active: inFavorite,
-            tooltip: inFavorite ? l10n.removeFromFavorite : l10n.addToFavorite,
-            onPressed: () => _toggleFavorite(inFavorite),
-          ),
-          PopupMenuButton<String>(
-            tooltip: l10n.more,
-            icon: const Icon(Symbols.more_vert_rounded),
-            onSelected: (value) {
-              switch (value) {
-                case 'info':
-                  showDocumentInfoDialog(
-                    context: context,
-                    document: widget.document,
-                  );
-                case 'extract':
-                  _extract();
-                case 'retranslate':
-                  ref
-                      .read(documentTranslationProvider(_id).notifier)
-                      .retranslate();
-                case 'summary':
-                  _generateSummary();
-                case 'viewSummary':
-                  _showSummary();
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(value: 'info', child: Text(l10n.documentInfo)),
-              if (_hasModel && _fileExists && !extracting)
-                PopupMenuItem(value: 'extract', child: Text(l10n.reExtract)),
-              if (translation.hasResult)
-                PopupMenuItem(
-                  value: 'retranslate',
-                  child: Text(l10n.reTranslate),
-                ),
-              if (_hasModel)
-                PopupMenuItem(
-                  value: 'summary',
-                  child: Text(l10n.generateSummary),
-                ),
-              if (File(DocPaths.summaryImage(_id)).existsSync())
-                PopupMenuItem(
-                  value: 'viewSummary',
-                  child: Text(l10n.viewSummary),
-                ),
-            ],
-          ),
-          const SizedBox(width: 4),
-        ],
+    final generating = ref.watch(
+      documentTaskProvider.select(
+        (tasks) =>
+            tasks[DocumentTaskKey(
+                  type: DocumentTaskType.generateSummaryImage,
+                  documentId: _id,
+                )]
+                ?.isActive ==
+            true,
       ),
     );
+    final canReExtract = _hasModel && _fileExists && !extracting;
+    final hasSummary = File(DocPaths.summaryImage(_id)).existsSync();
+    final generate = ReaderIconButton(
+      icon: Symbols.mindfulness_rounded,
+      tooltip: l10n.generateSummary,
+      loading: generating,
+      onPressed: _generateSummary,
+    );
+    // PDF 视图与 0.1.x 一致，把重新解析和文档信息放在顶栏；解析视图把生成摘要图放在顶栏。
+    final more = <AppContextMenuItem<String>>[
+      if (!_pdfMode && hasSummary)
+        AppContextMenuItem(
+          value: 'viewSummary',
+          label: l10n.viewSummary,
+          icon: Symbols.image_rounded,
+        ),
+      if (!_pdfMode)
+        AppContextMenuItem(
+          value: 'info',
+          label: l10n.documentInfo,
+          icon: Symbols.info_rounded,
+        ),
+      if (!_pdfMode && canReExtract)
+        AppContextMenuItem(
+          value: 'extract',
+          label: l10n.reExtract,
+          icon: Symbols.sync_rounded,
+        ),
+      if (translation.hasResult)
+        AppContextMenuItem(
+          value: 'retranslate',
+          label: l10n.reTranslate,
+          icon: Symbols.translate_rounded,
+        ),
+      if (_pdfMode && _hasModel)
+        AppContextMenuItem(
+          value: 'summary',
+          label: l10n.generateSummary,
+          icon: Symbols.mindfulness_rounded,
+        ),
+      if (_pdfMode && hasSummary)
+        AppContextMenuItem(
+          value: 'viewSummary',
+          label: l10n.viewSummary,
+          icon: Symbols.image_rounded,
+        ),
+    ];
+    final actions = [
+      ReaderIconButton(
+        icon: Symbols.search_rounded,
+        tooltip: l10n.searchContent,
+        onPressed: _loading ? null : _openSearch,
+      ),
+      ReaderIconButton(
+        icon: !_hasModel
+            ? Symbols.document_scanner_rounded
+            : _pdfMode
+            ? Symbols.article_rounded
+            : Symbols.picture_as_pdf_rounded,
+        tooltip: !_hasModel
+            ? l10n.documentExtract
+            : _pdfMode
+            ? l10n.viewExtractResult
+            : l10n.viewPdf,
+        loading: extracting,
+        onPressed: extracting || _loading
+            ? null
+            : (_hasModel ? _toggleMode : (_fileExists ? _extract : null)),
+      ),
+      if (!_pdfMode && _hasModel) generate,
+      ReaderIconButton(
+        icon: inFavorite
+            ? Symbols.bookmark_remove_rounded
+            : Symbols.bookmark_add_rounded,
+        active: inFavorite,
+        tooltip: inFavorite ? l10n.removeFromFavorite : l10n.addToFavorite,
+        onPressed: () => _toggleFavorite(inFavorite),
+      ),
+      if (_pdfMode && canReExtract)
+        ReaderIconButton(
+          icon: Symbols.sync_rounded,
+          tooltip: l10n.reExtract,
+          onPressed: _extract,
+        ),
+      if (_pdfMode)
+        ReaderIconButton(
+          icon: Symbols.info_rounded,
+          tooltip: l10n.documentInfo,
+          onPressed: _showInfo,
+        ),
+      if (more.isNotEmpty)
+        Builder(
+          builder: (anchor) => ReaderIconButton(
+            icon: Symbols.more_vert_rounded,
+            tooltip: l10n.more,
+            onPressed: () => _showMore(anchor, more),
+          ),
+        ),
+    ];
+    return SizedBox(
+      height: 48,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            ReaderIconButton(
+              icon: Symbols.arrow_back_rounded,
+              tooltip: l10n.back,
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            Expanded(
+              child: Text(
+                widget.document.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            // 窄窗时操作区横向滚动，给标题至少留 96。
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: (constraints.maxWidth - 48 - 96).clamp(
+                  0,
+                  double.infinity,
+                ),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(mainAxisSize: MainAxisSize.min, children: actions),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showInfo() =>
+      showDocumentInfoDialog(context: context, document: widget.document);
+
+  Future<void> _showMore(
+    BuildContext anchor,
+    List<AppContextMenuItem<String>> items,
+  ) async {
+    final box = anchor.findRenderObject()! as RenderBox;
+    final value = await showAppContextMenu(
+      context: anchor,
+      globalPosition: box.localToGlobal(Offset(0, box.size.height)),
+      items: items,
+    );
+    if (value == null || !mounted) return;
+    Haptics.soft();
+    switch (value) {
+      case 'info':
+        _showInfo();
+      case 'extract':
+        _extract();
+      case 'retranslate':
+        ref.read(documentTranslationProvider(_id).notifier).retranslate();
+      case 'summary':
+        _generateSummary();
+      case 'viewSummary':
+        _showSummary();
+    }
   }
 
   Widget _body(
