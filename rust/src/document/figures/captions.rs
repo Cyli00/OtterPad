@@ -199,6 +199,77 @@ pub(super) fn continuations(page: &StructurePage, index: usize) -> Vec<usize> {
     }
     result
 }
+/// PaddleOCR 把一组块的文字都放进组内唯一的非空块、其余成员留空（与 `paddle_regions` 同一约定）。
+/// 未写完的题注右侧同高处若是这样的空成员（跨栏题注的右半段），按成员面积比例找出属于它的段落，
+/// 返回 (空成员, 持有文字的块, 段落字节范围)。
+pub(super) fn grouped_tail(
+    page: &StructurePage,
+    last: usize,
+    caption: &str,
+) -> Option<(usize, usize, usize, usize)> {
+    static PARAGRAPH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\r?\n\s*\r?\n").unwrap());
+    if complete(caption) {
+        return None;
+    }
+    let a = Box_::of(&page.blocks[last]);
+    let (width, height) = (a.r - a.l, a.b - a.t);
+    let tolerance = 12f64.max(height * 0.2);
+    let member = page.blocks.iter().position(|b| {
+        let m = Box_::of(b);
+        b.block_label == "text"
+            && b.block_content.trim().is_empty()
+            && b.group_id.is_some()
+            && b.raw_bbox.len() == 4
+            && m.l >= a.r
+            && m.l - a.r <= width * 0.2
+            && (m.t - a.t).abs() <= tolerance
+            && m.b <= a.b + tolerance
+            && m.r - m.l >= width * 0.6
+    })?;
+    let mut members: Vec<_> = page
+        .blocks
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| b.group_id == page.blocks[member].group_id && b.block_label == "text")
+        .collect();
+    members.sort_by_key(|(i, b)| b.block_order.unwrap_or(*i as i64));
+    let owners: Vec<_> = members
+        .iter()
+        .filter(|(_, b)| !b.block_content.trim().is_empty())
+        .collect();
+    if owners.len() != 1 || members.iter().any(|(_, b)| b.raw_bbox.len() != 4) {
+        return None;
+    }
+    let owner = owners[0].0;
+    let content = &page.blocks[owner].block_content;
+    let areas: Vec<_> = members.iter().map(|(_, b)| Box_::of(b).area()).collect();
+    let total: f64 = areas.iter().sum();
+    let position = members.iter().position(|(i, _)| *i == member)?;
+    let from = areas[..position].iter().sum::<f64>() / total;
+    let to = from + areas[position] / total;
+    let mut paragraphs = Vec::new();
+    let mut cursor = 0;
+    for m in PARAGRAPH.find_iter(content) {
+        paragraphs.push((cursor, m.start()));
+        cursor = m.end();
+    }
+    paragraphs.push((cursor, content.len()));
+    paragraphs.retain(|(s, e)| !content[*s..*e].trim().is_empty());
+    let chars = content.chars().count() as f64;
+    let mine: Vec<_> = paragraphs
+        .iter()
+        .filter(|(s, e)| {
+            let middle =
+                (content[..*s].chars().count() + content[..*e].chars().count()) as f64 / 2.0;
+            (from..to).contains(&(middle / chars))
+        })
+        .collect();
+    let (first, last) = (mine.first()?, mine.last()?);
+    if mine.len() == paragraphs.len() || main_caption(&content[first.0..first.1]) {
+        return None;
+    }
+    Some((member, owner, first.0, last.1))
+}
 pub(super) fn modifier_tail(text: &str) -> bool {
     static MODIFIERS: LazyLock<Vec<String>> = LazyLock::new(|| {
         let config: Value = serde_json::from_str(include_str!(
@@ -262,7 +333,7 @@ pub(super) fn collect(page: &StructurePage, index: usize) -> Vec<Caption> {
         };
         parts.extend(duplicates.iter().copied());
         consumed.extend(parts.iter().copied());
-        let text = joined(
+        let mut text = joined(
             std::iter::once(&b.block_content[start..end]).chain(
                 parts
                     .iter()
@@ -286,6 +357,30 @@ pub(super) fn collect(page: &StructurePage, index: usize) -> Vec<Caption> {
             start: None,
             end: None,
         }));
+        let last = parts
+            .iter()
+            .rev()
+            .find(|p| !duplicates.contains(p))
+            .copied()
+            .unwrap_or(i);
+        if let Some((member, owner, from, to)) = (b.parent_id.is_none()
+            && end >= b.block_content.trim_end().len())
+        .then(|| grouped_tail(page, last, &text))
+        .flatten()
+        {
+            let holder = &page.blocks[owner];
+            let tail = &holder.block_content[from..to];
+            text = joined([text.as_str(), tail]);
+            refs.push(CaptionRef {
+                page_index: page.page_index,
+                text: tail.into(),
+                block_id: Some(holder.block_id.clone()),
+                line_index: None,
+                start: Some(holder.block_content[..from].encode_utf16().count()),
+                end: Some(holder.block_content[..to].encode_utf16().count()),
+            });
+            parts.push(member);
+        }
         captions.push(Caption {
             page: index,
             name: caption_name(&b.block_content[start..end]),

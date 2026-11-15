@@ -140,7 +140,21 @@ impl DocumentModel {
                 block.source_regions = if page.page_size.is_none() {
                     vec![]
                 } else if !native.text_regions.is_empty() {
-                    native.text_regions.clone()
+                    // 题注取走了组内某成员区域的文字时，正文不再占用该区域。
+                    native
+                        .text_regions
+                        .iter()
+                        .filter(|r| {
+                            remainder.is_none()
+                                || !model.figures.iter().any(|f| {
+                                    f.page_index == r.page_index
+                                        && f.blocks.iter().any(|b| {
+                                            b.block_id != native.block_id && b.bbox() == r.bbox
+                                        })
+                                })
+                        })
+                        .cloned()
+                        .collect()
                 } else if native.raw_bbox.len() == 4 {
                     vec![TextRegion {
                         page_index: page.page_index,
