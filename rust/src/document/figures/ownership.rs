@@ -34,39 +34,49 @@ pub(super) fn blocked(visuals: &[Visual], caption: &Caption, pages: &[StructureP
     })
 }
 
-/// 视觉块与题注之间可能出现阻挡物的区域。两者上下排列且横向重叠时，只取两者本身和
-/// 夹在中间、横向限于较窄一方的通道：通栏图配半栏题注（或反之）时，与较窄一方并排的
-/// 另一栏内容不在两者之间。其他排列沿用两者的外接框。
+/// 视觉块与题注之间可能出现阻挡物的区域。两者上下（或左右）排列时，只取两者本身和
+/// 夹在中间、宽度（或高度）限于较小一方的通道：通栏图配半栏题注、侧边题注下方接正文时，
+/// 与较小一方并排的内容不在两者之间。斜向排列沿用两者的外接框。
 fn sight_regions(visual: Box_, cap: Box_) -> Vec<Box_> {
-    let hull = Box_ {
-        l: visual.l.min(cap.l),
-        t: visual.t.min(cap.t),
-        r: visual.r.max(cap.r),
-        b: visual.b.max(cap.b),
-    };
     let x_overlap = visual.r.min(cap.r) - visual.l.max(cap.l);
     let y_overlap = visual.b.min(cap.b) - visual.t.max(cap.t);
-    if x_overlap <= 0.0 || y_overlap > 12.0 {
-        return vec![hull];
+    let stacked = x_overlap > 0.0 && y_overlap <= 12.0;
+    if !stacked && !(y_overlap > 0.0 && x_overlap <= 12.0) {
+        return vec![Box_ {
+            l: visual.l.min(cap.l),
+            t: visual.t.min(cap.t),
+            r: visual.r.max(cap.r),
+            b: visual.b.max(cap.b),
+        }];
     }
-    let (upper, lower) = if visual.t + visual.b <= cap.t + cap.b {
-        (visual, cap)
-    } else {
-        (cap, visual)
+    // 左右并排时转置坐标，按上下排列求通道后再转回。
+    let flip = |b: Box_| {
+        if stacked {
+            b
+        } else {
+            Box_ {
+                l: b.t,
+                t: b.l,
+                r: b.b,
+                b: b.r,
+            }
+        }
     };
-    let narrow = if visual.r - visual.l <= cap.r - cap.l {
-        visual
+    let (a, b) = (flip(visual), flip(cap));
+    let (upper, lower) = if a.t + a.b <= b.t + b.b {
+        (a, b)
     } else {
-        cap
+        (b, a)
     };
+    let narrow = if a.r - a.l <= b.r - b.l { a } else { b };
     let mut regions = vec![visual, cap];
     if lower.t > upper.b {
-        regions.push(Box_ {
+        regions.push(flip(Box_ {
             l: narrow.l,
             t: upper.b,
             r: narrow.r,
             b: lower.t,
-        });
+        }));
     }
     regions
 }

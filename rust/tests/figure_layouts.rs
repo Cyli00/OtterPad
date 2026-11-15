@@ -704,3 +704,34 @@ fn caption_split_into_two_stacked_title_blocks_stays_whole() {
             .ends_with("Accuracy on the test set.")
     );
 }
+/// 图占约 2/3 栏宽，题注在右侧顶部，题注下方接着正文。
+#[test]
+fn side_caption_beside_wide_figure_with_body_text_below_it() {
+    let mut blocks = vec![
+        image("img", [70.0, 100.0, 780.0, 600.0]),
+        caption(
+            "cap",
+            "Figure 1 | Side caption.",
+            [800.0, 100.0, 1110.0, 330.0],
+        ),
+        text("below", [800.0, 350.0, 1110.0, 600.0]),
+    ];
+    blocks.extend(columns("", 620.0));
+    assert_eq!(pairs(json!([page(blocks)])), vec![pair("cap", &["img"])]);
+}
+
+/// 守卫：图与侧边题注之间夹着正文时不配对。
+#[test]
+fn body_text_between_figure_and_side_caption_still_blocks() {
+    let raw = json!([page(vec![
+        image("img", [100.0, 200.0, 600.0, 700.0]),
+        block("between", "text", BODY, [620.0, 200.0, 760.0, 700.0]),
+        caption(
+            "cap",
+            "Figure 1. Side caption.",
+            [780.0, 200.0, 1100.0, 420.0]
+        ),
+        block("body", "text", BODY, [100.0, 740.0, 1100.0, 1000.0]),
+    ])]);
+    assert_eq!(pairs(raw), vec![]);
+}
