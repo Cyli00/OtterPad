@@ -29,6 +29,7 @@ class ReaderSurface extends StatefulWidget {
     this.maxColumnWidth = 720,
     this.onTranslate,
     this.onAskAi,
+    this.onCopy,
     this.onFigureTap,
     this.onTapBlank,
     this.onLocationChanged,
@@ -46,11 +47,20 @@ class ReaderSurface extends StatefulWidget {
   final double fontSize;
   final double maxColumnWidth;
 
-  /// 选区菜单的「翻译」：选中文字与选区外接矩形（全局坐标）。
-  final void Function(String text, Rect anchor)? onTranslate;
+  /// 选区菜单的「翻译」：选中文字、选区外接矩形（全局坐标），以及把译文存为笔记的回调
+  /// （点开的标注更新该标注，否则按选区新建）。
+  final void Function(
+    String text,
+    Rect anchor,
+    void Function(String color, String note) addNote,
+  )?
+  onTranslate;
 
-  /// 选区菜单的「问 AI」。
-  final void Function(String text)? onAskAi;
+  /// 选区菜单的「问 AI」：文字与其锚点。
+  final void Function(String text, List<AnchorRange> anchor)? onAskAi;
+
+  /// 选区菜单的「复制」；为 null 时直接写入剪贴板。
+  final void Function(String text)? onCopy;
 
   /// 点击图块。
   final void Function(Block block)? onFigureTap;
@@ -81,6 +91,9 @@ class ReaderSurfaceState extends State<ReaderSurface> {
   ScrollController? _scroll;
   PageController? _pages;
   ReaderContextMenuHandle? _menu;
+
+  /// 菜单针对的已有标注；为 null 时菜单针对选区。
+  ReaderHighlight? _menuHighlight;
   SearchHit? _revealedHit;
   bool _restorePending = false;
 
@@ -128,7 +141,7 @@ class ReaderSurfaceState extends State<ReaderSurface> {
     } else if (hit == null) {
       _revealedHit = null;
     }
-    if (!_controller.hasSelection) _closeMenu();
+    if (!_controller.hasSelection && _menuHighlight == null) _closeMenu();
     setState(() {});
   }
 
@@ -326,39 +339,52 @@ class ReaderSurfaceState extends State<ReaderSurface> {
     return (location, location);
   }
 
-  /// 选区在屏幕上的外接矩形，供工具栏定位。
-  Rect? _selectionRect() {
+  /// 块内区间 (块序号, 起, 止) 在屏幕上的外接矩形（全局坐标），供菜单定位。
+  Rect? _rangesRect(Iterable<(int, int, int)> spans) {
+    final ranges = <int, List<(int, int)>>{};
+    for (final (i, s, e) in spans) {
+      ranges.putIfAbsent(i, () => []).add((s, e));
+    }
     Rect? rect;
-    final ranges = {
-      for (final (i, s, e) in _controller.selectedRanges) i: (s, e),
-    };
     for (final target in _targets) {
       final item = target.widget.item;
-      final range = ranges[item.blockIndex];
       final paragraph = target.paragraph;
       final window = target.globalRect;
-      if (range == null || paragraph == null || window == null) continue;
-      final boxes = paragraph.getBoxesForSelection(
-        TextSelection(
-          baseOffset: item.map!.toPainter(range.$1),
-          extentOffset: item.map!.toPainter(range.$2),
-        ),
-      );
-      for (final box in boxes) {
-        final global = MatrixUtils.transformRect(
-          paragraph.getTransformTo(null),
-          box.toRect(),
-        ).intersect(window);
-        if (global.height <= 0 || global.width <= 0) continue;
-        rect = rect == null ? global : rect.expandToInclude(global);
+      if (paragraph == null || window == null) continue;
+      for (final range in ranges[item.blockIndex] ?? const <(int, int)>[]) {
+        final boxes = paragraph.getBoxesForSelection(
+          TextSelection(
+            baseOffset: item.map!.toPainter(range.$1),
+            extentOffset: item.map!.toPainter(range.$2),
+          ),
+        );
+        for (final box in boxes) {
+          final global = MatrixUtils.transformRect(
+            paragraph.getTransformTo(null),
+            box.toRect(),
+          ).intersect(window);
+          if (global.height <= 0 || global.width <= 0) continue;
+          rect = rect == null ? global : rect.expandToInclude(global);
+        }
       }
     }
     return rect;
   }
 
+  /// 菜单锚点：点开的标注，否则为当前选区。
+  Rect? _menuRect() {
+    final highlight = _menuHighlight;
+    return _rangesRect(
+      highlight == null
+          ? _controller.selectedRanges
+          : _controller.highlightRanges(highlight.id),
+    );
+  }
+
   void _closeMenu() {
     final menu = _menu;
     _menu = null;
+    _menuHighlight = null;
     menu?.remove();
   }
 
@@ -371,15 +397,23 @@ class ReaderSurfaceState extends State<ReaderSurface> {
     createdAt: h.createdAt,
   );
 
-  void _showMenu({ReaderHighlight? existing, Rect? anchor}) {
+  /// [existing] 为点开的已有标注：与 0.1.x 一致不进入选区，菜单锚定在标注上。
+  void _showMenu({ReaderHighlight? existing}) {
     _closeMenu();
-    final rect = anchor ?? _selectionRect();
-    if (rect == null) return;
+    _menuHighlight = existing;
+    final rect = _menuRect();
+    if (rect == null) {
+      _menuHighlight = null;
+      return;
+    }
     final controller = _controller;
+    final text = existing?.text ?? controller.selectedText;
+    // 关闭菜单会清除选区；翻译弹窗稍后「加入笔记」时按这里取出的锚点建标注。
+    final anchors = existing?.ranges ?? controller.selectionAnchors;
     _menu = showReaderContextMenu(
       context: context,
       selectionRect: rect,
-      selectedText: existing?.text ?? controller.selectedText,
+      selectedText: text,
       existingHighlight: existing == null ? null : _legacy(existing),
       onHighlight: (color) {
         if (existing != null) {
@@ -389,18 +423,31 @@ class ReaderSurfaceState extends State<ReaderSurface> {
         }
       },
       onCopy: () {
-        final text = existing?.text ?? controller.selectedText;
-        Clipboard.setData(ClipboardData(text: text));
         controller.clearSelection();
+        final copy = widget.onCopy;
+        if (copy != null) {
+          copy(text);
+        } else {
+          Clipboard.setData(ClipboardData(text: text));
+        }
       },
-      onTranslate: () {
-        final text = existing?.text ?? controller.selectedText;
-        widget.onTranslate?.call(text, rect);
-      },
+      onTranslate: () => widget.onTranslate?.call(text, rect, (color, note) {
+        final current = existing == null
+            ? null
+            : controller.highlights
+                  .where((h) => h.id == existing.id)
+                  .firstOrNull;
+        if (current != null) {
+          controller.updateHighlight(
+            current.copyWith(color: color, note: note),
+          );
+        } else if (existing == null) {
+          controller.addHighlight(anchors, color, note: note);
+        }
+      }),
       onAskAi: () {
-        final text = existing?.text ?? controller.selectedText;
         controller.clearSelection();
-        widget.onAskAi?.call(text);
+        widget.onAskAi?.call(text, anchors);
       },
       onCreateForNote: () {
         final created =
@@ -416,6 +463,7 @@ class ReaderSurfaceState extends State<ReaderSurface> {
           : () => controller.removeHighlight(existing.id),
       onDismiss: () {
         _menu = null;
+        _menuHighlight = null;
         controller.clearSelection();
       },
     );
@@ -440,20 +488,11 @@ class ReaderSurfaceState extends State<ReaderSurface> {
     final highlight = location == null
         ? null
         : _controller.highlightAt(location);
-    if (location == null || highlight == null) {
+    if (highlight == null) {
       widget.onTapBlank?.call();
       return;
     }
-    final range = highlight.ranges.firstWhere(
-      (r) => r.blockId == _controller.model.blocks[location.blockIndex].id,
-    );
-    _controller.select(
-      ReaderLocation(location.blockIndex, range.start.toInt()),
-      ReaderLocation(location.blockIndex, range.end.toInt()),
-    );
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _showMenu(existing: highlight),
-    );
+    _showMenu(existing: highlight);
   }
 
   Map<Type, GestureRecognizerFactory> get _gestures => {
@@ -591,7 +630,7 @@ class ReaderSurfaceState extends State<ReaderSurface> {
             location,
             max <= 0 ? 1 : (n.metrics.pixels / max).clamp(0.0, 1.0),
           );
-          final rect = _menu == null ? null : _selectionRect();
+          final rect = _menu == null ? null : _menuRect();
           if (rect != null) _menu?.updateVerticalAnchor(rect);
         }
         return false;

@@ -266,15 +266,25 @@ class ReaderController extends ChangeNotifier {
   }
 
   /// 以当前选区创建标注并清除选区；与 Rust `DocumentModel::anchor` 同规则生成锚点。
-  ReaderHighlight? highlightSelection(String color) {
-    final ranges = [
-      for (final (i, s, e) in selectedRanges) _anchor(model.blocks[i], s, e),
-    ];
+  ReaderHighlight? highlightSelection(String color) =>
+      addHighlight(selectionAnchors, color);
+
+  /// 当前选区的锚点；关闭菜单会清除选区，需要稍后再建标注时先取出。
+  List<AnchorRange> get selectionAnchors => [
+    for (final (i, s, e) in selectedRanges) _anchor(model.blocks[i], s, e),
+  ];
+
+  ReaderHighlight? addHighlight(
+    List<AnchorRange> ranges,
+    String color, {
+    String? note,
+  }) {
     if (ranges.isEmpty) return null;
     final highlight = ReaderHighlight(
       id: generateUuid(),
       ranges: ranges,
       color: color,
+      note: note,
       createdAt: DateTime.now(),
     );
     _highlights.add(highlight);
@@ -313,6 +323,13 @@ class ReaderController extends ChangeNotifier {
 
   /// 块 id（含译文块）对应的展示序号。
   int? indexOfBlock(String id) => _blockIndexById[id];
+
+  /// 标注在各展示块中的区间：(块序号, 起, 止)。
+  List<(int, int, int)> highlightRanges(String id) => [
+    for (final MapEntry(key: i, value: marks) in _highlightMarks.entries)
+      for (final (s, e, h) in marks)
+        if (h.id == id) (i, s, e),
+  ];
 
   ReaderHighlight? highlightAt(ReaderLocation location) {
     ReaderHighlight? hit;

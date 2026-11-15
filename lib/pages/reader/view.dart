@@ -460,21 +460,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return false;
   }
 
-  void _showTranslation(String text, Rect anchor) {
-    final controller = _controller;
+  void _copyText(String text) {
+    Haptics.soft();
+    Clipboard.setData(ClipboardData(text: text));
+    ref
+        .read(snackBarServiceProvider)
+        .showResult(message: context.l10n.copiedToClipboard);
+  }
+
+  void _showTranslation(
+    String text,
+    Rect anchor,
+    void Function(String color, String note) addNote,
+  ) {
     unawaited(
-      showTranslationPopup(
-        context,
-        sourceText: text,
-        onAddNote: controller == null || !controller.hasSelection
-            ? null
-            : (color, note) {
-                final created = controller.highlightSelection(color);
-                if (created != null) {
-                  controller.updateHighlight(created.copyWith(note: note));
-                }
-              },
-      ),
+      showTranslationPopup(context, sourceText: text, onAddNote: addNote),
     );
   }
 
@@ -1203,13 +1203,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         matchColor: theme.colorScheme.primaryContainer.withAlpha(150),
         activeMatchColor: theme.colorScheme.primary.withAlpha(72),
         selectionColor: theme.colorScheme.primary.withAlpha(56),
-        onCopy: (text) {
-          Haptics.soft();
-          Clipboard.setData(ClipboardData(text: text));
-          ref
-              .read(snackBarServiceProvider)
-              .showResult(message: context.l10n.copiedToClipboard);
-        },
+        onCopy: _copyText,
         onPageChanged: (page, total) {
           final progress = total <= 1 ? 1.0 : (page - 1) / (total - 1);
           _progress.value = progress;
@@ -1263,7 +1257,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           translationConfigProvider.select((c) => c.displayStyleId),
         ),
         onTranslate: _showTranslation,
-        onAskAi: (text) => _openChat(quote: text),
+        onAskAi: (text, anchor) => _openChat(quote: text, anchor: anchor),
+        onCopy: _copyText,
         onFigureTap: (b) => _openFigure(b, FigureHeroSource.reader),
         onTapBlank: () => setState(() => _toolbars = !_toolbars),
         onLocationChanged: _onLocation,
