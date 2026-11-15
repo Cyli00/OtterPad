@@ -167,3 +167,17 @@ fn block_regions_are_page_fractions_and_skip_pages_without_size() {
             .all(Vec::is_empty)
     );
 }
+
+#[test]
+fn list_markers_survive_as_text_like_the_source() {
+    let text = |markdown: &str| {
+        otter_core::document::inline_runs(markdown)
+            .into_iter()
+            .map(|r| r.text)
+            .collect::<String>()
+    };
+    assert_eq!(text("2. Method"), "2. Method");
+    assert_eq!(text("1) Detail"), "1) Detail");
+    assert_eq!(text("3. first\n4. second"), "3. first\n4. second");
+    assert_eq!(text("- one\n- two"), "• one\n• two");
+}

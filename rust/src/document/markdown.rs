@@ -12,6 +12,8 @@ pub(super) fn options() -> Options {
 // pulldown-cmark 不把 `$ x $` 当公式，OCR 结果却常带内侧空格；与 0.1.x 一样先收紧再解析。
 // `$$` 先行匹配并原样保留：显示公式本身允许内侧空格，也避免把两个显示公式之间的正文当成行内公式。
 static INLINE_MATH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\$|\$([^$\n]+)\$").unwrap());
+static LIST_MARKER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[ \t]*(\d{1,9}[.)]|[-+*])").unwrap());
 
 pub fn inline_runs(markdown: &str) -> Vec<InlineRun> {
     let markdown = INLINE_MATH.replace_all(markdown, |c: &Captures| match c.get(1) {
@@ -21,9 +23,18 @@ pub fn inline_runs(markdown: &str) -> Vec<InlineRun> {
     let mut style = InlineRun::default();
     let mut runs = Vec::new();
     let mut image_depth = 0;
-    for event in Parser::new_ext(&markdown, options()) {
+    for (event, range) in Parser::new_ext(&markdown, options()).into_offset_iter() {
         let mut run = style.clone();
         match event {
+            // 列表标记取自原文：OCR 的“2. Method”“1) Detail”保留原编号，无序列表显示为“•”。
+            Event::Start(Tag::Item) => {
+                run.text = match LIST_MARKER.captures(&markdown[range.start..]) {
+                    Some(c) if c[1].starts_with(|c: char| c.is_ascii_digit()) => {
+                        format!("{} ", &c[1])
+                    }
+                    _ => "• ".into(),
+                };
+            }
             Event::Start(Tag::Strong) => {
                 style.bold = true;
                 continue;
