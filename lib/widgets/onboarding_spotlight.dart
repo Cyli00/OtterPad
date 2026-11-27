@@ -244,8 +244,9 @@ class _TourOverlayState extends State<_TourOverlay>
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        color: cs.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: AppStroke.rule(cs)),
         boxShadow: AppShadows.dialog,
       ),
       child: AnimatedSize(

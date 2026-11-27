@@ -291,10 +291,9 @@ class ReaderSheetFrame extends StatelessWidget {
             minHeight: fill ? height : 0,
           ),
           decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppRadius.lg),
-            ),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(cs)),
             boxShadow: AppShadows.sheet,
           ),
           clipBehavior: Clip.antiAlias,
@@ -305,10 +304,10 @@ class ReaderSheetFrame extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 12, bottom: 8),
                 child: Container(
                   width: 32,
-                  height: 4,
+                  height: 3,
                   decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withAlpha(80),
-                    borderRadius: BorderRadius.circular(2),
+                    color: cs.outline,
+                    borderRadius: BorderRadius.circular(AppRadius.hairline),
                   ),
                 ),
               ),

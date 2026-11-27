@@ -247,9 +247,7 @@ class _TranslationSettingsSectionState
             return cs.surface;
           }),
           side: BorderSide(
-            color: isSelected
-                ? Colors.transparent
-                : cs.outlineVariant.withAlpha(100),
+            color: isSelected ? Colors.transparent : cs.outlineVariant,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -293,9 +291,7 @@ class _TranslationSettingsSectionState
       borderRadius: BorderRadius.circular(AppRadius.sm),
       baseColor: isSelected ? cs.primaryContainer : cs.surfaceContainerLow,
       border: Border.all(
-        color: isSelected
-            ? Colors.transparent
-            : cs.outlineVariant.withAlpha(100),
+        color: isSelected ? Colors.transparent : cs.outlineVariant,
       ),
       onTap: () {
         ref
@@ -321,7 +317,7 @@ class _TranslationSettingsSectionState
         decoration: BoxDecoration(
           color: cs.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+          border: Border.all(color: cs.outlineVariant),
         ),
         child: Row(
           children: [
@@ -358,10 +354,9 @@ class _TranslationSettingsSectionState
           child: Container(
             constraints: BoxConstraints(maxHeight: maxH),
             decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(AppRadius.lg),
-              ),
+              color: cs.surfaceContainerLowest,
+              borderRadius: AppRadius.sheetTop,
+              border: Border(top: AppStroke.side(cs)),
               boxShadow: AppShadows.sheet,
             ),
             child: Column(
@@ -370,10 +365,10 @@ class _TranslationSettingsSectionState
                 Container(
                   margin: const EdgeInsets.only(top: 12),
                   width: 32,
-                  height: 4,
+                  height: 3,
                   decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withAlpha(80),
-                    borderRadius: BorderRadius.circular(2),
+                    color: cs.outline,
+                    borderRadius: BorderRadius.circular(AppRadius.hairline),
                   ),
                 ),
                 const SizedBox(height: 8),

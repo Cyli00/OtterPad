@@ -277,9 +277,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         const SizedBox(width: 12),
         Text(
           context.l10n.translateText,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: theme.textTheme.titleLarge?.copyWith(),
         ),
         const Spacer(),
         IconButton(
@@ -345,7 +343,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         decoration: BoxDecoration(
           color: cs.surface,
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+          border: Border.all(color: cs.outlineVariant),
         ),
         child: Scrollbar(
           controller: _sourceScrollCtrl,

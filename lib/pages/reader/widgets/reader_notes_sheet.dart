@@ -118,14 +118,11 @@ class _Header extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          Icon(Symbols.bookmark_rounded, color: cs.primary, size: 22),
+          Icon(Symbols.bookmark_rounded, color: cs.onSurfaceVariant, size: 20),
           const SizedBox(width: 8),
           Text(
             context.l10n.highlightsAndNotes,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
+            style: theme.textTheme.titleLarge,
           ),
           const Spacer(),
           Text(
@@ -274,16 +271,10 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
     final cs = theme.colorScheme;
     final hl = widget.highlight;
     return AlertDialog(
-      backgroundColor: cs.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
       contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
       title: Text(
         context.l10n.editNoteTitle,
-        style: theme.textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.bold,
-        ),
+        style: theme.textTheme.titleLarge?.copyWith(),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,

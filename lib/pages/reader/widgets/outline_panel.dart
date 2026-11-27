@@ -75,7 +75,7 @@ class _OutlinePanelState extends State<OutlinePanel>
           unselectedLabelStyle: theme.textTheme.labelLarge,
           dividerHeight: 0,
         ),
-        Divider(height: 1, color: cs.outlineVariant.withAlpha(80)),
+        Divider(height: 1, color: cs.outlineVariant),
         Expanded(
           child: TabBarView(
             controller: _tabs,
@@ -226,8 +226,7 @@ class _FiguresTabState extends State<_FiguresTab> {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: figures.length + 1,
-      separatorBuilder: (_, _) =>
-          Divider(color: cs.outlineVariant.withAlpha(80), height: 32),
+      separatorBuilder: (_, _) => Divider(color: cs.outlineVariant, height: 32),
       itemBuilder: (context, index) {
         if (index == 0) return _summary(context);
         final block = figures[index - 1];
@@ -500,8 +499,7 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       itemCount: references.length,
-      separatorBuilder: (_, _) =>
-          Divider(color: cs.outlineVariant.withAlpha(80), height: 1),
+      separatorBuilder: (_, _) => Divider(color: cs.outlineVariant, height: 1),
       itemBuilder: (context, index) {
         final item = references[index];
         final copied = index == _copied;

@@ -37,9 +37,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
           : AppBar(
               title: Text(
                 l10n.appearanceSettings,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,
@@ -49,13 +47,10 @@ class AppearanceSettingsPage extends ConsumerWidget {
         children: [
           // ── 主题模式 ──
           Padding(
-            padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
+            padding: const EdgeInsets.only(left: 4, bottom: 12, top: 32),
             child: Text(
-              l10n.themeMode,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: cs.primary,
-                fontWeight: FontWeight.bold,
-              ),
+              eyebrowText(l10n.themeMode),
+              style: AppType.eyebrow(context),
             ),
           ),
           Padding(
@@ -86,14 +81,6 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   final mode = set.first;
                   ref.read(themeProvider.notifier).setThemeMode(mode);
                 },
-                style: SegmentedButton.styleFrom(
-                  backgroundColor: cs.surface,
-                  selectedBackgroundColor: cs.primaryContainer,
-                  side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                ),
               ),
             ),
           ),
@@ -147,16 +134,6 @@ class AppearanceSettingsPage extends ConsumerWidget {
                             .read(readerSettingsProvider.notifier)
                             .setDefaultReadingMode(set.first);
                       },
-                      style: SegmentedButton.styleFrom(
-                        backgroundColor: cs.surface,
-                        selectedBackgroundColor: cs.primaryContainer,
-                        side: BorderSide(
-                          color: cs.outlineVariant.withAlpha(100),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -504,7 +481,7 @@ class _AppLanguagePicker extends ConsumerWidget {
             decoration: BoxDecoration(
               color: cs.surface,
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+              border: Border.all(color: cs.outlineVariant),
             ),
             child: Row(
               children: [
@@ -556,10 +533,9 @@ class _AppLanguagePicker extends ConsumerWidget {
           child: Container(
             constraints: BoxConstraints(maxHeight: maxH),
             decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(AppRadius.lg),
-              ),
+              color: cs.surfaceContainerLowest,
+              borderRadius: AppRadius.sheetTop,
+              border: Border(top: AppStroke.side(cs)),
               boxShadow: AppShadows.sheet,
             ),
             child: Column(
@@ -568,10 +544,10 @@ class _AppLanguagePicker extends ConsumerWidget {
                 Container(
                   margin: const EdgeInsets.only(top: 12),
                   width: 32,
-                  height: 4,
+                  height: 3,
                   decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withAlpha(80),
-                    borderRadius: BorderRadius.circular(2),
+                    color: cs.outline,
+                    borderRadius: BorderRadius.circular(AppRadius.hairline),
                   ),
                 ),
                 const SizedBox(height: 8),

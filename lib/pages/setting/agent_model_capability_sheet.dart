@@ -136,10 +136,10 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
             child: Container(
               margin: const EdgeInsets.only(top: 12),
               width: 32,
-              height: 4,
+              height: 3,
               decoration: BoxDecoration(
-                color: cs.onSurfaceVariant.withAlpha(80),
-                borderRadius: BorderRadius.circular(2),
+                color: cs.outline,
+                borderRadius: BorderRadius.circular(AppRadius.hairline),
               ),
             ),
           )
@@ -251,8 +251,11 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
       final width = computed.clamp(lo, hi);
       final maxH = MediaQuery.sizeOf(context).height * 0.75;
       return Material(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: cs.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.lgAll,
+          side: AppStroke.side(cs),
+        ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           width: width,
@@ -268,9 +271,10 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
       filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
       child: Container(
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-            boxShadow: AppShadows.sheet,
+          color: cs.surfaceContainerLowest,
+          borderRadius: AppRadius.sheetTop,
+          border: Border(top: AppStroke.side(cs)),
+          boxShadow: AppShadows.sheet,
         ),
         child: column,
       ),
@@ -379,9 +383,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.sm),
           border: Border.all(
-            color: selected
-                ? Colors.transparent
-                : cs.outlineVariant.withAlpha(80),
+            color: selected ? Colors.transparent : cs.outlineVariant,
           ),
         ),
         padding: const EdgeInsets.symmetric(vertical: 16),

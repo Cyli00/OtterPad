@@ -52,7 +52,7 @@ class ReaderDesktopAppearance extends ConsumerWidget {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+        border: Border.all(color: cs.outlineVariant),
         boxShadow: AppShadows.sheet,
       ),
       clipBehavior: Clip.antiAlias,
@@ -383,7 +383,7 @@ class ReaderDesktopAppearance extends ConsumerWidget {
             border: Border.all(
               color: focused || selected
                   ? cs.primary.withAlpha(160)
-                  : cs.outlineVariant.withAlpha(100),
+                  : cs.outlineVariant,
               width: focused || selected ? 2 : 1,
             ),
             pressedScale: 0.98,
@@ -418,7 +418,6 @@ class ReaderDesktopAppearance extends ConsumerWidget {
     required Map<T, String> choices,
     required ValueChanged<T> onChanged,
   }) {
-    final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: double.infinity,
       child: SegmentedButton<T>(
@@ -429,14 +428,6 @@ class ReaderDesktopAppearance extends ConsumerWidget {
         selected: {value},
         showSelectedIcon: false,
         style: SegmentedButton.styleFrom(
-          backgroundColor: cs.surface,
-          selectedBackgroundColor: cs.primaryContainer,
-          foregroundColor: cs.onSurfaceVariant,
-          selectedForegroundColor: cs.onPrimaryContainer,
-          side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
           textStyle: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
@@ -521,9 +512,7 @@ class _AppearanceSliderState extends State<_AppearanceSlider> {
                       ? cs.primaryContainer
                       : cs.surfaceContainerHighest.withAlpha(160),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: isSet
-                      ? null
-                      : Border.all(color: cs.outlineVariant.withAlpha(80)),
+                  border: isSet ? null : Border.all(color: cs.outlineVariant),
                 ),
                 child: Text(
                   '${value.round()} px',

@@ -19,7 +19,6 @@ import '../library/widgets/doc_list_card.dart';
 import '../library/widgets/selection_app_bar.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
-import '../../core/design_tokens.dart';
 
 /// 无文件条目详情页
 class NoFileEntriesPage extends ConsumerWidget {
@@ -62,9 +61,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                 backgroundColor: colorScheme.surface,
                 title: Text(
                   context.l10n.noFileEntries,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(),
                 ),
                 leading: IconButton(
                   onPressed: () {
@@ -249,10 +246,6 @@ class NoFileEntriesPage extends ConsumerWidget {
     final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.batchDelete),
         content: Text(context.l10n.confirmDeleteEntries(count)),

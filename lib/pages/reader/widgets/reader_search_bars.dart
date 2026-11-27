@@ -170,8 +170,9 @@ class ReaderHighlightSearchBar extends StatelessWidget {
                   height: 40,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    color: cs.surfaceContainerLowest,
+                    borderRadius: AppRadius.mdAll,
+                    border: Border.all(color: AppStroke.rule(cs)),
                   ),
                   child: Row(
                     children: [

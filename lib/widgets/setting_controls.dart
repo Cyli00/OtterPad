@@ -133,9 +133,7 @@ class SettingSlider extends StatelessWidget {
                       ? cs.primaryContainer
                       : cs.surfaceContainerHighest.withAlpha(160),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: isSet
-                      ? null
-                      : Border.all(color: cs.outlineVariant.withAlpha(80)),
+                  border: isSet ? null : Border.all(color: cs.outlineVariant),
                 ),
                 child: Text(
                   formatter(displayValue),

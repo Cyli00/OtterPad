@@ -196,10 +196,10 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 32,
-            height: 4,
+            height: 3,
             decoration: BoxDecoration(
-              color: colorScheme.onSurfaceVariant.withAlpha(80),
-              borderRadius: BorderRadius.circular(2),
+              color: colorScheme.outline,
+              borderRadius: BorderRadius.circular(AppRadius.hairline),
             ),
           )
         else
@@ -217,9 +217,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                   children: [
                     Text(
                       isRunning ? l10n.batchExtracting : l10n.extractionDone,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.titleLarge?.copyWith(),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -287,7 +285,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
         ),
 
         const SizedBox(height: 12),
-        Divider(height: 1, color: colorScheme.outlineVariant.withAlpha(80)),
+        Divider(height: 1, color: colorScheme.outlineVariant),
 
         // Job 状态列表
         Expanded(
@@ -368,8 +366,11 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
 
     if (widget.asDialog) {
       return Material(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: colorScheme.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.lgAll,
+          side: AppStroke.side(colorScheme),
+        ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(width: 540, height: height, child: column),
       );
@@ -380,10 +381,9 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppRadius.lg),
-          ),
+          color: colorScheme.surfaceContainerLowest,
+          borderRadius: AppRadius.sheetTop,
+          border: Border(top: AppStroke.side(colorScheme)),
           boxShadow: AppShadows.sheet,
         ),
         child: column,

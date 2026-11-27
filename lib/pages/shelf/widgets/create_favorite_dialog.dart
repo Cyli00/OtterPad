@@ -6,6 +6,7 @@ import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/app_dialog.dart';
+import '../../../widgets/rule_icon_button.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../../core/design_tokens.dart';
 
@@ -112,9 +113,9 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
         width: dialogWidth,
         constraints: const BoxConstraints(maxHeight: 420),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-
+          color: colorScheme.surfaceContainerLowest,
+          borderRadius: AppRadius.lgAll,
+          border: Border.all(color: AppStroke.rule(colorScheme)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -129,24 +130,17 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                         ? context.l10n.editFavorite
                         : context.l10n.createFavorite,
                     style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
+                  RuleIconButton(
+                    icon: Symbols.close_rounded,
+                    tooltip: context.l10n.close,
                     onPressed: () {
                       Haptics.soft();
                       Navigator.of(context).pop();
                     },
-                    icon: Icon(
-                      Symbols.close_rounded,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    style: IconButton.styleFrom(
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      shape: const CircleBorder(),
-                    ),
                   ),
                 ],
               ),
@@ -168,21 +162,23 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            context.l10n.selectIcon,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                            eyebrowText(context.l10n.selectIcon),
+                            style: AppType.eyebrow(context),
                           ),
                           const SizedBox(height: 8),
                           // Emoji 网格
                           Flexible(
                             child: Container(
                               decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainer,
-                                borderRadius: BorderRadius.circular(AppRadius.md),
+                                border: Border.fromBorderSide(
+                                  AppStroke.side(colorScheme),
+                                ),
+                                borderRadius: AppRadius.mdAll,
                               ),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(AppRadius.md),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
                                 child: GridView.builder(
                                   padding: const EdgeInsets.all(8),
                                   shrinkWrap: true,
@@ -203,7 +199,9 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                         color: isSelected
                                             ? colorScheme.primaryContainer
                                             : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                                        borderRadius: BorderRadius.circular(
+                                          AppRadius.sm,
+                                        ),
                                       ),
                                       clipBehavior: Clip.antiAlias,
                                       child: TactilePress(
@@ -255,10 +253,8 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            context.l10n.favoriteName,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                            eyebrowText(context.l10n.favoriteName),
+                            style: AppType.eyebrow(context),
                           ),
                           const SizedBox(height: 8),
                           // 预览
@@ -266,8 +262,10 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              border: Border.fromBorderSide(
+                                AppStroke.side(colorScheme),
+                              ),
+                              borderRadius: AppRadius.mdAll,
                             ),
                             child: Column(
                               children: [
@@ -277,7 +275,9 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                   height: 56,
                                   decoration: BoxDecoration(
                                     color: colorScheme.primaryContainer,
-                                    borderRadius: BorderRadius.circular(AppRadius.md),
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
@@ -294,8 +294,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                   _nameController.text.isEmpty
                                       ? context.l10n.unnamed
                                       : _nameController.text,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
+                                  style: theme.textTheme.titleLarge?.copyWith(
                                     color: _nameController.text.isEmpty
                                         ? colorScheme.onSurfaceVariant
                                               .withAlpha(128)
@@ -318,23 +317,6 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                             decoration: InputDecoration(
                               hintText: context.l10n.enterFavoriteName,
                               counterText: '',
-                              filled: true,
-                              fillColor: colorScheme.surfaceContainerLow,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(AppRadius.sm),
-                                borderSide: BorderSide.none,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(AppRadius.sm),
-                                borderSide: BorderSide(
-                                  color: colorScheme.primary,
-                                  width: 2,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
                             ),
                           ),
                         ],

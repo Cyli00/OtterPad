@@ -32,9 +32,7 @@ class NetworkSettingsPage extends StatelessWidget {
           : AppBar(
               title: Text(
                 context.l10n.networkSettings,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,

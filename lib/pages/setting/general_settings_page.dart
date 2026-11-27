@@ -68,9 +68,7 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
           : AppBar(
               title: Text(
                 l10n.generalSettings,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,
@@ -134,19 +132,6 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
                                     setState(() => _logLevel = set.first);
                                     GStorage.setting.put(_kLogLevel, _logLevel);
                                   },
-                                  style: SegmentedButton.styleFrom(
-                                    backgroundColor: cs.surface,
-                                    selectedBackgroundColor:
-                                        cs.primaryContainer,
-                                    side: BorderSide(
-                                      color: cs.outlineVariant.withAlpha(100),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                        AppRadius.sm,
-                                      ),
-                                    ),
-                                  ),
                                 ),
                               ),
                             ],
@@ -368,13 +353,13 @@ class _ActionTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+              borderRadius: AppRadius.smAll,
+              border: Border.all(color: AppStroke.rule(cs)),
             ),
-            child: Icon(icon, color: cs.primary, size: 22),
+            child: Icon(icon, color: cs.onSurface, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(

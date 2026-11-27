@@ -147,10 +147,9 @@ class ChatModelPicker extends ConsumerWidget {
             child: Container(
               constraints: BoxConstraints(maxHeight: size.height * .7),
               decoration: BoxDecoration(
-                color: cs.surfaceContainerHigh,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppRadius.lg),
-                ),
+                color: cs.surfaceContainerLowest,
+                borderRadius: AppRadius.sheetTop,
+                border: Border(top: AppStroke.side(cs)),
                 boxShadow: AppShadows.sheet,
               ),
               child: Column(
@@ -160,10 +159,10 @@ class ChatModelPicker extends ConsumerWidget {
                     child: Container(
                       margin: const EdgeInsets.only(top: 12),
                       width: 32,
-                      height: 4,
+                      height: 3,
                       decoration: BoxDecoration(
-                        color: cs.onSurfaceVariant.withAlpha(80),
-                        borderRadius: BorderRadius.circular(2),
+                        color: cs.outline,
+                        borderRadius: BorderRadius.circular(AppRadius.hairline),
                       ),
                     ),
                   ),
@@ -360,7 +359,7 @@ class _ModelOptionsState extends ConsumerState<_ModelOptions> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                borderSide: BorderSide(color: cs.outlineVariant.withAlpha(100)),
+                borderSide: BorderSide(color: cs.outlineVariant),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),

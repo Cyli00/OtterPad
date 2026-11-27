@@ -77,7 +77,25 @@ abstract final class FolioPalette {
       brightness: brightness,
       dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
     );
-    return brightness == Brightness.light ? _paper(base) : _ink(base);
+    final neutral = brightness == Brightness.light ? _paper(base) : _ink(base);
+    return _washContainers(neutral, brightness);
+  }
+
+  /// `*Container` 角色不再是饱和色块，而是强调色在纸面上的一层淡彩
+  /// （浅色 12%、深色 20%），文字用强调色本身。散落在各处的
+  /// `primaryContainer` 图标盒、标签因此自动退成「淡彩 + 墨线」的分量。
+  static ColorScheme _washContainers(ColorScheme cs, Brightness brightness) {
+    final paper = cs.surfaceContainerLowest;
+    final alpha = brightness == Brightness.light ? 31 : 51;
+    Color wash(Color c) => Color.alphaBlend(c.withAlpha(alpha), paper);
+    return cs.copyWith(
+      primaryContainer: wash(cs.primary),
+      onPrimaryContainer: cs.primary,
+      secondaryContainer: wash(cs.secondary),
+      onSecondaryContainer: cs.secondary,
+      tertiaryContainer: wash(cs.tertiary),
+      onTertiaryContainer: cs.tertiary,
+    );
   }
 
   static ColorScheme _paper(ColorScheme base) => base.copyWith(

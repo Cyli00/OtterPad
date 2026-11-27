@@ -13,9 +13,6 @@ Future<DocExtractProvider?> showReprocessSourceDialog({
   context: context,
   builder: (context) => AlertDialog(
     backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-    ),
     title: Text(context.l10n.reformatSourceChoice),
     content: Column(
       mainAxisSize: MainAxisSize.min,
@@ -64,8 +61,11 @@ Future<DocExtractApiState?> showExtractProviderDialog({
           480.0,
         );
         return Material(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          color: cs.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.lgAll,
+            side: AppStroke.side(cs),
+          ),
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: width,
@@ -76,9 +76,7 @@ Future<DocExtractApiState?> showExtractProviderDialog({
               children: [
                 Text(
                   context.l10n.textExtraction,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -99,14 +97,6 @@ Future<DocExtractApiState?> showExtractProviderDialog({
                     selected: {selected},
                     showSelectedIcon: false,
                     style: SegmentedButton.styleFrom(
-                      backgroundColor: cs.surface,
-                      selectedBackgroundColor: cs.primaryContainer,
-                      foregroundColor: cs.onSurfaceVariant,
-                      selectedForegroundColor: cs.onPrimaryContainer,
-                      side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
                       textStyle: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),

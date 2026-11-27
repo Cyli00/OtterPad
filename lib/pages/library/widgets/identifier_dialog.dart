@@ -61,9 +61,9 @@ class _IdentifierContentState extends State<_IdentifierContent> {
         width: dialogWidth,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-
+          color: colorScheme.surfaceContainerLowest,
+          borderRadius: AppRadius.lgAll,
+          border: Border.all(color: AppStroke.rule(colorScheme)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -81,7 +81,6 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                   child: Text(
                     context.l10n.addByIdentifierTitle,
                     style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
                     ),
                   ),
@@ -96,8 +95,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                     color: colorScheme.onSurfaceVariant,
                   ),
                   style: IconButton.styleFrom(
-                    backgroundColor:
-                        colorScheme.surfaceContainerHighest,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
                     shape: const CircleBorder(),
                   ),
                 ),
@@ -128,10 +126,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  borderSide: BorderSide(
-                    color: colorScheme.primary,
-                    width: 2,
-                  ),
+                  borderSide: BorderSide(color: colorScheme.primary, width: 2),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,

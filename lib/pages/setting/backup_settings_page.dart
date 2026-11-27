@@ -105,9 +105,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
           : AppBar(
               title: Text(
                 context.l10n.dataManagement,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,
@@ -162,18 +160,6 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                                     _pingCacheKey = '';
                                   });
                                 },
-                                style: SegmentedButton.styleFrom(
-                                  backgroundColor: cs.surface,
-                                  selectedBackgroundColor: cs.primaryContainer,
-                                  side: BorderSide(
-                                    color: cs.outlineVariant.withAlpha(100),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      AppRadius.sm,
-                                    ),
-                                  ),
-                                ),
                               ),
                             ),
                           ],
@@ -460,17 +446,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       context: context,
       builder: (ctx) {
         final theme = Theme.of(ctx);
-        final cs = theme.colorScheme;
         return AlertDialog(
-          backgroundColor: cs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-          ),
           title: Text(
             ctx.l10n.resetZoteroSync,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: theme.textTheme.titleLarge?.copyWith(),
           ),
           content: Text(
             ctx.l10n.resetZoteroConfirm,
@@ -513,13 +492,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+              borderRadius: AppRadius.smAll,
+              border: Border.all(color: AppStroke.rule(cs)),
             ),
-            child: Icon(icon, color: cs.primary, size: 22),
+            child: Icon(icon, color: cs.onSurface, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -954,14 +933,6 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 Haptics.soft();
                 notifier.setInterval(value.first);
               },
-              style: SegmentedButton.styleFrom(
-                backgroundColor: cs.surface,
-                selectedBackgroundColor: cs.primaryContainer,
-                side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-              ),
             ),
           ),
           if (auto.interval != AutoBackupInterval.off) ...[
@@ -985,14 +956,6 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   Haptics.soft();
                   notifier.setScope(value.first);
                 },
-                style: SegmentedButton.styleFrom(
-                  backgroundColor: cs.surface,
-                  selectedBackgroundColor: cs.primaryContainer,
-                  side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -1306,12 +1269,7 @@ class _RemoteDialogScaffold extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text(title, style: theme.textTheme.titleLarge?.copyWith()),
                 const SizedBox(height: 20),
                 ...children,
                 const SizedBox(height: 12),

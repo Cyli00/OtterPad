@@ -62,7 +62,7 @@ class ChatMarkdown extends StatelessWidget {
                   horizontal: 8,
                   vertical: 6,
                 ),
-                border: TableBorder.all(color: cs.outlineVariant.withAlpha(80)),
+                border: TableBorder.all(color: cs.outlineVariant),
                 wrapper: (table) => SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: table,

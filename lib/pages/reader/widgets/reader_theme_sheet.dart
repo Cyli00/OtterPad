@@ -156,15 +156,9 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
   }) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: cs.primary),
+        Icon(icon, size: 18, color: cs.onSurfaceVariant),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: cs.primary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Text(title, style: theme.textTheme.titleLarge),
         const Spacer(),
         if (trailing != null)
           Container(

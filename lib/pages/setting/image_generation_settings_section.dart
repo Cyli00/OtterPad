@@ -10,7 +10,6 @@ import '../../providers/image_generation_config_provider.dart';
 import '../../services/haptics.dart';
 import 'setting_picker.dart';
 import 'setting_group.dart';
-import '../../core/design_tokens.dart';
 
 /// 画幅比例用户场景副标题——帮用户从"数字"映射到"使用场景"。
 /// 含中文的 hint 在 build 内通过 l10n 解析，其余技术描述保持原样。
@@ -185,17 +184,7 @@ class _ImageGenerationSettingsSectionState
     return SizedBox(
       width: double.infinity,
       child: SegmentedButton<T>(
-        style: SegmentedButton.styleFrom(
-          backgroundColor: cs.surface,
-          selectedBackgroundColor: cs.primaryContainer,
-          foregroundColor: cs.onSurfaceVariant,
-          selectedForegroundColor: cs.onPrimaryContainer,
-          side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
-          textStyle: theme.textTheme.bodyMedium,
-        ),
+        style: SegmentedButton.styleFrom(textStyle: theme.textTheme.bodyMedium),
         showSelectedIcon: false,
         segments: values
             .map(

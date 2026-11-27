@@ -332,8 +332,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           480.0,
         );
         return Material(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          color: cs.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.lgAll,
+            side: AppStroke.side(cs),
+          ),
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: width,
@@ -344,9 +347,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
               children: [
                 Text(
                   l10n.mimoSearchPluginTitle,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -441,8 +442,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             return Material(
-              color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
+              color: cs.surfaceContainerLowest,
+              shape: RoundedRectangleBorder(
+                borderRadius: AppRadius.lgAll,
+                side: AppStroke.side(cs),
+              ),
               clipBehavior: Clip.antiAlias,
               child: Container(
                 width: width,
@@ -453,9 +457,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                   children: [
                     Text(
                       l10n.newChat,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.titleLarge?.copyWith(),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -852,8 +854,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     showAppDialog(
       context: context,
       builder: (_) => Material(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: cs.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.lgAll,
+          side: AppStroke.side(cs),
+        ),
         clipBehavior: Clip.antiAlias,
         child: Container(
           width: (MediaQuery.of(context).size.width * 0.85).clamp(300.0, 480.0),
@@ -911,7 +916,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             decoration: BoxDecoration(
               color: cs.surfaceContainer,
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+              border: Border.all(color: cs.outlineVariant),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1145,7 +1150,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
             borderRadius: BorderRadius.circular(AppRadius.sm),
-            border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+            border: Border.all(color: cs.outlineVariant),
           ),
           padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
           child: Column(
@@ -1257,9 +1262,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(
-          top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
-        ),
+        border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.5)),
       ),
       child: SafeArea(
         top: false,
@@ -1354,10 +1357,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppRadius.lg),
-            ),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(cs)),
             boxShadow: AppShadows.sheet,
           ),
           padding: EdgeInsets.only(
@@ -1461,9 +1463,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                   Expanded(
                     child: Text(
                       l10n.chatHistory,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.titleLarge?.copyWith(),
                     ),
                   ),
                 ],

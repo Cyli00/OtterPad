@@ -240,10 +240,10 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
             child: Container(
               margin: const EdgeInsets.only(top: 12),
               width: 32,
-              height: 4,
+              height: 3,
               decoration: BoxDecoration(
-                color: cs.onSurfaceVariant.withAlpha(80),
-                borderRadius: BorderRadius.circular(2),
+                color: cs.outline,
+                borderRadius: BorderRadius.circular(AppRadius.hairline),
               ),
             ),
           )
@@ -263,8 +263,11 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       final hi = math.max(lo, math.min(540.0, computed));
       final width = computed.clamp(lo, hi);
       return Material(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: cs.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.lgAll,
+          side: AppStroke.side(cs),
+        ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(width: width, height: maxH, child: column),
       );
@@ -275,10 +278,9 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       child: Container(
         constraints: BoxConstraints(maxHeight: maxH),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppRadius.lg),
-          ),
+          color: cs.surfaceContainerLowest,
+          borderRadius: AppRadius.sheetTop,
+          border: Border(top: AppStroke.side(cs)),
           boxShadow: AppShadows.sheet,
         ),
         child: column,
@@ -310,7 +312,6 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
                       color: cs.onSurface,
                     ),
                   ),

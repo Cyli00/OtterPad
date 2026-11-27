@@ -233,15 +233,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         final theme = Theme.of(ctx);
         final cs = theme.colorScheme;
         return AlertDialog(
-          backgroundColor: cs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-          ),
           title: Text(
             context.l10n.deleteProvider,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: theme.textTheme.titleLarge?.copyWith(),
           ),
           content: Text(context.l10n.confirmDeleteProvider(inst.name)),
           actions: [
@@ -279,7 +273,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     return TactilePress(
       borderRadius: BorderRadius.circular(AppRadius.md),
       baseColor: cs.surface,
-      border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+      border: Border.all(color: cs.outlineVariant),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       onTap: _showProviderSwitcher,
       child: Row(
@@ -319,10 +313,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         return Container(
           constraints: BoxConstraints(maxHeight: maxH),
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppRadius.lg),
-            ),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(cs)),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(
@@ -331,10 +324,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
               Container(
                 margin: const EdgeInsets.only(top: 12),
                 width: 32,
-                height: 4,
+                height: 3,
                 decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withAlpha(80),
-                  borderRadius: BorderRadius.circular(2),
+                  color: cs.outline,
+                  borderRadius: BorderRadius.circular(AppRadius.hairline),
                 ),
               ),
               const SizedBox(height: 8),
@@ -478,10 +471,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         final cs = theme.colorScheme;
         return Container(
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppRadius.lg),
-            ),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(cs)),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(
@@ -492,10 +484,10 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 child: Container(
                   margin: const EdgeInsets.only(top: 12),
                   width: 32,
-                  height: 4,
+                  height: 3,
                   decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withAlpha(80),
-                    borderRadius: BorderRadius.circular(2),
+                    color: cs.outline,
+                    borderRadius: BorderRadius.circular(AppRadius.hairline),
                   ),
                 ),
               ),
@@ -1106,9 +1098,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                 children: [
                   Text(
                     context.l10n.selectRole(roleLabel),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: theme.textTheme.titleLarge?.copyWith(),
                   ),
                   const SizedBox(height: 20),
                   if (entries.isEmpty)
@@ -1330,9 +1320,7 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
             children: [
               Text(
                 context.l10n.addProtocol(widget.protocol.label),
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               fieldLabel(context.l10n.nameField),
               TextField(

@@ -65,7 +65,7 @@ class ReaderBottomBar extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
-              border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+              border: Border.all(color: cs.outlineVariant),
               borderRadius: BorderRadius.circular(AppRadius.md),
               boxShadow: AppShadows.bar,
             ),
@@ -82,7 +82,7 @@ class ReaderBottomBar extends StatelessWidget {
                         height: 24,
                         child: VerticalDivider(
                           width: 16,
-                          color: cs.outlineVariant.withAlpha(80),
+                          color: cs.outlineVariant,
                         ),
                       ),
                       ValueListenableBuilder<double>(
@@ -120,9 +120,7 @@ class ReaderBottomBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(
-          top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
-        ),
+        border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.5)),
       ),
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       child: SizedBox(height: 56, child: _buildActionRow(context)),

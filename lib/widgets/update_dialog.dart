@@ -35,8 +35,11 @@ class UpdateDialog extends StatelessWidget {
     final l10n = context.l10n;
 
     return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+      color: cs.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.lgAll,
+        side: AppStroke.side(cs),
+      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 480,
@@ -50,9 +53,7 @@ class UpdateDialog extends StatelessWidget {
             children: [
               Text(
                 l10n.updateNewVersionFound,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               const SizedBox(height: 4),
               Text(

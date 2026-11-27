@@ -15,13 +15,9 @@ Future<bool> showOnboardingWelcomeDialog(BuildContext context) async {
       final theme = Theme.of(context);
       final l10n = context.l10n;
       return AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Text(
           l10n.onboardingWelcomeTitle,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: theme.textTheme.titleLarge?.copyWith(),
         ),
         content: Text(
           l10n.onboardingWelcomeBody,
@@ -62,13 +58,9 @@ Future<bool> showOnboardingOcrDialog(BuildContext context) async {
       final theme = Theme.of(context);
       final l10n = context.l10n;
       return AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Text(
           l10n.onboardingOcrTitle,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: theme.textTheme.titleLarge?.copyWith(),
         ),
         // 矮窗口兜底可滚动，不允许假设窗口高度足够
         scrollable: true,
@@ -86,19 +78,21 @@ Future<bool> showOnboardingOcrDialog(BuildContext context) async {
             const SizedBox(height: 16),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: Builder(builder: (context) {
-                final lang = Localizations.localeOf(context).languageCode;
-                final asset = lang == 'zh'
-                    ? 'assets/icons/ocr_token_setting.png'
-                    : 'assets/icons/ocr_token_setting_en.png';
-                // 图片原生高度大，压到半屏内，否则矮窗口 BOTTOM OVERFLOWED
-                return ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(context).height * 0.5,
-                  ),
-                  child: Image.asset(asset, fit: BoxFit.contain),
-                );
-              }),
+              child: Builder(
+                builder: (context) {
+                  final lang = Localizations.localeOf(context).languageCode;
+                  final asset = lang == 'zh'
+                      ? 'assets/icons/ocr_token_setting.png'
+                      : 'assets/icons/ocr_token_setting_en.png';
+                  // 图片原生高度大，压到半屏内，否则矮窗口 BOTTOM OVERFLOWED
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+                    ),
+                    child: Image.asset(asset, fit: BoxFit.contain),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -134,13 +128,9 @@ Future<bool> showOnboardingAiDialog(BuildContext context) async {
       final theme = Theme.of(context);
       final l10n = context.l10n;
       return AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Text(
           l10n.onboardingAiTitle,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: theme.textTheme.titleLarge?.copyWith(),
         ),
         content: Text(
           l10n.onboardingAiBody,

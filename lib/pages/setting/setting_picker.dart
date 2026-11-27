@@ -87,15 +87,15 @@ class _SettingPickerState<T> extends State<SettingPicker<T>> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return TactilePress(
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: AppRadius.smAll,
       onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+          borderRadius: AppRadius.smAll,
+          border: Border.all(color: cs.outlineVariant),
         ),
         child: Row(
           children: [
@@ -207,10 +207,9 @@ class _SettingPickerState<T> extends State<SettingPicker<T>> {
         return Container(
           constraints: BoxConstraints(maxHeight: maxH),
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppRadius.lg),
-            ),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(cs)),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(
@@ -219,10 +218,10 @@ class _SettingPickerState<T> extends State<SettingPicker<T>> {
               Container(
                 margin: const EdgeInsets.only(top: 12),
                 width: 32,
-                height: 4,
+                height: 3,
                 decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant.withAlpha(80),
-                  borderRadius: BorderRadius.circular(2),
+                  color: cs.outline,
+                  borderRadius: BorderRadius.circular(AppRadius.hairline),
                 ),
               ),
               const SizedBox(height: 8),

@@ -239,9 +239,7 @@ class _ZoteroLocalImportDialogState
                 children: [
                   Text(
                     l10n.zoteroLocalTitle,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: theme.textTheme.titleLarge?.copyWith(),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -430,8 +428,9 @@ class _ZoteroLocalImportDialogState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: cs.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: AppStroke.rule(cs)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
