@@ -7,7 +7,7 @@
 参考 `lib/widgets/app_dialog.dart`、`lib/pages/setting/backup_settings_page.dart`、`lib/pages/shelf/widgets/create_favorite_dialog.dart`。
 由 `showAppDialog` 负责转场、模糊和遮罩，调用方不重复实现。
 
-- 形状与底色取主题：纸色 `surfaceContainerLowest` + 1px 细线 + `AppRadius.lg`（14），阴影 `AppShadows.dialog`；不在 `AlertDialog` 上写 `backgroundColor` / `shape`。自定义 `Material` 用 `RoundedRectangleBorder(borderRadius: AppRadius.lgAll, side: AppStroke.side(cs))`。padding 为 `fromLTRB(24, 24, 24, 20)`。
+- 形状与底色取主题：纸色 `surfaceContainerLowest` + 1px 细线 + `AppRadius.lg`（28，连续曲率），阴影 `AppShadows.dialog`；不在 `AlertDialog` 上写 `backgroundColor` / `shape`。自定义 `Material` 用 `AppShape.lg(AppStroke.side(cs))`（`RoundedSuperellipseBorder`），不要再写 `RoundedRectangleBorder`。padding 为 `fromLTRB(24, 24, 24, 20)`。
 - 配置型最大宽度 540；创建型沿用 `(w * 0.85).clamp(320, 480)`。小窗口仍需服从可用空间约束。
 - 标题为 `titleLarge`（衬线、w500），不加粗。关闭按钮用 `RuleIconButton`，不用圆形填充按钮。表单分区标签用 `AppType.eyebrow` + `eyebrowText`。
 - 底部统一 `TextButton`，取消和确认沿用默认主题，危险操作使用 `cs.error` 文字。
@@ -21,7 +21,7 @@
 | 属性 | 值 |
 |---|---|
 | 工具面板外层 | 透明背景 + BackdropFilter，blur 4 |
-| 容器 | `surfaceContainerLowest` 纸色，`AppRadius.sheetTop`（14），顶边 `Border(top: AppStroke.side(cs))`，阴影 `AppShadows.sheet` |
+| 容器 | `surfaceContainerLowest` 纸色，`AppRadius.sheetTop`（28），顶边 `Border(top: AppStroke.side(cs))`，阴影 `AppShadows.sheet` |
 | Grabber | 32×3，`outline`，圆角 `AppRadius.hairline` |
 | 底部留白 | 安全区域 padding.bottom + 16 |
 | 面板标题 | 眉题 `AppType.eyebrow` + `eyebrowText` |
@@ -40,7 +40,7 @@
 
 | 属性 | 值 |
 |---|---|
-| 形态 | floating；桌面宽 400，移动端左右 16、底部 12 外边距；`AppRadius.md`（10） |
+| 形态 | floating；桌面宽 400，移动端左右 16、底部 12 外边距；`AppRadius.md`（20） |
 | 尺寸 | padding `symmetric(h: 16, v: 8)`，内容行最小高 32，单行条高 48 |
 | 底色 | 默认 `inverseSurface`，不改色、不按语义换底色 |
 | 文字 | `bodyMedium` + `onInverseSurface`；进度单行省略，结果最多 3 行 |
@@ -108,7 +108,7 @@ Folio 里「卡片」分三种，都不铺 `surfaceContainer*` 底色：
 | 属性 | 值 |
 |---|---|
 | 背景 | 取主题：filled，纸色 `surfaceContainerLowest` |
-| 圆角 | `AppRadius.sm`（6） |
+| 圆角 | `AppRadius.sm`（14） |
 | 边框 | enabled 为细线 `outlineVariant`；focused 为 primary、宽 1.5 |
 | contentPadding | 主题默认：水平 14、垂直 12 |
 
@@ -138,7 +138,7 @@ SegmentedButton 的项目样式：
 |---|---|
 | 背景 / 选中背景 | 透明 / `inverseSurface`（墨色反白） |
 | 边框 | 细线 `outlineVariant` |
-| 圆角 | `AppRadius.sm`（6） |
+| 圆角 | `AppRadius.sm`（14） |
 | 布局 | 撑满可用宽度；showSelectedIcon: false |
 | 文字 | 取主题；未选中 `onSurfaceVariant`，选中 `onInverseSurface` |
 
@@ -193,3 +193,36 @@ SegmentedButton 的项目样式：
 
 进度展示使用 `ratio.clamp(0.0, 1.0)`，保持超额数值可见。
 本地估算需标明性质，并以 Tooltip 解释硬上限或降优先级等含义；数据来源与提供商配置规则见 [设置与 API 模块](../../../../docs/settings-and-api-modules.md)。
+
+## 主题风格与氛围光
+
+- 风格由 `ThemeStyle` 决定（纸墨、随色、雾凇、苔原、暮色、石墨），组件只读 `ColorScheme` 角色，不判断风格、不写死纸色。
+- 需要知道外观开关时读 `FolioLook.of(context)`：`style`、`ambient`、`floatingBars`。
+- 一级页面（文库、书架、设置及其嵌入的子页）的 Scaffold 背景用 `AmbientBackdrop.pageColor(context)`（嵌入子页直接透明），让 `AdaptiveScaffold` 铺的氛围光透出来；二级页面照常用 `cs.surface`。
+
+## 悬浮玻璃底栏
+
+| 项 | 规范 |
+|---|---|
+| 开关 | 「通用设置 › 界面 › 悬浮底栏」，`ThemeNotifier.setFloatingBars`；默认关 |
+| 面板 | `LiquidGlass`：模糊 22 + 饱和度 1.8 + 半透明着色（浅 58% / 深 52%）+ 左上亮、右下暗的渐变描边 + 双层投影；`radius` 为空时是胶囊 |
+| 切换 | 需要两种样式的栏用 `BarSurface`，关时退回 `surfaceContainerHigh` 实色 + 细线 |
+| 底部导航 | 开时 `AdaptiveScaffold` 设 `extendBody`，`AdaptiveBottomNavigation` 换成 `FloatingGlassNav`：每项 112 宽、64 高；透镜左右两条边各走一套弹簧，前缘 `kMotionSpatialFast`、后缘 `kMotionSpatialSteady`，移动时被拉长并略压扁 |
+| 内容避让 | 悬浮时内容延伸到栏下：列表底部要加 `MediaQuery.paddingOf(context).bottom`，`SafeArea(bottom: false)` |
+| 阅读器 | 悬浮时底栏叠在内容上，随工具栏显隐滑出 96px 并淡出，隐藏时 `IgnorePointer` |
+
+## 问 AI
+
+| 项 | 规范 |
+|---|---|
+| 形象 | `AiOrb`：主题三色 `SweepGradient` 自转的光球（颜色先推到饱和度 ≥ .62），左上白色高光；`thinking` 时转速从 6s 加快到 1.6s 并缩放呼吸、外发光起伏 |
+| 入口 · 阅读器底栏 | `_AskAiOrbButton`：52×48，内含 30 的光球 + sparkle 图标，对话打开时光球进入 thinking 并加 primary 外环 |
+| 入口 · 选区菜单 | 操作栏下方的 `_AiIntentStrip`：深色胶囊 + 主题三色渐变描边；光球和「随便问」固定在两端，中间四个意图（解释 / 简化 / 举例 / 挑刺）横向滚动、右缘渐隐；意图依次从左滑入。点意图 = 带引用打开对话并立即发送对应提示词；点「随便问」= 只带引用打开对话 |
+| 自动发送 | `DocumentChatPageArgs.initialPrompt`；页面在首帧后填入并发送，停靠栏通过 `onQuoteConsumed` 清掉 |
+| 空状态 | 64 光球 + 衬线大标题 + 文档名 + 四张起手卡（`_StarterCard`，宽 ≥ 520 时两列，错峰入场）；有待发引用时换成意图卡，标签就是完整提示词 |
+| 气泡 | 用户：`primaryContainer → tertiaryContainer` 渐变，28 圆角、右下角收成 6，文字 `onSurface`，最大宽 86%；助手：无底色，顶部一枚 20 的光球 |
+| 新消息 | `_MessageEntrance` 弹簧（stiffness 420、damping 28）上滑 + 放大，用户消息从右侧进；正在流式输出的那条不做入场 |
+| 思考中 | 22 的光球（thinking）+ `ShimmerText` 流光「正在思考」 |
+| 输入框 | 28 圆角浮起胶囊：悬浮玻璃开时为 `LiquidGlass`，关时为纸色 + `AppShadows.bar`；输入框自身无边框。发送中外圈 `AuroraRing`：沿连续曲率圆角旋转的三色扫光 + 外晕；发送键是主题色→第三色渐变圆，发送中换成 errorContainer 停止键 |
+| 宽屏 | 对话与输入框最大宽 760，居中 |
+| 减少动效 | 光球、流光、极光在 `MediaQuery.disableAnimations` 时都停住 |
