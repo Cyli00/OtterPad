@@ -62,7 +62,9 @@ class ReaderSurface extends StatefulWidget {
   onTranslate;
 
   /// 选区菜单的「问 AI」：文字与其锚点。
-  final void Function(String text, List<AnchorRange> anchor)? onAskAi;
+  /// [prompt] 为意图条带出的问题（解释、举例…）；null 表示自由提问。
+  final void Function(String text, List<AnchorRange> anchor, String? prompt)?
+  onAskAi;
 
   /// 选区菜单的「复制」；为 null 时直接写入剪贴板。
   final void Function(String text)? onCopy;
@@ -451,9 +453,9 @@ class ReaderSurfaceState extends State<ReaderSurface> {
           controller.addHighlight(anchors, color, note: note);
         }
       }),
-      onAskAi: () {
+      onAskAi: (prompt) {
         controller.clearSelection();
-        widget.onAskAi?.call(text, anchors);
+        widget.onAskAi?.call(text, anchors, prompt);
       },
       onCreateForNote: () {
         final created =

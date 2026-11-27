@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../core/folio_look.dart';
+import '../../../widgets/ai_orb.dart';
 import '../../../widgets/glass/liquid_glass.dart';
+import '../../../widgets/tactile_press.dart';
+import '../../../services/haptics.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import 'reader_docked_pane.dart';
@@ -148,8 +151,8 @@ class ReaderBottomBar extends StatelessWidget {
           onTap: onOpenOutline,
         ),
         _buildTranslationBottomButton(context),
-        _bottomButton(
-          icon: Symbols.auto_awesome_rounded,
+        // 问 AI 不再是普通图标：一颗会转的光球，是底栏的视觉重心
+        _AskAiOrbButton(
           tooltip: l10n.askAi,
           active: activeDock == ReaderDockPane.askAi,
           onTap: onAskAi,
@@ -241,4 +244,60 @@ class ReaderBottomBar extends StatelessWidget {
         DocTranslationMode.off => l10n.original,
         DocTranslationMode.translated => l10n.translated,
       };
+}
+
+class _AskAiOrbButton extends StatelessWidget {
+  const _AskAiOrbButton({
+    required this.tooltip,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        selected: active,
+        label: tooltip,
+        excludeSemantics: true,
+        child: TactilePress(
+          onTap: () {
+            Haptics.soft();
+            onTap();
+          },
+          baseColor: Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: SizedBox(
+            width: 52,
+            height: 48,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: active ? cs.primary : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                child: AiOrb(
+                  size: 30,
+                  thinking: active,
+                  icon: Symbols.auto_awesome_rounded,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

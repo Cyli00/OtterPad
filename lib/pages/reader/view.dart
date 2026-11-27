@@ -105,6 +105,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Map<String, dynamic>? _dockQuoteAnchor;
   String? _dockFigurePath;
 
+  /// 划词意图条带出的问题，停靠栏聊天页发送后清空。
+  String? _dockPrompt;
+
   /// 桌面端外观设置浮层（窄屏用底部面板）。
   bool _appearanceOpen = false;
 
@@ -406,6 +409,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     String? quote,
     String? figurePath,
     List<AnchorRange>? anchor,
+    String? prompt,
   }) {
     Haptics.soft();
     if (_useDock) {
@@ -413,6 +417,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _dockQuote = quote;
         _dockQuoteAnchor = anchor == null ? null : _anchorJson(anchor);
         _dockFigurePath = figurePath;
+        _dockPrompt = prompt;
         _quoteEpoch++;
         _chatReturn = null;
         _showDock(ReaderDockPane.askAi);
@@ -428,6 +433,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         figureImagePath: figurePath,
         onLocateQuote: _locateQuote,
         quoteEpoch: ++_quoteEpoch,
+        initialPrompt: prompt,
       ),
     );
   }
@@ -984,7 +990,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                         figureImagePath: _dockFigurePath,
                         onLocateQuote: _locateQuote,
                         quoteEpoch: _quoteEpoch,
+                        initialPrompt: _dockPrompt,
                       ),
+                      // 意图条的问题只发一次：停靠栏重建时不再重发
+                      onQuoteConsumed: () => _dockPrompt = null,
                     ),
                   ),
               ],
@@ -1279,7 +1288,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           translationConfigProvider.select((c) => c.displayStyleId),
         ),
         onTranslate: _showTranslation,
-        onAskAi: (text, anchor) => _openChat(quote: text, anchor: anchor),
+        onAskAi: (text, anchor, prompt) =>
+            _openChat(quote: text, anchor: anchor, prompt: prompt),
         onCopy: _copyText,
         onFigureTap: (b) => _openFigure(b, FigureHeroSource.reader),
         onTapBlank: () => setState(() => _toolbars = !_toolbars),
