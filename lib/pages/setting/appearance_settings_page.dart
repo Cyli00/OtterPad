@@ -15,6 +15,7 @@ import '../../widgets/tactile_press.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
 import 'app_font_settings.dart';
+import 'theme_style_picker.dart';
 import '../../core/design_tokens.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
@@ -31,7 +32,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
     final settings = ref.watch(readerSettingsProvider);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: embedded ? Colors.transparent : cs.surface,
       appBar: embedded
           ? null
           : AppBar(
@@ -83,6 +84,44 @@ class AppearanceSettingsPage extends ConsumerWidget {
                 },
               ),
             ),
+          ),
+
+          // ── 主题风格 ──
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 12, top: 32),
+            child: Text(
+              eyebrowText(l10n.themeStyle),
+              style: AppType.eyebrow(context),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 0),
+            child: ThemeStylePicker(),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+            child: Text(
+              l10n.themeStyleHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            title: Text(
+              l10n.ambientBackdrop,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(l10n.ambientBackdropDesc),
+            value: themeState.ambient,
+            onChanged: (v) {
+              Haptics.soft();
+              ref.read(themeProvider.notifier).setAmbient(v);
+            },
           ),
 
           // ── 主题色彩 ──

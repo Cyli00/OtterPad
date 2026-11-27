@@ -99,7 +99,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     _ensurePingFuture(remoteType, webDav, s3);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
       appBar: widget.embedded
           ? null
           : AppBar(

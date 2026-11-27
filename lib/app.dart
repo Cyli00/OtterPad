@@ -43,19 +43,23 @@ class OtterPadApp extends ConsumerWidget {
           lightScheme = FolioPalette.scheme(
             lightDynamic.primary,
             Brightness.light,
+            themeState.style,
           );
           darkScheme = FolioPalette.scheme(
             darkDynamic.primary,
             Brightness.dark,
+            themeState.style,
           );
         } else {
           lightScheme = FolioPalette.scheme(
             themeState.seedColor,
             Brightness.light,
+            themeState.style,
           );
           darkScheme = FolioPalette.scheme(
             themeState.seedColor,
             Brightness.dark,
+            themeState.style,
           );
         }
 
@@ -77,6 +81,7 @@ class OtterPadApp extends ConsumerWidget {
               themeState.appFont,
               defaultTargetPlatform,
             ),
+            look: themeState.look,
           ),
           darkTheme: buildAppTheme(
             darkScheme,
@@ -88,6 +93,7 @@ class OtterPadApp extends ConsumerWidget {
               themeState.appFont,
               defaultTargetPlatform,
             ),
+            look: themeState.look,
           ),
           routerConfig: router,
           builder: (context, child) {

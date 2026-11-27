@@ -8,22 +8,26 @@ import 'app_fonts.dart';
 // 不靠色块和柔光阴影。只有真正浮起的东西（菜单、浮层、弹窗、反馈条）
 // 才有阴影。完整规范见 docs/design-system.md。
 
-/// 圆角：收紧。纸张、印刷品没有 28 的大圆角。
+/// 圆角：大而连续。容器与控件用连续曲率（超椭圆）的形状，
+/// 让圆角成为界面的主要识别特征。
 abstract final class AppRadius {
-  /// 1px 级元素、细进度条、拖拽条。
-  static const double hairline = 2;
+  /// 细进度条、拖拽条。
+  static const double hairline = 3;
 
-  /// 胶囊内的小元素、Tooltip、徽标。
-  static const double xs = 4;
+  /// 封面、Tooltip、徽标、复选框。
+  static const double xs = 8;
 
   /// 控件：按钮、输入框、Chip、图标盒、菜单项。
-  static const double sm = 6;
+  static const double sm = 14;
 
   /// 容器：卡片、设置分组、菜单、反馈条。
-  static const double md = 10;
+  static const double md = 20;
 
   /// 大浮层：弹窗、底部面板。
-  static const double lg = 14;
+  static const double lg = 28;
+
+  /// 胶囊：悬浮栏、发送按钮、快捷提问。
+  static const double pill = 999;
 
   static BorderRadius get xsAll => BorderRadius.circular(xs);
   static BorderRadius get smAll => BorderRadius.circular(sm);
@@ -33,6 +37,24 @@ abstract final class AppRadius {
   static const BorderRadius sheetTop = BorderRadius.vertical(
     top: Radius.circular(lg),
   );
+}
+
+/// 连续曲率形状：与 [AppRadius] 同值，但用超椭圆代替圆弧，转角更柔和饱满。
+abstract final class AppShape {
+  static OutlinedBorder of(
+    double radius, {
+    BorderSide side = BorderSide.none,
+  }) => RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.circular(radius),
+    side: side,
+  );
+
+  static OutlinedBorder sm([BorderSide side = BorderSide.none]) =>
+      of(AppRadius.sm, side: side);
+  static OutlinedBorder md([BorderSide side = BorderSide.none]) =>
+      of(AppRadius.md, side: side);
+  static OutlinedBorder lg([BorderSide side = BorderSide.none]) =>
+      of(AppRadius.lg, side: side);
 }
 
 /// 间距：4 的倍数。页面左右边距桌面 32、移动端 20。
@@ -67,26 +89,84 @@ abstract final class AppStroke {
       BorderSide(color: rule(cs), width: hairline);
 }
 
-/// 纸与墨：中性色固定为暖纸色系，用户选的主题色只作为唯一强调色。
+/// 主题风格：决定中性色（纸面、文字、细线）的色相与浓淡。
 ///
-/// 强调色只用于：选中、焦点、主操作、进度。其余一律中性。
+/// 主题色（或系统动态色）始终只决定强调色；风格决定整页「纸」的气质。
+enum ThemeStyle {
+  /// 纸墨：暖白纸 + 墨色，固定中性色。
+  paper,
+
+  /// 随色：中性色跟着主题色走，容器保留饱和色块。
+  vivid,
+
+  /// 雾凇：冷调蓝灰。
+  mist,
+
+  /// 苔原：低饱和灰绿。
+  moss,
+
+  /// 暮色：带玫瑰紫调的灰。
+  dusk,
+
+  /// 石墨：几乎无彩的灰，深色下是纯黑。
+  graphite;
+
+  static ThemeStyle parse(String? name) =>
+      values.firstWhere((s) => s.name == name, orElse: () => paper);
+}
+
+/// 由风格 + 主题色生成配色。
+///
+/// 强调色只用于：选中、焦点、主操作、进度。其余由风格的中性色承担。
 abstract final class FolioPalette {
-  static ColorScheme scheme(Color seed, Brightness brightness) {
+  static ColorScheme scheme(
+    Color seed,
+    Brightness brightness, [
+    ThemeStyle style = ThemeStyle.paper,
+  ]) {
     final base = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: brightness,
-      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+      dynamicSchemeVariant: style == ThemeStyle.vivid
+          ? DynamicSchemeVariant.vibrant
+          : DynamicSchemeVariant.fidelity,
     );
-    final neutral = brightness == Brightness.light ? _paper(base) : _ink(base);
-    return _washContainers(neutral, brightness);
+    final light = brightness == Brightness.light;
+    return switch (style) {
+      ThemeStyle.paper => _washContainers(
+        light ? _paper(base) : _ink(base),
+        light ? 31 : 51,
+      ),
+      ThemeStyle.vivid => _tinted(
+        base,
+        HSLColor.fromColor(seed).hue,
+        light ? .34 : .24,
+        brightness,
+      ),
+      ThemeStyle.mist => _washContainers(
+        _tinted(base, 212, light ? .48 : .26, brightness),
+        light ? 38 : 56,
+      ),
+      ThemeStyle.moss => _washContainers(
+        _tinted(base, 96, light ? .30 : .17, brightness),
+        light ? 38 : 56,
+      ),
+      ThemeStyle.dusk => _washContainers(
+        _tinted(base, 318, light ? .36 : .22, brightness),
+        light ? 38 : 56,
+      ),
+      ThemeStyle.graphite => _washContainers(
+        _tinted(base, 220, light ? .05 : .04, brightness, oled: true),
+        light ? 34 : 60,
+      ),
+    };
   }
 
-  /// `*Container` 角色不再是饱和色块，而是强调色在纸面上的一层淡彩
-  /// （浅色 12%、深色 20%），文字用强调色本身。散落在各处的
-  /// `primaryContainer` 图标盒、标签因此自动退成「淡彩 + 墨线」的分量。
-  static ColorScheme _washContainers(ColorScheme cs, Brightness brightness) {
+  /// `*Container` 角色不再是饱和色块，而是强调色在纸面上的一层淡彩，
+  /// 文字用强调色本身。散落在各处的 `primaryContainer` 图标盒、标签
+  /// 因此自动退成「淡彩」的分量。「随色」风格保留饱和色块。
+  static ColorScheme _washContainers(ColorScheme cs, int alpha) {
     final paper = cs.surfaceContainerLowest;
-    final alpha = brightness == Brightness.light ? 31 : 51;
     Color wash(Color c) => Color.alphaBlend(c.withAlpha(alpha), paper);
     return cs.copyWith(
       primaryContainer: wash(cs.primary),
@@ -95,6 +175,57 @@ abstract final class FolioPalette {
       onSecondaryContainer: cs.secondary,
       tertiaryContainer: wash(cs.tertiary),
       onTertiaryContainer: cs.tertiary,
+    );
+  }
+
+  /// 按色相 [hue] 与饱和度 [sat] 生成一整套中性色阶。
+  static ColorScheme _tinted(
+    ColorScheme base,
+    double hue,
+    double sat,
+    Brightness brightness, {
+    bool oled = false,
+  }) {
+    Color t(double l, [double satScale = 1]) =>
+        HSLColor.fromAHSL(1, hue, (sat * satScale).clamp(0, 1), l).toColor();
+    if (brightness == Brightness.light) {
+      return base.copyWith(
+        surface: t(.962),
+        onSurface: t(.12, .5),
+        onSurfaceVariant: t(.37, .45),
+        surfaceDim: t(.88),
+        surfaceBright: t(.98),
+        surfaceContainerLowest: t(.99),
+        surfaceContainerLow: t(.944),
+        surfaceContainer: t(.925),
+        surfaceContainerHigh: t(.905),
+        surfaceContainerHighest: t(.885),
+        outline: t(.56, .4),
+        outlineVariant: t(.85, .7),
+        inverseSurface: t(.15, .5),
+        onInverseSurface: t(.95),
+        shadow: t(.1, .5),
+        scrim: t(.1, .5),
+      );
+    }
+    return base.copyWith(
+      surface: oled ? Colors.black : t(.085),
+      onSurface: t(.92, .4),
+      onSurfaceVariant: t(.72, .35),
+      surfaceDim: oled ? Colors.black : t(.085),
+      surfaceBright: t(.24),
+      // 纯黑底上「一张纸」要比底色亮一点
+      surfaceContainerLowest: oled ? t(.07) : t(.055),
+      surfaceContainerLow: oled ? t(.09) : t(.105),
+      surfaceContainer: oled ? t(.11) : t(.125),
+      surfaceContainerHigh: oled ? t(.14) : t(.155),
+      surfaceContainerHighest: oled ? t(.18) : t(.19),
+      outline: t(.52, .4),
+      outlineVariant: t(.24, .7),
+      inverseSurface: t(.92, .4),
+      onInverseSurface: t(.15),
+      shadow: Colors.black,
+      scrim: Colors.black,
     );
   }
 

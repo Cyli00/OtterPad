@@ -23,6 +23,7 @@ import 'ocr_settings_page.dart';
 import 'setting_group.dart';
 import 'storage_space_page.dart';
 import '../../core/design_tokens.dart';
+import '../../widgets/glass/ambient_backdrop.dart';
 
 enum SettingNavMode { shell, overlay }
 
@@ -323,8 +324,11 @@ class _SettingPageState extends State<SettingPage> {
         // 宽屏 shell 的分组标题已画在详情顶部，AppBar 只剩返回入口时才保留
         final showAppBar = !(showMasterDetail && _isShell && showRail);
 
+        final pageColor = _isShell
+            ? AmbientBackdrop.pageColor(context)
+            : colorScheme.surface;
         Widget page = Scaffold(
-          backgroundColor: colorScheme.surface,
+          backgroundColor: pageColor,
           appBar: !showAppBar
               ? null
               : AppBar(
@@ -362,7 +366,7 @@ class _SettingPageState extends State<SettingPage> {
                     ),
                   ),
                   centerTitle: false,
-                  backgroundColor: colorScheme.surface,
+                  backgroundColor: pageColor,
                   scrolledUnderElevation: 0,
                 ),
           body: showAppBar ? body : SafeArea(bottom: false, child: body),

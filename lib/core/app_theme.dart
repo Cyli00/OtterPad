@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'design_tokens.dart';
+import 'folio_look.dart';
 
 const appSliderTheme = SliderThemeData(
   thumbShape: RoundSliderThumbShape(enabledThumbRadius: 7, elevation: 0),
@@ -16,6 +17,7 @@ ThemeData buildAppTheme(
   ColorScheme colorScheme, {
   String? fontFamily,
   List<String>? fontFamilyFallback,
+  FolioLook look = const FolioLook(),
 }) {
   final cs = colorScheme;
   final text = AppType.editorial(
@@ -27,8 +29,9 @@ ThemeData buildAppTheme(
     defaultTargetPlatform,
   );
   final rule = AppStroke.side(cs);
-  final smShape = RoundedRectangleBorder(borderRadius: AppRadius.smAll);
-  final mdShape = RoundedRectangleBorder(borderRadius: AppRadius.mdAll);
+  final smShape = AppShape.sm();
+  final mdShape = AppShape.md();
+  const pill = StadiumBorder();
   final floatShadow = cs.shadow.withAlpha(
     cs.brightness == Brightness.light ? 46 : 140,
   );
@@ -44,6 +47,7 @@ ThemeData buildAppTheme(
     fontFamily: fontFamily,
     fontFamilyFallback: fontFamilyFallback,
     textTheme: text,
+    extensions: [look],
     scaffoldBackgroundColor: cs.surface,
     canvasColor: cs.surface,
     dividerColor: cs.outlineVariant,
@@ -67,13 +71,13 @@ ThemeData buildAppTheme(
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll, side: rule),
+      shape: AppShape.md(rule),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: cs.surfaceContainerLowest,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll, side: rule),
+      shape: AppShape.lg(rule),
       titleTextStyle: text.headlineSmall?.copyWith(color: cs.onSurface),
       contentTextStyle: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
     ),
@@ -85,11 +89,11 @@ ThemeData buildAppTheme(
       modalElevation: 0,
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
       dragHandleColor: cs.outline,
-      dragHandleSize: const Size(28, 3),
+      dragHandleSize: const Size(36, 4),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        shape: smShape,
+        shape: pill,
         padding: buttonPadding,
         minimumSize: buttonSize,
         textStyle: text.labelLarge,
@@ -98,7 +102,7 @@ ThemeData buildAppTheme(
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        shape: smShape,
+        shape: pill,
         padding: buttonPadding,
         minimumSize: buttonSize,
         textStyle: text.labelLarge,
@@ -110,7 +114,7 @@ ThemeData buildAppTheme(
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        shape: smShape,
+        shape: pill,
         padding: buttonPadding,
         minimumSize: buttonSize,
         textStyle: text.labelLarge,
@@ -120,7 +124,7 @@ ThemeData buildAppTheme(
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        shape: smShape,
+        shape: pill,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         minimumSize: const Size(48, 40),
         textStyle: text.labelLarge,
@@ -157,7 +161,7 @@ ThemeData buildAppTheme(
       ),
     ),
     chipTheme: ChipThemeData(
-      shape: smShape,
+      shape: pill,
       side: rule,
       backgroundColor: cs.surfaceContainerLowest,
       selectedColor: cs.primaryContainer,
@@ -166,7 +170,7 @@ ThemeData buildAppTheme(
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: SegmentedButton.styleFrom(
-        shape: smShape,
+        shape: pill,
         side: rule,
         backgroundColor: cs.surfaceContainerLowest,
         selectedBackgroundColor: cs.inverseSurface,
@@ -213,20 +217,21 @@ ThemeData buildAppTheme(
       unselectedLabelStyle: text.titleSmall?.copyWith(
         fontWeight: FontWeight.w500,
       ),
-      indicatorSize: TabBarIndicatorSize.label,
-      indicator: UnderlineTabIndicator(
-        borderSide: BorderSide(color: cs.onSurface, width: AppStroke.focus),
-      ),
-      dividerColor: cs.outlineVariant,
-      dividerHeight: AppStroke.hairline,
+      // 胶囊指示器：选中的标签落在一枚强调色淡彩胶囊里
+      indicatorSize: TabBarIndicatorSize.tab,
+      indicator: ShapeDecoration(color: cs.primaryContainer, shape: pill),
+      splashBorderRadius: BorderRadius.circular(AppRadius.pill),
+      dividerColor: Colors.transparent,
+      dividerHeight: 0,
       overlayColor: const WidgetStatePropertyAll(Colors.transparent),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: cs.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      height: 64,
-      indicatorColor: Colors.transparent,
+      height: 68,
+      indicatorColor: cs.primaryContainer,
+      indicatorShape: pill,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       iconTheme: WidgetStateProperty.resolveWith(
         (s) => IconThemeData(
@@ -269,7 +274,7 @@ ThemeData buildAppTheme(
       surfaceTintColor: Colors.transparent,
       elevation: 6,
       shadowColor: floatShadow,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll, side: rule),
+      shape: AppShape.md(rule),
       textStyle: text.bodyMedium,
     ),
     tooltipTheme: TooltipThemeData(

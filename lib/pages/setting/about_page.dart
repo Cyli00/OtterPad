@@ -49,7 +49,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     final l10n = context.l10n;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
       appBar: widget.embedded
           ? null
           : AppBar(

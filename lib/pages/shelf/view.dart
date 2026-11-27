@@ -20,6 +20,7 @@ import 'widgets/create_favorite_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../../core/design_tokens.dart';
+import '../../widgets/glass/ambient_backdrop.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
@@ -92,8 +93,9 @@ class ShelfPage extends ConsumerWidget {
     final byId = {for (final doc in docs) doc.id: doc};
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: AmbientBackdrop.pageColor(context),
       body: SafeArea(
+        bottom: false,
         child: SingleChildScrollView(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -102,7 +104,7 @@ class ShelfPage extends ConsumerWidget {
                   ? AppSpace.x6
                   : AppSpace.x2,
               AppSpace.pageGutter(context),
-              AppSpace.x4,
+              AppSpace.x4 + MediaQuery.paddingOf(context).bottom,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

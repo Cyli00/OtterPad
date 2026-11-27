@@ -432,7 +432,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     final onboardingStep = ref.watch(onboardingProvider);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
       appBar: widget.embedded
           ? null
           : AppBar(

@@ -31,6 +31,9 @@ class SettingsKeys {
   static const useDynamicColor = 'use_dynamic_color';
   static const textScale = 'text_scale';
   static const appFont = 'app_font';
+  static const themeStyle = 'theme_style';
+  static const ambientBackdrop = 'ambient_backdrop';
+  static const floatingBars = 'floating_bars';
 
   // ── 代理 ──
   static const proxyMode = 'proxy_mode';

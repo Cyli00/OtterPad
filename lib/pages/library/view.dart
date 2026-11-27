@@ -20,6 +20,7 @@ import 'widgets/doc_card_actions.dart';
 import 'widgets/home_header.dart';
 import 'widgets/selection_app_bar.dart';
 import '../../core/design_tokens.dart';
+import '../../widgets/glass/ambient_backdrop.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -197,8 +198,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final isGrid = ref.watch(viewModeProvider);
     final isSelectionMode = ref.watch(
       selectionProvider.select(
@@ -212,8 +211,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     return SelectionPopScope(
       sourceContext: 'library',
       child: Scaffold(
-        backgroundColor: cs.surface,
+        backgroundColor: AmbientBackdrop.pageColor(context),
+        // 底部不让：列表一直滚到悬浮玻璃底栏下面，末尾再补出底栏的高度
         body: SafeArea(
+          bottom: false,
           child: Column(
             children: [
               // ── 顶栏：搜索栏 ↔ 选择栏 平滑交叉淡入 ──
@@ -245,7 +246,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                   duration: _kAnimDuration,
                   curve: _kAnimCurve,
                   heightFactor: isSelectionMode ? 0.0 : 1.0,
-                  alignment: Alignment.topCenter,
+                  alignment: Alignment.topLeft,
                   child: _buildTabBar(context),
                 ),
               ),
@@ -258,7 +259,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     );
   }
 
-  /// Tabs 交给主题：左对齐、墨色、2px 下划线，带全宽细线。
+  /// Tabs 交给主题：左对齐，选中项落在强调色胶囊里。
   /// 首个标签的文字与刊头左缘对齐（页边距减去标签内边距）。
   Widget _buildTabBar(BuildContext context) {
     final gutter = AppSpace.pageGutter(context);
@@ -292,6 +293,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               BookshelfGrid(onStartSetup: _restartOnboarding)
             else
               BookshelfList(onStartSetup: _restartOnboarding),
+            SliverToBoxAdapter(
+              child: SizedBox(height: MediaQuery.paddingOf(context).bottom),
+            ),
           ],
         ),
       ],

@@ -26,7 +26,7 @@ class NetworkSettingsPage extends StatelessWidget {
     final cs = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: embedded ? Colors.transparent : cs.surface,
       appBar: embedded
           ? null
           : AppBar(
