@@ -34,6 +34,8 @@
 
 `FolioPalette.scheme(seed, brightness)` 先用 `DynamicSchemeVariant.fidelity` 从种子色生成强调色（保留种子色本来的饱和度），再把所有中性角色换成固定的纸 / 墨色。
 
+`*Container` 角色（`primaryContainer` 等）不再是饱和色块，而是**淡彩**：强调色以 12%（浅色）/ 20%（深色）叠在纸色上，`on*Container` 用强调色本身。散落各处的标签、选中底因此自动降到 Folio 的分量。
+
 | 角色 | 浅色 · 纸 | 深色 · 墨 | 用途 |
 |---|---|---|---|
 | `surface` | `#F6F3EC` | `#141311` | 页面底色 |
@@ -60,7 +62,7 @@
 | `body*` | 界面字体 | 行高 1.4–1.5 |
 | `labelSmall` | 界面字体 | w600 / +1.1，**眉题**（`AppType.eyebrow`） |
 
-衬线字体：Windows / macOS / iOS 用 Georgia，Android / Linux 用系统 serif；中文回退 Noto Serif CJK → 思源宋体 → 宋体。
+衬线字体：Windows / macOS / iOS 用 Georgia，Linux 用 Noto Serif，Android 用系统 serif；中文回退 Noto Serif CJK → 思源宋体 → 宋体。
 计数、百分比一律加 `AppType.tabular`（等宽数位）。
 
 ### 圆角（`AppRadius`）
@@ -91,15 +93,28 @@
 | 分组标题 | primary 色 `titleMedium` bold | `AppType.eyebrow`：小号、加宽字距、中性色 |
 | 设置分组 | `surfaceContainerHigh` 底 + 24 圆角 | 纸色底 + 细线 + 10 圆角 |
 | 文献卡（网格） | 卡片底色 + 柔光阴影 + 百分比胶囊 | 封面就是卡片：纸页 + 细线 + 贴边实影；下方衬线标题；进度是封面底边的 2px 墨线 |
-| 文献卡（列表） | 圆角卡片堆叠 | 目录式条目：细线分隔、衬线标题、等宽数字进度 |
+| 文献卡（列表） | 圆角卡片堆叠 | 纸页条目：纸色 + 细线、细线缩略图、衬线标题、斜体期刊、批注为细线 + 衬线斜体 |
+| 文库首页 | Material AppBar + 搜索 | `Masthead` 刊头（日期眉题 + 衬线「我的文库」+ 滚动计数）+ 细线搜索框；Tabs 左对齐 |
+| 书架 | 色块菜单卡 | 目录页：细线分隔的条目 + 等宽计数 + 箭头；收藏区用眉题 |
+| 设置首页 | 色块图标 + 圆角卡 | 细线图标盒、选中为淡彩底 + 主题色图标 |
 | 进度 | `primaryContainer` 胶囊 | 2px 进度线 + 等宽百分比 |
-| 图标按钮 | `primaryContainer` 圆形填充 | 透明底 + 细线方框（6 圆角），悬停加深 |
+| 图标按钮 | `primaryContainer` 圆形填充 | `RuleIconButton`：透明底 + 细线方框（6 圆角），悬停加深，选中墨色反白 |
 | 导航 | 药丸指示器 | 侧栏：左缘 2px 墨线 + 加粗图标；底栏：无指示器，选中项墨色，顶边细线 |
 | Tabs | 居中、primary 色、3px 指示器 | 左对齐、墨色、2px 下划线，带全宽细线 |
 | 弹窗 | `surfaceContainerLow` + 28 圆角 | 纸色 + 细线 + 14 圆角，衬线标题，双层阴影 |
 | 底部面板 | 28 圆角 + `surfaceContainerHigh` | 14 圆角 + 纸色 + 细线顶边 |
 | 反馈条 | 12 圆角 | 10 圆角，墨色底（保持单槽逻辑） |
+| 标签 / 图标盒 | `primaryContainer` 饱和色块 | 强调色淡彩或细线方框 |
 | 分段按钮 | `primaryContainer` 选中 | 墨色反白选中 |
+
+## 新增组件
+
+| 组件 | 作用 |
+|---|---|
+| `Masthead`（`lib/widgets/masthead.dart`） | 一级页面的刊头：衬线标题 + 眉题 + 滚动计数 + 右侧操作 |
+| `RuleIconButton`（`lib/widgets/rule_icon_button.dart`） | 细线方框图标按钮，替代填充圆形按钮 |
+| `ProgressLine`（`lib/widgets/progress_chip.dart`） | 2px 进度线；`ProgressChip` 是进度线 + 等宽百分比 |
+| `RollingNumber`（`lib/widgets/rolling_number.dart`） | 逐位滚动的数字 |
 
 ## 不做的事
 
