@@ -16,6 +16,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'core/app_theme.dart';
+import 'core/design_tokens.dart';
 import 'core/l10n.dart';
 import 'core/rust_backend.dart';
 import 'pages/reader2/reader2_page.dart';
@@ -131,10 +132,8 @@ class _LabAppState extends State<_LabApp> {
       debugShowCheckedModeBanner: false,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      theme: buildAppTheme(ColorScheme.fromSeed(seedColor: seed)),
-      darkTheme: buildAppTheme(
-        ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
-      ),
+      theme: buildAppTheme(FolioPalette.scheme(seed, Brightness.light)),
+      darkTheme: buildAppTheme(FolioPalette.scheme(seed, Brightness.dark)),
       home: Reader2Page(controller: _controller),
     );
   }

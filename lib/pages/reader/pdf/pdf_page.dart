@@ -196,7 +196,7 @@ class _PdfPageViewState extends State<PdfPageView> {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: AppShadows.card,
+        boxShadow: AppShadows.page,
       ),
       child: CustomPaint(
         size: widget.size,

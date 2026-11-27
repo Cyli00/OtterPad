@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
-import '../../../core/elevation.dart';
+import '../../../core/design_tokens.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/highlight_provider.dart';
@@ -382,9 +382,9 @@ class _HighlightTileState extends State<_HighlightTile> {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
+        color: cs.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: AppShadows.card,
+        border: Border.all(color: AppStroke.rule(cs)),
       ),
       child: TactilePress(
         onTap: () => setState(() => _expanded = !_expanded),

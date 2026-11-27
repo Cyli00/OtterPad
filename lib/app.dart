@@ -1,5 +1,6 @@
 import 'core/app_theme.dart';
 import 'core/app_fonts.dart';
+import 'core/design_tokens.dart';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
@@ -39,22 +40,22 @@ class OtterPadApp extends ConsumerWidget {
         if (themeState.useDynamicColor &&
             lightDynamic != null &&
             darkDynamic != null) {
-          lightScheme = ColorScheme.fromSeed(
-            seedColor: lightDynamic.primary,
-            brightness: Brightness.light,
+          lightScheme = FolioPalette.scheme(
+            lightDynamic.primary,
+            Brightness.light,
           );
-          darkScheme = ColorScheme.fromSeed(
-            seedColor: darkDynamic.primary,
-            brightness: Brightness.dark,
+          darkScheme = FolioPalette.scheme(
+            darkDynamic.primary,
+            Brightness.dark,
           );
         } else {
-          lightScheme = ColorScheme.fromSeed(
-            seedColor: themeState.seedColor,
-            brightness: Brightness.light,
+          lightScheme = FolioPalette.scheme(
+            themeState.seedColor,
+            Brightness.light,
           );
-          darkScheme = ColorScheme.fromSeed(
-            seedColor: themeState.seedColor,
-            brightness: Brightness.dark,
+          darkScheme = FolioPalette.scheme(
+            themeState.seedColor,
+            Brightness.dark,
           );
         }
 
