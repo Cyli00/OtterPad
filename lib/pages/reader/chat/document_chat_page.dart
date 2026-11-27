@@ -950,57 +950,63 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           if (notification.depth == 0) _scrollToLatest();
           return false;
         },
-        child: ListView.builder(
-          key: ValueKey(
-            ref.watch(documentChatProvider(_documentId)).activeSessionId,
-          ),
-          controller: _messageScroll,
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + _composerInset),
-          itemCount: messages.length + (sending ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (index == messages.length) {
-              if ((streamingText == null || streamingText.isEmpty) &&
-                  activities.isEmpty) {
-                return _MessageEntrance(
-                  key: const ValueKey('pending'),
-                  child: _buildPendingBubble(theme, cs),
-                );
-              }
-              return Padding(
-                key: const ValueKey('streaming'),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: _buildAssistantBubble(
-                  theme,
-                  cs,
-                  streamingText ?? '',
-                  activities: activities,
-                  thinking: true,
-                ),
-              );
-            }
-            final msg = messages[index];
-            final animate =
-                index >= _entranceFrom &&
-                !(index == _streamedIndex && !msg.isUser);
-            final bubble = Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: msg.isUser
-                  ? _buildUserBubble(theme, cs, msg, index)
-                  : _buildAssistantBubble(
+        child: LayoutBuilder(
+          builder: (context, box) {
+            // 宽屏上把对话收在阅读宽度内居中，和输入框对齐
+            final side = math.max(16.0, (box.maxWidth - _readingWidth) / 2);
+            return ListView.builder(
+              key: ValueKey(
+                ref.watch(documentChatProvider(_documentId)).activeSessionId,
+              ),
+              controller: _messageScroll,
+              padding: EdgeInsets.fromLTRB(side, 12, side, 16 + _composerInset),
+              itemCount: messages.length + (sending ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == messages.length) {
+                  if ((streamingText == null || streamingText.isEmpty) &&
+                      activities.isEmpty) {
+                    return _MessageEntrance(
+                      key: const ValueKey('pending'),
+                      child: _buildPendingBubble(theme, cs),
+                    );
+                  }
+                  return Padding(
+                    key: const ValueKey('streaming'),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: _buildAssistantBubble(
                       theme,
                       cs,
-                      msg.content,
-                      messageIndex: index,
-                      activities: msg.activities,
+                      streamingText ?? '',
+                      activities: activities,
+                      thinking: true,
                     ),
+                  );
+                }
+                final msg = messages[index];
+                final animate =
+                    index >= _entranceFrom &&
+                    !(index == _streamedIndex && !msg.isUser);
+                final bubble = Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: msg.isUser
+                      ? _buildUserBubble(theme, cs, msg, index)
+                      : _buildAssistantBubble(
+                          theme,
+                          cs,
+                          msg.content,
+                          messageIndex: index,
+                          activities: msg.activities,
+                        ),
+                );
+                return animate
+                    ? _MessageEntrance(
+                        key: ValueKey(msg.id),
+                        fromRight: msg.isUser,
+                        child: bubble,
+                      )
+                    : KeyedSubtree(key: ValueKey(msg.id), child: bubble);
+              },
             );
-            return animate
-                ? _MessageEntrance(
-                    key: ValueKey(msg.id),
-                    fromRight: msg.isUser,
-                    child: bubble,
-                  )
-                : KeyedSubtree(key: ValueKey(msg.id), child: bubble);
           },
         ),
       ),
@@ -1512,19 +1518,29 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       ],
     );
 
-    // 输入框是一枚浮起的大圆角胶囊：悬浮玻璃打开时是玻璃，关闭时是实色
+    // 输入框是一枚浮起的大圆角胶囊：悬浮玻璃打开时是玻璃，关闭时是实色；
+    // 宽屏上收在阅读宽度内居中。
     return SafeArea(
       top: false,
       child: Padding(
         padding: embedded
             ? const EdgeInsets.fromLTRB(10, 4, 10, 10)
             : const EdgeInsets.fromLTRB(14, 4, 14, 14),
-        child: inner,
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _readingWidth),
+            child: inner,
+          ),
+        ),
       ),
     );
   }
 
   static const double _composerRadius = AppRadius.lg;
+
+  /// 宽屏上对话与输入框的最大宽度。
+  static const double _readingWidth = 760;
 
   Widget _composerShell({
     required ColorScheme cs,
