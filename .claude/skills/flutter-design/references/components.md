@@ -204,7 +204,7 @@ SegmentedButton 的项目样式：
 
 | 项 | 规范 |
 |---|---|
-| 开关 | 「通用设置 › 界面 › 悬浮底栏」，`ThemeNotifier.setFloatingBars`；默认关 |
+| 开关 | 「通用设置 › 界面 › 悬浮玻璃栏」，`ThemeNotifier.setFloatingBars`；默认开 |
 | 面板 | `LiquidGlass`：模糊 22 + 饱和度 1.8 + 半透明着色（浅 58% / 深 52%）+ 左上亮、右下暗的渐变描边 + 双层投影；`radius` 为空时是胶囊 |
 | 切换 | 需要两种样式的栏用 `BarSurface`，关时退回 `surfaceContainerHigh` 实色 + 细线 |
 | 底部导航 | 开时 `AdaptiveScaffold` 设 `extendBody`，`AdaptiveBottomNavigation` 换成 `FloatingGlassNav`：每项 112 宽、64 高；透镜左右两条边各走一套弹簧，前缘 `kMotionSpatialFast`、后缘 `kMotionSpatialSteady`，移动时被拉长并略压扁 |
@@ -217,7 +217,7 @@ SegmentedButton 的项目样式：
 |---|---|
 | 形象 | `AiOrb`：主题三色 `SweepGradient` 自转的光球（颜色先推到饱和度 ≥ .62），左上白色高光；`thinking` 时转速从 6s 加快到 1.6s 并缩放呼吸、外发光起伏 |
 | 入口 · 阅读器底栏 | `_AskAiOrbButton`：52×48，内含 30 的光球 + sparkle 图标，对话打开时光球进入 thinking 并加 primary 外环 |
-| 入口 · 选区菜单 | 操作栏下方的 `_AiIntentStrip`：深色胶囊 + 主题三色渐变描边；光球和「随便问」固定在两端，中间四个意图（解释 / 简化 / 举例 / 挑刺）横向滚动、右缘渐隐；意图依次从左滑入。点意图 = 带引用打开对话并立即发送对应提示词；点「随便问」= 只带引用打开对话 |
+| 入口 · 选区菜单 | 操作栏下方的 `_AiIntentStrip`：深色胶囊 + 主题三色渐变描边；光球和「自由提问」固定在两端，中间四个意图（解释 / 说人话 / 举个例子 / 挑毛病）横向滚动、右缘渐隐；意图依次从左滑入。点意图 = 带引用打开对话并立即发送对应提示词；点「自由提问」= 只带引用打开对话 |
 | 自动发送 | `DocumentChatPageArgs.initialPrompt`；页面在首帧后填入并发送，停靠栏通过 `onQuoteConsumed` 清掉 |
 | 空状态 | 64 光球 + 衬线大标题 + 文档名 + 四张起手卡（`_StarterCard`，宽 ≥ 520 时两列，错峰入场）；有待发引用时换成意图卡，标签就是完整提示词 |
 | 气泡 | 用户：`primaryContainer → tertiaryContainer` 渐变，28 圆角、右下角收成 6，文字 `onSurface`，最大宽 86%；助手：无底色，顶部一枚 20 的光球 |
