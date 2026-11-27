@@ -146,11 +146,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
-        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(l10n.batchDelete),
         content: Text(l10n.confirmDeleteDocuments(count)),
         actions: [
@@ -251,7 +246,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                   curve: _kAnimCurve,
                   heightFactor: isSelectionMode ? 0.0 : 1.0,
                   alignment: Alignment.topCenter,
-                  child: _buildTabBar(cs),
+                  child: _buildTabBar(context),
                 ),
               ),
               // ── 内容区 ──
@@ -263,18 +258,16 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     );
   }
 
-  Widget _buildTabBar(ColorScheme cs) {
+  /// Tabs 交给主题：左对齐、墨色、2px 下划线，带全宽细线。
+  /// 首个标签的文字与刊头左缘对齐（页边距减去标签内边距）。
+  Widget _buildTabBar(BuildContext context) {
+    final gutter = AppSpace.pageGutter(context);
     return TabBar(
       controller: _tabController,
       isScrollable: true,
-      tabAlignment: TabAlignment.center,
-      indicatorSize: TabBarIndicatorSize.label,
-      indicatorWeight: 3.0,
-      indicatorColor: cs.primary,
-      labelColor: cs.primary,
-      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-      unselectedLabelColor: cs.onSurfaceVariant,
-      dividerColor: Colors.transparent,
+      tabAlignment: TabAlignment.start,
+      padding: EdgeInsets.only(left: gutter - AppSpace.x3),
+      labelPadding: const EdgeInsets.symmetric(horizontal: AppSpace.x3),
       tabs: [
         Tab(text: context.l10n.recommend),
         Tab(text: context.l10n.documentLibrary),

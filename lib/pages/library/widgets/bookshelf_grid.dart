@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/design_tokens.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/history_provider.dart';
 import '../../../providers/selection_provider.dart';
@@ -15,9 +16,9 @@ class BookshelfGrid extends ConsumerWidget {
 
   const BookshelfGrid({super.key, this.onStartSetup});
 
-  /// 文字块固定高度：标题 2 行 + 期刊 1 行 + 年份行 + 上下 8px padding +
-  /// 行间 4px 间距，约 92px，留少量余量防字体渲染舍入触发 overflow。
-  static const double _kTextBlockHeight = 96.0;
+  /// 文字块固定高度：上边距 12 + 衬线标题 2 行（15 × 1.28）+ 4 + 期刊 · 年份
+  /// 1 行，约 71px，留少量余量防字体渲染舍入触发 overflow。
+  static const double _kTextBlockHeight = 80.0;
 
   /// 屏幕宽度 → 列数。移动端窄屏 2 列，宽屏桌面 3–4 列。
   ///
@@ -52,20 +53,27 @@ class BookshelfGrid extends ConsumerWidget {
         // 封面锁 A4 比例 (W/H 0.707)，高度随列宽成比例放大；文字块（标题 2 行
         // + 期刊 + 年份行 + 上下 8px padding）是固定像素，所以用 mainAxisExtent
         // 而非 childAspectRatio——后者会让宽列产生越来越大的底部空隙。
-        final spacing = Responsive.showNavigationRail(context) ? 12.0 : 16.0;
+        // Folio：封面之间留出书页般的空白，行距比列距更大
+        final gutter = AppSpace.pageGutter(context);
+        final spacing = crossAxisCount == 2 ? AppSpace.x4 : AppSpace.x6;
         // 桌面宽屏紧凑密度：行距 -4px（token 见 Responsive.compactDensity）
         final rowSpacing = Responsive.compactDensity(context)
-            ? spacing - 4
-            : spacing;
+            ? AppSpace.x5
+            : AppSpace.x6;
         final cardWidth =
             (constraints.crossAxisExtent -
-                32.0 -
+                gutter * 2 -
                 spacing * (crossAxisCount - 1)) /
             crossAxisCount;
         final coverHeight = cardWidth / 0.707;
         final orderedIds = [for (final d in docs) d.id];
         return SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding: EdgeInsets.fromLTRB(
+            gutter,
+            AppSpace.x5,
+            gutter,
+            AppSpace.x8,
+          ),
           sliver: SliverGrid(
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,

@@ -22,39 +22,38 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
       return BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
         child: Container(
+          // Folio：底部面板是一张纸——纸色底、细线顶边、14 圆角
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppRadius.lg),
-            ),
+            color: colorScheme.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(colorScheme)),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                margin: const EdgeInsets.only(top: 12),
+                margin: const EdgeInsets.only(top: AppSpace.x3),
                 width: 32,
-                height: 4,
+                height: 3,
                 decoration: BoxDecoration(
-                  color: colorScheme.onSurfaceVariant.withAlpha(80),
-                  borderRadius: BorderRadius.circular(2),
+                  color: colorScheme.outline,
+                  borderRadius: BorderRadius.circular(AppRadius.hairline),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.x4),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.x6,
+                  0,
+                  AppSpace.x6,
+                  AppSpace.x2,
                 ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    context.l10n.tools,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                    ),
+                    eyebrowText(context.l10n.tools),
+                    style: AppType.eyebrow(context),
                   ),
                 ),
               ),
@@ -126,23 +125,22 @@ class _SheetItem extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+              borderRadius: AppRadius.smAll,
+              border: Border.all(color: AppStroke.rule(colorScheme)),
             ),
-            child: Icon(icon, color: colorScheme.primary, size: 22, fill: 1),
+            child: Icon(icon, color: colorScheme.onSurface, size: 20),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpace.x4),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+                  style: theme.textTheme.titleSmall?.copyWith(
                     color: colorScheme.onSurface,
                   ),
                 ),
@@ -157,9 +155,9 @@ class _SheetItem extends StatelessWidget {
             ),
           ),
           Icon(
-            Symbols.chevron_right_rounded,
-            color: colorScheme.onSurfaceVariant.withAlpha(120),
-            fill: 1,
+            Symbols.arrow_forward_rounded,
+            color: colorScheme.outline,
+            size: 18,
           ),
         ],
       ),

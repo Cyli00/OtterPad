@@ -6,6 +6,8 @@ import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../utils/responsive.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../core/design_tokens.dart';
+import '../../../widgets/rule_icon_button.dart';
 
 /// 多选模式操作栏
 ///
@@ -47,7 +49,7 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final wide = Responsive.showNavigationRail(context);
-    final sz = wide ? 40.0 : 36.0;
+    final sz = wide ? 34.0 : 36.0;
     final iconSz = sz * 0.5;
     final enabled = selectedCount > 0;
 
@@ -74,8 +76,8 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
             Expanded(
               child: Text(
                 context.l10n.selectedCount(selectedCount),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontFeatures: AppType.tabular,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -95,24 +97,18 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
                             ? Symbols.deselect_rounded
                             : Symbols.select_all_rounded,
                         sz: sz,
-                        iconSz: iconSz,
                         onPressed: onSelectAll,
                         tooltip: allSelected
                             ? context.l10n.deselectAll
                             : context.l10n.selectAll,
-                        bg: cs.primaryContainer,
-                        fg: cs.primary,
                       ),
                       if (onExtract != null) ...[
                         const SizedBox(width: 8),
                         _button(
                           icon: Symbols.auto_awesome_rounded,
                           sz: sz,
-                          iconSz: iconSz,
                           onPressed: enabled ? onExtract : null,
                           tooltip: context.l10n.textExtraction,
-                          bg: cs.primaryContainer,
-                          fg: cs.primary,
                         ),
                       ],
                       if (onDownload != null) ...[
@@ -120,11 +116,8 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
                         _button(
                           icon: Symbols.download_rounded,
                           sz: sz,
-                          iconSz: iconSz,
                           onPressed: enabled ? onDownload : null,
                           tooltip: context.l10n.downloadPdf,
-                          bg: cs.primaryContainer,
-                          fg: cs.primary,
                         ),
                       ],
                       if (onAddToFavorite != null) ...[
@@ -132,11 +125,8 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
                         _button(
                           icon: Symbols.bookmark_add_rounded,
                           sz: sz,
-                          iconSz: iconSz,
                           onPressed: enabled ? onAddToFavorite : null,
                           tooltip: context.l10n.addToFavorite,
-                          bg: cs.tertiaryContainer,
-                          fg: cs.tertiary,
                         ),
                       ],
                       if (onRemoveFromFavorite != null) ...[
@@ -144,22 +134,17 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
                         _button(
                           icon: Symbols.bookmark_remove_rounded,
                           sz: sz,
-                          iconSz: iconSz,
                           onPressed: enabled ? onRemoveFromFavorite : null,
                           tooltip: context.l10n.removeFromFavorite,
-                          bg: cs.tertiaryContainer,
-                          fg: cs.tertiary,
                         ),
                       ],
                       const SizedBox(width: 8),
                       _button(
                         icon: Symbols.delete_rounded,
                         sz: sz,
-                        iconSz: iconSz,
                         onPressed: enabled ? onDelete : null,
                         tooltip: context.l10n.delete,
-                        bg: cs.errorContainer,
-                        fg: cs.error,
+                        danger: true,
                       ),
                     ],
                   ),
@@ -171,8 +156,11 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
       ),
     );
 
-    return ColoredBox(
-      color: cs.surface,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(bottom: AppStroke.side(cs)),
+      ),
       child: useSafeArea ? SafeArea(bottom: false, child: row) : row,
     );
   }
@@ -180,31 +168,21 @@ class SelectionAppBar extends ConsumerWidget implements PreferredSizeWidget {
   static Widget _button({
     required IconData icon,
     required double sz,
-    required double iconSz,
     required VoidCallback? onPressed,
     required String tooltip,
-    required Color bg,
-    required Color fg,
+    bool danger = false,
   }) {
-    return SizedBox(
-      width: sz,
-      height: sz,
-      child: IconButton.filled(
-        onPressed: onPressed == null
-            ? null
-            : () {
-                Haptics.soft();
-                onPressed();
-              },
-        icon: Icon(icon, size: iconSz, fill: 1),
-        tooltip: tooltip,
-        style: IconButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          shape: const CircleBorder(),
-          padding: EdgeInsets.zero,
-        ),
-      ),
+    return RuleIconButton(
+      icon: icon,
+      size: sz,
+      tooltip: tooltip,
+      danger: danger,
+      onPressed: onPressed == null
+          ? null
+          : () {
+              Haptics.soft();
+              onPressed();
+            },
     );
   }
 }

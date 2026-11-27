@@ -15,6 +15,7 @@ import 'hover_actions.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
 import '../../../core/design_tokens.dart';
+import '../../../core/elevation.dart';
 
 /// 文献列表卡片（文献库列表 / 搜索 / 阅读历史 / 收藏夹 / 无文件条目共用）
 ///
@@ -68,27 +69,28 @@ class DocListCard extends ConsumerWidget {
         !isSelectionMode &&
         (onFavorite != null || onContextMenu != null);
 
+    // Folio：一张纸条目——纸色底 + 1px 细线；选中时细线换成强调色、纸面微染。
+    final paper = isSelected
+        ? Color.alphaBlend(
+            colorScheme.primary.withAlpha(18),
+            colorScheme.surfaceContainerLowest,
+          )
+        : colorScheme.surfaceContainerLowest;
     Widget card = AnimatedContainer(
       duration: kAnimFast,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        color: isSelected
-            ? colorScheme.primaryContainer.withAlpha(80)
-            : colorScheme.surfaceContainerLow,
+        borderRadius: AppRadius.mdAll,
+        color: paper,
         border: Border.all(
-          color: isSelected
-              ? colorScheme.primary.withAlpha(160)
-              : Colors.transparent,
-          width: isSelected ? 2 : 0,
+          color: isSelected ? colorScheme.primary : AppStroke.rule(colorScheme),
+          width: isSelected ? AppStroke.emphasis : AppStroke.hairline,
         ),
       ),
       clipBehavior: Clip.antiAlias,
       child: TactilePress(
-        baseColor: isSelected
-            ? colorScheme.primaryContainer.withAlpha(80)
-            : colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        pressedScale: 0.98,
+        baseColor: paper,
+        borderRadius: AppRadius.mdAll,
+        pressedScale: 0.99,
         onTap:
             (onTap == null &&
                 !isSelectionMode &&
@@ -116,11 +118,19 @@ class DocListCard extends ConsumerWidget {
                   children: [
                     // 缩略图 + 选中蒙版
                     if (doc.contentHash != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        child: SizedBox(
-                          width: _thumbWidth,
-                          height: _thumbHeight,
+                      Container(
+                        width: _thumbWidth,
+                        height: _thumbHeight,
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLowest,
+                          borderRadius: AppRadius.xsAll,
+                          border: Border.all(
+                            color: AppStroke.rule(colorScheme),
+                          ),
+                          boxShadow: AppShadows.page,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(AppRadius.xs - 1),
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -130,21 +140,22 @@ class DocListCard extends ConsumerWidget {
                                 alignment: Alignment.topCenter,
                               ),
                               if (isSelected)
-                                Container(
-                                  color: colorScheme.primary.withAlpha(80),
+                                ColoredBox(
+                                  color: colorScheme.primary.withAlpha(46),
                                   child: Center(
                                     child: SpringPop(
                                       child: Container(
-                                        width: 36,
-                                        height: 36,
+                                        width: 28,
+                                        height: 28,
                                         decoration: BoxDecoration(
                                           color: colorScheme.primary,
-                                          shape: BoxShape.circle,
+                                          borderRadius: AppRadius.smAll,
                                         ),
                                         child: Icon(
                                           Symbols.check_rounded,
                                           color: colorScheme.onPrimary,
-                                          size: 22,
+                                          size: 18,
+                                          weight: 600,
                                         ),
                                       ),
                                     ),
@@ -167,9 +178,16 @@ class DocListCard extends ConsumerWidget {
                             Text(
                               doc.title,
                               style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
+                                fontFamily: AppType.displayFamily(
+                                  theme.platform,
+                                ),
+                                fontFamilyFallback: AppType.displayFallbacks(
+                                  theme.platform,
+                                ),
+                                fontWeight: FontWeight.w500,
+                                fontSize: 17,
                                 color: colorScheme.onSurface,
-                                height: 1.3,
+                                height: 1.28,
                               ),
                               maxLines: 3,
                               overflow: TextOverflow.ellipsis,
@@ -191,9 +209,8 @@ class DocListCard extends ConsumerWidget {
                               Text(
                                 doc.journal!,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant.withAlpha(
-                                    180,
-                                  ),
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontStyle: FontStyle.italic,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -213,10 +230,11 @@ class DocListCard extends ConsumerWidget {
                                   Expanded(
                                     child: Text(
                                       doc.year ?? '',
-                                      style: theme.textTheme.bodySmall
+                                      style: theme.textTheme.labelSmall
                                           ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant
-                                                .withAlpha(140),
+                                            color: colorScheme.onSurfaceVariant,
+                                            letterSpacing: 0.4,
+                                            fontFeatures: AppType.tabular,
                                           ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -240,16 +258,21 @@ class DocListCard extends ConsumerWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Symbols.format_quote_rounded,
-                        size: 24,
-                        color: colorScheme.outlineVariant,
+                      Container(
+                        width: AppStroke.focus,
+                        height: 44,
+                        color: colorScheme.outline,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpace.x3),
                       Expanded(
                         child: Text(
                           comment!,
                           style: theme.textTheme.bodyMedium?.copyWith(
+                            fontFamily: AppType.displayFamily(theme.platform),
+                            fontFamilyFallback: AppType.displayFallbacks(
+                              theme.platform,
+                            ),
+                            fontStyle: FontStyle.italic,
                             color: colorScheme.onSurfaceVariant,
                             height: 1.5,
                           ),

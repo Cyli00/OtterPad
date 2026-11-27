@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
+import '../../../core/design_tokens.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 
@@ -111,10 +112,15 @@ class _HoverIconButton extends StatelessWidget {
         },
         tooltip: tooltip,
         icon: Icon(icon, size: 16),
+        // Folio：浮在封面上的小纸片——纸色底、细线、6 圆角
         style: IconButton.styleFrom(
-          backgroundColor: cs.surfaceContainerHigh.withAlpha(230),
+          backgroundColor: cs.surfaceContainerLowest.withAlpha(240),
           foregroundColor: cs.onSurface,
           padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.smAll,
+            side: AppStroke.side(cs),
+          ),
         ),
       ),
     );

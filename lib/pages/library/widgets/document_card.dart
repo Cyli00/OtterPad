@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
+import '../../../core/design_tokens.dart';
+import '../../../core/elevation.dart';
 import '../../../utils/desktop.dart';
-import '../../../widgets/hover_lift.dart';
 import '../../../widgets/spring_pop.dart';
 import '../../../widgets/tactile_press.dart';
 import 'doc_card_actions.dart';
 import 'hover_actions.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
-import '../../../core/design_tokens.dart';
 
 /// 文献网格卡片
 ///
@@ -18,11 +18,13 @@ import '../../../core/design_tokens.dart';
 /// - 正常模式：点击打开阅读器，长按进入多选模式
 /// - 多选模式：点击切换选中/取消，缩略图显示蒙版 + 勾选图标
 ///
-/// 视觉规范：
-/// - 缩略图区域锁定 A4 比例（W/H = 0.707），`BoxFit.contain` 不裁切
-/// - 文字层：标题（titleSmall + w600，2 行）/ 期刊 1 行 / 底行年-进度
-/// - 移动端窄卡（~156px）下作者行被隐藏，避免拥挤
-class DocumentCard extends StatelessWidget {
+/// 视觉规范（Folio）：
+/// - 封面就是卡片：A4 比例（W/H = 0.707）的一张纸，细线 + 贴边实影；
+///   没有外层卡片底色和柔光阴影
+/// - 阅读进度是封面底边的 2px 强调色线
+/// - 封面下方：衬线标题 2 行 / 期刊 · 年份 1 行 + 等宽百分比
+/// - 桌面悬停时只有封面离开纸面（上浮 2px、阴影变深）
+class DocumentCard extends StatefulWidget {
   final String docId;
   final String coverAsset;
   final String name;
@@ -64,181 +66,210 @@ class DocumentCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+  State<DocumentCard> createState() => _DocumentCardState();
+}
 
+class _DocumentCardState extends State<DocumentCard> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final w = widget;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final lift = isDesktopOs && !w.isSelectionMode && _hover;
     final showHover =
         isDesktopOs &&
-        !isSelectionMode &&
-        (onFavorite != null || onContextMenu != null);
+        !w.isSelectionMode &&
+        (w.onFavorite != null || w.onContextMenu != null);
 
-    Widget card = AnimatedContainer(
+    final meta = [
+      if (w.journalName.isNotEmpty) w.journalName,
+      if (w.year.isNotEmpty) w.year,
+    ].join(' · ');
+
+    // 封面：一张纸。选中时细线换成 2px 强调色，纸面压一层浅色。
+    Widget cover = AnimatedContainer(
       duration: kAnimFast,
+      curve: kAnimCurve,
+      transform: Matrix4.translationValues(0, lift ? -2 : 0, 0),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        color: cs.surfaceContainerLowest,
+        borderRadius: AppRadius.xsAll,
         border: Border.all(
-          color: isSelected
-              ? colorScheme.primary.withAlpha(160)
-              : colorScheme.outlineVariant.withAlpha(100),
-          width: isSelected ? 2 : 1,
+          color: w.isSelected ? cs.primary : AppStroke.rule(cs),
+          width: w.isSelected ? AppStroke.focus : AppStroke.hairline,
         ),
+        boxShadow: lift ? AppShadows.cardHover : AppShadows.page,
       ),
-      child: Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: TactilePress(
-          baseColor: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          pressedScale: 0.98,
-          onTap: () => DocCardActions.handleTap(
-            isSelectionMode: isSelectionMode,
-            onOpen: onTap,
-            onToggle: onSelectionTap,
-            onModifierToggle: onModifierToggle,
-            onSelectRange: onSelectRange,
-          ),
-          onLongPress: isSelectionMode ? null : onLongPress,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 封面缩略图：A4 槽位 + BoxFit.cover + 顶部对齐。
-              //
-              // 设计取舍：
-              // - 槽位锁 0.707（A4 W/H）保证网格视觉对齐
-              // - 非 A4 PDF（PPT 导出、海报等）会被裁，但**从顶部裁**——
-              //   PDF 首页顶部一般是标题/作者，最有识别价值的信息留下
-              // - 之前 BoxFit.contain 在非 A4 PDF 上下产生 letterbox，
-              //   配卡片圆角难看；cover + topCenter 彻底消除 letterbox
-              AspectRatio(
-                aspectRatio: 0.707,
-                child: _wrapCoverHover(
-                  showHover: showHover,
-                  bar: DocHoverButtons(
-                    onFavorite: onFavorite,
-                    onMore: onContextMenu,
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Container(
-                        color: colorScheme.surfaceContainerLow,
-                        child: coverAsset.isNotEmpty
-                            ? PdfCoverRender(
-                                assetPath: coverAsset,
-                                fit: BoxFit.cover,
-                                alignment: Alignment.topCenter,
-                              )
-                            : Center(
-                                child: Icon(
-                                  Symbols.article_rounded,
-                                  color: colorScheme.onSurfaceVariant.withAlpha(
-                                    80,
-                                  ),
-                                  size: 48,
-                                ),
-                              ),
-                      ),
-                      if (isSelected)
-                        Container(
-                          color: colorScheme.primary.withAlpha(80),
-                          child: Center(
-                            child: SpringPop(
-                              child: Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Symbols.check_rounded,
-                                  color: colorScheme.onPrimary,
-                                  size: 28,
-                                ),
-                              ),
-                            ),
-                          ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.xs - 1),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // cover + topCenter：非 A4 PDF 从顶部裁，保留标题/作者区
+            if (w.coverAsset.isNotEmpty)
+              PdfCoverRender(
+                assetPath: w.coverAsset,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+              )
+            else
+              _TypesetCover(title: w.name),
+            if (w.progress > 0)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: ProgressLine(progress: w.progress),
+              ),
+            if (w.isSelected)
+              ColoredBox(
+                color: cs.primary.withAlpha(46),
+                child: Align(
+                  alignment: AlignmentDirectional.topEnd,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpace.x2),
+                    child: SpringPop(
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: cs.primary,
+                          borderRadius: AppRadius.smAll,
                         ),
-                    ],
+                        child: Icon(
+                          Symbols.check_rounded,
+                          color: cs.onPrimary,
+                          size: 18,
+                          weight: 600,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-              // 文字层
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          height: 1.25,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+          ],
+        ),
+      ),
+    );
+    if (showHover) {
+      cover = HoverActions(
+        bar: DocHoverButtons(onFavorite: w.onFavorite, onMore: w.onContextMenu),
+        child: cover,
+      );
+    }
+
+    Widget card = TactilePress(
+      // 不铺按压底色：反馈只有回弹缩放，纸面保持干净
+      highlightSize: Size.zero,
+      pressedScale: 0.98,
+      onTap: () => DocCardActions.handleTap(
+        isSelectionMode: w.isSelectionMode,
+        onOpen: w.onTap,
+        onToggle: w.onSelectionTap,
+        onModifierToggle: w.onModifierToggle,
+        onSelectRange: w.onSelectRange,
+      ),
+      onLongPress: w.isSelectionMode ? null : w.onLongPress,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(aspectRatio: 0.707, child: cover),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: AppSpace.x3),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    w.name,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontFamily: AppType.displayFamily(theme.platform),
+                      fontFamilyFallback: AppType.displayFallbacks(
+                        theme.platform,
                       ),
-                      if (journalName.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          journalName,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                      height: 1.28,
+                      color: cs.onSurface,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpace.x1),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          meta,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                            color: cs.onSurfaceVariant,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              year,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant.withAlpha(
-                                  180,
-                                ),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (progress > 0) ProgressChip(progress: progress),
-                        ],
                       ),
+                      if (w.progress > 0)
+                        ProgressChip(progress: w.progress, trackWidth: 0),
                     ],
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
 
-    if (isDesktopOs && onContextMenu != null) {
+    if (isDesktopOs && w.onContextMenu != null) {
       card = GestureDetector(
-        onSecondaryTapDown: (d) => onContextMenu!(d.globalPosition),
+        onSecondaryTapDown: (d) => w.onContextMenu!(d.globalPosition),
         child: card,
       );
     }
-    return HoverLift(enabled: isDesktopOs && !isSelectionMode, child: card);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: card,
+    );
   }
+}
 
-  Widget _wrapCoverHover({
-    required bool showHover,
-    required Widget bar,
-    required Widget child,
-  }) {
-    if (!showHover) return child;
-    return HoverActions(bar: bar, child: child);
+/// 没有 PDF 文件时的封面：像一页排好版的扉页，而不是灰底图标。
+class _TypesetCover extends StatelessWidget {
+  const _TypesetCover({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return ColoredBox(
+      color: cs.surfaceContainerHigh,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpace.x4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(width: 20, height: AppStroke.focus, color: cs.onSurface),
+            const SizedBox(height: AppSpace.x3),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: cs.onSurface,
+                  height: 1.22,
+                ),
+                overflow: TextOverflow.fade,
+              ),
+            ),
+            Icon(Symbols.article_rounded, size: 18, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
   }
 }
