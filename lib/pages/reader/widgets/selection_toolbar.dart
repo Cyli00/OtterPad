@@ -9,6 +9,7 @@ import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 class ReaderContextMenuHandle {
   final OverlayEntry _entry;
@@ -274,13 +275,13 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
   Widget _buildActionBar(String? activeColor, double maxWidth) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         boxShadow: AppShadows.bar,
       ),
       child: Material(
         elevation: 0,
         color: const Color(0xF0282828),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         clipBehavior: Clip.antiAlias,
         // 约束到屏宽内：内容放得下时按内容自适应（窄于 maxWidth），放不下时
         // SingleChildScrollView 横向滚动，绝不溢出屏幕被裁。
@@ -348,13 +349,13 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
   Widget _buildNotePanel(double maxWidth) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         boxShadow: AppShadows.bar,
       ),
       child: Material(
         elevation: 0,
         color: const Color(0xF0282828),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           // 默认 320，窄屏收窄到屏宽内，避免笔记面板溢出被裁。
@@ -438,7 +439,7 @@ class _ColorDot extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Container(
           width: 22,
           height: 22,
@@ -482,7 +483,7 @@ class _ActionIcon extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         padding: const EdgeInsets.all(8),
         child: Icon(icon, color: color, size: 20, fill: 1),
       ),

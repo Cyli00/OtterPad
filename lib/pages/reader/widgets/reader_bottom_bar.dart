@@ -7,6 +7,7 @@ import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import 'reader_docked_pane.dart';
 import 'reader_icon_button.dart';
+import '../../../core/design_tokens.dart';
 
 enum ReaderSheetType { outline, notes, theme }
 
@@ -65,7 +66,7 @@ class ReaderBottomBar extends StatelessWidget {
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
               border: Border.all(color: cs.outlineVariant.withAlpha(80)),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               boxShadow: AppShadows.bar,
             ),
             child: Padding(

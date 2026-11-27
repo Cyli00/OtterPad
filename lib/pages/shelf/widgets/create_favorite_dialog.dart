@@ -7,6 +7,7 @@ import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 // 常用 emoji 列表，按类别分组
 const List<String> _emojis = [
@@ -112,7 +113,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
         constraints: const BoxConstraints(maxHeight: 420),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
 
         ),
         child: Column(
@@ -178,10 +179,10 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: colorScheme.surfaceContainer,
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(AppRadius.md),
                               ),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(AppRadius.md),
                                 child: GridView.builder(
                                   padding: const EdgeInsets.all(8),
                                   shrinkWrap: true,
@@ -202,7 +203,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                         color: isSelected
                                             ? colorScheme.primaryContainer
                                             : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(10),
+                                        borderRadius: BorderRadius.circular(AppRadius.sm),
                                       ),
                                       clipBehavior: Clip.antiAlias,
                                       child: TactilePress(
@@ -266,7 +267,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(AppRadius.md),
                             ),
                             child: Column(
                               children: [
@@ -276,7 +277,7 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                                   height: 56,
                                   decoration: BoxDecoration(
                                     color: colorScheme.primaryContainer,
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(AppRadius.md),
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
@@ -320,11 +321,11 @@ class _CreateFavoriteContentState extends State<_CreateFavoriteContent> {
                               filled: true,
                               fillColor: colorScheme.surfaceContainerLow,
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(AppRadius.sm),
                                 borderSide: BorderSide.none,
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(AppRadius.sm),
                                 borderSide: BorderSide(
                                   color: colorScheme.primary,
                                   width: 2,

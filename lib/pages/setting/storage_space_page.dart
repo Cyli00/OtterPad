@@ -11,6 +11,7 @@ import '../../widgets/app_dialog.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 import 'setting_group.dart';
+import '../../core/design_tokens.dart';
 
 class StorageSpacePage extends ConsumerStatefulWidget {
   const StorageSpacePage({super.key, this.embedded = false});
@@ -78,7 +79,7 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(l10n.clearData),
         content: Text(l10n.clearDataConfirm(names)),
@@ -398,7 +399,7 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
           width: double.infinity,
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           clipBehavior: Clip.antiAlias,
           child: child,
@@ -440,13 +441,13 @@ class _UsageBar extends StatelessWidget {
 
     if (segments.isEmpty || totalBytes <= 0) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Container(height: 12, color: cs.onSurface.withAlpha(20)),
       );
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Row(
         children: [
           for (final s in segments)
@@ -542,7 +543,7 @@ class _GroupRow extends StatelessWidget {
               onChanged: (_) => onToggle(),
               activeColor: cs.primary,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(AppRadius.xs),
               ),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
@@ -554,7 +555,7 @@ class _GroupRow extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(icon, color: cs.primary, size: 22),
           ),

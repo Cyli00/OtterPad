@@ -4,6 +4,7 @@ import '../core/l10n.dart';
 import '../data/models/ocr/doc_extract_config.dart';
 import '../services/haptics.dart';
 import 'app_dialog.dart';
+import '../core/design_tokens.dart';
 
 Future<DocExtractProvider?> showReprocessSourceDialog({
   required BuildContext context,
@@ -12,7 +13,9 @@ Future<DocExtractProvider?> showReprocessSourceDialog({
   context: context,
   builder: (context) => AlertDialog(
     backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+    ),
     title: Text(context.l10n.reformatSourceChoice),
     content: Column(
       mainAxisSize: MainAxisSize.min,
@@ -24,7 +27,7 @@ Future<DocExtractProvider?> showReprocessSourceDialog({
           ListTile(
             title: Text(source.label),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             onTap: () {
               Haptics.light();
@@ -62,7 +65,7 @@ Future<DocExtractApiState?> showExtractProviderDialog({
         );
         return Material(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: width,
@@ -102,7 +105,7 @@ Future<DocExtractApiState?> showExtractProviderDialog({
                       selectedForegroundColor: cs.onPrimaryContainer,
                       side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                       textStyle: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,

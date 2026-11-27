@@ -12,6 +12,7 @@ import '../../../providers/document_task_provider.dart';
 import '../../../utils/desktop.dart';
 import '../../../widgets/app_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/design_tokens.dart';
 
 Future<void> showBatchProgress({
   required BuildContext context,
@@ -258,7 +259,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
             children: [
               Expanded(
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(AppRadius.xs),
                   child: LinearProgressIndicator(
                     value: isRunning
                         ? (total > 0 ? completed / total : null)
@@ -335,7 +336,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                     ),
                   )
@@ -350,7 +351,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       backgroundColor: failed == 0
                           ? colorScheme.primary
@@ -368,7 +369,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
     if (widget.asDialog) {
       return Material(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(width: 540, height: height, child: column),
       );
@@ -380,7 +381,9 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
         height: height,
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius.lg),
+          ),
           boxShadow: AppShadows.sheet,
         ),
         child: column,

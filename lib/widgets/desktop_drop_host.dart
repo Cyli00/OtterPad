@@ -8,6 +8,7 @@ import '../core/l10n.dart';
 import '../providers/task_provider.dart';
 import '../services/share_receiver_service.dart';
 import '../services/snackbar_service.dart';
+import '../core/design_tokens.dart';
 
 /// 桌面 OS 全窗口拖入宿主。合法 PDF 走 [taskProvider.addFiles]。
 ///
@@ -128,7 +129,7 @@ class _DashedRRectPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rrect = RRect.fromRectAndRadius(
       Offset.zero & size,
-      const Radius.circular(28),
+      const Radius.circular(AppRadius.lg),
     );
     final paint = Paint()
       ..color = color

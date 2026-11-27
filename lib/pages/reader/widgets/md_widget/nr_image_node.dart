@@ -7,6 +7,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'nr_selectable_math.dart';
+import '../../../../core/design_tokens.dart';
 
 /// figure caption 的 alt text 前缀约定
 const _figPrefix = 'fig:';
@@ -72,7 +73,7 @@ class NRImgConfig extends ImgConfig {
 
            // 仅在 onTap 非空时让图片响应点击；caption 区保持纯文本（可选中）
            Widget imageArea = ClipRRect(
-             borderRadius: BorderRadius.circular(4),
+             borderRadius: BorderRadius.circular(AppRadius.xs),
              child: constrainedImage,
            );
            if (onTap != null) {

@@ -32,6 +32,7 @@ import 'backup_credentials_dialogs.dart';
 import 'setting_group.dart';
 import 'zotero_local_import_dialog.dart';
 import '../../utils/desktop.dart';
+import '../../core/design_tokens.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
   const BackupSettingsPage({
@@ -168,7 +169,9 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                                     color: cs.outlineVariant.withAlpha(100),
                                   ),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.sm,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -279,7 +282,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       ),
                       decoration: BoxDecoration(
                         color: cs.surface,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
                       ),
                       child: _buildBusyIndicator(theme),
                     ),
@@ -461,7 +464,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         return AlertDialog(
           backgroundColor: cs.surfaceContainerLow,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           title: Text(
             ctx.l10n.resetZoteroSync,
@@ -514,7 +517,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
             height: 44,
             decoration: BoxDecoration(
               color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(icon, color: cs.primary, size: 22),
           ),
@@ -956,7 +959,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 selectedBackgroundColor: cs.primaryContainer,
                 side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
               ),
             ),
@@ -987,7 +990,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   selectedBackgroundColor: cs.primaryContainer,
                   side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                 ),
               ),
@@ -1192,7 +1195,7 @@ class _ActionTile extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: enabled ? cs.primaryContainer : cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(
               icon,
@@ -1291,7 +1294,9 @@ class _RemoteDialogScaffold extends StatelessWidget {
     return Dialog(
       backgroundColor: cs.surfaceContainerLow,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 540),
         child: Padding(

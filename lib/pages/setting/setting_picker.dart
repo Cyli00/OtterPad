@@ -5,6 +5,7 @@ import '../../core/animation_constants.dart';
 import '../../core/elevation.dart';
 import '../../utils/desktop.dart';
 import '../../widgets/tactile_press.dart';
+import '../../core/design_tokens.dart';
 
 /// 桌面下拉菜单宽度下限：内容过窄时（两三个短选项）避免挤成一条。
 const double _kMenuMinWidth = 240;
@@ -86,14 +87,14 @@ class _SettingPickerState<T> extends State<SettingPicker<T>> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return TactilePress(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: cs.outlineVariant.withAlpha(100)),
         ),
         child: Row(
@@ -133,7 +134,9 @@ class _SettingPickerState<T> extends State<SettingPicker<T>> {
       backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerHigh),
       elevation: const WidgetStatePropertyAll(3),
       shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
       ),
       maximumSize: WidgetStatePropertyAll(
         Size(
@@ -205,7 +208,9 @@ class _SettingPickerState<T> extends State<SettingPicker<T>> {
           constraints: BoxConstraints(maxHeight: maxH),
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadius.lg),
+            ),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(

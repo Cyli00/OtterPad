@@ -14,6 +14,7 @@ import 'doc_card_actions.dart';
 import 'hover_actions.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
+import '../../../core/design_tokens.dart';
 
 /// 文献列表卡片（文献库列表 / 搜索 / 阅读历史 / 收藏夹 / 无文件条目共用）
 ///
@@ -70,7 +71,7 @@ class DocListCard extends ConsumerWidget {
     Widget card = AnimatedContainer(
       duration: kAnimFast,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         color: isSelected
             ? colorScheme.primaryContainer.withAlpha(80)
             : colorScheme.surfaceContainerLow,
@@ -86,7 +87,7 @@ class DocListCard extends ConsumerWidget {
         baseColor: isSelected
             ? colorScheme.primaryContainer.withAlpha(80)
             : colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         pressedScale: 0.98,
         onTap:
             (onTap == null &&
@@ -116,7 +117,7 @@ class DocListCard extends ConsumerWidget {
                     // 缩略图 + 选中蒙版
                     if (doc.contentHash != null)
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                         child: SizedBox(
                           width: _thumbWidth,
                           height: _thumbHeight,

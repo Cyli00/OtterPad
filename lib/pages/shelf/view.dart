@@ -18,6 +18,7 @@ import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
+import '../../core/design_tokens.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
@@ -53,7 +54,9 @@ class ShelfPage extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: theme.colorScheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.deleteFavorite),
         content: Text(context.l10n.confirmDeleteFavorite(fav.name)),
@@ -144,7 +147,7 @@ class ShelfPage extends ConsumerWidget {
                           ),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.secondaryContainer,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
                           ),
                           child: Text(
                             '$historyCount',
@@ -168,7 +171,7 @@ class ShelfPage extends ConsumerWidget {
                           ),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
                           ),
                           child: Text(
                             '$noFileCount',
@@ -236,7 +239,7 @@ class ShelfPage extends ConsumerWidget {
                           width: 24,
                           height: 24,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
                             color: theme.colorScheme.primaryContainer,
                           ),
                           alignment: Alignment.center,

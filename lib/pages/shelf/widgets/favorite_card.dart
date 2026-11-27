@@ -10,6 +10,7 @@ import '../../../widgets/app_context_menu.dart';
 import '../../../widgets/hover_lift.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../library/widgets/pdf_cover.dart';
+import '../../../core/design_tokens.dart';
 
 class FavoriteCard extends StatelessWidget {
   final String title;
@@ -63,11 +64,11 @@ class FavoriteCard extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             child: TactilePress(
               baseColor: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               pressedScale: 0.98,
               onTap: onTap,
               child: Padding(
@@ -108,7 +109,7 @@ class FavoriteCard extends StatelessWidget {
                     const SizedBox(height: 16),
                     TactilePress(
                       onTap: onTap,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                       baseColor: cs.surfaceContainerHighest.withAlpha(128),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Center(

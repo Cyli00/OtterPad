@@ -18,6 +18,7 @@ import '../../services/snackbar_service.dart';
 import '../../services/system_specs.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
+import '../../core/design_tokens.dart';
 
 // ── GStorage keys ──
 
@@ -141,7 +142,9 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
                                       color: cs.outlineVariant.withAlpha(100),
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.sm,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -369,7 +372,7 @@ class _ActionTile extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(icon, color: cs.primary, size: 22),
           ),

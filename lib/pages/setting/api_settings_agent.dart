@@ -24,6 +24,7 @@ import 'agent_model_capability_sheet.dart';
 import 'agent_model_manage_sheet.dart';
 import 'agent_model_tester.dart';
 import 'setting_group.dart';
+import '../../core/design_tokens.dart';
 
 /// 协议副标题——给用户一个"选它能做什么"的简短提示。
 String _protocolSubtitle(AgentApiProvider p, AppLocalizations l10n) =>
@@ -234,7 +235,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         return AlertDialog(
           backgroundColor: cs.surfaceContainerLow,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           title: Text(
             context.l10n.deleteProvider,
@@ -276,7 +277,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
     AgentProviderInstance current,
   ) {
     return TactilePress(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       baseColor: cs.surface,
       border: Border.all(color: cs.outlineVariant.withAlpha(100)),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -319,7 +320,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
           constraints: BoxConstraints(maxHeight: maxH),
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadius.lg),
+            ),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(
@@ -476,7 +479,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         return Container(
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadius.lg),
+            ),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(
@@ -899,7 +904,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: cs.outlineVariant.withAlpha(60)),
       ),
       child: Column(
@@ -1006,7 +1011,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
             height: 36,
             decoration: BoxDecoration(
               color: isSet ? iconBg : cs.surfaceContainerHighest.withAlpha(120),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             alignment: Alignment.center,
             child: Icon(
@@ -1089,7 +1094,7 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
         return Dialog(
           backgroundColor: cs.surfaceContainerLow,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540, maxHeight: 480),
@@ -1152,7 +1157,9 @@ class _AgentApiSectionState extends ConsumerState<AgentApiSection> {
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
                                     child: TactilePress(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.sm,
+                                      ),
                                       baseColor: selected
                                           ? cs.primaryContainer
                                           : cs.surfaceContainerHighest
@@ -1310,7 +1317,9 @@ class _AddProviderDialogState extends State<_AddProviderDialog> {
 
     return Dialog(
       backgroundColor: cs.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480),
         child: Padding(

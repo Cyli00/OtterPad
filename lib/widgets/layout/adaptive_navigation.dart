@@ -4,6 +4,7 @@ import 'package:motor/motor.dart';
 import '../../core/animation_constants.dart';
 import '../../services/haptics.dart';
 import '../tactile_press.dart';
+import '../../core/design_tokens.dart';
 
 /// 导航目标项配置
 class AdaptiveDestination {
@@ -78,7 +79,7 @@ class _RailIndicator extends StatelessWidget {
                       color: colorScheme.secondaryContainer.withValues(
                         alpha: progress,
                       ),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                   ),
                 ),
@@ -294,7 +295,7 @@ class _NavigationRailItem extends StatelessWidget {
     Widget item = TactilePress(
       baseColor: Colors.transparent,
       highlightSize: extended ? const Size(48, 36) : null,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       onTap: onTap,
       haptics: false,
       child: AnimatedSwitcher(

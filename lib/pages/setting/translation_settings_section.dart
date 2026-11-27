@@ -17,6 +17,7 @@ import '../../services/translation_skip_sections.dart';
 import '../../services/translation_style.dart';
 import '../../widgets/tactile_press.dart';
 import 'setting_group.dart';
+import '../../core/design_tokens.dart';
 
 /// 翻译设置区块——嵌入 api_settings_page 的 SettingGroup 内。
 class TranslationSettingsSection extends ConsumerStatefulWidget {
@@ -251,7 +252,7 @@ class _TranslationSettingsSectionState
                 : cs.outlineVariant.withAlpha(100),
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           onSelected: (v) {
             Haptics.soft();
@@ -289,7 +290,7 @@ class _TranslationSettingsSectionState
   ) {
     final isSelected = style.id == currentId;
     return TactilePress(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       baseColor: isSelected ? cs.primaryContainer : cs.surfaceContainerLow,
       border: Border.all(
         color: isSelected
@@ -312,14 +313,14 @@ class _TranslationSettingsSectionState
   /// 点击后弹出底部语言选择面板（视觉参照 toolbar_bottom_sheet）
   Widget _buildLanguagePicker(ThemeData theme, ColorScheme cs, String current) {
     return TactilePress(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       onTap: () => _showLanguageSheet(current),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: cs.outlineVariant.withAlpha(100)),
         ),
         child: Row(
@@ -359,7 +360,7 @@ class _TranslationSettingsSectionState
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
+                top: Radius.circular(AppRadius.lg),
               ),
               boxShadow: AppShadows.sheet,
             ),

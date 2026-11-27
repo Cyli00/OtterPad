@@ -24,6 +24,7 @@ import '../../../src/rust/api.dart' show cancelTask;
 import '../../../src/rust/api/translate.dart';
 import '../../../src/rust/error.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 /// 打开一个流式翻译小窗口展示 [sourceText] 的译文。
 ///
@@ -230,7 +231,9 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
     final cs = theme.colorScheme;
     return Dialog(
       backgroundColor: cs.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 540, maxHeight: 560),
@@ -262,7 +265,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
           height: 40,
           decoration: BoxDecoration(
             color: cs.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: Icon(
             Symbols.translate_rounded,
@@ -341,7 +344,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           border: Border.all(color: cs.outlineVariant.withAlpha(80)),
         ),
         child: Scrollbar(
@@ -519,7 +522,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
               // 与 toolbar 色盘同款横排圆点，配色随对话框主题
               color: cs.surfaceContainerHigh,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               // 成功反馈靠按钮自身（图标变 ✓ + 触觉）：snackbar 渲染在
               // 页面 Scaffold 层，会被对话框的模糊 barrier 盖住，看不见。
@@ -545,7 +548,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
                           child: TactilePress(
                             onTap: () => Navigator.pop(menuContext, color),
                             baseColor: Colors.transparent,
-                            borderRadius: BorderRadius.circular(11),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
                             child: Container(
                               width: 22,
                               height: 22,
@@ -571,7 +574,7 @@ class _TranslationPopupState extends ConsumerState<_TranslationPopup> {
             ),
             tooltip: context.l10n.copy,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             onSelected: (value) {
               Haptics.soft();

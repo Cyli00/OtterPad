@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
@@ -23,7 +24,9 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
         child: Container(
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadius.lg),
+            ),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(
@@ -71,15 +74,19 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                         icon: Symbols.travel_explore_rounded,
                         title: context.l10n.addByIdentifier,
                         subtitle: context.l10n.addByIdentifierSubtitle,
-                        onTap: () =>
-                            Navigator.pop(context, ToolbarAction.addByIdentifier),
+                        onTap: () => Navigator.pop(
+                          context,
+                          ToolbarAction.addByIdentifier,
+                        ),
                       ),
                       _SheetItem(
                         icon: Symbols.refresh_rounded,
                         title: context.l10n.rebuildLibrary,
                         subtitle: context.l10n.rebuildLibrarySubtitle,
-                        onTap: () =>
-                            Navigator.pop(context, ToolbarAction.rebuildLibrary),
+                        onTap: () => Navigator.pop(
+                          context,
+                          ToolbarAction.rebuildLibrary,
+                        ),
                       ),
                     ],
                   ),
@@ -117,45 +124,45 @@ class _SheetItem extends StatelessWidget {
       baseColor: Colors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: colorScheme.primary, size: 22, fill: 1),
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
+            child: Icon(icon, color: colorScheme.primary, size: 22, fill: 1),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Icon(
-              Symbols.chevron_right_rounded,
-              color: colorScheme.onSurfaceVariant.withAlpha(120),
-              fill: 1,
-            ),
-          ],
-        ),
+          ),
+          Icon(
+            Symbols.chevron_right_rounded,
+            color: colorScheme.onSurfaceVariant.withAlpha(120),
+            fill: 1,
+          ),
+        ],
+      ),
     );
   }
 }

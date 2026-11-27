@@ -9,6 +9,7 @@ import '../../services/system_font_service.dart';
 import '../../services/snackbar_service.dart';
 import 'setting_group.dart';
 import 'setting_picker.dart';
+import '../../core/design_tokens.dart';
 
 final systemFontFamiliesProvider = FutureProvider<List<String>>(
   (ref) => SystemFontService.listFamilies(),
@@ -77,7 +78,7 @@ class AppFontSettings extends ConsumerWidget {
                     color: theme.colorScheme.outlineVariant.withAlpha(100),
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                 ),
                 segments: [

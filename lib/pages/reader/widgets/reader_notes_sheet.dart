@@ -275,7 +275,9 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
     final hl = widget.highlight;
     return AlertDialog(
       backgroundColor: cs.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
       contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
       title: Text(
         context.l10n.editNoteTitle,
@@ -292,7 +294,7 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: SingleChildScrollView(
               child: Text(
@@ -315,11 +317,11 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
               filled: true,
               fillColor: cs.surfaceContainerLow,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: BorderSide(color: cs.outline),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: BorderSide(color: cs.primary, width: 2),
               ),
               hintText: context.l10n.writeYourThoughts,
@@ -383,13 +385,13 @@ class _HighlightTileState extends State<_HighlightTile> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppStroke.rule(cs)),
       ),
       child: TactilePress(
         onTap: () => setState(() => _expanded = !_expanded),
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         child: AnimatedSize(
           duration: kAnim,
           curve: kAnimCurve,
@@ -493,7 +495,7 @@ class _MiniButton extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         padding: const EdgeInsets.all(4),
         child: Icon(icon, size: 18, color: cs.onSurfaceVariant),
       ),

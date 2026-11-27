@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/animation_constants.dart';
 import '../../widgets/tactile_press.dart';
+import '../../core/design_tokens.dart';
 
 /// 小圆角标签：用于标注"默认 / 快速"等模型角色。
 class RoleBadge extends StatelessWidget {
@@ -24,7 +25,7 @@ class RoleBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         label,
@@ -79,14 +80,14 @@ class RoleToggleTile extends StatelessWidget {
             : value
                 ? containerColor.withAlpha(90)
                 : cs.surfaceContainerHighest.withAlpha(100),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
           color: value ? containerColor : cs.outlineVariant.withAlpha(70),
           width: value ? 1.2 : 1,
         ),
       ),
       child: TactilePress(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         onTap: enabled ? () => onChanged!(!value) : null,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Column(

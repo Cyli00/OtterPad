@@ -19,6 +19,7 @@ import '../reader/widgets/reader_typography.dart';
 import '../reader/widgets/selection_toolbar.dart';
 import 'reader_controller.dart';
 import 'reader_layout.dart';
+import '../../core/design_tokens.dart';
 
 /// 新阅读器正文：Flutter 原生排版，滚动与分页两种模式共用一次测量。
 class ReaderSurface extends StatefulWidget {
@@ -943,7 +944,7 @@ class _Figure extends StatelessWidget {
       height: size.height,
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Icon(Symbols.image_rounded, color: cs.onSurfaceVariant),
     );

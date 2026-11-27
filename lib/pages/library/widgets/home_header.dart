@@ -13,6 +13,7 @@ import '../../../router/app_routes.dart';
 import 'identifier_dialog.dart';
 import 'toolbar_bottom_sheet.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/design_tokens.dart';
 
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({super.key});
@@ -75,12 +76,12 @@ class HomeHeader extends ConsumerWidget {
                 context.push(AppRoutes.librarySearch);
               },
               baseColor: Colors.transparent,
-              borderRadius: BorderRadius.circular(24.0),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               child: Container(
                 height: isMobile ? 44 : 48,
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHighest.withAlpha(150),
-                  borderRadius: BorderRadius.circular(24.0),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                   border: Border.all(
                     color: colorScheme.outlineVariant.withAlpha(100),
                     width: 1,
@@ -166,7 +167,9 @@ class _ToolsMenuButton extends StatelessWidget {
         backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerHigh),
         elevation: const WidgetStatePropertyAll(3),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
         ),
       ),
       builder: (context, controller, _) {
@@ -193,7 +196,11 @@ class _ToolsMenuButton extends StatelessWidget {
         ),
         MenuItemButton(
           onPressed: () => onAction(ToolbarAction.addByIdentifier),
-          leadingIcon: const Icon(Symbols.travel_explore_rounded, size: 20, fill: 1),
+          leadingIcon: const Icon(
+            Symbols.travel_explore_rounded,
+            size: 20,
+            fill: 1,
+          ),
           child: Text(l10n.addByIdentifier),
         ),
         MenuItemButton(

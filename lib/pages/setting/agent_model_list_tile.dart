@@ -7,6 +7,7 @@ import '../../services/haptics.dart';
 import '../../widgets/spring_dismissible.dart';
 import '../../widgets/tactile_press.dart';
 import 'agent_role_widgets.dart';
+import '../../core/design_tokens.dart';
 
 /// 模型列表中单条记录的渲染——左滑可移除，点按编辑能力。
 ///
@@ -56,7 +57,7 @@ class AgentModelListTile extends StatelessWidget {
         background: Container(
           decoration: BoxDecoration(
             color: cs.errorContainer,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.only(right: 20),
@@ -85,11 +86,11 @@ class AgentModelListTile extends StatelessWidget {
     final badges = _badges(context, cs);
     return TactilePress(
       baseColor: cs.surface,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       onTap: onEdit,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
             color: isOk
                 ? cs.primary.withAlpha(100)

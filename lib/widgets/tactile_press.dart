@@ -4,6 +4,7 @@ import 'package:motor/motor.dart';
 
 import '../core/animation_constants.dart';
 import '../services/haptics.dart';
+import '../core/design_tokens.dart';
 
 class TactilePress extends StatefulWidget {
   final Widget child;
@@ -62,7 +63,7 @@ class _TactilePressState extends State<TactilePress> {
         ? pressTarget
         : (_hovered ? hoverTarget : base);
     final double scale = _pressed ? (widget.pressedScale ?? 0.96) : 1.0;
-    final radius = widget.borderRadius ?? BorderRadius.circular(12);
+    final radius = widget.borderRadius ?? BorderRadius.circular(AppRadius.sm);
 
     final content = widget.padding == null
         ? widget.child

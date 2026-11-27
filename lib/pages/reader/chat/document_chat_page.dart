@@ -35,6 +35,7 @@ import 'chat_model_picker.dart';
 import 'chat_user_quote.dart';
 import '../widgets/figure_viewer.dart';
 import '../../../data/models/chat/chat_activity.dart';
+import '../../../core/design_tokens.dart';
 
 /// 定位原文：阅读器滚动后展示「返回问 AI」引导。
 typedef LocateQuoteInReader =
@@ -332,7 +333,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         );
         return Material(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: width,
@@ -441,7 +442,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           builder: (ctx, setLocal) {
             return Material(
               color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               clipBehavior: Clip.antiAlias,
               child: Container(
                 width: width,
@@ -790,7 +791,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         position.dx,
         position.dy,
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
       color: cs.surfaceContainerHigh,
       items: [
         PopupMenuItem(
@@ -850,7 +853,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       context: context,
       builder: (_) => Material(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         clipBehavior: Clip.antiAlias,
         child: Container(
           width: (MediaQuery.of(context).size.width * 0.85).clamp(300.0, 480.0),
@@ -907,7 +910,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: cs.surfaceContainer,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(color: cs.outlineVariant.withAlpha(80)),
             ),
             child: Column(
@@ -1109,7 +1112,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
             maximumSize: Size.square(sendSize),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             backgroundColor: sending ? cs.errorContainer : null,
             foregroundColor: sending ? cs.onErrorContainer : null,
@@ -1141,7 +1144,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         Container(
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(color: cs.outlineVariant.withAlpha(100)),
           ),
           padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
@@ -1187,7 +1190,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                   ),
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Row(
                     children: [
@@ -1313,7 +1316,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerHigh),
         elevation: const WidgetStatePropertyAll(3),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
         ),
       ),
       builder: (context, controller, _) => button(() {
@@ -1350,7 +1355,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         return Container(
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadius.lg),
+            ),
             boxShadow: AppShadows.sheet,
           ),
           padding: EdgeInsets.only(
@@ -1563,7 +1570,7 @@ class _SessionCard extends StatelessWidget {
       duration: kAnimFast,
       curve: kAnimCurve,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: selected ? cs.primary.withAlpha(160) : Colors.transparent,
           width: 2,
@@ -1572,7 +1579,7 @@ class _SessionCard extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         pressedScale: 0.98,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 8, 6),
@@ -1647,7 +1654,7 @@ class _QuoteCardState extends State<_QuoteCard> {
       child: TactilePress(
         onTap: () => setState(() => _expanded = !_expanded),
         baseColor: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
           child: IntrinsicHeight(
@@ -1738,7 +1745,7 @@ class _BubbleAction extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         padding: const EdgeInsets.all(6),
         child: Icon(icon, size: 16, color: cs.onSurfaceVariant.withAlpha(160)),
       ),

@@ -8,6 +8,7 @@ import '../../providers/document_search_provider.dart';
 import 'widgets/doc_card_actions.dart';
 import 'widgets/doc_list_card.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../core/design_tokens.dart';
 
 /// 文献搜索页面
 class SearchPage extends ConsumerStatefulWidget {
@@ -78,7 +79,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             fillColor: colorScheme.surfaceContainerHighest
                                 .withAlpha(150),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
                               borderSide: BorderSide.none,
                             ),
                             contentPadding: const EdgeInsets.symmetric(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/design_tokens.dart';
 
 /// 阅读进度胶囊：primary container 圆角小标签 + 10sp 百分比文字。
 ///
@@ -16,7 +17,7 @@ class ProgressChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: cs.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         '$pct%',

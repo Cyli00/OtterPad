@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../../services/haptics.dart';
 import 'agent_role_widgets.dart';
+import '../../core/design_tokens.dart';
 
 /// 用户在"添加模型"对话框中做出的角色选择。
 class AddModelChoice {
@@ -50,7 +51,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
             elevation: 0,
             insetPadding: const EdgeInsets.symmetric(horizontal: 40),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),

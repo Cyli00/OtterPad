@@ -15,6 +15,7 @@ import '../../widgets/tactile_press.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
 import 'app_font_settings.dart';
+import '../../core/design_tokens.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
   const AppearanceSettingsPage({super.key, this.embedded = false});
@@ -90,7 +91,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   selectedBackgroundColor: cs.primaryContainer,
                   side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                 ),
               ),
@@ -153,7 +154,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                           color: cs.outlineVariant.withAlpha(100),
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                       ),
                     ),
@@ -184,7 +185,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                         ),
                         decoration: BoxDecoration(
                           color: cs.primaryContainer,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                         child: Text(
                           _scaleLabel(
@@ -477,7 +478,7 @@ class _AppLanguagePicker extends ConsumerWidget {
               verticalOffset: 16,
               decoration: BoxDecoration(
                 color: cs.inverseSurface,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -495,14 +496,14 @@ class _AppLanguagePicker extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         TactilePress(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           onTap: () => _showSheet(context, ref, current),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(color: cs.outlineVariant.withAlpha(100)),
             ),
             child: Row(
@@ -557,7 +558,7 @@ class _AppLanguagePicker extends ConsumerWidget {
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
+                top: Radius.circular(AppRadius.lg),
               ),
               boxShadow: AppShadows.sheet,
             ),

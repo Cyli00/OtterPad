@@ -16,6 +16,7 @@ import '../../widgets/onboarding_spotlight.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
 import 'setting_picker.dart';
+import '../../core/design_tokens.dart';
 
 /// OCR 设置页 — 独立顶级设置入口
 class OcrSettingsPage extends ConsumerStatefulWidget {
@@ -231,7 +232,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                 : cs.outlineVariant.withAlpha(100),
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           onSelected: (v) {
             Haptics.soft();
@@ -276,7 +277,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             selectedForegroundColor: cs.onPrimaryContainer,
             side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             textStyle: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
@@ -352,7 +353,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +389,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                   ),
                   decoration: BoxDecoration(
                     color: exhausted ? cs.errorContainer : cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Text(
                     context.l10n.ocrUsagePages(used, limit),
@@ -404,7 +405,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             ),
             const SizedBox(height: 12),
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(AppRadius.xs),
               child: LinearProgressIndicator(
                 value: ratio,
                 minHeight: 4,
@@ -712,7 +713,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                             : cs.outlineVariant.withAlpha(100),
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                       onSelected: (selected) {
                         Haptics.soft();
@@ -764,7 +765,9 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.resetOcrSettings),
         content: Text(context.l10n.resetOcrSettingsConfirm),

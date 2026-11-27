@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../core/design_tokens.dart';
 
 /// 设置分组容器：primary 色标题 + 24 圆角 `surfaceContainerHigh` 容器。
 ///
@@ -35,7 +36,7 @@ class SettingGroup extends StatelessWidget {
           width: double.infinity,
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           clipBehavior: Clip.antiAlias,
           child: Material(type: MaterialType.transparency, child: child),
@@ -87,7 +88,7 @@ InputDecoration settingFieldDecoration(
   final theme = Theme.of(context);
   final cs = theme.colorScheme;
   OutlineInputBorder outline(BorderSide side) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(16),
+    borderRadius: BorderRadius.circular(AppRadius.md),
     borderSide: side,
   );
   return InputDecoration(
@@ -107,9 +108,7 @@ InputDecoration settingFieldDecoration(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     border: outline(BorderSide.none),
     enabledBorder: outline(BorderSide(color: cs.outlineVariant.withAlpha(100))),
-    disabledBorder: outline(
-      BorderSide(color: cs.outlineVariant.withAlpha(50)),
-    ),
+    disabledBorder: outline(BorderSide(color: cs.outlineVariant.withAlpha(50))),
     focusedBorder: outline(BorderSide(color: cs.primary, width: 2)),
   );
 }

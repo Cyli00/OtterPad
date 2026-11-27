@@ -17,6 +17,7 @@ import '../../widgets/tactile_press.dart';
 import 'agent_add_model_dialog.dart';
 import 'agent_model_tester.dart';
 import 'agent_role_widgets.dart';
+import '../../core/design_tokens.dart';
 
 typedef AgentAddModelCallback =
     void Function(
@@ -263,7 +264,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
       final width = computed.clamp(lo, hi);
       return Material(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(width: width, height: maxH, child: column),
       );
@@ -275,7 +276,9 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
         constraints: BoxConstraints(maxHeight: maxH),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius.lg),
+          ),
           boxShadow: AppShadows.sheet,
         ),
         child: column,
@@ -404,7 +407,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
           filled: true,
           fillColor: cs.surface,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             borderSide: BorderSide.none,
           ),
           contentPadding: const EdgeInsets.symmetric(
@@ -518,7 +521,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
     return TactilePress(
       onTap: () => _showAddConfirm(id),
       baseColor: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
@@ -548,7 +551,7 @@ class _ModelManageSheetState extends State<_ModelManageSheet> {
 
     return Material(
       color: added ? cs.primaryContainer.withAlpha(60) : Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(
@@ -665,7 +668,7 @@ class _CapDot extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: color ?? cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         child: Icon(
           icon,
@@ -694,7 +697,7 @@ class _CountPill extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         '$value',

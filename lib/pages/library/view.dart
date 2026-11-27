@@ -19,6 +19,7 @@ import 'widgets/bookshelf_list.dart';
 import 'widgets/doc_card_actions.dart';
 import 'widgets/home_header.dart';
 import 'widgets/selection_app_bar.dart';
+import '../../core/design_tokens.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -146,7 +147,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(l10n.batchDelete),
         content: Text(l10n.confirmDeleteDocuments(count)),

@@ -11,6 +11,7 @@ import 'nr_custom_text_node.dart';
 import 'nr_image_node.dart';
 import 'nr_latex_node.dart';
 import 'nr_translated_node.dart';
+import '../../../../core/design_tokens.dart';
 
 /// 将 [ReaderSettingsState] + [ColorScheme] 映射到 [MarkdownConfig]。
 ///
@@ -101,7 +102,7 @@ MarkdownConfig buildReaderMarkdownConfig({
         ),
         decoration: BoxDecoration(
           color: codeBlockBg,
-          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
         ),
         padding: const EdgeInsets.all(12),
       ),

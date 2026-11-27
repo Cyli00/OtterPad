@@ -22,6 +22,7 @@ import 'network_settings_page.dart';
 import 'ocr_settings_page.dart';
 import 'setting_group.dart';
 import 'storage_space_page.dart';
+import '../../core/design_tokens.dart';
 
 enum SettingNavMode { shell, overlay }
 
@@ -432,7 +433,7 @@ class _SettingsCardState extends State<_SettingsCard> {
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -528,7 +529,7 @@ class _SettingsTile extends StatelessWidget {
                 color: selected
                     ? colorScheme.surface
                     : colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Icon(icon, color: colorScheme.primary, size: 22),
             ),

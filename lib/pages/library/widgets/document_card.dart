@@ -10,6 +10,7 @@ import 'doc_card_actions.dart';
 import 'hover_actions.dart';
 import 'pdf_cover.dart';
 import 'progress_chip.dart';
+import '../../../core/design_tokens.dart';
 
 /// 文献网格卡片
 ///
@@ -75,7 +76,7 @@ class DocumentCard extends StatelessWidget {
     Widget card = AnimatedContainer(
       duration: kAnimFast,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: isSelected
               ? colorScheme.primary.withAlpha(160)
@@ -87,11 +88,11 @@ class DocumentCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         child: TactilePress(
           baseColor: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           pressedScale: 0.98,
           onTap: () => DocCardActions.handleTap(
             isSelectionMode: isSelectionMode,

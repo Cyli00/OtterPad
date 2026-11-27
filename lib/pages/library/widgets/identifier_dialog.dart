@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/app_dialog.dart';
+import '../../../core/design_tokens.dart';
 
 /// 通过标识符添加条目对话框
 /// 返回用户输入的标识符字符串，取消返回 null
@@ -61,7 +62,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
 
         ),
         child: Column(
@@ -122,11 +123,11 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                 filled: true,
                 fillColor: colorScheme.surfaceContainerLow,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   borderSide: BorderSide(
                     color: colorScheme.primary,
                     width: 2,

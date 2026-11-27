@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/l10n.dart';
 import '../services/haptics.dart';
 import 'app_dialog.dart';
+import '../core/design_tokens.dart';
 
 /// 欢迎对话框 — 返回 true 表示开始引导，false 表示跳过。
 Future<bool> showOnboardingWelcomeDialog(BuildContext context) async {
@@ -15,7 +16,7 @@ Future<bool> showOnboardingWelcomeDialog(BuildContext context) async {
       final l10n = context.l10n;
       return AlertDialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Text(
           l10n.onboardingWelcomeTitle,
           style: theme.textTheme.titleLarge?.copyWith(
@@ -62,7 +63,7 @@ Future<bool> showOnboardingOcrDialog(BuildContext context) async {
       final l10n = context.l10n;
       return AlertDialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Text(
           l10n.onboardingOcrTitle,
           style: theme.textTheme.titleLarge?.copyWith(
@@ -84,7 +85,7 @@ Future<bool> showOnboardingOcrDialog(BuildContext context) async {
             ),
             const SizedBox(height: 16),
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               child: Builder(builder: (context) {
                 final lang = Localizations.localeOf(context).languageCode;
                 final asset = lang == 'zh'
@@ -134,7 +135,7 @@ Future<bool> showOnboardingAiDialog(BuildContext context) async {
       final l10n = context.l10n;
       return AlertDialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Text(
           l10n.onboardingAiTitle,
           style: theme.textTheme.titleLarge?.copyWith(

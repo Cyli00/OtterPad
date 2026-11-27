@@ -15,6 +15,7 @@ import '../../widgets/app_dialog.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 import 'setting_group.dart';
+import '../../core/design_tokens.dart';
 
 class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key, this.embedded = false});
@@ -71,7 +72,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
                 image: const DecorationImage(
                   image: AssetImage('assets/icons/app_icon.png'),
                   fit: BoxFit.cover,
@@ -101,7 +102,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
           Container(
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -220,7 +221,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       builder: (context) {
         return Material(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 540,
@@ -288,7 +289,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       builder: (context) {
         return Material(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 540,
@@ -371,7 +372,7 @@ class _AboutTile extends StatelessWidget {
           height: 44,
           decoration: BoxDecoration(
             color: cs.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: Icon(icon, color: cs.primary, size: 22),
         ),

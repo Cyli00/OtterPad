@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../utils/desktop.dart';
+import '../../../core/design_tokens.dart';
 
 class LibraryEmptyState extends StatelessWidget {
   final VoidCallback? onStartSetup;
@@ -26,7 +27,7 @@ class LibraryEmptyState extends StatelessWidget {
               height: 72,
               decoration: BoxDecoration(
                 color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
               ),
               alignment: Alignment.center,
               child: Icon(

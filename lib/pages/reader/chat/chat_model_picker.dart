@@ -14,6 +14,7 @@ import '../../../widgets/ai_brand_icon.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../setting/agent_role_widgets.dart';
 import '../../setting/setting_picker.dart';
+import '../../../core/design_tokens.dart';
 
 /// 桌面下拉菜单宽度：与 `flutter-design` §3.8 同一区间。
 ///
@@ -60,7 +61,7 @@ class ChatModelPicker extends ConsumerWidget {
           : '${l10n.chatSelectModel}: ${current.modelId}',
       child: TactilePress(
         baseColor: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(2, 2, 8, 2),
@@ -104,7 +105,9 @@ class ChatModelPicker extends ConsumerWidget {
           padding: const WidgetStatePropertyAll(EdgeInsets.zero),
           elevation: const WidgetStatePropertyAll(3),
           shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
           ),
           maximumSize: WidgetStatePropertyAll(
             Size(_kMenuMaxWidth, pickerMenuMaxHeight(size.height)),
@@ -146,7 +149,7 @@ class ChatModelPicker extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: cs.surfaceContainerHigh,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
+                  top: Radius.circular(AppRadius.lg),
                 ),
                 boxShadow: AppShadows.sheet,
               ),
@@ -352,15 +355,15 @@ class _ModelOptionsState extends ConsumerState<_ModelOptions> {
               filled: true,
               fillColor: cs.surfaceContainerLow,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: BorderSide(color: cs.outlineVariant.withAlpha(100)),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: BorderSide(color: cs.primary, width: 2),
               ),
               contentPadding: const EdgeInsets.symmetric(

@@ -10,6 +10,7 @@ import '../../services/haptics.dart';
 import '../../utils/desktop.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/tactile_press.dart';
+import '../../core/design_tokens.dart';
 
 /// 打开「模型能力」编辑 sheet（照搬 kelivo 基础页：类型 + 模态 + 能力）。
 ///
@@ -251,7 +252,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
       final maxH = MediaQuery.sizeOf(context).height * 0.75;
       return Material(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           width: width,
@@ -268,7 +269,7 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
       child: Container(
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
             boxShadow: AppShadows.sheet,
         ),
         child: column,
@@ -372,11 +373,11 @@ class _ModelCapabilitySheetState extends State<_ModelCapabilitySheet> {
     final selected = seg.selected;
     return TactilePress(
       baseColor: selected ? cs.primaryContainer : cs.surface,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: seg.onTap,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           border: Border.all(
             color: selected
                 ? Colors.transparent

@@ -8,6 +8,7 @@ import '../../../services/haptics.dart';
 import '../../../services/snackbar_service.dart';
 import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 Future<void> showDocumentInfoDialog({
   required BuildContext context,
@@ -51,7 +52,7 @@ class _DocumentInfoDialog extends ConsumerWidget {
 
     return AlertDialog(
       backgroundColor: cs.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       content: SizedBox(
@@ -64,7 +65,7 @@ class _DocumentInfoDialog extends ConsumerWidget {
             TactilePress(
               baseColor: Colors.transparent,
               onTap: () => _copy(context, ref, document.title),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 document.title,
@@ -120,7 +121,7 @@ class _InfoRow extends StatelessWidget {
       child: TactilePress(
         onTap: onCopy,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/animation_constants.dart';
 import '../core/elevation.dart';
+import '../core/design_tokens.dart';
 
 Future<T?> showAppDialog<T>({
   required BuildContext context,
@@ -50,7 +51,7 @@ Future<T?> showAppDialog<T>({
       return Center(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             boxShadow: AppShadows.dialog,
           ),
           child: builder(context),

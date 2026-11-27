@@ -7,6 +7,7 @@ import '../data/models/ocr/doc_extract_config.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
 import '../widgets/app_dialog.dart';
+import '../core/design_tokens.dart';
 
 class AiSettingsPrompt {
   AiSettingsPrompt._();
@@ -140,7 +141,7 @@ class AiSettingsPrompt {
         );
         return Material(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: width,

@@ -23,6 +23,7 @@ import '../../../widgets/extract_provider_dialog.dart';
 import '../../shelf/widgets/create_favorite_dialog.dart';
 import '../../shelf/widgets/pick_favorite_sheet.dart';
 import 'batch_progress_sheet.dart';
+import '../../../core/design_tokens.dart';
 
 /// 文献卡片单击要走的动作。
 enum DocTapIntent { open, toggle, range, modifierToggle }
@@ -248,7 +249,9 @@ class DocCardActions {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(title),
         content: Text(message),

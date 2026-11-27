@@ -12,6 +12,7 @@ import '../../widgets/spring_dismissible.dart';
 import '../library/widgets/doc_card_actions.dart';
 import '../../core/l10n.dart';
 import '../library/widgets/doc_list_card.dart';
+import '../../core/design_tokens.dart';
 
 /// 阅读历史页面：按日期桶分组展示所有已阅读文献
 ///
@@ -188,7 +189,9 @@ class ReadingHistoryPage extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.clearReadingHistory),
         content: Text(context.l10n.clearReadingHistoryConfirm),

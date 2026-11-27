@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../core/design_tokens.dart';
 
 /// 图表查看器中的一项：位图路径与题注（含已有的题注译文）。
 class FigureView {
@@ -310,7 +311,7 @@ class _FigureViewerState extends State<_FigureViewer>
       margin: const EdgeInsets.only(top: 8),
       decoration: const BoxDecoration(
         color: Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
       ),
       padding: EdgeInsets.fromLTRB(20, 16, 16, bottom + 16),
       child: ConstrainedBox(
@@ -353,7 +354,7 @@ class _FigureViewerState extends State<_FigureViewer>
                   minimumSize: const Size.square(36),
                   padding: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                 ),
                 onPressed: () {

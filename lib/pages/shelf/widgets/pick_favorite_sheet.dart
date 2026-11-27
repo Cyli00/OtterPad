@@ -11,6 +11,7 @@ import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
 
 import '../../../data/models/collection/favorite.dart';
+import '../../../core/design_tokens.dart';
 
 /// 选择一个目标收藏夹的结果。
 class PickFavoriteResult {
@@ -167,7 +168,7 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
       final width = computed.clamp(lo, hi);
       return Material(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           width: width,
@@ -185,7 +186,7 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
         constraints: BoxConstraints(maxHeight: maxH),
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
             boxShadow: AppShadows.sheet,
         ),
         child: column,
@@ -244,7 +245,7 @@ class _FavoriteItem extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: cs.primaryContainer.withAlpha(disabled ? 80 : 255),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             alignment: Alignment.center,
             child: Text(
@@ -311,7 +312,7 @@ class _CreateFavoriteItem extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             alignment: Alignment.center,
             child: creating

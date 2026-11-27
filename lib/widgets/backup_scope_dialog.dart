@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/l10n.dart';
 import '../src/rust/sync/archive.dart';
 import 'app_dialog.dart';
+import '../core/design_tokens.dart';
 
 /// 备份范围选择对话框（设置页手动备份与云同步页「立即备份」共用）。
 /// 取消返回 null。
@@ -19,7 +20,7 @@ Future<BackupScope?> showBackupScopeDialog(BuildContext context) {
           return AlertDialog(
             backgroundColor: cs.surfaceContainerLow,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             title: Text(l10n.backupScopeTitle),
             content: SizedBox(

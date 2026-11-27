@@ -14,6 +14,7 @@ import '../../../widgets/tactile_press.dart';
 import '../../../widgets/hover_lift.dart';
 import '../../../widgets/translation_style_label.dart';
 import 'reader_background.dart';
+import '../../../core/design_tokens.dart';
 
 class ReaderDesktopAppearance extends ConsumerWidget {
   const ReaderDesktopAppearance({
@@ -50,7 +51,7 @@ class ReaderDesktopAppearance extends ConsumerWidget {
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: cs.outlineVariant.withAlpha(80)),
         boxShadow: AppShadows.sheet,
       ),
@@ -282,7 +283,9 @@ class ReaderDesktopAppearance extends ConsumerWidget {
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: palette.background,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.sm,
+                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -432,7 +435,7 @@ class ReaderDesktopAppearance extends ConsumerWidget {
           selectedForegroundColor: cs.onPrimaryContainer,
           side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           textStyle: Theme.of(
             context,
@@ -517,7 +520,7 @@ class _AppearanceSliderState extends State<_AppearanceSlider> {
                   color: isSet
                       ? cs.primaryContainer
                       : cs.surfaceContainerHighest.withAlpha(160),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: isSet
                       ? null
                       : Border.all(color: cs.outlineVariant.withAlpha(80)),
