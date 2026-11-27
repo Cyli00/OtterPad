@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
-import '../../../core/elevation.dart';
+import '../../../core/folio_look.dart';
+import '../../../widgets/glass/liquid_glass.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import 'reader_docked_pane.dart';
@@ -62,54 +63,46 @@ class ReaderBottomBar extends StatelessWidget {
             right: 16,
             bottom: MediaQuery.of(context).padding.bottom + 16,
           ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              border: Border.all(color: cs.outlineVariant),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              boxShadow: AppShadows.bar,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildActionRow(context, compact: true),
-                    if (readingProgress != null) ...[
-                      SizedBox(
-                        height: 24,
-                        child: VerticalDivider(
-                          width: 16,
-                          color: cs.outlineVariant,
-                        ),
+          child: BarSurface(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildActionRow(context, compact: true),
+                  if (readingProgress != null) ...[
+                    SizedBox(
+                      height: 24,
+                      child: VerticalDivider(
+                        width: 16,
+                        color: cs.outlineVariant,
                       ),
-                      ValueListenableBuilder<double>(
-                        valueListenable: readingProgress!,
-                        builder: (context, progress, _) => Tooltip(
-                          message: context.l10n.readerReadingProgress,
-                          child: Semantics(
-                            label: context.l10n.readerReadingProgress,
-                            value: '${(progress.clamp(0, 1) * 100).round()}%',
-                            child: SizedBox(
-                              width: 48,
-                              child: Text(
-                                '${(progress.clamp(0, 1) * 100).round()}%',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: cs.onSurfaceVariant,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
+                    ),
+                    ValueListenableBuilder<double>(
+                      valueListenable: readingProgress!,
+                      builder: (context, progress, _) => Tooltip(
+                        message: context.l10n.readerReadingProgress,
+                        child: Semantics(
+                          label: context.l10n.readerReadingProgress,
+                          value: '${(progress.clamp(0, 1) * 100).round()}%',
+                          child: SizedBox(
+                            width: 48,
+                            child: Text(
+                              '${(progress.clamp(0, 1) * 100).round()}%',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                             ),
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
           ),
@@ -117,10 +110,21 @@ class ReaderBottomBar extends StatelessWidget {
       );
     }
 
+    if (FolioLook.of(context).floatingBars) {
+      // 悬浮玻璃：一枚胶囊浮在正文上，左右与底部留出呼吸空间
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: LiquidGlass(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: SizedBox(height: 60, child: _buildActionRow(context)),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.5)),
+        border: Border(top: AppStroke.side(cs)),
       ),
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       child: SizedBox(height: 56, child: _buildActionRow(context)),

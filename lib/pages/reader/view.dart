@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart' hide Block;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/animation_constants.dart';
+import '../../core/folio_look.dart';
+import 'package:motor/motor.dart';
 import '../../core/l10n.dart';
 import '../../core/otter_error_text.dart';
 import '../../core/rust_backend.dart';
@@ -775,6 +777,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       windowWidth,
     );
 
+    // 悬浮玻璃栏打开时，底栏叠在正文上方而不是占一行
+    final floatBar = FolioLook.of(context).floatingBars;
+    Widget readerBar() => ReaderBottomBar(
+      readerSettings: settings,
+      translation: translation,
+      activeSheet: _appearanceOpen ? ReaderSheetType.theme : _sheet,
+      activeDock: useDock && _dockOpen ? _dockPane : null,
+      desktop: isDesktopOs,
+      pdfView: _pdfMode,
+      nextTranslationMode: _pdfMode
+          ? _nextPdfTranslationMode(translation)
+          : null,
+      readingProgress: _progress,
+      onOpenOutline: _toggleOutline,
+      onTranslate: _translateDocument,
+      onCycleTranslationMode: () {
+        final notifier = ref.read(documentTranslationProvider(_id).notifier);
+        if (_pdfMode) {
+          notifier.setMode(_nextPdfTranslationMode(translation));
+        } else {
+          notifier.cycleMode();
+        }
+      },
+      onAskAi: _toggleAskAi,
+      onOpenNotes: _toggleNotes,
+      onOpenTheme: _toggleAppearance,
+    );
+
     return Theme(
       data: theme,
       child: CallbackShortcuts(
@@ -892,52 +922,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                 ),
                               ),
                             ),
+                            if (showBottom && floatBar)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                child: IgnorePointer(
+                                  ignoring: !_toolbars,
+                                  child: SingleMotionBuilder(
+                                    motion: kMotionSpatialFast,
+                                    value: _toolbars ? 1.0 : 0.0,
+                                    active: !MediaQuery.disableAnimationsOf(
+                                      context,
+                                    ),
+                                    builder: (context, t, child) =>
+                                        Transform.translate(
+                                          offset: Offset(0, 96 * (1 - t)),
+                                          child: Opacity(
+                                            opacity: t.clamp(0.0, 1.0),
+                                            child: child,
+                                          ),
+                                        ),
+                                    child: SafeArea(
+                                      top: false,
+                                      child: readerBar(),
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
-                      if (showBottom)
+                      if (showBottom && !floatBar)
                         AnimatedSize(
                           duration: kAnim,
                           curve: kAnimCurve,
                           child: _toolbars
-                              ? SafeArea(
-                                  top: false,
-                                  child: ReaderBottomBar(
-                                    readerSettings: settings,
-                                    translation: translation,
-                                    activeSheet: _appearanceOpen
-                                        ? ReaderSheetType.theme
-                                        : _sheet,
-                                    activeDock: useDock && _dockOpen
-                                        ? _dockPane
-                                        : null,
-                                    desktop: isDesktopOs,
-                                    pdfView: _pdfMode,
-                                    nextTranslationMode: _pdfMode
-                                        ? _nextPdfTranslationMode(translation)
-                                        : null,
-                                    readingProgress: _progress,
-                                    onOpenOutline: _toggleOutline,
-                                    onTranslate: _translateDocument,
-                                    onCycleTranslationMode: () {
-                                      final notifier = ref.read(
-                                        documentTranslationProvider(
-                                          _id,
-                                        ).notifier,
-                                      );
-                                      if (_pdfMode) {
-                                        notifier.setMode(
-                                          _nextPdfTranslationMode(translation),
-                                        );
-                                      } else {
-                                        notifier.cycleMode();
-                                      }
-                                    },
-                                    onAskAi: _toggleAskAi,
-                                    onOpenNotes: _toggleNotes,
-                                    onOpenTheme: _toggleAppearance,
-                                  ),
-                                )
+                              ? SafeArea(top: false, child: readerBar())
                               : const SizedBox(width: double.infinity),
                         ),
                     ],

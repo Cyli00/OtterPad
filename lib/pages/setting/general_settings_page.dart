@@ -13,6 +13,7 @@ import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/system_specs.dart';
@@ -62,7 +63,7 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
     final l10n = context.l10n;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
       appBar: widget.embedded
           ? null
           : AppBar(
@@ -154,6 +155,20 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
                   onTap: _reportIssue,
                 ),
               ],
+            ),
+          ),
+
+          // ── 界面 ──
+          SettingGroup(
+            title: l10n.generalInterface,
+            child: _SwitchTile(
+              title: l10n.floatingBars,
+              subtitle: l10n.floatingBarsDesc,
+              value: ref.watch(themeProvider).floatingBars,
+              onChanged: (v) {
+                Haptics.soft();
+                ref.read(themeProvider.notifier).setFloatingBars(v);
+              },
             ),
           ),
 
