@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../utils/desktop.dart';
 import '../../utils/responsive.dart';
 import 'adaptive_navigation.dart';
 
@@ -109,18 +108,12 @@ class AppNavigationRail extends StatelessWidget {
           extended: extended,
           leading: leading,
           bottomDestinationCount: bottomDestinationCount,
-          // 桌面端侧栏半透明（叠在窗口背景上的轻微着色）
-          backgroundColor: isDesktopOs
-              ? cs.surfaceContainer.withAlpha(180)
-              : null,
+          // Folio：侧栏与页面同一张纸，只靠右侧细线分开
+          backgroundColor: cs.surface,
           bottomAction: bottomAction,
           onBottomAction: onBottomAction,
         ),
-        VerticalDivider(
-          thickness: 1,
-          width: 1,
-          color: cs.outlineVariant.withAlpha(80),
-        ),
+        const VerticalDivider(),
       ],
     );
   }

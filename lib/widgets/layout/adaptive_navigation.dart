@@ -42,8 +42,8 @@ class _SelectedIconFill extends StatelessWidget {
   }
 }
 
-/// 侧栏选中指示器：选中时药丸从中心横向展开（弹簧，轻微过冲），取消选中时
-/// 收回；底色与图标颜色同步过渡。
+/// 侧栏选中态（Folio）：不再用药丸色块，选中项在侧栏左缘出现一道 2px
+/// 墨线（弹簧纵向展开），图标由描边过渡为实心、由中性灰过渡为墨色。
 class _RailIndicator extends StatelessWidget {
   const _RailIndicator({
     required this.selected,
@@ -60,46 +60,57 @@ class _RailIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleMotionBuilder(
+      motion: kMotionEffects,
+      value: selected ? 1 : 0,
+      active: !MediaQuery.disableAnimationsOf(context),
+      builder: (context, t, child) => SizedBox(
+        width: 48,
+        height: height,
+        child: Center(
+          child: IconTheme(
+            data: IconThemeData(
+              color: Color.lerp(
+                colorScheme.onSurfaceVariant.withAlpha(190),
+                colorScheme.onSurface,
+                t.clamp(0.0, 1.0),
+              ),
+              size: 22,
+            ),
+            child: child!,
+          ),
+        ),
+      ),
+      child: _SelectedIconFill(selected: selected, child: icon),
+    );
+  }
+}
+
+/// 侧栏左缘的选中墨线：从中心纵向弹出。
+class _RailInkBar extends StatelessWidget {
+  const _RailInkBar({required this.selected, required this.color});
+
+  final bool selected;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleMotionBuilder(
       motion: kMotionSpatialFast,
       value: selected ? 1 : 0,
       active: !MediaQuery.disableAnimationsOf(context),
-      builder: (context, t, child) {
-        final progress = t.clamp(0.0, 1.0);
-        return SizedBox(
-          width: 48,
-          height: height,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned.fill(
-                child: Transform.scale(
-                  scaleX: t.clamp(0.0, 1.1),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer.withValues(
-                        alpha: progress,
-                      ),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                  ),
-                ),
-              ),
-              IconTheme(
-                data: IconThemeData(
-                  color: Color.lerp(
-                    colorScheme.onSurfaceVariant,
-                    colorScheme.onSecondaryContainer,
-                    progress,
-                  ),
-                  size: 24,
-                ),
-                child: child!,
-              ),
-            ],
+      builder: (context, t, _) => Transform.scale(
+        scaleY: t.clamp(0.0, 1.2),
+        child: Container(
+          width: AppStroke.focus,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: t.clamp(0.0, 1.0)),
+            borderRadius: const BorderRadius.horizontal(
+              right: Radius.circular(AppRadius.hairline),
+            ),
           ),
-        );
-      },
-      child: _SelectedIconFill(selected: selected, child: icon),
+        ),
+      ),
     );
   }
 }
@@ -145,7 +156,7 @@ class AdaptiveNavigationRail extends StatelessWidget {
     final bottomDestinations = destinations.sublist(splitIndex);
 
     return ColoredBox(
-      color: backgroundColor ?? colorScheme.surfaceContainer,
+      color: backgroundColor ?? colorScheme.surface,
       child: SafeArea(
         child: SizedBox(
           width: 72,
@@ -273,11 +284,12 @@ class _NavigationRailItem extends StatelessWidget {
                     ? Duration.zero
                     : kAnimFast,
                 curve: kAnimCurve,
-                style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                  letterSpacing: 0.4,
                   color: selected
                       ? colorScheme.onSurface
-                      : colorScheme.onSurfaceVariant,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      : colorScheme.onSurfaceVariant.withAlpha(190),
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
                 child: Text(
                   label,
@@ -295,7 +307,7 @@ class _NavigationRailItem extends StatelessWidget {
     Widget item = TactilePress(
       baseColor: Colors.transparent,
       highlightSize: extended ? const Size(48, 36) : null,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: onTap,
       haptics: false,
       child: AnimatedSwitcher(
@@ -307,12 +319,18 @@ class _NavigationRailItem extends StatelessWidget {
     );
     if (!extended) item = Tooltip(message: label, child: item);
 
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: extended ? 4 : 12,
-        vertical: extended ? _labeledItemVerticalPadding : 4,
-      ),
-      child: item,
+    return Stack(
+      alignment: Alignment.centerLeft,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: extended ? 4 : 12,
+            vertical: extended ? _labeledItemVerticalPadding : 4,
+          ),
+          child: item,
+        ),
+        _RailInkBar(selected: selected, color: colorScheme.onSurface),
+      ],
     );
   }
 }
@@ -335,10 +353,11 @@ class AdaptiveBottomNavigation extends StatelessWidget {
     final labelBehavior =
         NavigationBarTheme.of(context).labelBehavior ??
         NavigationDestinationLabelBehavior.alwaysShow;
-    return NavigationBarTheme(
-      data: NavigationBarTheme.of(context).copyWith(
-        iconTheme: const WidgetStatePropertyAll(IconThemeData(fill: 1.0)),
-      ),
+    final cs = Theme.of(context).colorScheme;
+    // 底栏（Folio）：无指示器色块，顶边一道细线与内容分开；选中项由墨色、
+    // 实心图标和加粗标签表达（颜色与字号见 app_theme 的 navigationBarTheme）。
+    return DecoratedBox(
+      decoration: BoxDecoration(border: Border(top: AppStroke.side(cs))),
       child: NavigationBar(
         selectedIndex: selectedIndex,
         onDestinationSelected: (index) {

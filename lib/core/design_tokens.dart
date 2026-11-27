@@ -126,6 +126,8 @@ abstract final class AppType {
     TargetPlatform.windows ||
     TargetPlatform.macOS ||
     TargetPlatform.iOS => 'Georgia',
+    // Linux 的 fontconfig 不认 Flutter 传入的 `serif` 别名，直接点名
+    TargetPlatform.linux => 'Noto Serif',
     _ => 'serif',
   };
 
@@ -137,6 +139,8 @@ abstract final class AppType {
     'Songti TC',
     'SimSun',
     'Noto Serif',
+    'DejaVu Serif',
+    'Liberation Serif',
     if (AppFonts.family(AppFonts.sans, platform) case final String name) name,
   ];
 
