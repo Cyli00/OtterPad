@@ -13,9 +13,9 @@ dependencies:
   plugin_platform_interface: ^2.0.2
   # hook/build.dart 打包锁定版本的 PDFium
   archive: ^4.6.0
-  code_assets: ^2.1.0
+  code_assets: ^1.2.1
   crypto: ^3.0.8
-  hooks: ^2.2.0
+  hooks: ^2.0.2
 
 dev_dependencies:
   ffi: ^2.0.2
