@@ -2,6 +2,48 @@
 
 每个版本用 `<!-- release:en -->` 与 `<!-- release:zh -->` 分成英文、中文两段。`scripts/prepare_release.sh` 会把英文安装包放在这两段之前。
 
+## [0.2.0]
+
+<!-- release:en -->
+
+### Changed
+
+- OtterPad now runs on a new Rust core for the library, search, PDF, extraction, translation, Ask AI and backups. The reader no longer uses a WebView, so Windows no longer needs the WebView2 Runtime.
+- Your 0.1.x library moves over automatically the first time you open 0.2.0, including documents, highlights and notes, translations, Ask AI chats, favorites and reading history. Your 0.1.x files are left in place and are not changed.
+- API keys and passwords saved in 0.1.x are not carried over. Enter them again in Settings after updating.
+
+### Added
+
+- A new native reader with a docked outline that lists contents, figures and references.
+- PDF view renders pages directly, lets you select and copy text, and can show translations over the original page.
+- A new look across the app, with six theme styles, a redesigned library and shelf, a redesigned Ask AI panel, and floating glass bars that you can turn off in General settings.
+- Backups can include your API keys and passwords, encrypted with a password you set in backup settings.
+
+### Improved
+
+- Full-document translation adjusts how many requests it sends at once to the provider's rate limits.
+- Heading levels, list numbers and figure captions are recognized more accurately.
+
+<!-- release:zh -->
+
+### 变更
+
+- OtterPad 改用全新的 Rust 内核处理文献库、检索、PDF、解析、翻译、问 AI 和备份。阅读器不再使用 WebView，Windows 也不再需要 WebView2 Runtime。
+- 首次打开 0.2.0 时会自动迁移 0.1.x 的文献库，包括文献、高亮与笔记、译文、问 AI 会话、收藏和阅读历史。0.1.x 的文件保留在原处，不会被改动。
+- 0.1.x 保存的 API Key 和密码不会迁移，更新后请在设置里重新填写。
+
+### 新增
+
+- 全新原生阅读器，侧边目录面板可查看正文目录、图表和参考文献。
+- PDF 视图直接渲染页面，支持选择和复制文字，并可在原页面上叠加译文。
+- 全新界面，提供六种主题风格，重新设计了文献库、书架和问 AI 面板，悬浮玻璃栏可在通用设置里关闭。
+- 备份可以附带 API Key 和密码，用你在备份设置里设定的口令加密。
+
+### 改进
+
+- 全文翻译会按服务商的速率限制调整同时发送的请求数。
+- 标题层级、列表编号和图表题注识别更准确。
+
 ## [0.1.9]
 
 <!-- release:en -->
