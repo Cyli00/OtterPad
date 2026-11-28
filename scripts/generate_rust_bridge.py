@@ -14,15 +14,17 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBSPEC = """name: otter_backend_bridge_check
+# FRB embeds the Dart package name in exported Rust symbols, so the isolated
+# project must share the application's name to reproduce frb_generated.rs.
+PUBSPEC = """name: otter_pad
 environment:
   sdk: '>=3.8.0 <4.0.0'
 dependencies:
   flutter_rust_bridge: 2.13.0
   freezed_annotation: 3.1.0
 dev_dependencies:
-  freezed: 4.0.3
-  build_runner: 2.17.1
+  freezed: 3.2.5
+  build_runner: 2.15.0
 """
 
 
