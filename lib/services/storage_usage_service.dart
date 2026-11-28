@@ -87,6 +87,7 @@ class StorageUsageService {
     StorageGroup.database => StorageGroupKey.database,
   };
 
+  /// 恢复残留文件只统计、不清理：Rust 收到 [StorageGroup.recovery] 会整体拒绝。
   static Future<void> clearGroups(Set<StorageGroupKey> keys) async {
     await RustBackend.instance.clearStorage(
       groups: [
@@ -98,7 +99,6 @@ class StorageUsageService {
             StorageGroupKey.logs => StorageGroup.logs,
             StorageGroupKey.database => StorageGroup.database,
           },
-        if (keys.contains(StorageGroupKey.cache)) StorageGroup.recovery,
       ],
       taskId: rustTaskId('storage-clear'),
     );
