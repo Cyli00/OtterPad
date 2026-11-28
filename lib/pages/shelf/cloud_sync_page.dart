@@ -16,6 +16,7 @@ import '../../services/snackbar_service.dart';
 import '../../widgets/backup_scope_dialog.dart';
 import '../../src/rust/sync/archive.dart';
 import '../../src/rust/sync/remote.dart';
+import '../../core/design_tokens.dart';
 
 /// 云同步状态页：摘要卡（远端目标 / 上次备份 / 立即备份）+ 按同步状态
 /// 分组的文献列表。状态数据全部来自 [syncStatusProvider]；本页只读 +
@@ -80,9 +81,7 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
       appBar: AppBar(
         title: Text(
           context.l10n.cloudSync,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: theme.textTheme.titleLarge?.copyWith(),
         ),
         centerTitle: false,
         backgroundColor: cs.surface,
@@ -292,7 +291,7 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: cs.outlineVariant.withAlpha(60)),
       ),
       child: child,
@@ -334,7 +333,7 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
                   ),
                   decoration: BoxDecoration(
                     color: accent.withAlpha(30),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Text(
                     '$count',
@@ -351,7 +350,7 @@ class _CloudSyncPageState extends ConsumerState<CloudSyncPage> {
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(color: cs.outlineVariant.withAlpha(60)),
             ),
             child: Column(

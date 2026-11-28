@@ -16,6 +16,7 @@ import '../../widgets/onboarding_spotlight.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
 import 'setting_picker.dart';
+import '../../core/design_tokens.dart';
 
 /// OCR 设置页 — 独立顶级设置入口
 class OcrSettingsPage extends ConsumerStatefulWidget {
@@ -226,12 +227,10 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             return cs.surface;
           }),
           side: BorderSide(
-            color: isSelected
-                ? Colors.transparent
-                : cs.outlineVariant.withAlpha(100),
+            color: isSelected ? Colors.transparent : cs.outlineVariant,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           onSelected: (v) {
             Haptics.soft();
@@ -270,14 +269,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
           selected: {provider},
           showSelectedIcon: false,
           style: SegmentedButton.styleFrom(
-            backgroundColor: cs.surface,
-            selectedBackgroundColor: cs.primaryContainer,
-            foregroundColor: cs.onSurfaceVariant,
-            selectedForegroundColor: cs.onPrimaryContainer,
-            side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
             textStyle: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -299,19 +290,16 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
         // 分组标题 + 获取 Token 入口（URL 跟随当前提供商）
         Padding(
           padding: const EdgeInsets.only(
-            left: 16,
+            left: 4,
             right: 4,
-            top: 24,
+            top: 32,
             bottom: 12,
           ),
           child: Row(
             children: [
               Text(
-                context.l10n.ocrInterface,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: cs.primary,
-                  fontWeight: FontWeight.bold,
-                ),
+                eyebrowText(context.l10n.ocrInterface),
+                style: AppType.eyebrow(context),
               ),
               const SizedBox(width: 4),
               SettingHelpIcon(context.l10n.ocrProviderHelp),
@@ -351,8 +339,9 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(24),
+          color: cs.surfaceContainerLowest,
+          borderRadius: AppRadius.mdAll,
+          border: Border.all(color: AppStroke.rule(cs)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +377,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                   ),
                   decoration: BoxDecoration(
                     color: exhausted ? cs.errorContainer : cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Text(
                     context.l10n.ocrUsagePages(used, limit),
@@ -404,7 +393,7 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
             ),
             const SizedBox(height: 12),
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(AppRadius.xs),
               child: LinearProgressIndicator(
                 value: ratio,
                 minHeight: 4,
@@ -443,16 +432,14 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     final onboardingStep = ref.watch(onboardingProvider);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
       appBar: widget.embedded
           ? null
           : AppBar(
               leading: _buildBackButton(onboardingStep),
               title: Text(
                 context.l10n.ocrSettings,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,
@@ -709,10 +696,10 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
                       side: BorderSide(
                         color: state.mineruExtraFormats.contains(format)
                             ? Colors.transparent
-                            : cs.outlineVariant.withAlpha(100),
+                            : cs.outlineVariant,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                       onSelected: (selected) {
                         Haptics.soft();
@@ -763,8 +750,6 @@ class _OcrSettingsPageState extends ConsumerState<OcrSettingsPage> {
     final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.resetOcrSettings),
         content: Text(context.l10n.resetOcrSettingsConfirm),

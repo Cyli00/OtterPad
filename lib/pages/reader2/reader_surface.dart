@@ -19,6 +19,7 @@ import '../reader/widgets/reader_typography.dart';
 import '../reader/widgets/selection_toolbar.dart';
 import 'reader_controller.dart';
 import 'reader_layout.dart';
+import '../../core/design_tokens.dart';
 
 /// 新阅读器正文：Flutter 原生排版，滚动与分页两种模式共用一次测量。
 class ReaderSurface extends StatefulWidget {
@@ -61,7 +62,9 @@ class ReaderSurface extends StatefulWidget {
   onTranslate;
 
   /// 选区菜单的「问 AI」：文字与其锚点。
-  final void Function(String text, List<AnchorRange> anchor)? onAskAi;
+  /// [prompt] 为意图条带出的问题（解释、举例…）；null 表示自由提问。
+  final void Function(String text, List<AnchorRange> anchor, String? prompt)?
+  onAskAi;
 
   /// 选区菜单的「复制」；为 null 时直接写入剪贴板。
   final void Function(String text)? onCopy;
@@ -450,9 +453,9 @@ class ReaderSurfaceState extends State<ReaderSurface> {
           controller.addHighlight(anchors, color, note: note);
         }
       }),
-      onAskAi: () {
+      onAskAi: (prompt) {
         controller.clearSelection();
-        widget.onAskAi?.call(text, anchors);
+        widget.onAskAi?.call(text, anchors, prompt);
       },
       onCreateForNote: () {
         final created =
@@ -943,7 +946,7 @@ class _Figure extends StatelessWidget {
       height: size.height,
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Icon(Symbols.image_rounded, color: cs.onSurfaceVariant),
     );

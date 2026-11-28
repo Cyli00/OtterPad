@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../core/design_tokens.dart';
 
 /// 定位原文后悬浮于阅读器上的「返回问 AI / 取消」操作条。
 ///
@@ -24,7 +25,7 @@ class ReaderChatReturnPrompt extends StatelessWidget {
     return Material(
       color: cs.surfaceContainerHigh,
       elevation: 6,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(

@@ -24,6 +24,7 @@ import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 import 'setting_picker.dart';
 import 'setting_group.dart';
+import '../../core/design_tokens.dart';
 
 Future<void> showZoteroLocalImport(BuildContext context) => showAppDialog<void>(
   context: context,
@@ -224,7 +225,9 @@ class _ZoteroLocalImportDialogState
       canPop: !_busy,
       child: Dialog(
         backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 540),
           child: SizedBox(
@@ -236,9 +239,7 @@ class _ZoteroLocalImportDialogState
                 children: [
                   Text(
                     l10n.zoteroLocalTitle,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: theme.textTheme.titleLarge?.copyWith(),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -344,7 +345,7 @@ class _ZoteroLocalImportDialogState
                               color: _messageIsError
                                   ? cs.errorContainer
                                   : cs.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(AppRadius.md),
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -427,8 +428,9 @@ class _ZoteroLocalImportDialogState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(24),
+        color: cs.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: AppStroke.rule(cs)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -536,7 +538,7 @@ class _ZoteroLocalImportDialogState
 
   Widget _progress(BuildContext context) => LinearProgressIndicator(
     minHeight: 4,
-    borderRadius: BorderRadius.circular(4),
+    borderRadius: BorderRadius.circular(AppRadius.xs),
     backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(80),
   );
 
@@ -552,7 +554,7 @@ class _ZoteroLocalImportDialogState
         children: [
           TactilePress(
             baseColor: selected ? cs.primaryContainer : cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             padding: const EdgeInsets.all(12),
             onTap: _busy
                 ? null

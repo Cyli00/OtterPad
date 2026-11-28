@@ -15,6 +15,7 @@ import '../../widgets/app_dialog.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 import 'setting_group.dart';
+import '../../core/design_tokens.dart';
 
 class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key, this.embedded = false});
@@ -48,15 +49,13 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     final l10n = context.l10n;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
       appBar: widget.embedded
           ? null
           : AppBar(
               title: Text(
                 l10n.about,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,
@@ -71,7 +70,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
                 image: const DecorationImage(
                   image: AssetImage('assets/icons/app_icon.png'),
                   fit: BoxFit.cover,
@@ -90,9 +89,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
           Center(
             child: Text(
               l10n.appTitle,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: theme.textTheme.titleLarge?.copyWith(),
             ),
           ),
           const SizedBox(height: 32),
@@ -100,8 +97,9 @@ class _AboutPageState extends ConsumerState<AboutPage> {
           // ── Info & Action Card ──
           Container(
             decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(24),
+              color: cs.surfaceContainerLowest,
+              borderRadius: AppRadius.mdAll,
+              border: Border.all(color: AppStroke.rule(cs)),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -219,8 +217,11 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       context: context,
       builder: (context) {
         return Material(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          color: cs.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.lgAll,
+            side: AppStroke.side(cs),
+          ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 540,
@@ -234,9 +235,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                 children: [
                   Text(
                     l10n.aboutLicense,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: theme.textTheme.titleLarge?.copyWith(),
                   ),
                   const SizedBox(height: 16),
                   Flexible(
@@ -287,8 +286,11 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       barrierDismissible: false,
       builder: (context) {
         return Material(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          color: cs.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.lgAll,
+            side: AppStroke.side(cs),
+          ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 540,
@@ -302,9 +304,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                 children: [
                   Text(
                     l10n.aboutDisclaimer,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: theme.textTheme.titleLarge?.copyWith(),
                   ),
                   const SizedBox(height: 16),
                   Flexible(
@@ -367,13 +367,13 @@ class _AboutTile extends StatelessWidget {
     final content = Row(
       children: [
         Container(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color: cs.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.smAll,
+            border: Border.all(color: AppStroke.rule(cs)),
           ),
-          child: Icon(icon, color: cs.primary, size: 22),
+          child: Icon(icon, color: cs.onSurface, size: 20),
         ),
         const SizedBox(width: 16),
         Expanded(

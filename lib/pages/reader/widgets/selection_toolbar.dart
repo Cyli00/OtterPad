@@ -8,7 +8,9 @@ import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../services/haptics.dart';
+import '../../../widgets/ai_orb.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 class ReaderContextMenuHandle {
   final OverlayEntry _entry;
@@ -56,7 +58,7 @@ ReaderContextMenuHandle showReaderContextMenu({
   required void Function(String color) onHighlight,
   required VoidCallback onCopy,
   required VoidCallback onTranslate,
-  required VoidCallback onAskAi,
+  required void Function(String? prompt) onAskAi,
   Highlight? Function()? onCreateForNote,
   void Function(String highlightId, String note)? onNoteChanged,
   VoidCallback? onDelete,
@@ -83,8 +85,8 @@ ReaderContextMenuHandle showReaderContextMenu({
           onTranslate();
           close();
         },
-        onAskAi: () {
-          onAskAi();
+        onAskAi: (prompt) {
+          onAskAi(prompt);
           close();
         },
         onCreateForNote: onCreateForNote,
@@ -119,7 +121,9 @@ class _ContextMenuOverlay extends StatefulWidget {
   final void Function(String color) onHighlight;
   final VoidCallback onCopy;
   final VoidCallback onTranslate;
-  final VoidCallback onAskAi;
+
+  /// [prompt] 为意图条带出的问题；null 表示自由提问。
+  final void Function(String? prompt) onAskAi;
   final Highlight? Function()? onCreateForNote;
   final void Function(String highlightId, String note)? onNoteChanged;
   final VoidCallback? onDelete;
@@ -258,6 +262,14 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
               children: [
                 // 操作栏
                 _buildActionBar(activeColor, maxToolbarWidth),
+                // 问 AI 意图条：选中文字后直接选一种问法
+                if (!_showNotePanel) ...[
+                  const SizedBox(height: 6),
+                  _AiIntentStrip(
+                    maxWidth: maxToolbarWidth,
+                    onAsk: widget.onAskAi,
+                  ),
+                ],
                 // 笔记面板（展开时显示）
                 if (_showNotePanel) ...[
                   const SizedBox(height: 6),
@@ -274,13 +286,13 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
   Widget _buildActionBar(String? activeColor, double maxWidth) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         boxShadow: AppShadows.bar,
       ),
       child: Material(
         elevation: 0,
         color: const Color(0xF0282828),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         clipBehavior: Clip.antiAlias,
         // 约束到屏宽内：内容放得下时按内容自适应（窄于 maxWidth），放不下时
         // SingleChildScrollView 横向滚动，绝不溢出屏幕被裁。
@@ -318,11 +330,6 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
                         : Colors.white,
                   ),
                   _ActionIcon(
-                    icon: Symbols.auto_awesome_rounded,
-                    tooltip: context.l10n.askAi,
-                    onTap: widget.onAskAi,
-                  ),
-                  _ActionIcon(
                     icon: Symbols.translate_rounded,
                     tooltip: context.l10n.translateText,
                     onTap: widget.onTranslate,
@@ -348,13 +355,13 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
   Widget _buildNotePanel(double maxWidth) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         boxShadow: AppShadows.bar,
       ),
       child: Material(
         elevation: 0,
         color: const Color(0xF0282828),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           // 默认 320，窄屏收窄到屏宽内，避免笔记面板溢出被裁。
@@ -419,6 +426,155 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay> {
 
 // ─── 子组件 ───
 
+/// 问 AI 意图条：一枚暗色胶囊，描一圈主题色渐变边，里面是光球和几种问法。
+/// 点意图直接带着引用把问题发出去；「自由提问」只带引用、由用户自己写。
+class _AiIntentStrip extends StatelessWidget {
+  const _AiIntentStrip({required this.maxWidth, required this.onAsk});
+
+  final double maxWidth;
+  final void Function(String? prompt) onAsk;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
+    final intents = [
+      (l10n.aiIntentExplain, l10n.aiPromptExplain),
+      (l10n.aiIntentSimplify, l10n.aiPromptSimplify),
+      (l10n.aiIntentExample, l10n.aiPromptExample),
+      (l10n.aiIntentChallenge, l10n.aiPromptChallenge),
+    ];
+    return Container(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      padding: const EdgeInsets.all(1.2),
+      decoration: ShapeDecoration(
+        shape: const StadiumBorder(),
+        gradient: LinearGradient(
+          colors: [cs.primary, cs.tertiary, cs.secondary],
+        ),
+        shadows: AppShadows.bar,
+      ),
+      child: Material(
+        color: const Color(0xF5222222),
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        // 光球与「自由提问」固定在两端，中间的意图在窄屏上横向滑动，
+        // 右缘渐隐提示还有更多。
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 5, 5, 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const AiOrb(size: 18),
+              const SizedBox(width: 4),
+              Flexible(
+                child: ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (r) => const LinearGradient(
+                    colors: [Colors.white, Colors.white, Colors.transparent],
+                    stops: [0, .9, 1],
+                  ).createShader(r),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < intents.length; i++)
+                          _IntentChip(
+                            index: i,
+                            label: intents[i].$1,
+                            onTap: () => onAsk(intents[i].$2),
+                          ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              _IntentChip(
+                index: intents.length,
+                label: l10n.aiIntentFree,
+                trailing: Symbols.arrow_forward_rounded,
+                emphasized: true,
+                onTap: () => onAsk(null),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IntentChip extends StatelessWidget {
+  const _IntentChip({
+    required this.index,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+    this.emphasized = false,
+  });
+
+  final int index;
+  final String label;
+  final VoidCallback onTap;
+  final IconData? trailing;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // 依次从左侧滑入，像一串被「吹」出来的气泡
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 260 + index * 50),
+      curve: Curves.easeOutBack,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.translate(
+          offset: Offset(-10 * (1 - t), 0),
+          child: child,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: TactilePress(
+          onTap: () {
+            Haptics.soft();
+            onTap();
+          },
+          baseColor: emphasized
+              ? cs.primary.withValues(alpha: .9)
+              : Colors.white.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: emphasized ? cs.onPrimary : Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  trailing,
+                  size: 15,
+                  color: emphasized ? cs.onPrimary : Colors.white,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ColorDot extends StatelessWidget {
   final String hexColor;
   final bool isActive;
@@ -438,7 +594,7 @@ class _ColorDot extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Container(
           width: 22,
           height: 22,
@@ -482,7 +638,7 @@ class _ActionIcon extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         padding: const EdgeInsets.all(8),
         child: Icon(icon, color: color, size: 20, fill: 1),
       ),

@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../core/design_tokens.dart';
 
-/// 设置分组容器：primary 色标题 + 24 圆角 `surfaceContainerHigh` 容器。
+/// 设置分组容器（Folio）：眉题（小号、加宽字距、中性色）+ 纸色底、
+/// 1px 细线、10 圆角的容器。不再用 primary 色加粗标题和灰色色块。
 ///
 /// 收敛自原各设置页七份逐像素相同的 `_buildGroup` 拷贝。
 /// 内置 `Material(transparency)` 祖先：内部 ListTile/RadioListTile 的
@@ -22,20 +24,19 @@ class SettingGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
+          padding: const EdgeInsets.only(
+            left: AppSpace.x1,
+            bottom: AppSpace.x3,
+            top: AppSpace.x8,
           ),
+          child: Text(eyebrowText(title), style: AppType.eyebrow(context)),
         ),
         Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: AppStroke.rule(cs)),
           ),
           clipBehavior: Clip.antiAlias,
           child: Material(type: MaterialType.transparency, child: child),
@@ -73,7 +74,8 @@ class SettingListView extends StatelessWidget {
   }
 }
 
-/// 设置页输入框统一样式：与 [SettingPicker] 折叠态同款白底、浅描边、16 圆角。
+/// 设置页输入框统一样式：比分组纸面略深的底、1px 细线、6 圆角，聚焦时
+/// 1.5px 强调色。
 /// 页面里字段名放在输入框上方；[labelText] 只用于弹窗表单、并排的短字段等
 /// 放不下上方标签的场景。
 InputDecoration settingFieldDecoration(
@@ -86,15 +88,13 @@ InputDecoration settingFieldDecoration(
 }) {
   final theme = Theme.of(context);
   final cs = theme.colorScheme;
-  OutlineInputBorder outline(BorderSide side) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(16),
-    borderSide: side,
-  );
+  OutlineInputBorder outline(BorderSide side) =>
+      OutlineInputBorder(borderRadius: AppRadius.smAll, borderSide: side);
   return InputDecoration(
     labelText: labelText,
     hintText: hint,
     hintStyle: theme.textTheme.bodyMedium?.copyWith(
-      color: cs.onSurfaceVariant.withAlpha(120),
+      color: cs.onSurfaceVariant.withAlpha(150),
     ),
     helperText: helperText,
     helperStyle: theme.textTheme.bodySmall?.copyWith(
@@ -104,12 +104,17 @@ InputDecoration settingFieldDecoration(
     suffixIcon: suffixIcon,
     filled: true,
     fillColor: cs.surface,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    border: outline(BorderSide.none),
-    enabledBorder: outline(BorderSide(color: cs.outlineVariant.withAlpha(100))),
-    disabledBorder: outline(
-      BorderSide(color: cs.outlineVariant.withAlpha(50)),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpace.x3,
+      vertical: AppSpace.x3,
     ),
-    focusedBorder: outline(BorderSide(color: cs.primary, width: 2)),
+    border: outline(AppStroke.side(cs)),
+    enabledBorder: outline(AppStroke.side(cs)),
+    disabledBorder: outline(
+      BorderSide(color: cs.outlineVariant.withAlpha(110)),
+    ),
+    focusedBorder: outline(
+      BorderSide(color: cs.primary, width: AppStroke.emphasis),
+    ),
   );
 }

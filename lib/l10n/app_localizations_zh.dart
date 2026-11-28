@@ -3717,6 +3717,90 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get skip => '跳过';
+
+  @override
+  String get themeStyle => '主题风格';
+
+  @override
+  String get themeStylePaper => '纸墨';
+
+  @override
+  String get themeStyleVivid => '随色';
+
+  @override
+  String get themeStyleMist => '雾凇';
+
+  @override
+  String get themeStyleMoss => '苔原';
+
+  @override
+  String get themeStyleDusk => '暮色';
+
+  @override
+  String get themeStyleGraphite => '石墨';
+
+  @override
+  String get themeStyleHint => '风格决定页面与文字的色调，主题色决定强调色。';
+
+  @override
+  String get ambientBackdrop => '氛围光';
+
+  @override
+  String get ambientBackdropDesc => '一级页面背后铺一层来自主题色的柔光';
+
+  @override
+  String get generalInterface => '界面';
+
+  @override
+  String get floatingBars => '悬浮玻璃栏';
+
+  @override
+  String get floatingBarsDesc => '底部各种栏悬浮在内容上方，呈磨砂玻璃质感';
+
+  @override
+  String get chatEmptyTitle => '关于这篇文献，想问什么？';
+
+  @override
+  String get chatStarterSummary => '总结这篇文献的核心贡献';
+
+  @override
+  String get chatStarterMethod => '梳理研究方法与实验设置';
+
+  @override
+  String get chatStarterLimits => '这篇论文有哪些局限？';
+
+  @override
+  String get chatStarterPlain => '用通俗的话解释摘要';
+
+  @override
+  String get chatThinking => '正在思考';
+
+  @override
+  String get aiIntentExplain => '解释';
+
+  @override
+  String get aiIntentSimplify => '说人话';
+
+  @override
+  String get aiIntentExample => '举个例子';
+
+  @override
+  String get aiIntentChallenge => '挑毛病';
+
+  @override
+  String get aiIntentFree => '自由提问';
+
+  @override
+  String get aiPromptExplain => '解释这段话在文中的意思。';
+
+  @override
+  String get aiPromptSimplify => '用通俗的话重新讲一遍。';
+
+  @override
+  String get aiPromptExample => '举一个具体的例子说明。';
+
+  @override
+  String get aiPromptChallenge => '这段论述有什么可以质疑的地方？';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -7054,4 +7138,88 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get skip => '略過';
+
+  @override
+  String get themeStyle => '主題風格';
+
+  @override
+  String get themeStylePaper => '紙墨';
+
+  @override
+  String get themeStyleVivid => '隨色';
+
+  @override
+  String get themeStyleMist => '霧凇';
+
+  @override
+  String get themeStyleMoss => '苔原';
+
+  @override
+  String get themeStyleDusk => '暮色';
+
+  @override
+  String get themeStyleGraphite => '石墨';
+
+  @override
+  String get themeStyleHint => '風格決定頁面與文字的色調，主題色決定強調色。';
+
+  @override
+  String get ambientBackdrop => '氛圍光';
+
+  @override
+  String get ambientBackdropDesc => '一級頁面背後鋪一層來自主題色的柔光';
+
+  @override
+  String get generalInterface => '介面';
+
+  @override
+  String get floatingBars => '懸浮玻璃欄';
+
+  @override
+  String get floatingBarsDesc => '底部各種欄懸浮在內容上方，呈磨砂玻璃質感';
+
+  @override
+  String get chatEmptyTitle => '關於這篇文獻，想問什麼？';
+
+  @override
+  String get chatStarterSummary => '總結這篇文獻的核心貢獻';
+
+  @override
+  String get chatStarterMethod => '梳理研究方法與實驗設置';
+
+  @override
+  String get chatStarterLimits => '這篇論文有哪些局限？';
+
+  @override
+  String get chatStarterPlain => '用通俗的話解釋摘要';
+
+  @override
+  String get chatThinking => '正在思考';
+
+  @override
+  String get aiIntentExplain => '解釋';
+
+  @override
+  String get aiIntentSimplify => '說人話';
+
+  @override
+  String get aiIntentExample => '舉個例子';
+
+  @override
+  String get aiIntentChallenge => '挑毛病';
+
+  @override
+  String get aiIntentFree => '自由提問';
+
+  @override
+  String get aiPromptExplain => '解釋這段話在文中的意思。';
+
+  @override
+  String get aiPromptSimplify => '用通俗的話重新講一遍。';
+
+  @override
+  String get aiPromptExample => '舉一個具體的例子說明。';
+
+  @override
+  String get aiPromptChallenge => '這段論述有什麼可以質疑的地方？';
 }

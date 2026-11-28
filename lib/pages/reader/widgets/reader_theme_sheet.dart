@@ -14,6 +14,7 @@ import '../../../services/haptics.dart';
 import '../../../services/translation_style.dart';
 import '../../../widgets/tactile_press.dart';
 import 'reader_background.dart';
+import '../../../core/design_tokens.dart';
 
 /// 阅读器「外观」底部面板 body：
 /// 主题色 / 背景 / 字号 / 字体 / 翻页方式 / 译文样式。
@@ -155,22 +156,16 @@ class _ReaderThemeSheetBodyState extends ConsumerState<ReaderThemeSheetBody> {
   }) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: cs.primary),
+        Icon(icon, size: 18, color: cs.onSurfaceVariant),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: cs.primary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Text(title, style: theme.textTheme.titleLarge),
         const Spacer(),
         if (trailing != null)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Text(
               trailing,
@@ -373,7 +368,7 @@ class _BackgroundCard extends StatelessWidget {
             height: 56,
             decoration: BoxDecoration(
               color: previewBg,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
                 color: selected ? cs.primary : cs.outlineVariant,
                 width: selected ? 2.5 : 1,
@@ -424,14 +419,14 @@ class _FontFamilyRow extends StatelessWidget {
               baseColor: selected
                   ? cs.primaryContainer
                   : cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               onTap: () => onChanged(f),
               child: AnimatedContainer(
                 duration: kAnim,
                 curve: kAnimCurve,
                 height: 56,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
                     color: selected ? cs.primary : Colors.transparent,
                     width: 2,
@@ -482,14 +477,14 @@ class _PaginationModeRow extends StatelessWidget {
               baseColor: selected
                   ? cs.primaryContainer
                   : cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               onTap: () => onChanged(m),
               child: AnimatedContainer(
                 duration: kAnim,
                 curve: kAnimCurve,
                 height: 56,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
                     color: selected ? cs.primary : Colors.transparent,
                     width: 2,
@@ -611,7 +606,7 @@ class _TranslationStyleRowState extends ConsumerState<_TranslationStyleRow> {
               baseColor: selected
                   ? cs.primaryContainer
                   : cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               onTap: () => ref
                   .read(translationConfigProvider.notifier)
                   .setDisplayStyleId(s.id),
@@ -620,7 +615,7 @@ class _TranslationStyleRowState extends ConsumerState<_TranslationStyleRow> {
                 curve: kAnimCurve,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
                     color: selected ? cs.primary : Colors.transparent,
                     width: 2,

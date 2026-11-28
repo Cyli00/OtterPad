@@ -17,10 +17,6 @@ Future<BackupScope?> showBackupScopeDialog(BuildContext context) {
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            backgroundColor: cs.surfaceContainerLow,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
-            ),
             title: Text(l10n.backupScopeTitle),
             content: SizedBox(
               width: 420,

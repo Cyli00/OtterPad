@@ -10,6 +10,8 @@ import '../../../widgets/app_context_menu.dart';
 import '../../../widgets/hover_lift.dart';
 import '../../../widgets/tactile_press.dart';
 import '../../library/widgets/pdf_cover.dart';
+import '../../../core/design_tokens.dart';
+import '../../../core/elevation.dart';
 
 class FavoriteCard extends StatelessWidget {
   final String title;
@@ -57,72 +59,102 @@ class FavoriteCard extends StatelessWidget {
             : null,
         child: HoverLift(
           enabled: isDesktopOs,
+          // Folio：一张纸——纸色底 + 细线，静止不投影
           child: Container(
             width: _cardWidth(),
             height: 380,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
+              color: cs.surfaceContainerLowest,
+              borderRadius: AppRadius.mdAll,
+              border: Border.all(color: AppStroke.rule(cs)),
             ),
             child: TactilePress(
-              baseColor: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
+              baseColor: cs.surfaceContainerLowest,
+              borderRadius: AppRadius.mdAll,
               pressedScale: 0.98,
               onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpace.x5,
+                        AppSpace.x5,
+                        AppSpace.x5,
+                        AppSpace.x4,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        if (subtitleIcon != null) ...[
-                          subtitleIcon!,
-                          const SizedBox(width: 8),
-                        ],
-                        Expanded(
-                          child: Text(
-                            subtitle,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurfaceVariant,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              color: cs.onSurface,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(child: _buildCoverArea(context)),
-                    const SizedBox(height: 16),
-                    TactilePress(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(12),
-                      baseColor: cs.surfaceContainerHighest.withAlpha(128),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Center(
-                        child: Text(
-                          context.l10n.viewLibraryTotal(totalCount),
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: cs.primary,
+                          const SizedBox(height: AppSpace.x1),
+                          Row(
+                            children: [
+                              if (subtitleIcon != null) ...[
+                                subtitleIcon!,
+                                const SizedBox(width: 8),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  subtitle,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                    fontFeatures: AppType.tabular,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
+                          const SizedBox(height: AppSpace.x4),
+                          Expanded(child: _buildCoverArea(context)),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  // 底栏：细线上方一行文字链接，不再是灰色按钮块
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(top: AppStroke.side(cs)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpace.x5,
+                        vertical: AppSpace.x3,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              context.l10n.viewLibraryTotal(totalCount),
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: cs.onSurface,
+                                fontFeatures: AppType.tabular,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Icon(
+                            Symbols.arrow_forward_rounded,
+                            size: 18,
+                            color: cs.onSurface,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -177,30 +209,29 @@ class FavoriteCard extends StatelessWidget {
 
   Widget _emptyCover(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      color: cs.surfaceContainerHighest,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadius.hairline),
+        border: Border.all(color: AppStroke.rule(cs)),
+      ),
       child: Center(
-        child: Icon(
-          Symbols.picture_as_pdf_rounded,
-          color: cs.onSurfaceVariant.withAlpha(100),
-          size: 24,
-        ),
+        child: Icon(Symbols.bookmark_rounded, color: cs.outline, size: 22),
       ),
     );
   }
 
+  /// 每张封面都是一页纸：细线 + 贴边实影，和文献库网格一致。
   Widget _cover(BuildContext context, String? path) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(13),
-            blurRadius: 4,
-            offset: const Offset(2, 2),
-          ),
-        ],
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppRadius.hairline),
+        border: Border.all(color: AppStroke.rule(cs)),
+        boxShadow: AppShadows.page,
       ),
+      clipBehavior: Clip.antiAlias,
       child: path != null && path.isNotEmpty
           ? PdfCoverRender(assetPath: path)
           : _emptyCover(context),

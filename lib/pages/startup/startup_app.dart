@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/design_tokens.dart';
 import '../../core/l10n.dart';
 import '../../src/rust/error.dart';
 
@@ -27,12 +28,9 @@ class StartupApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      theme: buildAppTheme(ColorScheme.fromSeed(seedColor: Colors.blue)),
+      theme: buildAppTheme(FolioPalette.scheme(Colors.blue, Brightness.light)),
       darkTheme: buildAppTheme(
-        ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
+        FolioPalette.scheme(Colors.blue, Brightness.dark),
       ),
       home: ValueListenableBuilder<StartupStatus>(
         valueListenable: status,

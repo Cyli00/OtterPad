@@ -6807,6 +6807,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Skip'**
   String get skip;
+
+  /// No description provided for @themeStyle.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme style'**
+  String get themeStyle;
+
+  /// No description provided for @themeStylePaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper'**
+  String get themeStylePaper;
+
+  /// No description provided for @themeStyleVivid.
+  ///
+  /// In en, this message translates to:
+  /// **'Vivid'**
+  String get themeStyleVivid;
+
+  /// No description provided for @themeStyleMist.
+  ///
+  /// In en, this message translates to:
+  /// **'Mist'**
+  String get themeStyleMist;
+
+  /// No description provided for @themeStyleMoss.
+  ///
+  /// In en, this message translates to:
+  /// **'Moss'**
+  String get themeStyleMoss;
+
+  /// No description provided for @themeStyleDusk.
+  ///
+  /// In en, this message translates to:
+  /// **'Dusk'**
+  String get themeStyleDusk;
+
+  /// No description provided for @themeStyleGraphite.
+  ///
+  /// In en, this message translates to:
+  /// **'Graphite'**
+  String get themeStyleGraphite;
+
+  /// No description provided for @themeStyleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Style sets the tone of pages and text; theme color sets the accent.'**
+  String get themeStyleHint;
+
+  /// No description provided for @ambientBackdrop.
+  ///
+  /// In en, this message translates to:
+  /// **'Ambient glow'**
+  String get ambientBackdrop;
+
+  /// No description provided for @ambientBackdropDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'A soft wash of your theme color behind the main pages'**
+  String get ambientBackdropDesc;
+
+  /// No description provided for @generalInterface.
+  ///
+  /// In en, this message translates to:
+  /// **'Interface'**
+  String get generalInterface;
+
+  /// No description provided for @floatingBars.
+  ///
+  /// In en, this message translates to:
+  /// **'Floating glass bars'**
+  String get floatingBars;
+
+  /// No description provided for @floatingBarsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Bottom bars float above the content as frosted glass'**
+  String get floatingBarsDesc;
+
+  /// No description provided for @chatEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What would you like to know about this paper?'**
+  String get chatEmptyTitle;
+
+  /// No description provided for @chatStarterSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize the key contributions'**
+  String get chatStarterSummary;
+
+  /// No description provided for @chatStarterMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Walk me through the method and setup'**
+  String get chatStarterMethod;
+
+  /// No description provided for @chatStarterLimits.
+  ///
+  /// In en, this message translates to:
+  /// **'What are the limitations?'**
+  String get chatStarterLimits;
+
+  /// No description provided for @chatStarterPlain.
+  ///
+  /// In en, this message translates to:
+  /// **'Explain the abstract in plain language'**
+  String get chatStarterPlain;
+
+  /// No description provided for @chatThinking.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get chatThinking;
+
+  /// No description provided for @aiIntentExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'Explain'**
+  String get aiIntentExplain;
+
+  /// No description provided for @aiIntentSimplify.
+  ///
+  /// In en, this message translates to:
+  /// **'Simplify'**
+  String get aiIntentSimplify;
+
+  /// No description provided for @aiIntentExample.
+  ///
+  /// In en, this message translates to:
+  /// **'Example'**
+  String get aiIntentExample;
+
+  /// No description provided for @aiIntentChallenge.
+  ///
+  /// In en, this message translates to:
+  /// **'Challenge'**
+  String get aiIntentChallenge;
+
+  /// No description provided for @aiIntentFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask anything'**
+  String get aiIntentFree;
+
+  /// No description provided for @aiPromptExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'Explain what this passage means in context.'**
+  String get aiPromptExplain;
+
+  /// No description provided for @aiPromptSimplify.
+  ///
+  /// In en, this message translates to:
+  /// **'Say this again in plain language.'**
+  String get aiPromptSimplify;
+
+  /// No description provided for @aiPromptExample.
+  ///
+  /// In en, this message translates to:
+  /// **'Give me a concrete example of this.'**
+  String get aiPromptExample;
+
+  /// No description provided for @aiPromptChallenge.
+  ///
+  /// In en, this message translates to:
+  /// **'What could be questioned in this argument?'**
+  String get aiPromptChallenge;
 }
 
 class _AppLocalizationsDelegate

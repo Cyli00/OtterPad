@@ -11,6 +11,7 @@ import '../../widgets/app_dialog.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
 import 'setting_group.dart';
+import '../../core/design_tokens.dart';
 
 class StorageSpacePage extends ConsumerStatefulWidget {
   const StorageSpacePage({super.key, this.embedded = false});
@@ -71,14 +72,11 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
     Haptics.soft();
     final cs = Theme.of(context).colorScheme;
     final l10n = context.l10n;
-    final names =
-        _selected.map((k) => _groupTitle(k)).join(l10n.listSeparator);
+    final names = _selected.map((k) => _groupTitle(k)).join(l10n.listSeparator);
 
     final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(l10n.clearData),
         content: Text(l10n.clearDataConfirm(names)),
@@ -209,8 +207,7 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
       ];
     }
 
-    final sel =
-        report.groups.where((g) => _selected.contains(g.key)).toList();
+    final sel = report.groups.where((g) => _selected.contains(g.key)).toList();
 
     if (sel.length == 1 && sel.first.subcategories.isNotEmpty) {
       return [
@@ -242,30 +239,30 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
     final l10n = context.l10n;
 
     return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: widget.embedded ? null : AppBar(
-        title: Text(
-          l10n.storageSpace,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: cs.surface,
-        scrolledUnderElevation: 0,
-      ),
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: Text(
+                l10n.storageSpace,
+                style: theme.textTheme.titleLarge?.copyWith(),
+              ),
+              centerTitle: false,
+              backgroundColor: cs.surface,
+              scrolledUnderElevation: 0,
+            ),
       body: _loading && _report == null
           ? const Center(child: CircularProgressIndicator())
           : _report == null
-              ? Center(
-                  child: Text(
-                    l10n.storageSpaceLoadFailed,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              : _buildBody(theme, cs, l10n, _report!),
+          ? Center(
+              child: Text(
+                l10n.storageSpaceLoadFailed,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            )
+          : _buildBody(theme, cs, l10n, _report!),
     );
   }
 
@@ -312,7 +309,6 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
                     StorageUsageService.formatSize(displayTotal),
                     key: ValueKey(displayTotal),
                     style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
                       color: cs.onSurface,
                     ),
                   ),
@@ -338,8 +334,9 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
                   icon: _groupIcon(report.groups[i].key),
                   color: _groupColor(report.groups[i].key, cs),
                   title: _groupTitle(report.groups[i].key),
-                  sizeText:
-                      StorageUsageService.formatSize(report.groups[i].bytes),
+                  sizeText: StorageUsageService.formatSize(
+                    report.groups[i].bytes,
+                  ),
                   countText: l10n.storageSpaceFilesCount(
                     report.groups[i].fileCount,
                   ),
@@ -356,8 +353,7 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
         const SizedBox(height: 24),
         Center(
           child: TextButton.icon(
-            onPressed:
-                _clearing || _selected.isEmpty ? null : _confirmClear,
+            onPressed: _clearing || _selected.isEmpty ? null : _confirmClear,
             icon: _clearing
                 ? const SizedBox(
                     width: 18,
@@ -385,20 +381,15 @@ class _StorageSpacePageState extends ConsumerState<StorageSpacePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          padding: const EdgeInsets.only(left: 4, bottom: 12, top: 32),
+          child: Text(eyebrowText(title), style: AppType.eyebrow(context)),
         ),
         Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: AppStroke.rule(cs)),
           ),
           clipBehavior: Clip.antiAlias,
           child: child,
@@ -440,13 +431,13 @@ class _UsageBar extends StatelessWidget {
 
     if (segments.isEmpty || totalBytes <= 0) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Container(height: 12, color: cs.onSurface.withAlpha(20)),
       );
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Row(
         children: [
           for (final s in segments)
@@ -491,9 +482,9 @@ class _UsageLegend extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 s.label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
             ],
           ),
@@ -542,7 +533,7 @@ class _GroupRow extends StatelessWidget {
               onChanged: (_) => onToggle(),
               activeColor: cs.primary,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(AppRadius.xs),
               ),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
@@ -550,13 +541,13 @@ class _GroupRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.smAll,
+              border: Border.all(color: AppStroke.rule(cs)),
             ),
-            child: Icon(icon, color: cs.primary, size: 22),
+            child: Icon(icon, color: cs.onSurface, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(

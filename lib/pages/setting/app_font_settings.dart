@@ -70,16 +70,6 @@ class AppFontSettings extends ConsumerWidget {
             else
               SegmentedButton<String>(
                 showSelectedIcon: false,
-                style: SegmentedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.surface,
-                  selectedBackgroundColor: theme.colorScheme.primaryContainer,
-                  side: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withAlpha(100),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
                 segments: [
                   for (final value in options)
                     ButtonSegment(value: value, label: Text(label(value))),

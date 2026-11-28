@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../utils/desktop.dart';
 import '../../utils/responsive.dart';
+import '../../core/folio_look.dart';
+import '../glass/ambient_backdrop.dart';
 import 'adaptive_navigation.dart';
 
 /// 自适应 Scaffold
@@ -43,22 +44,31 @@ class AdaptiveScaffold extends StatelessWidget {
     final showRail = Responsive.showNavigationRail(context);
 
     // Row 分栏避让，禁止改回 Stack 叠层——侧栏会遮挡/拦截主内容左侧（设置分组列表等）。
+    final floating =
+        FolioLook.of(context).floatingBars &&
+        !showRail &&
+        !hideBottomNavigation;
     return Scaffold(
-      body: Row(
-        children: [
-          if (showRail)
-            AppNavigationRail(
-              selectedIndex: selectedIndex,
-              onDestinationSelected: onDestinationSelected,
-              destinations: destinations,
-              extended: extendedRail,
-              leading: railLeading,
-              bottomDestinationCount: railBottomDestinationCount,
-              bottomAction: railBottomAction,
-              onBottomAction: onRailBottomAction,
-            ),
-          Expanded(key: const ValueKey('adaptive-body'), child: body),
-        ],
+      // 悬浮玻璃底栏要透出下面的内容
+      extendBody: floating,
+      backgroundColor: Colors.transparent,
+      body: AmbientBackdrop(
+        child: Row(
+          children: [
+            if (showRail)
+              AppNavigationRail(
+                selectedIndex: selectedIndex,
+                onDestinationSelected: onDestinationSelected,
+                destinations: destinations,
+                extended: extendedRail,
+                leading: railLeading,
+                bottomDestinationCount: railBottomDestinationCount,
+                bottomAction: railBottomAction,
+                onBottomAction: onRailBottomAction,
+              ),
+            Expanded(key: const ValueKey('adaptive-body'), child: body),
+          ],
+        ),
       ),
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: (showRail || hideBottomNavigation)
@@ -98,7 +108,6 @@ class AppNavigationRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -109,18 +118,12 @@ class AppNavigationRail extends StatelessWidget {
           extended: extended,
           leading: leading,
           bottomDestinationCount: bottomDestinationCount,
-          // 桌面端侧栏半透明（叠在窗口背景上的轻微着色）
-          backgroundColor: isDesktopOs
-              ? cs.surfaceContainer.withAlpha(180)
-              : null,
+          // 侧栏与页面同一张纸，只靠右侧细线分开；氛围光打开时一起透出
+          backgroundColor: AmbientBackdrop.pageColor(context),
           bottomAction: bottomAction,
           onBottomAction: onBottomAction,
         ),
-        VerticalDivider(
-          thickness: 1,
-          width: 1,
-          color: cs.outlineVariant.withAlpha(80),
-        ),
+        const VerticalDivider(),
       ],
     );
   }

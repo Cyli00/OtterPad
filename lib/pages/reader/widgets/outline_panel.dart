@@ -14,6 +14,7 @@ import '../../../src/rust/document.dart';
 import '../../../src/rust/document/references.dart';
 import '../../../widgets/tactile_press.dart';
 import 'figure_viewer.dart';
+import '../../../core/design_tokens.dart';
 
 /// 大纲：目录、图表（含总结图）与参考文献三页。sheet / 停靠栏外壳负责圆角与背景。
 class OutlinePanel extends StatefulWidget {
@@ -74,7 +75,7 @@ class _OutlinePanelState extends State<OutlinePanel>
           unselectedLabelStyle: theme.textTheme.labelLarge,
           dividerHeight: 0,
         ),
-        Divider(height: 1, color: cs.outlineVariant.withAlpha(80)),
+        Divider(height: 1, color: cs.outlineVariant),
         Expanded(
           child: TabBarView(
             controller: _tabs,
@@ -151,7 +152,7 @@ class _ContentsTab extends StatelessWidget {
         return TactilePress(
           baseColor: Colors.transparent,
           onTap: () => onNavigate(block.id),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           padding: EdgeInsets.fromLTRB(8 + depth * 16.0, 10, 8, 10),
           child: Text(
             block.text.trim(),
@@ -225,8 +226,7 @@ class _FiguresTabState extends State<_FiguresTab> {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: figures.length + 1,
-      separatorBuilder: (_, _) =>
-          Divider(color: cs.outlineVariant.withAlpha(80), height: 32),
+      separatorBuilder: (_, _) => Divider(color: cs.outlineVariant, height: 32),
       itemBuilder: (context, index) {
         if (index == 0) return _summary(context);
         final block = figures[index - 1];
@@ -292,11 +292,11 @@ class _FiguresTabState extends State<_FiguresTab> {
           const SizedBox(height: 10),
           TactilePress(
             baseColor: Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             pressedScale: 0.98,
             onTap: widget.onOpenSummary,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               child: Hero(
                 tag: figureHeroTag(
                   FigureHeroSource.outline,
@@ -317,7 +317,7 @@ class _FiguresTabState extends State<_FiguresTab> {
             height: 160,
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             alignment: Alignment.center,
             child: Text(
@@ -368,11 +368,11 @@ class _FigureEntry extends StatelessWidget {
         if (hasImage)
           TactilePress(
             baseColor: Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             pressedScale: 0.98,
             onTap: onOpen,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               child: Hero(
                 tag: figureHeroTag(FigureHeroSource.outline, path),
                 child: Image.file(
@@ -390,7 +390,7 @@ class _FigureEntry extends StatelessWidget {
             height: 100,
             decoration: BoxDecoration(
               color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Center(
               child: Icon(
@@ -499,8 +499,7 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       itemCount: references.length,
-      separatorBuilder: (_, _) =>
-          Divider(color: cs.outlineVariant.withAlpha(80), height: 1),
+      separatorBuilder: (_, _) => Divider(color: cs.outlineVariant, height: 1),
       itemBuilder: (context, index) {
         final item = references[index];
         final copied = index == _copied;
@@ -510,7 +509,7 @@ class _ReferencesTabState extends ConsumerState<_ReferencesTab> {
                 ? cs.primaryContainer.withAlpha(110)
                 : Colors.transparent,
             onTap: () => _copy(index, item),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,7 +571,7 @@ class _ActionLink extends StatelessWidget {
     return TactilePress(
       onTap: onTap,
       baseColor: Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       pressedScale: 0.94,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(

@@ -2,11 +2,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
-import '../../../core/elevation.dart';
+import '../../../core/folio_look.dart';
+import '../../../widgets/ai_orb.dart';
+import '../../../widgets/glass/liquid_glass.dart';
+import '../../../widgets/tactile_press.dart';
+import '../../../services/haptics.dart';
 import '../../../providers/document_translation_provider.dart';
 import '../../../providers/reader_settings_provider.dart';
 import 'reader_docked_pane.dart';
 import 'reader_icon_button.dart';
+import '../../../core/design_tokens.dart';
 
 enum ReaderSheetType { outline, notes, theme }
 
@@ -61,54 +66,46 @@ class ReaderBottomBar extends StatelessWidget {
             right: 16,
             bottom: MediaQuery.of(context).padding.bottom + 16,
           ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              border: Border.all(color: cs.outlineVariant.withAlpha(80)),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: AppShadows.bar,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildActionRow(context, compact: true),
-                    if (readingProgress != null) ...[
-                      SizedBox(
-                        height: 24,
-                        child: VerticalDivider(
-                          width: 16,
-                          color: cs.outlineVariant.withAlpha(80),
-                        ),
+          child: BarSurface(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildActionRow(context, compact: true),
+                  if (readingProgress != null) ...[
+                    SizedBox(
+                      height: 24,
+                      child: VerticalDivider(
+                        width: 16,
+                        color: cs.outlineVariant,
                       ),
-                      ValueListenableBuilder<double>(
-                        valueListenable: readingProgress!,
-                        builder: (context, progress, _) => Tooltip(
-                          message: context.l10n.readerReadingProgress,
-                          child: Semantics(
-                            label: context.l10n.readerReadingProgress,
-                            value: '${(progress.clamp(0, 1) * 100).round()}%',
-                            child: SizedBox(
-                              width: 48,
-                              child: Text(
-                                '${(progress.clamp(0, 1) * 100).round()}%',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: cs.onSurfaceVariant,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
+                    ),
+                    ValueListenableBuilder<double>(
+                      valueListenable: readingProgress!,
+                      builder: (context, progress, _) => Tooltip(
+                        message: context.l10n.readerReadingProgress,
+                        child: Semantics(
+                          label: context.l10n.readerReadingProgress,
+                          value: '${(progress.clamp(0, 1) * 100).round()}%',
+                          child: SizedBox(
+                            width: 48,
+                            child: Text(
+                              '${(progress.clamp(0, 1) * 100).round()}%',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                             ),
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
           ),
@@ -116,12 +113,21 @@ class ReaderBottomBar extends StatelessWidget {
       );
     }
 
+    if (FolioLook.of(context).floatingBars) {
+      // 悬浮玻璃：一枚胶囊浮在正文上，左右与底部留出呼吸空间
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: LiquidGlass(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: SizedBox(height: 60, child: _buildActionRow(context)),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(
-          top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
-        ),
+        border: Border(top: AppStroke.side(cs)),
       ),
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       child: SizedBox(height: 56, child: _buildActionRow(context)),
@@ -145,8 +151,8 @@ class ReaderBottomBar extends StatelessWidget {
           onTap: onOpenOutline,
         ),
         _buildTranslationBottomButton(context),
-        _bottomButton(
-          icon: Symbols.auto_awesome_rounded,
+        // 问 AI 不再是普通图标：一颗会转的光球，是底栏的视觉重心
+        _AskAiOrbButton(
           tooltip: l10n.askAi,
           active: activeDock == ReaderDockPane.askAi,
           onTap: onAskAi,
@@ -238,4 +244,60 @@ class ReaderBottomBar extends StatelessWidget {
         DocTranslationMode.off => l10n.original,
         DocTranslationMode.translated => l10n.translated,
       };
+}
+
+class _AskAiOrbButton extends StatelessWidget {
+  const _AskAiOrbButton({
+    required this.tooltip,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        selected: active,
+        label: tooltip,
+        excludeSemantics: true,
+        child: TactilePress(
+          onTap: () {
+            Haptics.soft();
+            onTap();
+          },
+          baseColor: Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: SizedBox(
+            width: 52,
+            height: 48,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: active ? cs.primary : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                child: AiOrb(
+                  size: 30,
+                  thinking: active,
+                  icon: Symbols.auto_awesome_rounded,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

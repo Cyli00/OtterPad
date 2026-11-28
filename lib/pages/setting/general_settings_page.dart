@@ -13,11 +13,13 @@ import '../../core/animation_constants.dart';
 import '../../core/l10n.dart';
 import '../../core/storage/settings_keys.dart';
 import '../../core/storage/storage.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/haptics.dart';
 import '../../services/snackbar_service.dart';
 import '../../services/system_specs.dart';
 import '../../widgets/app_divider.dart';
 import '../../widgets/tactile_press.dart';
+import '../../core/design_tokens.dart';
 
 // ── GStorage keys ──
 
@@ -61,15 +63,13 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
     final l10n = context.l10n;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
       appBar: widget.embedded
           ? null
           : AppBar(
               title: Text(
                 l10n.generalSettings,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,
@@ -133,17 +133,6 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
                                     setState(() => _logLevel = set.first);
                                     GStorage.setting.put(_kLogLevel, _logLevel);
                                   },
-                                  style: SegmentedButton.styleFrom(
-                                    backgroundColor: cs.surface,
-                                    selectedBackgroundColor:
-                                        cs.primaryContainer,
-                                    side: BorderSide(
-                                      color: cs.outlineVariant.withAlpha(100),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
                                 ),
                               ),
                             ],
@@ -166,6 +155,20 @@ class _GeneralSettingsPageState extends ConsumerState<GeneralSettingsPage> {
                   onTap: _reportIssue,
                 ),
               ],
+            ),
+          ),
+
+          // ── 界面 ──
+          SettingGroup(
+            title: l10n.generalInterface,
+            child: _SwitchTile(
+              title: l10n.floatingBars,
+              subtitle: l10n.floatingBarsDesc,
+              value: ref.watch(themeProvider).floatingBars,
+              onChanged: (v) {
+                Haptics.soft();
+                ref.read(themeProvider.notifier).setFloatingBars(v);
+              },
             ),
           ),
 
@@ -365,13 +368,13 @@ class _ActionTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.smAll,
+              border: Border.all(color: AppStroke.rule(cs)),
             ),
-            child: Icon(icon, color: cs.primary, size: 22),
+            child: Icon(icon, color: cs.onSurface, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(

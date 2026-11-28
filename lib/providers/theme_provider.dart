@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/legacy.dart';
 
 import '../core/storage/settings_keys.dart';
 import '../core/app_fonts.dart';
+import '../core/design_tokens.dart';
+import '../core/folio_look.dart';
 import '../core/storage/storage.dart';
 
 class ThemeState {
@@ -12,6 +14,9 @@ class ThemeState {
   final bool useDynamicColor;
   final double textScale;
   final String appFont;
+  final ThemeStyle style;
+  final bool ambient;
+  final bool floatingBars;
 
   const ThemeState({
     required this.mode,
@@ -19,7 +24,13 @@ class ThemeState {
     this.useDynamicColor = false,
     this.textScale = 1.0,
     this.appFont = AppFonts.sans,
+    this.style = ThemeStyle.paper,
+    this.ambient = true,
+    this.floatingBars = true,
   });
+
+  FolioLook get look =>
+      FolioLook(style: style, ambient: ambient, floatingBars: floatingBars);
 
   ThemeState copyWith({
     ThemeMode? mode,
@@ -27,6 +38,9 @@ class ThemeState {
     bool? useDynamicColor,
     double? textScale,
     String? appFont,
+    ThemeStyle? style,
+    bool? ambient,
+    bool? floatingBars,
   }) {
     return ThemeState(
       mode: mode ?? this.mode,
@@ -34,6 +48,9 @@ class ThemeState {
       useDynamicColor: useDynamicColor ?? this.useDynamicColor,
       textScale: textScale ?? this.textScale,
       appFont: appFont ?? this.appFont,
+      style: style ?? this.style,
+      ambient: ambient ?? this.ambient,
+      floatingBars: floatingBars ?? this.floatingBars,
     );
   }
 }
@@ -85,6 +102,11 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
       textScale: textScale,
       appFont:
           box.get(SettingsKeys.appFont, defaultValue: AppFonts.sans) as String,
+      style: ThemeStyle.parse(box.get(SettingsKeys.themeStyle) as String?),
+      ambient:
+          box.get(SettingsKeys.ambientBackdrop, defaultValue: true) as bool,
+      floatingBars:
+          box.get(SettingsKeys.floatingBars, defaultValue: true) as bool,
     );
   }
 
@@ -113,6 +135,21 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
   Future<void> setTextScale(double scale) async {
     state = state.copyWith(textScale: scale);
     await GStorage.setting.put(_textScaleKey, scale);
+  }
+
+  Future<void> setStyle(ThemeStyle style) async {
+    state = state.copyWith(style: style);
+    await GStorage.setting.put(SettingsKeys.themeStyle, style.name);
+  }
+
+  Future<void> setAmbient(bool value) async {
+    state = state.copyWith(ambient: value);
+    await GStorage.setting.put(SettingsKeys.ambientBackdrop, value);
+  }
+
+  Future<void> setFloatingBars(bool value) async {
+    state = state.copyWith(floatingBars: value);
+    await GStorage.setting.put(SettingsKeys.floatingBars, value);
   }
 
   void reload() {

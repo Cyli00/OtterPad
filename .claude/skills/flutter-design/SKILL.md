@@ -10,7 +10,9 @@ description: 创建或调整 OtterPad Flutter 界面的视觉、交互和多端�
 ## 硬约定
 
 - 图标用 `material_symbols_icons` 的 `Symbols`。
+- 视觉语言是 Folio（纸与墨、细线分隔、衬线刊头、收紧圆角），规范见 `docs/design-system.md`。
 - 颜色取 `ColorScheme`，字号取 `TextTheme`；透明背景、遮罩和主题预览例外。
+- 圆角、间距、细线、眉题与刊头字体取 `lib/core/design_tokens.dart`（`AppRadius`、`AppSpace`、`AppStroke`、`AppType`），组件不写裸数字圆角；配色经 `FolioPalette.scheme` 生成。
 - 动画时长与弹簧取 `lib/core/animation_constants.dart`，阴影取 `lib/core/elevation.dart` 的 `AppShadows`，触觉走 `Haptics`（`lib/services/haptics.dart`）。
 - 桌面与移动端的交互分型用 `isDesktopOs`，尺寸按当前窗口的可用空间判断。
 

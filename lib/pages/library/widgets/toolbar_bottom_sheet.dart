@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/elevation.dart';
 import '../../../core/l10n.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 enum ToolbarAction { addFile, addByIdentifier, rebuildLibrary }
 
@@ -21,37 +22,38 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
       return BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
         child: Container(
+          // Folio：底部面板是一张纸——纸色底、细线顶边、14 圆角
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            color: colorScheme.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(colorScheme)),
             boxShadow: AppShadows.sheet,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                margin: const EdgeInsets.only(top: 12),
+                margin: const EdgeInsets.only(top: AppSpace.x3),
                 width: 32,
-                height: 4,
+                height: 3,
                 decoration: BoxDecoration(
-                  color: colorScheme.onSurfaceVariant.withAlpha(80),
-                  borderRadius: BorderRadius.circular(2),
+                  color: colorScheme.outline,
+                  borderRadius: BorderRadius.circular(AppRadius.hairline),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.x4),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.x6,
+                  0,
+                  AppSpace.x6,
+                  AppSpace.x2,
                 ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    context.l10n.tools,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                    ),
+                    eyebrowText(context.l10n.tools),
+                    style: AppType.eyebrow(context),
                   ),
                 ),
               ),
@@ -71,15 +73,19 @@ Future<ToolbarAction?> showToolbarSheet(BuildContext context) {
                         icon: Symbols.travel_explore_rounded,
                         title: context.l10n.addByIdentifier,
                         subtitle: context.l10n.addByIdentifierSubtitle,
-                        onTap: () =>
-                            Navigator.pop(context, ToolbarAction.addByIdentifier),
+                        onTap: () => Navigator.pop(
+                          context,
+                          ToolbarAction.addByIdentifier,
+                        ),
                       ),
                       _SheetItem(
                         icon: Symbols.refresh_rounded,
                         title: context.l10n.rebuildLibrary,
                         subtitle: context.l10n.rebuildLibrarySubtitle,
-                        onTap: () =>
-                            Navigator.pop(context, ToolbarAction.rebuildLibrary),
+                        onTap: () => Navigator.pop(
+                          context,
+                          ToolbarAction.rebuildLibrary,
+                        ),
                       ),
                     ],
                   ),
@@ -117,45 +123,44 @@ class _SheetItem extends StatelessWidget {
       baseColor: Colors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: colorScheme.primary, size: 22, fill: 1),
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: AppRadius.smAll,
+              border: Border.all(color: AppStroke.rule(colorScheme)),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
+            child: Icon(icon, color: colorScheme.onSurface, size: 20),
+          ),
+          const SizedBox(width: AppSpace.x4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: colorScheme.onSurface,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Icon(
-              Symbols.chevron_right_rounded,
-              color: colorScheme.onSurfaceVariant.withAlpha(120),
-              fill: 1,
-            ),
-          ],
-        ),
+          ),
+          Icon(
+            Symbols.arrow_forward_rounded,
+            color: colorScheme.outline,
+            size: 18,
+          ),
+        ],
+      ),
     );
   }
 }

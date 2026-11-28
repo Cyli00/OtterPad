@@ -12,6 +12,7 @@ import '../../../providers/document_task_provider.dart';
 import '../../../utils/desktop.dart';
 import '../../../widgets/app_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/design_tokens.dart';
 
 Future<void> showBatchProgress({
   required BuildContext context,
@@ -195,10 +196,10 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 32,
-            height: 4,
+            height: 3,
             decoration: BoxDecoration(
-              color: colorScheme.onSurfaceVariant.withAlpha(80),
-              borderRadius: BorderRadius.circular(2),
+              color: colorScheme.outline,
+              borderRadius: BorderRadius.circular(AppRadius.hairline),
             ),
           )
         else
@@ -216,9 +217,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                   children: [
                     Text(
                       isRunning ? l10n.batchExtracting : l10n.extractionDone,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.titleLarge?.copyWith(),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -258,7 +257,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
             children: [
               Expanded(
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(AppRadius.xs),
                   child: LinearProgressIndicator(
                     value: isRunning
                         ? (total > 0 ? completed / total : null)
@@ -286,7 +285,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
         ),
 
         const SizedBox(height: 12),
-        Divider(height: 1, color: colorScheme.outlineVariant.withAlpha(80)),
+        Divider(height: 1, color: colorScheme.outlineVariant),
 
         // Job 状态列表
         Expanded(
@@ -335,7 +334,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                     ),
                   )
@@ -350,7 +349,7 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       backgroundColor: failed == 0
                           ? colorScheme.primary
@@ -367,8 +366,11 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
 
     if (widget.asDialog) {
       return Material(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        color: colorScheme.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.lgAll,
+          side: AppStroke.side(colorScheme),
+        ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(width: 540, height: height, child: column),
       );
@@ -379,8 +381,9 @@ class _BatchProgressSheetState extends ConsumerState<BatchProgressSheet> {
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          color: colorScheme.surfaceContainerLowest,
+          borderRadius: AppRadius.sheetTop,
+          border: Border(top: AppStroke.side(colorScheme)),
           boxShadow: AppShadows.sheet,
         ),
         child: column,

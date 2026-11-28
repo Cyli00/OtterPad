@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/design_tokens.dart';
 
 class AppContextMenuItem<T> {
   const AppContextMenuItem({
@@ -35,7 +36,9 @@ Future<T?> showAppContextMenu<T>({
     ),
     color: cs.surfaceContainerHigh,
     elevation: 3,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+    ),
     items: [
       for (final item in items)
         PopupMenuItem<T>(

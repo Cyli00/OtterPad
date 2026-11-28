@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../core/l10n.dart';
 import '../services/update_service.dart';
+import '../core/design_tokens.dart';
 
 /// 检查更新结果弹窗：版本对比 + changelog 摘要，串联更新/忽略/稍后/查看发布页四个动作。
 /// 纯展示组件，不做网络/下载/持久化——那些交给 `update_flow.dart` 的回调完成。
@@ -34,8 +35,11 @@ class UpdateDialog extends StatelessWidget {
     final l10n = context.l10n;
 
     return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(28),
+      color: cs.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.lgAll,
+        side: AppStroke.side(cs),
+      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 480,
@@ -49,9 +53,7 @@ class UpdateDialog extends StatelessWidget {
             children: [
               Text(
                 l10n.updateNewVersionFound,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               const SizedBox(height: 4),
               Text(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/design_tokens.dart';
 import '../../../providers/documents_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../utils/responsive.dart';
@@ -22,7 +23,7 @@ class BookshelfList extends ConsumerWidget {
   static const _kTwoColumnBreakpoint = 900; // ← 双栏触发宽度
   static const _kThreeColumnBreakpoint = 1800; // ← 三栏触发宽度
   static const _kMaxContentWidth = 2700; // ← 内容区最大宽度
-  static const _kCardHeight = 174.0; // ← padding(16×2) + thumbHeightFull(142)
+  static const _kCardHeight = 176.0; // ← padding(16×2) + thumb(142) + 细线(1×2)
   // └──────────────────────────────────────────────────────────┘
 
   @override
@@ -86,6 +87,7 @@ class BookshelfList extends ConsumerWidget {
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.crossAxisExtent;
+        final gutter = AppSpace.pageGutter(context);
         final columnCount = width >= _kThreeColumnBreakpoint
             ? 3
             : width >= _kTwoColumnBreakpoint
@@ -94,17 +96,24 @@ class BookshelfList extends ConsumerWidget {
 
         if (columnCount >= 2) {
           final contentWidth = width.clamp(0.0, _kMaxContentWidth);
-          final hPadding = (width - contentWidth) / 2 + 16;
+          final hPadding = (width - contentWidth) / 2 + gutter;
           // 桌面宽屏紧凑密度：行距 -4px（Responsive.compactDensity）
-          final rowSpacing = Responsive.compactDensity(context) ? 8.0 : 12.0;
+          final rowSpacing = Responsive.compactDensity(context)
+              ? AppSpace.x2
+              : AppSpace.x3;
 
           return SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: hPadding, vertical: 8.0),
+            padding: EdgeInsets.fromLTRB(
+              hPadding,
+              AppSpace.x5,
+              hPadding,
+              AppSpace.x8,
+            ),
             sliver: SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columnCount,
                 mainAxisExtent: _kCardHeight,
-                crossAxisSpacing: 16,
+                crossAxisSpacing: AppSpace.x4,
                 mainAxisSpacing: rowSpacing,
               ),
               delegate: SliverChildBuilderDelegate(
@@ -116,9 +125,16 @@ class BookshelfList extends ConsumerWidget {
         }
 
         // 窄屏：单栏列表
-        final rowSpacing = Responsive.compactDensity(context) ? 8.0 : 12.0;
+        final rowSpacing = Responsive.compactDensity(context)
+            ? AppSpace.x2
+            : AppSpace.x3;
         return SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding: EdgeInsets.fromLTRB(
+            gutter,
+            AppSpace.x4,
+            gutter,
+            AppSpace.x8,
+          ),
           sliver: SliverList.separated(
             itemCount: docs.length,
             separatorBuilder: (_, _) => SizedBox(height: rowSpacing),

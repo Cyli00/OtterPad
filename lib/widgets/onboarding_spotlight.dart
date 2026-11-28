@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../core/animation_constants.dart';
 import '../core/elevation.dart';
 import '../services/haptics.dart';
+import '../core/design_tokens.dart';
 
 /// 引导中的一步：高亮 [targetKey] 指向的组件，并在旁边给出说明。
 class SpotlightStep {
@@ -243,8 +244,9 @@ class _TourOverlayState extends State<_TourOverlay>
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        color: cs.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: AppStroke.rule(cs)),
         boxShadow: AppShadows.dialog,
       ),
       child: AnimatedSize(

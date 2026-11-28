@@ -19,15 +19,13 @@ class ApiSettingsPage extends StatelessWidget {
     final cs = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: embedded ? Colors.transparent : cs.surface,
       appBar: embedded
           ? null
           : AppBar(
               title: Text(
                 context.l10n.aiSettings,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,

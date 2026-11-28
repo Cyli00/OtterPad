@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../utils/desktop.dart';
+import '../../../core/design_tokens.dart';
 
 class LibraryEmptyState extends StatelessWidget {
   final VoidCallback? onStartSetup;
@@ -21,29 +22,30 @@ class LibraryEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Folio：空白页像一张还没写字的纸——细线方框里一个墨色图标，
+            // 衬线标题，不用彩色色块。
             Container(
-              width: 72,
-              height: 72,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(20),
+                color: cs.surfaceContainerLowest,
+                borderRadius: AppRadius.mdAll,
+                border: Border.all(color: AppStroke.rule(cs)),
               ),
               alignment: Alignment.center,
               child: Icon(
                 Symbols.auto_stories_rounded,
-                size: 36,
-                color: cs.onPrimaryContainer,
+                size: 26,
+                color: cs.onSurface,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpace.x6),
             Text(
               context.l10n.emptyLibraryTitle,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: theme.textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.x2),
             Text(
               context.l10n.emptyLibraryBody,
               style: theme.textTheme.bodyMedium?.copyWith(
@@ -65,29 +67,13 @@ class LibraryEmptyState extends StatelessWidget {
             ],
             if (onStartSetup != null) ...[
               const SizedBox(height: 24),
-              FilledButton.tonal(
+              FilledButton.icon(
                 onPressed: () {
                   Haptics.soft();
                   onStartSetup!();
                 },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Symbols.tune_rounded,
-                      size: 18,
-                      color: cs.onSecondaryContainer,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(context.l10n.emptyLibraryAction),
-                  ],
-                ),
+                icon: const Icon(Symbols.tune_rounded, size: 18),
+                label: Text(context.l10n.emptyLibraryAction),
               ),
             ],
           ],

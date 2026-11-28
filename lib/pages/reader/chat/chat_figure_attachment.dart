@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/l10n.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 class ChatFigureAttachment extends StatelessWidget {
   final String imagePath;
@@ -41,10 +42,10 @@ class ChatFigureAttachment extends StatelessWidget {
               message: context.l10n.chatPreviewFigure,
               child: TactilePress(
                 baseColor: cs.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 onTap: onOpen,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: _image(context, cacheWidth: 312),

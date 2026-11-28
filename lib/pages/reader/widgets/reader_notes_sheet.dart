@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/animation_constants.dart';
-import '../../../core/elevation.dart';
+import '../../../core/design_tokens.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/book/highlight.dart';
 import '../../../providers/highlight_provider.dart';
@@ -118,14 +118,11 @@ class _Header extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          Icon(Symbols.bookmark_rounded, color: cs.primary, size: 22),
+          Icon(Symbols.bookmark_rounded, color: cs.onSurfaceVariant, size: 20),
           const SizedBox(width: 8),
           Text(
             context.l10n.highlightsAndNotes,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.primary,
-              fontWeight: FontWeight.bold,
-            ),
+            style: theme.textTheme.titleLarge,
           ),
           const Spacer(),
           Text(
@@ -274,14 +271,10 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
     final cs = theme.colorScheme;
     final hl = widget.highlight;
     return AlertDialog(
-      backgroundColor: cs.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
       title: Text(
         context.l10n.editNoteTitle,
-        style: theme.textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.bold,
-        ),
+        style: theme.textTheme.titleLarge?.copyWith(),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -292,7 +285,7 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: SingleChildScrollView(
               child: Text(
@@ -315,11 +308,11 @@ class _EditNoteDialogState extends State<_EditNoteDialog> {
               filled: true,
               fillColor: cs.surfaceContainerLow,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: BorderSide(color: cs.outline),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 borderSide: BorderSide(color: cs.primary, width: 2),
               ),
               hintText: context.l10n.writeYourThoughts,
@@ -382,14 +375,14 @@ class _HighlightTileState extends State<_HighlightTile> {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppShadows.card,
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppStroke.rule(cs)),
       ),
       child: TactilePress(
         onTap: () => setState(() => _expanded = !_expanded),
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         child: AnimatedSize(
           duration: kAnim,
           curve: kAnimCurve,
@@ -493,7 +486,7 @@ class _MiniButton extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         padding: const EdgeInsets.all(4),
         child: Icon(icon, size: 18, color: cs.onSurfaceVariant),
       ),

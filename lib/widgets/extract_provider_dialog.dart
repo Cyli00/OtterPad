@@ -4,6 +4,7 @@ import '../core/l10n.dart';
 import '../data/models/ocr/doc_extract_config.dart';
 import '../services/haptics.dart';
 import 'app_dialog.dart';
+import '../core/design_tokens.dart';
 
 Future<DocExtractProvider?> showReprocessSourceDialog({
   required BuildContext context,
@@ -12,7 +13,6 @@ Future<DocExtractProvider?> showReprocessSourceDialog({
   context: context,
   builder: (context) => AlertDialog(
     backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
     title: Text(context.l10n.reformatSourceChoice),
     content: Column(
       mainAxisSize: MainAxisSize.min,
@@ -24,7 +24,7 @@ Future<DocExtractProvider?> showReprocessSourceDialog({
           ListTile(
             title: Text(source.label),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             onTap: () {
               Haptics.light();
@@ -61,8 +61,11 @@ Future<DocExtractApiState?> showExtractProviderDialog({
           480.0,
         );
         return Material(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          color: cs.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.lgAll,
+            side: AppStroke.side(cs),
+          ),
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: width,
@@ -73,9 +76,7 @@ Future<DocExtractApiState?> showExtractProviderDialog({
               children: [
                 Text(
                   context.l10n.textExtraction,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -96,14 +97,6 @@ Future<DocExtractApiState?> showExtractProviderDialog({
                     selected: {selected},
                     showSelectedIcon: false,
                     style: SegmentedButton.styleFrom(
-                      backgroundColor: cs.surface,
-                      selectedBackgroundColor: cs.primaryContainer,
-                      foregroundColor: cs.onSurfaceVariant,
-                      selectedForegroundColor: cs.onPrimaryContainer,
-                      side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                       textStyle: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),

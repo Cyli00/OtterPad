@@ -3879,4 +3879,91 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get skip => 'Skip';
+
+  @override
+  String get themeStyle => 'Theme style';
+
+  @override
+  String get themeStylePaper => 'Paper';
+
+  @override
+  String get themeStyleVivid => 'Vivid';
+
+  @override
+  String get themeStyleMist => 'Mist';
+
+  @override
+  String get themeStyleMoss => 'Moss';
+
+  @override
+  String get themeStyleDusk => 'Dusk';
+
+  @override
+  String get themeStyleGraphite => 'Graphite';
+
+  @override
+  String get themeStyleHint =>
+      'Style sets the tone of pages and text; theme color sets the accent.';
+
+  @override
+  String get ambientBackdrop => 'Ambient glow';
+
+  @override
+  String get ambientBackdropDesc =>
+      'A soft wash of your theme color behind the main pages';
+
+  @override
+  String get generalInterface => 'Interface';
+
+  @override
+  String get floatingBars => 'Floating glass bars';
+
+  @override
+  String get floatingBarsDesc =>
+      'Bottom bars float above the content as frosted glass';
+
+  @override
+  String get chatEmptyTitle => 'What would you like to know about this paper?';
+
+  @override
+  String get chatStarterSummary => 'Summarize the key contributions';
+
+  @override
+  String get chatStarterMethod => 'Walk me through the method and setup';
+
+  @override
+  String get chatStarterLimits => 'What are the limitations?';
+
+  @override
+  String get chatStarterPlain => 'Explain the abstract in plain language';
+
+  @override
+  String get chatThinking => 'Thinking';
+
+  @override
+  String get aiIntentExplain => 'Explain';
+
+  @override
+  String get aiIntentSimplify => 'Simplify';
+
+  @override
+  String get aiIntentExample => 'Example';
+
+  @override
+  String get aiIntentChallenge => 'Challenge';
+
+  @override
+  String get aiIntentFree => 'Ask anything';
+
+  @override
+  String get aiPromptExplain => 'Explain what this passage means in context.';
+
+  @override
+  String get aiPromptSimplify => 'Say this again in plain language.';
+
+  @override
+  String get aiPromptExample => 'Give me a concrete example of this.';
+
+  @override
+  String get aiPromptChallenge => 'What could be questioned in this argument?';
 }

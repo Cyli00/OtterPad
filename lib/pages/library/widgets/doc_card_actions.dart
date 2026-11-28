@@ -247,8 +247,6 @@ class DocCardActions {
     final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(title),
         content: Text(message),

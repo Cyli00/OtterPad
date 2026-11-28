@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../core/l10n.dart';
 import '../services/haptics.dart';
+import '../core/design_tokens.dart';
 
 class SettingHelpIcon extends StatelessWidget {
   const SettingHelpIcon(this.message, {super.key});
@@ -21,7 +22,7 @@ class SettingHelpIcon extends StatelessWidget {
       verticalOffset: 16,
       decoration: BoxDecoration(
         color: cs.inverseSurface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       textStyle: theme.textTheme.bodySmall?.copyWith(
         color: cs.onInverseSurface,
@@ -131,10 +132,8 @@ class SettingSlider extends StatelessWidget {
                   color: isSet
                       ? cs.primaryContainer
                       : cs.surfaceContainerHighest.withAlpha(160),
-                  borderRadius: BorderRadius.circular(12),
-                  border: isSet
-                      ? null
-                      : Border.all(color: cs.outlineVariant.withAlpha(80)),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: isSet ? null : Border.all(color: cs.outlineVariant),
                 ),
                 child: Text(
                   formatter(displayValue),

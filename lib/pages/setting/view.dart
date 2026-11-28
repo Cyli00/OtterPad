@@ -22,6 +22,8 @@ import 'network_settings_page.dart';
 import 'ocr_settings_page.dart';
 import 'setting_group.dart';
 import 'storage_space_page.dart';
+import '../../core/design_tokens.dart';
+import '../../widgets/glass/ambient_backdrop.dart';
 
 enum SettingNavMode { shell, overlay }
 
@@ -130,13 +132,16 @@ class _SettingPageState extends State<SettingPage> {
           builder: (context, constraints) {
             final side = SettingListView.sidePadding(constraints.maxWidth);
             return Padding(
-              // 顶边与左侧列表首张卡片对齐；+16 对齐 SettingGroup 标题缩进
-              padding: EdgeInsets.fromLTRB(side + 16, 12, side, 0),
+              // Folio 刊头：衬线大标题；+4 对齐 SettingGroup 眉题缩进
+              padding: EdgeInsets.fromLTRB(
+                side + AppSpace.x1,
+                AppSpace.x6,
+                side,
+                0,
+              ),
               child: Text(
                 _sectionTitle(section),
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: theme.textTheme.headlineLarge,
               ),
             );
           },
@@ -164,7 +169,12 @@ class _SettingPageState extends State<SettingPage> {
   Widget _buildList({SettingsSection? selected, required bool showChevron}) {
     final l10n = context.l10n;
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.x4,
+        AppSpace.x6,
+        AppSpace.x4,
+        AppSpace.x4,
+      ),
       children: [
         _SettingsCard(
           children: [
@@ -266,11 +276,7 @@ class _SettingPageState extends State<SettingPage> {
                   showChevron: false,
                 ),
               ),
-              VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: colorScheme.outlineVariant.withAlpha(80),
-              ),
+              const VerticalDivider(),
               // 平级分组切换：标题随内容一起 fade through
               Expanded(
                 child: PageTransitionSwitcher(
@@ -318,8 +324,11 @@ class _SettingPageState extends State<SettingPage> {
         // 宽屏 shell 的分组标题已画在详情顶部，AppBar 只剩返回入口时才保留
         final showAppBar = !(showMasterDetail && _isShell && showRail);
 
+        final pageColor = _isShell
+            ? AmbientBackdrop.pageColor(context)
+            : colorScheme.surface;
         Widget page = Scaffold(
-          backgroundColor: colorScheme.surface,
+          backgroundColor: pageColor,
           appBar: !showAppBar
               ? null
               : AppBar(
@@ -353,13 +362,11 @@ class _SettingPageState extends State<SettingPage> {
                           ? _sectionTitle(_selectedSection!)
                           : l10n.settings,
                       key: ValueKey(inSection ? _selectedSection : null),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.titleLarge,
                     ),
                   ),
                   centerTitle: false,
-                  backgroundColor: colorScheme.surface,
+                  backgroundColor: pageColor,
                   scrolledUnderElevation: 0,
                 ),
           body: showAppBar ? body : SafeArea(bottom: false, child: body),
@@ -429,10 +436,12 @@ class _SettingsCardState extends State<_SettingsCard> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
+    // Folio：纸色底 + 细线 + 10 圆角；选中指示器是一层极淡的强调色
     return Container(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(24),
+        color: cs.surfaceContainerLowest,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: AppStroke.rule(cs)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -454,7 +463,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     Opacity(opacity: opacity.clamp(0.0, 1.0), child: child),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: cs.primaryContainer,
+                    color: cs.primary.withAlpha(22),
                     borderRadius: BorderRadius.circular(_SettingsTile.radius),
                   ),
                 ),
@@ -494,12 +503,9 @@ class _SettingsTile extends StatelessWidget {
   });
 
   /// 点按区与卡片边缘的间隙；选中指示器与点按高亮共用这块区域。
-  /// 圆角与卡片 24 同心（24 - 6）。
-  static const EdgeInsets margin = EdgeInsets.symmetric(
-    horizontal: 6,
-    vertical: 4,
-  );
-  static const double radius = 18;
+  /// 圆角与卡片 10 同心（10 - 4）。
+  static const EdgeInsets margin = EdgeInsets.all(AppSpace.x1);
+  static const double radius = AppRadius.sm;
 
   @override
   Widget build(BuildContext context) {
@@ -513,8 +519,10 @@ class _SettingsTile extends StatelessWidget {
         onTap: onTap,
         baseColor: Colors.transparent,
         borderRadius: BorderRadius.circular(radius),
-        // 加上 margin 后内容位置不变（20 / 16）
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.x3,
+          vertical: AppSpace.x3,
+        ),
         child: Row(
           children: [
             AnimatedContainer(
@@ -522,25 +530,31 @@ class _SettingsTile extends StatelessWidget {
                   ? Duration.zero
                   : kAnimFast,
               curve: kAnimCurve,
-              width: 44,
-              height: 44,
+              width: 36,
+              height: 36,
+              // 图标盒：细线方框，选中时细线与图标换成强调色
               decoration: BoxDecoration(
-                color: selected
-                    ? colorScheme.surface
-                    : colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppRadius.smAll,
+                border: Border.all(
+                  color: selected
+                      ? colorScheme.primary.withAlpha(120)
+                      : AppStroke.rule(colorScheme),
+                ),
               ),
-              child: Icon(icon, color: colorScheme.primary, size: 22),
+              child: Icon(
+                icon,
+                color: selected ? colorScheme.primary : colorScheme.onSurface,
+                size: 19,
+              ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpace.x3),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
+                    style: theme.textTheme.titleSmall?.copyWith(
                       color: colorScheme.onSurface,
                     ),
                   ),
@@ -558,8 +572,9 @@ class _SettingsTile extends StatelessWidget {
             ),
             if (showChevron)
               Icon(
-                Symbols.chevron_right_rounded,
-                color: colorScheme.onSurfaceVariant.withAlpha(120),
+                Symbols.arrow_forward_rounded,
+                size: 18,
+                color: colorScheme.outline,
               ),
           ],
         ),

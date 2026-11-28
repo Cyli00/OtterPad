@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../providers/reader_settings_provider.dart';
 import '../widgets/md_widget/nr_markdown_config.dart';
+import '../../../core/design_tokens.dart';
 
 TextStyle chatBodyStyle(ThemeData theme) =>
     theme.textTheme.bodyMedium!.copyWith(height: 1.4);
@@ -61,7 +62,7 @@ class ChatMarkdown extends StatelessWidget {
                   horizontal: 8,
                   vertical: 6,
                 ),
-                border: TableBorder.all(color: cs.outlineVariant.withAlpha(80)),
+                border: TableBorder.all(color: cs.outlineVariant),
                 wrapper: (table) => SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: table,
@@ -77,7 +78,7 @@ class ChatMarkdown extends StatelessWidget {
                 textStyle: body.copyWith(fontFamily: 'monospace'),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
               ),
             ],

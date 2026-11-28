@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/collection/favorite.dart';
 import '../../services/haptics.dart';
 import '../../widgets/app_dialog.dart';
-import '../../widgets/app_divider.dart';
 import '../../providers/documents_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
@@ -12,12 +11,16 @@ import '../../providers/sync_status_provider.dart';
 import '../../router/app_routes.dart';
 import '../../utils/doc_paths.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/masthead.dart';
+import '../../widgets/rule_icon_button.dart';
 import '../../widgets/staggered_entrance.dart';
 import 'widgets/library_menu_item.dart';
 import 'widgets/favorite_card.dart';
 import 'widgets/create_favorite_dialog.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
+import '../../core/design_tokens.dart';
+import '../../widgets/glass/ambient_backdrop.dart';
 
 class ShelfPage extends ConsumerWidget {
   const ShelfPage({super.key});
@@ -52,9 +55,6 @@ class ShelfPage extends ConsumerWidget {
     final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: theme.colorScheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.deleteFavorite),
         content: Text(context.l10n.confirmDeleteFavorite(fav.name)),
         actions: [
@@ -93,114 +93,92 @@ class ShelfPage extends ConsumerWidget {
     final byId = {for (final doc in docs) doc.id: doc};
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: AmbientBackdrop.pageColor(context),
       body: SafeArea(
+        bottom: false,
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24.0,
-              vertical: 16.0,
+            padding: EdgeInsets.fromLTRB(
+              AppSpace.pageGutter(context),
+              Responsive.showNavigationRail(context)
+                  ? AppSpace.x6
+                  : AppSpace.x2,
+              AppSpace.pageGutter(context),
+              AppSpace.x4 + MediaQuery.paddingOf(context).bottom,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 16),
-                // 页面大标题 + 云同步 / 设置入口
+                // 刊头：衬线大标题 + 文献总数（数字滚动）；云同步 / 设置在右
+                Masthead(
+                  title: context.l10n.myLibrary,
+                  count: docs.length,
+                  countLabel: context.l10n.favoriteDocumentCount,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _CloudSyncButton(),
+                      if (!Responsive.showNavigationRail(context)) ...[
+                        const SizedBox(width: AppSpace.x2),
+                        RuleIconButton(
+                          icon: Symbols.settings_rounded,
+                          tooltip: context.l10n.settings,
+                          onPressed: () {
+                            Haptics.soft();
+                            context.push(AppRoutes.settingsOverlay);
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpace.x8),
+
+                // 目录：细线分隔的条目
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(top: AppStroke.side(theme.colorScheme)),
+                  ),
+                  child: Column(
+                    children: [
+                      LibraryMenuItem(
+                        icon: Symbols.history_rounded,
+                        title: context.l10n.readingHistory,
+                        count: historyCount,
+                        onTap: () => context.push(AppRoutes.shelfHistory),
+                      ),
+                      LibraryMenuItem(
+                        icon: Symbols.description_rounded,
+                        title: context.l10n.noFileEntries,
+                        count: noFileCount,
+                        alert: true,
+                        onTap: () => context.push(AppRoutes.shelfNoFileEntries),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpace.x12),
+
+                // 收藏夹：眉题 + 新建
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      context.l10n.myLibrary,
-                      style: theme.textTheme.headlineLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurface,
-                      ),
+                      eyebrowText(context.l10n.favorites),
+                      style: AppType.eyebrow(context),
                     ),
-                    const Spacer(),
-                    const _CloudSyncButton(),
-                    if (!Responsive.showNavigationRail(context))
-                      IconButton(
-                        icon: const Icon(Symbols.settings_rounded),
-                        color: theme.colorScheme.onSurfaceVariant,
-                        tooltip: context.l10n.settings,
-                        onPressed: () {
-                          Haptics.soft();
-                          context.push(AppRoutes.settingsOverlay);
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-
-                // 菜单列表项
-                LibraryMenuItem(
-                  icon: Symbols.history_rounded,
-                  title: context.l10n.readingHistory,
-                  trailing: historyCount > 0
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.secondaryContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '$historyCount',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSecondaryContainer,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        )
-                      : null,
-                  onTap: () => context.push(AppRoutes.shelfHistory),
-                ),
-                LibraryMenuItem(
-                  icon: Symbols.description_rounded,
-                  title: context.l10n.noFileEntries,
-                  trailing: noFileCount > 0
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '$noFileCount',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.error,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        )
-                      : null,
-                  onTap: () => context.push(AppRoutes.shelfNoFileEntries),
-                ),
-
-                // 分割线
-                const AppDivider.full(height: 32),
-                const SizedBox(height: 8),
-
-                // 收藏夹标题与操作栏
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
+                    const SizedBox(width: AppSpace.x2),
                     Text(
-                      context.l10n.favorites,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurface,
-                      ),
+                      '${favorites.length}',
+                      style: AppType.eyebrow(
+                        context,
+                      ).copyWith(fontFeatures: AppType.tabular),
                     ),
                     const Spacer(),
-                    IconButton(
-                      icon: const Icon(Symbols.add_rounded),
-                      color: theme.colorScheme.onSurfaceVariant,
+                    RuleIconButton(
+                      icon: Symbols.add_rounded,
+                      tooltip: context.l10n.createFavorite,
+                      size: 32,
                       onPressed: () async {
                         Haptics.soft();
                         final result = await showCreateFavoriteDialog(context);
@@ -216,7 +194,7 @@ class ShelfPage extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.x4),
 
                 LayoutBuilder(
                   builder: (context, constraints) {
@@ -232,18 +210,9 @@ class ShelfPage extends ConsumerWidget {
                         subtitle: context.l10n.favoriteDocumentCount(
                           fav.documentIds.length,
                         ),
-                        subtitleIcon: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
-                            color: theme.colorScheme.primaryContainer,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            fav.emoji,
-                            style: const TextStyle(fontSize: 13, height: 1.0),
-                          ),
+                        subtitleIcon: Text(
+                          fav.emoji,
+                          style: const TextStyle(fontSize: 15, height: 1.0),
                         ),
                         pdfAssets: pdfAssets,
                         totalCount: fav.documentIds.length,
@@ -261,10 +230,10 @@ class ShelfPage extends ConsumerWidget {
 
                     if (maxW >= 900) {
                       return Wrap(
-                        spacing: 16,
+                        spacing: AppSpace.x4,
                         runSpacing: Responsive.compactDensity(context)
-                            ? 12
-                            : 16,
+                            ? AppSpace.x3
+                            : AppSpace.x4,
                         children: [
                           for (var i = 0; i < favorites.length; i++)
                             StaggeredEntrance(
@@ -319,32 +288,34 @@ class _CloudSyncButton extends ConsumerWidget {
       orElse: () => (Symbols.cloud_rounded, false),
     );
 
-    return IconButton(
-      icon: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Icon(icon, color: cs.onSurfaceVariant),
-          if (showBadge)
-            Positioned(
-              top: -2,
-              right: -2,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        RuleIconButton(
+          icon: icon,
+          tooltip: context.l10n.cloudSync,
+          onPressed: () {
+            Haptics.soft();
+            context.push(AppRoutes.shelfCloudSync);
+          },
+        ),
+        if (showBadge)
+          Positioned(
+            top: -3,
+            right: -3,
+            child: IgnorePointer(
               child: Container(
-                width: 8,
-                height: 8,
+                width: 9,
+                height: 9,
                 decoration: BoxDecoration(
-                  color: cs.tertiary,
+                  color: cs.primary,
                   shape: BoxShape.circle,
-                  border: Border.all(color: cs.surface, width: 1.5),
+                  border: Border.all(color: cs.surface, width: 2),
                 ),
               ),
             ),
-        ],
-      ),
-      tooltip: context.l10n.cloudSync,
-      onPressed: () {
-        Haptics.soft();
-        context.push(AppRoutes.shelfCloudSync);
-      },
+          ),
+      ],
     );
   }
 }

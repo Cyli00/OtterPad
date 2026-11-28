@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
+import '../../../core/design_tokens.dart';
 
 class ReaderPdfSearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -89,7 +90,7 @@ class ReaderPdfSearchBar extends StatelessWidget {
                     fillColor: cs.surfaceContainerHigh,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -169,8 +170,9 @@ class ReaderHighlightSearchBar extends StatelessWidget {
                   height: 40,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
+                    color: cs.surfaceContainerLowest,
+                    borderRadius: AppRadius.mdAll,
+                    border: Border.all(color: AppStroke.rule(cs)),
                   ),
                   child: Row(
                     children: [

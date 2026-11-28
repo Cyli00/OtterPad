@@ -11,6 +11,7 @@ import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
 
 import '../../../data/models/collection/favorite.dart';
+import '../../../core/design_tokens.dart';
 
 /// 选择一个目标收藏夹的结果。
 class PickFavoriteResult {
@@ -109,10 +110,10 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 32,
-            height: 4,
+            height: 3,
             decoration: BoxDecoration(
-              color: cs.onSurfaceVariant.withAlpha(80),
-              borderRadius: BorderRadius.circular(2),
+              color: cs.outline,
+              borderRadius: BorderRadius.circular(AppRadius.hairline),
             ),
           )
         else
@@ -166,8 +167,11 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
       final hi = math.max(lo, math.min(540.0, computed));
       final width = computed.clamp(lo, hi);
       return Material(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+        color: cs.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.lgAll,
+          side: AppStroke.side(cs),
+        ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           width: width,
@@ -184,9 +188,10 @@ class _PickFavoriteContentState extends State<_PickFavoriteContent> {
       child: Container(
         constraints: BoxConstraints(maxHeight: maxH),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: AppShadows.sheet,
+          color: cs.surfaceContainerLowest,
+          borderRadius: AppRadius.sheetTop,
+          border: Border(top: AppStroke.side(cs)),
+          boxShadow: AppShadows.sheet,
         ),
         child: column,
       ),
@@ -244,7 +249,7 @@ class _FavoriteItem extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: cs.primaryContainer.withAlpha(disabled ? 80 : 255),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             alignment: Alignment.center,
             child: Text(
@@ -311,7 +316,7 @@ class _CreateFavoriteItem extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             alignment: Alignment.center,
             child: creating

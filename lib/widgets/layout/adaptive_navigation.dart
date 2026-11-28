@@ -4,6 +4,9 @@ import 'package:motor/motor.dart';
 import '../../core/animation_constants.dart';
 import '../../services/haptics.dart';
 import '../tactile_press.dart';
+import '../../core/design_tokens.dart';
+import '../../core/folio_look.dart';
+import '../glass/liquid_glass.dart';
 
 /// 导航目标项配置
 class AdaptiveDestination {
@@ -41,8 +44,8 @@ class _SelectedIconFill extends StatelessWidget {
   }
 }
 
-/// 侧栏选中指示器：选中时药丸从中心横向展开（弹簧，轻微过冲），取消选中时
-/// 收回；底色与图标颜色同步过渡。
+/// 侧栏选中态：图标背后一枚强调色胶囊从中心横向弹开，图标由描边过渡为
+/// 实心、由中性灰过渡为强调色上的前景色。
 class _RailIndicator extends StatelessWidget {
   const _RailIndicator({
     required this.selected,
@@ -59,38 +62,37 @@ class _RailIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleMotionBuilder(
-      motion: kMotionSpatialFast,
+      motion: kMotionEffects,
       value: selected ? 1 : 0,
       active: !MediaQuery.disableAnimationsOf(context),
       builder: (context, t, child) {
-        final progress = t.clamp(0.0, 1.0);
+        final k = t.clamp(0.0, 1.0);
         return SizedBox(
-          width: 48,
+          width: 56,
           height: height,
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Positioned.fill(
-                child: Transform.scale(
-                  scaleX: t.clamp(0.0, 1.1),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer.withValues(
-                        alpha: progress,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+              // 胶囊指示器：从中心横向弹开
+              Transform.scale(
+                scaleX: t.clamp(0.0, 1.15),
+                child: Container(
+                  width: 52,
+                  height: height >= 48 ? 40 : 32,
+                  decoration: ShapeDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: k),
+                    shape: const StadiumBorder(),
                   ),
                 ),
               ),
               IconTheme(
                 data: IconThemeData(
                   color: Color.lerp(
-                    colorScheme.onSurfaceVariant,
-                    colorScheme.onSecondaryContainer,
-                    progress,
+                    colorScheme.onSurfaceVariant.withAlpha(190),
+                    colorScheme.onPrimaryContainer,
+                    k,
                   ),
-                  size: 24,
+                  size: 22,
                 ),
                 child: child!,
               ),
@@ -144,7 +146,7 @@ class AdaptiveNavigationRail extends StatelessWidget {
     final bottomDestinations = destinations.sublist(splitIndex);
 
     return ColoredBox(
-      color: backgroundColor ?? colorScheme.surfaceContainer,
+      color: backgroundColor ?? colorScheme.surface,
       child: SafeArea(
         child: SizedBox(
           width: 72,
@@ -272,11 +274,12 @@ class _NavigationRailItem extends StatelessWidget {
                     ? Duration.zero
                     : kAnimFast,
                 curve: kAnimCurve,
-                style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                  letterSpacing: 0.4,
                   color: selected
                       ? colorScheme.onSurface
-                      : colorScheme.onSurfaceVariant,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      : colorScheme.onSurfaceVariant.withAlpha(190),
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
                 child: Text(
                   label,
@@ -294,7 +297,7 @@ class _NavigationRailItem extends StatelessWidget {
     Widget item = TactilePress(
       baseColor: Colors.transparent,
       highlightSize: extended ? const Size(48, 36) : null,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: onTap,
       haptics: false,
       child: AnimatedSwitcher(
@@ -308,7 +311,7 @@ class _NavigationRailItem extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: extended ? 4 : 12,
+        horizontal: extended ? 4 : 8,
         vertical: extended ? _labeledItemVerticalPadding : 4,
       ),
       child: item,
@@ -334,10 +337,18 @@ class AdaptiveBottomNavigation extends StatelessWidget {
     final labelBehavior =
         NavigationBarTheme.of(context).labelBehavior ??
         NavigationDestinationLabelBehavior.alwaysShow;
-    return NavigationBarTheme(
-      data: NavigationBarTheme.of(context).copyWith(
-        iconTheme: const WidgetStatePropertyAll(IconThemeData(fill: 1.0)),
-      ),
+    final cs = Theme.of(context).colorScheme;
+    if (FolioLook.of(context).floatingBars) {
+      return FloatingGlassNav(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: onDestinationSelected,
+        destinations: destinations,
+      );
+    }
+    // 平铺底栏：顶边一道细线与内容分开，选中项落在胶囊指示器里
+    // （颜色、形状与字号见 app_theme 的 navigationBarTheme）。
+    return DecoratedBox(
+      decoration: BoxDecoration(border: Border(top: AppStroke.side(cs))),
       child: NavigationBar(
         selectedIndex: selectedIndex,
         onDestinationSelected: (index) {
@@ -361,6 +372,194 @@ class AdaptiveBottomNavigation extends StatelessWidget {
             tooltip: labelVisible ? '' : d.label,
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+/// 悬浮玻璃底栏：一枚胶囊浮在内容上方，选中项下面是一片会「流动」的
+/// 液态透镜——前沿用快弹簧、后沿用慢弹簧，切换时透镜先被拉长再收拢。
+class FloatingGlassNav extends StatefulWidget {
+  const FloatingGlassNav({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.destinations,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final List<AdaptiveDestination> destinations;
+
+  /// 胶囊本体高度；页面据此给列表留出底部空间。
+  static const double barHeight = 64;
+
+  @override
+  State<FloatingGlassNav> createState() => _FloatingGlassNavState();
+}
+
+class _FloatingGlassNavState extends State<FloatingGlassNav> {
+  static const double _itemWidth = 112;
+  static const double _inset = 6;
+  bool _movingRight = true;
+
+  @override
+  void didUpdateWidget(FloatingGlassNav old) {
+    super.didUpdateWidget(old);
+    if (old.selectedIndex != widget.selectedIndex) {
+      _movingRight = widget.selectedIndex > old.selectedIndex;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final reduce = MediaQuery.disableAnimationsOf(context);
+    final n = widget.destinations.length;
+    final i = widget.selectedIndex.clamp(0, n - 1);
+    final lead = kMotionSpatialFast;
+    const trail = kMotionSpatialSteady;
+
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 12),
+      child: Center(
+        heightFactor: 1,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: LiquidGlass(
+            padding: const EdgeInsets.all(_inset),
+            child: SizedBox(
+              width: _itemWidth * n,
+              height: FloatingGlassNav.barHeight - _inset * 2,
+              child: Stack(
+                children: [
+                  SingleMotionBuilder(
+                    motion: _movingRight ? trail : lead,
+                    value: i * _itemWidth,
+                    active: !reduce,
+                    builder: (context, left, _) => SingleMotionBuilder(
+                      motion: _movingRight ? lead : trail,
+                      value: (i + 1) * _itemWidth,
+                      active: !reduce,
+                      builder: (context, right, _) {
+                        final w = (right - left).clamp(24.0, _itemWidth * n);
+                        // 被拉长时略微压扁，像一滴液体
+                        final stretch = (w / _itemWidth - 1).clamp(0.0, 1.0);
+                        return Positioned(
+                          left: left,
+                          width: w,
+                          top: 4 * stretch,
+                          bottom: 4 * stretch,
+                          child: DecoratedBox(
+                            decoration: ShapeDecoration(
+                              shape: const StadiumBorder(),
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color.alphaBlend(
+                                    Colors.white.withValues(alpha: .22),
+                                    cs.primaryContainer,
+                                  ),
+                                  cs.primaryContainer,
+                                ],
+                              ),
+                              shadows: [
+                                BoxShadow(
+                                  color: cs.primary.withValues(alpha: .18),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      for (var k = 0; k < n; k++)
+                        _GlassNavItem(
+                          width: _itemWidth,
+                          destination: widget.destinations[k],
+                          selected: k == i,
+                          onTap: () {
+                            Haptics.soft();
+                            widget.onDestinationSelected(k);
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassNavItem extends StatelessWidget {
+  const _GlassNavItem({
+    required this.width,
+    required this.destination,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final double width;
+  final AdaptiveDestination destination;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final color = selected ? cs.onPrimaryContainer : cs.onSurfaceVariant;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: destination.label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: width,
+          height: double.infinity,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconTheme(
+                data: IconThemeData(color: color, size: 22),
+                child: _SelectedIconFill(
+                  selected: selected,
+                  child: selected ? destination.selectedIcon : destination.icon,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: AnimatedDefaultTextStyle(
+                  duration: kAnimFast,
+                  curve: kAnimCurve,
+                  style: theme.textTheme.labelLarge!.copyWith(
+                    color: color,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                  child: Text(
+                    destination.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/animation_constants.dart';
+import '../core/design_tokens.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -67,7 +69,7 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
         children: [
           DragToMoveArea(
             child: ColoredBox(
-              color: cs.surfaceContainerHighest,
+              color: cs.surface,
               child: AnimatedOpacity(
                 opacity: _focused ? 1.0 : 0.55,
                 duration: kAnimFast,
@@ -80,11 +82,20 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
                             ? WindowChrome._trafficLightInset
                             : 16,
                       ),
+                      // 刊名式字标：衬线、略收字距
                       child: Text(
                         'OtterPad',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontFamily: AppType.displayFamily(
+                                defaultTargetPlatform,
+                              ),
+                              fontFamilyFallback: AppType.displayFallbacks(
+                                defaultTargetPlatform,
+                              ),
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                            ),
                       ),
                     ),
                     const Spacer(),
@@ -129,16 +140,7 @@ class _WindowChromeState extends State<WindowChrome> with WindowListener {
               ),
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: cs.outlineVariant.withAlpha(80),
-            ),
-          ),
+          Positioned(left: 0, right: 0, bottom: 0, child: const Divider()),
         ],
       ),
     );

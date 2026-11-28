@@ -36,9 +36,7 @@ class ReadingHistoryPage extends ConsumerWidget {
         backgroundColor: colorScheme.surface,
         title: Text(
           context.l10n.readingHistory,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: theme.textTheme.titleLarge?.copyWith(),
         ),
         leading: IconButton(
           onPressed: () {
@@ -187,8 +185,6 @@ class ReadingHistoryPage extends ConsumerWidget {
     final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.clearReadingHistory),
         content: Text(context.l10n.clearReadingHistoryConfirm),
@@ -258,12 +254,7 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Container(
-              height: 1,
-              color: cs.outlineVariant.withAlpha(120),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: cs.outlineVariant)),
           const SizedBox(width: 12),
           Text(
             '$count',

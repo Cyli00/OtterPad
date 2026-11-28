@@ -184,17 +184,7 @@ class _ImageGenerationSettingsSectionState
     return SizedBox(
       width: double.infinity,
       child: SegmentedButton<T>(
-        style: SegmentedButton.styleFrom(
-          backgroundColor: cs.surface,
-          selectedBackgroundColor: cs.primaryContainer,
-          foregroundColor: cs.onSurfaceVariant,
-          selectedForegroundColor: cs.onPrimaryContainer,
-          side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          textStyle: theme.textTheme.bodyMedium,
-        ),
+        style: SegmentedButton.styleFrom(textStyle: theme.textTheme.bodyMedium),
         showSelectedIcon: false,
         segments: values
             .map(

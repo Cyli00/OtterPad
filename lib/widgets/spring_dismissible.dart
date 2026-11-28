@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../core/animation_constants.dart';
 import '../services/haptics.dart';
+import '../core/design_tokens.dart';
 
 /// 向左滑动超过 [threshold] 比例（或快速猛划）则删除；否则以弹簧动画回弹。
 ///
@@ -140,7 +141,7 @@ class SpringDismissDeleteBackground extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: cs.errorContainer,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       alignment: Alignment.centerRight,
       padding: const EdgeInsets.only(right: 20),

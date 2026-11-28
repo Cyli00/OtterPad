@@ -12,6 +12,7 @@ import '../../providers/favorites_provider.dart';
 import '../../services/snackbar_service.dart';
 import '../../core/l10n.dart';
 import '../library/widgets/doc_list_card.dart';
+import '../../core/design_tokens.dart';
 
 /// 收藏夹"添加文献"页面。
 ///
@@ -234,7 +235,7 @@ class _SearchField extends StatelessWidget {
           fillColor: cs.surfaceContainerHighest,
           contentPadding: const EdgeInsets.symmetric(vertical: 10),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             borderSide: BorderSide.none,
           ),
         ),
@@ -252,7 +253,7 @@ class _IncludedBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -291,7 +292,7 @@ class _BottomActions extends StatelessWidget {
     return Material(
       color: cs.surfaceContainerHigh,
       elevation: 6,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(

@@ -6,6 +6,7 @@ import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../data/models/chat/chat_activity.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 String _toolDetail(String value) {
   String describe(Object? data) {
@@ -67,8 +68,8 @@ class _ChatActivityViewState extends State<ChatActivityView> {
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

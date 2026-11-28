@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/animation_constants.dart';
 import '../core/elevation.dart';
+import '../core/design_tokens.dart';
 
 Future<T?> showAppDialog<T>({
   required BuildContext context,
@@ -17,7 +18,8 @@ Future<T?> showAppDialog<T>({
     barrierLabel:
         barrierLabel ??
         MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black54,
+    // Folio：浅一些的墨色遮罩 + 轻模糊，纸面仍隐约可见
+    barrierColor: Colors.black.withAlpha(82),
     transitionDuration: kAnimSlow,
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       // scale 用 easeOutBack 轻回弹，fade 保持标准缓出
@@ -50,7 +52,7 @@ Future<T?> showAppDialog<T>({
       return Center(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppRadius.lgAll,
             boxShadow: AppShadows.dialog,
           ),
           child: builder(context),

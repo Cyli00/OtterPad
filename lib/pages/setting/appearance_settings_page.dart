@@ -15,6 +15,8 @@ import '../../widgets/tactile_press.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'setting_group.dart';
 import 'app_font_settings.dart';
+import 'theme_style_picker.dart';
+import '../../core/design_tokens.dart';
 
 class AppearanceSettingsPage extends ConsumerWidget {
   const AppearanceSettingsPage({super.key, this.embedded = false});
@@ -30,15 +32,13 @@ class AppearanceSettingsPage extends ConsumerWidget {
     final settings = ref.watch(readerSettingsProvider);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: embedded ? Colors.transparent : cs.surface,
       appBar: embedded
           ? null
           : AppBar(
               title: Text(
                 l10n.appearanceSettings,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,
@@ -48,13 +48,10 @@ class AppearanceSettingsPage extends ConsumerWidget {
         children: [
           // ── 主题模式 ──
           Padding(
-            padding: const EdgeInsets.only(left: 16, bottom: 12, top: 24),
+            padding: const EdgeInsets.only(left: 4, bottom: 12, top: 32),
             child: Text(
-              l10n.themeMode,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: cs.primary,
-                fontWeight: FontWeight.bold,
-              ),
+              eyebrowText(l10n.themeMode),
+              style: AppType.eyebrow(context),
             ),
           ),
           Padding(
@@ -85,16 +82,46 @@ class AppearanceSettingsPage extends ConsumerWidget {
                   final mode = set.first;
                   ref.read(themeProvider.notifier).setThemeMode(mode);
                 },
-                style: SegmentedButton.styleFrom(
-                  backgroundColor: cs.surface,
-                  selectedBackgroundColor: cs.primaryContainer,
-                  side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
               ),
             ),
+          ),
+
+          // ── 主题风格 ──
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 12, top: 32),
+            child: Text(
+              eyebrowText(l10n.themeStyle),
+              style: AppType.eyebrow(context),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 0),
+            child: ThemeStylePicker(),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+            child: Text(
+              l10n.themeStyleHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            title: Text(
+              l10n.ambientBackdrop,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(l10n.ambientBackdropDesc),
+            value: themeState.ambient,
+            onChanged: (v) {
+              Haptics.soft();
+              ref.read(themeProvider.notifier).setAmbient(v);
+            },
           ),
 
           // ── 主题色彩 ──
@@ -146,16 +173,6 @@ class AppearanceSettingsPage extends ConsumerWidget {
                             .read(readerSettingsProvider.notifier)
                             .setDefaultReadingMode(set.first);
                       },
-                      style: SegmentedButton.styleFrom(
-                        backgroundColor: cs.surface,
-                        selectedBackgroundColor: cs.primaryContainer,
-                        side: BorderSide(
-                          color: cs.outlineVariant.withAlpha(100),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -184,7 +201,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                         ),
                         decoration: BoxDecoration(
                           color: cs.primaryContainer,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                         child: Text(
                           _scaleLabel(
@@ -477,7 +494,7 @@ class _AppLanguagePicker extends ConsumerWidget {
               verticalOffset: 16,
               decoration: BoxDecoration(
                 color: cs.inverseSurface,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 12),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -495,15 +512,15 @@ class _AppLanguagePicker extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         TactilePress(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           onTap: () => _showSheet(context, ref, current),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outlineVariant.withAlpha(100)),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: cs.outlineVariant),
             ),
             child: Row(
               children: [
@@ -555,10 +572,9 @@ class _AppLanguagePicker extends ConsumerWidget {
           child: Container(
             constraints: BoxConstraints(maxHeight: maxH),
             decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
+              color: cs.surfaceContainerLowest,
+              borderRadius: AppRadius.sheetTop,
+              border: Border(top: AppStroke.side(cs)),
               boxShadow: AppShadows.sheet,
             ),
             child: Column(
@@ -567,10 +583,10 @@ class _AppLanguagePicker extends ConsumerWidget {
                 Container(
                   margin: const EdgeInsets.only(top: 12),
                   width: 32,
-                  height: 4,
+                  height: 3,
                   decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withAlpha(80),
-                    borderRadius: BorderRadius.circular(2),
+                    color: cs.outline,
+                    borderRadius: BorderRadius.circular(AppRadius.hairline),
                   ),
                 ),
                 const SizedBox(height: 8),

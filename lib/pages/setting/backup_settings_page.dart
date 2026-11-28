@@ -32,6 +32,7 @@ import 'backup_credentials_dialogs.dart';
 import 'setting_group.dart';
 import 'zotero_local_import_dialog.dart';
 import '../../utils/desktop.dart';
+import '../../core/design_tokens.dart';
 
 class BackupSettingsPage extends ConsumerStatefulWidget {
   const BackupSettingsPage({
@@ -98,15 +99,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
     _ensurePingFuture(remoteType, webDav, s3);
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: widget.embedded ? Colors.transparent : cs.surface,
       appBar: widget.embedded
           ? null
           : AppBar(
               title: Text(
                 context.l10n.dataManagement,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,
@@ -161,16 +160,6 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                                     _pingCacheKey = '';
                                   });
                                 },
-                                style: SegmentedButton.styleFrom(
-                                  backgroundColor: cs.surface,
-                                  selectedBackgroundColor: cs.primaryContainer,
-                                  side: BorderSide(
-                                    color: cs.outlineVariant.withAlpha(100),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
                               ),
                             ),
                           ],
@@ -279,7 +268,7 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                       ),
                       decoration: BoxDecoration(
                         color: cs.surface,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
                       ),
                       child: _buildBusyIndicator(theme),
                     ),
@@ -457,17 +446,10 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
       context: context,
       builder: (ctx) {
         final theme = Theme.of(ctx);
-        final cs = theme.colorScheme;
         return AlertDialog(
-          backgroundColor: cs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
           title: Text(
             ctx.l10n.resetZoteroSync,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: theme.textTheme.titleLarge?.copyWith(),
           ),
           content: Text(
             ctx.l10n.resetZoteroConfirm,
@@ -510,13 +492,13 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.smAll,
+              border: Border.all(color: AppStroke.rule(cs)),
             ),
-            child: Icon(icon, color: cs.primary, size: 22),
+            child: Icon(icon, color: cs.onSurface, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -951,14 +933,6 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                 Haptics.soft();
                 notifier.setInterval(value.first);
               },
-              style: SegmentedButton.styleFrom(
-                backgroundColor: cs.surface,
-                selectedBackgroundColor: cs.primaryContainer,
-                side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
             ),
           ),
           if (auto.interval != AutoBackupInterval.off) ...[
@@ -982,14 +956,6 @@ class _BackupSettingsPageState extends ConsumerState<BackupSettingsPage> {
                   Haptics.soft();
                   notifier.setScope(value.first);
                 },
-                style: SegmentedButton.styleFrom(
-                  backgroundColor: cs.surface,
-                  selectedBackgroundColor: cs.primaryContainer,
-                  side: BorderSide(color: cs.outlineVariant.withAlpha(100)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -1192,7 +1158,7 @@ class _ActionTile extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: enabled ? cs.primaryContainer : cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(
               icon,
@@ -1291,7 +1257,9 @@ class _RemoteDialogScaffold extends StatelessWidget {
     return Dialog(
       backgroundColor: cs.surfaceContainerLow,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 540),
         child: Padding(
@@ -1301,12 +1269,7 @@ class _RemoteDialogScaffold extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text(title, style: theme.textTheme.titleLarge?.copyWith()),
                 const SizedBox(height: 20),
                 ...children,
                 const SizedBox(height: 12),

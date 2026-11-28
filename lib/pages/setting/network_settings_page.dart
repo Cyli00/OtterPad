@@ -26,15 +26,13 @@ class NetworkSettingsPage extends StatelessWidget {
     final cs = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: embedded ? Colors.transparent : cs.surface,
       appBar: embedded
           ? null
           : AppBar(
               title: Text(
                 context.l10n.networkSettings,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(),
               ),
               centerTitle: false,
               backgroundColor: cs.surface,

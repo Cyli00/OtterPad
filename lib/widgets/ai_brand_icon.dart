@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../core/design_tokens.dart';
 
 const _brands = <String, List<String>>{
   'claude-color': ['claude'],
@@ -80,7 +81,7 @@ class AiBrandIcon extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: cs.primaryContainer,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         child: Text(
           label.isEmpty ? '?' : label.characters.first.toUpperCase(),

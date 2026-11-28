@@ -7,6 +7,7 @@ import '../data/models/ocr/doc_extract_config.dart';
 import '../router/app_router.dart';
 import '../router/app_routes.dart';
 import '../widgets/app_dialog.dart';
+import '../core/design_tokens.dart';
 
 class AiSettingsPrompt {
   AiSettingsPrompt._();
@@ -139,8 +140,11 @@ class AiSettingsPrompt {
           480.0,
         );
         return Material(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          color: cs.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.lgAll,
+            side: AppStroke.side(cs),
+          ),
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: width,
@@ -151,9 +155,7 @@ class AiSettingsPrompt {
               children: [
                 Text(
                   l10n.configurationRequired,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(),
                 ),
                 const SizedBox(height: 12),
                 Text(

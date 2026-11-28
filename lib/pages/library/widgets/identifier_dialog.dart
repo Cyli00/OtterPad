@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/l10n.dart';
 import '../../../services/haptics.dart';
 import '../../../widgets/app_dialog.dart';
+import '../../../core/design_tokens.dart';
 
 /// 通过标识符添加条目对话框
 /// 返回用户输入的标识符字符串，取消返回 null
@@ -60,9 +61,9 @@ class _IdentifierContentState extends State<_IdentifierContent> {
         width: dialogWidth,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(28),
-
+          color: colorScheme.surfaceContainerLowest,
+          borderRadius: AppRadius.lgAll,
+          border: Border.all(color: AppStroke.rule(colorScheme)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -80,7 +81,6 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                   child: Text(
                     context.l10n.addByIdentifierTitle,
                     style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
                     ),
                   ),
@@ -95,8 +95,7 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                     color: colorScheme.onSurfaceVariant,
                   ),
                   style: IconButton.styleFrom(
-                    backgroundColor:
-                        colorScheme.surfaceContainerHighest,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
                     shape: const CircleBorder(),
                   ),
                 ),
@@ -122,15 +121,12 @@ class _IdentifierContentState extends State<_IdentifierContent> {
                 filled: true,
                 fillColor: colorScheme.surfaceContainerLow,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: colorScheme.primary,
-                    width: 2,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  borderSide: BorderSide(color: colorScheme.primary, width: 2),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,

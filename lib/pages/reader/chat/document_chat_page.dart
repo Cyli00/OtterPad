@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,6 +29,10 @@ import '../../../services/web_search_service.dart';
 import '../../../utils/desktop.dart';
 import '../../../widgets/app_dialog.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/folio_look.dart';
+import '../../../widgets/ai_orb.dart';
+import '../../../widgets/glass/liquid_glass.dart';
+import '../../../widgets/staggered_entrance.dart';
 import 'chat_markdown.dart';
 import 'chat_activity_view.dart';
 import 'chat_figure_attachment.dart';
@@ -35,6 +40,7 @@ import 'chat_model_picker.dart';
 import 'chat_user_quote.dart';
 import '../widgets/figure_viewer.dart';
 import '../../../data/models/chat/chat_activity.dart';
+import '../../../core/design_tokens.dart';
 
 /// 定位原文：阅读器滚动后展示「返回问 AI」引导。
 typedef LocateQuoteInReader =
@@ -59,6 +65,10 @@ class DocumentChatPageArgs {
   /// 每次划词/Figure 问 AI 递增；同值引用再入也要刷新 composer。
   final int quoteEpoch;
 
+  /// 划词意图条（解释 / 说人话 / 举例 / 挑毛病）带进来的问题：
+  /// 进入后连同引用自动发送，不用再打字。
+  final String? initialPrompt;
+
   const DocumentChatPageArgs({
     required this.document,
     this.initialQuote,
@@ -67,6 +77,7 @@ class DocumentChatPageArgs {
     this.onLocateQuote,
     this.preserveSession = false,
     this.quoteEpoch = 0,
+    this.initialPrompt,
   });
 }
 
@@ -128,6 +139,16 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
 
   String get _documentId => widget.args.document.id;
 
+  /// 悬浮输入框的实测高度：消息列表底部留出同样的空间。
+  double _composerHeight = 0;
+
+  /// 入场动画只给「打开会话之后」新出现的消息：切会话时记下当时的条数。
+  String? _entranceSession;
+  int _entranceFrom = 0;
+
+  /// 流式回答落定成消息时不再重放入场（它已经在屏幕上了）。
+  int? _streamedIndex;
+
   @override
   void initState() {
     super.initState();
@@ -145,6 +166,24 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         }
       });
     }
+    _scheduleAutoSend(widget.args.initialPrompt);
+  }
+
+  /// 意图条进入：问题直接发出去（排在新会话初始化之后）。
+  void _scheduleAutoSend(String? prompt) {
+    final text = prompt?.trim();
+    if (text == null || text.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _inputController.text = text;
+      _send();
+    });
+  }
+
+  /// 空状态的起手问题卡：点一下即发送。
+  void _sendStarter(String text) {
+    _inputController.text = text;
+    _send();
   }
 
   @override
@@ -158,6 +197,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       _figureImagePath = widget.args.figureImagePath;
       _quoteAnchor = widget.args.quoteAnchor;
     });
+    _scheduleAutoSend(widget.args.initialPrompt);
   }
 
   @override
@@ -331,8 +371,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           480.0,
         );
         return Material(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
+          color: cs.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.lgAll,
+            side: AppStroke.side(cs),
+          ),
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: width,
@@ -343,9 +386,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
               children: [
                 Text(
                   l10n.mimoSearchPluginTitle,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -440,8 +481,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             return Material(
-              color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(28),
+              color: cs.surfaceContainerLowest,
+              shape: RoundedRectangleBorder(
+                borderRadius: AppRadius.lgAll,
+                side: AppStroke.side(cs),
+              ),
               clipBehavior: Clip.antiAlias,
               child: Container(
                 width: width,
@@ -452,9 +496,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                   children: [
                     Text(
                       l10n.newChat,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.titleLarge?.copyWith(),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -589,6 +631,14 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
 
     final session = chat.activeSession;
     final messages = session?.messages ?? const <ChatMessage>[];
+    if (session?.id != _entranceSession) {
+      _entranceSession = session?.id;
+      _entranceFrom = messages.length;
+      _streamedIndex = null;
+    }
+    if (chat.sending && (chat.streamingText?.isNotEmpty ?? false)) {
+      _streamedIndex = messages.length;
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -613,15 +663,25 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                     },
                   )
                 : const BackButton(),
-            title: Text(
-              session?.title ?? l10n.askAi,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AiOrb(size: 18, thinking: chat.sending),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    session?.title ?? l10n.askAi,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
             centerTitle: true,
+            backgroundColor: Colors.transparent,
             actions: [
               IconButton(
                 icon: const Icon(Symbols.history_rounded, size: 22),
@@ -642,50 +702,228 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
               const SizedBox(width: 8),
             ],
           ),
-          body: Column(
-            children: [
-              Expanded(
-                child: messages.isEmpty && !chat.sending
-                    ? _buildEmptyState(theme, cs)
-                    : _buildMessageList(
-                        theme,
-                        cs,
-                        messages,
-                        chat.sending,
-                        chat.streamingText,
-                      ),
-              ),
-              _buildComposer(theme, cs, chat.sending),
-            ],
+          extendBodyBehindAppBar: true,
+          // extendBodyBehindAppBar 时 Scaffold 把栏高并进 body 的 padding.top
+          body: Builder(
+            builder: (context) => _buildBody(
+              theme,
+              cs,
+              chat,
+              messages,
+              MediaQuery.paddingOf(context).top,
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme, ColorScheme cs) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Symbols.auto_awesome_rounded,
-            size: 40,
-            color: cs.onSurfaceVariant.withAlpha(120),
-          ),
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48),
-            child: Text(
-              context.l10n.chatEmptyHint,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurfaceVariant,
+  /// 页面主体：顶部一层主题色柔光；悬浮玻璃打开时输入框浮在消息上方，
+  /// 关闭时输入框与消息上下排列。
+  Widget _buildBody(
+    ThemeData theme,
+    ColorScheme cs,
+    DocumentChatState chat,
+    List<ChatMessage> messages,
+    double topInset,
+  ) {
+    final floating = FolioLook.of(context).floatingBars;
+    final content = messages.isEmpty && !chat.sending
+        ? _buildEmptyState(theme, cs)
+        : _buildMessageList(
+            theme,
+            cs,
+            messages,
+            chat.sending,
+            chat.streamingText,
+          );
+    final composer = _buildComposer(theme, cs, chat.sending);
+
+    return Stack(
+      children: [
+        // 顶部极光：发送中更亮一些
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          height: topInset + 220,
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: chat.sending ? 1 : .7,
+              duration: kAnim,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, -1.4),
+                    radius: 1.3,
+                    colors: [
+                      cs.primary.withValues(alpha: .16),
+                      cs.tertiary.withValues(alpha: .06),
+                      cs.surface.withValues(alpha: 0),
+                    ],
+                    stops: const [0, .45, 1],
+                  ),
+                ),
               ),
-              textAlign: TextAlign.center,
             ),
           ),
-        ],
-      ),
+        ),
+        Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: floating
+                ? Stack(
+                    children: [
+                      Positioned.fill(child: content),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _SizeReporter(
+                          onSize: (size) {
+                            if ((size.height - _composerHeight).abs() > .5) {
+                              setState(() => _composerHeight = size.height);
+                            }
+                          },
+                          child: composer,
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      Expanded(child: content),
+                      composer,
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 悬浮输入框盖住的高度（平铺时为 0）。
+  double get _composerInset =>
+      FolioLook.of(context).floatingBars ? _composerHeight : 0;
+
+  Widget _buildEmptyState(ThemeData theme, ColorScheme cs) {
+    final l10n = context.l10n;
+    final hasQuote = _quote != null || _figureImagePath != null;
+    // 带着划词进来：给「对这段话」的意图；否则给「对这篇文献」的起手问题
+    final starters = hasQuote
+        ? [
+            (
+              Symbols.lightbulb_rounded,
+              l10n.aiPromptExplain,
+              l10n.aiPromptExplain,
+            ),
+            (
+              Symbols.chat_bubble_rounded,
+              l10n.aiPromptSimplify,
+              l10n.aiPromptSimplify,
+            ),
+            (
+              Symbols.category_rounded,
+              l10n.aiPromptExample,
+              l10n.aiPromptExample,
+            ),
+            (
+              Symbols.balance_rounded,
+              l10n.aiPromptChallenge,
+              l10n.aiPromptChallenge,
+            ),
+          ]
+        : [
+            (
+              Symbols.summarize_rounded,
+              l10n.chatStarterSummary,
+              l10n.chatStarterSummary,
+            ),
+            (
+              Symbols.science_rounded,
+              l10n.chatStarterMethod,
+              l10n.chatStarterMethod,
+            ),
+            (
+              Symbols.report_rounded,
+              l10n.chatStarterLimits,
+              l10n.chatStarterLimits,
+            ),
+            (
+              Symbols.forum_rounded,
+              l10n.chatStarterPlain,
+              l10n.chatStarterPlain,
+            ),
+          ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth >= 520;
+        final cardWidth = twoColumns
+            ? (math.min(constraints.maxWidth, 640) - 48 - 12) / 2
+            : double.infinity;
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + _composerInset),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: math.max(
+                0,
+                constraints.maxHeight - 48 - _composerInset,
+              ),
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 592),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AiOrb(size: 64),
+                    const SizedBox(height: 24),
+                    Text(
+                      l10n.chatEmptyTitle,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.args.document.title,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (var i = 0; i < starters.length; i++)
+                          SizedBox(
+                            width: cardWidth,
+                            child: StaggeredEntrance(
+                              index: i + 1,
+                              child: _StarterCard(
+                                icon: starters[i].$1,
+                                label: starters[i].$2,
+                                onTap: () => _sendStarter(starters[i].$3),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -712,43 +950,62 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           if (notification.depth == 0) _scrollToLatest();
           return false;
         },
-        child: ListView.builder(
-          key: ValueKey(
-            ref.watch(documentChatProvider(_documentId)).activeSessionId,
-          ),
-          controller: _messageScroll,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          itemCount: messages.length + (sending ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (index == messages.length) {
-              if ((streamingText == null || streamingText.isEmpty) &&
-                  activities.isEmpty) {
-                return _buildPendingBubble(cs);
-              }
-              return Padding(
-                key: const ValueKey('streaming'),
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: _buildAssistantBubble(
-                  theme,
-                  cs,
-                  streamingText ?? '',
-                  activities: activities,
-                ),
-              );
-            }
-            final msg = messages[index];
-            return Padding(
-              key: ValueKey(msg.id),
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: msg.isUser
-                  ? _buildUserBubble(theme, cs, msg, index)
-                  : _buildAssistantBubble(
+        child: LayoutBuilder(
+          builder: (context, box) {
+            // 宽屏上把对话收在阅读宽度内居中，和输入框对齐
+            final side = math.max(16.0, (box.maxWidth - _readingWidth) / 2);
+            return ListView.builder(
+              key: ValueKey(
+                ref.watch(documentChatProvider(_documentId)).activeSessionId,
+              ),
+              controller: _messageScroll,
+              padding: EdgeInsets.fromLTRB(side, 12, side, 16 + _composerInset),
+              itemCount: messages.length + (sending ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == messages.length) {
+                  if ((streamingText == null || streamingText.isEmpty) &&
+                      activities.isEmpty) {
+                    return _MessageEntrance(
+                      key: const ValueKey('pending'),
+                      child: _buildPendingBubble(theme, cs),
+                    );
+                  }
+                  return Padding(
+                    key: const ValueKey('streaming'),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: _buildAssistantBubble(
                       theme,
                       cs,
-                      msg.content,
-                      messageIndex: index,
-                      activities: msg.activities,
+                      streamingText ?? '',
+                      activities: activities,
+                      thinking: true,
                     ),
+                  );
+                }
+                final msg = messages[index];
+                final animate =
+                    index >= _entranceFrom &&
+                    !(index == _streamedIndex && !msg.isUser);
+                final bubble = Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: msg.isUser
+                      ? _buildUserBubble(theme, cs, msg, index)
+                      : _buildAssistantBubble(
+                          theme,
+                          cs,
+                          msg.content,
+                          messageIndex: index,
+                          activities: msg.activities,
+                        ),
+                );
+                return animate
+                    ? _MessageEntrance(
+                        key: ValueKey(msg.id),
+                        fromRight: msg.isUser,
+                        child: bubble,
+                      )
+                    : KeyedSubtree(key: ValueKey(msg.id), child: bubble);
+              },
             );
           },
         ),
@@ -756,17 +1013,19 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     );
   }
 
-  Widget _buildPendingBubble(ColorScheme cs) {
+  /// 等待首个字：光球加速呼吸 + 一行流光的「正在思考」。
+  Widget _buildPendingBubble(ThemeData theme, ColorScheme cs) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: cs.onSurfaceVariant.withAlpha(140),
+          const AiOrb(size: 22, thinking: true),
+          const SizedBox(width: 12),
+          ShimmerText(
+            context.l10n.chatThinking,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: .2,
             ),
           ),
         ],
@@ -790,7 +1049,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         position.dx,
         position.dy,
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
       color: cs.surfaceContainerHigh,
       items: [
         PopupMenuItem(
@@ -849,8 +1110,11 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     showAppDialog(
       context: context,
       builder: (_) => Material(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(28),
+        color: cs.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.lgAll,
+          side: AppStroke.side(cs),
+        ),
         clipBehavior: Clip.antiAlias,
         child: Container(
           width: (MediaQuery.of(context).size.width * 0.85).clamp(300.0, 480.0),
@@ -902,13 +1166,30 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
               msg,
             );
           },
+          // 用户气泡：强调色淡彩、右下角收成小圆角，像从右侧「说出来」
           child: Container(
-            constraints: BoxConstraints(maxWidth: constraints.maxWidth * .9),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainer,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outlineVariant.withAlpha(80)),
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth * .86),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: ShapeDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  cs.primaryContainer,
+                  Color.alphaBlend(
+                    cs.tertiaryContainer.withValues(alpha: .45),
+                    cs.primaryContainer,
+                  ),
+                ],
+              ),
+              shape: const RoundedSuperellipseBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(AppRadius.lg),
+                  topRight: Radius.circular(AppRadius.lg),
+                  bottomLeft: Radius.circular(AppRadius.lg),
+                  bottomRight: Radius.circular(AppRadius.xs - 2),
+                ),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -950,11 +1231,17 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     String content, {
     int? messageIndex,
     List<ChatActivity> activities = const [],
+    bool thinking = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        // 回答以一颗光球开头；生成中它在转
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: AiOrb(size: 20, thinking: thinking, glow: thinking),
+        ),
         ChatActivityView(activities: activities, onToggle: _pauseOutputFollow),
         if (content.isNotEmpty) ChatMarkdown(data: content),
         if (messageIndex != null)
@@ -1093,36 +1380,18 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
     final sendSize = isDesktopOs ? 36.0 : 40.0;
     final sendButton = ValueListenableBuilder<TextEditingValue>(
       valueListenable: _inputController,
-      builder: (context, input, _) => SizedBox.square(
+      builder: (context, input, _) => _SendOrb(
         key: const ValueKey('chat-send-button'),
-        dimension: sendSize,
-        child: IconButton.filled(
-          icon: Icon(
-            sending ? Symbols.stop_rounded : Symbols.arrow_upward_rounded,
-            size: 20,
-          ),
-          tooltip: sending ? l10n.cancel : l10n.chatSend,
-          padding: EdgeInsets.zero,
-          constraints: BoxConstraints.tight(Size.square(sendSize)),
-          style: IconButton.styleFrom(
-            minimumSize: Size.square(sendSize),
-            maximumSize: Size.square(sendSize),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            backgroundColor: sending ? cs.errorContainer : null,
-            foregroundColor: sending ? cs.onErrorContainer : null,
-          ),
-          onPressed: sending
-              ? () {
-                  Haptics.soft();
-                  ref.read(documentChatProvider(_documentId).notifier).cancel();
-                }
-              : input.text.trim().isEmpty
-              ? null
-              : _send,
-        ),
+        size: sendSize,
+        sending: sending,
+        enabled: sending || input.text.trim().isNotEmpty,
+        tooltip: sending ? l10n.cancel : l10n.chatSend,
+        onPressed: sending
+            ? () {
+                Haptics.soft();
+                ref.read(documentChatProvider(_documentId).notifier).cancel();
+              }
+            : _send,
       ),
     );
 
@@ -1138,13 +1407,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
           ),
           const SizedBox(height: 8),
         ],
-        Container(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: cs.outlineVariant.withAlpha(100)),
-          ),
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+        _composerShell(
+          cs: cs,
+          sending: sending,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1185,9 +1450,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                     horizontal: 12,
                     vertical: 8,
                   ),
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(10),
+                    shape: AppShape.sm(),
                   ),
                   child: Row(
                     children: [
@@ -1224,6 +1489,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                 textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
                   hintText: l10n.chatInputHint,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -1250,23 +1518,52 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       ],
     );
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(
-          top: BorderSide(color: cs.outlineVariant.withAlpha(80), width: 0.5),
+    // 输入框是一枚浮起的大圆角胶囊：悬浮玻璃打开时是玻璃，关闭时是实色；
+    // 宽屏上收在阅读宽度内居中。
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: embedded
+            ? const EdgeInsets.fromLTRB(10, 4, 10, 10)
+            : const EdgeInsets.fromLTRB(14, 4, 14, 14),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _readingWidth),
+            child: inner,
+          ),
         ),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: embedded
-              ? const EdgeInsets.fromLTRB(8, 8, 8, 8)
-              : const EdgeInsets.fromLTRB(16, 10, 16, 10),
-          child: inner,
-        ),
-      ),
+    );
+  }
+
+  static const double _composerRadius = AppRadius.lg;
+
+  /// 宽屏上对话与输入框的最大宽度。
+  static const double _readingWidth = 760;
+
+  Widget _composerShell({
+    required ColorScheme cs,
+    required bool sending,
+    required Widget child,
+  }) {
+    const padding = EdgeInsets.fromLTRB(10, 6, 8, 8);
+    final body = FolioLook.of(context).floatingBars
+        ? LiquidGlass(radius: _composerRadius, padding: padding, child: child)
+        : DecoratedBox(
+            decoration: ShapeDecoration(
+              color: cs.surfaceContainerLow,
+              shape: AppShape.of(_composerRadius, side: AppStroke.side(cs)),
+              shadows: AppShadows.bar,
+            ),
+            child: Padding(padding: padding, child: child),
+          );
+    // 发送中：一道极光沿输入框边缘流动
+    return AuroraRing(
+      active: sending,
+      radius: _composerRadius,
+      width: 2,
+      child: body,
     );
   }
 
@@ -1313,7 +1610,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
         backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerHigh),
         elevation: const WidgetStatePropertyAll(3),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
         ),
       ),
       builder: (context, controller, _) => button(() {
@@ -1349,8 +1648,9 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
       builder: (sheetContext) {
         return Container(
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(cs)),
             boxShadow: AppShadows.sheet,
           ),
           padding: EdgeInsets.only(
@@ -1454,9 +1754,7 @@ class _DocumentChatPageState extends ConsumerState<DocumentChatPage> {
                   Expanded(
                     child: Text(
                       l10n.chatHistory,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.titleLarge?.copyWith(),
                     ),
                   ),
                 ],
@@ -1563,7 +1861,7 @@ class _SessionCard extends StatelessWidget {
       duration: kAnimFast,
       curve: kAnimCurve,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: selected ? cs.primary.withAlpha(160) : Colors.transparent,
           width: 2,
@@ -1572,7 +1870,7 @@ class _SessionCard extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         pressedScale: 0.98,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 8, 6),
@@ -1647,7 +1945,7 @@ class _QuoteCardState extends State<_QuoteCard> {
       child: TactilePress(
         onTap: () => setState(() => _expanded = !_expanded),
         baseColor: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
           child: IntrinsicHeight(
@@ -1738,10 +2036,275 @@ class _BubbleAction extends StatelessWidget {
       child: TactilePress(
         onTap: onTap,
         baseColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         padding: const EdgeInsets.all(6),
         child: Icon(icon, size: 16, color: cs.onSurfaceVariant.withAlpha(160)),
       ),
     );
+  }
+}
+
+/// 空状态里的起手问题卡：图标落在强调色淡彩圆里，右侧一枚斜箭头。
+class _StarterCard extends StatelessWidget {
+  const _StarterCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: TactilePress(
+        onTap: () {
+          Haptics.soft();
+          onTap();
+        },
+        baseColor: cs.surfaceContainerLow.withValues(alpha: .8),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: DecoratedBox(
+          decoration: ShapeDecoration(shape: AppShape.md(AppStroke.side(cs))),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [cs.primaryContainer, cs.tertiaryContainer],
+                    ),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: cs.onPrimaryContainer,
+                    fill: 1,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Symbols.north_east_rounded,
+                  size: 16,
+                  color: cs.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 发送键：一颗圆形渐变按钮；可发送时亮起并带一圈主题色光晕，
+/// 发送中变成停止键。
+class _SendOrb extends StatelessWidget {
+  const _SendOrb({
+    super.key,
+    required this.size,
+    required this.sending,
+    required this.enabled,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final double size;
+  final bool sending;
+  final bool enabled;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final live = enabled && !sending;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: tooltip,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: tooltip,
+        child: GestureDetector(
+          onTap: enabled ? onPressed : null,
+          child: AnimatedScale(
+            scale: live ? 1 : .92,
+            duration: kAnimFast,
+            curve: Curves.easeOutBack,
+            child: AnimatedContainer(
+              duration: kAnimFast,
+              curve: kAnimCurve,
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: sending
+                    ? cs.errorContainer
+                    : live
+                    ? null
+                    : cs.surfaceContainerHighest,
+                gradient: live
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [cs.primary, cs.tertiary],
+                      )
+                    : null,
+                boxShadow: live
+                    ? [
+                        BoxShadow(
+                          color: cs.primary.withValues(alpha: .35),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: AnimatedSwitcher(
+                duration: kAnimFast,
+                transitionBuilder: (child, a) => RotationTransition(
+                  turns: Tween(begin: -.25, end: 0.0).animate(a),
+                  child: FadeTransition(opacity: a, child: child),
+                ),
+                child: Icon(
+                  sending ? Symbols.stop_rounded : Symbols.arrow_upward_rounded,
+                  key: ValueKey(sending),
+                  size: 20,
+                  weight: 600,
+                  fill: 1,
+                  color: sending
+                      ? cs.onErrorContainer
+                      : live
+                      ? cs.onPrimary
+                      : cs.onSurfaceVariant.withValues(alpha: .6),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 新消息入场：弹簧把气泡从下方（用户消息从右下）托上来，同时淡入。
+class _MessageEntrance extends StatefulWidget {
+  const _MessageEntrance({
+    super.key,
+    required this.child,
+    this.fromRight = false,
+  });
+
+  final Widget child;
+  final bool fromRight;
+
+  @override
+  State<_MessageEntrance> createState() => _MessageEntranceState();
+}
+
+class _MessageEntranceState extends State<_MessageEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController.unbounded(
+    vsync: this,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _c.animateWith(
+      SpringSimulation(
+        const SpringDescription(mass: 1, stiffness: 420, damping: 28),
+        0,
+        1,
+        0,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final t = _c.value;
+        return Opacity(
+          opacity: t.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(widget.fromRight ? 18 * (1 - t) : 0, 22 * (1 - t)),
+            child: Transform.scale(
+              scale: .94 + .06 * t,
+              alignment: widget.fromRight
+                  ? Alignment.bottomRight
+                  : Alignment.bottomLeft,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// 把子组件布局后的尺寸报给父级（用于悬浮输入框给列表留白）。
+class _SizeReporter extends SingleChildRenderObjectWidget {
+  const _SizeReporter({required this.onSize, super.child});
+
+  final ValueChanged<Size> onSize;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderSizeReporter(onSize);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderSizeReporter renderObject,
+  ) => renderObject.onSize = onSize;
+}
+
+class _RenderSizeReporter extends RenderProxyBox {
+  _RenderSizeReporter(this.onSize);
+
+  ValueChanged<Size> onSize;
+  Size? _last;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (size == _last) return;
+    _last = size;
+    final reported = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onSize(reported));
   }
 }

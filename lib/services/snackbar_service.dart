@@ -10,6 +10,7 @@ import '../core/animation_constants.dart';
 import '../core/l10n.dart';
 import '../providers/task_activity_provider.dart';
 import '../router/app_router.dart';
+import '../core/design_tokens.dart';
 
 export '../providers/task_activity_provider.dart' show ListenableProgress;
 
@@ -253,7 +254,8 @@ class SnackBarService {
             ? (margin ??
                   const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0))
             : null,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        // Folio：墨色底的一张小纸条，10 圆角
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         elevation: 6,
         // 收起时机由本服务决定：结果自带计时，进度随任务注销。

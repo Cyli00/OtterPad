@@ -61,9 +61,7 @@ class NoFileEntriesPage extends ConsumerWidget {
                 backgroundColor: colorScheme.surface,
                 title: Text(
                   context.l10n.noFileEntries,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(),
                 ),
                 leading: IconButton(
                   onPressed: () {
@@ -248,8 +246,6 @@ class NoFileEntriesPage extends ConsumerWidget {
     final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: cs.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         title: Text(context.l10n.batchDelete),
         content: Text(context.l10n.confirmDeleteEntries(count)),

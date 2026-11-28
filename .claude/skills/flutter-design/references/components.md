@@ -7,9 +7,9 @@
 参考 `lib/widgets/app_dialog.dart`、`lib/pages/setting/backup_settings_page.dart`、`lib/pages/shelf/widgets/create_favorite_dialog.dart`。
 由 `showAppDialog` 负责转场、模糊和遮罩，调用方不重复实现。
 
-- 内容背景 `surfaceContainerLow`，圆角 28，padding 为 `fromLTRB(24, 24, 24, 20)`。
+- 形状与底色取主题：纸色 `surfaceContainerLowest` + 1px 细线 + `AppRadius.lg`（28，连续曲率），阴影 `AppShadows.dialog`；不在 `AlertDialog` 上写 `backgroundColor` / `shape`。自定义 `Material` 用 `AppShape.lg(AppStroke.side(cs))`（`RoundedSuperellipseBorder`），不要再写 `RoundedRectangleBorder`。padding 为 `fromLTRB(24, 24, 24, 20)`。
 - 配置型最大宽度 540；创建型沿用 `(w * 0.85).clamp(320, 480)`。小窗口仍需服从可用空间约束。
-- 标题为 `titleLarge` bold。
+- 标题为 `titleLarge`（衬线、w500），不加粗。关闭按钮用 `RuleIconButton`，不用圆形填充按钮。表单分区标签用 `AppType.eyebrow` + `eyebrowText`。
 - 底部统一 `TextButton`，取消和确认沿用默认主题，危险操作使用 `cs.error` 文字。
 - 按钮靠右排列、间距 8，不使用填充按钮、描边按钮或等宽拉伸，不自定义按钮 padding 和圆角。
 - 点击选项即确认的选择型弹窗仅保留清除与取消操作。
@@ -21,12 +21,13 @@
 | 属性 | 值 |
 |---|---|
 | 工具面板外层 | 透明背景 + BackdropFilter，blur 4 |
-| 容器 | surfaceContainerHigh，顶部圆角 28 |
-| Grabber | 32×4，onSurfaceVariant.withAlpha(80)，圆角 2 |
+| 容器 | `surfaceContainerLowest` 纸色，`AppRadius.sheetTop`（28），顶边 `Border(top: AppStroke.side(cs))`，阴影 `AppShadows.sheet` |
+| Grabber | 32×3，`outline`，圆角 `AppRadius.hairline` |
 | 底部留白 | 安全区域 padding.bottom + 16 |
-| SheetItem 图标盒 | 44×44，圆角 12，primaryContainer 背景，22px primary 图标 |
+| 面板标题 | 眉题 `AppType.eyebrow` + `eyebrowText` |
+| SheetItem 图标盒 | 40×40，`AppRadius.sm`，透明底 + 细线，20px `onSurface` 图标 |
 | SheetItem 文字 | bodyLarge w600；说明 bodySmall + onSurfaceVariant |
-| 展开图标 | onSurfaceVariant.withAlpha(120) |
+| 展开图标 | `arrow_forward`，`onSurfaceVariant` |
 
 阅读器实时预览面板和 `SettingPicker` 不加背景模糊；不要从工具面板机械复制 blur。
 自定义 SheetItem 使用透明底色的 `TactilePress`。
@@ -39,7 +40,7 @@
 
 | 属性 | 值 |
 |---|---|
-| 形态 | floating；桌面宽 400，移动端左右 16、底部 12 外边距；圆角 12 |
+| 形态 | floating；桌面宽 400，移动端左右 16、底部 12 外边距；`AppRadius.md`（20） |
 | 尺寸 | padding `symmetric(h: 16, v: 8)`，内容行最小高 32，单行条高 48 |
 | 底色 | 默认 `inverseSurface`，不改色、不按语义换底色 |
 | 文字 | `bodyMedium` + `onInverseSurface`；进度单行省略，结果最多 3 行 |
@@ -79,10 +80,26 @@
 
 参考 `lib/pages/library/widgets/document_card.dart`、`lib/pages/library/widgets/doc_list_card.dart`、`lib/pages/shelf/widgets/favorite_card.dart`。
 
-- 背景 `surfaceContainerLow`，圆角 16，标题 `titleMedium` bold。
-- 阴影 `AppShadows.card`；桌面 hover 使用 `HoverLift`。
-- 点击使用 `TactilePress`，卡片推荐 `pressedScale: 0.98`。
-- 选中边框 `primary.withAlpha(160)`、宽 2，以 `kAnimFast` 过渡；勾选使用 `SpringPop`。
+Folio 里「卡片」分三种，都不铺 `surfaceContainer*` 底色：
+
+| 种类 | 做法 |
+|---|---|
+| 网格文献卡 | 封面本身就是卡片：纸色 + 细线 + `AppRadius.xs` + `AppShadows.page`；悬停换 `AppShadows.cardHover` 并上移 2px。进度是封面底边的 `ProgressLine`。封面下方衬线标题 15px、`期刊 · 年份` 与百分比一行 |
+| 列表文献条目 | 纸页条目：纸色 + 细线 + `AppRadius.md`；缩略图细线 + 页影；衬线 17px 标题、斜体期刊、等宽年份；批注为左侧细线 + 衬线斜体 |
+| 收藏 / 分组卡 | 纸色 + 细线 + `AppRadius.md`，`titleLarge` 衬线标题；底部链接行上方一条细线 |
+
+- 静止时无阴影（`AppShadows.card` 为空），只有封面类「一张纸」用 `page` 阴影。
+- 点击使用 `TactilePress`，`highlightSize: Size.zero`，卡片推荐 `pressedScale: 0.98`。
+- 选中：2px `primary` 边框 + 淡彩底（`primaryContainer` 即强调色淡彩）+ 方形勾选，以 `kAnimFast` 过渡。
+
+## 刊头、细线图标按钮与进度线
+
+| 组件 | 文件 | 用法 |
+|---|---|---|
+| `Masthead` | `lib/widgets/masthead.dart` | 每个一级页面唯一的大字：衬线标题（`AppType.masthead`）+ 可选眉题 + `RollingNumber` 计数；右侧放搜索框或操作。不要再加第二个大标题 |
+| `RuleIconButton` | `lib/widgets/rule_icon_button.dart` | 页面级图标按钮：透明底 + 1px 细线方框（`AppRadius.sm`）；悬停加深细线，`selected` 墨色反白，`danger` 用 error 色图标。替代 `primaryContainer` 圆形填充按钮 |
+| `ProgressLine` / `ProgressChip` | `lib/widgets/progress_chip.dart` | 阅读进度：2px 墨线 + 等宽百分比，不用胶囊 |
+| `RollingNumber` | `lib/widgets/rolling_number.dart` | 会变化的计数：逐位滚动，减少动态效果时直接切换 |
 
 ## TextField
 
@@ -90,10 +107,12 @@
 
 | 属性 | 值 |
 |---|---|
-| 背景 | filled，surfaceContainerLow |
-| 圆角 | 12 |
-| 边框 | enabled 为 outline；focused 为 primary、宽 2 |
-| contentPadding | 水平 16、垂直 14 |
+| 背景 | 取主题：filled，纸色 `surfaceContainerLowest` |
+| 圆角 | `AppRadius.sm`（14） |
+| 边框 | enabled 为细线 `outlineVariant`；focused 为 primary、宽 1.5 |
+| contentPadding | 主题默认：水平 14、垂直 12 |
+
+设置页内用 `settingFieldDecoration`；其他地方只写 `hintText` / `labelText` 等内容字段，不覆盖填充色和边框。
 | prefixIcon（需要时） | 20px，onSurfaceVariant |
 
 上级没有独立标题，或同级均为 TextField 时用 `labelText`；
@@ -117,11 +136,13 @@ SegmentedButton 的项目样式：
 
 | 属性 | 值 |
 |---|---|
-| 背景 / 选中背景 | surface / primaryContainer |
-| 边框 | outlineVariant.withAlpha(100) |
-| 圆角 | 12 |
+| 背景 / 选中背景 | 透明 / `inverseSurface`（墨色反白） |
+| 边框 | 细线 `outlineVariant` |
+| 圆角 | `AppRadius.sm`（14） |
 | 布局 | 撑满可用宽度；showSelectedIcon: false |
-| 可选文字样式 | bodyMedium w600，未选中 onSurfaceVariant，选中 onPrimaryContainer |
+| 文字 | 取主题；未选中 `onSurfaceVariant`，选中 `onInverseSurface` |
+
+样式全部在 `app_theme.dart` 的 `segmentedButtonTheme`，调用处不写 `styleFrom`。
 
 `SettingPicker<T>` 位于 `lib/pages/setting/setting_picker.dart`，仅用于固定列表单选。
 通过 `current/options/labelFor/subtitleFor/sheetTitle/onChanged` 配置内容，不复制内部组件树。
@@ -134,8 +155,8 @@ SegmentedButton 的项目样式：
 
 参考 `lib/pages/setting/ocr_settings_page.dart` 与 `lib/pages/setting/translation_settings_section.dart`。
 
-- 布局 `Wrap(spacing: 8, runSpacing: 8)`，圆角 12。
-- 选中背景 `primaryContainer`、透明边框；未选中边框 `outlineVariant.withAlpha(100)`。
+- 布局 `Wrap(spacing: 8, runSpacing: 8)`，圆角 `AppRadius.sm`。
+- 选中背景 `primaryContainer`（强调色淡彩）、透明边框；未选中边框细线 `outlineVariant`。
 - 标题使用 `SettingTitle`，不重复实现帮助图标。
 - 多选标签使用 `FilterChip`，`showCheckmark: false`，未选中背景 `surface`。
 - 自描述样式 Chip 使用 `TactilePress`，未选中背景 `surfaceContainerLow`；名称以对应效果渲染，如“加粗”使用粗体、“主题色”使用 primary。
@@ -163,12 +184,45 @@ SegmentedButton 的项目样式：
 
 | 属性 | 值 |
 |---|---|
-| 容器 | surfaceContainerHigh，圆角 24，padding 16，撑满可用宽度 |
+| 容器 | 纸色 + 细线，`AppRadius.md`，padding 16，撑满可用宽度 |
 | 标题 | titleSmall w600 + 帮助图标，紧凑 Wrap |
-| 数值胶囊 | padding 水平 10、垂直 4，圆角 12，labelMedium w700 |
+| 数值胶囊 | padding 水平 10、垂直 4，`AppRadius.sm`，labelMedium 等宽数字 |
 | 正常配色 | primaryContainer / onPrimaryContainer |
 | 超额配色 | errorContainer / onErrorContainer |
-| 进度条 | 圆角 4，高度 4，背景 outlineVariant.withAlpha(80) |
+| 进度条 | `AppRadius.hairline`，高度 4，背景 `outlineVariant` |
 
 进度展示使用 `ratio.clamp(0.0, 1.0)`，保持超额数值可见。
 本地估算需标明性质，并以 Tooltip 解释硬上限或降优先级等含义；数据来源与提供商配置规则见 [设置与 API 模块](../../../../docs/settings-and-api-modules.md)。
+
+## 主题风格与氛围光
+
+- 风格由 `ThemeStyle` 决定（纸墨、随色、雾凇、苔原、暮色、石墨），组件只读 `ColorScheme` 角色，不判断风格、不写死纸色。
+- 需要知道外观开关时读 `FolioLook.of(context)`：`style`、`ambient`、`floatingBars`。
+- 一级页面（文库、书架、设置及其嵌入的子页）的 Scaffold 背景用 `AmbientBackdrop.pageColor(context)`（嵌入子页直接透明），让 `AdaptiveScaffold` 铺的氛围光透出来；二级页面照常用 `cs.surface`。
+
+## 悬浮玻璃底栏
+
+| 项 | 规范 |
+|---|---|
+| 开关 | 「通用设置 › 界面 › 悬浮玻璃栏」，`ThemeNotifier.setFloatingBars`；默认开 |
+| 面板 | `LiquidGlass`：模糊 22 + 饱和度 1.8 + 半透明着色（浅 58% / 深 52%）+ 左上亮、右下暗的渐变描边 + 双层投影；`radius` 为空时是胶囊 |
+| 切换 | 需要两种样式的栏用 `BarSurface`，关时退回 `surfaceContainerHigh` 实色 + 细线 |
+| 底部导航 | 开时 `AdaptiveScaffold` 设 `extendBody`，`AdaptiveBottomNavigation` 换成 `FloatingGlassNav`：每项 112 宽、64 高；透镜左右两条边各走一套弹簧，前缘 `kMotionSpatialFast`、后缘 `kMotionSpatialSteady`，移动时被拉长并略压扁 |
+| 内容避让 | 悬浮时内容延伸到栏下：列表底部要加 `MediaQuery.paddingOf(context).bottom`，`SafeArea(bottom: false)` |
+| 阅读器 | 悬浮时底栏叠在内容上，随工具栏显隐滑出 96px 并淡出，隐藏时 `IgnorePointer` |
+
+## 问 AI
+
+| 项 | 规范 |
+|---|---|
+| 形象 | `AiOrb`：主题三色 `SweepGradient` 自转的光球（颜色先推到饱和度 ≥ .62），左上白色高光；`thinking` 时转速从 6s 加快到 1.6s 并缩放呼吸、外发光起伏 |
+| 入口 · 阅读器底栏 | `_AskAiOrbButton`：52×48，内含 30 的光球 + sparkle 图标，对话打开时光球进入 thinking 并加 primary 外环 |
+| 入口 · 选区菜单 | 操作栏下方的 `_AiIntentStrip`：深色胶囊 + 主题三色渐变描边；光球和「自由提问」固定在两端，中间四个意图（解释 / 说人话 / 举个例子 / 挑毛病）横向滚动、右缘渐隐；意图依次从左滑入。点意图 = 带引用打开对话并立即发送对应提示词；点「自由提问」= 只带引用打开对话 |
+| 自动发送 | `DocumentChatPageArgs.initialPrompt`；页面在首帧后填入并发送，停靠栏通过 `onQuoteConsumed` 清掉 |
+| 空状态 | 64 光球 + 衬线大标题 + 文档名 + 四张起手卡（`_StarterCard`，宽 ≥ 520 时两列，错峰入场）；有待发引用时换成意图卡，标签就是完整提示词 |
+| 气泡 | 用户：`primaryContainer → tertiaryContainer` 渐变，28 圆角、右下角收成 6，文字 `onSurface`，最大宽 86%；助手：无底色，顶部一枚 20 的光球 |
+| 新消息 | `_MessageEntrance` 弹簧（stiffness 420、damping 28）上滑 + 放大，用户消息从右侧进；正在流式输出的那条不做入场 |
+| 思考中 | 22 的光球（thinking）+ `ShimmerText` 流光「正在思考」 |
+| 输入框 | 28 圆角浮起胶囊：悬浮玻璃开时为 `LiquidGlass`，关时为纸色 + `AppShadows.bar`；输入框自身无边框。发送中外圈 `AuroraRing`：沿连续曲率圆角旋转的三色扫光 + 外晕；发送键是主题色→第三色渐变圆，发送中换成 errorContainer 停止键 |
+| 宽屏 | 对话与输入框最大宽 760，居中 |
+| 减少动效 | 光球、流光、极光在 `MediaQuery.disableAnimations` 时都停住 |

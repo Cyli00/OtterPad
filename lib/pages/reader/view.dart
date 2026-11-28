@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart' hide Block;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/animation_constants.dart';
+import '../../core/folio_look.dart';
+import 'package:motor/motor.dart';
 import '../../core/l10n.dart';
 import '../../core/otter_error_text.dart';
 import '../../core/rust_backend.dart';
@@ -102,6 +104,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   String? _dockQuote;
   Map<String, dynamic>? _dockQuoteAnchor;
   String? _dockFigurePath;
+
+  /// 划词意图条带出的问题，停靠栏聊天页发送后清空。
+  String? _dockPrompt;
 
   /// 桌面端外观设置浮层（窄屏用底部面板）。
   bool _appearanceOpen = false;
@@ -404,6 +409,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     String? quote,
     String? figurePath,
     List<AnchorRange>? anchor,
+    String? prompt,
   }) {
     Haptics.soft();
     if (_useDock) {
@@ -411,6 +417,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _dockQuote = quote;
         _dockQuoteAnchor = anchor == null ? null : _anchorJson(anchor);
         _dockFigurePath = figurePath;
+        _dockPrompt = prompt;
         _quoteEpoch++;
         _chatReturn = null;
         _showDock(ReaderDockPane.askAi);
@@ -426,6 +433,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         figureImagePath: figurePath,
         onLocateQuote: _locateQuote,
         quoteEpoch: ++_quoteEpoch,
+        initialPrompt: prompt,
       ),
     );
   }
@@ -775,6 +783,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       windowWidth,
     );
 
+    // 悬浮玻璃栏打开时，底栏叠在正文上方而不是占一行
+    final floatBar = FolioLook.of(context).floatingBars;
+    Widget readerBar() => ReaderBottomBar(
+      readerSettings: settings,
+      translation: translation,
+      activeSheet: _appearanceOpen ? ReaderSheetType.theme : _sheet,
+      activeDock: useDock && _dockOpen ? _dockPane : null,
+      desktop: isDesktopOs,
+      pdfView: _pdfMode,
+      nextTranslationMode: _pdfMode
+          ? _nextPdfTranslationMode(translation)
+          : null,
+      readingProgress: _progress,
+      onOpenOutline: _toggleOutline,
+      onTranslate: _translateDocument,
+      onCycleTranslationMode: () {
+        final notifier = ref.read(documentTranslationProvider(_id).notifier);
+        if (_pdfMode) {
+          notifier.setMode(_nextPdfTranslationMode(translation));
+        } else {
+          notifier.cycleMode();
+        }
+      },
+      onAskAi: _toggleAskAi,
+      onOpenNotes: _toggleNotes,
+      onOpenTheme: _toggleAppearance,
+    );
+
     return Theme(
       data: theme,
       child: CallbackShortcuts(
@@ -892,52 +928,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                 ),
                               ),
                             ),
+                            if (showBottom && floatBar)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                child: IgnorePointer(
+                                  ignoring: !_toolbars,
+                                  child: SingleMotionBuilder(
+                                    motion: kMotionSpatialFast,
+                                    value: _toolbars ? 1.0 : 0.0,
+                                    active: !MediaQuery.disableAnimationsOf(
+                                      context,
+                                    ),
+                                    builder: (context, t, child) =>
+                                        Transform.translate(
+                                          offset: Offset(0, 96 * (1 - t)),
+                                          child: Opacity(
+                                            opacity: t.clamp(0.0, 1.0),
+                                            child: child,
+                                          ),
+                                        ),
+                                    child: SafeArea(
+                                      top: false,
+                                      child: readerBar(),
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
-                      if (showBottom)
+                      if (showBottom && !floatBar)
                         AnimatedSize(
                           duration: kAnim,
                           curve: kAnimCurve,
                           child: _toolbars
-                              ? SafeArea(
-                                  top: false,
-                                  child: ReaderBottomBar(
-                                    readerSettings: settings,
-                                    translation: translation,
-                                    activeSheet: _appearanceOpen
-                                        ? ReaderSheetType.theme
-                                        : _sheet,
-                                    activeDock: useDock && _dockOpen
-                                        ? _dockPane
-                                        : null,
-                                    desktop: isDesktopOs,
-                                    pdfView: _pdfMode,
-                                    nextTranslationMode: _pdfMode
-                                        ? _nextPdfTranslationMode(translation)
-                                        : null,
-                                    readingProgress: _progress,
-                                    onOpenOutline: _toggleOutline,
-                                    onTranslate: _translateDocument,
-                                    onCycleTranslationMode: () {
-                                      final notifier = ref.read(
-                                        documentTranslationProvider(
-                                          _id,
-                                        ).notifier,
-                                      );
-                                      if (_pdfMode) {
-                                        notifier.setMode(
-                                          _nextPdfTranslationMode(translation),
-                                        );
-                                      } else {
-                                        notifier.cycleMode();
-                                      }
-                                    },
-                                    onAskAi: _toggleAskAi,
-                                    onOpenNotes: _toggleNotes,
-                                    onOpenTheme: _toggleAppearance,
-                                  ),
-                                )
+                              ? SafeArea(top: false, child: readerBar())
                               : const SizedBox(width: double.infinity),
                         ),
                     ],
@@ -963,7 +990,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                         figureImagePath: _dockFigurePath,
                         onLocateQuote: _locateQuote,
                         quoteEpoch: _quoteEpoch,
+                        initialPrompt: _dockPrompt,
                       ),
+                      // 意图条的问题只发一次：停靠栏重建时不再重发
+                      onQuoteConsumed: () => _dockPrompt = null,
                     ),
                   ),
               ],
@@ -1258,7 +1288,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           translationConfigProvider.select((c) => c.displayStyleId),
         ),
         onTranslate: _showTranslation,
-        onAskAi: (text, anchor) => _openChat(quote: text, anchor: anchor),
+        onAskAi: (text, anchor, prompt) =>
+            _openChat(quote: text, anchor: anchor, prompt: prompt),
         onCopy: _copyText,
         onFigureTap: (b) => _openFigure(b, FigureHeroSource.reader),
         onTapBlank: () => setState(() => _toolbars = !_toolbars),

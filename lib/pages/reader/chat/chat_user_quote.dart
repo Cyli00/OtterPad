@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/animation_constants.dart';
 import '../../../core/l10n.dart';
 import '../../../widgets/tactile_press.dart';
+import '../../../core/design_tokens.dart';
 
 class ChatUserQuote extends StatefulWidget {
   final String text;
@@ -33,7 +34,7 @@ class _ChatUserQuoteState extends State<ChatUserQuote> {
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,7 +48,7 @@ class _ChatUserQuoteState extends State<ChatUserQuote> {
                 message: label,
                 child: TactilePress(
                   baseColor: Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   onTap: () {
                     widget.onToggle();
                     setState(() => _expanded = !_expanded);

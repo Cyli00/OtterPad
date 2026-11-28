@@ -4,16 +4,14 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/l10n.dart';
 import '../../services/haptics.dart';
 import 'agent_role_widgets.dart';
+import '../../core/design_tokens.dart';
 
 /// 用户在"添加模型"对话框中做出的角色选择。
 class AddModelChoice {
   final bool setAsDefault;
   final bool setAsFast;
 
-  const AddModelChoice({
-    required this.setAsDefault,
-    required this.setAsFast,
-  });
+  const AddModelChoice({required this.setAsDefault, required this.setAsFast});
 }
 
 /// 弹出"添加模型"对话框，询问用户是否将该模型设为默认 / 快速。
@@ -39,7 +37,8 @@ Future<AddModelChoice?> showAgentAddModelDialog({
       final cs = theme.colorScheme;
       return StatefulBuilder(
         builder: (ctx, setLocal) {
-          final defaultReplaces = setAsDefault &&
+          final defaultReplaces =
+              setAsDefault &&
               currentDefault != null &&
               currentDefault != modelId;
           final fastReplaces =
@@ -50,7 +49,7 @@ Future<AddModelChoice?> showAgentAddModelDialog({
             elevation: 0,
             insetPadding: const EdgeInsets.symmetric(horizontal: 40),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
@@ -63,7 +62,6 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                     Text(
                       ctx.l10n.addModelTitle,
                       style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
                         color: cs.onSurface,
                         letterSpacing: 0.2,
                       ),
@@ -104,8 +102,9 @@ Future<AddModelChoice?> showAgentAddModelDialog({
                         Haptics.soft();
                         setLocal(() => setAsFast = v);
                       },
-                      replacingText:
-                          fastReplaces ? ctx.l10n.willReplace(currentFast) : null,
+                      replacingText: fastReplaces
+                          ? ctx.l10n.willReplace(currentFast)
+                          : null,
                     ),
                     const SizedBox(height: 24),
                     Row(

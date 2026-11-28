@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/animation_constants.dart';
 import '../../../core/elevation.dart';
 import 'reader_background.dart';
+import '../../../core/design_tokens.dart';
 
 /// 阅读器内嵌 bottom sheet 宿主。
 ///
@@ -290,8 +291,9 @@ class ReaderSheetFrame extends StatelessWidget {
             minHeight: fill ? height : 0,
           ),
           decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            color: cs.surfaceContainerLowest,
+            borderRadius: AppRadius.sheetTop,
+            border: Border(top: AppStroke.side(cs)),
             boxShadow: AppShadows.sheet,
           ),
           clipBehavior: Clip.antiAlias,
@@ -302,10 +304,10 @@ class ReaderSheetFrame extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 12, bottom: 8),
                 child: Container(
                   width: 32,
-                  height: 4,
+                  height: 3,
                   decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withAlpha(80),
-                    borderRadius: BorderRadius.circular(2),
+                    color: cs.outline,
+                    borderRadius: BorderRadius.circular(AppRadius.hairline),
                   ),
                 ),
               ),
