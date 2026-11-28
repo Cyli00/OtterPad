@@ -70,12 +70,12 @@ class PrepareReleaseTests(unittest.TestCase):
         self.assertIn(f"compare/", packages)
         en, zh = self.notes.split("## 更新内容", 1)
         changes = en.split("## Changes", 1)[1]
-        self.assertIn("no longer freezes the reader", changes)
-        self.assertIn("MinerU and PaddleOCR", changes)
-        self.assertNotIn("不再让阅读器卡住", changes)
-        self.assertIn("不再让阅读器卡住", zh)
-        self.assertIn("MinerU 与 PaddleOCR", zh)
-        self.assertNotIn("no longer freezes the reader", zh)
+        self.assertIn("runs on a new Rust core", changes)
+        self.assertIn("moves over automatically", changes)
+        self.assertNotIn("全新的 Rust 内核", changes)
+        self.assertIn("全新的 Rust 内核", zh)
+        self.assertIn("自动迁移 0.1.x", zh)
+        self.assertNotIn("runs on a new Rust core", zh)
 
 
 if __name__ == "__main__":

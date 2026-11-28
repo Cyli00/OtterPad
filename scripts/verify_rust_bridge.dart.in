@@ -3,20 +3,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'package:otter_backend_bridge_check/api.dart';
-import 'package:otter_backend_bridge_check/api/backup.dart';
-import 'package:otter_backend_bridge_check/api/acquisition.dart';
-import 'package:otter_backend_bridge_check/api/ocr.dart';
-import 'package:otter_backend_bridge_check/api/metadata.dart';
-import 'package:otter_backend_bridge_check/api/types.dart';
-import 'package:otter_backend_bridge_check/credentials.dart';
-import 'package:otter_backend_bridge_check/error.dart';
-import 'package:otter_backend_bridge_check/frb_generated.dart';
-import 'package:otter_backend_bridge_check/ocr.dart';
-import 'package:otter_backend_bridge_check/pdf.dart';
-import 'package:otter_backend_bridge_check/storage/models.dart';
-import 'package:otter_backend_bridge_check/sync/archive.dart';
-import 'package:otter_backend_bridge_check/sync/backup.dart';
+import 'package:otter_pad/api.dart';
+import 'package:otter_pad/api/backup.dart';
+import 'package:otter_pad/api/acquisition.dart';
+import 'package:otter_pad/api/ocr.dart';
+import 'package:otter_pad/api/metadata.dart';
+import 'package:otter_pad/api/types.dart';
+import 'package:otter_pad/credentials.dart';
+import 'package:otter_pad/error.dart';
+import 'package:otter_pad/frb_generated.dart';
+import 'package:otter_pad/ocr.dart';
+import 'package:otter_pad/pdf.dart';
+import 'package:otter_pad/storage/models.dart';
+import 'package:otter_pad/sync/archive.dart';
+import 'package:otter_pad/sync/backup.dart';
 
 void require(bool condition, String detail) {
   if (!condition) throw StateError(detail);

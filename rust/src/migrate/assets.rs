@@ -56,8 +56,11 @@ pub(super) fn copy_tree(source: &Path, target: &Path, token: &CancellationToken)
 }
 pub(super) fn copy_file(source: &Path, target: &Path) -> Result<()> {
     fs::copy(source, target)?;
-    fs::OpenOptions::new().write(true).open(target)?.flush()?;
-    fs::File::open(target)?.sync_all()?;
+    // Windows 的 FlushFileBuffers 需要写权限，只读句柄会报 Access is denied。
+    fs::OpenOptions::new()
+        .write(true)
+        .open(target)?
+        .sync_all()?;
     Ok(())
 }
 

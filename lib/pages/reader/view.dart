@@ -124,15 +124,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _pdfMode =
         ref.read(readerSettingsProvider).defaultReadingMode ==
         DefaultReadingMode.pdf;
+    // PDF 搜索逐页异步返回，命中数与上下条按钮要随之刷新。
+    _pdfSearch.addListener(_onPdfSearchChanged);
     unawaited(_history.record(_id));
     unawaited(_load());
+  }
+
+  void _onPdfSearchChanged() {
+    if (mounted && _searching) setState(() {});
   }
 
   @override
   void dispose() {
     unawaited(_history.flushProgress());
     _controller?.dispose();
-    _pdfSearch.dispose();
+    _pdfSearch
+      ..removeListener(_onPdfSearchChanged)
+      ..dispose();
     _query.dispose();
     _queryFocus.dispose();
     _bodyFocus.dispose();

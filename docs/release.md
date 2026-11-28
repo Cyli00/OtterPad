@@ -13,7 +13,7 @@
 
 ## Rust 工具链（0.2.0 起）
 
-当前 Rust 后端独立编译。按用户最新安排，本轮后续只做逻辑迁移、格式化、FRB 绑定生成和编译，不再新增或执行测试；下述测试与应用验收交由统一安排，历史通过记录不代表最新修改已完成验证。工具链固定在 `rust/rust-toolchain.toml`：Rust `1.99.1`，组件 `rustfmt`、`clippy`。`rust/Cargo.lock` 随源码保存。
+工具链固定在 `rust/rust-toolchain.toml`：Rust `1.99.1`，组件 `rustfmt`、`clippy`。`rust/Cargo.lock` 随源码保存。
 
 `checks.yml` 已增加 Linux、Windows、macOS 三个 runner 的原生 Rust 检查，CI 和 Release 通过共用检查自动引用。各 runner 在 `rust/` 下读取固定工具链，然后执行：
 
@@ -31,28 +31,22 @@ cd rust
 cargo test --locked
 ```
 
-新增 CI 配置尚未在远端执行，本机只运行了 macOS arm64 的 Rust 检查；Linux、Windows 和 Android 不能据此认定通过。
+0.2.0 发包前已在 Linux 本机运行上述 Rust 检查、`flutter analyze`、`flutter test` 与应用端到端验证；Windows、macOS、Android 以远端 CI 和下文的发包前验收为准。
 
-FRB 的 Rust API 与生成绑定已加入；Dart 绑定在独立临时工程中验证，未写入应用。Windows 检查 job 增加固定版本 `flutter_rust_bridge_codegen 2.13.0`、`cargo-expand 1.0.127`，执行：
+应用内的 Dart 绑定在 `lib/src/rust/`。Windows 检查 job 增加固定版本 `flutter_rust_bridge_codegen 2.13.0`、`cargo-expand 1.0.127`，执行：
 
 ```bash
 python scripts/generate_rust_bridge.py --check-rust --smoke
 ```
 
-该命令重建 Rust 绑定并比较差异，在仓库外生成 Dart 类型，运行 Freezed、`dart analyze`，构建真实原生动态库，再由 Dart 走通 SQLite/FTS、错误码、PDFium、OCR HTTP/Stream、锚点/笔记/会话及备份恢复。需要 `PDFIUM_LIBRARY_PATH` 指向已校验的宿主动态库；`--verify` 只做类型与分析器检查。脚本不会修改应用的 `pubspec.yaml`、`lib/` 或平台目录。本机完整 FFI 已运行，新增远端步骤尚未执行。
+该命令重建 Rust 绑定并比较差异，在仓库外生成 Dart 类型，运行 Freezed、`dart analyze`，构建真实原生动态库，再由 Dart 走通 SQLite/FTS、错误码、PDFium、OCR HTTP/Stream、锚点/笔记/会话及备份恢复。需要 `PDFIUM_LIBRARY_PATH` 指向已校验的宿主动态库；`--verify` 只做类型与分析器检查。脚本不会修改应用的 `pubspec.yaml`、`lib/` 或平台目录。临时工程沿用应用的 Dart 包名 `otter_pad`，因为 FRB 会把包名写进 Rust 符号，换名后 `--check-rust` 必然报差异。
 
-cargokit 与 Flutter 应用构建尚未接入，应用接入仍需补齐：
-
-- 在构建 job 安装对应 target：Android `aarch64-linux-android`、`armv7-linux-androideabi`（另需 NDK），Windows `x86_64-pc-windows-msvc`，macOS `aarch64-apple-darwin`；配置 Cargo 缓存。
-- 修改 `rust/src/api/` 后运行上述生成器，将 Rust 绑定与源码一起保存；本轮前端排除，Dart 产物只在临时工程保留。
-- 随包携带固定 ABI 的 PDFium 动态库、校验值与许可，实际执行四个目标的 `flutter build`。
-
-因此当前检查通过不代表 0.2.0 Flutter 包已可构建。
+应用通过 `rust_builder/`（cargokit）在 `flutter build` 时编译 Rust，cargokit 用 rustup 安装缺少的 target，Android 另需 NDK。PDFium 由 `rust_builder/hook/build.dart` 按 `rust/pdfium-binaries.json` 下载、校验并以 `otter_pdfium` 打包。修改 `rust/src/api/` 后运行 FRB codegen，绑定与源码一起提交。
 
 ## 本地准备
 
 1. 将版本改为下一个发布版本，递增构建号，补齐 `CHANGELOG.md`。
-2. 运行 `bash scripts/prepare_release.sh v0.1.7`，确认生成的说明只有一份英文安装包，后面依次是英文和中文更新说明。
+2. 运行 `bash scripts/prepare_release.sh v0.2.0`，确认生成的说明只有一份英文安装包，后面依次是英文和中文更新说明。
 3. 按改动范围运行必要验证；最终 CI 会统一执行静态分析和敏感信息检查。
 4. 核对发布提交包含所有源码、生成的国际化代码及发布资源。tag 无法包含未提交文件。
 

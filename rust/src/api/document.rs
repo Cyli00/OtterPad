@@ -239,15 +239,23 @@ mod tests {
         let found = images
             .iter()
             .map(|i| {
-                (
-                    i.block_id.as_str(),
-                    i.path.rsplit("figures/").next().unwrap(),
-                )
+                // Windows 上 figures 目录前缀用反斜杠，只比较 figures 之下的部分。
+                let relative = std::path::Path::new(&i.path)
+                    .strip_prefix(&figures)
+                    .unwrap()
+                    .components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/");
+                (i.block_id.as_str(), relative)
             })
             .collect::<Vec<_>>();
         assert_eq!(
             found,
-            [("fig-new", "new.png"), ("fig-old", "generation_a/old.png")]
+            [
+                ("fig-new", "new.png".to_owned()),
+                ("fig-old", "generation_a/old.png".to_owned())
+            ]
         );
         assert_eq!((images[0].width_px, images[0].height_px), (30, 20));
     }

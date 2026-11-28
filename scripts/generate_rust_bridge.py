@@ -5,24 +5,28 @@ The Flutter application and platform trees are deliberately outside this command
 outputs. Set FRB_CODEGEN, CARGO, DART and PUB_CACHE to use local tool installations.
 """
 import argparse
+import difflib
 import os
 from pathlib import Path
 import platform
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBSPEC = """name: otter_backend_bridge_check
+# FRB embeds the Dart package name in exported Rust symbols, so the isolated
+# project must share the application's name to reproduce frb_generated.rs.
+PUBSPEC = """name: otter_pad
 environment:
   sdk: '>=3.8.0 <4.0.0'
 dependencies:
   flutter_rust_bridge: 2.13.0
   freezed_annotation: 3.1.0
 dev_dependencies:
-  freezed: 4.0.3
-  build_runner: 2.17.1
+  freezed: 3.2.5
+  build_runner: 2.15.0
 """
 
 
@@ -69,8 +73,11 @@ def main():
     generated = ROOT / "rust/src/frb_generated.rs"
     previous = generated.read_bytes() if generated.exists() else None
     codegen = os.environ.get("FRB_CODEGEN", "flutter_rust_bridge_codegen")
+    # Leave --rust-output to FRB's default (rust/src/frb_generated.rs): FRB
+    # canonicalizes the crate root, which on Windows gains a \\?\ prefix that a
+    # plain absolute output path does not share.
     run([codegen, "generate", "--rust-root", str(ROOT / "rust"),
-         "--rust-input", "crate::api", "--rust-output", str(generated),
+         "--rust-input", "crate::api",
          "--dart-root", str(project), "--dart-output", str(output),
          "--no-web", "--no-build-runner", "--no-deps-check",
          "--no-auto-upgrade-dependency", "--no-dart-fix", "--no-dart-format",
@@ -80,7 +87,13 @@ def main():
     # so cargo fmt and codegen do not alternately rewrite the generated file.
     run([os.environ.get("RUSTFMT", "rustfmt"), "--edition", "2024", str(generated)],
         ROOT / "rust", project / "rustfmt.log")
-    if args.check_rust and previous != generated.read_bytes():
+    current = generated.read_bytes()
+    # A Windows checkout may hold the committed file with CRLF; codegen writes LF.
+    if args.check_rust and (previous or b"").replace(b"\r\n", b"\n") != current:
+        before = (previous or b"").decode("utf-8", "replace").replace("\r\n", "\n").splitlines()
+        diff = difflib.unified_diff(before, current.decode("utf-8", "replace").splitlines(),
+                                    "committed", "regenerated", n=1, lineterm="")
+        print("\n".join(list(diff)[:40]), file=sys.stderr)
         raise SystemExit("Rust bindings changed; regenerate and include them with the API change")
     if "AutoAccessor" in generated.read_text():
         raise SystemExit("Unexpected opaque field accessors in the public bridge; keep runtime state private")
