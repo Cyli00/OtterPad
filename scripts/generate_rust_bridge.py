@@ -71,8 +71,11 @@ def main():
     generated = ROOT / "rust/src/frb_generated.rs"
     previous = generated.read_bytes() if generated.exists() else None
     codegen = os.environ.get("FRB_CODEGEN", "flutter_rust_bridge_codegen")
+    # Leave --rust-output to FRB's default (rust/src/frb_generated.rs): FRB
+    # canonicalizes the crate root, which on Windows gains a \\?\ prefix that a
+    # plain absolute output path does not share.
     run([codegen, "generate", "--rust-root", str(ROOT / "rust"),
-         "--rust-input", "crate::api", "--rust-output", str(generated),
+         "--rust-input", "crate::api",
          "--dart-root", str(project), "--dart-output", str(output),
          "--no-web", "--no-build-runner", "--no-deps-check",
          "--no-auto-upgrade-dependency", "--no-dart-fix", "--no-dart-format",
