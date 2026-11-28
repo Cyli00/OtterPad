@@ -120,7 +120,11 @@ pub(crate) fn snapshot(storage: &Storage, path: &Path) -> Result<()> {
             .ok_or_else(|| OtterError::new(ErrorCode::InvalidArgument, "snapshot path UTF-8"))?],
     )?;
     crate::storage::repair_snapshot_index(path)?;
-    File::open(path)?.sync_all()?;
+    // Windows 的 FlushFileBuffers 需要写权限，只读句柄会报 Access is denied。
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)?
+        .sync_all()?;
     Ok(())
 }
 
